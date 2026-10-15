@@ -1,5 +1,5 @@
 {
-  "schema": "infini.agent-impact-rules.v2",
+  "schema": "infini.agent-impact-rules.v3",
   "rules": [
     {
       "id": "runtime-authoring-contract",
@@ -15,50 +15,46 @@
         "tools/check_planner_prompt_usability.py",
         "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
         "docs/reference/generated/LOWERY_RU.md",
-        "tools/audit_terraria_standardization.py"
+        "tools/audit_terraria_standardization.py",
+        "LocalGenerator/infini_local/pipelines/gameplay_stage.py"
       ],
       "checks": [
-        "terraria_standardization",
-        "capability_audit",
         "schema_check",
-        "generated_docs",
-        "delivery_contract",
-        "contract_parity",
-        "mutation_gate",
-        "planner_prompt",
-        "semantic_runtime_diff",
-        "pytest"
+        "delivery_contract"
       ],
       "context": [
-        "AGENTS.md",
         "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md",
         "docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md",
         "docs/development/TECHNICAL_LOWERING_POLICY_RU.md",
         "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
         "docs/reference/generated/LOWERY_RU.md",
         "docs/reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md"
+      ],
+      "area": "runtime",
+      "tests": [
+        "LocalGenerator/tests/test_registry_*contract.py",
+        "LocalGenerator/tests/test_repair_gameplay_contract.py",
+        "LocalGenerator/tests/test_low_level_three_stage_pipeline.py"
+      ],
+      "entrypoints": [
+        "LocalGenerator/infini_local/AGENTS.md",
+        "docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md",
+        "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py"
       ]
     },
     {
       "id": "csharp-runtime-contract",
       "patterns": [
-        "ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs",
-        "ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData*.cs",
-        "ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedItemData*.cs",
-        "ModSources/InfiniCrafterLocal/Common/Runtime/**",
-        "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem*.cs",
-        "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile*.cs",
-        "ModSources/InfiniCrafterLocal/**/*.csproj",
-        "ModSources/InfiniCrafterLocal/Common/Models/Contracts/TerrariaRuntimeVocabulary.cs"
+        "ModSources/**/*.cs",
+        "ModSources/**/*.csproj",
+        "tools/EngineRuntimeChecks*.cs",
+        "tools/EngineRuntimeChecks.csproj",
+        "Directory.Build.props",
+        "global.json"
       ],
       "checks": [
-        "terraria_standardization",
-        "delivery_contract",
-        "contract_parity",
-        "mutation_gate",
-        "semantic_runtime_diff",
         "csharp_contracts",
-        "tml_build"
+        "native_checks"
       ],
       "requiresBuild": true,
       "context": [
@@ -66,6 +62,11 @@
         "ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs",
         "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
         "docs/reference/generated/LOWERY_RU.md"
+      ],
+      "area": "native",
+      "entrypoints": [
+        "ModSources/InfiniCrafterLocal/AGENTS.md",
+        "docs/development/CODE_MAP_RU.md"
       ]
     },
     {
@@ -74,37 +75,159 @@
         "LocalGenerator/infini_local/pipelines/visual_*.py",
         "LocalGenerator/infini_local/core/vfx_manifest.py",
         "ModSources/InfiniCrafterLocal/Common/VFX/**",
-        "ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs"
+        "ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs",
+        "LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py"
       ],
       "checks": [
-        "schema_check",
-        "contract_parity",
-        "semantic_runtime_diff",
-        "pytest"
+        "schema_check"
       ],
       "context": [
         "docs/development/THREE_STAGE_LLM_PIPELINE_RU.md",
         "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
+      ],
+      "area": "visual",
+      "tests": [
+        "LocalGenerator/tests/test_repair_vfx_contract.py",
+        "LocalGenerator/tests/test_vfx_dependency_delivery_contracts.py",
+        "LocalGenerator/tests/test_visual_presentation_metadata.py"
+      ],
+      "entrypoints": [
+        "LocalGenerator/infini_local/AGENTS.md",
+        "LocalGenerator/infini_local/pipelines/visual_generation_pipeline.py",
+        "LocalGenerator/infini_local/core/vfx_manifest.py"
       ]
     },
     {
       "id": "storage-network-boundary",
       "patterns": [
-        "LocalGenerator/infini_local/storage/**",
-        "ModSources/InfiniCrafterLocal/**/*NetSync*.cs",
-        "ModSources/InfiniCrafterLocal/**/*Packet*.cs"
+        "LocalGenerator/infini_local/storage/**"
       ],
       "checks": [
-        "delivery_contract",
-        "csharp_contracts",
-        "project_hygiene",
-        "pytest",
-        "tml_build"
+        "delivery_contract"
       ],
-      "requiresBuild": true,
+      "requiresBuild": false,
       "context": [
         "docs/development/ARCHITECTURE_RU.md",
         "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
+      ],
+      "area": "storage",
+      "tests": [
+        "LocalGenerator/tests/test_world_recipe_cache_admission.py",
+        "LocalGenerator/tests/test_asset_transfer_cache_contracts.py"
+      ],
+      "entrypoints": [
+        "LocalGenerator/infini_local/AGENTS.md",
+        "LocalGenerator/infini_local/storage/world_storage.py"
+      ]
+    },
+    {
+      "id": "shared-llm-boundaries",
+      "patterns": [
+        "LocalGenerator/infini_local/core/llm_json_tools.py",
+        "LocalGenerator/infini_local/core/schema_validation.py",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+      ],
+      "checks": [
+        "project_hygiene"
+      ],
+      "context": [
+        "docs/development/THREE_STAGE_LLM_PIPELINE_RU.md"
+      ],
+      "area": "transport",
+      "tests": [
+        "LocalGenerator/tests/test_provider_*contract.py",
+        "LocalGenerator/tests/test_repair_frozen_contract.py",
+        "LocalGenerator/tests/test_registry_vertical_contract.py"
+      ],
+      "entrypoints": [
+        "LocalGenerator/infini_local/AGENTS.md",
+        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+      ]
+    },
+    {
+      "id": "studio-settings",
+      "area": "studio",
+      "patterns": [
+        "LocalGenerator/infini_local/desktop/**",
+        "LocalGenerator/settings_gui.py",
+        "LocalGenerator/config.example.env"
+      ],
+      "checks": [
+        "config_registry"
+      ],
+      "tests": [
+        "LocalGenerator/tests/test_web_studio*.py",
+        "LocalGenerator/tests/test_settings_*.py"
+      ],
+      "entrypoints": [
+        "LocalGenerator/infini_local/desktop/web_studio.py",
+        "LocalGenerator/infini_local/desktop/settings_schema.py"
+      ],
+      "context": [
+        "docs/development/TESTING_RU.md"
+      ]
+    },
+    {
+      "id": "development-workflow",
+      "area": "tooling",
+      "patterns": [
+        "tools/agentctl.py",
+        "tools/run_changed_pytests.py",
+        "tools/run_focused_pytests.py",
+        "tools/run_pytest_shards.py",
+        "tools/validate_release*",
+        "tools/render_validation_report.py",
+        ".agent/**",
+        ".github/workflows/ci.yml"
+      ],
+      "checks": [
+        "project_hygiene"
+      ],
+      "tests": [
+        "LocalGenerator/tests/test_pytest_runner_selection.py"
+      ],
+      "entrypoints": [
+        "docs/development/TESTING_RU.md",
+        "tools/agentctl.py"
+      ],
+      "context": []
+    },
+    {
+      "id": "handbook",
+      "area": "docs",
+      "patterns": [
+        "docs/**",
+        "AGENTS.md",
+        "**/AGENTS.md",
+        "README.md",
+        "CONTRIBUTING.md",
+        "START_HERE.html"
+      ],
+      "checks": [
+        "handbook",
+        "project_hygiene"
+      ],
+      "entrypoints": [
+        "docs/development/CODE_MAP_RU.md"
+      ],
+      "context": []
+    },
+    {
+      "id": "tml-build-workflow",
+      "area": "tooling",
+      "patterns": [
+        "tools/test_tml_ci.py",
+        "tools/build_tml_windows.*",
+        "tools/parse_tml_build_log.py"
+      ],
+      "checks": [
+        "tml_ci_regression"
+      ],
+      "entrypoints": [
+        "tools/test_tml_ci.py"
+      ],
+      "context": [
+        "docs/development/BUILD_RU.md"
       ]
     }
   ]

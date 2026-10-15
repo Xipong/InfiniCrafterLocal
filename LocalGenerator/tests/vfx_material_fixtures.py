@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any
 from infini_local.core import vfx_manifest as vfx
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 

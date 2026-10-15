@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from tests.captured_projectile_author import project_captured_projectile_call, project_captured_author_notation
 from tests.captured_parent_combat_author import captured_parent_combat_author, historical_child_combat_wire

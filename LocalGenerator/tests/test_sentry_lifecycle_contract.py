@@ -5,9 +5,10 @@ import json
 import pytest
 from repair_test_helpers import frozen_call_repair
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, compile_runtime_program, validate_runtime_program, validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
 from infini_local.qa.capability_witnesses import build_capability_witness

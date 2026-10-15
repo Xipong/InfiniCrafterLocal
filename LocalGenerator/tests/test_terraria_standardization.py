@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.capability_registry import INPUT_KINDS
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_TOKENS,

@@ -10,32 +10,29 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
+import agentctl  # noqa: E402
 import run_changed_pytests as changed  # noqa: E402
 import run_focused_pytests as focused  # noqa: E402
 import run_pytest_shards as shards  # noqa: E402
 
 
 def _git_status(monkeypatch: pytest.MonkeyPatch, status: str) -> None:
-    def fake_run(command, **kwargs):
-        assert command[:2] == ["git", "status"]
-        return SimpleNamespace(returncode=0, stdout=status, stderr="")
-
-    monkeypatch.setattr(changed.subprocess, "run", fake_run)
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [line[3:] for line in status.splitlines() if line])
 
 
-def test_production_only_change_selects_both_offline_test_roots(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_production_change_selects_existing_owner_tests(monkeypatch: pytest.MonkeyPatch) -> None:
     _git_status(monkeypatch, " M LocalGenerator/infini_local/core/runtime_authoring/program_schema.py\n")
     plan = changed.build_plan()
-    assert plan["selected"] == ["LocalGenerator/tests", "toolbox/tests"]
-    assert plan["mode"] == "full_due_to_non_test_change"
-    assert plan["uncoveredChangePaths"] == []
-    assert plan["fullSelectionTriggers"] == ["LocalGenerator/infini_local/core/runtime_authoring/program_schema.py"]
-    assert plan["sharedTestChanges"] == []
+    assert "LocalGenerator/tests/test_registry_vertical_contract.py" in plan["selected"]
+    assert "LocalGenerator/tests/test_web_studio.py" not in plan["selected"]
+    assert plan["mode"] == "owner_areas"
+    assert plan["fullSelectionTriggers"] == []
+    assert plan["releaseReady"] is False
 
 
 def test_no_changed_paths_is_not_a_test_pass(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     _git_status(monkeypatch, "")
-    assert changed.main() == 2
+    assert changed.main([]) == 2
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "not_selected"
     assert report["ok"] is False
@@ -43,7 +40,7 @@ def test_no_changed_paths_is_not_a_test_pass(monkeypatch: pytest.MonkeyPatch, ca
 
 
 @pytest.mark.parametrize("path", [
-    "pyproject.toml", "tools/run_focused_pytests.py", "toolbox/fixtures/items.jsonl",
+    "pyproject.toml", "LocalGenerator/infini_local/new_owner.py", "toolbox/fixtures/items.jsonl",
     "LocalGenerator/tests/conftest.py", "LocalGenerator/tests/test_deleted.py",
 ])
 def test_shared_config_or_deleted_test_selects_both_roots(
@@ -64,7 +61,7 @@ def test_changed_runner_does_not_select_external_symlink(
     outside.write_text("def test_external(): pass\n", encoding="utf-8")
     (test_root / "test_external.py").symlink_to(outside)
     monkeypatch.setattr(changed, "ROOT", root)
-    monkeypatch.setattr(changed, "TEST_ROOTS", (root / "LocalGenerator/tests", test_root))
+    monkeypatch.setattr(agentctl, "ROOT", root)
     _git_status(monkeypatch, "?? toolbox/tests/test_external.py\n")
     plan = changed.build_plan()
     assert plan["changedModules"] == []
@@ -79,19 +76,21 @@ def test_changed_toolbox_module_is_selected_without_broad_collection(monkeypatch
     assert plan["uncoveredChangePaths"] == []
 
 
+@pytest.mark.parametrize("doc", ["docs/overview.md", "README.md", "AGENTS.md", "START_HERE.html"])
 def test_selected_subset_with_uncovered_docs_is_not_a_complete_pass(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], doc: str
 ) -> None:
-    status = " M toolbox/tests/test_live20_support_v5.py\n M docs/overview.md\n"
+    status = f" M toolbox/tests/test_live20_support_v5.py\n M {doc}\n"
     def fake_run(cmd, **kw):
         if cmd[:2] == ["git", "status"]:
             return SimpleNamespace(returncode=0, stdout=status, stderr="")
         return SimpleNamespace(returncode=0, stdout="1 passed", stderr="")
+    _git_status(monkeypatch, status)
     monkeypatch.setattr(changed.subprocess, "run", fake_run)
-    assert changed.main() == 2
+    assert changed.main([]) == 2
     report = json.loads(capsys.readouterr().out)
     assert report["status"] == "partial"
-    assert report["uncoveredChangePaths"] == ["docs/overview.md"]
+    assert report["uncoveredChangePaths"] == [doc]
     assert report["selected"] == ["toolbox/tests/test_live20_support_v5.py"]
 
 
@@ -172,8 +171,9 @@ def test_changed_runner_forces_offline_config(monkeypatch: pytest.MonkeyPatch, c
             return SimpleNamespace(returncode=0, stdout=" M toolbox/tests/test_live20_support_v5.py\n", stderr="")
         assert kwargs["env"]["INFINI_TEST_USE_PROJECT_CONFIG"] == "0"
         return SimpleNamespace(returncode=0, stdout="1 passed")
+    _git_status(monkeypatch, " M toolbox/tests/test_live20_support_v5.py\n")
     monkeypatch.setattr(changed.subprocess, "run", fake_run)
-    assert changed.main() == 0
+    assert changed.main([]) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "passed"
 
 
@@ -186,23 +186,22 @@ def test_shards_without_files_are_not_reported_as_passed(monkeypatch: pytest.Mon
 
 
 def test_hosted_shards_use_the_accepted_finite_command_budget() -> None:
-    import shlex
-
+    manifest = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))
+    command = manifest["checks"]["pytest"]
+    assert command[command.index("--timeout-seconds") + 1] == "300"
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    invocation = next(line.split("run:", 1)[1].strip() for line in workflow.splitlines()
-                      if "run:" in line and "tools/run_pytest_shards.py" in line)
-    arguments = shlex.split(invocation)
-    assert "--timeout-seconds" in arguments
-    assert int(arguments[arguments.index("--timeout-seconds") + 1]) == 300
+    assert "python tools/validate_release.py --group python" in workflow
 
 
 def test_hosted_suite_executes_supported_roots_once() -> None:
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    commands = [line.split("run:", 1)[1].strip() for line in workflow.splitlines()
-                if line.lstrip().startswith("run:")]
-    assert sum("tools/run_pytest_shards.py" in command for command in commands) == 1
-    assert not any("-m pytest toolbox/tests" in command for command in commands), \
-        "toolbox is already included by the canonical shard runner"
+    import validate_release as validation
+
+    manifest = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))
+    groups = [name for group in ("python", "static", "build") for name in validation.checks_for_group(group, manifest)]
+    assert len(groups) == len(set(groups))
+    assert groups == validation.checks_for_group("full", manifest)
+    assert groups.count("pytest") == groups.count("tml_build") == 1
+    assert manifest["checks"]["pytest"][1] == "tools/run_pytest_shards.py"
 
 
 def test_failed_shard_cli_explains_command_termination(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -289,3 +288,224 @@ def test_hosted_python_cache_uses_the_lockfile_without_skipping_installation() -
         assert "          cache: pip\n          cache-dependency-path: LocalGenerator/requirements-dev.lock" in block
         assert "python -m pip install -r LocalGenerator/requirements-dev.lock" in block
         assert "cache-hit" not in block
+
+
+def test_validation_missing_native_environment_is_not_passed(monkeypatch: pytest.MonkeyPatch) -> None:
+    import validate_release as validation
+
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: None)
+    for name in ('tml_build', 'native_checks'):
+        row = validation.run_check(name, ['dotnet', 'build'], env={})
+        assert row['status'] == 'unavailable'
+        assert row['exitCode'] is None
+    assert validation.run_check('tml_runtime_selftest', [], env={})['status'] == 'notRun'
+
+
+def test_validation_native_checks_build_once_then_execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import validate_release as validation
+
+    for relative in ('refs/tModLoader.dll', 'deps/ParticleLibrary/ParticleLibrary.dll',
+                     'deps/Luminance/bin/Debug/net8.0/Luminance.dll'):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: '/usr/bin/dotnet' if name == 'dotnet' else None)
+    calls = []
+
+    def execute(command, root, env):
+        calls.append(command)
+        return SimpleNamespace(returncode=0, stdout='ok')
+
+    monkeypatch.setattr(validation, '_execute', execute)
+    row = validation.run_check('native_checks', ['dotnet', 'build'], root=tmp_path,
+                               env={'INFINI_TML_REFERENCE_DIR': str(tmp_path / 'refs'), 'INFINI_TML_DEPS_SRC': str(tmp_path / 'deps')})
+    assert row['status'] == 'passed'
+    assert len(calls) == 2
+    assert calls[0][1:3] == ['build', 'tools/EngineRuntimeChecks.csproj']
+    assert calls[1][1] == 'tools/bin/Debug/net8.0/EngineRuntimeChecks.dll'
+
+
+def test_validation_native_failure_does_not_execute_stale_dll(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import validate_release as validation
+
+    for relative in ('refs/tModLoader.dll', 'deps/ParticleLibrary/ParticleLibrary.dll',
+                     'deps/Luminance/bin/Debug/net8.0/Luminance.dll'):
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: '/usr/bin/dotnet' if name == 'dotnet' else None)
+    calls = []
+
+    def execute(command, root, env):
+        calls.append(command)
+        return SimpleNamespace(returncode=1, stdout='build failed')
+
+    monkeypatch.setattr(validation, '_execute', execute)
+    row = validation.run_check('native_checks', [], root=tmp_path,
+                               env={'INFINI_TML_REFERENCE_DIR': str(tmp_path / 'refs'), 'INFINI_TML_DEPS_SRC': str(tmp_path / 'deps')})
+    assert row['status'] == 'failed'
+    assert len(calls) == 1
+
+
+def test_refresh_groups_delegate_to_existing_producers() -> None:
+    manifest = json.loads((ROOT / '.agent/manifest.json').read_text(encoding='utf-8'))
+    groups = manifest['refreshGroups']
+    assert set(groups) == {'runtime', 'config', 'docs'}
+    for commands in groups.values():
+        for command in commands:
+            assert command[0] == 'python'
+            assert (ROOT / command[1]).is_file()
+            assert '--check' not in command
+
+
+@pytest.mark.parametrize("path,expected,absent", [
+    ("LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py", "schema_check", "mutation_gate"),
+    ("LocalGenerator/infini_local/desktop/settings_page_configure.py", "config_registry", "schema_check"),
+    ("ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Mobility.cs", "native_checks", "pytest"),
+    ("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs", "native_checks", "pytest"),
+])
+def test_owner_iteration_selects_relevant_gates_without_final_campaign(path, expected, absent) -> None:
+    plan = agentctl.verification_plan([path])
+    assert plan["mode"] == "iteration"
+    assert expected in plan["checks"] and absent not in plan["checks"]
+    assert not plan["releaseScope"]
+    if path.startswith("ModSources/"):
+        assert plan["requiresBuild"]
+    if "/desktop/" in path:
+        assert "LocalGenerator/tests/test_web_studio.py" in plan["tests"]
+
+
+def test_unmapped_change_and_final_mode_require_complete_plan() -> None:
+    manifest = json.loads(agentctl.MANIFEST_PATH.read_text())
+    path = "LocalGenerator/infini_local/unmapped_new_feature.py"
+    unknown = agentctl.verification_plan([path])
+    assert unknown["unmappedPaths"] == [path]
+    assert unknown["mode"] == "final_fallback"
+    assert unknown["checks"] == manifest["fullChecks"]
+    final = agentctl.verification_plan(["LocalGenerator/tests/test_web_studio.py"], final=True)
+    assert final["checks"] == manifest["fullChecks"] and not final["tests"]
+    assert final["releaseScope"]
+
+
+def test_branch_selection_includes_commits_worktree_and_both_rename_paths(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=tmp_path, check=True, text=True,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30).stdout.strip()
+    git("init", "-b", "main")
+    git("config", "user.name", "Offline test")
+    git("config", "user.email", "offline@example.invalid")
+    (tmp_path / "old name.py").write_text("baseline\n")
+    git("add", ".")
+    git("commit", "-m", "baseline")
+    base = git("rev-parse", "HEAD")
+    git("checkout", "-b", "task")
+    git("mv", "old name.py", "new name.py")
+    git("commit", "-m", "move")
+    (tmp_path / "new name.py").write_text("working tree\n")
+    (tmp_path / "untracked.py").write_text("new\n")
+    monkeypatch.setattr(agentctl, "ROOT", tmp_path)
+    assert agentctl.changed_files(base) == ["new name.py", "old name.py", "untracked.py"]
+    assert agentctl.changed_files() == ["new name.py", "untracked.py"]
+    with pytest.raises(ValueError, match="invalid --base"):
+        agentctl.changed_files("not-a-revision")
+
+
+def test_clean_task_context_selects_entrypoints_before_tool_metadata(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    args = SimpleNamespace(base=None, path=None, area=["runtime"], task="new capability", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    paths = [row["path"] for row in report["documents"]]
+    assert "LocalGenerator/infini_local/AGENTS.md" in paths
+    assert "docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md" in paths
+    assert not any(path.startswith(".agent/") for path in paths)
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 14000
+    args.path = ["../outside.py"]
+    with pytest.raises(ValueError, match="inside checkout"):
+        agentctl.command_context(args)
+
+
+@pytest.mark.parametrize("status,exit_code", [("passed", 0), ("notRun", 2), ("unavailable", 2), ("failed", 1)])
+def test_iteration_never_claims_release_or_missing_execution_passed(
+    status: str, exit_code: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["LocalGenerator/tests/test_web_studio.py"])
+    monkeypatch.setattr(agentctl, "ARTIFACTS", tmp_path)
+    monkeypatch.setattr(agentctl, "_run_check", lambda name, command: {"name": name, "status": status})
+    args = SimpleNamespace(base=None, changed=True, require_build=False, plan=False, out=None)
+    assert agentctl.command_verify(args) == exit_code
+    report = json.loads(capsys.readouterr().out)
+    assert report["releaseReady"] is False
+    assert report["ok"] is (status == "passed")
+
+
+def test_native_iteration_runs_one_native_owner_without_duplicate_tml_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["ModSources/InfiniCrafterLocal/Common/Players/InfiniCraftPlayer.Mobility.cs"])
+    monkeypatch.setattr(agentctl, "ARTIFACTS", tmp_path)
+    calls = []
+    def run(name, command):
+        calls.append(name)
+        return {"name": name, "status": "passed"}
+    monkeypatch.setattr(agentctl, "_run_check", run)
+    assert agentctl.command_verify(SimpleNamespace(base=None, changed=True, require_build=False, plan=False, out=None)) == 0
+    capsys.readouterr()
+    assert calls == ["csharp_contracts", "native_checks"]
+
+
+@pytest.mark.parametrize('group', ['runtime', 'config', 'docs'])
+def test_refresh_rebuilds_handbook_once(group: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    import validate_release as validation
+
+    calls = []
+
+    def run_check(name, command):
+        calls.append(command)
+        return {'name': name, 'status': 'passed'}
+
+    monkeypatch.setattr(validation, 'run_check', run_check)
+    validation.refresh(group)
+    assert calls[-1] == ['python', 'tools/build_documentation.py']
+    assert calls.count(calls[-1]) == 1
+
+
+def test_refresh_stops_before_handbook_on_producer_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    import validate_release as validation
+
+    calls = []
+
+    def run_check(name, command):
+        calls.append(command)
+        return {'name': name, 'status': 'failed'}
+
+    monkeypatch.setattr(validation, 'run_check', run_check)
+    rows = validation.refresh('runtime')
+    assert len(calls) == len(rows) == 1
+    assert calls[0][1] != 'tools/build_documentation.py'
+
+
+def test_validation_forces_offline_config_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    import validate_release as validation
+
+    def execute(command, root, env):
+        assert env['INFINI_SKIP_CONFIG_FILE'] == '1'
+        assert env['INFINI_TEST_USE_PROJECT_CONFIG'] == '0'
+        assert env['PYTHONPATH'] == str(ROOT / 'LocalGenerator')
+        return SimpleNamespace(returncode=0, stdout='ok')
+
+    monkeypatch.setattr(validation, '_execute', execute)
+    row = validation.run_check('probe', ['python', '-c', 'pass'], env={
+        'INFINI_SKIP_CONFIG_FILE': '0', 'INFINI_TEST_USE_PROJECT_CONFIG': '1', 'PYTHONPATH': '/wrong'})
+    assert row['status'] == 'passed'
+
+
+def test_validation_translates_paths_only_for_windows_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
+    import validate_release as validation
+
+    monkeypatch.setattr(validation.os, 'name', 'posix')
+    monkeypatch.setattr(validation.shutil, 'which', lambda name: '/usr/bin/wslpath')
+    monkeypatch.setattr(validation.subprocess, 'run', lambda command, **kwargs: SimpleNamespace(returncode=0, stdout='C:\\repo\\tools\\check.csproj\n'))
+    assert validation._host_path('dotnet', 'tools/check.csproj', ROOT) == 'tools/check.csproj'
+    assert validation._host_path('dotnet.exe', 'tools/check.csproj', ROOT) == 'C:\\repo\\tools\\check.csproj'

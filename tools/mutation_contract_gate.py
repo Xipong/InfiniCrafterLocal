@@ -16,14 +16,12 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 import infini_local.core.runtime_authoring.capability_registry as registry_module
 import infini_local.core.runtime_authoring.validator as validator_module
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY,
-    audit_compiler_receipts,
-    compile_runtime_program,
-    runtime_program_author_schema,
-    validate_runtime_program,
-    validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 

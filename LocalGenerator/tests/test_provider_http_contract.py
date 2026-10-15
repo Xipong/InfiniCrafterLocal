@@ -553,7 +553,7 @@ def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypa
 
     from infini_local.web.vfx_debug_routes import _sample_data
     from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
-    from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 
     for suffix, parents, versions in [
         ("a", ("Wooden Sword", "Work Bench"), {"runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION}),

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 from contextlib import nullcontext
 
@@ -8,11 +9,12 @@ import json
 import pytest
 
 import infini_local.pipelines.llm_authoring_pipeline as gameplay_stage
-import infini_local.pipelines.combine_pipeline as combine_stage
+import infini_local.pipelines.gameplay_stage as combine_stage
 import infini_local.pipelines.visual_generation_pipeline as visual_stage
 import infini_local.core.vfx_manifest as vfx_stage
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA, attach_hybrid_vfx_manifest, vfx_director_surface
 from infini_local.pipelines.combine_pipeline import _assert_stage_topology
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -163,7 +165,7 @@ def wire_transport(monkeypatch):
             raise value
         return {"choices": [{"message": {"content": value if isinstance(value, str) else json.dumps(value)}}]}
 
-    for module in (gameplay_stage, visual_stage):
+    for module in (gameplay_stage, visual_stage, vfx_transport):
         monkeypatch.setattr(module, "USE_LLM", True)
         monkeypatch.setattr(module, "resolve_llm_model", lambda: "test-model")
         monkeypatch.setattr(module, "llm_chat_json", reply)
@@ -203,7 +205,7 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
         responses.append({"schema": VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.5,
                           "visualBudgetClass": None, "motif": None, "slotsUpsert": [],
                           "slotIdsDelete": [], "slotIndicesDelete": [], "note": "repair only magnitude"})
-    final = attach_hybrid_vfx_manifest(visual, "a+b", llm_director=gameplay_stage.call_llm_vfx_director)
+    final = attach_hybrid_vfx_manifest(visual, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
     expected_stages = ["planner", "visual_director"] + (["visual_repair"] if repair_needed else [])
     expected_stages += ["vfx_director"] + (["vfx_repair"] if repair_needed else [])
     assert [request["_infini_stage"] for request in requests] == expected_stages
@@ -292,7 +294,7 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
         elif stage == "visual":
             result = visual_stage.apply_visual_director(data, {}, {}, {}, {})
         else:
-            result = attach_hybrid_vfx_manifest(data, "a+b", llm_director=gameplay_stage.call_llm_vfx_director)
+            result = attach_hybrid_vfx_manifest(data, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
     names = {"gameplay": ["planner", "author_repair"], "visual": ["visual_director", "visual_repair"], "vfx": ["vfx_director", "vfx_repair"]}[stage]
     assert [request["_infini_stage"] for request in requests] == names
     assert not responses  # Any unbounded third request fails the recording transport too.
@@ -401,7 +403,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
     pytest.param("empty-healing", "json_object", id="object-empty-effect"),
 ])
 def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monkeypatch, mode, case):
-    from infini_local.core.runtime_authoring import validate_runtime_wire
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
@@ -451,7 +453,7 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire_transport, monkeypatch, mode):
     fields = ("buffId", "durationTicks")
-    from infini_local.core.runtime_authoring import validate_runtime_wire
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from test_pipeline_repair_contract import _bounded_invalid_buff_calls
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
@@ -489,7 +491,7 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("oversized_surface", ["calls", "unknown-root"])
 def test_oversized_author_response_refuses_before_format_or_gameplay_repair(wire_transport, monkeypatch, mode, oversized_surface):
-    from infini_local.core.runtime_authoring import program_schema
+    import infini_local.core.runtime_authoring.program_schema as program_schema
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     responses, requests = wire_transport
@@ -537,10 +539,12 @@ def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario
                 fixed["params"]["useStyle"] = "shoot"
             responses.append(dict(_empty_gameplay_patch(), callsUpsert=[fixed] if scenario == "scoped-fix" else [], realizationReplacement=copy.deepcopy(current["realization"])))
     labels = []
+    stage_labels = []
     recovered = False
 
     def observe(_label, fn, *args, **kwargs):
         nonlocal recovered
+        stage_labels.append(_label)
         phases = {combine_stage.strict_validate_authored_item: "author_validation",
                   combine_stage.attach_gameplay_and_runtime_program: "runtime_compile",
                   combine_stage.repair_author_item_after_failure: "author_recovery"}
@@ -569,3 +573,84 @@ def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario
     assert pipeline_phase_count(labels, "runtime_compile") == int(cutoff is None)
     assert [r["_infini_stage"] for r in requests] == (["author_repair"] if scenario in {"scoped-fix", "no-op"} else [])
     assert not responses
+
+    domain_labels = ["strict_runtime_program", "parent_power_context", "compile_runtime_program", "wire_boundary"]
+    expected_labels = {
+        "valid": ["02_" + label for label in domain_labels],
+        "scoped-fix": ["02_strict_runtime_program", "02r_conditional_gameplay_repair"]
+            + ["02r_" + label for label in domain_labels],
+        "no-op": ["02_strict_runtime_program", "02r_conditional_gameplay_repair"],
+        "spent-budget": ["02_strict_runtime_program"],
+    }
+    assert stage_labels == expected_labels[scenario]
+
+
+@pytest.mark.parametrize("error_type", [RuntimeError, AssertionError, TypeError, ValueError])
+@pytest.mark.parametrize("after_repair", [False, True])
+def test_compiler_faults_propagate_without_gameplay_repair(monkeypatch, error_type, after_repair):
+    good = build_runtime_fixture("workbench_blade")
+    current = copy.deepcopy(good)
+    if after_repair:
+        current["name"] = ""
+    repair_calls = []
+
+    def repair(*args, **kwargs):
+        repair_calls.append(kwargs["failure_report"])
+        return copy.deepcopy(good)
+
+    fault = error_type("compiler invariant failed")
+
+    def broken_compiler(*args, **kwargs):
+        raise fault
+
+    monkeypatch.setattr(combine_stage, "compile_runtime_program", broken_compiler)
+    monkeypatch.setattr(combine_stage, "repair_author_item_after_failure", repair)
+    with pytest.raises(error_type) as caught:
+        combine_stage.compile_and_validate_authored_runtime(
+            current, {}, {}, {}, {}, "compiler-fault", run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+    assert caught.value is fault
+    assert len(repair_calls) == int(after_repair)
+
+
+def test_runtime_wire_admission_once_and_final_gate_still_rejects_mutation(monkeypatch):
+    validate = combine_stage.validate_runtime_wire
+    calls = []
+
+    def observe(data):
+        calls.append(data)
+        return validate(data)
+
+    monkeypatch.setattr(combine_stage, "validate_runtime_wire", observe)
+    result = combine_stage.compile_and_validate_authored_runtime(
+        build_runtime_fixture("workbench_blade"), {}, {}, {}, {}, "single-admission",
+        run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+    assert len(calls) == 1
+    result["runtimeProgram"]["schema"] = "invalid-after-presentation"
+    with pytest.raises(PlannerUnavailable, match="runtime wire rejected"):
+        combine_stage.validate_final_runtime_wire_boundary(result)
+    assert len(calls) == 2
+
+
+def test_wire_rejection_preserves_exact_repair_targets(monkeypatch):
+    validate = combine_stage.validate_runtime_wire
+    target = {"path": "$.runtimeProgram.entities[0]", "code": "wire_rejection", "message": "invalid wire leaf"}
+    reports = []
+    count = 0
+
+    def reject_once(data):
+        nonlocal count
+        count += 1
+        return {"ok": False, "errors": [target]} if count == 1 else validate(data)
+
+    def repair(authored, *args, **kwargs):
+        reports.append(kwargs["failure_report"])
+        return authored
+
+    monkeypatch.setattr(combine_stage, "validate_runtime_wire", reject_once)
+    monkeypatch.setattr(combine_stage, "repair_author_item_after_failure", repair)
+    result = combine_stage.compile_and_validate_authored_runtime(
+        build_runtime_fixture("workbench_blade"), {}, {}, {}, {}, "wire-rejection",
+        run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+    assert validate(result)["ok"]
+    assert count == 2 and len(reports) == 1
+    assert reports[0]["errors"] == [target]

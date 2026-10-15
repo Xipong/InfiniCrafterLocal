@@ -11,7 +11,7 @@ from typing import Any, Callable
 
 from infini_local.core.config_bootstrap import APP_VERSION
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 
 
 from infini_local.pipelines.result_identity_policy import (

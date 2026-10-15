@@ -36,6 +36,30 @@
 - Удаляй низкоценные повторные проверки, не прячь их за skip/xfail, общим циклом или переименованным helper. Не обещай сохранение всех прежних assertions: узкое честное покрытие лучше дублирующего scanner framework.
 - Для tests-only cleanup достаточно одного affected Python run; неизменённые native результаты можно повторно использовать. Не запускай full suite и mutation campaign по кругу. Full CI принадлежит интегрированному commit.
 
+## Один рабочий маршрут
+
+`tools/agentctl.py` выбирает существующие семейства проверок по крупным областям владельцев. Это подсказка для итерации, не доказательство полного impact closure:
+
+```bash
+python tools/agentctl.py context --task "новая capability" --area runtime
+python tools/agentctl.py context --task "настройка Studio" --area studio
+python tools/agentctl.py context --task "projectile bug" --path ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs
+python tools/agentctl.py verify --changed --base origin/main --plan
+python tools/agentctl.py verify --changed --base origin/main
+```
+
+- `--base` сравнивает committed branch diff от merge-base и добавляет staged/unstaged/untracked изменения. Для stacked PR используй его base branch. Без `--base` учитывается только рабочее дерево.
+- Runtime, Studio, transport и storage выбирают готовые test families; C# — static contract gate и один полный быстрый linked-source CPU runner. Mutation и full pytest остаются финальной приёмкой.
+- Неизвестные пути и общие test fixtures/conftest консервативно выбирают полный набор. Изменённый самостоятельный test module запускается сам. Пустая выборка — `not_selected`, недоступная среда — `unavailable`/`notRun`, не PASS.
+- `--area` явно выбирает контекст до правок, `--path` начинает от конкретного файла; `--task` — описание, а не эвристический router. Большие файлы обрезаются с `truncated`, entrypoints идут первыми.
+- `run_changed_pytests.py --base ...` — только удобный pytest subset из той же карты. Он не заменяет остальные gates.
+
+Полная приёмка: `python tools/validate_release.py`. Bash/PowerShell wrappers и CI вызывают тот же Python owner и manifest. Группы `--group python`, `--group static`, `--group build` делят полный набор без повторов; `releaseReady` требует выполнения всего набора. Недоступные optional native/live проверки показываются отдельно даже при успешных offline gates.
+
+Для native CPU: `dotnet` в PATH, `INFINI_TML_REFERENCE_DIR` указывает на `tModLoader/lib/net8.0`, `INFINI_TML_DEPS_SRC` — на корень ParticleLibrary/Luminance. Runner собирает harness один раз и запускает DLL только после успешной сборки. Это не GPU/world/MP проверка. `--require-build` и `--require-runtime-selftest` делают соответствующие environment gates обязательными для release command.
+
+Обновление производных файлов: `python tools/validate_release.py --refresh runtime` либо `--refresh config`; оба вызывают существующих producers и в конце обновляют offline handbook. Для одной документации — `--refresh docs`. Refresh не запускает тестовую кампанию и не меняет runtime contracts сам.
+
 ## Запуск
 
 Из корня с test dependencies:

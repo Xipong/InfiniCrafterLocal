@@ -8,6 +8,7 @@
 Capability существует только после полного `registry → provider schema/prompt → validator → compiler receipts → strict wire → C# DTO/executor → tests → docs`.
 
 1. В `capability_registry.py` объяви exact meaning, target kinds, typed params с **units/neutral/Author range/one-to-one wire projection/execution phase**, component slot/exclusivity, dependencies/events, authority/budget, finite wire paths и Python callable/C# method symbols. Percent, percentage points и multiplier различны. Runtime envelope ради исторических DTO может быть шире Author, но не уже.
+   Механические факты задаются рядом с capability в `_cap(...)`: `cs`, `component_slot`, `authority`/`authority_by_effect`, ownership/events и локальные `requirements`. Не добавляй параллельную таблицу по имени capability. Для особой проекции `wire` содержит точные пути; для уже поддержанной простой component-проекции оставь его пустым: пути выводятся из `ParamSpec`. Dependencies/conflicts, effect-group paths и общие параметрические требования выводятся при финализации. Для movement общие факты задаёт `_movement`; индивидуальные требования остаются в вызове. Изменение C# executor по-прежнему требует полного vertical slice.
 2. Используй registry-generated schemas/cards. Shape owner — `program_schema.py`, model prose — `author_item_contract.py`; ручной alias/shadow registry не создавай.
 3. Validator rule — metadata или общий exact rule, не выбор design default. Event producer alternatives выводи из canonical event/entity metadata; model выбирает полный вариант. Для нового error code добавь machine Repair policy и blocker closure parity, без event-name repair router.
 4. Compiler пишет declared paths и receipts; [classification](TECHNICAL_LOWERING_POLICY_RU.md#transformations) и lossless proof обязательны. [Новые omission permissions](../reference/DECLARED_NEUTRAL_OMISSIONS_RU.md#dependencies) требуют совместных комбинаций, provenance и C# consumer проверки, не только optional flag.
@@ -21,17 +22,10 @@ Capability существует только после полного `registry
 Из корня, Python проекта и `PYTHONPATH=LocalGenerator`:
 
 ```bash
-python tools/export_contract_schemas.py
-python tools/generate_lowery.py
-python tools/generate_low_level_runtime_docs.py
-python tools/generate_equipment_bounds.py
-python tools/generate_primitive_parity.py
-python tools/audit_targeted_repair.py --output contracts/targeted_repair_audit.generated.json
-python tools/audit_terraria_standardization.py --write
-python -m infini_local.qa.primitive_loss_audit
+python tools/validate_release.py --refresh runtime
 ```
 
-После генерации применяй `--check`, где поддерживается; остальные parity/mutation/build commands — [AGENTS](../../AGENTS.md#обязательный-vertical-slice) и [test owners](TESTING_RU.md). Это authoring workflow, **не** разрешение редактировать generated файлы вручную или менять runtime в docs-only задаче.
+Команда вызывает существующих producers в порядке зависимостей и обновляет offline handbook. Для проверки без записи: `python tools/validate_release.py --group static`; полная приёмка и focused iteration — [AGENTS](../../AGENTS.md#обязательный-vertical-slice) и [test owners](TESTING_RU.md). Это authoring workflow, **не** разрешение редактировать generated файлы вручную или менять runtime в docs-only задаче.
 
 <a id="shortcuts"></a>
 ## Запрещённый shortcut

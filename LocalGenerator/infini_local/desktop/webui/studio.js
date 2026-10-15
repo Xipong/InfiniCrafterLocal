@@ -166,7 +166,7 @@
     const first = !state.remote;
     const presentation=()=>JSON.stringify(state.fields.map(field=>[field.key,inactiveReason(field),!!derivedField(field.key)]));
     const previousPresentation=presentation();
-    let needsRender=false;
+    let needsRender=false, finished=null;
     const previousFields = JSON.stringify(state.fields.map(f => [f.key,f.options]));
     const previousPresets = JSON.stringify([state.remote?.presets,state.remote?.userPresets]);
     const saved = {...remote.defaults,...(remote.savedValues || remote.values)};
@@ -230,7 +230,7 @@
         if (['acceptDefaults','declineDefaults'].includes(pending.action)) defaultsError(message);
         toast(message,true);
       }
-      state.suppressToast=false;state.pending = null; clearTimeout(pending.timer);
+      state.suppressToast=false;state.pending = null; clearTimeout(pending.timer);finished=pending;
       if(receipt.ok && ['applyPreset','savePreset'].includes(pending.action)) state.presetChoice=null;
       if (pending.action === 'exitStudio' && receipt.ok && receipt.status === 'succeeded') {
         state.shutdown=true;clearTimeout(state.pollTimer);$('#utility-dialog').close();
@@ -267,6 +267,7 @@
     if ($('#account-status')) $('#account-status').textContent=accountText(state.page);
     $('#version').textContent = `Версия ${remote.version || 'α'}`;
     if($('#defaults-summary')) $('#defaults-summary').textContent=defaultsSummary();
+    restoreActionFocus(finished);
     return true;
   }
   async function poll() {
@@ -301,17 +302,19 @@
     if(state.pending?.action === name || state.submission?.action === name) return;
     if (!state.connected || state.pending || state.posting) {toast('Дождись ответа текущего действия или восстанови соединение.',true);return;}
     if(name === 'codexCatalog') state.catalogAutoRequested=true;
+    const active=document.activeElement;
+    const focus=active?.dataset?.action === name ? {element:active,action:name,page:state.page,region:active.closest('#save-tray') ? '#save-tray':'#workspace'} : null;
     state.posting = true;
     const defaultsDecision = ['acceptDefaults','declineDefaults'].includes(name);
     const sent = defaultsDecision ? (name === 'acceptDefaults' ? Object.fromEntries((state.defaultsPreview?.changes || []).map(row => [row.key,row.recommended])) : {}) : editableValues();
     const clock = state.editClock, sentLan = state.lan, dirtyKeys=[...state.dirty];
     // Protect the submission from the first byte sent, not only after its id arrives.
-    state.submission = {action:name,sent,clock,lan:sentLan,dirtyKeys};
+    state.submission = {action:name,sent,clock,lan:sentLan,dirtyKeys,focus};
     updateActionButtons();
     try {
       const queued = await api('/api/action',{action:name,values:defaultsDecision ? {} : sent,extra:defaultsDecision ? {revision:extra.revision} : {lanEnabled:sentLan,...(['save','start','forceRestart'].includes(name) ? {savedRevision:state.savedRevision} : {}),...extra}});
       if (!queued.ok || !queued.id) throw new Error('Локальный сервер не подтвердил очередь действия.');
-      const pending = {id:queued.id,action:name,sent,clock,lan:sentLan,dirtyKeys,timer:null};
+      const pending = {id:queued.id,action:name,sent,clock,lan:sentLan,dirtyKeys,focus,timer:null};
       state.pending = pending;
       state.submission = null;
       pending.timer = setTimeout(() => {
@@ -321,7 +324,15 @@
       },name === 'browse' ? 180000 : 30000);
       poll();
     } catch (error) {if (defaultsDecision) defaultsError(error.message); toast(error.message,true);}
-    finally {state.submission = null; state.posting = false; updateActionButtons();}
+    finally {state.submission = null; state.posting = false; updateActionButtons();if(!state.pending) restoreActionFocus({focus});}
+  }
+  function restoreActionFocus(finished) {
+    const focus=finished?.focus;
+    // Disabling the initiating button drops focus to body. Restore only that
+    // abandoned focus, never a newer field, dialog, or navigation choice.
+    if(!focus || focus.page !== state.page || document.activeElement !== document.body || document.querySelector('dialog[open]')) return;
+    const candidates=focus.element.isConnected ? [focus.element] : $$('[data-action]',$(focus.region));
+    candidates.find(button=>button.dataset.action === focus.action && !button.disabled && button.getClientRects().length)?.focus({preventScroll:true});
   }
   function updateActionButtons() {
     const locked = !state.connected || state.pending || state.posting || state.shutdown;
@@ -624,7 +635,15 @@
     const display=(key,val)=>isCredentialKey(key) ? (val ? '••••••••':'Не задано') : val || 'Не задано';
     utility('Конфигурация изменилась на диске', `<p class="dialog-copy">Другой процесс или вкладка сохранили настройки после начала твоего черновика. Проверь изменения ниже. Твои правки останутся в этой вкладке; сохранение потребует отдельного нажатия.</p><div class="confirm-list">${changed.map(key=>`<div><span>${esc(names[key] || key)}<small>На диске: ${esc(display(key,disk[key]))}</small></span><span>Черновик: ${esc(display(key,value(key)))}</span></div>`).join('')}</div><div class="dialog-actions"><button class="button" data-ui="close-dialog">Вернуться</button><button class="button button-primary" id="reconcile-draft">Продолжить с моими правками</button></div>`);
     const revision=state.remote.savedRevision;
-    $('#reconcile-draft').onclick=()=>{const edits=Object.fromEntries([...state.dirty].map(key=>[key,state.draft[key]]));state.draft={...disk,...edits};state.baseline={...disk};state.savedRevision=revision;state.revisionValues={...disk};$('#utility-dialog').close();recomputeDirty();render();toast('Черновик сохранён в этой вкладке. Проверь его и нажми «Сохранить», когда будешь готов.');};
+    $('#reconcile-draft').onclick=()=>{
+      // Polling may have observed a second writer while this comparison was
+      // open. Never acknowledge a revision different from the reviewed one.
+      if(!state.remote.savedRevision) {toast('Не удалось проверить конфигурацию на диске. Дождись восстановления чтения и обнови сравнение.',true);return;}
+      if(state.remote.savedRevision !== revision) {showSaveConflict();$('#utility-dialog [data-ui="close-dialog"]').focus({preventScroll:true});toast('Конфигурация изменилась ещё раз. Сравнение обновлено; проверь новые значения перед продолжением.',true);return;}
+      const edits=Object.fromEntries([...state.dirty].map(key=>[key,state.draft[key]]));
+      state.draft={...disk,...edits};state.baseline={...disk};state.savedRevision=revision;state.revisionValues={...disk};
+      $('#utility-dialog').close();recomputeDirty();render();toast('Черновик сохранён в этой вкладке. Проверь его и нажми «Сохранить», когда будешь готов.');
+    };
   }
   function showDocument(result) {
     utility(result.title || 'Локальный документ', `<p class="dialog-copy">${esc(result.path || '')}</p><pre class="document-view">${esc(result.content || '')}</pre><div class="dialog-actions"><button class="button" data-ui="close-dialog">Закрыть</button></div>`);

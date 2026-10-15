@@ -11,10 +11,7 @@ from typing import Any
 
 from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LENGTH
 
-from infini_local.core.runtime_authoring import (
-    RUNTIME_PROGRAM_API_VERSION,
-    RUNTIME_PROGRAM_SCHEMA,
-)
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA
 
 
 def _parent_name(parent: dict[str, Any], default: str) -> str:

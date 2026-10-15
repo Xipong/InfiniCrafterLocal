@@ -5,11 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope,
-    compile_runtime_program, filter_repair_patch_scope, validate_runtime_program,
-    validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.capability_registry import MOVEMENT_OPCODE
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
@@ -365,7 +366,7 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
 
 @pytest.mark.parametrize("fn", ["spawn_over_target", "move_bounce"])
 def test_retired_author_call_is_absent_from_schema_prompt_repair_and_registry(fn):
-    from infini_local.core.runtime_authoring import compact_capability_catalog, capability_provider_union
+    from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog, capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
     assert fn not in {row["fn"] for row in compact_capability_catalog()}
     assert fn not in {row["properties"]["fn"]["const"] for row in capability_provider_union()}

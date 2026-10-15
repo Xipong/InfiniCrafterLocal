@@ -4,7 +4,7 @@ from infini_local.core.runtime_authoring.capability_registry import visible_capa
 import json
 from typing import Any, Mapping, Sequence
 
-from infini_local.core.runtime_authoring import (
+from infini_local.core.runtime_authoring.capability_registry import (
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
     ENTITY_KIND_REGISTRY,

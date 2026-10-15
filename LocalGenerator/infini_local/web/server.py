@@ -46,7 +46,7 @@ from infini_local.core.llm_config import (
     OPENROUTER_MODEL,
     USE_LLM,
 )
-from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_RUNTIME_AUTHORING,
     LLM_RUNTIME_PLAN_REQUIRED,

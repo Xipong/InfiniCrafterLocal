@@ -5,10 +5,17 @@ import argparse,json,sys
 from pathlib import Path
 from typing import Any
 ROOT=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(ROOT/"LocalGenerator"))
-from infini_local.core.runtime_authoring import author_item_repair_schema, author_item_response_schema, capability_inventory_rows, runtime_program_author_schema, runtime_repair_scope_schema, technical_lowering_manifest
+from infini_local.core.runtime_authoring.program_schema import (
+    author_item_repair_schema,
+    author_item_response_schema,
+    runtime_program_author_schema,
+)
+from infini_local.core.runtime_authoring.capability_registry import capability_inventory_rows
+from infini_local.core.runtime_authoring.repair_scope import runtime_repair_scope_schema
+from infini_local.core.runtime_authoring.technical_lowering import technical_lowering_manifest
 from infini_local.core.vfx_manifest import vfx_director_schema, vfx_repair_schema
 from infini_local.pipelines.visual_generation_pipeline import visual_repair_schema, visual_response_schema
-from infini_local.core.runtime_authoring import compile_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 OUT=ROOT/"contracts/schemas"
 

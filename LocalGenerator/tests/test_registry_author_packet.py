@@ -8,10 +8,8 @@ import json
 import pytest
 from repair_test_helpers import offline_builder, repair_with_response, assert_repaired_source
 
-from infini_local.core.runtime_authoring import (
-    INPUT_KIND_REGISTRY,
-    validate_runtime_program,
-)
+from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.capability_registry import runtime_authoring_prompt_field_guide
 from infini_local.core.runtime_authoring.program_schema import binding_schema, strict_schema_errors
 from infini_local.pipelines.author_item_contract import (
@@ -35,7 +33,8 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 @pytest.mark.parametrize("fixture_name", ["fishing_platform_tool", "workbench_blade"])
 def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(monkeypatch, fixture_name):
-    from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
     item = build_runtime_fixture(fixture_name)
@@ -143,7 +142,8 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
 
 @pytest.mark.parametrize("pick_power", [0, 50], ids=["inactive-tool-keeps-light", "active-tool-keeps-light"])
 def test_tool_applicability_does_not_rewrite_authored_composition(pick_power):
-    from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     doc = build_capability_witness("configure_tool")

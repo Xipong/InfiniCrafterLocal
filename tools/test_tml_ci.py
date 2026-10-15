@@ -37,8 +37,10 @@ class TmlWorkflowTests(unittest.TestCase):
             root = Path(directory)
             tools = root / "tools"
             tools.mkdir()
-            for name in ("build_tml_windows.ps1", "parse_tml_build_log.py"):
+            for name in ("build_tml_windows.ps1", "parse_tml_build_log.py", "validate_release.py"):
                 shutil.copy2(ROOT / "tools" / name, tools / name)
+            (root / ".agent").mkdir()
+            shutil.copy2(ROOT / ".agent/manifest.json", root / ".agent/manifest.json")
             project = root / "ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
             project.parent.mkdir(parents=True)
             project.write_text('<Project Sdk="Tomat.Terraria.ModLoader.Sdk" />', encoding="utf-8")
@@ -74,6 +76,8 @@ class TmlWorkflowTests(unittest.TestCase):
                 "Set-Location $PSScriptRoot\n"
                 f"$env:PATH = (Join-Path $PSScriptRoot 'bin') + '{separator}' + $env:PATH\n"
                 "$env:INFINI_TML_DEPS_SRC = Join-Path $PSScriptRoot 'deps'\n"
+                "$env:INFINI_TML_REFERENCE_DIR = ''\n"
+                "$env:INFINI_AGENT_SELFTEST_REPORT = ''\n"
                 "$env:GITHUB_ENV = Join-Path $PSScriptRoot 'github-env.txt'\n"
                 "./workflow.ps1\n"
                 # GitHub's pwsh shell checks LASTEXITCODE after the run block.
