@@ -66,6 +66,27 @@ def test_csharp_lint_reports_invalid_source_not_comment_or_string_decoys(gates, 
     assert any(issue.startswith(code + ":") for issue in scanner.source_policy_issues({path: source}))
 
 
+@pytest.mark.parametrize("mutation,diagnostic", [
+    ("unguarded", "selftest_opt_in"),
+    ("spawn", "selftest_projectile_spawn"),
+])
+def test_selftest_safety_policy_rejects_unguarded_or_world_mutating_emitter(gates, mutation, diagnostic):
+    _, scanner = gates
+    path = "Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs"
+    source = (scanner.SRC / path).read_text(encoding="utf-8")
+    assert scanner.source_policy_issues({path: source}) == []
+    body = scanner.method_body(source, "PostSetupContent")
+    guard_end = body.index("return;") + len("return;")
+    if mutation == "unguarded":
+        changed = source.replace(body, body[guard_end:], 1)
+    else:
+        changed = source.replace("var checks =", "Projectile.NewProjectile(default);\n        var checks =", 1)
+    assert diagnostic + ":" + path in scanner.source_policy_issues({path: changed})
+    # A comment/string mention of a spawn is not executable world mutation.
+    decoy = source + '\n// Projectile.NewProjectile(default);\n' + 'class Note { const string Text = "Projectile.NewProjectile"; }'
+    assert scanner.source_policy_issues({path: decoy}) == []
+
+
 def test_forbidden_gameplay_router_policy_ignores_layout_and_decoys(gates):
     _, scanner = gates
     assert scanner.architecture_issues({"Moved.cs": '// AttackSpec\nstring text = "WeaponFamily";'}) == []
