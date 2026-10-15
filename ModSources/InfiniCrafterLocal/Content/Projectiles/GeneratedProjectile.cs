@@ -211,8 +211,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
             Projectile.timeLeft = Math.Max(1, syncedTimeLeft);
             _remainingBounces = Math.Clamp(syncedBounces, 0, entity.Collision.BounceCount);
             _activationDelayTicks = Math.Max(0, syncedActivationDelay);
-            Projectile.friendly = _activationDelayTicks <= 0 && entity.Damage.Enabled && Projectile.damage > 0;
-            Projectile.alpha = _activationDelayTicks > 0 ? 220 : 0;
+            bool waitingForActivation = _activationDelayTicks > 0 || entity.Spawn.OverTarget.DelayTicks > 0 && _age == 0;
+            Projectile.friendly = !waitingForActivation && entity.Damage.Enabled && Projectile.damage > 0;
+            Projectile.alpha = waitingForActivation ? 220 : 0;
         }
         _preserveSyncedStateOnHydrate = false;
         // Only fully configured native results convert a reservation to live

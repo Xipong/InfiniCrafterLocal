@@ -123,6 +123,13 @@ internal static partial class EngineRuntimeChecks
     private static void WeaponAmmoActivationDelayPreservesNativeShotAndHydration()
     {
         using var scope = new SwarmRuntimeScope();
+        int spawnEvents = 0;
+        using var eventObserver = new Hook(typeof(GeneratedProjectile).GetMethod("RunRuntimeEvent", RootPrivate)!,
+            (Action<Action<GeneratedProjectile, string, NPC?, int>, GeneratedProjectile, string, NPC?, int>)
+            ((original, projectile, eventName, target, damage) => {
+                if (eventName == RuntimeEventKind.OnSpawn) spawnEvents++;
+                original(projectile, eventName, target, damage);
+            }));
         var property = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
         var previous = property.GetValue(null);
         using var registry = new GeneratedItemRegistryService();
@@ -197,6 +204,17 @@ internal static partial class EngineRuntimeChecks
                     Equal(new Vector2(2f, 7f), peer.Projectile.velocity, "late metadata hydration never relaunches live motion");
                     Equal(true, typeof(GeneratedProjectile).GetField("_activationSpawnBudget", RootPrivate)!.GetValue(peer) is null,
                         "received launch snapshot creates no owner spawn ledger");
+                    // A valid waiting snapshot can arrive after this peer has
+                    // observed activation. Arming must not depend on its retained
+                    // one-shot event flag, nor replay on_spawn during recovery.
+                    int previousSpawnEvents = spawnEvents;
+                    peer.ReceiveExtraAI(new BinaryReader(new MemoryStream(payload)));
+                    for (int update = 0; update < remainingWait; update++) peer.AI();
+                    Equal(false, peer.Projectile.friendly, "replayed final waiting update remains harmless");
+                    peer.AI();
+                    Equal(true, peer.Projectile.friendly, "replayed waiting snapshot rearms on first active update");
+                    Equal(0, peer.Projectile.alpha, "replayed waiting snapshot restores active visibility");
+                    Equal(previousSpawnEvents, spawnEvents, "replayed waiting snapshot cannot emit on_spawn twice");
                 }
                 if (basis == "native_shot")
                 {
