@@ -595,7 +595,6 @@ public sealed class GeneratorClient
             existing = canonical;
         }
         Item craftItem = CraftIdentityItem(item, existing);
-        RuntimePlacementSpec? placement = CanonicalParentPlacement(existing);
         int originalPrefix = SafePrefix(item);
         bool prefixIgnored = originalPrefix != InfiniTerrariaSentinels.NoPrefix;
         var autoFeatures = AutoFeaturesFromItem(craftItem).ToArray();
@@ -603,93 +602,52 @@ public sealed class GeneratorClient
         string sourceMod = SourceModName(craftItem);
         string internalName = InternalName(craftItem);
         var tooltip = CaptureLiteralParentTooltip(craftItem, existing, sourceMod + "/" + internalName);
-        var snapshot = new
+        ParentNativeFacts native = CaptureParentNativeFacts(craftItem, existing);
+        // The three historical envelopes share one observed native snapshot. Only
+        // these explicit shape differences belong here; no native field is read
+        // again by an envelope projection. Copies preserve null and number types.
+        JsonObject snapshot = (JsonObject)native.RuntimeFacts.DeepClone();
+        snapshot.Remove("type");
+        snapshot.Remove("buffType");
+        snapshot.Remove("buffTime");
+        snapshot["id"] = native.RuntimeFacts["type"]!.DeepClone();
+        snapshot["name"] = existing?.Name ?? craftItem.Name;
+        snapshot["sourceMod"] = sourceMod;
+        snapshot["internalName"] = internalName;
+        snapshot["fullName"] = sourceMod + "/" + internalName;
+        snapshot["tooltipLines"] = JsonSerializer.SerializeToNode(tooltip.Lines, WireJsonOptions);
+        snapshot["tooltipSource"] = JsonSerializer.SerializeToNode(tooltip.Source, WireJsonOptions);
+        snapshot["prefix"] = InfiniTerrariaSentinels.NoPrefix;
+        snapshot["originalPrefix"] = originalPrefix;
+        snapshot["prefixIgnored"] = prefixIgnored;
+        snapshot["stack"] = item.stack;
+        snapshot["moddedOrigin"] = sourceMod != "Terraria";
+        snapshot["directProjectileRaw"] = native.DirectProjectileRaw?.DeepClone();
+        // Player-aware ammo observations intentionally differ from fingerprint's
+        // player-free reference candidates and must remain separate captures.
+        snapshot["effectiveProjectileRaw"] = JsonSerializer.SerializeToNode(EffectiveProjectileRawFromItem(craftItem, player), WireJsonOptions);
+        snapshot["ammoRaw"] = JsonSerializer.SerializeToNode(AmmoRawFromItem(craftItem, player), WireJsonOptions);
+        // Only generated parents carry authored design tags.
+        snapshot["tags"] = JsonSerializer.SerializeToNode(existing?.Tags is { Length: > 0 } ? existing.Tags : Array.Empty<string>(), WireJsonOptions);
+        snapshot["runtimeFacts"] = native.RuntimeFacts.DeepClone();
+        snapshot["autoFeatures"] = JsonSerializer.SerializeToNode(autoFeatures, WireJsonOptions);
+        snapshot["nameTokens"] = JsonSerializer.SerializeToNode(nameTokens, WireJsonOptions);
+        snapshot["canonical"] = JsonSerializer.SerializeToNode(existing?.Canonical ?? CanonicalFromItem(craftItem, autoFeatures), WireJsonOptions);
+        snapshot["fingerprint"] = FingerprintFromItem(craftItem, sourceMod, internalName, autoFeatures, nameTokens, existing, native, originalPrefix);
+        snapshot["generatedData"] = JsonSerializer.SerializeToNode(existing, WireJsonOptions);
+        snapshot["craftInput"] = JsonSerializer.SerializeToNode(new
         {
-            id = craftItem.type,
-            name = existing?.Name ?? craftItem.Name,
-            sourceMod,
-            internalName,
-            fullName = sourceMod + "/" + internalName,
-            tooltipLines = tooltip.Lines,
-            tooltipSource = tooltip.Source,
-            prefix = InfiniTerrariaSentinels.NoPrefix,
-            originalPrefix,
             prefixIgnored,
-            damage = craftItem.damage,
-            // Base Item.crit only: CraftIdentityItem already removed the reforge.
-            // Player-effective crit and equipment bonuses are separate observations.
-            crit = craftItem.crit,
-            useTime = craftItem.useTime,
-            useAnimation = craftItem.useAnimation,
-            useStyle = craftItem.useStyle,
-            useStyleName = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(craftItem.useStyle),
-            reuseDelay = craftItem.reuseDelay,
-            channel = craftItem.channel,
-            noMelee = craftItem.noMelee,
-            noUseGraphic = craftItem.noUseGraphic,
-            autoReuse = craftItem.autoReuse,
-            useTurn = craftItem.useTurn,
-            rare = craftItem.rare,
-            rarityDetails = RarityDetailsFromItem(craftItem),
-            value = craftItem.value,
-            consumable = craftItem.consumable,
-            potion = craftItem.potion,
-            material = craftItem.material,
-            accessory = craftItem.accessory,
-            maxStack = craftItem.maxStack,
-            stack = item.stack,
-            createTile = existing is null ? (int?)craftItem.createTile : placement?.TileId,
-            createWall = existing is null ? (int?)craftItem.createWall : placement?.WallId,
-            placeStyle = existing is null ? (int?)craftItem.placeStyle : placement?.PlaceStyle,
-            defense = craftItem.defense,
-            headSlot = craftItem.headSlot,
-            bodySlot = craftItem.bodySlot,
-            legSlot = craftItem.legSlot,
-            pickPower = craftItem.pick,
-            axePower = craftItem.axe,
-            hammerPower = craftItem.hammer,
-            healLife = craftItem.healLife,
-            healMana = craftItem.healMana,
-            manaCost = craftItem.mana,
-            ammo = craftItem.ammo,
-            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(craftItem.ammo),
-            notAmmo = craftItem.notAmmo,
-            useAmmo = craftItem.useAmmo,
-            shoot = craftItem.shoot,
-            shootSpeed = craftItem.shootSpeed,
-            knockback = craftItem.knockBack,
-            bait = craftItem.bait,
-            fishingPole = craftItem.fishingPole,
-            damageClass = DamageClassName(craftItem),
-            shootProjectileFullName = ProjectileFullName(craftItem.shoot),
-            moddedOrigin = sourceMod != "Terraria",
-            directProjectileRaw = DirectProjectileRawFromItem(craftItem),
-            effectiveProjectileRaw = EffectiveProjectileRawFromItem(craftItem, player),
-            ammoRaw = AmmoRawFromItem(craftItem, player),
-            // Only generated items carry authored design tags. Vanilla/modded parents do not get fake semantic tags.
-            tags = existing?.Tags is { Length: > 0 } ? existing.Tags : Array.Empty<string>(),
-            runtimeFacts = RuntimeFactsFromItem(craftItem, existing),
-            autoFeatures,
-            nameTokens,
-            canonical = existing?.Canonical ?? CanonicalFromItem(craftItem, autoFeatures),
-            fingerprint = FingerprintFromItem(craftItem, sourceMod, internalName, autoFeatures, nameTokens, existing, originalPrefix),
-            generatedData = existing,
-            craftInput = new
-            {
-                prefixIgnored,
-                originalPrefix,
-                normalizedStats = "base_item_defaults_without_reforge_prefix",
-                note = "Terraria reforges/prefixes are intentionally ignored for InfiniCraft recipes; original items/refunds keep their prefix."
-            }
-        };
+            originalPrefix,
+            normalizedStats = "base_item_defaults_without_reforge_prefix",
+            note = "Terraria reforges/prefixes are intentionally ignored for InfiniCraft recipes; original items/refunds keep their prefix."
+        }, WireJsonOptions);
         ParentSpriteReference? spriteReference = TryCaptureNativeSpriteReference(craftItem, existing);
-        if (spriteReference is null)
-            return snapshot;
-        // Preserve every historical field/null; only an observed request-local fact
-        // opts this one parent into structured insertion. No global null omission.
-        var wire = (JsonObject)JsonSerializer.SerializeToNode(snapshot, WireJsonOptions)!;
-        wire["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(spriteReference, WireJsonOptions);
-        return wire;
+        // Preserve every historical field/null; only an observed request-local
+        // fact adds spriteReferenceRaw. No global null omission.
+        if (spriteReference is not null)
+            snapshot["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(spriteReference, WireJsonOptions);
+        return snapshot;
     }
 
     private static (string[] Lines, object? Source) CaptureLiteralParentTooltip(Item item, GeneratedItemData? existing, string fullName)
@@ -854,126 +812,91 @@ public sealed class GeneratorClient
         if (data.ParentB == "Unknown") data.ParentB = parentB;
     }
 
-    private static object FingerprintFromItem(Item item, string sourceMod, string internalName, string[] autoFeatures, string[] nameTokens, GeneratedItemData? existing, int originalPrefix = 0)
+    private static JsonObject FingerprintFromItem(Item item, string sourceMod, string internalName,
+        string[] autoFeatures, string[] nameTokens, GeneratedItemData? existing, ParentNativeFacts native, int originalPrefix)
     {
-        RuntimePlacementSpec? placement = CanonicalParentPlacement(existing);
-        return new
-        {
-            sourceMod,
-            internalName,
-            fullName = sourceMod + "/" + internalName,
-            isVanilla = item.ModItem is null,
-            type = item.type,
-            name = existing?.Name ?? item.Name,
-            prefix = InfiniTerrariaSentinels.NoPrefix,
-            originalPrefix,
-            prefixIgnored = originalPrefix != InfiniTerrariaSentinels.NoPrefix,
-            damage = item.damage,
-            crit = item.crit,
-            damageClass = DamageClassName(item),
-            knockback = item.knockBack,
-            useStyle = item.useStyle,
-            useStyleName = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
-            useTime = item.useTime,
-            useAnimation = item.useAnimation,
-            rare = item.rare,
-            rarityDetails = RarityDetailsFromItem(item),
-            value = item.value,
-            maxStack = item.maxStack,
-            consumable = item.consumable,
-            potion = item.potion,
-            accessory = item.accessory,
-            defense = item.defense,
-            headSlot = item.headSlot,
-            bodySlot = item.bodySlot,
-            legSlot = item.legSlot,
-            createTile = existing is null ? (int?)item.createTile : placement?.TileId,
-            createWall = existing is null ? (int?)item.createWall : placement?.WallId,
-            placeStyle = existing is null ? (int?)item.placeStyle : placement?.PlaceStyle,
-            pickPower = item.pick,
-            axePower = item.axe,
-            hammerPower = item.hammer,
-            bait = item.bait,
-            fishingPole = item.fishingPole,
-            healLife = item.healLife,
-            healMana = item.healMana,
-            manaCost = item.mana,
-            ammo = item.ammo,
-            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.ammo),
-            notAmmo = item.notAmmo,
-            useAmmo = item.useAmmo,
-            shoot = item.shoot,
-            shootSpeed = item.shootSpeed,
-            directProjectileRaw = DirectProjectileRawFromItem(item),
-            effectiveProjectileRaw = EffectiveProjectileRawFromItem(item, null),
-            ammoRaw = AmmoRawFromItem(item, null),
-            buffType = item.buffType,
-            buffTime = item.buffTime,
-            channel = item.channel,
-            noMelee = item.noMelee,
-            noUseGraphic = item.noUseGraphic,
-            useTurn = item.useTurn,
-            autoReuse = item.autoReuse,
-            runtimeFacts = RuntimeFactsFromItem(item, existing),
-            autoFeatures,
-            nameTokens
-        };
+        JsonObject fingerprint = (JsonObject)native.RuntimeFacts.DeepClone();
+        fingerprint.Remove("material");
+        fingerprint.Remove("reuseDelay");
+        fingerprint.Remove("shootProjectileFullName");
+        fingerprint["sourceMod"] = sourceMod;
+        fingerprint["internalName"] = internalName;
+        fingerprint["fullName"] = sourceMod + "/" + internalName;
+        fingerprint["isVanilla"] = item.ModItem is null;
+        fingerprint["name"] = existing?.Name ?? item.Name;
+        fingerprint["prefix"] = InfiniTerrariaSentinels.NoPrefix;
+        fingerprint["originalPrefix"] = originalPrefix;
+        fingerprint["prefixIgnored"] = originalPrefix != InfiniTerrariaSentinels.NoPrefix;
+        fingerprint["directProjectileRaw"] = native.DirectProjectileRaw?.DeepClone();
+        fingerprint["effectiveProjectileRaw"] = JsonSerializer.SerializeToNode(EffectiveProjectileRawFromItem(item, null), WireJsonOptions);
+        fingerprint["ammoRaw"] = JsonSerializer.SerializeToNode(AmmoRawFromItem(item, null), WireJsonOptions);
+        fingerprint["runtimeFacts"] = native.RuntimeFacts.DeepClone();
+        fingerprint["autoFeatures"] = JsonSerializer.SerializeToNode(autoFeatures, WireJsonOptions);
+        fingerprint["nameTokens"] = JsonSerializer.SerializeToNode(nameTokens, WireJsonOptions);
+        return fingerprint;
     }
 
+    private sealed record ParentNativeFacts(JsonObject RuntimeFacts, JsonNode? DirectProjectileRaw);
 
-    private static object RuntimeFactsFromItem(Item item, GeneratedItemData? existing = null)
+    // Sole native-fact field map for root, runtimeFacts and fingerprint. Read the
+    // unprefixed request-local Item once; authored placement replaces native proxy
+    // defaults only when an exact canonical placement exists. Absence stays null.
+    private static ParentNativeFacts CaptureParentNativeFacts(Item item, GeneratedItemData? existing)
     {
         RuntimePlacementSpec? placement = CanonicalParentPlacement(existing);
-        return new
+        var facts = new JsonObject
         {
-            type = item.type,
-            damage = item.damage,
-            crit = item.crit,
-            damageClass = DamageClassName(item),
-            shootProjectileFullName = ProjectileFullName(item.shoot),
-            useStyle = item.useStyle,
-            useStyleName = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
-            useTime = item.useTime,
-            useAnimation = item.useAnimation,
-            reuseDelay = item.reuseDelay,
-            channel = item.channel,
-            noMelee = item.noMelee,
-            noUseGraphic = item.noUseGraphic,
-            autoReuse = item.autoReuse,
-            useTurn = item.useTurn,
-            rare = item.rare,
-            rarityDetails = RarityDetailsFromItem(item),
-            value = item.value,
-            maxStack = item.maxStack,
-            consumable = item.consumable,
-            potion = item.potion,
-            accessory = item.accessory,
-            defense = item.defense,
-            headSlot = item.headSlot,
-            bodySlot = item.bodySlot,
-            legSlot = item.legSlot,
-            createTile = existing is null ? (int?)item.createTile : placement?.TileId,
-            createWall = existing is null ? (int?)item.createWall : placement?.WallId,
-            placeStyle = existing is null ? (int?)item.placeStyle : placement?.PlaceStyle,
-            pickPower = item.pick,
-            axePower = item.axe,
-            hammerPower = item.hammer,
-            bait = item.bait,
-            fishingPole = item.fishingPole,
-            healLife = item.healLife,
-            healMana = item.healMana,
-            manaCost = item.mana,
-            ammo = item.ammo,
-            ammoCategoryName = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.ammo),
-            notAmmo = item.notAmmo,
-            useAmmo = item.useAmmo,
-            shoot = item.shoot,
-            shootSpeed = item.shootSpeed,
-            knockback = item.knockBack,
-            buffType = item.buffType,
-            buffTime = item.buffTime,
-            material = item.material
+            ["type"] = item.type,
+            ["damage"] = item.damage,
+            // Base Item.crit only: CraftIdentityItem already removed the reforge.
+            // Player/equipment-effective crit remains a separate observation.
+            ["crit"] = item.crit,
+            ["damageClass"] = DamageClassName(item),
+            ["shootProjectileFullName"] = ProjectileFullName(item.shoot),
+            ["useStyle"] = item.useStyle,
+            ["useStyleName"] = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
+            ["useTime"] = item.useTime,
+            ["useAnimation"] = item.useAnimation,
+            ["reuseDelay"] = item.reuseDelay,
+            ["channel"] = item.channel,
+            ["noMelee"] = item.noMelee,
+            ["noUseGraphic"] = item.noUseGraphic,
+            ["autoReuse"] = item.autoReuse,
+            ["useTurn"] = item.useTurn,
+            ["rare"] = item.rare,
+            ["rarityDetails"] = JsonSerializer.SerializeToNode(RarityDetailsFromItem(item), WireJsonOptions),
+            ["value"] = item.value,
+            ["maxStack"] = item.maxStack,
+            ["consumable"] = item.consumable,
+            ["potion"] = item.potion,
+            ["accessory"] = item.accessory,
+            ["defense"] = item.defense,
+            ["headSlot"] = item.headSlot,
+            ["bodySlot"] = item.bodySlot,
+            ["legSlot"] = item.legSlot,
+            ["createTile"] = existing is null ? (int?)item.createTile : placement?.TileId,
+            ["createWall"] = existing is null ? (int?)item.createWall : placement?.WallId,
+            ["placeStyle"] = existing is null ? (int?)item.placeStyle : placement?.PlaceStyle,
+            ["pickPower"] = item.pick,
+            ["axePower"] = item.axe,
+            ["hammerPower"] = item.hammer,
+            ["bait"] = item.bait,
+            ["fishingPole"] = item.fishingPole,
+            ["healLife"] = item.healLife,
+            ["healMana"] = item.healMana,
+            ["manaCost"] = item.mana,
+            ["ammo"] = item.ammo,
+            ["ammoCategoryName"] = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.ammo),
+            ["notAmmo"] = item.notAmmo,
+            ["useAmmo"] = item.useAmmo,
+            ["shoot"] = item.shoot,
+            ["shootSpeed"] = item.shootSpeed,
+            ["knockback"] = item.knockBack,
+            ["buffType"] = item.buffType,
+            ["buffTime"] = item.buffTime,
+            ["material"] = item.material,
         };
+        return new(facts, JsonSerializer.SerializeToNode(DirectProjectileRawFromItem(item), WireJsonOptions));
     }
 
     private static IEnumerable<string> NameTokens(Item item)
