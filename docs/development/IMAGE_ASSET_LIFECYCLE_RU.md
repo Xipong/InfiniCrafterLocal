@@ -23,6 +23,8 @@ Diagnostic manifest и `debug.visualAssetPlan` остаются наблюден
 
 Source owners: [executor](../../LocalGenerator/infini_local/pipelines/visual_sprite_generation.py), [backend adapters](../../LocalGenerator/infini_local/pipelines/image_backend_pipeline.py), [plan](../../LocalGenerator/infini_local/pipelines/visual_asset_plan.py), [delivery](../../LocalGenerator/infini_local/pipelines/visual_delivery_gate.py), [storage admission](../../LocalGenerator/infini_local/storage/world_storage.py), [AssetSync](../../ModSources/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs), [texture cache](../../ModSources/InfiniCrafterLocal/Common/Services/Assets/RuntimeSpriteCache.cs).
 
+sd.cpp: `pipeline_visual_config.py` читает настройки и владеет process state/cleanup; единственный `_sdcpp_config()` в `image_backend_pipeline.py` собирает effective runtime config (включая LoRA file → directory/tags). `services/sdcpp_backend.py` владеет command/payload primitives, `sdcpp_service.py` — процессом. Не добавлять параллельный config builder или forwarding helpers без consumer: неиспользуемые command/argv facades удалены. Provider routing, deadlines, retries, cancellation и private output остаются в прежнем рабочем пути.
+
 <a id="attempts"></a>
 ## Одна попытка, private output и atomic publication
 

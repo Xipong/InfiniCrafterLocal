@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from infini_local.desktop import settings_env, settings_schema, settings_gui, settings_gui_ui, settings_gui_trace_state
+from infini_local.desktop import settings_env, settings_schema
+from infini_local.desktop.settings_controller import SettingsController
 from infini_local.storage import trace_runtime, trace_tools
 
 
@@ -75,12 +76,11 @@ def test_gui_displays_full_stored_record_even_when_older_rows_are_not_in_tail(mo
     clean = "exact\r\n " + "ж" * 140000 + " GUI_RECORD_TAIL"
     for index in range(121):
         trace_runtime.trace_event("response", "offline", str(index), response=clean if index == 120 else "old")
-    gui = _Gui(settings_schema.DEFAULTS)
-    gui.trace_texts = {key: _Widget() for key in ("summary", "prompts", "pipeline", "events", "sdcpp", "failure")}
+    gui = SettingsController(tmp_path / "config.env")
     snapshot = gui._load_local_trace_snapshot(cache=tmp_path)
     gui._render_trace_snapshot(snapshot)
     assert len(snapshot["promptTrace"]) == 120
-    assert clean in gui.trace_texts["prompts"].content
+    assert clean in gui.trace["prompts"]
     assert len(trace_tools.tail_ndjson(trace_runtime.PROMPT_TRACE_FILE, 200)) == 121
 
 
@@ -169,6 +169,7 @@ def test_saved_gui_logging_choice_reaches_fresh_runtime_writer(monkeypatch, tmp_
     settings_env.write_env(config, {**settings_schema.DEFAULTS, "INFINI_TRACE_PROMPTS": saved})
     reloaded = settings_env.parse_env(config)
     env = {**os.environ, **reloaded, "INFINI_SKIP_CONFIG_FILE": "1", "INFINI_CACHE_DIR": str(tmp_path / "cache")}
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
     script = """
 from infini_local.storage import trace_runtime as t
 assert t.TRACE_PROMPTS_ENABLED is EXPECTED
@@ -185,15 +186,15 @@ t.log_event('info', 'extra diagnostics')
     assert (cache / "stage_requests").exists() is (saved == "1")
 
 
-def test_gui_trace_fetch_accepts_complete_large_record_not_bounded_preview(monkeypatch):
+def test_gui_trace_fetch_accepts_complete_large_record_not_bounded_preview(monkeypatch, tmp_path):
     from test_settings_gui_contract import _gui_loopback_http
     clean = "x" * (17 * 1024 * 1024) + " GUI_FULL_RECORD_TAIL"
     snapshot = {"ok": True, "pid": 123, "promptTrace": [{"response": clean}]}
     with _gui_loopback_http({"/trace.json": (200, snapshot)}) as (base, requests):
-        gui = _Gui(settings_schema.DEFAULTS)
+        gui = SettingsController(tmp_path / "config.env")
         gui._fetch_health_snapshot = lambda **kwargs: {"pid": 123}
         gui._health_matches_this_gui = lambda value: True
-        gui._read_gui_json = settings_gui.SettingsGui._read_gui_json
+        gui._read_gui_json = SettingsController._read_gui_json
         read = gui._fetch_trace_snapshot(base)
         assert read["promptTrace"][0]["response"] == clean
         assert requests == ["/trace.json"]
@@ -251,110 +252,25 @@ def test_unlimited_json_diagnostic_fallback_does_not_erase_non_json_string():
     assert trace_tools.json_slim(cycle, 0) == str(cycle)
 
 
-class _Var:
-    def __init__(self, value=""):
-        self.value = value
-    def get(self):
-        return self.value
-    def set(self, value):
-        self.value = value
-
-
-class _Widget:
-    instances = []
-    def __init__(self, *args, **kwargs):
-        self.options = kwargs
-        self.visible = True
-        self.content = ""
-        self.instances.append(self)
-    def pack(self, **kwargs):
-        pass
-    def configure(self, **kwargs):
-        self.options.update(kwargs)
-    def delete(self, *args):
-        self.content = ""
-    def insert(self, index, content):
-        self.content += content
-    def invoke(self):
-        var = self.options["variable"]
-        var.set(self.options["offvalue"] if var.get() == self.options["onvalue"] else self.options["onvalue"])
-        self.options["command"]()
-
-
-class _Gui(settings_gui_ui.SettingsGuiUiMixin, settings_gui_trace_state.SettingsGuiTraceStateMixin):
-    def __init__(self, data):
-        self.data = data
-        self.vars = {}
-        self.text_widgets = {}
-        self.field_widgets = {}
-        self.field_hint_labels = {}
-        self.field_disabled_reasons = {}
-        self.advanced_var = _Var(False)
-        self.radmin_enabled = _Var(False)
-        self.preset_var = _Var("Custom")
-        self.status_var = _Var()
-        self.user_presets = {}
-        self.trace_texts = {}
-    def _var(self, key):
-        var = _Var(self.data.get(key, settings_schema.DEFAULTS.get(key, "")))
-        self.vars[key] = var
-        return var
-    def _card(self, *args, **kwargs):
-        return _Widget()
-    def row(self, parent, label, key, **kwargs):
-        self._var(key)
-    def _modern_button(self, *args, **kwargs):
-        return _Widget()
-    def _attach_static_help(self, *args):
-        pass
-    def _info_panel(self, *args, **kwargs):
-        pass
-    def _bg_of(self, *args):
-        return "unused"
-    def _register_field_widgets(self, key, widgets, hint, hint_label):
-        self.field_widgets[key] = widgets
-    def _set_packed_visible(self, widget, visible):
-        widget.visible = visible
-    def _refresh_visibility(self):
-        self._apply_view_mode()
-    def _lora_dir_from_file(self, *args):
-        return ""
-    def _radmin_status_text(self):
-        return "offline"
-    force_restart_server = apply_radmin_overlay = apply_local_overlay = autofill_radmin_url = copy_radmin_friend_guide = open_mp_connect_page = on_radmin_toggle = _attach_static_help
-
-
 @pytest.mark.parametrize("saved", [None, "0"])
-def test_recording_checkbox_save_reload_and_presets_respect_explicit_off(monkeypatch, tmp_path, saved):
+def test_recording_save_reload_and_presets_respect_explicit_off(tmp_path, saved):
     config = tmp_path / "config.env"
     if saved is not None:
         config.write_text("INFINI_TRACE_PROMPTS=" + saved + "\n")
-    monkeypatch.setattr(settings_gui_trace_state, "CONFIG_PATH", config)
-    for name in ("Frame", "Checkbutton", "Label"):
-        monkeypatch.setattr(settings_gui_ui.ttk, name, _Widget)
-    monkeypatch.setattr(settings_gui_ui.tk, "StringVar", _Var)
-    _Widget.instances = []
-    gui = _Gui(settings_env.parse_env(config))
-    gui._build_general(_Widget())
-    widgets = [widget for widget in _Widget.instances if widget.options.get("variable") is gui.vars["INFINI_TRACE_PROMPTS"]]
-    assert len(widgets) == 1, "logging must be a checkbox, not an advanced-only combo"
-    checkbox = widgets[0]
-    assert checkbox.options["onvalue"] == "1" and checkbox.options["offvalue"] == "0"
-    gui._apply_view_mode()
-    assert checkbox.visible and gui.vars["INFINI_TRACE_PROMPTS"].get() == (saved or "1")
-    if saved is None:
-        checkbox.invoke()
+    gui = SettingsController(config)
+    assert gui.values["INFINI_TRACE_PROMPTS"] == (saved or "1")
+    gui.update_values({"INFINI_TRACE_PROMPTS": "0"})
     gui.save()
     assert settings_env.parse_env(config)["INFINI_TRACE_PROMPTS"] == "0"
     for preset in settings_schema.PRESETS:
-        gui.preset_var.set(preset)
+        gui.preset = preset
         gui.apply_preset()
-        assert gui.vars["INFINI_TRACE_PROMPTS"].get() == "0", preset
+        assert gui.values["INFINI_TRACE_PROMPTS"] == "0", preset
     path = tmp_path / "profiles.json"
     gui.user_presets = settings_env.save_user_preset(path, "quiet", gui.collect())
-    gui.vars["INFINI_TRACE_PROMPTS"].set("1")
+    gui.update_values({"INFINI_TRACE_PROMPTS": "1"})
     gui.user_presets = settings_env.load_user_presets(path)
-    gui.preset_var.set(settings_env.USER_PRESET_PREFIX + "quiet")
+    gui.preset = settings_env.USER_PRESET_PREFIX + "quiet"
     gui.apply_preset()
     gui.save()
     assert settings_env.parse_env(config)["INFINI_TRACE_PROMPTS"] == "0"

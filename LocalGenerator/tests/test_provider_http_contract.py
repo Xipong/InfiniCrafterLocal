@@ -694,7 +694,7 @@ def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, mo
             json=handler.json,
             json_status=handler.json_status,
             combine_cache_lookup=pipeline.combine_cache_lookup,
-            sanitize_recipe_for_delivery=recipes.sanitize_recipe_for_delivery,
+            sanitize_recipe_for_delivery=world_storage.sanitize_recipe_for_delivery,
         ),
     )
     assert handler.code == 200 and handler.payload["id"] == "fresh_valid_recipe"

@@ -3,6 +3,12 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from infini_local.core.item_identity_tools import (
+    dict_get_ci,
+    generated_data_of,
+    item_field,
+    name_of,
+)
 from infini_local.pipelines.parent_context_pipeline import (
     _compact_keep,
     _compact_raw_value,
@@ -12,17 +18,12 @@ from infini_local.pipelines.parent_context_pipeline import (
     compact_item_raw_for_llm,
     compact_projectile_profile,
     compact_vanilla_flags_for_llm,
-    dict_get_ci,
     effective_projectile_profile_of,
-    generated_data_of,
-    item_field,
-    name_of,
     projectile_profile_of,
 )
 
-# AGENT MAP: LLM raw parent card assembly. Kept separate from parent projectile
-# profile extraction so parent_context_pipeline.py can stay below the large-file cap
-# while keeping the card itself in this single owner module.
+# LLM parent packet owner. Extraction lives in parent_context_pipeline; identity
+# primitives come directly from their defining module. No derived-card alternative.
 
 _FORBIDDEN_DERIVED_PACKET_KEYS = frozenset({
     "behaviorDigest", "mechanicalHint", "semantics",

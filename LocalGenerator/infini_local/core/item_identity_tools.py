@@ -22,6 +22,11 @@ def name_of(item: dict[str, Any]) -> str:
     return str(item.get("name") or "Unknown")
 
 
+def safe_file_part(text: Any, default: str = "value", max_len: int = 80) -> str:
+    raw = re.sub(r"[^A-Za-z0-9._-]+", "_", str(text or "").strip()).strip("._-")
+    return raw[:max_len] or default
+
+
 def slug(text: str) -> str:
     text = text.lower().strip()
     text = re.sub(r"[^a-z0-9а-яё]+", "_", text)

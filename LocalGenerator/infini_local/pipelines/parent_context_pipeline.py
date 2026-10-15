@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import json
-import re
 from typing import Any
 
 from infini_local.core.runtime_authoring.binding_use_policy import (
@@ -13,12 +12,9 @@ from infini_local.core.item_identity_tools import (
     dict_get_ci,
     fingerprint_of,
     generated_data_of,
-    generation_depth,
     item_bool,
     item_field,
     item_num,
-    name_of,
-    tags_of,
 )
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
@@ -28,11 +24,10 @@ from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_ITEM_RAW_KEYS,
     LLM_PROJECTILE_RAW_KEYS,
 )
-from infini_local.pipelines.pipeline_runtime_dumps import (
+from infini_local.services.runtime_dump_service import (
     RUNTIME_ITEMS,
     runtime_projectile_lookup,
 )
-from infini_local.pipelines.result_identity_policy import parent_primary_category
 
 
 def _raw_section_dict(item: dict[str, Any], *names: str) -> dict[str, Any]:
@@ -46,16 +41,6 @@ def _raw_section_dict(item: dict[str, Any], *names: str) -> dict[str, Any]:
             return v
     return {}
 
-def _raw_section_list(item: dict[str, Any], *names: str) -> list[Any]:
-    for name in names:
-        v = dict_get_ci(item, name, None)
-        if isinstance(v, list) and v:
-            return v
-        fp = fingerprint_of(item)
-        v = dict_get_ci(fp, name, None) if isinstance(fp, dict) else None
-        if isinstance(v, list) and v:
-            return v
-    return []
 
 def _strip_texture_metrics_for_llm(profile: dict[str, Any]) -> dict[str, Any]:
     """Keep source texture metrics out of LLM authoring cards by default.
@@ -421,59 +406,6 @@ def source_weapon_profile(item: dict[str, Any]) -> dict[str, Any]:
         "projectileProfile": proj,
     }
 
-def parent_weapon_profiles(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
-    out = []
-    for item in (a, b):
-        if item_num(item, "damage") > 0 or item_num(item, "shoot") > 0:
-            prof = source_weapon_profile(item)
-            prof["name"] = name_of(item)
-            out.append(prof)
-    return out
-
-def runtime_facts_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
-    rf = item.get("runtimeFacts")
-    if isinstance(rf, dict):
-        return rf
-    fp = fingerprint_of(item)
-    rf = fp.get("runtimeFacts") if isinstance(fp, dict) else None
-    if isinstance(rf, dict):
-        return rf
-    keys = ["type", "damage", "damageClass", "useStyle", "useStyleName", "useTime", "useAnimation", "rare", "rarityDetails", "value", "maxStack", "consumable", "accessory", "defense", "createTile", "createWall", "placeStyle", "pickPower", "axePower", "hammerPower", "healLife", "healMana", "potion", "manaCost", "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "knockback", "buffType", "buffTime"]
-    return {k: item_field(item, k, None) for k in keys if item_field(item, k, None) is not None}
-
-def auto_features_for_prompt(item: dict[str, Any]) -> dict[str, Any]:
-    raw_features = item.get("autoFeatures")
-    if not isinstance(raw_features, list):
-        fp = fingerprint_of(item)
-        raw_features = fp.get("autoFeatures") if isinstance(fp, dict) else []
-    raw_tokens = item.get("nameTokens")
-    if not isinstance(raw_tokens, list):
-        fp = fingerprint_of(item)
-        raw_tokens = fp.get("nameTokens") if isinstance(fp, dict) else []
-    features = sorted({str(x).lower() for x in (raw_features or []) if str(x).strip()})
-    tokens = sorted({str(x).lower() for x in (raw_tokens or []) if str(x).strip()})
-    return {
-        "runtimeRoles": features,
-        "nameTokens": tokens,
-        "projectileBehavior": sorted(projectile_behavior_tags(item)),
-        "note": "autoFeatures are mechanically derived from runtime fields/name tokens; they are not hand-authored Terraria tags",
-    }
-
-def llm_parent_card(item: dict[str, Any], canonical: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "name": name_of(item),
-        "sourceMod": str(item_field(item, "sourceMod", "Terraria")),
-        "internalName": str(item_field(item, "internalName", "")),
-        "fullName": str(item_field(item, "fullName", "")),
-        "primaryCategory": parent_primary_category(item),
-        "runtimeFacts": runtime_facts_for_prompt(item),
-        "autoFeatures": auto_features_for_prompt(item),
-        "canonical": canonical,
-        "weaponProfile": source_weapon_profile(item),
-        "directProjectileProfile": projectile_profile_of(item),
-        "ammoProfile": ammo_profile_of(item),
-        "generatedDepth": generation_depth(item),
-    }
 
 def _compact_keep(value: Any) -> bool:
     # Keep 0 and False; those are real raw values. Drop only absent/empty containers/empty text.
@@ -797,109 +729,3 @@ def _dedupe_projectile_profile(raw: dict[str, Any], key: str, reference_key: str
     if _compact_keep(cur.get("source")):
         replacement["source"] = cur.get("source")
     raw[key] = replacement
-
-def _fishing_bait_semantics_for_llm(item: dict[str, Any], item_raw: dict[str, Any]) -> dict[str, Any]:
-    """Label fishing/bait parent facts as preserved intent, not enabled gameplay.
-
-    Generated fishing poles and bait outputs are deliberately future-disabled in
-    this build. Keeping the raw values in the parent card is useful identity and
-    flavor context, but it must not look like a supported generated result kind.
-    """
-    raw_fishing = item_raw.get("fishingPole", item.get("fishingPole", 0))
-    raw_bait = item_raw.get("bait", item.get("bait", 0))
-    def _positive_intish(value: Any) -> int:
-        if isinstance(value, bool) or value in (None, ""):
-            return 0
-        if isinstance(value, int):
-            return max(0, value)
-        if isinstance(value, float):
-            return max(0, int(value))
-        text = str(value).strip()
-        if not re.fullmatch(r"[+-]?\d+(?:\.\d+)?", text):
-            return 0
-        return max(0, int(float(text)))
-    fishing_power = _positive_intish(raw_fishing)
-    bait_power = _positive_intish(raw_bait)
-    if fishing_power <= 0 and bait_power <= 0:
-        return {}
-    roles: list[str] = []
-    if fishing_power > 0:
-        roles.append("fishing_pole_parent")
-    if bait_power > 0:
-        roles.append("bait_parent")
-    return {
-        "roles": roles,
-        "supportStatus": "future_disabled_for_generated_outputs",
-        "note": "Fishing/bait parent facts are preserved as identity/flavor/debug context; this build does not generate executable fishing poles or bait items.",
-        "creativePermission": "The LLM may use the theme for another supported result, but must not treat fishingPole/bait as an enabled generated runtime.",
-    }
-
-
-def _placeable_consumption_semantics_for_llm(item: dict[str, Any], item_raw: dict[str, Any]) -> dict[str, Any]:
-    """Clarify the one Terraria raw flag that small planners misread most often.
-
-    Placeable tiles/walls are `consumable` because the stack is spent when the
-    player places the tile.  That fact is important raw data, but it is not the
-    same authoring signal as a potion, ammo stack, or thrown consumable weapon.
-    This card does not forbid consumable outputs; it only labels the source
-    meaning so the LLM can make that choice intentionally.
-    """
-    create_tile = item_raw.get("createTile", item.get("createTile", -1))
-    create_wall = item_raw.get("createWall", item.get("createWall", -1))
-    try:
-        has_placeable_target = int(float(create_tile)) >= 0 or int(float(create_wall)) >= 0
-    except Exception:
-        has_placeable_target = False
-    if not has_placeable_target or not bool(item_raw.get("consumable", item.get("consumable", False))):
-        return {}
-    return {
-        "consumptionSemantics": "consumed_when_placed_as_tile_or_wall",
-        "note": "The raw consumable flag here means the source stack is spent when placed; it does not automatically mean potion, ammo, thrown stack, or consumable weapon.",
-        "creativePermission": "A consumable result is still allowed when the explicit concept and runtimeProgram intentionally author that behavior.",
-    }
-
-
-def _projectile_semantics_for_llm(profile: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(profile, dict) or not profile:
-        return {}
-    out: dict[str, Any] = {}
-    if profile.get("ownerHitCheck") is True:
-        out["itemOwnedProjectileMeaning"] = "owner_checked_close_or_held_hitbox; not automatically a free-flying thrown projectile"
-    try:
-        if int(float(profile.get("penetrate") or 0)) < 0:
-            out["penetrateSemantics"] = "raw indefinite penetration on vanilla held/projectile source; do not copy literally unless intentionally authored"
-    except Exception:
-        pass
-    if profile.get("tileCollide") is False:
-        out["tileCollisionSemantics"] = "source projectile does not collide with tiles; may be held/visual/contact style"
-    return out
-
-def combined_tags(*items: dict[str, Any], data: dict[str, Any] | None = None) -> set[str]:
-    tags: set[str] = set()
-    for item in items:
-        tags |= tags_of(item)
-    if isinstance(data, dict):
-        tags |= {str(t).lower() for t in data.get("tags", []) if str(t).strip()}
-        for section in (data.get("designFeatures"), data.get("sourceRepresentation"), data.get("inheritance")):
-            try:
-                tags |= {tok.lower() for tok in re.findall(r"[A-Za-z_]+", json.dumps(section, ensure_ascii=False)) if len(tok) >= 3}
-            except Exception:
-                pass
-    return tags
-
-def behavior_policy_for_prompt(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Authoring contract note for the LLM.
-
-    This is intentionally not a semantic router. Older builds used small families such as
-    explosive/thrown/light/heal here; that grew into code-side design. The planner should
-    author the role/effect itself, while the server only validates executable bounds.
-    """
-    return {
-        "compositionMode": "low_level_runtime_program",
-        "serverWillEnforce": "technical safety only: strict capabilities, typed references, bounded entities/events/recursion, authority and sync limits",
-        "note": "No item-name or category router is applied. Author every behavior explicitly through runtimeProgram entities, bindings, calls, and events.",
-    }
-
-# Parent-relative soft damage caps are deliberately not exposed to the LLM prompt.
-# combine_balance.clamp_vanilla_like_weapon_damage();
-# this module only packages raw parent facts and hard executable context for authoring.

@@ -105,7 +105,7 @@ def real_route():
         vfx_debug_routes=lambda: None,
         combine_endpoint=endpoint,
         combine_cache_lookup=pipeline.combine_cache_lookup,
-        sanitize_recipe_for_delivery=recipes.sanitize_recipe_for_delivery,
+        sanitize_recipe_for_delivery=world_storage.sanitize_recipe_for_delivery,
         combine=pipeline.combine,
         trace_event=lambda *_a, **_k: None,
         log_event=lambda *_a, **_k: None,

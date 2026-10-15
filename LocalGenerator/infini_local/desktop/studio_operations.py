@@ -1,3 +1,7 @@
+"""Headless Studio worker operations, server guards, OAuth and diagnostics.
+
+All public state is plain data; only the owner loop applies worker results.
+"""
 from __future__ import annotations
 
 import json
@@ -15,20 +19,19 @@ from urllib.parse import urlsplit
 import webbrowser
 from pathlib import Path, PureWindowsPath
 
+from infini_local.storage import trace_tools
 from infini_local.core import http_io
-from infini_local.desktop.tk_compat import filedialog, messagebox
-from infini_local.desktop.settings_gui_theme import (
+from infini_local.desktop.settings_paths import (
     ROOT,
-    CONFIG_PATH,
 )
 
 
 from infini_local.desktop.settings_interactions import notify, finish_action, begin_action, saved_config_revision
 
 
-class SettingsGuiServerControlsMixin:
+class StudioOperations:
     def _run_gui_task(self, name, work, on_result):
-        """Worker -> Queue -> Tk.after; workers receive only captured plain data."""
+        """Worker -> queue -> owner event loop; workers receive only captured plain data."""
         if self.__dict__.get("_gui_closed", False):
             return
         tasks = self.__dict__.setdefault("_gui_tasks", {})
@@ -84,7 +87,7 @@ class SettingsGuiServerControlsMixin:
                 except Exception:
                     # Transport and subprocess exceptions may contain secrets.
                     finish_action(self, state["command_id"], False, "Не удалось завершить действие. Проверь настройки и журнал.")
-                    self.status_var.set("Не удалось завершить действие. Проверь настройки и журнал.")
+                    self.status = ("Не удалось завершить действие. Проверь настройки и журнал.")
                 finally:
                     self._studio_notification_action_id = previous_notice_id
             else:
@@ -104,120 +107,85 @@ class SettingsGuiServerControlsMixin:
             # refresh coalesces until its network timeout/result returns.
 
     def ping_codex_image_account(self):
-        """Read-only account connectivity probe; there is no image-model list API."""
+        """Read-only connectivity probe, with one bounded in-flight worker."""
         from infini_local.services import codex_catalog
 
-        command_id = begin_action(self)
-        generation = getattr(self, "_codex_image_ping_generation", 0) + 1
-        self._codex_image_ping_generation = generation
-        results = Queue()
-        self.codex_image_account_var.set("Проверка аккаунта через read-only текстовый endpoint…")
-        self.status_var.set("Codex: проверка аккаунта; image-доступ не проверяется.")
+        begin_action(self)
+        self.codex_image_account = "Проверка аккаунта через read-only текстовый endpoint…"
+        self.status = "Codex: проверка аккаунта; image-доступ не проверяется."
 
-        def worker():
-            try:
-                codex_catalog.list_text_models()
-                results.put(True)
-            except Exception:
-                results.put(False)
+        def work(cancel):
+            codex_catalog.list_text_models()
 
-        threading.Thread(target=worker, daemon=True, name="codex-image-account-ping").start()
-
-        def poll():
-            if generation != self._codex_image_ping_generation:
-                finish_action(self, command_id, False, "Проверка аккаунта отменена.", cancelled=True)
-                return
-            try:
-                reachable = results.get_nowait()
-            except Empty:
-                self.after(150, poll)
-                return
-            self.codex_image_account_var.set(
+        def apply(ok, result):
+            self.codex_image_account = (
                 "Аккаунт доступен через текстовый каталог; image-доступ не проверен (нет image-каталога)."
-                if reachable else "Аккаунт/сеть не ответили; image-доступ не проверен. Выбранная image-модель сохранена."
-            )
-            self.status_var.set(self.codex_image_account_var.get())
-            finish_action(self, command_id, reachable, self.codex_image_account_var.get())
+                if ok else "Аккаунт/сеть не ответили; image-доступ не проверен. Выбранная image-модель сохранена.")
+            self.status = self.codex_image_account
+            return {"ok": ok, "message": self.codex_image_account}
 
-        self.after(150, poll)
+        self._run_gui_task("codex-image-ping", work, apply)
 
     def refresh_codex_text_catalog(self):
-        """Account-scoped read-only text catalog; only the Tk loop touches widgets."""
+        """Account catalog; only the owner loop publishes worker results."""
         from infini_local.services import codex_catalog
 
-        command_id = begin_action(self)
-        generation = getattr(self, "_codex_catalog_generation", 0) + 1
-        self._codex_catalog_generation = generation
-        results = Queue()
-        self.codex_catalog_var.set("Читаем текстовые модели текущего Codex-аккаунта…")
+        begin_action(self)
+        self.codex_catalog = "Читаем текстовые модели текущего Codex-аккаунта…"
 
-        def worker():
-            try:
-                results.put((True, codex_catalog.list_text_models()))
-            except Exception:
-                # Never display raw transport exceptions: they may include URLs or session data.
-                results.put((False, ()))
+        def work(cancel):
+            return codex_catalog.list_text_models()
 
-        threading.Thread(target=worker, daemon=True, name="codex-text-catalog").start()
-
-        def poll():
-            if generation != self._codex_catalog_generation:
-                finish_action(self, command_id, False, "Обновление каталога отменено.", cancelled=True)
-                return
-            try:
-                ok, models = results.get_nowait()
-            except Empty:
-                self.after(150, poll)
-                return
+        def apply(ok, models):
             if ok:
                 self._codex_text_models = {model.slug: model for model in models}
-                current = self.vars["INFINI_CODEX_LLM_MODEL"].get().strip()
+                current = self.values["INFINI_CODEX_LLM_MODEL"].strip()
                 choices = [model.slug for model in models]
                 if current and current not in choices:
                     choices.insert(0, current)
-                self.codex_model_combo.configure(values=choices)
-                self.codex_catalog_var.set(f"Текстовый каталог аккаунта: {len(models)} моделей. Список не проверяет image-доступ.")
+                self.codex_models = choices
+                self.codex_catalog = f"Текстовый каталог аккаунта: {len(models)} моделей. Список не проверяет image-доступ."
                 self._update_codex_efforts()
             else:
-                self.codex_catalog_var.set("Не удалось обновить текстовый каталог. Сохранённый slug остаётся; проверь вход/сеть.")
-            self.status_var.set(self.codex_catalog_var.get())
-            finish_action(self, command_id, ok, self.codex_catalog_var.get())
+                self.codex_catalog = "Не удалось обновить текстовый каталог. Сохранённый slug остаётся; проверь вход/сеть."
+            self.status = self.codex_catalog
+            return {"ok": ok, "message": self.codex_catalog}
 
-        self.after(150, poll)
+        self._run_gui_task("codex-catalog", work, apply)
 
     def _update_codex_efforts(self):
         from infini_local.services.codex_text_backend import EFFORTS
-        current = self.vars["INFINI_CODEX_LLM_MODEL"].get().strip()
+        current = self.values["INFINI_CODEX_LLM_MODEL"].strip()
         model = getattr(self, "_codex_text_models", {}).get(current)
         if model is None:
             if hasattr(self, "_codex_text_models") and current:
-                self.codex_reasoning_combo.configure(values=["off", "none", "minimal", "low", "medium", "high", "xhigh"])
-                self.codex_visual_reasoning_combo.configure(values=["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"])
-                self.codex_catalog_var.set("Ручной slug вне текущего каталога: доступ/effort не подтверждены. Значение сохранено.")
+                self.codex_efforts = list(["off", "none", "minimal", "low", "medium", "high", "xhigh"])
+                self.codex_visual_efforts = list(["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"])
+                self.codex_catalog = ("Ручной slug вне текущего каталога: доступ/effort не подтверждены. Значение сохранено.")
             return
         selectable = tuple(effort for effort in model.efforts if effort in EFFORTS)
-        self.codex_reasoning_combo.configure(values=("off", *selectable))
-        self.codex_visual_reasoning_combo.configure(values=("inherit", "model_default", *selectable))
+        self.codex_efforts = list(("off", *selectable))
+        self.codex_visual_efforts = list(("inherit", "model_default", *selectable))
         # A newly selected model must not silently rewrite a user's saved effort.
-        reasoning = self.vars["INFINI_LLM_REASONING_MODE"].get()
-        visual = self.vars["INFINI_CODEX_VISUAL_REASONING"].get()
+        reasoning = self.values["INFINI_LLM_REASONING_MODE"]
+        visual = self.values["INFINI_CODEX_VISUAL_REASONING"]
         if reasoning not in ("off", *selectable) or visual not in ("inherit", "model_default", *selectable):
-            self.codex_catalog_var.set("Сохранённый reasoning не поддерживается выбранной моделью; выбери допустимый effort. Значения не изменены.")
+            self.codex_catalog = ("Сохранённый reasoning не поддерживается выбранной моделью; выбери допустимый effort. Значения не изменены.")
         else:
-            self.codex_catalog_var.set(f"Текстовая модель аккаунта: effort {', '.join(selectable) or 'не заявлен'}; default: {model.default_effort or 'не указан'}. Image-доступ не проверен.")
+            self.codex_catalog = (f"Текстовая модель аккаунта: effort {', '.join(selectable) or 'не заявлен'}; default: {model.default_effort or 'не указан'}. Image-доступ не проверен.")
 
     def codex_login(self):
         from queue import Queue
         from infini_local.services import codex_auth
         if getattr(self, "_codex_login_running", False):
-            self.status_var.set("Codex OAuth: вход уже ожидает завершения в браузере.")
-            return {"ok": False, "message": self.status_var.get()}
+            self.status = ("Codex OAuth: вход уже ожидает завершения в браузере.")
+            return {"ok": False, "message": self.status}
         self._codex_login_command_id = begin_action(self)
         self._codex_login_running = True
         self._codex_login_cancel = threading.Event()
         self._codex_login_results = Queue()
         cancel, results = self._codex_login_cancel, self._codex_login_results
-        self.status_var.set("Codex OAuth: заверши вход в открывшемся браузере (3 минуты).")
+        self.status = ("Codex OAuth: заверши вход в открывшемся браузере (3 минуты).")
         def worker():
             try:
                 codex_auth.login(cancel=cancel)
@@ -238,7 +206,7 @@ class SettingsGuiServerControlsMixin:
             return
         self._codex_login_running = False
         ok, message = result
-        self.status_var.set(message)
+        self.status = (message)
         self._codex_account_status = message
         finish_action(self, self.__dict__.get('_codex_login_command_id'), ok, message)
 
@@ -248,68 +216,34 @@ class SettingsGuiServerControlsMixin:
         text = "вход не выполнен"
         if status["authenticated"]:
             text = "сессия сохранена; токен обновится при запросе" if status["expired"] else "сессия готова"
-        self.status_var.set("Codex OAuth: " + text + ". Квота проверяется сервером при генерации.")
-        self._codex_account_status = self.status_var.get()
-        return {"ok": True, "message": self.status_var.get()}
+        self.status = ("Codex OAuth: " + text + ". Квота проверяется сервером при генерации.")
+        self._codex_account_status = self.status
+        return {"ok": True, "message": self.status}
 
     def codex_logout(self):
         from infini_local.services.codex_auth import logout
         if getattr(self, "_codex_login_running", False):
             self._codex_login_cancel.set()
-            self.status_var.set("Codex OAuth: отмена входа; после завершения нажми Sign out ещё раз.")
-            return {"ok": False, "message": self.status_var.get()}
+            self.status = ("Codex OAuth: отмена входа; после завершения нажми Sign out ещё раз.")
+            return {"ok": False, "message": self.status}
         try:
             logout()
             # A worker may have fetched the previous account's catalog before
             # sign-out. Retire every queued UI result and remove account metadata.
-            self._codex_catalog_generation = getattr(self, "_codex_catalog_generation", 0) + 1
-            self._codex_image_ping_generation = getattr(self, "_codex_image_ping_generation", 0) + 1
-            self._codex_auto_ping_tabs = set()
+            self._cancel_gui_task("codex-catalog")
+            self._cancel_gui_task("codex-image-ping")
             self._codex_text_models = {}
-            current = self.vars["INFINI_CODEX_LLM_MODEL"].get().strip()
-            self.codex_model_combo.configure(values=[current] if current else [])
-            self.codex_catalog_var.set("Сессия удалена; каталог очищен. Сохранённый slug не проверен.")
-            self.codex_image_account_var.set("Сессия удалена; image-доступ не проверен.")
-            self.status_var.set("Codex OAuth: локальная сессия InfiniCrafter удалена.")
-            self._codex_account_status = self.status_var.get()
-            return {"ok": True, "message": self.status_var.get()}
+            current = self.values["INFINI_CODEX_LLM_MODEL"].strip()
+            self.codex_models = list([current] if current else [])
+            self.codex_catalog = ("Сессия удалена; каталог очищен. Сохранённый slug не проверен.")
+            self.codex_image_account = ("Сессия удалена; image-доступ не проверен.")
+            self.status = ("Codex OAuth: локальная сессия InfiniCrafter удалена.")
+            self._codex_account_status = self.status
+            return {"ok": True, "message": self.status}
         except OSError:
-            self.status_var.set("Codex OAuth: не удалось удалить локальную сессию.")
-            return {"ok": False, "message": self.status_var.get()}
+            self.status = ("Codex OAuth: не удалось удалить локальную сессию.")
+            return {"ok": False, "message": self.status}
 
-    def browse_file(self, key: str):
-        initial = self.vars[key].get() if key in self.vars else ""
-        filename = filedialog.askopenfilename(title="Выбери файл", initialdir=str(Path(initial).parent) if initial else str(ROOT))
-        if filename and key in self.vars:
-            self.vars[key].set(filename)
-
-    def browse_model(self, key: str):
-        initial = self.vars[key].get() if key in self.vars else ""
-        filename = filedialog.askopenfilename(title="Выбери model файл", initialdir=str(Path(initial).parent) if initial else str(ROOT), filetypes=[("Model files", "*.gguf *.safetensors *.ckpt *.pt *.pth"), ("All files", "*.*")])
-        if filename and key in self.vars:
-            self.vars[key].set(filename)
-
-    def browse_lora_file(self) -> bool:
-        key = "INFINI_SDCPP_LORA_FILE"
-        initial = self.vars[key].get() if key in self.vars else self.data.get("INFINI_SDCPP_LORA_FILE", "")
-        initial_dir = str(Path(initial).parent) if initial and Path(initial).suffix else (initial if initial else str(ROOT))
-        filename = filedialog.askopenfilename(
-            title="Выбери LoRA файл",
-            initialdir=initial_dir if Path(initial_dir).exists() else str(ROOT),
-            filetypes=[("LoRA files", "*.safetensors *.ckpt *.pt *.pth"), ("All files", "*.*")],
-        )
-        if filename and key in self.vars:
-            self.vars[key].set(filename)
-            self.data["INFINI_SDCPP_LORA_DIR"] = str(Path(filename).parent)
-            self.status_var.set("LoRA file выбран. Нажми Use selected LoRA, чтобы добавить prompt tag; папка будет взята из файла.")
-            return True
-        return False
-
-    def browse_folder(self, key: str):
-        initial = self.vars[key].get() if key in self.vars else ""
-        directory = filedialog.askdirectory(title="Выбери папку", initialdir=initial if initial and Path(initial).exists() else str(ROOT))
-        if directory and key in self.vars:
-            self.vars[key].set(directory)
 
     def _server_base_url(self) -> str:
         data = self.collect()
@@ -325,8 +259,7 @@ class SettingsGuiServerControlsMixin:
             if owned:
                 return owned
         from infini_local.desktop.settings_env import parse_env
-        from infini_local.desktop.settings_gui_theme import EXAMPLE_PATH
-        values = parse_env(CONFIG_PATH if CONFIG_PATH.exists() else EXAMPLE_PATH)
+        values = parse_env(self.config_path if self.config_path.exists() else self.example_path)
         host = values.get('INFINI_HOST') or '127.0.0.1'
         if host == '0.0.0.0':
             host = '127.0.0.1'
@@ -341,29 +274,6 @@ class SettingsGuiServerControlsMixin:
             return PureWindowsPath(text).as_posix().rstrip("/").casefold()
         return str(Path(text)).rstrip("/")
 
-    @staticmethod
-    def _parent_path_text(value: str, levels: int) -> str:
-        text = str(value or "").strip()
-        if not text:
-            return ""
-        path = PureWindowsPath(text) if (":" in text or "\\" in text) else Path(text)
-        for _ in range(levels):
-            path = path.parent
-        return str(path)
-
-    def _infer_server_root_from_health(self, snap: dict) -> str:
-        root = str(snap.get("serverRoot") or "").strip()
-        if root:
-            return root
-        # Fallback path detection: infer LocalGenerator root from cache paths.
-        asset_sync = snap.get("assetSync") or {}
-        sprite_dir = str(asset_sync.get("spriteDir") or "").strip()
-        if sprite_dir:
-            return self._parent_path_text(sprite_dir, 2)
-        world_recipes = str(snap.get("worldRecipesDir") or "").strip()
-        if world_recipes:
-            return self._parent_path_text(world_recipes, 2)
-        return ""
 
     def _health_matches_this_gui(self, snap: dict) -> bool:
         # Custom cache roots make cache-derived server-root guesses unsafe.
@@ -373,19 +283,6 @@ class SettingsGuiServerControlsMixin:
             return False
         return self._norm_path_for_compare(root) == self._norm_path_for_compare(ROOT)
 
-    @staticmethod
-    def _health_looks_like_infini_helper(snap: dict) -> bool:
-        if not isinstance(snap, dict):
-            return False
-        # Do not kill arbitrary services that happen to answer {"ok": true} on 5055.
-        return bool(
-            snap.get("serverRoot")
-            or snap.get("cacheDir")
-            or snap.get("assetSync")
-            or snap.get("pipeline")
-            or snap.get("sdcpp")
-            or str(snap.get("server_version") or "").lower().startswith("infinicrafter")
-        )
 
     @staticmethod
     def _read_gui_json(url: str, timeout: float, max_bytes: int | None = 16 * 1024 * 1024) -> dict:
@@ -406,23 +303,6 @@ class SettingsGuiServerControlsMixin:
         base_url = base_url if base_url is not None else self._server_base_url()
         return self._read_gui_json(base_url + "/health", timeout=timeout)
 
-    def _server_identity_warning(self, snap: dict) -> str:
-        root = self._infer_server_root_from_health(snap) or "unknown"
-        pid = snap.get("pid") or "unknown"
-        return (
-            "На этом порту отвечает другая копия InfiniCrafterLocal.\n"
-            f"Ответивший server.py: {root}\n"
-            f"PID: {pid}\n"
-            f"Текущий GUI: {ROOT}\n\n"
-            "GUI не будет убивать чужой процесс автоматически. "
-            "Останови другую копию вручную или выбери её GUI; Safe/Force restart работают только с текущим root."
-        )
-
-    def _server_port(self) -> int:
-        try:
-            return int((self.collect().get("INFINI_PORT") or "5055").strip())
-        except Exception:
-            return 5055
 
     def _try_http_shutdown_current_server(self, timeout: float = 2.0, base_url: str | None = None, force: bool = False) -> tuple[bool, str]:
         base_url = base_url if base_url is not None else self._server_base_url()
@@ -461,30 +341,6 @@ class SettingsGuiServerControlsMixin:
                 time.sleep(min(0.2, max(0, deadline - time.monotonic())))
         return False
 
-    def open_sdcpp_start(self):
-        self.save()
-        webbrowser.open(self._server_base_url() + "/sdcpp_start")
-        self.status_var.set("Opened /sdcpp_start. Если server.py ещё не запущен — сначала нажми Start server.")
-
-    def open_sdcpp_debug(self):
-        webbrowser.open(self._server_base_url() + "/sdcpp_debug")
-        self.status_var.set("Opened /sdcpp_debug.")
-
-    def open_visual_doctor(self):
-        webbrowser.open(self._server_base_url() + "/visual_doctor")
-        self.status_var.set("Opened /visual_doctor. Если server.py не запущен — Start server.")
-
-    def open_visual_doctor_probe(self):
-        webbrowser.open(self._server_base_url() + "/visual_doctor.json?probe=1&role=item")
-        self.status_var.set("Opened live item sprite probe. Это реально дергает Z-Image без крафта.")
-
-    def open_config(self):
-        if not CONFIG_PATH.exists():
-            self.save()
-        os.startfile(CONFIG_PATH) if os.name == "nt" else webbrowser.open(CONFIG_PATH.as_uri())
-
-    def open_health(self):
-        webbrowser.open(self._server_base_url() + "/health")
 
     def validate_paths(self):
         data = self.collect()
@@ -536,7 +392,7 @@ class SettingsGuiServerControlsMixin:
         if backend == "image_api" and not data.get("INFINI_IMAGE_API_KEY"):
             warnings.append("Image API выбран, но API key пустой.")
         asset_transport = (data.get("INFINI_MP_ASSET_TRANSPORT") or "native").strip().lower()
-        if self.radmin_enabled.get() and asset_transport == "http":
+        if self.lan_enabled and asset_transport == "http":
             url = data.get("INFINI_ASSET_PUBLIC_BASE_URL", "")
             if not url or "26.x.x.x" in url:
                 warnings.append("Radmin/LAN включён, но Public asset URL не заполнен реальным Radmin IP: http://26.xxx.xxx.xxx:5055")
@@ -544,11 +400,11 @@ class SettingsGuiServerControlsMixin:
                 warnings.append("Radmin/LAN включён, но Host не 0.0.0.0 — друзья не достучатся до LocalGenerator asset host.")
         if warnings:
             notify(self, "warning", "Проверка настроек", "\n".join(warnings))
-            self.status_var.set("Есть предупреждения по настройкам.")
+            self.status = ("Есть предупреждения по настройкам.")
             return {"ok": False, "message": "\n".join(warnings)}
         else:
             notify(self, "info", "Проверка настроек", "Критичных проблем в настройках не вижу.")
-            self.status_var.set("Проверка прошла без критичных предупреждений.")
+            self.status = ("Проверка прошла без критичных предупреждений.")
             return {"ok": True, "message": "Проверка прошла без критичных предупреждений."}
 
     def _shutdown_identity_is_safe(self, snap: dict) -> bool:
@@ -577,11 +433,6 @@ class SettingsGuiServerControlsMixin:
     def start_server(self):
         return self._request_server_action(restart=True)
 
-    def force_restart_server(self):
-        if messagebox.askyesno("Force restart", "Прервать активные/ожидающие craft и перезапустить этот server.py?\nГотовность recipe/refund это действие не подтверждает."):
-            self._request_server_action(restart=True, force=True)
-        else:
-            self.status_var.set("Force restart cancelled.")
 
     @staticmethod
     def _connection_was_refused(exc: Exception) -> bool:
@@ -590,14 +441,14 @@ class SettingsGuiServerControlsMixin:
 
     def _request_server_action(self, restart: bool, force: bool = False):
         if "server-action" in self.__dict__.get("_gui_tasks", {}):
-            self.status_var.set("Server action already in progress; wait for its result.")
+            self.status = ("Server action already in progress; wait for its result.")
             return {"ok": False, "message": "Действие сервера уже выполняется."}
         expected_revision = self.__dict__.get("_studio_expected_config_revision")
         owned_running = self.proc is not None and self.proc.poll() is None
         owned_url = self.__dict__.get('_owned_server_base_url') if owned_running else None
         base_url = owned_url or (self._server_base_url() if restart else self._saved_or_owned_server_base_url())
         data = self.collect() if restart else None
-        self.status_var.set("Force restart: checking identity…" if force else "Safe restart/stop: checking generation activity…")
+        self.status = ("Force restart: checking identity…" if force else "Safe restart/stop: checking generation activity…")
         shutdown_acknowledged = threading.Event()
 
         def work(cancel):
@@ -633,16 +484,16 @@ class SettingsGuiServerControlsMixin:
                 self._cancel_gui_task("health-config")
                 self._applied_config_ack = None
                 self._server_lifecycle = "unknown"
-                self.applied_config_var.set("Runtime config unconfirmed: shutdown was requested; check connection.")
+                self.applied_config = ("Runtime config unconfirmed: shutdown was requested; check connection.")
             if not ok or refusal:
-                self.status_var.set(refusal if ok else "Safe restart refused: activity unknown.")
-                return {"ok": False, "message": self.status_var.get()}
-            if expected_revision is not None and expected_revision != saved_config_revision(CONFIG_PATH):
-                self.status_var.set("Запуск отменён: сохранённая конфигурация изменилась во время проверки. Проверь значения и запусти снова.")
-                return {"ok": False, "message": self.status_var.get()}
+                self.status = (refusal if ok else "Safe restart refused: activity unknown.")
+                return {"ok": False, "message": self.status}
+            if expected_revision is not None and expected_revision != saved_config_revision(self.config_path, example_path=self.example_path):
+                self.status = ("Запуск отменён: сохранённая конфигурация изменилась во время проверки. Проверь значения и запусти снова.")
+                return {"ok": False, "message": self.status}
             if restart and self.collect() != data:
-                self.status_var.set("Restart cancelled: GUI settings changed while checking; start again.")
-                return {"ok": False, "message": self.status_var.get()}
+                self.status = ("Restart cancelled: GUI settings changed while checking; start again.")
+                return {"ok": False, "message": self.status}
             if restart:
                 return self._start_server_after_guard()
             else:
@@ -657,8 +508,8 @@ class SettingsGuiServerControlsMixin:
                     self.after_cancel(scheduled)
                     self._health_after_id = None
                 self._update_applied_config_feedback("Stopped")
-                self.status_var.set("Server stopped through guarded /shutdown.")
-                return {"ok": True, "message": self.status_var.get()}
+                self.status = ("Server stopped through guarded /shutdown.")
+                return {"ok": True, "message": self.status}
 
         self._run_gui_task("server-action", work, apply)
 
@@ -682,7 +533,7 @@ class SettingsGuiServerControlsMixin:
             self._owned_launch_settings = dict(launch_values)
             self._owned_server_base_url = launch_url
             self._server_lifecycle = "starting"
-            self.status_var.set("server.py запущен. Runtime config ещё не подтверждён.")
+            self.status = ("server.py запущен. Runtime config ещё не подтверждён.")
             previous = self.__dict__.get("_health_after_id")
             if previous is not None:
                 self.after_cancel(previous)
@@ -690,12 +541,12 @@ class SettingsGuiServerControlsMixin:
                 self._health_after_id = None
                 self._delayed_health_check()
             self._health_after_id = self.after(1000, check_launched_server)
-            return {"ok": True, "message": self.status_var.get(), "saved": True}
+            return {"ok": True, "message": self.status, "saved": True}
         except Exception:
             self._server_lifecycle = "unknown"
             message = "Настройки сохранены в config.env, но не удалось запустить server.py; проверь Python/права/порт. Runtime config не подтверждён."
             notify(self, "error", "Не удалось запустить сервер", message)
-            self.status_var.set(message)
+            self.status = (message)
             # Saving and launching are separate outcomes. The failed launch must
             # still acknowledge this command's persisted baseline to its tab.
             return {"ok": False, "message": message, "saved": True}
@@ -762,24 +613,12 @@ class SettingsGuiServerControlsMixin:
             "sdcppAutostart": env.get("INFINI_SDCPP_SERVER_AUTOSTART", "0").strip().lower() in {"1", "true", "yes", "on", "y", "t"},
         }
 
-    def _install_applied_config_tracking(self):
-        # Only these non-secret inputs participate in the partial projection.
-        # Editing other fields cannot manufacture an acknowledgement of them.
-        for key in (
-            "INFINI_HOST", "INFINI_PORT", "INFINI_CACHE_DIR", "INFINI_WORLD_RECIPES_DIR",
-            "INFINI_IMAGE_BACKEND", "INFINI_LLM_PROVIDER", "INFINI_LMSTUDIO_MODEL",
-            "INFINI_OPENROUTER_MODEL", "INFINI_OPENAI_COMPAT_MODEL", "INFINI_CODEX_LLM_MODEL",
-            "INFINI_OPENROUTER_PROVIDER", "INFINI_SDCPP_SERVER_AUTOSTART",
-        ):
-            variable = self.vars.get(key)
-            if variable is not None and callable(getattr(variable, "trace_add", None)):
-                variable.trace_add("write", lambda *_args: self._update_applied_config_feedback("Edited"))
 
     def _update_applied_config_feedback(self, state: str = ""):
         prefix = state + "; " if state else ""
         ack = self.__dict__.get("_applied_config_ack")
         if not ack or ack.get("baseUrl") != self._server_base_url():
-            self.applied_config_var.set(prefix + "Runtime config unconfirmed (partial non-secret projection; pools/secrets unverified).")
+            self.applied_config = (prefix + "Runtime config unconfirmed (partial non-secret projection; pools/secrets unverified).")
             return
         proposed = self._proposed_effective_config()
         mismatches = [key for key in proposed if proposed[key] != ack["effectiveConfig"].get(key)]
@@ -787,7 +626,7 @@ class SettingsGuiServerControlsMixin:
             text = "Restart required / runtime mismatch: " + ", ".join(mismatches) + ". Partial non-secret projection; pools/secrets unverified."
         else:
             text = "Runtime matches launch settings at last health check (partial non-secret projection; pools/secrets unverified)."
-        self.applied_config_var.set(prefix + text)
+        self.applied_config = (prefix + text)
 
     @staticmethod
     def _generation_activity_text(activity) -> str:
@@ -835,14 +674,14 @@ class SettingsGuiServerControlsMixin:
         return "\n".join(lines)
 
     def _delayed_health_check(self):
-        # Called by the Tk loop, never a background thread. Capture plain launch
+        # Called by the owner loop, never a background thread. Capture plain launch
         # inputs here and return results through the same bounded queue pattern.
         if self.__dict__.get("_gui_closed", False):
             return
         studio_request = bool(self.__dict__.get("_studio_command_id"))
         base_url = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
         expected_pid = self.proc.pid if self.proc is not None and self.proc.poll() is None else None
-        self.applied_config_var.set("Checking runtime config (partial non-secret projection)…")
+        self.applied_config = ("Checking runtime config (partial non-secret projection)…")
 
         def work(cancel):
             snap = self._fetch_health_snapshot(timeout=3, base_url=base_url)
@@ -860,19 +699,17 @@ class SettingsGuiServerControlsMixin:
             current_target = self._saved_or_owned_server_base_url() if studio_request else self._server_base_url()
             if ack is not None and ack["baseUrl"] != current_target:
                 ack = None
-            activity_var = self.__dict__.get("activity_var")
-            if activity_var is not None:
-                activity_var.set(ack["activityText"] if ok and ack is not None else "Backend activity unknown (health unavailable or foreign server).")
+            self.activity = ack["activityText"] if ok and ack is not None else "Backend activity unknown (health unavailable or foreign server)."
             if not ok or ack is None:
                 self._applied_config_ack = None
                 self._server_lifecycle = "unknown"
-                self.applied_config_var.set("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")
-                return {"ok": False, "message": self.applied_config_var.get()}
+                self.applied_config = ("Runtime config unconfirmed: health/projection unavailable or другая копия (partial; secrets/pools unverified).")
+                return {"ok": False, "message": self.applied_config}
             self._applied_config_ack = ack
             self._server_lifecycle = "responding"
             self._update_applied_config_feedback()
-            self.status_var.set(self.applied_config_var.get())
-            return {"ok": True, "message": self.applied_config_var.get()}
+            self.status = (self.applied_config)
+            return {"ok": True, "message": self.applied_config}
 
         self._run_gui_task("health-config", work, apply)
 
@@ -880,19 +717,222 @@ class SettingsGuiServerControlsMixin:
         return self._request_server_action(restart=False)
 
     def on_close(self):
+        if self.__dict__.get("_gui_closed", False):
+            return
         self._gui_closed = True
-        health_after = self.__dict__.get("_health_after_id")
-        if health_after is not None:
-            self.after_cancel(health_after)
-            self._health_after_id = None
+        # Retire every receipt before removing callbacks; shutdown of Studio is
+        # independent from the owned generator process and never terminates it.
+        identifiers = set(self.__dict__.get("_studio_async_ids", set()))
         for state in self.__dict__.get("_gui_tasks", {}).values():
             state["cancel"].set()
+            identifiers.add(state["command_id"])
+            if state["pending"] is not None:
+                identifiers.add(state["pending"][2])
             state["pending"] = None
-            if state["after"] is not None:
-                self.after_cancel(state["after"])
+        identifiers.add(self.__dict__.get("_codex_login_command_id"))
+        for identifier in identifiers - {None}:
+            finish_action(self, identifier, False, "Студия закрыта; действие отменено.", cancelled=True)
         self.__dict__.get("_gui_tasks", {}).clear()
+        self._health_after_id = None
         if getattr(self, "_codex_login_running", False):
             self._codex_login_cancel.set()
-        self.destroy()
+        self.cancel_scheduled()
 
-__all__ = ["SettingsGuiServerControlsMixin"]
+    @staticmethod
+    def _cache_dir_from_environment(env: dict[str, str]) -> Path:
+        # Match env_path() and the GUI launch cwd, including an explicit blank
+        # override (Path("") == cwd). Do not expand ~ or reinterpret saved keys.
+        cache = Path(env.get("INFINI_CACHE_DIR", str(ROOT / "cache")).strip())
+        return (cache if cache.is_absolute() else ROOT / cache).resolve()
+
+    def _effective_cache_dir(self) -> Path:
+        env = os.environ.copy()
+        env.update(self.collect())
+        return self._cache_dir_from_environment(env)
+
+    def _load_local_trace_snapshot(self, reason: str = "", cache: Path | None = None) -> dict:
+        cache = cache if cache is not None else self._effective_cache_dir()
+        return {
+            "ok": False,
+            "source": "local_cache_fallback",
+            "version": "server unavailable",
+            "serverRoot": str(ROOT),
+            "cacheDir": str(cache),
+            "pipeline": {"note": "server.py не ответил или отвечает другая копия; показан локальный cache", "reason": reason},
+            "traceConfig": {"eventsFile": str(cache / "events.ndjson"), "promptTraceFile": str(cache / "prompt_trace.ndjson"), "pipelineTraceFile": str(cache / "pipeline_trace.ndjson")},
+            "events": trace_tools.tail_ndjson(cache / "events.ndjson", 120),
+            "promptTrace": trace_tools.tail_ndjson(cache / "prompt_trace.ndjson", 120),
+            "pipelineTrace": trace_tools.tail_ndjson(cache / "pipeline_trace.ndjson", 120),
+            "sdcpp": {
+                "logFile": str(cache / "sdcpp_server.log"),
+                "logTail": trace_tools.tail_text_file(cache / "sdcpp_server.log", 20000),
+            },
+            "lastCombineFailure": json.loads((cache / "last_combine_failure.json").read_text(encoding="utf-8")) if (cache / "last_combine_failure.json").exists() else None,
+        }
+
+    def _fetch_trace_snapshot(self, base_url: str | None = None) -> dict:
+        base_url = base_url if base_url is not None else self._server_base_url()
+        health = self._fetch_health_snapshot(timeout=8, base_url=base_url)
+        if not self._health_matches_this_gui(health):
+            raise RuntimeError("Trace refused: другая копия server.py")
+        snap = self._read_gui_json(base_url + "/trace.json", timeout=18, max_bytes=None)
+        if not self._health_matches_this_gui(snap) or snap.get("pid") != health.get("pid"):
+            raise RuntimeError("Trace refused: server identity changed")
+        return snap
+
+    def _pretty(self, value) -> str:
+        try:
+            return json.dumps(value, ensure_ascii=False, indent=2, default=str)
+        except Exception:
+            return str(value)
+
+    def _fmt_event_line(self, ev: dict, include_prompts: bool = False) -> str:
+        ts = ev.get("ts") or ev.get("createdAt") or ""
+        stage = ev.get("stage") or ev.get("level") or ev.get("kind") or "event"
+        title = ev.get("title") or ev.get("message") or ""
+        head = f"[{ts}] {stage} :: {title}\n"
+        payload = {k: v for k, v in ev.items() if k not in {"prompt", "negative", "response"}}
+        body = self._pretty(payload)
+        if include_prompts:
+            if ev.get("prompt"):
+                body += "\n\n--- PROMPT ---\n" + str(ev.get("prompt"))
+            if ev.get("negative"):
+                body += "\n\n--- NEGATIVE ---\n" + str(ev.get("negative"))
+            if ev.get("response"):
+                body += "\n\n--- RESPONSE ---\n" + str(ev.get("response"))
+        return head + body + "\n" + ("═" * 96) + "\n"
+
+    def refresh_trace(self, *, base_url=None, cache=None):
+        # Capture plain settings on the owner thread before starting any I/O.
+        base_url = self._server_base_url() if base_url is None else base_url
+        cache = self._effective_cache_dir() if cache is None else cache
+        self.trace_status = ("Loading trace…")
+
+        def work(cancel):
+            try:
+                snap = self._fetch_trace_snapshot(base_url=base_url)
+                return snap, "Trace loaded from server /trace.json"
+            except Exception:
+                if cancel.is_set():
+                    return None
+                reason = "server unavailable or identity mismatch"
+                snap = self._load_local_trace_snapshot(reason, cache=cache)
+                return snap, f"Local cache fallback: {cache} ({reason})"
+
+        def apply(ok, result):
+            if not ok or result is None:
+                self.trace_status = ("Trace unavailable; local trace could not be read.")
+                return {"ok": False, "message": self.trace_status}
+            snap, status = result
+            self.trace_status = (status)
+            self._render_trace_snapshot(snap)
+            return {"ok": True, "message": status}
+
+        self._run_gui_task("trace", work, apply)
+
+    def cancel_trace_refresh(self):
+        self._cancel_gui_task("trace")
+        self.trace_status = ("Trace refresh cancelled; any in-flight read is being retired.")
+
+    def _render_trace_snapshot(self, snap: dict):
+        pipeline = snap.get("pipeline") or {}
+        trace_cfg = snap.get("traceConfig") or {}
+        summary = []
+        summary.append("INFICRAFTER TRACE SUMMARY")
+        summary.append("═" * 96)
+        summary.append(f"version: {snap.get('version')}")
+        summary.append(f"cache:   {snap.get('cacheDir')}")
+        summary.append("")
+        summary.append("PIPELINE")
+        summary.append(self._pretty(pipeline))
+        summary.append("")
+        summary.append("TRACE FILES")
+        summary.append(self._pretty(trace_cfg))
+        self._set_trace_text("summary", "\n".join(summary))
+
+        prompt_events = snap.get("promptTrace") or []
+        self._set_trace_text("prompts", "".join(self._fmt_event_line(ev, include_prompts=True) for ev in reversed(prompt_events)) or "Пока prompt trace пуст.")
+        pipe_events = snap.get("pipelineTrace") or []
+        self._set_trace_text("pipeline", "".join(self._fmt_event_line(ev) for ev in reversed(pipe_events)) or "Пока pipeline trace пуст.")
+        events = snap.get("events") or []
+        self._set_trace_text("events", "".join(self._fmt_event_line(ev) for ev in reversed(events)) or "Пока events пуст.")
+        self._set_trace_text("sdcpp", self._pretty(snap.get("sdcpp") or {}))
+        self._set_trace_text("failure", self._pretty(snap.get("lastCombineFailure")))
+
+
+    def open_cache_folder(self):
+        cache = self._effective_cache_dir()
+        cache.mkdir(parents=True, exist_ok=True)
+        os.startfile(cache) if os.name == "nt" else webbrowser.open(cache.as_uri())
+        self.status = (f"Opened launch cache: {cache}")
+
+    def clear_trace_files(self, *, confirmed=False):
+        if "trace-clear" in self.__dict__.get("_gui_tasks", {}):
+            self.trace_status = ("Trace clear already in progress.")
+            return {"ok": False, "message": "Очистка журнала уже выполняется."}
+        if not confirmed:
+            return {"ok": False, "message": "Trace clear requires confirmation."}
+        base_url = self._server_base_url()
+        cache = self._effective_cache_dir()
+        self._cancel_gui_task("trace")
+        self.trace_status = ("Clearing trace…")
+
+        def work(cancel):
+            try:
+                health = self._fetch_health_snapshot(timeout=2, base_url=base_url)
+            except Exception as exc:
+                # HTTP refusals/timeouts are not proof that the selected helper
+                # is offline; never truncate its files as a destructive fallback.
+                if not self._connection_was_refused(exc):
+                    return "Trace clear refused: server liveness/identity unavailable."
+                health = None
+            if cancel.is_set():
+                return None
+            if health is not None:
+                if health.get("ok") is not True or not self._health_matches_this_gui(health):
+                    return "Trace clear refused: unknown/foreign server root."
+                projection = health.get("effectiveConfig") or {}
+                live_cache = projection.get("cacheDir") if isinstance(projection, dict) else None
+                live_cache = live_cache or health.get("cacheDir")
+                if not isinstance(live_cache, str) or self._norm_path_for_compare(live_cache) != self._norm_path_for_compare(cache):
+                    return "Trace clear refused: live cache differs from launch cache or is unverified. Check applied config / restart."
+                reply = self._read_gui_json(base_url + "/trace_clear", timeout=4, max_bytes=64 * 1024)
+                cleared = reply.get("cleared")
+                expected = {self._norm_path_for_compare(cache / name) for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")}
+                acknowledged = set()
+                if isinstance(cleared, list):
+                    for value in cleared:
+                        if isinstance(value, str):
+                            path = Path(value)
+                            path = (path if path.is_absolute() else ROOT / path).resolve()
+                            acknowledged.add(self._norm_path_for_compare(path))
+                if reply.get("ok") is not True or not expected.issubset(acknowledged):
+                    return "Trace clear unavailable; server did not confirm all selected trace files."
+                return "Trace cleared through this server."
+            paths = [cache / name for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")]
+            # Refuse known linked trace/lock leaves before clearing any file;
+            # folder configuration never authorizes mutation of their targets.
+            if any(path.is_symlink() or path.with_name(path.name + ".lock").is_symlink() for path in paths):
+                return "Trace clear refused: linked trace/lock file outside the selected-file contract."
+            for path in paths:
+                if cancel.is_set():
+                    return None
+                trace_tools.clear_ndjson(path)
+            return f"Trace cleared locally: {cache}"
+
+        def apply(ok, result):
+            self.trace_status = (result if ok and result else "Trace clear unavailable; not confirmed.")
+            if ok and result and result.startswith("Trace cleared"):
+                self.refresh_trace(base_url=base_url, cache=cache)
+            return {"ok": bool(ok and result and result.startswith("Trace cleared")), "message": result or "Trace clear unavailable; not confirmed."}
+
+        self._run_gui_task("trace-clear", work, apply)
+
+
+    def _set_trace_text(self, key: str, content: str):
+        self.trace[key] = content
+
+    def force_restart_server(self, *, confirmed=False):
+        if not confirmed:
+            return {"ok": False, "message": "Force restart requires confirmation."}
+        return self._request_server_action(restart=True, force=True)

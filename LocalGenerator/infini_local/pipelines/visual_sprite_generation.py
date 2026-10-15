@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from infini_local.core.http_io import HttpDeadlineExceeded
-from infini_local.storage.world_recipe_runtime import safe_file_part
+from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.core.config_bootstrap import SPRITE_DIR, WORLD_RECIPES_DIR
 from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
 from infini_local.core.image_dependencies import (

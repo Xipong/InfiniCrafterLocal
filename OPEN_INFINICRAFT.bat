@@ -16,7 +16,7 @@ set "RESULT=%ERRORLEVEL%"
 if not "%RESULT%"=="0" (
   echo.
   echo Could not open Infinicraft. Read the error above.
-  echo Python 3.11+ with Tcl/Tk is required. Download: https://www.python.org/downloads/
+  echo Python 3.11+ is required. Download: https://www.python.org/downloads/
   pause
 )
 popd
