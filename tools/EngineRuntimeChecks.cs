@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("equipment periodic gameplay native spawn", EquipmentPeriodicGameplayReachesNativeSpawn),
+            ("equipment periodic gameplay authority and delay", EquipmentPeriodicGameplayKeepsAuthorityAndDelay),
             ("equipment presentation carrier native frame bounds", EquipmentCarrierSheetsCoverNativeFrames),
             ("equipment presentation front back native layer tree", EquipmentAccessoryLayersKeepMountsDyesAndVisibility),
             ("equipment presentation native displayed carrier selection", EquipmentNeutralCarrierUsesNativeDisplayedSelection),

@@ -1,5 +1,7 @@
 """Independent equipment flags, not source-item presets."""
 from copy import deepcopy
+import json
+from pathlib import Path
 from infini_local.core.runtime_authoring import apply_repair_patch, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
 import pytest
@@ -8,6 +10,53 @@ from infini_local.core.runtime_authoring import (
 )
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
+
+
+def periodic_equipment_fixture(kind="accessory"):
+    """Fresh Author composition used by the native equipment hook regression."""
+    doc = build_capability_witness("configure_" + kind)
+    source = build_capability_witness("spawn_entity_on_event")["runtimeProgram"]
+    program = doc["runtimeProgram"]
+    program["entities"].extend(deepcopy(row) for row in source["entities"] if row["id"] == "witness_child")
+    program["calls"].extend(deepcopy(row) for row in source["calls"] if row.get("target") == "witness_child")
+    event = deepcopy(next(row for row in source["calls"] if row["fn"] == "spawn_entity_on_event"))
+    event.update(id="periodic_spawn", target="item")
+    event["params"]["when"] = {"everyTicks": 6}
+    program["calls"].append(event)
+    next(row for row in program["calls"] if row["id"] == "child_configure_spawn")["params"]["aim"] = "facing"
+    return doc
+
+
+@pytest.mark.parametrize("kind", ["accessory", "armor"])
+def test_equipped_only_periodic_spawn_reaches_strict_delivery(kind):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines.author_item_contract import author_item_response_schema
+
+    doc = periodic_equipment_fixture(kind)
+    assert Draft202012Validator(author_item_response_schema()).is_valid(doc)
+    assert validate_runtime_program(doc)["ok"]
+    wire = compile_runtime_program(doc)
+    assert validate_runtime_wire(wire)["ok"]
+    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=doc, final_document=wire)["ok"]
+    assert [binding["input"] for binding in wire["runtimeProgram"]["bindings"]] == ["equipped"]
+    body = next(entity for entity in wire["runtimeProgram"]["entities"] if entity["kind"] == "item_body")
+    assert body["events"][0]["event"] == "periodic"
+    assert body["events"][0]["periodTicks"] == 6
+    assert body["events"][0]["entityId"] == "witness_child"
+    # Native DTO consumes this same fresh compiler payload. Test-only visual
+    # metadata supplies no gameplay and no model/image/game run is claimed.
+    for key in ("concept", "realization", "runtimeContract"):
+        wire.pop(key)
+    wire.update(sourceMode="test_fixture", id="equipment_periodic_hook",
+                visual={"spritePath": "equipment_periodic.png",
+                        "equipOverlayPath": "equipment_periodic_overlay.png", "equipOverlayStatus": "generated"})
+    for entity in wire["runtimeProgram"]["entities"]:
+        entity["visual"]["assetMode"] = "reuse_item_icon" if entity["kind"] == "item_body" else "no_asset"
+    assert validate_runtime_wire(wire)["ok"]
+    if kind == "accessory":
+        native_fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/equipment-periodic-compiled.json"
+        assert json.loads(native_fixture.read_text()) == wire
 
 
 @pytest.mark.parametrize("field,valid,invalid", [

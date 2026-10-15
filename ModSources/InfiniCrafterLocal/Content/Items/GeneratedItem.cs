@@ -42,6 +42,7 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? Binding, uint Tick, bool Completed) _stackChanceUseOutcome;
     private (Player? Player, Item? Item, GeneratedItemData? Data,
         RuntimeItemEffectGroupSpec? Group, uint Tick, uint SnapshotTick) _heldEffectRefresh;
+    private (Player? Player, Item? Item, GeneratedItemData? Data, uint Tick) _periodicItemEvents;
 
 
     private static void Warn(string context, Exception ex)
@@ -58,6 +59,7 @@ public partial class GeneratedItem : ModItem
         catch { clone.Data = GeneratedItemData.Placeholder(); }
         clone._itemPresentationToken=0;clone._itemPresentationGeneration=new object();
         clone._itemEventBudget = new RuntimeSpawnBudget(0);
+        clone._periodicItemEvents = default;
         clone.ResetPureMobilityUseOutcome();
         CopyNativePrefixLifecycleTo(clone);
         return clone;
@@ -69,6 +71,7 @@ public partial class GeneratedItem : ModItem
     {
         ResetPureMobilityUseOutcome();
         _itemEventBudget = new RuntimeSpawnBudget(0);
+        _periodicItemEvents = default;
         if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;}
         Data = data ?? GeneratedItemData.Placeholder();
         try { ApplyDataWithNativePrefix(); }
@@ -558,6 +561,15 @@ public partial class GeneratedItem : ModItem
 
     private void RunPeriodicItemEvents(Player player, RuntimeEntitySpec entity)
     {
+        // Native held/equipment hooks can visit the same instance in one tick.
+        // One emission keeps the authored cadence and shared sibling budget;
+        // distinct physical items and owners remain independent.
+        var previous = _periodicItemEvents;
+        uint tick = Main.GameUpdateCount;
+        if (ReferenceEquals(previous.Player, player) && ReferenceEquals(previous.Item, Item)
+            && ReferenceEquals(previous.Data, Data) && previous.Tick == tick)
+            return;
+        _periodicItemEvents = (player, Item, Data, tick);
         var budget = new RuntimeSpawnBudget(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(RuntimeEventKind.Periodic))
         {
@@ -689,6 +701,7 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Accessory.Enabled) return;
         ApplyEquipmentEffects(player, Data.Accessory);
+        RunPeriodicItemEvents(player, Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);
     }
 
@@ -698,6 +711,7 @@ public partial class GeneratedItem : ModItem
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Armor.Enabled) return;
         ApplyEquipmentEffects(player, Data.Armor);
+        RunPeriodicItemEvents(player, Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);
     }
 
