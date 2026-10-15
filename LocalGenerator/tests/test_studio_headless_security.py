@@ -42,7 +42,9 @@ def request(server, path, payload=None, headers=None):
         headers['Content-Type'] = 'application/json'
     req = urllib.request.Request(server.base_url + path, data=data, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=3) as response:
+        # This is an owned loopback security probe, not an external HTTP route.
+        # An inherited proxy must not turn the server's 403 into a proxy 503.
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=3) as response:
             return response.status, json.load(response)
     except urllib.error.HTTPError as error:
         return error.code, json.load(error)

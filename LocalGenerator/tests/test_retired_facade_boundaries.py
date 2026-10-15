@@ -21,6 +21,9 @@ PACKAGE = Path(__file__).resolve().parents[1] / "infini_local"
         "_fishing_bait_semantics_for_llm", "_placeable_consumption_semantics_for_llm",
         "_projectile_semantics_for_llm",
     }),
+    ("storage/trace_runtime.py", {
+        "_json_slim", "_trace_message_summary", "_tail_text_file", "_tail_ndjson",
+    }),
     ("storage/world_recipe_runtime.py", {
         "safe_file_part", "atomic_write_json", "read_json_file", "write_world_manifest",
         "strip_runtime_only_fields", "_delivery_safe_debug", "sanitize_recipe_for_delivery",

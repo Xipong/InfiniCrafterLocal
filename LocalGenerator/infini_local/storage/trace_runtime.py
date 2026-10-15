@@ -57,10 +57,6 @@ def initialize_trace_storage() -> dict[str, bool]:
     return trace_tools.initialize_trace_storage(tuple(path for path in paths if path.exists()))
 
 
-def _json_slim(obj: Any, max_chars: int = 40000) -> Any:
-    return trace_tools.json_slim(obj, max_chars)
-
-
 def log_event(level: str, message: str, payload: Any = None) -> None:
     if not TRACE_PROMPTS_ENABLED:
         if str(level).lower() != "error":
@@ -71,10 +67,6 @@ def log_event(level: str, message: str, payload: Any = None) -> None:
 
 def _trace_clip(value: Any, max_chars: int | None = None) -> str:
     return trace_tools.trace_clip(value, default_max_chars=TRACE_MAX_PROMPT_CHARS, max_chars=max_chars)
-
-
-def _trace_message_summary(messages: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    return trace_tools.trace_message_summary(messages)
 
 
 def trace_event(kind: str, stage: str, title: str, payload: Any = None, *, prompt: Any = None, negative: Any = None, response: Any = None, error: Any = None) -> None:
@@ -327,14 +319,6 @@ def flush_codex_transport(timeout: float = 2) -> bool:
     return done.wait(timeout)
 
 
-def _tail_text_file(path: str | Path, max_chars: int = 16000) -> str:
-    return trace_tools.tail_text_file(path, max_chars)
-
-
-def _tail_ndjson(path: str | Path, limit: int = 80) -> list[dict[str, Any]]:
-    return trace_tools.tail_ndjson(path, limit)
-
-
 __all__ = [
     "TRACE_PROMPTS_ENABLED",
     "TRACE_MAX_PROMPT_CHARS",
@@ -342,12 +326,8 @@ __all__ = [
     "TRACE_FILE",
     "PROMPT_TRACE_FILE",
     "initialize_trace_storage",
-    "_json_slim",
     "log_event",
     "_trace_clip",
-    "_trace_message_summary",
     "trace_event",
     "trace_stage_request",
-    "_tail_text_file",
-    "_tail_ndjson",
 ]

@@ -1,6 +1,8 @@
 """Read-only account catalog callbacks: saved choices, errors and retired results."""
 from __future__ import annotations
 
+import pytest
+
 from infini_local.services import codex_auth, codex_catalog
 from infini_local.services.codex_catalog import CodexModel
 from test_settings_gui_contract import _GuiWorkflowHarness, _SpriteGuiHarness, held_gui_call
@@ -13,8 +15,19 @@ class Harness(_GuiWorkflowHarness):
         self.codex_models = ['saved-custom']
 
 
-def test_catalog_refresh_keeps_saved_model_and_unsupported_effort(tmp_path, held_gui_call):
-    gui = Harness(tmp_path / "config.env")
+@pytest.fixture
+def catalog_studio(tmp_path):
+    from infini_local.desktop.web_studio import StudioController, StudioServer
+
+    gui = Harness(tmp_path / 'config.env')
+    server = StudioServer(tmp_path)
+    yield gui, StudioController(gui, server)
+    gui.on_close()
+    server.close()
+
+
+def test_catalog_refresh_keeps_saved_model_and_unsupported_effort(catalog_studio, held_gui_call):
+    gui, controller = catalog_studio
     models = [CodexModel("account-model", "Account", ("low", "medium", "ultra"), "low", 1)]
     hold = held_gui_call(codex_catalog, "list_text_models", models)
     gui.refresh_codex_text_catalog()
@@ -22,13 +35,20 @@ def test_catalog_refresh_keeps_saved_model_and_unsupported_effort(tmp_path, held
     assert gui.codex_models == ["saved-custom"]
     hold.release.set()
     gui.drain_until(lambda: "account-model" in gui.codex_models)
-    assert gui.values["INFINI_CODEX_LLM_MODEL"] == "saved-custom"
-    gui.update_values({"INFINI_CODEX_LLM_MODEL": "account-model"})
-    gui._update_codex_efforts()
-    assert gui.codex_efforts == ["off", "low", "medium"]
-    assert gui.codex_visual_efforts == ["inherit", "model_default", "low", "medium"]
-    assert gui.values["INFINI_LLM_REASONING_MODE"] == "high"
-    assert "не поддерживается" in gui.codex_catalog
+    snapshot = controller.snapshot()
+    model_field = next(row for row in snapshot['fields'] if row['key'] == 'INFINI_CODEX_LLM_MODEL')
+    assert model_field['options'] == ['saved-custom', 'account-model']
+    assert snapshot['values']["INFINI_CODEX_LLM_MODEL"] == "saved-custom"
+    assert snapshot['account']['textModels'] == {'account-model': {'efforts': ['low', 'medium'], 'defaultEffort': 'low'}}
+    gui.update_values({"INFINI_CODEX_LLM_MODEL": "account-model", "INFINI_CODEX_VISUAL_REASONING": "max"})
+    selected = controller.snapshot()
+    assert selected['values']["INFINI_CODEX_LLM_MODEL"] == "account-model"
+    assert selected['values']["INFINI_LLM_REASONING_MODE"] == "high"
+    assert selected['values']["INFINI_CODEX_VISUAL_REASONING"] == "max"
+    assert selected['account']['textModels'] == snapshot['account']['textModels']
+    gui.update_values({"INFINI_CODEX_LLM_MODEL": "manual-slug"})
+    assert controller.snapshot()['values']["INFINI_CODEX_LLM_MODEL"] == "manual-slug"
+    assert not gui.config_path.exists()
 
 
 def test_failed_new_refresh_discards_held_old_success(tmp_path, monkeypatch, held_gui_call):

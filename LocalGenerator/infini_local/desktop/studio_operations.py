@@ -145,34 +145,12 @@ class StudioOperations:
                     choices.insert(0, current)
                 self.codex_models = choices
                 self.codex_catalog = f"Текстовый каталог аккаунта: {len(models)} моделей. Список не проверяет image-доступ."
-                self._update_codex_efforts()
             else:
                 self.codex_catalog = "Не удалось обновить текстовый каталог. Сохранённый slug остаётся; проверь вход/сеть."
             self.status = self.codex_catalog
             return {"ok": ok, "message": self.codex_catalog}
 
         self._run_gui_task("codex-catalog", work, apply)
-
-    def _update_codex_efforts(self):
-        from infini_local.services.codex_text_backend import EFFORTS
-        current = self.values["INFINI_CODEX_LLM_MODEL"].strip()
-        model = getattr(self, "_codex_text_models", {}).get(current)
-        if model is None:
-            if hasattr(self, "_codex_text_models") and current:
-                self.codex_efforts = list(["off", "none", "minimal", "low", "medium", "high", "xhigh"])
-                self.codex_visual_efforts = list(["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"])
-                self.codex_catalog = ("Ручной slug вне текущего каталога: доступ/effort не подтверждены. Значение сохранено.")
-            return
-        selectable = tuple(effort for effort in model.efforts if effort in EFFORTS)
-        self.codex_efforts = list(("off", *selectable))
-        self.codex_visual_efforts = list(("inherit", "model_default", *selectable))
-        # A newly selected model must not silently rewrite a user's saved effort.
-        reasoning = self.values["INFINI_LLM_REASONING_MODE"]
-        visual = self.values["INFINI_CODEX_VISUAL_REASONING"]
-        if reasoning not in ("off", *selectable) or visual not in ("inherit", "model_default", *selectable):
-            self.codex_catalog = ("Сохранённый reasoning не поддерживается выбранной моделью; выбери допустимый effort. Значения не изменены.")
-        else:
-            self.codex_catalog = (f"Текстовая модель аккаунта: effort {', '.join(selectable) or 'не заявлен'}; default: {model.default_effort or 'не указан'}. Image-доступ не проверен.")
 
     def codex_login(self):
         from queue import Queue

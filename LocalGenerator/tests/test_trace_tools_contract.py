@@ -25,6 +25,24 @@ def _check_json_slim_keeps_small_json_and_truncates_large_payload() -> None:
     assert "jsonPrefix" in slim
 
 
+def _check_message_summary_keeps_metadata_and_bounds_preview() -> None:
+    content = "я" * 421
+    messages = [{"role": "user", "name": "recipe_context", "content": content}]
+    assert trace_tools.trace_message_summary(messages) == [{
+        "index": 0, "role": "user", "name": "recipe_context", "chars": 421,
+        "preview": "я" * 420,
+    }]
+    assert messages[0]["content"] == content
+    assert trace_tools.trace_message_summary(None) == []
+
+
+def _check_text_tail_keeps_utf8_characters_and_missing_file_is_empty(tmp_path: Path) -> None:
+    log_file = tmp_path / "sdcpp.log"
+    log_file.write_text("old log\n" + "я" * 100 + "終🙂", encoding="utf-8")
+    assert trace_tools.tail_text_file(log_file, 4) == "яя終🙂"
+    assert trace_tools.tail_text_file(tmp_path / "missing.log", 4) == ""
+
+
 def _check_trace_event_routes_prompt_events_to_prompt_trace(tmp_path: Path) -> None:
     events = tmp_path / "pipeline.ndjson"
     prompts = tmp_path / "prompt.ndjson"

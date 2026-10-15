@@ -65,6 +65,18 @@ state.draft={INFINI_LLM_PROVIDER:'local',INFINI_LMSTUDIO_URL:'http://localhost:1
 state.remote={values:{INFINI_LLM_PROVIDER:'openrouter',INFINI_LMSTUDIO_URL:'http://localhost:1234'}};
 assert.equal(inactiveReason({key:'INFINI_LMSTUDIO_URL',disabled:'Other provider'}),'');
 
+// Changing an unrelated draft field must not enable API-only reasoning controls.
+state.draft={INFINI_LLM_PROVIDER:'openrouter',INFINI_LLM_REASONING_MODE:'prompt_light',INFINI_PORT:'5055'};
+state.remote={values:{...state.draft}};state.baseline={...state.draft};state.lan=state.baselineLan=false;state.dirty.clear();
+const excludeField={key:'INFINI_LLM_REASONING_EXCLUDE',disabled:'API reasoning only'};
+assert(inactiveReason(excludeField),'prompt-only reasoning keeps exclude inactive while clean');
+state.draft.INFINI_PORT='6060';recomputeDirty();
+assert(inactiveReason(excludeField),'an unrelated port edit cannot enable API reasoning exclude');
+state.draft.INFINI_LLM_REASONING_MODE='high';recomputeDirty();
+assert.equal(inactiveReason(excludeField),'','an explicit API effort makes exclude active');
+state.draft.INFINI_LLM_PROVIDER='local';recomputeDirty();
+assert(inactiveReason(excludeField),'local reasoning cannot use API exclude');
+
 // Saving a named profile selects only this tab's resulting profile draft.
 state.pending={id:'profile',action:'savePreset',sent:{},clock:state.editClock};
 acceptSnapshot(snapshot({}, {actionResults:[{id:'profile',status:'succeeded',ok:true,lanEnabled:false,values:{INFINI_GUI_PIPELINE_PRESET:'Мой: New'}}]}));

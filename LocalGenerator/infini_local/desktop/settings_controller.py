@@ -46,8 +46,6 @@ class SettingsController(StudioOperations):
         self.codex_image_account = "Image-доступ не проверен."
         self._codex_text_models = {}
         self.codex_models = [self._value("INFINI_CODEX_LLM_MODEL")] if self._value("INFINI_CODEX_LLM_MODEL") else []
-        self.codex_efforts = ["off", "none", "minimal", "low", "medium", "high", "xhigh"]
-        self.codex_visual_efforts = ["inherit", "model_default", "none", "minimal", "low", "medium", "high", "xhigh", "max"]
         self.user_presets = {}
         try:
             self.user_presets = load_user_presets(self.config_path.with_name("gui_user_presets.json"))
@@ -103,8 +101,6 @@ class SettingsController(StudioOperations):
             self.lan_enabled = bool(lan_enabled)
         self._refresh_visibility()
         self._update_applied_config_feedback()
-        if "INFINI_CODEX_LLM_MODEL" in values:
-            self._update_codex_efforts()
 
     def _refresh_visibility(self):
         if self._value("INFINI_VISUAL_STRICT_AI_AUTHORSHIP", "1") == "1":

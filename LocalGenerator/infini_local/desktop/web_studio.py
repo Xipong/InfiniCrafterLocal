@@ -310,8 +310,6 @@ class StudioController:
         for field in fields:
             if field['key'] == 'INFINI_CODEX_LLM_MODEL':
                 field['options'] = list(self.app.codex_models)
-            elif field['key'] == 'INFINI_CODEX_VISUAL_REASONING':
-                field['options'] = list(self.app.codex_visual_efforts)
         # The catalog owner already validates/redacts model IDs. Publish only
         # bounded text-model metadata, so each tab can describe its own draft
         # selection without mutating the shared controller or querying providers.
@@ -412,6 +410,13 @@ class StudioController:
         CONFIG_PATH = self.app.config_path
         app = self.app
         action, extra = command['action'], command.get('extra', {})
+        if action == 'forceRestart' and extra.get('confirm') is not True:
+            raise ValueError('Explicit confirmation is required to interrupt active generation')
+        if action in {'start', 'forceRestart'} and 'server-action' in app._gui_tasks:
+            # Refuse before adopting another tab's draft: the in-flight guard
+            # still compares and launches from the shared control-loop state.
+            return (app.start_server() if action == 'start' else
+                    app.force_restart_server(confirmed=extra.get('confirm') is True))
         if action in {'save', 'start', 'forceRestart'} and 'savedRevision' in extra:
             if not extra['savedRevision'] or extra['savedRevision'] != saved_config_revision(CONFIG_PATH, example_path=self.app.example_path):
                 raise ValueError('Конфигурация на диске изменилась в другой вкладке или программе. Черновик сохранён в этой вкладке. Проверь новые сохранённые значения перед повторным сохранением или запуском.')
@@ -468,9 +473,7 @@ class StudioController:
         elif action == 'clearTrace':
             return app.clear_trace_files(confirmed=True)
         elif action == 'forceRestart':
-            if extra.get('confirm') is not True:
-                raise ValueError('Explicit confirmation is required to interrupt active generation')
-            return app._request_server_action(restart=True, force=True)
+            return app.force_restart_server(confirmed=extra.get('confirm') is True)
         elif action == 'applyPreset':
             app.preset = str(extra.get('name', CUSTOM_PRESET))
             app.apply_preset()

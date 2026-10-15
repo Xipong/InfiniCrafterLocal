@@ -10,7 +10,7 @@ import pytest
 from infini_local.desktop import settings_controller
 from infini_local.desktop import studio_operations as controls
 from infini_local.desktop.web_studio import StudioController, StudioServer
-from test_settings_gui_contract import _GuiWorkflowHarness
+from test_settings_gui_contract import _GuiWorkflowHarness, held_gui_call
 
 
 @pytest.fixture
@@ -154,6 +154,66 @@ def test_help_returns_real_guide_without_desktop_browser(studio):
     assert result['result']['kind'] == 'guide'
     assert result['result']['url'].startswith('/guide?token=')
     assert result['result']['url'].endswith('START_RU.md')
+
+
+@pytest.mark.parametrize('rejected_action', ['start', 'forceRestart'])
+def test_rejected_cross_tab_launch_preserves_first_guarded_launch(studio, monkeypatch, held_gui_call, rejected_action):
+    from infini_local.desktop.settings_env import parse_env
+    from infini_local.desktop.settings_interactions import saved_config_revision
+
+    app, controller, _server, config = studio
+    config.write_text('INFINI_PROMPT_STYLE=original\n', encoding='utf-8')
+    revision = saved_config_revision(config)
+    hold = held_gui_call(app, '_fetch_health_snapshot', ConnectionRefusedError())
+    launches = []
+    monkeypatch.setattr(controls.subprocess, 'Popen',
+                        lambda *args, **kwargs: launches.append(kwargs['env']) or SimpleNamespace(pid=123456, poll=lambda: None))
+    first = command(controller, 'start', 'first-tab',
+                    values={'INFINI_PORT': '6061', 'INFINI_GUI_PIPELINE_PRESET': 'first-tab-profile'},
+                    extra={'savedRevision': revision, 'lanEnabled': False})
+    assert hold.entered.wait(1)
+    before = (dict(app.values), app.preset, app.lan_enabled,
+              dict(app._profile_baseline), app._profile_baseline_label, config.read_bytes())
+    try:
+        rejected = command(controller, rejected_action, 'second-tab',
+                           values={'INFINI_PORT': '7172', 'INFINI_GUI_PIPELINE_PRESET': 'second-tab-profile',
+                                   'INFINI_SECOND_TAB_EXTENSION': 'must not escape'},
+                           extra={'savedRevision': revision, 'lanEnabled': True, 'confirm': True})
+        assert rejected['status'] == 'failed' and rejected['ok'] is False
+        assert 'уже выполняется' in rejected['message']
+        assert not rejected.get('saved')
+        assert (app.values, app.preset, app.lan_enabled,
+                app._profile_baseline, app._profile_baseline_label, config.read_bytes()) == before
+        assert first['status'] == 'running' and not launches
+    finally:
+        hold.release.set()
+    app.drain_until(lambda: first['status'] != 'running')
+    assert first['status'] == 'succeeded' and first['saved'] is True
+    assert len(launches) == 1 and hold.calls == ['http://127.0.0.1:6061']
+    assert launches[0]['INFINI_PORT'] == '6061'
+    assert launches[0]['INFINI_GUI_PIPELINE_PRESET'] == 'first-tab-profile'
+    assert 'INFINI_SECOND_TAB_EXTENSION' not in launches[0]
+    assert parse_env(config)['INFINI_PORT'] == '6061'
+    assert first['savedRevision'] == saved_config_revision(config) != revision
+    assert app._owned_server_base_url == 'http://127.0.0.1:6061'
+
+
+@pytest.mark.parametrize('confirm', [None, False, 'true', 1])
+def test_unconfirmed_force_restart_cannot_adopt_browser_draft(studio, monkeypatch, confirm):
+    app, controller, _server, config = studio
+    config.write_text('INFINI_DISK_EXTENSION=latest on disk\n', encoding='utf-8')
+    app.values['INFINI_DISK_EXTENSION'] = 'cached value'
+    app.values['INFINI_REMOVED_EXTENSION'] = 'retained only in controller'
+    before = (dict(app.values), app.preset, app.lan_enabled,
+              dict(app._profile_baseline), app._profile_baseline_label, config.read_bytes())
+    monkeypatch.setattr(app, '_request_server_action', lambda **kwargs: pytest.fail('Unconfirmed force must not enter guard'))
+    with pytest.raises(ValueError, match='confirmation'):
+        command(controller, 'forceRestart', values={'INFINI_PORT': '7172', 'INFINI_GUI_PIPELINE_PRESET': 'unconfirmed'},
+                extra={'confirm': confirm, 'lanEnabled': not app.lan_enabled})
+    assert (app.values, app.preset, app.lan_enabled,
+            app._profile_baseline, app._profile_baseline_label, config.read_bytes()) == before
+    assert controller.last_action['status'] == 'failed'
+    assert not controller.last_action.get('saved') and not app._gui_tasks
 
 
 @pytest.mark.parametrize('action', ['start', 'forceRestart'])

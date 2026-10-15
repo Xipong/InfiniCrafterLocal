@@ -60,7 +60,8 @@ from infini_local.pipelines.llm_transport import (
     resolve_llm_model,
     with_llm_stage,
 )
-from infini_local.storage.trace_runtime import _trace_message_summary, trace_event, trace_stage_request
+from infini_local.storage.trace_runtime import trace_event, trace_stage_request
+from infini_local.storage.trace_tools import trace_message_summary
 
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
@@ -279,7 +280,7 @@ def try_llm_plan(
                 "provider": active_llm_provider(),
                 "model": model_name,
                 "responseFormat": bool(request.get("response_format")),
-                "messages": _trace_message_summary(request.get("messages")),
+                "messages": trace_message_summary(request.get("messages")),
             },
             prompt=user_content,
         )

@@ -109,16 +109,17 @@ def test_latest_worker_replaces_pending_request_and_retires_all_receipts(host):
 
 def test_catalog_preserves_saved_slug_and_unsupported_effort(host, monkeypatch):
     host.values.update(INFINI_CODEX_LLM_MODEL='saved-custom', INFINI_LLM_REASONING_MODE='high', INFINI_CODEX_VISUAL_REASONING='inherit')
-    monkeypatch.setattr(codex_catalog, 'list_text_models', lambda: [CodexModel('account-model', 'Account', ('low', 'medium', 'ultra'), 'low', 1)])
+    models = [CodexModel('account-model', 'Account', ('low', 'medium', 'ultra'), 'low', 1)]
+    before = dict(host.values)
+    monkeypatch.setattr(codex_catalog, 'list_text_models', lambda: models)
     host.refresh_codex_text_catalog()
     host.drain_until(lambda: 'account-model' in host.codex_models)
-    assert host.values['INFINI_CODEX_LLM_MODEL'] == 'saved-custom'
-    host.values['INFINI_CODEX_LLM_MODEL'] = 'account-model'
-    host._update_codex_efforts()
-    assert host.codex_efforts == ['off', 'low', 'medium']
-    assert host.codex_visual_efforts == ['inherit', 'model_default', 'low', 'medium']
-    assert host.values['INFINI_LLM_REASONING_MODE'] == 'high'
-    assert 'не поддерживается' in host.codex_catalog
+    assert host.values == before
+    assert host.codex_models == ['saved-custom', 'account-model']
+    assert host._codex_text_models == {'account-model': models[0]}
+    assert '1 моделей' in host.codex_catalog
+    assert 'не проверяет image-доступ' in host.codex_catalog
+    assert not host.config_path.exists()
 
 
 def test_logout_retires_old_account_catalog(host, monkeypatch):

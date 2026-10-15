@@ -188,14 +188,23 @@ def test_external_extension_edit_survives_partial_save(studio):
 
 @pytest.mark.parametrize('provider', ['local', 'openrouter', 'openai_compat', 'openai_codex'])
 def test_shared_snapshot_retains_generic_reasoning_choices_for_each_tab(studio, provider):
+    from infini_local.desktop.settings_fields import FIELDS
+    from infini_local.services.codex_catalog import CodexModel
+
     app, controller = studio
-    app.values['INFINI_LLM_PROVIDER'] = provider
-    app.codex_efforts = ['off', 'high']
-    field = next(row for row in controller.snapshot()['fields'] if row['key'] == 'INFINI_LLM_REASONING_MODE')
-    assert {'auto', 'tokens', 'prompt_light', 'prompt_strong'} <= set(field['options'])
-    # Codex-specific filtering is derived by each browser from its draft model,
-    # not from the most recent provider selection in the shared controller.
-    assert app.codex_efforts == ['off', 'high']
+    app._codex_text_models = {'narrow-model': CodexModel('narrow-model', 'Narrow', ('high',), 'high', 1)}
+    app.update_values({'INFINI_LLM_PROVIDER': provider, 'INFINI_CODEX_LLM_MODEL': 'narrow-model',
+                       'INFINI_LLM_REASONING_MODE': 'prompt_light', 'INFINI_CODEX_VISUAL_REASONING': 'max'})
+    snapshot = controller.snapshot()
+    for key in ('INFINI_LLM_REASONING_MODE', 'INFINI_CODEX_VISUAL_REASONING'):
+        field = next(row for row in snapshot['fields'] if row['key'] == key)
+        generic = next(row for row in FIELDS if row['key'] == key)
+        assert field['options'] == generic['options']
+    # Filtering belongs to each browser's draft; the shared model must not
+    # restrict choices or rewrite unsupported preferences in another tab.
+    assert snapshot['account']['textModels'] == {'narrow-model': {'efforts': ['high'], 'defaultEffort': 'high'}}
+    assert snapshot['values']['INFINI_LLM_REASONING_MODE'] == 'prompt_light'
+    assert snapshot['values']['INFINI_CODEX_VISUAL_REASONING'] == 'max'
 
 
 @pytest.mark.parametrize('through_bridge', [False, True])

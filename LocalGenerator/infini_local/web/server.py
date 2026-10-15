@@ -81,7 +81,6 @@ from infini_local.services import (
     network_info_service,
 )
 from infini_local.storage.trace_runtime import (
-    _tail_ndjson,
     _trace_clip,
     CONSOLE_EVENT_LEVELS,
     initialize_trace_storage,
@@ -93,6 +92,7 @@ from infini_local.storage.trace_runtime import (
     TRACE_MAX_PROMPT_CHARS,
     TRACE_PROMPTS_ENABLED,
 )
+from infini_local.storage.trace_tools import tail_ndjson
 from infini_local.storage.world_storage import read_json_file, sanitize_recipe_for_delivery
 from infini_local.storage.world_recipe_runtime import (
     normalize_world_id_from_payload,
@@ -204,7 +204,7 @@ def trace_snapshot() -> dict[str, Any]:
         llm_auth_snapshot=llm_auth_snapshot,
         contract_versions_payload=visual_config.contract_versions_payload,
         sdcpp_debug_snapshot=sdcpp_debug_snapshot,
-        tail_ndjson=_tail_ndjson,
+        tail_ndjson=tail_ndjson,
     )
 
 

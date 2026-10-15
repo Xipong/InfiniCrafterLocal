@@ -101,10 +101,10 @@ from infini_local.services import (
     sdcpp_service,
 )
 from infini_local.storage.trace_runtime import (
-    _tail_text_file,
     log_event,
     trace_event,
 )
+from infini_local.storage.trace_tools import tail_text_file
 from infini_local.core.item_identity_tools import safe_file_part
 from infini_local.services.visual_asset_pipeline import ImageOutputIOError, write_image_bytes
 
@@ -287,7 +287,7 @@ def sdcpp_debug_snapshot(include_log_tail: bool = True, *, probe_server: bool = 
         server_log_file=SDCPP_SERVER_LOG_FILE,
         server_is_alive=sdcpp_server_is_alive() if probe_server else None,
         server_is_configured=sdcpp_server_is_configured(),
-        tail_text_file=_tail_text_file,
+        tail_text_file=tail_text_file,
         include_log_tail=include_log_tail,
     )
     snap["serverAliveProbed"] = probe_server
@@ -310,7 +310,7 @@ def ensure_sdcpp_server() -> bool:
         stringify_cmd=_stringify_cmd,
         cleanup_process=cleanup_sdcpp_server_process,
         log_event=log_event,
-        tail_text_file=_tail_text_file,
+        tail_text_file=tail_text_file,
         process_env=sdcpp_backend.server_process_environment(_sdcpp_config()),
         diagnostics_enabled=trace_runtime.TRACE_PROMPTS_ENABLED,
     )
