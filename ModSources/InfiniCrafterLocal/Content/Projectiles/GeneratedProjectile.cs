@@ -469,7 +469,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         for (int i = 0; i < 80 && y + i < Main.maxTilesY - 2; i++)
         {
             Tile t = Framing.GetTileSafely(x, y + i);
-            if (t.HasTile && Main.tileSolid[t.TileType])
+            if (t.HasUnactuatedTile && Main.tileSolid[t.TileType])
                 return new Vector2(x * 16f + 8f, (y + i) * 16f - 4f);
         }
         return cursor;

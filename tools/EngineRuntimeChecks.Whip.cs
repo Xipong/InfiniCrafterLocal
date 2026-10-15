@@ -105,9 +105,20 @@ internal static partial class EngineRuntimeChecks
                     tag.ModifyHitByProjectile(target, projectile, ref modifiers);
                     return modifiers.SourceDamage.ApplyTo(100f);
                 }
+                var hybrid = new Projectile { owner = 0, DamageType = DamageClass.MagicSummonHybrid };
                 Equal(100f, Source(minion), "unmarked target");
+                Equal(100f, Source(hybrid), "hybrid also requires an owner tag");
                 generated.OnHitNPC(target, new NPC.HitInfo(), 100);
                 Equal(125f, Source(minion), "whip hit grants multiplicative summon source bonus");
+                Equal(125f, Source(hybrid), "hybrid inherits summon effects without minion or sentry flags");
+                Equal(125f, Source(new Projectile { owner = 0, DamageType = DamageClass.Summon }), "unflagged summon retains tag bonus");
+                Equal(125f, Source(new Projectile { owner = 0, DamageType = DamageClass.SummonMeleeSpeed }), "non-whip summon melee class retains tag bonus");
+                Equal(125f, Source(new Projectile { owner = 0, minion = true, DamageType = DamageClass.Default }), "explicit minion flag remains sufficient");
+                Equal(125f, Source(new Projectile { owner = 0, sentry = true, DamageType = DamageClass.Default }), "explicit sentry flag remains sufficient");
+                Equal(100f, Source(new Projectile { owner = 0, DamageType = DamageClass.Magic }), "pure magic does not inherit summon effects");
+                hybrid.owner = 1;
+                Equal(100f, Source(hybrid), "hybrid cannot borrow another owner's tag");
+                hybrid.owner = 0;
                 var twiceBase = new NPC.HitModifiers();
                 tag.ModifyHitByProjectile(target, minion, ref twiceBase);
                 Equal(250f, twiceBase.SourceDamage.ApplyTo(200f), "source bonus scales with base damage, not a flat tag");
@@ -117,6 +128,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(100f, Source(hitProjectile), "tagging whip cannot consume own tag");
                 tag.SetDefaults(target);
                 Equal(100f, Source(minion), "NPC reuse clears marks");
+                Equal(100f, Source(hybrid), "NPC reuse also clears hybrid eligibility");
                 Terraria.Main.netMode = NetmodeID.Server;
                 generated.OnHitNPC(target, new NPC.HitInfo(), 100);
                 Equal(100f, Source(minion), "dedicated server cannot mint tag from a hook it does not receive");
@@ -141,6 +153,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(125f, Source(minion), "tag remains until its final tick");
                 tag.PostAI(target);
                 Equal(100f, Source(minion), "tag expires after its lifetime");
+                Equal(100f, Source(hybrid), "hybrid cannot retain an expired tag");
             }
             finally
             {
