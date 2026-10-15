@@ -21,6 +21,12 @@ Station A/B inputs
 [Три стадии](THREE_STAGE_LLM_PIPELINE_RU.md#flow) задают handoffs/accounting: baseline fresh craft — Author → Visual → VFX → image pass. Cache hit/dev fixture не означает три новых LLM вызова. [Frozen-first Repair](TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) условен, bounded и относится только к invalid leaves/exact dependencies отвергнутой стадии; accepted context read-only. Это не judge/critic и не restart валидных стадий.
 
 <a id="authority"></a>
+## Stage entrypoints и зависимости
+
+`combine_pipeline.combine` владеет порядком стадий, cache/lease и final commit. `gameplay_stage.compile_and_validate_authored_runtime` держит вместе strict Author/identity acceptance, parent context, compilation, wire gate и один conditional Repair/revalidation. `llm_authoring_pipeline` строит Author/Repair requests; `vfx_generation_pipeline` — VFX requests. Ни одна presentation-стадия не импортирует Gameplay Author только ради JSON helper.
+
+`wire_views` читает accepted wire для Visual/VFX/diagnostics, не компилирует его заново. Runtime package не реэкспортирует owners: прямой import указывает точку изменения и не загружает всю authoring цепочку. [Маршруты задач](CODE_MAP_RU.md#fast-start) сохраняют полный vertical slice для настоящих contract changes.
+
 ## Кто принимает решения
 
 | Authority | Canonical owner / контракт |

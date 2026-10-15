@@ -4,10 +4,9 @@ import json
 
 import pytest
 
-from infini_local.core.runtime_authoring import (
-    apply_repair_patch, build_runtime_repair_scope, filter_repair_patch_scope,
-    validate_runtime_program,
-)
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from test_front_hand_movement import fixture
 
 
@@ -52,7 +51,8 @@ def test_missing_movement_repair_respects_exact_frozen_support(max_active, hand_
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("selected_aim", ["cursor", "facing", "velocity"])
 def test_aim_none_serialized_repair_offers_exact_axis_choices_and_freezes_siblings(monkeypatch, mode, selected_aim):
-    from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_wire
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.pipelines import llm_authoring_pipeline as stage
     from prompt_packet_helpers import request_dossier
     from repair_test_helpers import repair_with_response

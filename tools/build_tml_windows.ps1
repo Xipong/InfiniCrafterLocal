@@ -4,7 +4,8 @@ param(
     [string]$LogDir = "build_logs",
     [string]$InfiniExternalDepsRoot = "",
     [string]$InfiniParticleLibraryDll = "",
-    [string]$InfiniLuminanceDll = ""
+    [string]$InfiniLuminanceDll = "",
+    [switch]$WarningsAsErrors
 )
 
 $ErrorActionPreference = "Stop"
@@ -106,6 +107,7 @@ New-Item -ItemType Directory -Force -Path $LogPathDir | Out-Null
 $Stamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $LogPath = Join-Path $LogPathDir "tml_build_$Stamp.log"
 
+if ($WarningsAsErrors) { $BuildArgs += "-warnaserror" }
 Write-Host "[run] dotnet $($BuildArgs -join ' ')"
 & dotnet @BuildArgs *>&1 | Tee-Object -FilePath $LogPath
 $BuildCode = $LASTEXITCODE

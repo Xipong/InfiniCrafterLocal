@@ -7,7 +7,7 @@ import pytest
 
 from prompt_packet_helpers import request_dossier
 from infini_local.core import vfx_manifest as vfx
-from infini_local.pipelines import llm_authoring_pipeline as stage
+from infini_local.pipelines import vfx_generation_pipeline as stage
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_low_level_three_stage_pipeline import _accepted_visual_data, wire_transport
 from vfx_material_fixtures import _legacy, _sprite

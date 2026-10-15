@@ -1,3 +1,4 @@
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 """Canonical full-craft authority is owned by production builders, not adapters."""
 import copy
 import json
@@ -38,13 +39,16 @@ class Captured(BaseException):
 def stage_packets(monkeypatch, stage, format_mode="json_object"):
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core import vfx_manifest as vfx
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from vfx_material_fixtures import _data, _legacy
     from test_visual_presentation_metadata import _visual_kit
 
     monkeypatch.setattr(author, "USE_LLM", True)
+
+    monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     monkeypatch.setattr(author, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     packets = []
@@ -52,6 +56,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object"):
         packets.append(packet)
         raise Captured()
     monkeypatch.setattr(author, "llm_chat_json", capture)
+    monkeypatch.setattr(vfx_transport, "llm_chat_json", capture)
     monkeypatch.setattr(visual, "llm_chat_json", capture)
     for label in ("novel-a", "novel-b"):
         a = {"name": label, "damage": 7, "useTime": 20}
@@ -82,7 +87,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object"):
                 broken["slots"][0]["alpha"] = None
                 errors = vfx.validate_vfx_director_output(broken, data)["errors"]
                 scope = vfx._build_vfx_repair_scope(broken, errors)
-                vfx._request(author.call_llm_vfx_director, vfx._prompt_packet(data, a, {}),
+                vfx._request(vfx_transport.call_llm_vfx_director, vfx._prompt_packet(data, a, {}),
                     **({"repair_errors": errors, "previous": broken, "repair_scope": scope} if stage.endswith("repair") else {}))
     return packets
 

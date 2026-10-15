@@ -21,29 +21,31 @@
     "vfxDirectorContract": "LocalGenerator/infini_local/core/vfx_manifest.py",
     "capabilityInventory": "docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md",
     "terrariaVocabulary": "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
-    "aliasPolicy": "docs/reference/generated/LOWERY_RU.md"
+    "aliasPolicy": "docs/reference/generated/LOWERY_RU.md",
+    "gameplayStage": "LocalGenerator/infini_local/pipelines/gameplay_stage.py",
+    "wirePresentationViews": "LocalGenerator/infini_local/core/runtime_authoring/wire_views.py",
+    "vfxTransport": "LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py",
+    "parentNativeFacts": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
   },
-  "alwaysChecks": [
-    "compileall",
-    "schema_check",
-    "capability_audit",
-    "project_hygiene",
-    "terraria_standardization"
-  ],
   "checks": {
     "pytest": [
       "python",
-      "-m",
-      "pytest",
-      "-q"
+      "tools/run_pytest_shards.py",
+      "--shards",
+      "4",
+      "--timeout-seconds",
+      "300",
+      "--json-out",
+      "artifacts/validation/pytest_shards.json"
     ],
     "compileall": [
       "python",
       "-m",
       "compileall",
       "-q",
-      "LocalGenerator/infini_local",
-      "tools"
+      "LocalGenerator",
+      "tools",
+      "toolbox"
     ],
     "schema_check": [
       "python",
@@ -104,26 +106,77 @@
       "ruff",
       "check",
       "LocalGenerator/infini_local",
-      "tools"
+      "tools",
+      "toolbox"
     ],
     "pyright": [
       "pyright"
     ],
     "tml_build": [
-      "python",
-      "tools/try_tml_build_check.py",
-      "--project",
+      "dotnet",
+      "build",
       "ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj"
     ],
     "terraria_standardization": [
       "python",
       "tools/audit_terraria_standardization.py",
       "--check"
+    ],
+    "targeted_repair": [
+      "python",
+      "tools/audit_targeted_repair.py",
+      "--check"
+    ],
+    "lowery": [
+      "python",
+      "tools/generate_lowery.py",
+      "--check"
+    ],
+    "equipment_bounds": [
+      "python",
+      "tools/generate_equipment_bounds.py",
+      "--check"
+    ],
+    "primitive_parity": [
+      "python",
+      "tools/generate_primitive_parity.py",
+      "--check"
+    ],
+    "handbook": [
+      "python",
+      "tools/build_documentation.py",
+      "--check"
+    ],
+    "primitive_loss": [
+      "python",
+      "-m",
+      "infini_local.qa.primitive_loss_audit"
+    ],
+    "native_checks": [
+      "dotnet",
+      "build",
+      "tools/EngineRuntimeChecks.csproj"
+    ],
+    "tml_runtime_selftest": [
+      "python",
+      "tools/check_tml_selftest_report.py"
+    ],
+    "tml_ci_regression": [
+      "python",
+      "tools/test_tml_ci.py",
+      "-v"
+    ],
+    "env_poisoning": [
+      "python",
+      "-c",
+      "import os; os.environ.update(INFINI_LOCAL_PORT='abc', INFINI_LLM_TIMEOUT_MS='xyz', INFINI_SPRITE_CACHE_MAX='garbage'); import infini_local.core.env_utils as e; print(e.env_int('INFINI_LOCAL_PORT', 9000)); print(e.env_int('INFINI_LLM_TIMEOUT_MS', 30000)); print(e.env_int('INFINI_SPRITE_CACHE_MAX', 512))"
     ]
   },
   "fullChecks": [
     "pytest",
     "compileall",
+    "env_poisoning",
+    "tml_ci_regression",
     "schema_check",
     "capability_audit",
     "generated_docs",
@@ -133,13 +186,103 @@
     "planner_prompt",
     "semantic_runtime_diff",
     "runtime_impact",
-    "terraria_standardization",
     "csharp_contracts",
     "project_hygiene",
     "config_registry",
-    "portable_sandbox",
     "ruff",
     "pyright",
-    "tml_build"
-  ]
+    "terraria_standardization",
+    "targeted_repair",
+    "lowery",
+    "equipment_bounds",
+    "primitive_parity",
+    "handbook",
+    "primitive_loss",
+    "tml_build",
+    "native_checks",
+    "tml_runtime_selftest"
+  ],
+  "validationGroups": {
+    "python": [
+      "pytest",
+      "compileall",
+      "env_poisoning",
+      "tml_ci_regression"
+    ],
+    "static": [
+      "schema_check",
+      "capability_audit",
+      "generated_docs",
+      "delivery_contract",
+      "contract_parity",
+      "mutation_gate",
+      "planner_prompt",
+      "semantic_runtime_diff",
+      "runtime_impact",
+      "csharp_contracts",
+      "project_hygiene",
+      "config_registry",
+      "ruff",
+      "pyright",
+      "terraria_standardization",
+      "targeted_repair",
+      "lowery",
+      "equipment_bounds",
+      "primitive_parity",
+      "handbook",
+      "primitive_loss"
+    ],
+    "build": [
+      "tml_build",
+      "native_checks",
+      "tml_runtime_selftest"
+    ]
+  },
+  "refreshGroups": {
+    "runtime": [
+      [
+        "python",
+        "tools/export_contract_schemas.py"
+      ],
+      [
+        "python",
+        "tools/generate_equipment_bounds.py"
+      ],
+      [
+        "python",
+        "tools/generate_primitive_parity.py"
+      ],
+      [
+        "python",
+        "tools/generate_lowery.py"
+      ],
+      [
+        "python",
+        "tools/generate_low_level_runtime_docs.py"
+      ],
+      [
+        "python",
+        "tools/audit_targeted_repair.py",
+        "--output",
+        "contracts/targeted_repair_audit.generated.json"
+      ],
+      [
+        "python",
+        "tools/audit_terraria_standardization.py",
+        "--write"
+      ]
+    ],
+    "config": [
+      [
+        "python",
+        "tools/config_registry.py"
+      ]
+    ],
+    "docs": [
+      [
+        "python",
+        "tools/build_documentation.py"
+      ]
+    ]
+  }
 }

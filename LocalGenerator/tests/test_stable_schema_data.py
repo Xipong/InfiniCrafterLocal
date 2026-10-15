@@ -146,7 +146,7 @@ def test_reference_schema_reconstructs_exact_owner_nodes_and_validator_outcomes(
 def test_static_definitions_remain_case_independent_across_runtime_domains(monkeypatch, fixture, stage, mode):
     from vfx_material_fixtures import _data
     import vfx_material_fixtures
-    from infini_local.core.runtime_authoring import compile_runtime_program
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     ordinary = stage_packets(monkeypatch, stage, format_mode=mode)[0]
     if fixture in {"channel_beam", "move_whip_lash"}:

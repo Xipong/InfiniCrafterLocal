@@ -8,7 +8,7 @@ from dataclasses import replace
 import pytest
 from jsonschema import Draft202012Validator
 
-from infini_local.core.runtime_authoring import capability_registry as registry
+import infini_local.core.runtime_authoring.capability_registry as registry
 from infini_local.core.runtime_authoring.capability_registry import ParamSpec
 from infini_local.pipelines import author_item_contract as contract
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request

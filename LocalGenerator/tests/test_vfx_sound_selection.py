@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 from infini_local.core import vfx_manifest as vfx
-from infini_local.pipelines import llm_authoring_pipeline as stage
+from infini_local.pipelines import vfx_generation_pipeline as stage
 from tests.test_repair_vfx_contract import _offline_transport
 from tests.vfx_material_fixtures import _data, _legacy
 
@@ -117,7 +117,7 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     # only mutations are the retired audio absences and old alpha/phase inputs.
     current = _data()
     current["vfxManifest"] = vfx._compile_manifest(current, _sound(current), "current-cache-sound")
-    from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
     current.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                    sourceMode="offline_contract_fixture")
     world_storage.write_world_recipe_cache(tmp_path, "sound-test", "sound", "world", current)
@@ -191,7 +191,7 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
 
 @pytest.mark.parametrize("sound_id", ["Item1", "ResearchComplete"], ids=["explicit-item1", "explicit-named-sample"])
 def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(sound_id, tmp_path):
-    from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION
+    from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
     from infini_local.storage import world_storage
     data = _data()
     data.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,

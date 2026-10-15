@@ -40,7 +40,7 @@ def test_author_declares_only_static_app_contract_as_instruction_prefix(monkeypa
 
 
 def test_area_damage_card_scopes_direct_target_exclusion_in_author_and_repair(monkeypatch):
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'area-clarity', model_name='test-model')
@@ -194,7 +194,8 @@ def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actu
 
 def test_condition_card_describes_its_existing_union_and_placement_guide_matches_public_ids(monkeypatch):
     from dataclasses import replace
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_program
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
@@ -228,7 +229,8 @@ def test_condition_card_describes_its_existing_union_and_placement_guide_matches
     ('move_yoyo_hover', ('same authored speed', 'both cursor tracking and return', 'velocity smoothing')),
 ])
 def test_movement_execution_meaning_reaches_initial_and_repair_cards(monkeypatch, fn, phrases):
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, validate_runtime_program
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
@@ -284,7 +286,7 @@ def test_future_author_accounts_for_refreshable_utility_economy_without_item_rou
 
 
 def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_scope(monkeypatch):
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
@@ -309,7 +311,9 @@ def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_sco
 
 def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair():
     from copy import deepcopy
-    from infini_local.core.runtime_authoring import apply_repair_patch, filter_repair_patch_scope, validate_runtime_program
+    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     source = build_capability_witness('apply_generated_buff_on_use')

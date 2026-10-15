@@ -9,10 +9,10 @@ import pytest
 from jsonschema import Draft202012Validator
 
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope,
-    filter_repair_patch_scope, validate_runtime_program,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.repair_scope import runtime_repair_schema_capabilities
 from infini_local.pipelines import author_item_contract as contract
 from infini_local.pipelines import llm_authoring_pipeline as author

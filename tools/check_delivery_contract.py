@@ -4,7 +4,10 @@ from __future__ import annotations
 import argparse, json, sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]; sys.path.insert(0,str(ROOT/"LocalGenerator"))
-from infini_local.core.runtime_authoring import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA, compile_runtime_program, validate_runtime_program, validate_runtime_wire
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_WIRE_SCHEMA
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 

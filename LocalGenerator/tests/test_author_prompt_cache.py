@@ -1,5 +1,6 @@
 """Author cache boundaries and local request-build work, without provider calls."""
 from __future__ import annotations
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import json
@@ -115,7 +116,7 @@ class _RequestCaptured(BaseException):
 @pytest.mark.parametrize("syntax_only", [False, True])
 def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_only):
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(author, "resolve_llm_model", lambda: "test-model")
@@ -161,11 +162,11 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
 @pytest.mark.parametrize("repair", [False, True])
 def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, repair):
     from infini_local.core import vfx_manifest as vfx
-    from infini_local.core.runtime_authoring import compile_runtime_program
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
-    monkeypatch.setattr(author, "USE_LLM", True)
-    monkeypatch.setattr(author, "resolve_llm_model", lambda: "test-model")
+    monkeypatch.setattr(vfx_transport, "USE_LLM", True)
+    monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     requests = []
 
@@ -173,13 +174,13 @@ def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, re
         requests.append(request)
         raise _RequestCaptured()
 
-    monkeypatch.setattr(author, "llm_chat_json", capture)
+    monkeypatch.setattr(vfx_transport, "llm_chat_json", capture)
     for name in ("workbench_blade", "throwing_axe"):
         data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
         data["name"] = name
         packet = vfx._prompt_packet(data, {"name": name}, {})
         with pytest.raises(_RequestCaptured):
-            vfx._request(author.call_llm_vfx_director, packet,
+            vfx._request(vfx_transport.call_llm_vfx_director, packet,
                          repair_errors=[] if repair else None, previous={}, repair_scope={})
     static, prefix, full = _marked_prefix(requests[0])
     other_static, other_prefix, other_full = _marked_prefix(requests[1])

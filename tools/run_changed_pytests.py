@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Run only changed pytest modules during agent iteration.
+"""Pytest-only convenience command using agentctl's owner-area selection.
 
-Release verification still runs the full sharded suite.  This helper is for dirty-tree
-feedback: ordinary test edits run their own modules, while shared test support or
-fixture changes deliberately fall back to the full suite because their consumers
-cannot be inferred safely.
+Includes committed branch changes with --base. Unknown/shared surfaces use the
+full suite; use agentctl verify for non-pytest gates and final acceptance.
 """
 from __future__ import annotations
 
@@ -18,74 +16,40 @@ from typing import Any
 from run_pytest_shards import missing_full_test_dependencies
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_ROOTS = (ROOT / "LocalGenerator" / "tests", ROOT / "toolbox" / "tests")
 
 
-def _changed_test_paths() -> tuple[list[Path], list[str], list[str]]:
-    proc = subprocess.run(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or "git status failed")
-
-    modules: set[Path] = set()
-    shared: set[str] = set()
-    uncovered: set[str] = set()
-    prefixes = ("LocalGenerator/tests/", "toolbox/tests/")
-    for line in proc.stdout.splitlines():
-        if len(line) < 4:
-            continue
-        status = line[:2]
-        relative = line[3:]
-        if " -> " in relative:
-            relative = relative.split(" -> ", 1)[1]
-        relative = relative.replace("\\", "/")
-        prefix = next((item for item in prefixes if relative.startswith(item)), None)
-        if prefix:
-            path = ROOT / relative
-            if (relative.startswith(prefix + "test_") and relative.endswith(".py") and "D" not in status
-                    and path.is_file() and path.resolve().is_relative_to((ROOT / prefix).resolve())):
-                modules.add(path)
-            else:
-                shared.add(relative)
-        elif relative.startswith(("LocalGenerator/", "toolbox/", "tools/")) or relative in {
-            "pyproject.toml", "pytest.ini", "setup.cfg", "conftest.py"
-        }:
-            shared.add(relative)
-        else:
-            uncovered.add(relative)
-    return sorted(modules), sorted(shared), sorted(uncovered)
-
-
-def build_plan() -> dict[str, Any]:
-    modules, shared, uncovered = _changed_test_paths()
-    if shared:
-        selected = list(TEST_ROOTS)
-        mode = ("full_due_to_non_test_change" if any(not path.startswith(("LocalGenerator/tests/", "toolbox/tests/")) for path in shared)
-                else "full_due_to_shared_test_surface")
-    else:
-        selected = modules
-        mode = "changed_modules" if modules else "none"
+def build_plan(base: str | None = None) -> dict[str, Any]:
+    from agentctl import changed_files, verification_plan
+    files = changed_files(base)
+    plan = verification_plan(files)
+    selected = ["LocalGenerator/tests", "toolbox/tests"] if plan["releaseScope"] else plan["tests"]
+    tests = [path for path in files if path in plan["tests"]]
+    # Only standalone test edits are fully verified by this pytest-only helper.
+    # Every production/docs/tooling surface has additional owner/final gates.
+    uncovered = [path for path in files if path not in tests]
     return {
-        "schema": "infini.changed-pytests.v1",
+        "schema": "infini.changed-pytests.v2",
         "ok": bool(selected) and not uncovered,
-        "mode": mode,
-        "changedModules": [path.relative_to(ROOT).as_posix() for path in modules],
-        "fullSelectionTriggers": shared,
-        "sharedTestChanges": [path for path in shared if path.startswith(("LocalGenerator/tests/", "toolbox/tests/"))],
+        "mode": "full_due_to_unmapped_change" if plan["releaseScope"] else "changed_modules" if tests == files else "owner_areas",
+        "changedModules": tests,
+        "fullSelectionTriggers": plan["unmappedPaths"],
+        "sharedTestChanges": [path for path in plan["unmappedPaths"] if path.startswith(("LocalGenerator/tests/", "toolbox/tests/"))],
         "uncoveredChangePaths": uncovered,
-        "selected": [path.relative_to(ROOT).as_posix() for path in selected],
+        "selected": selected,
+        "comparisonBase": base,
+        "scope": "pytest-only; use agentctl verify for other gates",
+        "releaseReady": False,
     }
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base")
+    parser.add_argument("--plan", action="store_true")
+    args = parser.parse_args(argv)
     try:
-        plan = build_plan()
+        plan = build_plan(args.base)
     except Exception as exc:
         print(json.dumps({
             "schema": "infini.changed-pytests.v1",
@@ -94,6 +58,9 @@ def main() -> int:
         }, ensure_ascii=False, indent=2, sort_keys=True))
         return 1
 
+    if args.plan:
+        print(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
     selected = [ROOT / relative for relative in plan["selected"]]
     if not selected:
         plan.update({"ok": False, "status": "not_selected"})

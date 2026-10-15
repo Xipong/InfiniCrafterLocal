@@ -112,7 +112,7 @@ def _sparse_event_item(event):
 @pytest.mark.parametrize("control", ["nullable-valid", "required-null", "unknown-function"])
 def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_invalid_authorship(monkeypatch, control):
     from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     item, _ = _sparse_event_item("on_hit")
     encoded = _encode_nullable_fixture(item, contract.author_item_response_schema())
@@ -150,7 +150,7 @@ def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_inva
 def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
-    from infini_local.core.runtime_authoring import validate_runtime_program
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
 
     item, selected = _sparse_event_item("periodic")
     expected = copy.deepcopy(item)

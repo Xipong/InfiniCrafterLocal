@@ -10,26 +10,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 
-REQUIRED_CHECKS = frozenset({
-    "pytest",
-    "compileall",
-    "schema_check",
-    "targeted_repair",
-    "terraria_standardization",
-    "config_registry",
-    "contract_parity",
-    "delivery_contract",
-    "mutation_gate",
-    "semantic_runtime_diff",
-    "runtime_impact",
-    "csharp_contracts",
-    "project_hygiene",
-    "planner_prompt",
-    "ruff",
-    "pyright",
-    "tml_build",
-    "tml_runtime_selftest",
-})
+# Same final gate inventory used by agentctl, CI and release execution.
+REQUIRED_CHECKS = frozenset(json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))["fullChecks"])
 
 
 def _tail(text: str, limit: int = 1800) -> str:
@@ -72,19 +54,23 @@ def main() -> int:
     missing_checks = sorted(REQUIRED_CHECKS - seen)
     failed = [row["name"] for row in checks if row["status"] == "failed"]
     optional_unavailable = {
+        "native_checks": True,
+        "tml_ci_regression": True,
         "tml_build": not args.require_build,
         "tml_runtime_selftest": not args.require_runtime_selftest,
     }
     unavailable_required = [
         row["name"] for row in checks
-        if row["status"] == "unavailable" and not optional_unavailable.get(row["name"], False)
+        if row["status"] in {"unavailable", "notRun"} and not optional_unavailable.get(row["name"], False)
     ]
     build = next((row for row in checks if row["name"] == "tml_build"), None)
     runtime_selftest = next((row for row in checks if row["name"] == "tml_runtime_selftest"), None)
     report = {
         "schema": "infini.release-validation.v1",
         "ok": not failed and not unavailable_required and not missing_checks and not duplicate_checks,
-        "releaseReady": not failed and not unavailable_required and not missing_checks and not duplicate_checks and bool(
+        "releaseReady": not failed and not unavailable_required and not missing_checks and not duplicate_checks and all(
+            row["status"] == "passed" for row in checks
+        ) and bool(
             build and build["status"] == "passed" and runtime_selftest and runtime_selftest["status"] == "passed"
         ),
         "failed": failed,

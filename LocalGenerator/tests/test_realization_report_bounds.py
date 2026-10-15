@@ -8,11 +8,9 @@ import json
 import jsonschema
 import pytest
 
-from infini_local.core.runtime_authoring import (
-    compile_runtime_program,
-    validate_runtime_program,
-    validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import (
     strict_author_shape_report,
     strict_repair_shape_report,
@@ -33,7 +31,7 @@ from infini_local.storage.world_storage import atomic_write_json, sanitize_recip
 
 @pytest.mark.parametrize("length,accepted", [(80, True), (81, False)])
 def test_fresh_item_name_has_80_unicode_character_boundary(length, accepted):
-    from infini_local.pipelines.combine_validation import authored_item_validation_report
+    from infini_local.pipelines.gameplay_stage import authored_item_validation_report
 
     item = build_runtime_fixture("workbench_blade")
     item["name"] = "🌟" * length
@@ -107,7 +105,7 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
 
 @pytest.mark.parametrize("mode", ["json_object", "off"])
 def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(monkeypatch, mode):
-    from infini_local.core.runtime_authoring import program_schema
+    import infini_local.core.runtime_authoring.program_schema as program_schema
     from infini_local.pipelines import llm_transport
 
     canonical = program_schema.realization_schema
@@ -180,7 +178,8 @@ def test_report_bounds_remain_finite_nonempty_and_preserve_legacy_values(field, 
 
 
 def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
-    from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, program_schema
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    import infini_local.core.runtime_authoring.program_schema as program_schema
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     schema = program_schema.author_item_response_schema()
