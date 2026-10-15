@@ -181,6 +181,66 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
+    private static void MaterialItemPeriodicSurvivesEquipmentSlotTransitions()
+    {
+        WithLighting((config, _) => WithPlayer((player, modPlayer) => {
+            var system = new InfiniDetachedVfxSystem(); var tick = Terraria.Main.GameUpdateCount;
+            var prior = Terraria.Main.player[0];
+            try {
+                config.ParticleSpawnMultiplier = 1;
+                foreach (string attachment in new[] { "world", "source" }) {
+                    system.OnWorldUnload(); MaterialClock(105);
+                    Terraria.Main.player[0] = player; player.whoAmI = 0; player.active = true; player.selectedItem = 0;
+                    player.Center = new Vector2(100, 200); player.itemLocation = new Vector2(120, 200); player.direction = 1;
+                    for (int i = 0; i < player.armor.Length; i++) player.armor[i] = new Item();
+                    for (int i = 0; i < player.inventory.Length; i++) player.inventory[i] = new Item();
+                    var data = ParseMaterialElement(MaterialElementWire(attachment));
+                    data.Accessory.Enabled = true;
+                    data.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec { Id = "equip", Input = RuntimeInputKind.Equipped,
+                        UsePolicy = new() { Action = new() { Kind = RuntimeBindingAction.EquipPassive, TargetId = data.RuntimeProgram.ItemEntityId } } } };
+                    var slot = data.VfxManifest.Slots[0]; slot.RepeatEvery = 7; slot.Element!.Count = 1;
+                    var item = new Item { type = 1, stack = 1, accessory = true };
+                    var generated = AttachItem(new InfiniCrafterLocal.Content.Items.GeneratedItem(), item, data);
+                    var queue = OwnedMaterialQueue();
+                    void Visit(bool held = false, bool vanity = false) {
+                        // Actual producers can visit repeatedly in the same world tick.
+                        for (int i = 0; i < 2; i++) {
+                            if (held) generated.HoldItem(player);
+                            else {
+                                if (!vanity) generated.UpdateAccessory(player, false);
+                                InfiniCrafterLocal.Common.Players.GeneratedEquipOverlayDrawLayerBase.EmitVisibleEquipmentVfx(player);
+                            }
+                        }
+                        system.PostUpdateEverything();
+                    }
+                    int StartedAt(uint at) => queue.Cast<object>().Count(e =>
+                        (ulong)e.GetType().GetField("Start", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(e)! == at);
+                    void Due(uint at, bool held = false, bool vanity = false) {
+                        MaterialClock(at); Visit(held, vanity);
+                        Equal(1, StartedAt(at), attachment + ": moved instance emits exactly once at authored due tick " + at);
+                        system.PostUpdateEverything();
+                        Equal(1, StartedAt(at), attachment + ": repeated update keeps one emission");
+                    }
+                    player.armor[3] = item; Due(105);
+                    // ItemSlot uses this native reference swap; it does not clone
+                    // a new presentation generation when moving an item.
+                    Utils.Swap(ref player.armor[3], ref player.armor[4]); Due(112);
+                    Equal(attachment == "world" ? 2 : 1, queue.Count, attachment + ": swap preserves world overlap and retires old source attachment");
+                    MaterialClock(113); Visit();
+                    Equal(0, StartedAt(113), attachment + ": slot change does not reset world-clock cadence");
+                    Utils.Swap(ref player.armor[4], ref player.armor[14]); Due(119, vanity: true);
+                    Utils.Swap(ref player.armor[14], ref player.inventory[0]); Due(126, held: true);
+                    Utils.Swap(ref player.inventory[0], ref player.inventory[1]); MaterialClock(133); system.PostUpdateEverything();
+                    Equal(0, StartedAt(133), attachment + ": unequipped item has no periodic producer");
+                    Equal(attachment == "world" ? 1 : 0, queue.Count, attachment + ": unequip preserves only authored world lifetime");
+                    Utils.Swap(ref player.inventory[1], ref player.armor[3]); Due(140);
+                    Equal(1, queue.Count, attachment + ": re-equip starts one current emission after old lifetimes expire");
+                }
+            }
+            finally { system.OnWorldUnload(); Terraria.Main.player[0] = prior; MaterialClock(tick); }
+        }));
+    }
+
     private delegate Terraria.ModLoader.ModPacket VfxGetPacketOriginal(Terraria.ModLoader.Mod mod,int capacity);
     private delegate Terraria.ModLoader.ModPacket VfxGetPacketHook(VfxGetPacketOriginal orig,Terraria.ModLoader.Mod mod,int capacity);
     private static void MaterialOwnerHitReachesValidatedServerRelayAndRemote()

@@ -348,12 +348,15 @@ public sealed partial class GeneratedProjectile
     {
         if (Projectile.owner != Main.myPlayer)
             return;
-        Vector2 previous = new(Projectile.ai[0], Projectile.ai[1]);
         Projectile.ai[0] = value.X;
         Projectile.ai[1] = value.Y;
+        // Local input keeps moving during the throttle. Compare against the last
+        // publication so its final value still reaches peers after input stops.
         if (_age - _lastOwnerVectorSyncAge < Math.Max(1, AuthoredTicksToProjectileUpdates(minSyncIntervalTicks))
-            || Vector2.DistanceSquared(previous, value) <= Math.Max(0f, changeThresholdSquared))
+            || _lastPublishedOwnerVector is { } previous
+                && Vector2.DistanceSquared(previous, value) <= Math.Max(0f, changeThresholdSquared))
             return;
+        _lastPublishedOwnerVector = value;
         _lastOwnerVectorSyncAge = _age;
         Projectile.netUpdate = true;
     }

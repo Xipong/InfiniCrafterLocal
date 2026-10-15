@@ -620,7 +620,7 @@
   function utility(title,body) {setMenu(false);$('#utility-dialog').dataset.kind='';$('#utility-title').textContent=title;$('#utility-body').innerHTML=body;$('#utility-dialog').showModal();updateActionButtons();}
   function showSaveConflict() {
     const disk={...state.remote.defaults,...state.remote.savedValues};
-    const changed=Object.keys(disk).filter(key=>disk[key] !== state.revisionValues?.[key]);
+    const changed=[...new Set([...Object.keys(state.revisionValues || {}),...Object.keys(disk)])].filter(key=>disk[key] !== state.revisionValues?.[key]);
     const display=(key,val)=>isCredentialKey(key) ? (val ? '••••••••':'Не задано') : val || 'Не задано';
     utility('Конфигурация изменилась на диске', `<p class="dialog-copy">Другой процесс или вкладка сохранили настройки после начала твоего черновика. Проверь изменения ниже. Твои правки останутся в этой вкладке; сохранение потребует отдельного нажатия.</p><div class="confirm-list">${changed.map(key=>`<div><span>${esc(names[key] || key)}<small>На диске: ${esc(display(key,disk[key]))}</small></span><span>Черновик: ${esc(display(key,value(key)))}</span></div>`).join('')}</div><div class="dialog-actions"><button class="button" data-ui="close-dialog">Вернуться</button><button class="button button-primary" id="reconcile-draft">Продолжить с моими правками</button></div>`);
     const revision=state.remote.savedRevision;
