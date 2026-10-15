@@ -55,10 +55,10 @@ public sealed class GeneratedWhipTagGlobalNPC : GlobalNPC
             return;
         if (projectile.type > ProjectileID.None && projectile.type < ProjectileID.Sets.IsAWhip.Length && ProjectileID.Sets.IsAWhip[projectile.type])
             return;
+        // Effects follow native class inheritance, including hybrid/modded summon shots.
         bool summonHit = projectile.minion
             || projectile.sentry
-            || projectile.DamageType == DamageClass.Summon
-            || projectile.DamageType == DamageClass.SummonMeleeSpeed;
+            || projectile.CountsAsClass(DamageClass.Summon);
         if (!summonHit)
             return;
         Player player = Main.player[owner];
