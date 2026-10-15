@@ -3,7 +3,7 @@ from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import json
 import pytest
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
 
 

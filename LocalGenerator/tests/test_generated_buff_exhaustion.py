@@ -7,12 +7,13 @@ import pytest
 
 from repair_test_helpers import gameplay_repair, provider_roundtrip
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.runtime_authoring import CAPABILITY_REGISTRY, build_runtime_repair_scope
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
 from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
 
-from infini_local.core.runtime_authoring import (
-    compile_runtime_program, validate_runtime_program, validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 

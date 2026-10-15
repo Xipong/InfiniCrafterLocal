@@ -5,13 +5,11 @@ import copy
 from copy import deepcopy
 import json
 import pytest
-from infini_local.core.runtime_authoring import (
-    compile_runtime_program,
-    validate_runtime_program,
-    validate_runtime_wire,
-    build_runtime_repair_scope,
-    audit_compiler_receipts,
-)
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.pipelines.parent_context_pipeline import _generated_runtime_primary_projectile

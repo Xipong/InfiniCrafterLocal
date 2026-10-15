@@ -14,11 +14,8 @@ sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
 from check_delivery_contract import build_report as delivery_report
 from check_planner_prompt_usability import build_report as prompt_report
-from infini_local.core.runtime_authoring import (
-    capability_provider_union,
-    compact_capability_catalog,
-    runtime_program_author_schema,
-)
+from infini_local.core.runtime_authoring.capability_registry import capability_provider_union, compact_capability_catalog
+from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
 from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 from infini_local.qa.capability_library_audit import capability_library_audit
 from infini_local.qa.capability_witnesses import capability_vertical_slice_report

@@ -1,5 +1,6 @@
 """Source-preserving units at the actual offline serialized stage boundaries."""
 from __future__ import annotations
+from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
@@ -11,7 +12,8 @@ import socket
 import pytest
 
 from infini_local.core import vfx_manifest as vfx
-from infini_local.core.runtime_authoring import compile_runtime_program, validate_runtime_program
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.pipelines import llm_transport
 from infini_local.pipelines import visual_generation_pipeline as visual
@@ -33,13 +35,14 @@ def offline_packets(monkeypatch, request):
     monkeypatch.setattr(socket, "create_connection", denied)
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", request.param)
     monkeypatch.setattr(author, "USE_LLM", True)
+    monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     captured = []
 
     def stop(payload, **kwargs):
         captured.append(copy.deepcopy(payload))
         raise _CapturedRequest()
 
-    for module in (author, visual):
+    for module in (author, visual, vfx_transport):
         monkeypatch.setattr(module, "resolve_llm_model", lambda: "offline-test-model")
         monkeypatch.setattr(module, "trace_stage_request", lambda *a, **k: None)
         monkeypatch.setattr(module, "llm_chat_json", stop)
@@ -100,7 +103,7 @@ def _vfx_packets(data, captured):
     packet = vfx._prompt_packet(data, None, None)
     for repair in (False, True):
         with pytest.raises(_CapturedRequest):
-            vfx._request(author.call_llm_vfx_director, packet, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
+            vfx._request(vfx_transport.call_llm_vfx_director, packet, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
     return [request_dossier(row) for row in captured[start:]]
 
 
@@ -191,7 +194,9 @@ def test_new_gameplay_context_does_not_widen_actual_vfx_repair_permissions(monke
         return {"choices": [{"message": {"content": json.dumps(next(responses))}}]}
 
     monkeypatch.setattr(author, "llm_chat_json", respond)
-    final = vfx.attach_hybrid_vfx_manifest(data, "units-frozen-repair", llm_director=author.call_llm_vfx_director)
+
+    monkeypatch.setattr(vfx_transport, "llm_chat_json", respond)
+    final = vfx.attach_hybrid_vfx_manifest(data, "units-frozen-repair", llm_director=vfx_transport.call_llm_vfx_director)
     assert len(captured) == 2
     director, repair = [request_dossier(row) for row in captured]
     assert director["acceptedGameplayReadOnly"] == repair["acceptedGameplayReadOnly"] == before["gameplay"]

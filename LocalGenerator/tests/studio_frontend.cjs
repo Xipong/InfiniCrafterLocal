@@ -2,7 +2,7 @@
 'use strict';
 const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/strict');
 const nodes=new Map(), events={};
-function node() {return {hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(){},replaceChildren(){},remove(){},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(){},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node();}};}
+function node() {return {hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(){},focus(){},replaceChildren(){},remove(){},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(){},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node();}};}
 global.setTimeout=()=>0;
 global.document={createElement:()=>node(),activeElement:null,addEventListener(name,fn){events[name]=fn;},querySelectorAll(){return [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
 global.window={INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
@@ -12,7 +12,7 @@ assert(!source.includes('window.confirm('),'discard must use the in-page dialog'
 source=source.replace('  navigate();poll();',`
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
@@ -98,6 +98,39 @@ document.querySelector('#reconcile-draft').onclick();
 assert.equal(state.draft.INFINI_REMOVED,'my-restored-value');
 assert.equal(state.savedRevision,'disk-C');
 assert(state.dirty.has('INFINI_REMOVED'));
+
+// A conflict dialog can outlive the disk revision it showed. Re-review the
+// latest snapshot instead of acknowledging an already stale comparison.
+state.remote=snapshot({[x]:'other-x',[y]:'disk-b'},{savedRevision:'review-b'});
+state.savedRevision='review-a';state.revisionValues={[x]:'old-x',[y]:'old-y'};
+state.draft={[x]:'my-x',[y]:'disk-b'};state.baseline={...state.remote.savedValues};recomputeDirty();
+studio.showSaveConflict();
+acceptSnapshot(snapshot({[x]:'newer-x',[y]:'disk-c'},{savedRevision:'review-c'}));
+document.querySelector('#reconcile-draft').onclick();
+assert(document.querySelector('#utility-dialog').open,'new disk changes require another review');
+assert(document.querySelector('#utility-body').innerHTML.includes('newer-x'));
+assert.equal(state.savedRevision,'review-a');assert.equal(state.draft[x],'my-x');assert.equal(state.draft[y],'disk-c');
+// Unreadable disk state cannot certify the shown revision either.
+state.remote.savedRevision=null;document.querySelector('#reconcile-draft').onclick();
+assert(document.querySelector('#utility-dialog').open);assert.equal(state.savedRevision,'review-a');
+state.remote.savedRevision='review-c';document.querySelector('#reconcile-draft').onclick();
+assert.equal(state.savedRevision,'review-c');assert.equal(state.draft[x],'my-x');assert.equal(state.draft[y],'disk-c');
+assert(!document.querySelector('#utility-dialog').open);
+
+// Terminal action feedback restores only abandoned button focus, not a newer
+// input, modal, or navigation choice. A disappearing Save tray stays hidden.
+document.body={};document.activeElement=document.body;state.page='providers';
+let actionFocus=0;
+const refreshButton={isConnected:true,disabled:false,dataset:{action:'codexCatalog'},getClientRects:()=>[{}],focus(){actionFocus++;}};
+const completed={focus:{element:refreshButton,action:'codexCatalog',page:'providers'}};
+studio.restoreActionFocus(completed);assert.equal(actionFocus,1);
+document.activeElement={dataset:{field:x}};studio.restoreActionFocus(completed);assert.equal(actionFocus,1);
+document.activeElement=document.body;document.querySelector('#utility-dialog').open=true;
+studio.restoreActionFocus(completed);assert.equal(actionFocus,1);
+document.querySelector('#utility-dialog').open=false;state.page='multiplayer';
+studio.restoreActionFocus(completed);assert.equal(actionFocus,1);
+state.page='providers';refreshButton.getClientRects=()=>[];studio.restoreActionFocus(completed);assert.equal(actionFocus,1);
+document.activeElement=null;
 
 // Recommendations never interrupt loading, polling, or a deliberate custom edit.
 document.querySelector('#utility-dialog').open=false;

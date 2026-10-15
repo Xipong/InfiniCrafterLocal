@@ -13,7 +13,6 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
-import time
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,20 +108,33 @@ def _source_index_changes(root: Path = ROOT) -> list[str]:
     return sorted(changed)
 
 
-def changed_files() -> list[str]:
-    proc = _git("status", "--porcelain=v1", "--untracked-files=all")
-    if proc.returncode != 0:
+def changed_files(base: str | None = None) -> list[str]:
+    """Committed branch diff plus staged, unstaged and untracked paths.
+
+    --base is a merge-base comparison, so unrelated upstream commits are not
+    attributed to this task. --no-renames retains both sides of moves.
+    """
+    if _git("rev-parse", "--show-toplevel").returncode != 0:
+        if base:
+            raise ValueError("--base requires a Git checkout")
         return _source_index_changes()
-    rows: list[str] = []
-    for line in proc.stdout.splitlines():
-        path = line[3:]
-        if " -> " in path:
-            path = path.split(" -> ", 1)[1]
-        normalized = path.replace("\\", "/")
-        if _ignored_repository_path(normalized):
-            continue
-        rows.append(normalized)
-    return sorted(set(rows))
+    commands: list[tuple[str, ...]] = [("diff", "--name-only", "-z", "--no-renames", "HEAD"),
+                                      ("ls-files", "--others", "--exclude-standard", "-z")]
+    if base:
+        revision = _git("rev-parse", "--verify", "--end-of-options", base + "^{commit}")
+        if revision.returncode:
+            raise ValueError(f"invalid --base revision: {base}")
+        ancestor = _git("merge-base", revision.stdout.strip(), "HEAD")
+        if ancestor.returncode:
+            raise ValueError(f"no merge base with {base}")
+        commands.insert(0, ("diff", "--name-only", "-z", "--no-renames", ancestor.stdout.strip(), "HEAD"))
+    rows: set[str] = set()
+    for command in commands:
+        proc = _git(*command)
+        if proc.returncode:
+            raise ValueError(proc.stderr.strip() or "git change discovery failed")
+        rows.update(path for path in proc.stdout.split("\0") if path and not _ignored_repository_path(path))
+    return sorted(rows)
 
 
 def _matches(path: str, pattern: str) -> bool:
@@ -134,10 +146,47 @@ def _matches(path: str, pattern: str) -> bool:
 def impacted(files: list[str]) -> tuple[list[dict[str, Any]], list[str], bool]:
     rules = _load(RULES_PATH).get("rules", [])
     matched = [rule for rule in rules if any(_matches(path, pattern) for path in files for pattern in rule.get("patterns", []))]
-    checks = set(_load(MANIFEST_PATH).get("alwaysChecks", []))
-    checks.update(check for rule in matched for check in rule.get("checks", []))
-    requires_build = any(bool(rule.get("requiresBuild")) for rule in matched)
+    checks = {check for rule in matched for check in rule.get("checks", [])}
+    requires_build = any(path.startswith("ModSources/") and path.endswith((".cs", ".csproj")) for path in files)
+    requires_build = requires_build or any(bool(rule.get("requiresBuild")) for rule in matched)
     return matched, sorted(checks), requires_build
+
+
+def _test_module(path: str) -> bool:
+    candidate = ROOT / path
+    return any(path.startswith(prefix) and candidate.name.startswith("test_") and candidate.suffix == ".py"
+               and candidate.is_file() and candidate.resolve().is_relative_to((ROOT / prefix).resolve())
+               for prefix in ("LocalGenerator/tests/", "toolbox/tests/"))
+
+
+def verification_plan(files: list[str], *, final: bool = False) -> dict[str, Any]:
+    """Small owner-area map for iteration; unknown surfaces require final gates."""
+    manifest = _load(MANIFEST_PATH)
+    rules, checks, requires_build = impacted(files)
+    unknown = [path for path in files if not _test_module(path) and not any(
+        _matches(path, pattern) for rule in rules for pattern in rule.get("patterns", []))]
+    tests = {path for path in files if _test_module(path)}
+    for rule in rules:
+        for pattern in rule.get("tests", []):
+            matches = [path.relative_to(ROOT).as_posix() for path in ROOT.glob(pattern)
+                       if _test_module(path.relative_to(ROOT).as_posix())]
+            if not matches:
+                raise ValueError(f"test selection pattern has no modules: {pattern}")
+            tests.update(matches)
+    full = final or bool(unknown)
+    if full:
+        checks = list(manifest["fullChecks"])
+        tests = set()
+    return {
+        "mode": "final" if final else "final_fallback" if unknown else "iteration",
+        "changedFiles": files,
+        "impactedRules": [rule["id"] for rule in rules],
+        "checks": checks,
+        "tests": sorted(tests),
+        "requiresBuild": requires_build,
+        "unmappedPaths": unknown,
+        "releaseScope": full,
+    }
 
 
 def _environment() -> dict[str, str]:
@@ -145,69 +194,19 @@ def _environment() -> dict[str, str]:
     env["PYTHONPATH"] = str(ROOT / "LocalGenerator")
     env["PYTHONUTF8"] = "1"
     env["INFINI_SKIP_CONFIG_FILE"] = "1"
+    env["INFINI_TEST_USE_PROJECT_CONFIG"] = "0"
     return env
 
 
 def _run_check(name: str, command: list[str]) -> dict[str, Any]:
-    start = time.monotonic()
-    command = list(command)
-    if command and command[0] in {"python", "python3"}:
-        command[0] = sys.executable
-    executable = command[0] if command and Path(command[0]).is_file() else shutil.which(command[0])
-    if executable is None and command:
-        sibling_names = [command[0]]
-        if not Path(command[0]).suffix:
-            sibling_names.extend([f"{command[0]}.exe", f"{command[0]}.cmd"])
-        for sibling_name in sibling_names:
-            sibling = Path(sys.executable).with_name(sibling_name)
-            if sibling.is_file():
-                command[0] = str(sibling)
-                executable = str(sibling)
-                break
-    if executable is None:
-        return {"name": name, "status": "unavailable", "command": command, "durationSeconds": 0.0, "reason": f"{command[0]} not installed"}
-    if name == "pyright":
-        command = [
-            sys.executable,
-            str(ROOT / "tools/run_pyright.py"),
-            "--pythonpath",
-            sys.executable,
-            "--pyright-command",
-            str(executable),
-        ]
-    # All manifest commands are repository-root relative. The pytest shard
-    # runner creates its own isolated LocalGenerator working directories.
-    cwd = ROOT
-    proc = subprocess.run(command, cwd=cwd, env=_environment(), text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
-    structured_unavailable = proc.returncode == 2 and '"status": "unavailable"' in proc.stdout
-    return {
-        "name": name,
-        "status": "unavailable" if structured_unavailable else ("passed" if proc.returncode == 0 else "failed"),
-        "exitCode": proc.returncode,
-        "command": command,
-        "durationSeconds": round(time.monotonic() - start, 3),
-        "outputTail": proc.stdout[-12000:],
-    }
+    from validate_release import run_check
+    return run_check(name, command, root=ROOT, env=_environment())
 
 
 def _dotnet_executable() -> str | None:
     """Find .NET in native shells and in the project's WSL/Windows workflow."""
     return shutil.which("dotnet") or shutil.which("dotnet.exe")
 
-
-def _dotnet_path(executable: str, path: Path) -> str:
-    """Translate WSL paths only when invoking the Windows dotnet host."""
-    if os.name != "nt" and executable.lower().endswith(".exe") and shutil.which("wslpath"):
-        proc = subprocess.run(
-            ["wslpath", "-w", str(path)],
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            return proc.stdout.strip()
-    return str(path)
 
 
 def command_doctor(_: argparse.Namespace) -> int:
@@ -242,56 +241,34 @@ def command_doctor(_: argparse.Namespace) -> int:
 
 def command_verify(args: argparse.Namespace) -> int:
     manifest = _load(MANIFEST_PATH)
-    files = changed_files()
-    rules, selected, requires_build = impacted(files)
-    if not args.changed:
-        selected = list(manifest.get("fullChecks", []))
-    checks: list[dict[str, Any]] = []
-    for name in selected:
-        command = manifest.get("checks", {}).get(name)
-        if command:
-            checks.append(_run_check(name, list(command)))
-    blocked: list[str] = []
-    build_status = "not-required"
-    if requires_build or args.require_build:
-        dotnet = _dotnet_executable()
-        if dotnet is None:
-            build_status = "blocked"
-            blocked.append("C#-sensitive diff requires real tML build, but dotnet/dotnet.exe is unavailable")
-        elif not os.environ.get("INFINI_TML_DEPS_SRC"):
-            build_status = "blocked"
-            blocked.append("C#-sensitive diff requires INFINI_TML_DEPS_SRC for real tML build")
-        else:
-            project = _dotnet_path(dotnet, ROOT / "ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj")
-            deps_root = _dotnet_path(dotnet, Path(os.environ["INFINI_TML_DEPS_SRC"]))
-            command = [dotnet, "build", project, "-c", "Debug", "--nologo", "-v:minimal", "-warnaserror", f"/p:InfiniExternalDepsRoot={deps_root}"]
-            row = _run_check("tml_build", command)
-            checks.append(row)
-            build_status = row["status"]
-            if row["status"] == "passed":
-                report_path = os.environ.get("INFINI_AGENT_SELFTEST_REPORT", "")
-                if report_path and Path(report_path).is_file():
-                    checks.append(_run_check("tml_runtime_selftest", ["python", "tools/check_tml_selftest_report.py", report_path]))
-    failed = [row for row in checks if row["status"] == "failed"]
-    unavailable = [row for row in checks if row["status"] == "unavailable"]
+    files = changed_files(args.base)
+    plan = verification_plan(files, final=not args.changed)
+    if args.require_build and "tml_build" not in plan["checks"]:
+        plan["checks"].append("tml_build")
+    if args.plan:
+        print(json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+    checks = [_run_check(name, list(manifest["checks"][name])) for name in plan["checks"]]
+    if plan["tests"]:
+        checks.append(_run_check("focused_pytest", ["python", "tools/run_focused_pytests.py", *plan["tests"]]))
+    passed = bool(checks) and all(row["status"] == "passed" for row in checks)
     report = {
-        "schema": "infini.agent-run-result.v1",
+        "schema": "infini.agent-run-result.v2",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "ok": not failed,
-        "releaseReady": not failed and not blocked and not unavailable,
+        **plan,
+        "ok": passed,
+        "status": "not_selected" if not checks else "passed" if passed else "incomplete" if all(
+            row["status"] in {"passed", "unavailable", "notRun"} for row in checks) else "failed",
+        "releaseReady": passed and plan["releaseScope"],
         "baseRevision": _base_revision(),
-        "changedFiles": files,
-        "impactedRules": [rule["id"] for rule in rules],
-        "requiresBuild": requires_build,
-        "buildStatus": build_status,
+        "comparisonBase": args.base,
         "checks": checks,
-        "blocked": blocked,
     }
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     out = Path(args.out) if args.out else ARTIFACTS / "last_verify.json"
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
-    return 0 if report["ok"] and (not args.require_build or report["releaseReady"]) else 1
+    return 0 if passed else 2 if report["status"] in {"not_selected", "incomplete"} else 1
 
 
 def _read_context_file(path: str, remaining: int) -> tuple[dict[str, Any], int]:
@@ -304,27 +281,43 @@ def _read_context_file(path: str, remaining: int) -> tuple[dict[str, Any], int]:
 
 
 def command_context(args: argparse.Namespace) -> int:
-    files = changed_files()
-    rules, checks, requires_build = impacted(files)
-    requested: list[str] = ["AGENTS.md", ".agent/manifest.json", ".agent/impact_rules.json"]
-    for rule in rules:
-        requested.extend(rule.get("context", []))
-    requested.extend(files[:30])
+    files = changed_files(args.base)
+    paths = list(dict.fromkeys(args.path or ([] if args.area else files)))
+    for path in paths:
+        if not (ROOT / path).resolve().is_relative_to(ROOT.resolve()):
+            raise ValueError(f"context path must stay inside checkout: {path}")
+    all_rules = _load(RULES_PATH)["rules"]
+    areas = args.area or []
+    unknown_areas = set(areas) - {rule["area"] for rule in all_rules}
+    if unknown_areas:
+        raise ValueError("unknown areas: " + ", ".join(sorted(unknown_areas)))
+    rules = [rule for rule in all_rules if rule["area"] in areas or any(
+        _matches(path, pattern) for path in paths for pattern in rule["patterns"])]
+    # Put real entrypoints ahead of long general policy, never raw tool JSON.
+    requested = [path for rule in rules for path in rule.get("entrypoints", [])]
+    requested.extend(path for path in paths if (ROOT / path).is_file())
+    requested.extend(path for rule in rules for path in rule.get("context", []))
+    requested.extend(["docs/development/CODE_MAP_RU.md", "AGENTS.md"])
     remaining = max(1000, int(args.budget))
     docs: list[dict[str, Any]] = []
     for path in dict.fromkeys(requested):
-        row, remaining = _read_context_file(path, remaining)
+        # A long registry must not crowd out all navigation and policy.
+        row, unused = _read_context_file(path, min(remaining, 3000))
+        remaining -= min(remaining, 3000) - unused
         docs.append(row)
         if remaining <= 0:
             break
     report = {
-        "schema": "infini.agent-context.v1",
+        "schema": "infini.agent-context.v2",
         "task": args.task,
         "baseRevision": _base_revision(),
+        "comparisonBase": args.base,
         "changedFiles": files,
-        "impactedRules": [rule["id"] for rule in rules],
-        "requiredChecks": checks,
-        "requiresBuild": requires_build,
+        "areas": sorted({rule["area"] for rule in rules}),
+        "availableAreas": sorted({rule["area"] for rule in all_rules}),
+        "entrypoints": list(dict.fromkeys(path for rule in rules for path in rule.get("entrypoints", []))),
+        "verification": verification_plan(files),
+        "hint": "Choose --area or --path before edits; --task is a human label, not a semantic router.",
         "documents": docs,
     }
     text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
@@ -356,7 +349,7 @@ def command_diff(_: argparse.Namespace) -> int:
 def command_handoff(args: argparse.Namespace) -> int:
     verify_path = ARTIFACTS / "last_verify.json"
     verification = _load(verify_path) if verify_path.exists() else None
-    files = changed_files()
+    files = changed_files(args.base)
     rules, checks, requires_build = impacted(files)
     report = {
         "schema": "infini.agent-handoff.v1",
@@ -465,14 +458,18 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="agentctl")
     sub = parser.add_subparsers(dest="command", required=True)
     doctor = sub.add_parser("doctor"); doctor.set_defaults(func=command_doctor)
-    verify = sub.add_parser("verify"); verify.add_argument("--changed", action="store_true"); verify.add_argument("--require-build", action="store_true"); verify.add_argument("--out"); verify.set_defaults(func=command_verify)
-    context = sub.add_parser("context"); context.add_argument("--task", required=True); context.add_argument("--budget", type=int, default=14000); context.add_argument("--out"); context.set_defaults(func=command_context)
+    verify = sub.add_parser("verify"); verify.add_argument("--changed", action="store_true"); verify.add_argument("--base"); verify.add_argument("--plan", action="store_true"); verify.add_argument("--require-build", action="store_true"); verify.add_argument("--out"); verify.set_defaults(func=command_verify)
+    context = sub.add_parser("context"); context.add_argument("--task", required=True); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=14000); context.add_argument("--out"); context.set_defaults(func=command_context)
     diff = sub.add_parser("diff"); diff.add_argument("--semantic", action="store_true"); diff.set_defaults(func=command_diff)
-    handoff = sub.add_parser("handoff"); handoff.add_argument("--out"); handoff.set_defaults(func=command_handoff)
+    handoff = sub.add_parser("handoff"); handoff.add_argument("--out"); handoff.add_argument("--base"); handoff.set_defaults(func=command_handoff)
     task_check = sub.add_parser("task-check"); task_check.add_argument("--task-file", required=True); task_check.set_defaults(func=command_task_check)
     bootstrap = sub.add_parser("bootstrap-snapshot"); bootstrap.add_argument("--message", default="Baseline imported source snapshot"); bootstrap.add_argument("--allow-dirty", action="store_true"); bootstrap.set_defaults(func=command_bootstrap)
     args = parser.parse_args()
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except ValueError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

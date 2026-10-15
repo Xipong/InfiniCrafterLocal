@@ -27,7 +27,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
-from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, _wire_projection_witness
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH, MAX_EVENT_SPAWNS_PER_ACTIVATION, MAX_RUNTIME_ENTITIES,
@@ -381,7 +381,6 @@ def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
 def _validate_sprite_presentation(visual: Mapping[str, Any], path: str, errors: list[dict[str, Any]], *, entity_kind: str | None = None) -> None:
     """Additive DTO compatibility: omission stays omitted, present choices are strict."""
     from infini_local.core.visual_contract_schema import grip_schema, sprite_presentation_properties
-    from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
     from infini_local.pipelines.visual_generation_pipeline import _visual_item_schema
     fields = ("renderSizePx", "forwardAngleDegrees", "grip") if entity_kind is None else ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize", "grip")
     properties = {**sprite_presentation_properties(), "grip": grip_schema(),

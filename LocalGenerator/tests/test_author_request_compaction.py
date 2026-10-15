@@ -9,9 +9,10 @@ from dataclasses import replace
 import pytest
 from jsonschema import Draft202012Validator
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, compile_runtime_program, validate_runtime_program, validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines import author_item_contract as contract
 from infini_local.pipelines import combine_balance as balance

@@ -163,7 +163,8 @@ def canonical_transaction(binding: Mapping[str, Any], *, item_body_id: str) -> d
     Independent actions, cost/contact choices and conditional selectors survive.
     """
     from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
-    from infini_local.core.runtime_authoring.program_schema import binding_schema, strict_schema_errors
+    from infini_local.core.runtime_authoring.program_schema import binding_schema
+    from infini_local.core.schema_validation import strict_schema_errors
 
     result = {key: copy.deepcopy(value) for key, value in binding.items() if key != "id"}
     if strict_schema_errors({**result, "id": "transaction_probe"}, binding_schema()):

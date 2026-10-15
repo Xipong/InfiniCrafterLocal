@@ -63,7 +63,7 @@ def test_shared_definition_rejects_equal_numbers_with_different_json_literals():
 
 def _packet(monkeypatch, stage, fixture, mode, *, captured=None):
     from test_craft_instruction_segments import stage_packets
-    from infini_local.core.runtime_authoring import compile_runtime_program
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     import vfx_material_fixtures
     data = (vfx_material_fixtures._data("channel_beam") if fixture == "channel_beam"
@@ -71,7 +71,7 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None):
     with monkeypatch.context() as mp:
         mp.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
         if captured is not None:
-            from infini_local.pipelines import llm_authoring_pipeline as sender, visual_generation_pipeline as visual
+            from infini_local.pipelines import vfx_generation_pipeline as sender, visual_generation_pipeline as visual
             def record(payload, schema_key, paths):
                 captured.append(copy.deepcopy(payload))
                 return with_schema_instruction_definitions(payload, schema_key, paths)
@@ -118,7 +118,7 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
 def test_visual_item_only_roster_preserves_optional_equipment_contract(monkeypatch, stage, mode, overlay):
     from test_craft_instruction_segments import stage_packets
     from prompt_packet_helpers import request_dossier
-    from infini_local.core.runtime_authoring import compile_runtime_program
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from infini_local.pipelines import visual_generation_pipeline as visual

@@ -25,8 +25,10 @@ from infini_local.core.llm_prompt_cache import with_instruction_segments, with_s
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
-from infini_local.core.runtime_authoring import runtime_event_inventory, runtime_visual_roles, strict_schema_errors
+from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
+from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.pipelines.llm_transport import (
+    effective_response_format,
     apply_llm_common_options,
     llm_chat_json,
     llm_json_response_format,
@@ -40,7 +42,6 @@ from infini_local.pipelines.author_item_contract import (
     project_provider_nullable_optionals_to_local,
     provider_nullable_transport_rule,
 )
-from infini_local.pipelines.llm_authoring_pipeline import _effective_response_format
 from infini_local.pipelines.pipeline_visual_config import VISUAL_DIRECTOR_LLM
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.pipelines.visual_asset_plan import equipment_overlay_requirement
@@ -274,7 +275,12 @@ def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = F
 
 
 def _runtime_card(data: Mapping[str, Any]) -> list[dict[str, Any]]:
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, CONTROLLER_OPCODE, MOVEMENT_OPCODE, PROJECTILE_MODIFIER_COMPONENTS
+    from infini_local.core.runtime_authoring.capability_registry import (
+        CAPABILITY_REGISTRY,
+        CONTROLLER_OPCODE,
+        MOVEMENT_OPCODE,
+        PROJECTILE_MODIFIER_COMPONENTS,
+    )
     runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), Mapping) else {}
     events_by_entity: dict[str, list[str]] = {}
     for row in runtime_event_inventory(data):
@@ -1134,7 +1140,7 @@ def _request_visual_kit(
     trace_event("response", "LLM:" + stage_name, "Visual stage response", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, response=content)
     try:
         parsed = parse_first_valid_llm_json(content)
-        effective_format = _effective_response_format(request, raw)
+        effective_format = effective_response_format(request, raw)
         # Repair's object-or-null blocks have no semantic discriminator. Select the
         # object branch by container type, not by whether invalid authored leaves
         # happen to validate; those leaves must still reach exact-scope Repair.

@@ -4,11 +4,12 @@ import json
 
 import pytest
 
-from infini_local.core.runtime_authoring import (
-    CAPABILITY_REGISTRY, apply_repair_patch, build_runtime_repair_scope,
-    compile_runtime_program, filter_repair_patch_scope, runtime_repair_fragments,
-    validate_runtime_program, validate_runtime_wire,
-)
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope, runtime_repair_fragments
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.program_schema import strict_repair_structure_report, strict_schema_errors
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -131,7 +132,11 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(
 @pytest.mark.parametrize("owner", ["item-condition", "projectile-trigger"])
 def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypatch, owner):
     from dataclasses import replace
-    from infini_local.core.runtime_authoring import capability_registry, repair_scope, validator, compiler, technical_lowering
+    import infini_local.core.runtime_authoring.capability_registry as capability_registry
+    import infini_local.core.runtime_authoring.repair_scope as repair_scope
+    import infini_local.core.runtime_authoring.validator as validator
+    import infini_local.core.runtime_authoring.compiler as compiler
+    import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
     from infini_local.core.runtime_authoring.capability_registry import ParamSpec
 
     fn = "require_use_condition" if owner == "item-condition" else "pull_on_event"

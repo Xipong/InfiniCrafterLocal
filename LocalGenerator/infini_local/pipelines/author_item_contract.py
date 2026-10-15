@@ -4,22 +4,19 @@ import copy
 import json
 from typing import Any, Iterable, Mapping
 
-from infini_local.core.runtime_authoring import (
-    RUNTIME_PROGRAM_API_VERSION,
-    RUNTIME_PROGRAM_SCHEMA,
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA
+from infini_local.core.runtime_authoring.program_schema import (
     apply_repair_patch,
     author_item_repair_schema as _repair_schema,
     author_item_response_schema as _author_schema,
     strict_repair_shape_report,
-    validate_runtime_program,
-)
-from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
     PRIMARY_ENTITY_FIELD,
     PRIMARY_ENTITY_SELECTION_FIELD,
     _binding_variant_schema,
-    strict_schema_errors,
 )
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.schema_validation import strict_schema_errors
 
 
 PRIMARY_REPAIR_SYSTEM_RULE = (

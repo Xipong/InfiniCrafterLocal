@@ -666,5 +666,4 @@ __all__ = [
     "strict_author_shape_report",
     "strict_repair_shape_report",
     "strict_repair_structure_report",
-    "strict_schema_errors",
 ]
