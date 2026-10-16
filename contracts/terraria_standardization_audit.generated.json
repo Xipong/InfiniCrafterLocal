@@ -412,9 +412,9 @@
       "detail": "lowery.md missing guardrail: ID-static immunity не exposed"
     },
     {
-      "name": "lowery:VFX fallback palette",
+      "name": "lowery:VFX цвет задаётся local ",
       "ok": true,
-      "detail": "lowery.md missing guardrail: VFX fallback palette"
+      "detail": "lowery.md missing guardrail: VFX цвет задаётся local RGB objects"
     },
     {
       "name": "lowery:ModName/ClassName",
@@ -422,9 +422,9 @@
       "detail": "lowery.md missing guardrail: ModName/ClassName"
     },
     {
-      "name": "lowery:effect_catalog.py",
+      "name": "lowery:Whole-pattern aliases и ",
       "ok": true,
-      "detail": "lowery.md missing guardrail: effect_catalog.py"
+      "detail": "lowery.md missing guardrail: Whole-pattern aliases и archetype routers не входят в текущий контракт"
     },
     {
       "name": "lowery:псевдотокены `none`/`mod",
@@ -442,14 +442,14 @@
       "detail": "documented image backend aliases must match visual config"
     },
     {
-      "name": "category_aliases_documented",
+      "name": "current_categories_without_aliases",
       "ok": true,
-      "detail": "documented UI category aliases must match identity normalization"
+      "detail": "current category values must pass; retired UI spellings and null must be refused"
     },
     {
-      "name": "vfx_aliases_visual_only",
+      "name": "explicit_local_rgb_without_semantic_aliases",
       "ok": true,
-      "detail": "documented VFX aliases must remain confined to presentation color"
+      "detail": "local RGB bytes must preserve zero/endpoints and reject named/global colors, alpha, missing or invalid channels"
     }
   ],
   "issues": []

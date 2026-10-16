@@ -1,4 +1,4 @@
-# VFX material elements — активный контракт 0.4.249
+# VFX material elements — текущий контракт
 
 Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures.
 
@@ -9,16 +9,16 @@
 
 VFX Director и VFX Repair получают `acceptedRuntimeProgramReadOnly`: точную копию принятого runtimeProgram без per-entity `visual` (отдельный Visual context уже передаётся). Не создаётся второй механический контракт и не выводятся траектории из описания. Числа, entity IDs, движения, controllers, collision, события и bindings не меняются этим handoff.
 
-VFX владеет своими image requests и временно-пространственной композицией. Он не меняет внешний вид основного предмета, gameplay, коллизии, урон или события. Image backend выполняет принятые запросы через существующий ограниченный generation gate; никакой скрытой смены backend/provider или подмены отсутствующего изображения.
+VFX владеет своими image requests и временно-пространственной композицией. `impactSprite` явно задаёт `spritePrompt`, `spriteNegativePrompt`, `spriteCanvasSize` (24/32/48/64/96/128); pipeline переносит их в same-entity `visual.impactPrompt/impactNegativePrompt/impactCanvasSize`. Остальные renderer branches не имеют этих generation fields и не требуют пустых строк. Canvas не выводится из hitbox. Он не меняет внешний вид основного предмета, gameplay, коллизии, урон или события. Image backend выполняет принятые запросы через существующий ограниченный generation gate; никакой скрытой смены backend/provider или подмены отсутствующего изображения.
 
-Лимит ответа VFX Director и его условного Repair по умолчанию — 8000 токенов (`INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS`). Явная настройка пользователя сохраняет приоритет; новая LLM-роль или дополнительные Repair-попытки не добавляются.
+Лимит ответа VFX Director и его условного Repair наследует `INFINI_LLM_MAX_TOKENS` (application recommendation 18000); timeout наследует `INFINI_LLM_TIMEOUT` (600 s). `INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS`/`INFINI_VFX_LLM_DIRECTOR_TIMEOUT` задают явные overrides. Явная настройка пользователя сохраняет приоритет; новая LLM-роль или дополнительные Repair-попытки не добавляются.
 
-Источники: [VFX owner](../../LocalGenerator/infini_local/core/vfx_manifest.py) — schema/surface/diagnostics/Repair; [material payloads](../../LocalGenerator/infini_local/core/vfx_material_contract.py) — поля и нейтрали; [C# DTO](../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs) и [material executor](../../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Materials.cs). Image/byte/texture ownership вынесен в [жизненный цикл ассетов](../development/IMAGE_ASSET_LIFECYCLE_RU.md).
+Источники: [VFX owner](../../LocalGenerator/infini_local/core/vfx_manifest.py) — schema/surface/diagnostics/Repair; [material payloads](../../LocalGenerator/infini_local/core/vfx_material_contract.py) — потребляемые поля и profile math; [C# DTO](../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs) и [material executor](../../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Materials.cs). Image/byte/texture ownership вынесен в [жизненный цикл ассетов](../development/IMAGE_ASSET_LIFECYCLE_RU.md).
 
 <a id="assets"></a>
 ## Ингредиенты и selectors
 
-`rendererKind=spriteElement` требует только payload `element`; `texturedPath` — только `path`. Legacy renderers не принимают эти payload. Material renderers не используют channel `light`/`sound`; renderer/event/entity applicability задаётся accepted surface, не независимым декартовым произведением enum.
+`rendererKind=spriteElement` требует только payload `element`; `texturedPath` — только `path`. Остальные renderers не принимают эти payload. Renderer — единственный selector исполнительной ветви; renderer/event/entity applicability задаётся accepted surface, не независимым декартовым произведением enum.
 
 Optional `assets` в Director/manifest содержит до четырёх самостоятельных ингредиентов. Отсутствие означает отсутствие новых запросов и остаётся отсутствием в старом wire; явный null не является отсутствием.
 
@@ -38,7 +38,7 @@ Texture selector обоих payload — `{source, assetId}`: `source=item|entity
 <a id="libraries"></a>
 ## ParticleLibrary и Luminance: явные additive primitives
 
-`libraryParticle` требует только `particle`, `backend=Particle` и channel `ambientParticles|impactParticles|decaySmoke`. Это настоящий ParticleLibrary V3 instance/shader path, не прежние `pl:*` selectors: они по-прежнему выбирают Terraria Dust. Старые recipes не получают новые эффекты автоматически.
+`libraryParticle` требует только свой payload `particle`; renderer выбирает ParticleLibrary consumer напрямую. Это настоящий ParticleLibrary V3 instance/shader path. Simple Dust slots отдельно выбирают exact `GemDiamond`, `TintableDustLighted`, `Glass`, `Smoke`, `Electric` или `none`, не библиотечные aliases.
 
 Все 17 полей обязательны: `textureId`, `count`, `speedMinPxPerTick`, `speedMaxPxPerTick`, `spreadRadians`, `inheritVelocity`, `drag`, `accelerationXPxPerTickSquared`, `accelerationYPxPerTickSquared`, `widthPx`, `heightPx`, `rotationRadians`, `rotationSpeedRadiansPerTick`, `colorStart`, `colorEnd`, `endScaleMultiplier`, `endOpacity`. Полные ranges принадлежат `library_particle_schema()` в [canonical payload owner](../../LocalGenerator/infini_local/core/vfx_material_contract.py), не второму каталогу.
 
@@ -49,9 +49,9 @@ Texture selector обоих payload — `{source, assetId}`: `source=item|entity
 - `duration` — 3..120 world ticks жизни частицы. Nonperiodic `startTick` — задержка от события, `repeatEvery=0`; periodic требует repeatEvery≥1, projectile startTick ограничивает возраст, item startTick=0.
 - Alpha/additive и точный before/after-projectiles слой выбираются явно. Четыре fixed mod-lifetime buffers удерживаются через world clear и освобождаются graphics-owner callback на unload; per-emission/per-world GPU buffers не создаются. Ещё не готовый backend ожидается ограниченно, без Dust/PNG substitute.
 
-`screenShakeCue` требует только `screenShake`, `backend=Realtime`, channel `screenShake`, lane `cue` и nonperiodic event. Шесть обязательных controls: `strengthPx`, `angularVarianceRadians`, `directionRadians`, `dissipationPxPerFrame`, `taperStartDistancePx`, `taperEndDistancePx`; ranges — `screen_shake_schema()` того же owner. Direction задан относительно captured forward; taper end строго больше start. Strength=0 — тишина.
+`screenShakeCue` требует только свой payload `screenShake` и nonperiodic event. Шесть обязательных controls: `strengthPx`, `angularVarianceRadians`, `directionRadians`, `dissipationPxPerFrame`, `taperStartDistancePx`, `taperEndDistancePx`; ranges — `screen_shake_schema()` того же owner. Direction задан относительно captured forward; taper end строго больше start. Strength=0 — тишина.
 
-`startTick` задерживает native `Luminance.ScreenShakeSystem.StartShakeAtPoint` от события в world ticks; captured anchor/forward сохраняются после retirement источника. Duration=3, repeatEvery=0, alpha=1, alpha blend и BeforeProjectiles — обязательные нейтрали, не camera lifespan/отрисовка. Native ModifyScreenPosition и пользовательские Luminance screenshake controls владеют dissipation. Один handle расходует один existing instance allowance; нулевой budget не обходит лимит. Clear/disable отменяет только наши handles, не чужие. Если native universal rumble удаляет handle без обнуления strength, наш camera hook наблюдает отсутствие native dissipation на последовательных camera visits и освобождает запись; world ticks не имитируют dissipation, private/global native roster не читается и не изменяется.
+`startTick` задерживает native `Luminance.ScreenShakeSystem.StartShakeAtPoint` от события в world ticks; captured anchor/forward сохраняются после retirement источника. Поля `duration`, `repeatEvery`, `alpha`, `blend`, `layer` у camera cue отсутствуют: они не управляют native camera lifespan/отрисовкой и не запрашиваются как placeholders. Native ModifyScreenPosition и пользовательские Luminance screenshake controls владеют dissipation. Один handle расходует один existing instance allowance; нулевой budget не обходит лимит. Clear/disable отменяет только наши handles, не чужие. Если native universal rumble удаляет handle без обнуления strength, наш camera hook наблюдает отсутствие native dissipation на последовательных camera visits и освобождает запись; world ticks не имитируют dissipation, private/global native roster не читается и не изменяется.
 
 Новые branches используют существующие delayed/cadence/occurrence/relay owners и общие source/particle/draw/resource caps. Model не выбирает native hooks или authority. Client settings `EnableParticleLibraryBackend`, `ParticleSpawnMultiplier`/`ParticleAlphaMultiplier` и `EnableLuminanceScreenShakeBackend` подавляют соответствующие presentation paths без подмены. Gameplay, звук, свет и generated PNG не добавляются неявно. Runtime owner — [bounded library executor](../../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Library.cs); strict DTO — [VfxLibrarySpec](../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxLibrarySpec.cs).
 
@@ -92,13 +92,13 @@ Texture selector обоих payload — `{source, assetId}`: `source=item|entity
 
 Width/height/opacity/color profiles — объекты `{start,middle,end,curve}` для нормализованных позиций 0, 0.5 и 1. `curve` = `linear`, `easeIn`, `easeOut`, `smoothStep`, применяется отдельно к каждому интервалу. Это фиксированная математика, не выражения/код модели.
 
-Размеры/ширина имеют knots 0..4, opacity 0..1. Явный ноль сохраняется. Color knots — opaque rendering color tokens плюс `effect` для захваченного существующего цвета; `white` сохраняет RGB исходного изображения. RGB-профиль не заменяет opacity и не должен умножать прозрачность дважды. Все параметры снимаются в immutable state, изменения исходного DTO не переписывают уже испущенный эффект.
+Размеры/ширина имеют knots 0..4, opacity 0..1. Явный ноль сохраняется. Color knots — explicit local RGB objects `{r,g,b}`, каждый канал integer 0..255; `{r:255,g:255,b:255}` сохраняет RGB исходного изображения. Named tokens и global references не принимаются. RGB-профиль не заменяет opacity и не должен умножать прозрачность дважды. Все параметры снимаются в immutable state, изменения исходного DTO не переписывают уже испущенный эффект.
 
 Именованные поля позволяют Repair менять одну ошибочную точку без общего indexed-array merge и без размораживания соседних корректных параметров.
 
 Validator-diagnosed foreign/additional fields допускают точное удаление через существующие delete-path permissions: например, лишний `path` у spriteElement. Только для этих диагностированных leaves omission означает delete; остальные omissions остаются no-change. Дублирующая asset-строка удаляется по ошибочному индексу, не вместе с корректной строкой того же ID.
 
-Color tokens: `white`, `gray`, `brown`, `tan`, `red`, `orange`, `yellow`, `gold`, `green`, `cyan`, `blue`, `purple`, `pink`, `black`, `effect`. На каждом полуинтервале для локального t: linear=t; easeIn=t²; easeOut=1−(1−t)²; smoothStep=t²(3−2t). Sprite profiles используют normalized age; path — выбранный age/length. Отсутствие, explicit null и ноль не взаимозаменяемы.
+На каждом полуинтервале для локального t: linear=t; easeIn=t²; easeOut=1−(1−t)²; smoothStep=t²(3−2t). Sprite profiles используют normalized age; path — выбранный age/length. Отсутствие, explicit null и ноль не взаимозаменяемы.
 
 При пустом asset-domain ошибка относится и к `texture.source`, и к `texture.assetId`: допустимую замену явно выбирает Repair, не код. При непустом домене меняется только сломанная ссылка; source и requests frozen. Unknown target сначала требует identity Repair, а не размораживания валидного selector без контекста. Общая процедура — [frozen-first Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md).
 
@@ -113,7 +113,7 @@ Color tokens: `white`, `gray`, `brown`, `tan`, `red`, `orange`, `yellow`, `gold`
 
 `profileDomain=age` применяется только к истории; `length` использует нормализованную накопленную длину. `uvMode=stretch` натягивает текстуру; `repeat` использует явную `repeatLengthPx` и `scrollPxPerTick`. Геометрия источник/история не сглаживается в выдуманную траекторию. Пропуски/скачки больше явно заданного `maxSegmentLengthPx` не соединяются.
 
-Live paths доступны projectile `periodic`/`on_spawn`, не item_body и не terminal event. История после retirement затухает по retention; текущая beam/whip geometry заканчивается вместе с источником. StartTick управляет началом sampling; repeatEvery=0 и duration=3 — нейтральные значения неиспользуемых здесь common controls.
+Live paths доступны projectile `periodic`/`on_spawn`, не item_body и не terminal event. История после retirement затухает по retention; текущая beam/whip geometry заканчивается вместе с источником. `startTick` управляет началом sampling. `repeatEvery` и `duration` у path отсутствуют: нет repeated detached emission или отдельного lifespan control.
 
 | Поля | Единицы / обязательные сочетания |
 |---|---|
@@ -125,11 +125,13 @@ Live paths доступны projectile `periodic`/`on_spawn`, не item_body и 
 | `repeatLengthPx`, `scrollPxPerTick` | 1..512 px/repeat; −32..32 UV px/world tick |
 
 <a id="runtime"></a>
-## Нейтрали, бюджеты и transport identity
+## Потребляемые поля, бюджеты и transport identity
 
-Непотребляемые common поля для обоих material renderers **обязаны** быть нейтральными: `scale=1`, `density=spread=jitter=fadeIn=fadeOut=signatureWeight=visualCost=0`, `budgetWeight=1`, `emissionMode=particleRole=particleSystemId=textureRole=none`. `spriteElement.backend=Sprite`; `texturedPath.backend=Primitive`, `repeatEvery=0`, `duration=3`. Это не автоматически достроенные defaults и не вторые владельцы поведения. `alpha` применяется с opacityProfile один раз; звук/свет/Dust — отдельные возможности, не незапрошенные слои.
+Каждая renderer branch содержит только потребляемые поля. У `spriteElement`, `texturedPath`, `libraryParticle`, `screenShakeCue` отсутствуют `scale`, `density`, `spread`, `particleSystemId`, `textureRole`. У path также отсутствуют `duration`/`repeatEvery`; у camera cue — `duration`/`repeatEvery`/`alpha`/`blend`/`layer`. Schema не требует inert нули или placeholder нейтрали и отвергает эти foreign fields. `alpha` применяется с opacityProfile один раз; звук/свет/Dust — отдельные возможности, не незапрошенные слои.
 
-Сохраняются event/entity producer validation, frozen-first Repair, лимиты source/tick/draw, работа после source retirement для world effects, finite checks и controlled Begin/End. Симуляция не живёт в Draw. Dedicated server не исполняет presentation. Networking использует проверенную definition/asset identity, не пересылает произвольные image paths/bytes в VFX-event packet.
+Сохраняются event/entity producer validation, frozen-first Repair, лимиты source/tick/draw, работа после source retirement для world effects, finite checks и controlled Begin/End. Симуляция не живёт в Draw. Dedicated server не исполняет presentation. Networking использует проверенную definition/asset identity, не пересылает произвольные image paths/bytes в VFX-event packet. Persisted `recipeId` участвует в content-addressed PNG identity, `slotSeed` — deterministic random/phase, optional `phaseOffset` — процедурная фаза, не sound pitch. Это реальные technical consumers, не biography/debug metadata.
+
+В `budget` остаются ровно `maxParticlesPerTick`, `maxParticlesTotal`, `maxDrawCalls`: source/world-tick, lifetime/event и draw allowance соответственно. Wire safety ceilings — 256/12000/512; current application emergency ceilings (`vfx_manifest_config.py`) по умолчанию 240/9000/420 и client quality могут дополнительно ограничить исполнение. Explicit zero — запрет. Caps/seeds/identity не являются вопросами Director и не подменяют authored дизайн.
 
 Незапрошенный/отсутствующий PNG не заменяется stock маской, белым quad или Dust. Требуемый PNG блокирует delivery при ошибке; ещё не загруженная клиентом текстура временно не рисуется. Старые слоты без новых fields не получают новые значения автоматически.
 

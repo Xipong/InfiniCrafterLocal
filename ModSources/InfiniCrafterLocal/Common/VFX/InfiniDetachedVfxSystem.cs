@@ -78,7 +78,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     public override void OnWorldUnload() => Clear();
 
     // Unlike PostUpdateWorld, this hook also runs on multiplayer clients.
-    // Retire legacy snapshots and source budgets even when no Draw follows.
+    // Retire simple-renderer snapshots and source budgets even when no Draw follows.
     public override void PostUpdateEverything()
     {
         if (!Main.dedServ) {
@@ -105,7 +105,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         if (Main.dedServ || string.IsNullOrWhiteSpace(sourceKey) || string.IsNullOrWhiteSpace(texturePath))
             return;
         PruneExpired();
-        MakeRoomForLegacyEmission();
+        MakeRoomForSimpleEmission();
         Emissions.Add(new DetachedEmission
         {
             SourceKey = sourceKey,
@@ -133,7 +133,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     {
         if (Main.dedServ || string.IsNullOrWhiteSpace(sourceKey)) return;
         PruneExpired();
-        MakeRoomForLegacyEmission();
+        MakeRoomForSimpleEmission();
         Emissions.Add(new DetachedEmission {
             SourceKey = sourceKey, PrimitiveKind = kind, Layer = layer, Center = center, Forward = forward,
             Scale = scale, Density = density, PhaseOffset = phaseOffset, RepeatEvery = repeatEvery,
@@ -195,7 +195,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
             DrawLibraryParticles(layer,batch.GraphicsDevice);
             if(MaterialPaths.Any(p=>p.Design.Layer==layer))DrawMaterialPaths(layer,batch.GraphicsDevice);
             // Authored PNG elements preserve texels, independent of vanilla's
-            // configurable sampler. This batch is owned and ends before legacy.
+            // configurable sampler. This batch is owned and ends before simple-renderer draws.
             DrawMaterialSprites(layer,batch,()=>{
                 if(began)return;
                 batch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
@@ -228,6 +228,9 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
                     (Main.GameUpdateCount - emission.StartUpdate) / (float)Math.Max(1, emission.Duration),
                     0f,
                     1f);
+                // Impact PNGs use their authored effect scale directly; only main-body
+                // copies carry RenderSizePx. Main-body admission never omits it.
+                float frameScale = emission.RenderSizePx is { } size ? SpritePresentation.FrameScale(size, texture.Width, texture.Height) : 1f;
                 batch.Draw(
                     texture,
                     emission.Center - Main.screenPosition,
@@ -235,9 +238,9 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
                     emission.Color * (emission.Alpha * (1f - progress)),
                     emission.Rotation - (emission.HasCapturedPose ? 0f : localForwardRadians),
                     emission.HandAnchor?.Origin(texture.Width, texture.Height,
-                        emission.Scale * SpritePresentation.FrameScale(emission.RenderSizePx, texture.Width, texture.Height), emission.Effects)
+                        emission.Scale * frameScale, emission.Effects)
                         ?? new Vector2(texture.Width * 0.5f, texture.Height * 0.5f),
-                    emission.Scale * SpritePresentation.FrameScale(emission.RenderSizePx, texture.Width, texture.Height),
+                    emission.Scale * frameScale,
                     emission.Effects,
                     0f);
             }

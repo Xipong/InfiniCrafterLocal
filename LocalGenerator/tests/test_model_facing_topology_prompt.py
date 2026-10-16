@@ -2,7 +2,7 @@
 from __future__ import annotations
 from prompt_packet_helpers import request_dossier, dossier_text
 
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 import json
 
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, compact_capability_catalog
@@ -15,7 +15,7 @@ def _request(monkeypatch):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
     blade = {"id": "blade", "name": "Blade", "damage": 7, "useTime": 20}
     bench = {"id": "bench", "name": "Workbench", "createTile": 18, "useTime": 15}
-    request, user, _ = build_initial_author_request(blade, bench, blade, bench, "blade+bench", model_name="gemini-2.5-flash")
+    request, user, _ = build_initial_author_request(blade, bench, "blade+bench", model_name="gemini-2.5-flash")
     assert request["response_format"] == {"type": "json_object"}
     assert dossier_text(request) == user
     assert len(user) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
@@ -53,7 +53,7 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     cards = {card["fn"]: card for card in catalog["capabilities"]}
     canonical = {card["fn"]: card for card in compact_capability_catalog()}
-    assert set(cards) == {cap.name for cap in visible_capabilities()}
+    assert set(cards) == {cap.name for cap in CAPABILITY_REGISTRY.values()}
     assert _expand_constraint_references(
         {fn: {key: value for key, value in card.items() if key != "constructionMeaning"}
          for fn, card in cards.items()}, catalog["fieldGuide"]["consumerConstraints"]) == canonical

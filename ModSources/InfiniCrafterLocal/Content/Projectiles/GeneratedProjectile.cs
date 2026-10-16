@@ -194,10 +194,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
             _vfxSourceToken=0;
             _presentationGeneration=new object();
             _presentationRetired=false;
-            _vfxState = new InfiniVfxState { LocalSeed = data.VfxManifest.Seed,SourceKey=$"net:{Projectile.owner}:{VfxSourceToken()}:{data.Id}:{entity.Id}" };
+            _vfxState = new InfiniVfxState { SourceKey=$"net:{Projectile.owner}:{VfxSourceToken()}:{data.Id}:{entity.Id}" };
         }
         else {
-            if(_vfxState.LocalSeed==0)_vfxState.LocalSeed=data.VfxManifest.Seed;
             _vfxState.Tick=Math.Max(_vfxState.Tick,_age/Math.Max(1,Projectile.extraUpdates+1));
             if(_vfxState.SourceKey.Length==0)_vfxState.SourceKey=$"net:{Projectile.owner}:{VfxSourceToken()}:{data.Id}:{entity.Id}";
         }

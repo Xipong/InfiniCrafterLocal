@@ -89,14 +89,13 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
         assert len(str(fixture.resolve())) > 139
 
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
-    data.update(id="qa-serving-root-control", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION)
-    data["vfxManifest"] = _compile_manifest(data, {
-        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
-        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
-                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0}, "slots": [],
-    }, "no-image-serving-root")
+    data.update(id="qa-serving-root-control", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
+                visual={"preferredCanvasSize": 32})
+    data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "no-image-serving-root")
     for entity in data["runtimeProgram"]["entities"]:
         entity.setdefault("visual", {})["assetMode"] = "baked_sprite"
+        if entity["kind"] != "item_body":
+            entity["visual"]["preferredCanvasSize"] = 32
     # Selected baked history consumes real PNG execution metadata, not just a
     # hydrated filename. Exercise the actual harness-installed final observer.
     authored = _vfx_output(data)
@@ -157,7 +156,7 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
     }
 
 
-@pytest.mark.parametrize("selection", ["baked_history", "projectile_alias", "reuse_item_icon", "item_body"])
+@pytest.mark.parametrize("selection", ["baked_history", "projectile_body", "reuse_item_icon", "item_body"])
 def test_campaign_execution_control_preserves_selected_owner_and_qa_evidence(campaign_case, tmp_path, monkeypatch, selection):
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
     from infini_local.core.vfx_manifest import vfx_png_dependencies
@@ -258,14 +257,19 @@ def campaign_case(tmp_path):
             data = _data([ingredient])
             entity = None
         else:
-            data = compile_runtime_program(build_runtime_fixture("returning_potion" if selection == "projectile_alias" else "workbench_blade"))
-            data.update(id=identity, schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION)
+            data = compile_runtime_program(build_runtime_fixture("returning_potion" if selection == "projectile_body" else "workbench_blade"))
+            data.update(id=identity, schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
+                        visual={"preferredCanvasSize": 32})
             entity = next(row for row in data["runtimeProgram"]["entities"] if (row["kind"] == "item_body") == (selection == "item_body"))
             for row in data["runtimeProgram"]["entities"]:
                 row.setdefault("visual", {})["assetMode"] = "baked_sprite"
+                if row["kind"] != "item_body":
+                    row["visual"]["preferredCanvasSize"] = 32
             entity["visual"]["assetMode"] = "reuse_item_icon" if selection == "reuse_item_icon" else "baked_sprite"
+            if selection == "reuse_item_icon":
+                entity["visual"].pop("preferredCanvasSize")
             authored = _vfx_output(data)
-            authored["slots"][0].update(entityId=entity["id"], event="periodic", textureRole="projectile" if selection == "projectile_alias" else "entity")
+            authored["slots"][0].update(entityId=entity["id"], event="periodic", textureRole="entity")
             admitted = validate_vfx_director_output(authored, data)
             assert admitted["ok"], admitted["errors"]
             data["vfxManifest"] = _compile_manifest(data, admitted["normalized"], identity)
@@ -460,14 +464,14 @@ def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path:
         Image.open(BytesIO(damaged)).load()
 
     data = build_runtime_fixture("workbench_blade")
-    data["visual"] = {}
+    data["visual"] = {"preferredCanvasSize": 32}
     non_item = [
         entity
         for entity in data["runtimeProgram"]["entities"]
         if entity["kind"] != "item_body"
     ]
     non_item[0]["visualRole"] = "projectile"
-    non_item[0]["visual"] = {"assetMode": "baked_sprite"}
+    non_item[0]["visual"] = {"assetMode": "baked_sprite", "preferredCanvasSize": 32}
     non_item[1]["visualRole"] = "child"
     non_item[1]["visual"] = {"assetMode": "reuse_item_icon"}
 
@@ -492,7 +496,7 @@ def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path:
     entities = data["runtimeProgram"]["entities"]
     required = entities[1]
     unrelated = entities[2]
-    required.setdefault("visual", {})["impactSpriteStatus"] = "pending"
+    required.setdefault("visual", {}).update(impactSpriteStatus="pending", impactCanvasSize=32)
     unrelated.setdefault("visual", {})["impactSpriteStatus"] = "pending"
     data["vfxManifest"] = {
         "slots": [{
@@ -527,13 +531,15 @@ def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path:
 def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does(tmp_path: Path) -> None:
     fixture = write_no_image_fixture_png(tmp_path / "no-image.png")
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data["visual"] = {"preferredCanvasSize": 32}
     entity = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
     for row in data["runtimeProgram"]["entities"]:
         if row["kind"] != "item_body":
-            row.setdefault("visual", {})["assetMode"] = "baked_sprite"
+            row.setdefault("visual", {}).update(assetMode="baked_sprite", preferredCanvasSize=32)
     authored = _vfx_output(data)
     authored["slots"][0].update(entityId=entity["id"], event="periodic",
-                                rendererKind="impactRing", textureRole="impact")
+                                rendererKind="impactRing")
+    authored["slots"][0].pop("textureRole")
     report = validate_vfx_director_output(authored, data)
     assert report["ok"], report["errors"]
     data["vfxManifest"] = _compile_manifest(data, report["normalized"], "no_image_impact_probe")
@@ -544,7 +550,11 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
     assert ring_report["ok"], ring_report["problems"]
     assert not any(slot["role"] == "impact:" + entity["id"] for slot in ring_report["slots"])
 
-    data["vfxManifest"]["slots"][0]["rendererKind"] = "impactSprite"
+    slot = data["vfxManifest"]["slots"][0]
+    slot.update(rendererKind="impactSprite", textureRole="impact")
+    for field in ("spread", "particleSystemId"):
+        slot.pop(field)  # no Dust accompaniment; repeatEvery=0 still consumes density
+    entity["visual"]["impactCanvasSize"] = 32
     sprite_report = visual_delivery_report(data, check_backend_config=False)
     assert "required_impact_sprite_missing" in {problem["code"] for problem in sprite_report["problems"]}
     hydrate_no_image_fixture_assets(data, fixture)

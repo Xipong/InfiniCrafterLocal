@@ -98,7 +98,6 @@ public partial class GeneratedItem
     private void LoadNativePrefixLifecycle(TagCompound tag)
     {
         _pendingNativePrefix = null;
-        if (!tag.ContainsKey(NativePrefixSaveKey)) return; // legacy native Item.prefix still works
         RetainNativePrefixForHydration(ResolveNativePrefixIdentity(tag));
     }
 

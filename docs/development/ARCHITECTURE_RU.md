@@ -45,18 +45,32 @@ Registry объявляет runtime `infini.runtime-program.v5`, fresh Author `i
 
 Whole-weapon macros, semantic family/profile routers, legacy weapon IR и migration/cache importer запрещены. Name/category/tags/prose не выбирают механику. Четыре класса преобразований — [Fallback / Fix / declared Normalization / lossless Alias](TECHNICAL_LOWERING_POLICY_RU.md#transformations); generated [boundary](../reference/generated/LOWERY_RU.md) и receipts не являются вторым registry. Новая capability завершается только [полным vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md).
 
+<a id="consumer-first"></a>
+## Consumer-first контракт
+
+Каждое поле должно иметь конкретный consumer: **исполнение**, **генерация** (включая запрос PNG), **advisory context** или **диагностика**. Одной сериализации, упоминания в prompt или сохранения в DTO недостаточно. Если полезного reader нет, поле не входит в текущий контракт; не сохраняй его как обязательную нейтраль или compatibility-слой.
+
+- Сначала найди конечного владельца и наблюдаемый эффект поля; затем меняй canonical schema/registry и весь [vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md#vertical-slice). Derived schema, prompt, compiler и DTO не становятся вторыми owners.
+- Модель явно выбирает механику, renderer, image dependency и локальный цвет. Name/category/prose/palette не маршрутизируют поведение; старую grammar не восстанавливают importer, aliases или guessed defaults.
+- Проверяй **реальный исходящий packet** каждого затронутого stage/transport: roles, schema, leaf values, read-only context и разрешения Repair. Helper snapshot без actual sender boundary недостаточен; offline capture останавливается до auth/network.
+- Missing/invalid executable или required generation choice — точный технический отказ, conditional scoped Repair либо RED, не скрытая подстановка. Объявленные engine caps, clocks, seeds и точные нейтрали остаются у технических owners.
+- Корневой item envelope закрыт: Author проверяет неизвестные поля, а не скрывает их metadata-проекцией; compiled wire/cache отказывают тем же неизвестным полям до GREEN. Только объявленные `runtimeContract`/`visualKit` являются stage-only artifacts и удаляются delivery projection. Текущие advisory/diagnostic sidecars перечислены явно; arbitrary extension warehouse отсутствует.
+- `concept`, `realization`/текстовый `selfEvaluation` и Visual `animationPlan` — optional advisory. Они помогают следующей модели/читателю, но не выбирают gameplay и не вызывают report-only Repair; malformed advisory не превращается в исполняемую ошибку. Обязательные art prompts/size/axis и runtime refs/bounds остаются строгими.
+
+Для VFX текущий wire — `infini.vfx.runtime-events.v16`, Director — `infini.vfx-director.runtime-events.v3`, Repair — `infini.vfx-repair-patch.runtime-events.v2`. Простые visible slots имеют local RGB `color={r,g,b}`, material profiles и library endpoints — свои RGB; global color или semantic color routing отсутствуют. [VFX consumer contracts](../reference/PRESENTATION_CONSISTENCY_RU.md#color-budget).
+
 <a id="primary"></a>
 ## Primary и identity
 
 [Primary/use contract](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#primary-use) задаёт explicit primary, независимые contact/action lanes и placement cost. Wire primaryOwner реально управляет noMelee/contact/heldProj/animation, не только telemetry; secondary spawn/урон не передают ownership. Shared proxies исполняют per-instance definition, не type-wide weapon flags.
 
-Имя и категория authored. `bad_result_name` в `pipelines/final_normalize.py` отказывает craft с refund, не генерирует замену. `result_identity_policy.normalize_category` сохраняет legacy metadata normalization (в том числе `generic` для неизвестного значения); это не обход strict Author enum и не gameplay routing. Parent hints/debug не дописываются в tags, category sampling/name generator не восстанавливаются. Finite localized feedback из typed executable facts разрешён; authored tooltip prose — нет.
+Имя и категория принадлежат Author и проходят strict acceptance без category normalization или generic fallback. `bad_result_name` в `pipelines/final_normalize.py` отказывает craft с refund, не генерирует замену. Parent hints/debug не дописываются в tags. Finite localized feedback из typed executable facts разрешён; authored tooltip prose не становится исполнением.
 
 Fresh Author shape и persisted wire/recipes имеют разные readers/provenance: retirement grammar не удаляет принятую вещь. Units/neutral/zero/absence и original numeric admission — [MODEL_FACING_UNITS](../reference/MODEL_FACING_UNITS_RU.md), [DTO boundary](MODULES_RU.md#contracts), не эвристика по DamageClass/категории.
 
 ## Transport не выбирает gameplay
 
-Cache-marked stage packets самодостаточны и не используют Responses history. Это **не** глобальный запрет continuation: unmarked запросы из двух system/user messages могут продолжать `previous_response_id` внутри той же item lease. Cache marker исключает continuation/очищает chain; failover её сбрасывает. Owners — stage request builders и `pipelines/llm_transport.py`; [cache/latency](LLM_PROMPT_CACHE_AND_LATENCY_RU.md), [request shape](LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [provider admission](LLM_PROVIDER_ADMISSION_RU.md).
+Cache-marked stage packets самодостаточны и не используют Responses history: каждый запрос несёт текущие instructions и read-only context. У unmarked двухсообщенческих system/user запросов Responses continuation остаётся внутри текущей item lease; cache marker исключает continuation и очищает chain, failover её сбрасывает. Prompt-cache identity не является conversation state и не дополняет отсутствующие факты. Owners — stage request builders и `pipelines/llm_transport.py`; [cache/latency](LLM_PROMPT_CACHE_AND_LATENCY_RU.md), [request shape](LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [provider admission](LLM_PROVIDER_ADMISSION_RU.md).
 
 Multi-dev lanes — операционная изоляция, не Author capability. `/multidevcraft 2|3` даёт отдельные A/B escrow/request/task/progress/refund и pin к `llm_1/2/3` без profile/model hopping. Обычный single-lane сохраняет transport round-robin/failover. Profile добавляется только в multi-dev world recipe cache identity, не wire/schema; upstream provider pin — отдельная настройка.
 

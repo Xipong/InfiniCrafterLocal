@@ -283,6 +283,10 @@ public sealed class RuntimeProgramSpec
                 throw new InvalidDataException($"entity '{entity.Id}' target_and_fire has no explicit shotEntityId");
             if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire && entity.Targeting.IntervalTicks <= 0)
                 throw new InvalidDataException($"entity '{entity.Id}' target_and_fire requires positive typed intervalTicks");
+            if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire
+                && (entity.Targeting.DamageBasis is null || entity.Targeting.KnockbackBasis is null
+                    || entity.Targeting.DamageMultiplier is null))
+                throw new InvalidDataException($"entity '{entity.Id}' target_and_fire requires explicit damageBasis, knockbackBasis and damageMultiplier");
             if (entity.Controller.Code != RuntimeControllerCode.TargetAndFire
                 && (entity.Targeting.DamageBasis is not null || entity.Targeting.KnockbackBasis is not null
                     || entity.Targeting.DamageMultiplier is not null))
@@ -858,6 +862,14 @@ public sealed class RuntimeEntityVisualSpec
     public string Prompt { get; set; } = "";
     public string Silhouette { get; set; } = "";
     public string VisualIdentity { get; set; } = "";
+    private int? impactCanvasSize;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ImpactCanvasSize
+    {
+        get => impactCanvasSize;
+        set => impactCanvasSize = value is 24 or 32 or 48 or 64 or 96 or 128
+            ? value : throw new InvalidDataException("entity.visual.impactCanvasSize must be 24/32/48/64/96/128 when present");
+    }
     public string ImpactPrompt { get; set; } = "";
     public string ImpactNegativePrompt { get; set; } = "";
     public float Scale { get; set; } = 1f;
@@ -1538,8 +1550,8 @@ public sealed class RuntimeTargetingSpec
     public int IntervalTicks { get; set; }
     public float RangeTiles { get; set; }
     public float SameTargetBias { get; set; }
-    // Missing fields in saved wire keep the historical authored-child lane.
-    // Present null/unknown values are invalid; fresh Author requires every choice.
+    // Nullable storage also serves inactive targeting placeholders. An active
+    // target_and_fire requires all three explicit combat choices at admission.
     private string? _damageBasis;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? DamageBasis { get => _damageBasis; set => _damageBasis = RuntimeChildCombatBasis.Require(value); }
@@ -1563,9 +1575,9 @@ public sealed class RuntimeTargetingSpec
             _damageMultiplier = multiplier;
         }
     }
-    // Missing retained-v5 leaves remain absent from the serialized definition.
-    // Effective legacy behavior is selected only by the native consumer, not
-    // materialized into the persisted identity. Explicit null is never omission.
+    // Declared optional targeting neutrals remain absent from persisted identity:
+    // count=1, spread=0, distance_score, LOS=false and hardRange=false.
+    // Explicit null is never omission.
     private int? _count;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Count {
@@ -1908,6 +1920,9 @@ public sealed class RuntimeEventActionSpec
         else if (StepCount is not null || StepRangeTiles is not null || SelectionAnchor is not null || RepeatPolicy is not null
             || RequireLineOfSight is not null || InitialIgnoreCountdownUpdates is not null)
             throw new InvalidDataException("target selection/emission params require the exact SelectTargetsAndEmit opcode");
+        if (ActionCode == RuntimeEventActionCode.SpawnEntity
+            && (DamageBasis is null || KnockbackBasis is null))
+            throw new InvalidDataException($"event '{Id}' spawn_entity_on_event requires explicit damageBasis and knockbackBasis");
         if (ActionCode != RuntimeEventActionCode.SpawnEntity
             && (DamageBasis is not null || KnockbackBasis is not null))
             throw new InvalidDataException($"event '{Id}' child combat fields require spawn_entity_on_event");

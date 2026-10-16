@@ -50,10 +50,10 @@ def test_standard_schema_and_local_gate_agree_on_exact_asset_ids(repair: bool, a
 def _screen_shake(data: dict[str, Any]) -> dict[str, Any]:
     raw = _legacy(data)
     slot = raw["slots"][0]
-    from infini_local.core.vfx_material_contract import NEUTRAL_FIELDS
-    slot.update(NEUTRAL_FIELDS)
-    slot.update(id="local_camera_cue", rendererKind="screenShakeCue", backend="Realtime",
-                channel="screenShake", lane="cue", duration=3, alpha=1, startTick=0, repeatEvery=0)
+    for field in ("color", "scale", "density", "spread", "particleSystemId", "textureRole",
+                  "duration", "repeatEvery", "alpha", "blend", "layer"):
+        slot.pop(field, None)
+    slot.update(id="local_camera_cue", rendererKind="screenShakeCue", startTick=0)
     slot["screenShake"] = {
         "strengthPx": 3.0, "angularVarianceRadians": 1.0, "directionRadians": 0.5,
         "dissipationPxPerFrame": 0.25, "taperStartDistancePx": 400.0, "taperEndDistancePx": 1200.0,
@@ -65,14 +65,14 @@ def _library_particle(data: dict[str, Any]) -> dict[str, Any]:
     raw = _screen_shake(data)
     slot = raw["slots"][0]
     slot.pop("screenShake")
-    slot.update(id="library_star", rendererKind="libraryParticle", backend="Particle",
-                channel="impactParticles", lane="accent", duration=20, alpha=0.8, blend="additive")
+    slot.update(id="library_star", rendererKind="libraryParticle",
+                duration=20, repeatEvery=0, alpha=0.8, blend="additive", layer="BeforeProjectiles")
     slot["particle"] = {
         "textureId": "star", "count": 3, "speedMinPxPerTick": 1.0, "speedMaxPxPerTick": 3.0,
         "spreadRadians": 0.5, "inheritVelocity": 0.25, "drag": 0.9,
         "accelerationXPxPerTickSquared": 0.0, "accelerationYPxPerTickSquared": 0.05,
         "widthPx": 8.0, "heightPx": 2.0, "rotationRadians": 0.0,
-        "rotationSpeedRadiansPerTick": 0.1, "colorStart": "effect", "colorEnd": "gold",
+        "rotationSpeedRadiansPerTick": 0.1, "colorStart": {"r": 17, "g": 93, "b": 241}, "colorEnd": {"r": 255, "g": 215, "b": 0},
         "endScaleMultiplier": 0.0, "endOpacity": 0.0,
     }
     return raw
@@ -90,7 +90,7 @@ def _library_particle(data: dict[str, Any]) -> dict[str, Any]:
     pytest.param("screenShakeCue", {"screenShake.strengthPx": None}, False, id="camera-null-control"),
     pytest.param("screenShakeCue", {"event": "periodic"}, False, id="camera-periodic-forbidden"),
     pytest.param("screenShakeCue", {"element": {}}, False, id="camera-foreign-payload"),
-    pytest.param("screenShakeCue", {"rendererKind": "soundCue", "channel": "sound"}, False, id="camera-payload-on-native-sound"),
+    pytest.param("screenShakeCue", {"rendererKind": "soundCue"}, False, id="camera-payload-on-native-sound"),
 ] + [
     pytest.param("libraryParticle", {"particle.speedMaxPxPerTick": 0}, False, id="particle-inverted-speed"),
     pytest.param("libraryParticle", {"particle.textureId": "smoke"}, False, id="particle-unknown-texture"),
@@ -119,7 +119,7 @@ def test_library_payload_typed_admission(renderer, edits, valid):
     pytest.param("screenShakeCue", "screenShake", "taperEndDistancePx", 300, 1200,
                  {"strengthPx": 12}, id="camera-taper"),
     pytest.param("libraryParticle", "particle", "speedMaxPxPerTick", 0, 3,
-                 {"drag": 0.1, "colorStart": "black"}, id="particle-speed"),
+                 {"drag": 0.1, "colorStart": {"r": 0, "g": 0, "b": 0}}, id="particle-speed"),
 ])
 def test_library_relation_repair_changes_only_diagnosed_endpoint(renderer, payload, leaf, bad, replacement, hostile):
     data = _data()
@@ -142,7 +142,7 @@ def _compiled() -> dict[str, Any]:
     data = _data()
     raw = _with_asset(data)
     raw["slots"].append(_path(data)["slots"][0])
-    return vfx.attach_hybrid_vfx_manifest(data, "wire_material", llm_director=lambda *_a, **_kw: raw)
+    return vfx.attach_vfx_manifest(data, "wire_material", llm_director=lambda *_a, **_kw: raw)
 
 
 def test_pending_compiled_and_stripped_ready_runtime_wire_have_distinct_caption_domains() -> None:
@@ -175,7 +175,7 @@ def test_shared_schema_mutation_reaches_wire_consumer_not_a_duplicate_definition
 def test_wire_slot_ceiling_is_not_bypassed_by_canonical_shape_gate() -> None:
     data = _data()
     raw = _sprite(data)
-    vfx.attach_hybrid_vfx_manifest(data, "bounded_wire", llm_director=lambda *_a, **_kw: raw)
+    vfx.attach_vfx_manifest(data, "bounded_wire", llm_director=lambda *_a, **_kw: raw)
     slot = data["vfxManifest"]["slots"][0]
     data["vfxManifest"]["slots"] = [{**copy.deepcopy(slot), "id": f"row_{index}"} for index in range(13)]
     report = vfx.validate_vfx_manifest_wire(data)
@@ -220,10 +220,14 @@ def test_nested_impact_requires_same_entity_existing_image_producer(renderer: st
     assert not unpaired["ok"]
     assert {r["path"] for r in unpaired["errors"]} == {f"$.slots[0].{name}.texture.source"}
     producer = _legacy(data)["slots"][0]
-    producer.update(id="exact_impact", entityId=raw["slots"][0]["entityId"], event=raw["slots"][0]["event"], rendererKind="impactSprite", backend="Sprite", textureRole="impact", spritePrompt="one impact ingredient")
+    producer.update(id="exact_impact", entityId=raw["slots"][0]["entityId"], event=raw["slots"][0]["event"], rendererKind="impactSprite", textureRole="impact", spriteCanvasSize=32, spritePrompt="one impact ingredient", spriteNegativePrompt="")
+    producer.pop("spread"); producer.pop("particleSystemId")
+    if producer["event"] != "periodic":
+        for field in ("startTick", "repeatEvery", "density"):
+            producer.pop(field)
     raw["slots"].append(producer)
     assert vfx.validate_vfx_director_output(raw, data)["ok"]
-    final = vfx.attach_hybrid_vfx_manifest(data, "nested_impact", llm_director=lambda *_a, **_kw: raw)
+    final = vfx.attach_vfx_manifest(data, "nested_impact", llm_director=lambda *_a, **_kw: raw)
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
     final["vfxManifest"]["slots"].pop()
     report = vfx.validate_vfx_manifest_wire(final)
@@ -253,7 +257,7 @@ def test_material_boundary_rejection(case):
     elif kind == "later":
         authored = _with_asset(data)
         authored["slots"].append({**copy.deepcopy(authored["slots"][0]), "id": "later_material"})
-        target = vfx.attach_hybrid_vfx_manifest(data, "large_integer_wire", llm_director=lambda *_a, **_kw: authored)
+        target = vfx.attach_vfx_manifest(data, "large_integer_wire", llm_director=lambda *_a, **_kw: authored)
     else:
         target = _with_asset(data) if kind == "asset" else _path(data, case["source"]) if kind in {"path", "anchor"} else _sprite(data)
     apply_edits(target, case["edits"])
@@ -312,12 +316,14 @@ def test_material_payload_roundtrip(kind, source, capability):
     report = vfx.validate_vfx_director_output(raw, data)
     assert report["ok"], report["errors"]
     assert report["normalized"] == before
-    final = vfx.attach_hybrid_vfx_manifest(data, "legacy_material_abi" if kind == "legacy" else "material_roundtrip", llm_director=lambda *_a, **_kw: raw)
+    final = vfx.attach_vfx_manifest(data, "legacy_material_abi" if kind == "legacy" else "material_roundtrip", llm_director=lambda *_a, **_kw: raw)
     compiled = final["vfxManifest"]["slots"]
     assert compiled[0]["rendererKind"] == slot["rendererKind"]
     if kind == "legacy":
         expected = (Path(__file__).parent / "fixtures/vfx_material_legacy_manifest.json").read_text(encoding="utf-8")
-        assert json.dumps(final["vfxManifest"], ensure_ascii=False, separators=(",", ":")) == expected
+        stale = {**copy.deepcopy(final), "vfxManifest": json.loads(expected)}
+        assert not vfx.validate_vfx_manifest_wire(stale)["ok"]
+        assert final["vfxManifest"]["slots"][0]["color"] == slot["color"]
         assert "assets" not in final["vfxManifest"]
     else:
         payload = "screenShake" if kind == "screenShakeCue" else "particle" if library else "path" if source else "element"
@@ -352,57 +358,6 @@ def test_material_payload_roundtrip(kind, source, capability):
     assert data["runtimeProgram"] == gameplay and raw == before
 
 ROUTE_SURFACE = vfx.vfx_director_surface(_accepted_visual_data("workbench_blade"))
-# Admission constrains channel and lane independently for each renderer.
-# Cover every renderer/channel and renderer/lane pair, rotating the lanes across
-# renderers to cover all admitted channel/lane pairs too. The old full triple
-# product repeated the same membership checks; these are real standalone cases,
-# not a product hidden inside a test. See docs/TEST_CONTRACT_OWNERS_RU.md.
-ROUTE_DOMAINS = {
-    renderer: (
-        ("screenShake",) if renderer == "screenShakeCue" else
-        ("light",) if renderer == "lightCue" else
-        ("sound",) if renderer == "soundCue" else
-        ("ambientParticles", "impactParticles", "decaySmoke") if renderer == "libraryParticle" else
-        tuple(channel for channel in ROUTE_SURFACE["channel"]
-              if channel not in ({"screenShake", "light", "sound"} if renderer in {"spriteElement", "texturedPath"} else {"screenShake"})),
-        ("cue",) if renderer in {"lightCue", "soundCue", "screenShakeCue"} else
-        ("primary", "support", "accent", "ornament") if renderer == "libraryParticle" else tuple(ROUTE_SURFACE["lane"]),
-    ) for renderer in ROUTE_SURFACE["rendererKind"]
-}
-def _admitted_route_witnesses():
-    # Start with all renderer/channel and renderer/lane pairs. Domain families
-    # share the same channel/lane clauses; the second pass fills their missing
-    # channel/lane pairs without repeating every three-way combination.
-    routes = []
-    covered = set()
-    for offset, (renderer, (channels, lanes)) in enumerate(ROUTE_DOMAINS.items()):
-        for index in range(max(len(channels), len(lanes))):
-            channel, lane = channels[index % len(channels)], lanes[(index + offset) % len(lanes)]
-            routes.append((renderer, channel, lane))
-            covered.add((channels, lanes, channel, lane))
-    for renderer, (channels, lanes) in ROUTE_DOMAINS.items():
-        for channel in channels:
-            for lane in lanes:
-                key = (channels, lanes, channel, lane)
-                if key not in covered:
-                    routes.append((renderer, channel, lane))
-                    covered.add(key)
-    return routes
-
-
-RENDERER_ROUTES = [
-    pytest.param(renderer, channel, lane, "", id=renderer + "-" + channel + "-" + lane)
-    for renderer, channel, lane in _admitted_route_witnesses()
-] + [
-    pytest.param(renderer, channel, lanes[0], "channel", id=renderer + "-forbidden-" + channel)
-    for renderer, (channels, lanes) in ROUTE_DOMAINS.items()
-    for channel in (("light", "sound", "screenShake") if renderer in {"spriteElement", "texturedPath"} else
-                    ("motionTrail",) if renderer in {"lightCue", "soundCue", "screenShakeCue", "libraryParticle"} else ("screenShake",))
-] + [
-    pytest.param(renderer, channels[0], "primary" if lanes == ("cue",) else "cue", "lane",
-                 id=renderer + "-forbidden-lane")
-    for renderer, (channels, lanes) in ROUTE_DOMAINS.items() if len(lanes) < len(ROUTE_SURFACE["lane"])
-]
 COMPANION_FIELDS = [pytest.param(renderer, field, neutral, id=renderer + "-" + field)
                     for renderer, requirements in ROUTE_SURFACE["rendererRequirements"].items() for field, neutral in requirements.items()]
 
@@ -414,45 +369,29 @@ def _renderer_material(data, renderer):
     raw = _sprite(data) if renderer == "spriteElement" else _path(data) if renderer == "texturedPath" else _vfx_output(data)
     raw["slots"][0].update(rendererKind=renderer)
     if renderer == "soundCue":
+        for field in ("color", "scale", "spread", "particleSystemId", "textureRole", "duration", "alpha", "blend", "layer", "density", "startTick", "repeatEvery"):
+            raw["slots"][0].pop(field, None)
         raw["slots"][0]["soundId"] = "Item1"
         raw["slots"][0]["sound"] = {"volume": 0.4, "pitch": 0, "pitchVariance": 0}
     if renderer == "impactSprite":
-        raw["slots"][0].update(textureRole="impact", spritePrompt="one transparent impact sprite")
-    return raw
-
-@pytest.fixture(scope="module")
-def renderer_route_inputs():
-    # Route cases only vary the authored slot below. Build the identical accepted
-    # gameplay/Visual context and capture its serialized Director schema once;
-    # each case receives detached copies, and still checks both real validators.
-    data = _accepted_visual_data("workbench_blade")
-    schema = _sent(data, False)["outputSchema"]["properties"]["slots"]["items"]
-    return data, schema
-
-
-@pytest.mark.parametrize("renderer,channel,lane,invalid_field", RENDERER_ROUTES)
-def test_renderer_route_admission(renderer_route_inputs, renderer, channel, lane, invalid_field):
-    data, schema = copy.deepcopy(renderer_route_inputs)
-    raw = _renderer_material(data, renderer)
+        raw["slots"][0].update(textureRole="impact", spriteCanvasSize=32, spritePrompt="one transparent impact sprite", spriteNegativePrompt="")
+    for field in (("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole") if renderer == "lightCue"
+                  else ("spread", "particleSystemId") if renderer == "impactSprite"
+                  else ("alpha", "blend", "layer", "duration") if renderer == "childMotes" else ()):
+        raw["slots"][0].pop(field, None)
     slot = raw["slots"][0]
-    slot.update(channel=channel, lane=lane)
-    if renderer == "screenShakeCue":
-        expected = (channel, lane) == ("screenShake", "cue")
-    elif renderer == "libraryParticle":
-        expected = channel in {"ambientParticles", "impactParticles", "decaySmoke"} and lane != "cue"
-    else:
-        expected = channel != "screenShake" and (channel not in {"light", "sound"} if renderer in {"spriteElement", "texturedPath"} else renderer not in {"lightCue", "soundCue"} or (channel, lane) == ("light" if renderer == "lightCue" else "sound", "cue"))
-    before = copy.deepcopy(raw)
-    schema_errors = strict_schema_errors(slot, schema)
-    assert (not schema_errors) is expected
-    report = vfx.validate_vfx_director_output(raw, data)
-    assert report["ok"] is expected, report["errors"]
-    if invalid_field:
-        assert {row["path"] for row in schema_errors} == {"$." + invalid_field}
-        assert "$.slots[0]." + invalid_field in {row["path"] for row in report["errors"]}
-    assert raw == before
-    if expected:
-        assert report["normalized"]["slots"][0] == slot
+    if renderer not in {"spriteStampTrail", "impactSprite"}:
+        slot.pop("textureRole", None)
+    if renderer in {"lightCue", "impactSprite"}:
+        item_id = data["runtimeProgram"]["itemEntityId"]
+        if slot["event"] != "periodic":
+            for field in ("startTick", "repeatEvery", "density"):
+                slot.pop(field, None)
+        elif slot["entityId"] == item_id:
+            slot.pop("startTick", None); slot.pop("density", None)
+        elif slot["repeatEvery"] > 0:
+            slot.pop("density", None)
+    return raw
 
 @pytest.mark.parametrize("renderer,field,neutral", COMPANION_FIELDS)
 def test_renderer_companion_admission(renderer, field, neutral):

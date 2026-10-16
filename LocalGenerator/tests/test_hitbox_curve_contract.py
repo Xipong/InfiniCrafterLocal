@@ -147,7 +147,7 @@ def test_unselected_curve_does_not_appear_in_current_wire():
 
 
 def test_full_request_and_numeric_native_range_audit_cover_the_new_owner():
-    _, user, _ = build_initial_author_request({}, {}, {}, {}, "curve", model_name="test-model")
+    _, user, _ = build_initial_author_request({}, {}, "curve", model_name="test-model")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     card = next(row for row in catalog["capabilities"] if row["fn"] == FN)
     assert set(card["params"]) == set(PARAMS)

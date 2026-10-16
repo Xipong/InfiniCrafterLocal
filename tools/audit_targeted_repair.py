@@ -21,7 +21,7 @@ from infini_local.core.runtime_authoring.repair_scope import (
 )
 from infini_local.core.runtime_authoring.validator import VALIDATION_ERROR_CODES, validate_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.pipelines.llm_authoring_pipeline import (
     build_gameplay_repair_dossier,
     build_initial_author_request,
@@ -32,8 +32,6 @@ SCHEMA = "infini.targeted-repair-audit.v1"
 
 PARENT_A = {"name": "Workbench"}
 PARENT_B = {"name": "Sword"}
-CANONICAL_A = {"facts": ["literal workbench body"]}
-CANONICAL_B = {"facts": ["metal blade"]}
 
 
 def _compact_chars(value: Any) -> int:
@@ -50,8 +48,6 @@ def _case(name: str, mutate: Callable[[dict[str, Any]], None]) -> dict[str, Any]
         current,
         PARENT_A,
         PARENT_B,
-        CANONICAL_A,
-        CANONICAL_B,
         failure_report={"stage": "runtime_program_validation", "errors": validation["errors"]},
     )
     plan = dossier["repairScope"]["blockerPlan"]
@@ -195,7 +191,7 @@ def _frozen_callsite_audit() -> dict[str, Any]:
 
 def render() -> dict[str, Any]:
     _, full_author_payload, _ = build_initial_author_request(
-        PARENT_A, PARENT_B, CANONICAL_A, CANONICAL_B, "repair-audit", model_name="audit-model"
+        PARENT_A, PARENT_B, "repair-audit", model_name="audit-model"
     )
     cases = [
         _case("missing_required_parameter", _missing_use_style),
@@ -203,7 +199,7 @@ def render() -> dict[str, Any]:
         _case("missing_position_driver", _missing_movement),
         _case("existing_dependency_parameter_mismatch", _channel_dependency),
     ]
-    full_count = len(visible_capabilities())
+    full_count = len(CAPABILITY_REGISTRY)
     errors: list[str] = []
     for row in cases:
         if row["capabilitySubsetCount"] >= full_count:

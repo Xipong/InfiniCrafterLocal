@@ -118,8 +118,9 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
     private static bool ShouldDrawHeldSprite(GeneratedItemData data, Player player, HeldItemPresentationPayload? payload)
     {
         string releaseTiming = (data.RuntimeProgram?.ItemUse?.ReleaseTiming ?? "").Trim().ToLowerInvariant();
-        if (releaseTiming != "" || data.Visual?.RenderSizePx.HasValue != true)
-            return releaseTiming != "immediate";
+        if (data.Visual?.RenderSizePx.HasValue != true || !data.Visual.ForwardAngleDegrees.HasValue)
+            return false; // compact/unavailable presentation must hydrate, never select historical raw frame scale
+        if (releaseTiming != "") return releaseTiming != "immediate";
         return data.RuntimeProgram?.ItemUse?.HideUseGraphic != true;
     }
 

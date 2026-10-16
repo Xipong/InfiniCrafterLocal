@@ -30,11 +30,10 @@ internal static partial class EngineRuntimeChecks
                 {
                     var data = new GeneratedItemData();
                     data.Visual.Palette = new[] { "cyan" };
-                    data.Visual.EffectColor = "cyan";
                     var slot = new VfxSlotSpec { Id = "preview", EntityId = "probe", Event = RuntimeEventKind.Periodic,
-                        RendererKind = kind, Scale = 1f, Alpha = 0.65f, Density = 0.5f, Spread = 0.5f,
+                        RendererKind = kind, Color = Rgb(90,235,255), Scale = 1f, Alpha = 0.65f, Density = 0.5f, Spread = 0.5f,
                         Blend = blend, Layer = "BeforeProjectiles", ParticleSystemId = "none", RepeatEvery = 72, Duration = 72, SlotSeed = 17 };
-                    var manifest = new VfxManifestSpec { Seed = 17, Slots = new[] { slot } };
+                    var manifest = new VfxManifestSpec { Slots = new[] { slot } };
                     manifest.Budget.MaxDrawCalls = 32;
                     var projectile = new Projectile { width = 24, height = 12, identity = 17, scale = 1f, velocity = new Vector2(3f, 0f) };
                     var state = new InfiniVfxState();
@@ -60,7 +59,7 @@ internal static partial class EngineRuntimeChecks
                         }
                         captures.Add(new { renderer = kind, blend, tick, worldTick = Terraria.Main.GameUpdateCount,
                             stateTick = state.Tick, scale = slot.Scale, alpha = slot.Alpha, repeatEvery = slot.RepeatEvery, duration = slot.Duration,
-                            density = slot.Density, spread = slot.Spread, palette = data.Visual.Palette, effectColor = data.Visual.EffectColor,
+                            density = slot.Density, spread = slot.Spread, color = slot.Color,
                             center = new[] { projectile.Center.X, projectile.Center.Y }, screen = new[] { Terraria.Main.screenPosition.X, Terraria.Main.screenPosition.Y },
                             texture = new[] { texture.Width, texture.Height }, budget = manifest.Budget.MaxDrawCalls,
                             drawCalls = state.DrawCallsThisFrame, quads });

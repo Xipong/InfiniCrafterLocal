@@ -17,14 +17,12 @@ internal static partial class EngineRuntimeChecks
     // first positive DTO assertion is the behavioral RED, not a missing-type error.
     private static JsonObject LibrarySlotWire(bool shake = false)
     {
-        var row = JsonSerializer.SerializeToNode(new VfxSlotSpec {
+        var slot = new VfxSlotSpec {
             Id="library",EntityId="unavailable_item",Event=shake?"on_use":"periodic",
-            RendererKind=shake?"screenShakeCue":"libraryParticle",Backend=shake?"Realtime":"Particle",
-            TextureRole="none",ParticleRole="none",ParticleSystemId="none",EmissionMode="none",
-            Channel=shake?"screenShake":"ambientParticles",Lane=shake?"cue":"support",
-            Scale=1,Alpha=1,Duration=shake?3:12,RepeatEvery=shake?0:1,
-            BudgetWeight=1,Layer="BeforeProjectiles"
-        }, new JsonSerializerOptions { PropertyNamingPolicy=JsonNamingPolicy.CamelCase })!.AsObject();
+            RendererKind=shake?"screenShakeCue":"libraryParticle", StartTick=0,
+        };
+        if (!shake) { slot.Alpha=1; slot.Duration=12; slot.RepeatEvery=1; slot.Blend="alpha"; slot.Layer="BeforeProjectiles"; }
+        var row = JsonSerializer.SerializeToNode(slot, new JsonSerializerOptions { PropertyNamingPolicy=JsonNamingPolicy.CamelCase })!.AsObject();
         row[shake?"screenShake":"particle"] = shake ? new JsonObject {
             ["strengthPx"]=6,["angularVarianceRadians"]=0.25,["directionRadians"]=0,
             ["dissipationPxPerFrame"]=0.5,["taperStartDistancePx"]=100,["taperEndDistancePx"]=200
@@ -33,7 +31,7 @@ internal static partial class EngineRuntimeChecks
             ["spreadRadians"]=0,["inheritVelocity"]=1,["drag"]=0.5,
             ["accelerationXPxPerTickSquared"]=1,["accelerationYPxPerTickSquared"]=-1,
             ["widthPx"]=8,["heightPx"]=20,["rotationRadians"]=0.25,["rotationSpeedRadiansPerTick"]=0.5,
-            ["colorStart"]="white",["colorEnd"]="effect",["endScaleMultiplier"]=2,["endOpacity"]=0
+            ["colorStart"]=RgbWire(255,255,255),["colorEnd"]=RgbWire(255,255,255),["endScaleMultiplier"]=2,["endOpacity"]=0
         };
         return row;
     }

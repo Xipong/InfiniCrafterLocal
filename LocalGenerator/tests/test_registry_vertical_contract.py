@@ -3,7 +3,7 @@
 from __future__ import annotations
 from dataclasses import replace
 from types import MappingProxyType
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from copy import deepcopy
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -35,12 +35,12 @@ from infini_local.qa.capability_library_audit import capability_library_audit
         pytest.param("inputs", "input", INPUT_KIND_REGISTRY, id="inputs"),
         pytest.param("bindingActions", "action", BINDING_ACTION_REGISTRY, id="binding-actions"),
         pytest.param("events", "event", EVENT_KIND_REGISTRY, id="events"),
-        pytest.param("capabilities", "fn", {cap.name: cap for cap in visible_capabilities()}, id="capabilities"),
+        pytest.param("capabilities", "fn", {cap.name: cap for cap in CAPABILITY_REGISTRY.values()}, id="capabilities"),
     ],
 )
 def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
     rows = runtime_authoring_registry_manifest()[key]
-    expected = ({name for name, cap in registry.items() if cap.prompt_visible and cap.decision == "expose"}
+    expected = ({name for name, cap in registry.items() }
                 if key == "capabilities" else set(registry))
     assert {r[identity] for r in rows} == expected
     assert len(rows) == len(expected)
@@ -52,7 +52,7 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
         )
 
 
-@pytest.mark.parametrize("fn", [cap.name for cap in visible_capabilities()])
+@pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values()])
 def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines.author_item_contract import author_item_response_schema
@@ -66,7 +66,7 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
 
 
 def test_registry_public_catalog_and_schema_remain_reachable():
-    expected = {cap.name for cap in visible_capabilities()}
+    expected = {cap.name for cap in CAPABILITY_REGISTRY.values()}
     schema = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
     assert {row["properties"]["fn"]["const"] for row in schema} == expected
     assert {row["fn"] for row in compact_capability_catalog()} == expected
@@ -82,7 +82,6 @@ def test_registry_mutation_updates_schema_but_missing_executor_stays_red(monkeyp
         summary="Synthetic mutation witness over an existing parameter surface.",
         compiler_owner="synthetic.missing.vertical.slice",
         csharp_owner="SyntheticMissingExecutor.cs",
-        provenance="mutation test",
     )
     mutated = dict(CAPABILITY_REGISTRY)
     mutated[synthetic.name] = synthetic

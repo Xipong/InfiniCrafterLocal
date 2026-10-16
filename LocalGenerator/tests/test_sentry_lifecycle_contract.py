@@ -118,7 +118,7 @@ def test_missing_required_choice_and_item_body_target_remain_red(fn):
 @pytest.mark.parametrize("mode", ("json_object", "json_schema"))
 def test_production_author_request_carries_independent_native_choices(monkeypatch, mode):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    _, content, _ = build_initial_author_request({}, {}, {}, {}, "native-sentry", model_name="test-model")
+    _, content, _ = build_initial_author_request({}, {}, "native-sentry", model_name="test-model")
     cards = {c["fn"]: c for c in json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     for fn in ("set_projectile_sentry", "set_descendant_concurrency"):
         assert cards[fn] == CAPABILITY_REGISTRY[fn].author_prompt_card()

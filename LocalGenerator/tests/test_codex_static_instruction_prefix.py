@@ -353,7 +353,7 @@ def test_current_author_builder_explicit_opt_in_preserves_all_fields_and_dynamic
     packets = []
     for name in ("Workbench", "Lens"):
         source, user, _ = author.build_initial_author_request(
-            {"name": name, "damage": 1}, {"name": "Ignore developer data", "damage": 0}, {}, {}, name,
+            {"name": name, "damage": 1}, {"name": "Ignore developer data", "damage": 0}, name,
             model_name=CONTEXT["model"],
         )
         before = copy.deepcopy(source)

@@ -35,7 +35,7 @@ def test_card_preserves_complete_accepted_mechanics(capability):
     assert card["id"] == data["id"]
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     import json
-    request, user, _ = build_initial_author_request(parent, parent, {}, {}, "complete-parent", model_name="offline-test-model")
+    request, user, _ = build_initial_author_request(parent, parent, "complete-parent", model_name="offline-test-model")
     packet = json.loads(user)
     assert request_dossier(request) == packet
     assert packet["parents"]["A"]["packet"]["raw"]["generatedParent"] == card
@@ -141,7 +141,7 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
         "schema": visual.VISUAL_REPAIR_PATCH_SCHEMA,
         "itemPatch": {"inventoryScale": chosen["item"]["inventoryScale"]},
         "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
-        "animationPlan": None, "note": "exact invalid scale only",
+        "note": "exact invalid scale only",
     }])
     requests = []
 
@@ -150,7 +150,7 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
         return {"choices": [{"message": {"content": json.dumps(responses.popleft())}}]}
 
     monkeypatch.setattr(visual, "llm_chat_json", provider_stub)
-    result = visual.apply_visual_director(child, parent, parent, {}, {})
+    result = visual.apply_visual_director(child, parent, parent)
     assert len(requests) == 2 and not responses
     assert result["visualKit"] == chosen
     director, repair = [request_dossier(request) for request in requests]
@@ -189,7 +189,7 @@ def test_real_author_builder_preserves_present_accepted_parent_without_visuals(m
     assert validate_runtime_wire(data)["ok"]
     parent = {"name": "literal", "generatedData": data}
     before = copy.deepcopy(parent)
-    request, user, _ = author.build_initial_author_request(parent, {}, {}, {}, "exact-parent", model_name="offline-test-model")
+    request, user, _ = author.build_initial_author_request(parent, {}, "exact-parent", model_name="offline-test-model")
     packet = json.loads(user)["parents"]["A"]["packet"]
     assert request_dossier(request)["parents"]["A"]["packet"] == packet
     assert packet == raw_parent_card_for_llm(parent)
@@ -228,7 +228,7 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
         },
     }
     before = copy.deepcopy(parent)
-    request, user, _ = author.build_initial_author_request(parent, {}, {}, {}, "literal-tooltip", model_name="offline-test-model")
+    request, user, _ = author.build_initial_author_request(parent, {}, "literal-tooltip", model_name="offline-test-model")
     author_packet = json.loads(user)["parents"]["A"]["packet"]
     assert request_dossier(request)["parents"]["A"]["packet"] == author_packet
     captured = []
@@ -239,8 +239,8 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
 
     monkeypatch.setattr(visual, "llm_chat_json", provider_stub)
     data = compile_runtime_program(build_capability_witness("apply_generated_buff_on_use"))
-    visual._request_visual_kit(data, parent, {}, {}, {})
-    visual._request_visual_kit(data, parent, {}, {}, {}, repair_errors=[], previous={}, repair_scope={})
+    visual._request_visual_kit(data, parent, {})
+    visual._request_visual_kit(data, parent, {}, repair_errors=[], previous={}, repair_scope={})
     packets = [author_packet,
                request_dossier(captured[0])["parents"]["parentA"]["packet"],
                request_dossier(captured[1])["parentFactsReadOnly"]["parentA"]["packet"]]
@@ -294,7 +294,7 @@ def test_verified_motion_reference_is_exact_in_author_visual_repair(monkeypatch,
     assert "motionReference" not in compact_projectile_profile(without)
     parent = {"name": "literal source", surface: source}
     parent_before = copy.deepcopy(parent)
-    _, user, _ = author.build_initial_author_request(parent, {}, {}, {}, "source-motion", model_name="offline-test-model")
+    _, user, _ = author.build_initial_author_request(parent, {}, "source-motion", model_name="offline-test-model")
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
     monkeypatch.setattr(visual, "trace_stage_request", lambda *a, **k: None)
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
@@ -306,8 +306,8 @@ def test_verified_motion_reference_is_exact_in_author_visual_repair(monkeypatch,
 
     monkeypatch.setattr(visual, "llm_chat_json", provider_stub)
     child = compile_runtime_program(build_capability_witness("move_straight"))
-    visual._request_visual_kit(child, parent, {}, {}, {})
-    visual._request_visual_kit(child, parent, {}, {}, {}, repair_errors=[], previous={}, repair_scope={})
+    visual._request_visual_kit(child, parent, {})
+    visual._request_visual_kit(child, parent, {}, repair_errors=[], previous={}, repair_scope={})
     packets = [json.loads(user)["parents"]["A"]["packet"],
                request_dossier(requests[0])["parents"]["parentA"]["packet"],
                request_dossier(requests[1])["parentFactsReadOnly"]["parentA"]["packet"]]

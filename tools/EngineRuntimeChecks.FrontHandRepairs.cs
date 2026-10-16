@@ -319,8 +319,8 @@ internal static partial class EngineRuntimeChecks
                     var data = FrontHandDefinition(root.ToJsonString()); var entity = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.PrimaryEntityId)!;
                     if (legacy) { entity.Movement.Code = 19; entity.Movement.Name = "move_forward_then_retract"; entity.Movement.Params = new RuntimeParamsSpec { DurationTicks = 60, RangeTiles = 5 }; }
                     data.VfxManifest = new VfxManifestSpec { Slots = new[] { new VfxSlotSpec { Id = "exact_scale_copy", EntityId = entity.Id,
-                        Event = RuntimeEventKind.OnKill, RendererKind = "projectileAfterimage", TextureRole = "entity", Anchor = "self",
-                        Layer = "AfterProjectiles", Scale = 1, Alpha = 1, Duration = 24, ParticleSystemId = "none" } } };
+                        Event = RuntimeEventKind.OnKill, RendererKind = "spriteStampTrail", Color = Rgb(255, 255, 255), TextureRole = "entity", Anchor = "self",
+                        Layer = "AfterProjectiles", Scale = 1, Alpha = 1, Duration = 24, ParticleSystemId = "none", Blend = "alpha", Density = 0, Spread = 0, RepeatEvery = 0, StartTick = 0 } } };
                     data.VfxManifest.Budget.MaxDrawCalls = 8;
                     if (!cache.Textures.Contains(path)) cache.Textures.Add(path, Activator.CreateInstance(cache.Record, CpuTexture(64, 16), .71f, 0L)!);
                     FrontHandRepairOwner(owner, data); Vector2 axis = .6f.ToRotationVector2();

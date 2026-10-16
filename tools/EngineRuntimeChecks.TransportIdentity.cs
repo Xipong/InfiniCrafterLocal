@@ -61,6 +61,7 @@ internal static partial class EngineRuntimeChecks
     private static GeneratedItemData Pb02Data(string id, string transport)
     {
         var data = PlacedLedgerData(id);
+        data.Visual.RenderSizePx=32; data.Visual.ForwardAngleDegrees=0;
         data.RecipeMeta.AssetTransport = transport;
         data.RecipeMeta.AssetBaseUrl = transport == "http" ? "http://192.0.2.17:5055" : "";
         data.RecipeMeta.AssetFiles = new[] { "stale_host_roster.png" };
@@ -104,7 +105,7 @@ internal static partial class EngineRuntimeChecks
                 ("source world", d => d.RecipeMeta.WorldId = "pb02_other_world"),
                 ("world scope", d => d.RecipeMeta.WorldScoped = false),
                 ("Visual", d => d.Visual.WorldScale = 1.25f),
-                ("VFX", d => d.VfxManifest.Seed += 1),
+                ("VFX", d => d.VfxManifest.Budget.MaxDrawCalls += 1),
                 ("PNG identity", d => { d.Visual.SpritePath = alternatePng; d.Visual.SpriteStatus = "generated"; }),
             };
             foreach (var mutation in mutations)

@@ -150,24 +150,24 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static void LegacyUnclampedEquipmentStatsRemainIntact()
+    private static void CurrentAuthoredEquipmentValuesReachRuntime()
     {
         var data = GeneratedItemData.Placeholder();
         data.Accessory.Enabled = true;
-        data.Accessory.MaxRunSpeed = 30f; // Legacy DTO did not clamp this field.
-        data.Accessory.AttackSpeed = 4f;
-        data.Normalize(); // Same legacy DTO normalization invoked by FromJson/ToNetworkJson.
-        Equal(30f, data.Accessory.MaxRunSpeed, "unclamped legacy run-speed survives normalization");
-        Equal(4f, data.Accessory.AttackSpeed, "unclamped legacy attack-speed survives normalization");
+        data.Accessory.MaxRunSpeed = 20f; // Current Author maximum in pixels/world tick.
+        data.Accessory.AttackSpeed = 3f;
+        data.Normalize();
+        Equal(20f, data.Accessory.MaxRunSpeed, "current authored run-speed reaches runtime");
+        Equal(3f, data.Accessory.AttackSpeed, "current authored attack-speed reaches runtime");
         var armorData = GeneratedItemData.Placeholder();
         armorData.Armor.Enabled = true;
         armorData.Armor.Slot = "head";
-        armorData.Armor.SetBonusMagicDamage = 4f; // Only generic set damage was clamped.
+        armorData.Armor.SetBonusMagicDamage = 3f; // Current +300% authored class modifier.
         armorData.Normalize();
-        Equal(4f, armorData.Armor.SetBonusMagicDamage, "unclamped legacy set damage survives normalization");
+        Equal(3f, armorData.Armor.SetBonusMagicDamage, "current authored class set modifier reaches runtime");
     }
 
-    private static void LegacyEquipmentClampsRemainUnchanged()
+    private static void EquipmentRuntimeSafetyBoundsApply()
     {
         var data = GeneratedItemData.Placeholder();
         data.Accessory.GenericDamage = 100f;
@@ -177,12 +177,12 @@ internal static partial class EngineRuntimeChecks
         data.Armor.SetBonusGenericDamage = 100f;
         data.Armor.SetBonusLifeRegen = 1000;
         data.Normalize();
-        Equal(3f, data.Accessory.GenericDamage, "legacy generic additive bonus capped");
-        Equal(500, data.Accessory.Defense, "legacy defense cap retained");
-        Equal(0.75f, data.Accessory.Endurance, "legacy endurance cap retained");
+        Equal(3f, data.Accessory.GenericDamage, "runtime generic additive bonus capped");
+        Equal(500, data.Accessory.Defense, "runtime defense cap applied");
+        Equal(0.75f, data.Accessory.Endurance, "runtime endurance cap applied");
         Equal(true, data.Accessory.FallDamageImmune, "boolean immunity survives normalization");
-        Equal(3f, data.Armor.SetBonusGenericDamage, "legacy set generic damage capped");
-        Equal(200, data.Armor.SetBonusLifeRegen, "legacy set life regen capped");
+        Equal(3f, data.Armor.SetBonusGenericDamage, "runtime set generic damage capped");
+        Equal(200, data.Armor.SetBonusLifeRegen, "runtime set life regen capped");
     }
 
     private static void SignedAccessoryDefenseReachesPlayer()

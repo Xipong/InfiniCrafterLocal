@@ -93,7 +93,6 @@ def test_pre_llm_failure_saves_both_exact_inputs_and_recipe_key(monkeypatch, tmp
     before = copy.deepcopy(payload)
     key = "r_exact-source-key"
     monkeypatch.setattr(pipeline, "USE_LLM", True)
-    monkeypatch.setattr(pipeline, "canonicalize", lambda value: value)
     monkeypatch.setattr(pipeline, "recipe_key", lambda *args: key)
     monkeypatch.setattr(pipeline, "cache_get", lambda *args, **kwargs: None)
     monkeypatch.setattr(pipeline, "begin_llm_item_lease", lambda *args, **kwargs: ("lease", "token"))

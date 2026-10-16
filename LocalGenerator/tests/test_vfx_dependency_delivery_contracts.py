@@ -17,10 +17,10 @@ from tests.test_repair_vfx_contract import _offline_transport
 from tests.vfx_image_fixtures import _data, _request, _slot, _existing_texture_data, offline_backend
 
 BAD_SELECTORS = [
-    ("projectileAfterimage", "runtime_geometry", "entity"),
+    ("spriteStampTrail", "runtime_geometry", "entity"),
     ("spriteStampTrail", "no_asset", "entity"),
-    ("actorAfterimage", "no_asset", "projectile"),
-    ("projectileAfterimage", "reuse_item_icon", "field"),
+    ("spriteStampTrail", "no_asset", "projectile"),
+    ("spriteStampTrail", "reuse_item_icon", "field"),
 ]
 
 def visual_data(mode: str) -> dict:
@@ -43,21 +43,31 @@ def visual_data(mode: str) -> dict:
 
 def authored_vfx(renderer: str, texture: str = "entity") -> dict:
     slot = _slot("selected", "")
-    slot.update(spritePrompt="", spriteNegativePrompt="")
     if renderer in {"spriteElement", "texturedPath"}:
         slot = _slot("selected", "", renderer=renderer)
-        slot.update(spritePrompt="", spriteNegativePrompt="")
         slot["element" if renderer == "spriteElement" else "path"]["texture"] = {"source": texture, "assetId": ""}
     else:
-        slot.pop("element")
-        slot.update(rendererKind=renderer, backend="Sprite", textureRole=texture)
-        if renderer == "lightCue":
-            slot.update(channel="light", lane="cue")
-        elif renderer == "soundCue":
-            slot.update(channel="sound", lane="cue", soundId="Item1", sound={"volume": 0.4, "pitch": 0, "pitchVariance": 0})
-    return {"schema": vfx.VFX_DIRECTOR_SCHEMA, "effectMagnitude": 0.5, "visualBudgetClass": "normal",
-            "motif": {"element": "amber", "shapeLanguage": "ring", "motionLanguage": "quiet",
-                      "paletteRole": "accent", "rhythm": 1.0, "chaos": 0.0}, "slots": [slot]}
+        from tests.vfx_material_fixtures import _legacy
+        slot = _legacy({"runtimeProgram": {"itemEntityId": "item"}})["slots"][0]
+        slot.update(id="selected", entityId="orb", event="periodic", repeatEvery=4,
+                    duration=12, alpha=1.0, density=0.0, spread=0.0,
+                    rendererKind=renderer, textureRole=texture, layer="AfterProjectiles")
+        if renderer == "soundCue":
+            for field in ("color", "scale", "spread", "particleSystemId", "textureRole", "duration", "alpha", "blend", "layer", "density", "startTick", "repeatEvery"):
+                slot.pop(field)
+            slot.update(repeatEvery=4, startTick=0, soundId="Item1", sound={"volume": 0.4, "pitch": 0, "pitchVariance": 0})
+        elif renderer == "impactSprite":
+            slot.update(spriteCanvasSize=32, spritePrompt="one literal amber impact", spriteNegativePrompt="")
+    for field in (("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole") if renderer == "lightCue"
+                  else ("spread", "particleSystemId") if renderer == "impactSprite"
+                  else ("alpha", "blend", "layer", "duration") if renderer == "childMotes" else ()):
+        slot.pop(field, None)
+    if renderer not in {"spriteStampTrail", "impactSprite"}:
+        slot.pop("textureRole", None)
+    if renderer in {"lightCue", "impactSprite"}:  # explicit projectile periodic repeatEvery=4
+        slot.pop("density", None)
+    return {"schema": vfx.VFX_DIRECTOR_SCHEMA,
+             "slots": [slot]}
 
 def roundtrip(data, tmp_path):
     assert validate_runtime_wire(data)["ok"]
@@ -78,10 +88,10 @@ def roundtrip(data, tmp_path):
 
 def test_item_body_entity_texture_requires_its_actual_projected_png(offline_backend, monkeypatch, tmp_path):
     data = visual_data("no_asset")
-    raw = authored_vfx("actorAfterimage", "entity")
+    raw = authored_vfx("spriteStampTrail", "entity")
     raw["slots"][0]["entityId"] = "item"
     sent = _offline_transport(monkeypatch, "item_body_png", [raw])
-    final = vfx.attach_hybrid_vfx_manifest(data, "item_body_dependency", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "item_body_dependency", llm_director=stage.call_llm_vfx_director)
     final = visual_sprite_generation.maybe_generate_visual_assets(final)
     assert len(sent) == 1
     assert visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)["ok"]
@@ -105,7 +115,7 @@ def test_item_body_entity_texture_requires_its_actual_projected_png(offline_back
 @pytest.mark.parametrize("selector", [None, ["entity"], "Entity"])
 def test_persisted_png_selector_rejects_untyped_or_normalized_tokens(selector):
     data = visual_data("reuse_item_icon")
-    raw = authored_vfx("projectileAfterimage")
+    raw = authored_vfx("spriteStampTrail")
     raw["slots"][0]["textureRole"] = selector
     data["vfxManifest"] = vfx._compile_manifest(data, raw, "invalid_saved_selector")
     before = copy.deepcopy(data)
@@ -115,15 +125,14 @@ def test_persisted_png_selector_rejects_untyped_or_normalized_tokens(selector):
     assert data == before
 
 @pytest.mark.parametrize("renderer,mode,selector,kind,role,jobs", [
-    ("projectileAfterimage", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
+    ("spriteStampTrail", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
     ("spriteStampTrail", "reuse_item_icon", "entity", "free_projectile", "item", 1),
-    ("actorAfterimage", "baked_sprite", "projectile", "free_projectile", "entity:orb", 2),
-    ("spriteStampTrail", "baked_sprite", "field", "field", "entity:orb", 2),
+    ("spriteStampTrail", "baked_sprite", "entity", "field", "entity:orb", 2),
     ("spriteElement", "reuse_item_icon", "entity", "free_projectile", "item", 1),
     ("texturedPath", "baked_sprite", "entity", "free_projectile", "entity:orb", 2),
     ("impactRing", "runtime_geometry", "entity", "free_projectile", "", 1),
     ("childMotes", "no_asset", "impact", "free_projectile", "", 1),
-    ("lightCue", "no_asset", "field", "free_projectile", "", 1),
+    ("lightCue", "no_asset", "none", "free_projectile", "", 1),
     ("soundCue", "runtime_geometry", "impact", "free_projectile", "", 1),
 ])
 def test_valid_png_or_untextured_renderer_retains_existing_producers(
@@ -140,7 +149,7 @@ def test_valid_png_or_untextured_renderer_retains_existing_producers(
     assert projected["errors"] == [] and data == before
     assert [row["role"] for row in projected["dependencies"]] == ([role] if role else [])
     sent = _offline_transport(monkeypatch, "positive_" + renderer + "_" + selector, [raw])
-    final = vfx.attach_hybrid_vfx_manifest(data, "valid_dependencies", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "valid_dependencies", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 1 and final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 0
     assert final["debug"]["vfxDirectorRaw"] == raw and final["runtimeProgram"] == before["runtimeProgram"]
     final = visual_sprite_generation.maybe_generate_visual_assets(final)
@@ -176,10 +185,11 @@ def test_shared_png_producer_stays_one_owned_request_through_delivery(offline_ba
     second["id"] = "other_material_consumer"
     raw["slots"].append(second)
     if producer == "impact":
-        legacy = authored_vfx("actorAfterimage", "impact")["slots"][0]
+        legacy = authored_vfx("spriteStampTrail", "impact")["slots"][0]
         legacy["id"] = "legacy_consumer"
         impact = authored_vfx("impactSprite", "impact")["slots"][0]
         impact.update(id="exact_impact", event="on_hit", spritePrompt="one literal amber impact", spriteNegativePrompt="no text")
+        impact.pop("startTick"); impact.pop("repeatEvery")
         raw["slots"].extend([legacy, impact])
     else:
         raw["assets"] = [_request("shared", layout="strip")]
@@ -187,7 +197,7 @@ def test_shared_png_producer_stays_one_owned_request_through_delivery(offline_ba
             slot["element" if slot["rendererKind"] == "spriteElement" else "path"]["texture"]["assetId"] = "shared"
     before = copy.deepcopy(data["runtimeProgram"])
     sent = _offline_transport(monkeypatch, "shared_" + producer, [raw])
-    final = vfx.attach_hybrid_vfx_manifest(data, "shared_dependency", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "shared_dependency", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 1
     final = visual_sprite_generation.maybe_generate_visual_assets(final)
     report = visual_delivery_gate.visual_delivery_report(final, check_backend_config=False)

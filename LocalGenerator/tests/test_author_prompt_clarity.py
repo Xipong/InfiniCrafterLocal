@@ -8,7 +8,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author, llm_transpo
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_author_packet_names_real_fields_without_harness_instructions(monkeypatch, mode):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
-    req, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'clarity', model_name='test-model')
+    req, user, _ = author.build_initial_author_request({}, {}, 'clarity', model_name='test-model')
     assert dossier_text(req) == user
     payload = json.loads(user)
     priority = ' '.join(payload['priorityHeader'])
@@ -29,7 +29,7 @@ def test_author_packet_names_real_fields_without_harness_instructions(monkeypatc
 def test_author_declares_only_static_app_contract_as_instruction_prefix(monkeypatch):
     from infini_local.core.llm_prompt_cache import instruction_segment_index
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    req, user, _ = author.build_initial_author_request({'name': 'user-owned-parent'}, {}, {}, {}, 'recipe', model_name='test-model')
+    req, user, _ = author.build_initial_author_request({'name': 'user-owned-parent'}, {}, 'recipe', model_name='test-model')
     assert req['_infini_prompt_cache'] == {'instructionMessageIndex': 1}
     assert instruction_segment_index(req) == 1
     assert [row['role'] for row in req['messages']] == ['system', 'developer', 'user']
@@ -43,7 +43,7 @@ def test_area_damage_card_scopes_direct_target_exclusion_in_author_and_repair(mo
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'area-clarity', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'area-clarity', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     card = next(row for row in catalog['capabilities'] if row['fn'] == 'damage_area_on_event')
     # The event carries the exclusion target, not the projectile's hit history.
@@ -54,14 +54,14 @@ def test_area_damage_card_scopes_direct_target_exclusion_in_author_and_repair(mo
     del call['params']['radiusTiles']
     report = validate_runtime_program(doc)
     assert not report['ok']
-    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=report)
+    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=report)
     repair_card = next(c for c in dossier['existingBrokenCapabilityCards'] if c['fn'] == call['fn'])
     assert repair_card['does'] == card['does']
 
 
 def test_author_guidance_is_local_and_report_coverage_is_authored_not_potential(monkeypatch):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'local-task', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'local-task', model_name='test-model')
     payload = json.loads(user)
     shape = payload['requiredJsonShape']
     assert 'Repair' not in json.dumps(shape)
@@ -69,9 +69,9 @@ def test_author_guidance_is_local_and_report_coverage_is_authored_not_potential(
     # No undefined cross-dimensional host score masquerading as a usable budget.
     assert 'powerBudget' not in payload['balanceCorridor']
     rule = payload['diagnosticReport']['selfEvaluation']
-    assert 'authored event actions' in rule
-    assert 'without a subscribed action' in rule
-    assert 'group' in rule
+    assert 'Optional advisory' in rule
+    assert 'No checklist' in rule
+    assert 'never establish execution' in rule
     guide = payload['runtimeCapabilityContract']['catalog']['fieldGuide']
     assert 'Neutral values are not defaults' not in guide['sourceValues']
     assert 'explicit card default' in guide['paramNotation']
@@ -79,7 +79,7 @@ def test_author_guidance_is_local_and_report_coverage_is_authored_not_potential(
 
 def test_primary_and_projectile_lifecycle_card_explains_choice_not_invented_fields(monkeypatch):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'lifecycle', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'lifecycle', model_name='test-model')
     payload = json.loads(user)
     rule = payload['runtimeProgramInvariants']['primaryEntityOwnership']['primaryRule']
     assert 'configure_item_use.hideUseGraphic=true' in rule
@@ -101,7 +101,7 @@ def test_primary_and_projectile_lifecycle_card_explains_choice_not_invented_fiel
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_author_system_suffix_does_not_explain_other_model_tasks(monkeypatch, mode):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
-    _, _, system = author.build_initial_author_request({}, {}, {}, {}, 'local-system', model_name='test-model')
+    _, _, system = author.build_initial_author_request({}, {}, 'local-system', model_name='test-model')
     assert 'Repair' not in system
     assert 'realizationReplacement' not in system
     assert "this stage's" not in system
@@ -111,7 +111,7 @@ def test_author_system_suffix_does_not_explain_other_model_tasks(monkeypatch, mo
 
 def test_immunity_is_one_required_typed_choice(monkeypatch):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'cooldown', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'cooldown', model_name='test-model')
     cat = json.loads(user)['runtimeCapabilityContract']['catalog']
     params = next(c for c in cat['capabilities'] if c['fn'] == 'set_projectile_collision')['params']
     param = params['immunity']
@@ -165,7 +165,7 @@ def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actu
     from infini_local.core.runtime_authoring.program_schema import binding_schema
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'binding-guidance', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'binding-guidance', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     rule = catalog['fieldGuide']['stackCost']
     assert rule == STACK_COST_RULE  # The presentation must not replace this and lose optional chance semantics.
@@ -193,7 +193,7 @@ def test_condition_card_describes_its_existing_union_and_placement_guide_matches
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'typed-guidance', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'typed-guidance', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     cards = {row['fn']: row for row in catalog['capabilities']}
     condition = cards['require_use_condition']['params']['condition']
@@ -203,7 +203,7 @@ def test_condition_card_describes_its_existing_union_and_placement_guide_matches
     assert {branch['type'] for branch in condition['shape']['oneOf']} == {'string', 'object'}
     doc = build_capability_witness('require_use_condition')
     next(row for row in doc['runtimeProgram']['calls'] if row['fn'] == 'require_use_condition')['params']['condition'] = 3
-    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=validate_runtime_program(doc))
+    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
     repair_card = next(row for row in dossier['existingBrokenCapabilityCards'] if row['fn'] == 'require_use_condition')
     assert repair_card['params']['condition']['type'] == 'union'
     assert repair_card['params']['condition']['shape'] == condition['shape']
@@ -221,25 +221,25 @@ def test_movement_execution_meaning_reaches_initial_and_repair_cards(monkeypatch
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'movement-guidance', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'movement-guidance', model_name='test-model')
     cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
     assert cards[fn]['does'] == CAPABILITY_REGISTRY[fn].prompt_card()['does']
     doc = build_capability_witness(fn)
     call = next(row for row in doc['runtimeProgram']['calls'] if row['fn'] == fn)
     del call['params'][next(name for name, spec in CAPABILITY_REGISTRY[fn].params.items() if spec.required)]
-    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=validate_runtime_program(doc))
+    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
     repair_card = next(row for row in dossier['existingBrokenCapabilityCards'] if row['fn'] == fn)
     assert repair_card['does'] == cards[fn]['does']
 
 
 def test_conditional_neutral_guidance_preserves_optional_contract(monkeypatch):
-    from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'neutral-guidance', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'neutral-guidance', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     cards = {row['fn']: row for row in catalog['capabilities']}
-    conditional = [(cap, name, spec) for cap in visible_capabilities() for name, spec in cap.params.items()
+    conditional = [(cap, name, spec) for cap in CAPABILITY_REGISTRY.values() for name, spec in cap.params.items()
                    if spec.omission_condition is not None]
     assert conditional
     for cap, name, spec in conditional:
@@ -257,7 +257,7 @@ def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(mo
               'consumable': True, 'value': 500,
               'ammoRaw': {'mode': 'this_item_is_ammo', 'ammoId': 71}}
     before = deepcopy(source)
-    _, user, _ = author.build_initial_author_request(source, {}, {}, {}, 'ammo-economy', model_name='offline')
+    _, user, _ = author.build_initial_author_request(source, {}, 'ammo-economy', model_name='offline')
     payload = json.loads(user)
     rule = payload['requiredJsonShape']['concept']['coreMechanic']
     for meaning in ('ammunition damage is a contribution', 'not proof of a standalone weapon',
@@ -278,7 +278,7 @@ def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(mo
     parents = ({'name': 'Source A', 'damage': 0, 'value': 100, 'rare': 0, 'consumable': True},
                {'name': 'Source B', 'damage': 0, 'value': 1, 'rare': 0, 'consumable': True})
     before = deepcopy(parents)
-    request, user, _ = author.build_initial_author_request(*parents, {}, {}, 'ingredient-balance', model_name='offline')
+    request, user, _ = author.build_initial_author_request(*parents, 'ingredient-balance', model_name='offline')
     packet = json.loads(user)
     rule = packet['requiredJsonShape']['concept']['coreMechanic']
     for meaning in ('actual ingredient power', 'rarity', 'acquisition facts', 'resource economy',
@@ -291,7 +291,7 @@ def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(mo
     # Guidance is invariant: source fields are read, never used to select a
     # mechanics preset, invent a tier or rewrite the parents or authored params.
     renamed = tuple({**parent, 'name': 'Unrelated identity'} for parent in parents)
-    other, _, _ = author.build_initial_author_request(*renamed, {}, {}, 'renamed', model_name='offline')
+    other, _, _ = author.build_initial_author_request(*renamed, 'renamed', model_name='offline')
     assert request['messages'][:2] == other['messages'][:2]
     assert packet['parents'] == {label: {'packet': raw_parent_card_for_llm(parent)}
                                  for label, parent in zip(('A', 'B'), parents)}
@@ -307,8 +307,8 @@ def test_future_author_accounts_for_refreshable_utility_economy_without_item_rou
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
     parent = {'name': 'Arbitrary object', 'damage': 4, 'useTime': 18, 'maxStack': 1}
     before = deepcopy(parent)
-    first, user, _ = author.build_initial_author_request(parent, {}, {}, {}, 'future-economy', model_name='test-model')
-    second, _, _ = author.build_initial_author_request({**parent, 'name': 'Different identity'}, {}, {}, {}, 'other-economy', model_name='test-model')
+    first, user, _ = author.build_initial_author_request(parent, {}, 'future-economy', model_name='test-model')
+    second, _, _ = author.build_initial_author_request({**parent, 'name': 'Different identity'}, {}, 'other-economy', model_name='test-model')
     payload = json.loads(user)
     rule = payload['requiredJsonShape']['concept']['coreMechanic']
     for meaning in ('effective uptime', 'free repeated refresh', 'duration is not a cooldown',
@@ -327,7 +327,7 @@ def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_sco
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'utility-refresh', model_name='test-model')
+    _, user, _ = author.build_initial_author_request({}, {}, 'utility-refresh', model_name='test-model')
     cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
     card = cards['apply_generated_buff_on_use']
     for meaning in ('identical effect', 'maximum remaining duration', 'distinct effects', 'indefinite uptime'):
@@ -339,7 +339,7 @@ def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_sco
     source = build_capability_witness('apply_generated_buff_on_use')
     buff = next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use')
     del buff['params']['durationTicks']
-    dossier = author.build_gameplay_repair_dossier(source, {}, {}, {}, {}, failure_report=validate_runtime_program(source))
+    dossier = author.build_gameplay_repair_dossier(source, {}, {}, failure_report=validate_runtime_program(source))
     repair_card = next(c for c in dossier['existingBrokenCapabilityCards'] if c['fn'] == 'apply_generated_buff_on_use')
     assert repair_card['does'] == card['does']
     for leaf in ('durationTicks', 'oreSenseEnabled'):
@@ -357,7 +357,7 @@ def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair(
     original = deepcopy(source)
     stats = next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'configure_item_stats')
     stats['params']['damage'] = True
-    dossier = author.build_gameplay_repair_dossier(source, {}, {}, {}, {}, failure_report=validate_runtime_program(source))
+    dossier = author.build_gameplay_repair_dossier(source, {}, {}, failure_report=validate_runtime_program(source))
     scope = dossier['repairScope']
     assert scope['fieldPermissions']['calls'] == [{'id': stats['id'], 'paths': ['params.damage']}]
     repaired_stats = deepcopy(stats)

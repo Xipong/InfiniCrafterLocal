@@ -18,7 +18,6 @@ sys.path.insert(0, str(ROOT / "LocalGenerator"))
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
     CAPABILITY_REGISTRY,
     INPUT_KINDS,
-    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E402
     AMMO_CATEGORY_TMODLOADER_NAMES,
@@ -74,9 +73,7 @@ def report() -> dict[str, Any]:
     projectile = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs")
     executors = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs")
     transport = read("LocalGenerator/infini_local/pipelines/llm_transport.py")
-    categories = read("LocalGenerator/infini_local/pipelines/result_identity_policy.py")
     image_config = read("LocalGenerator/infini_local/pipelines/pipeline_visual_config.py")
-    vfx = read("ModSources/InfiniCrafterLocal/Common/VFX/InfiniVfxRuntime.cs")
     parent_cards = read("LocalGenerator/infini_local/pipelines/parent_context_cards.py")
     parent_constants = read("LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py")
     generator_client = read("ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs")
@@ -166,9 +163,9 @@ def report() -> dict[str, Any]:
             "GeneratedItem` и `GeneratedProjectile` — proxy-типы",
             "sand ammo не выставляется",
             "ID-static immunity не exposed",
-            "VFX fallback palette",
+            "VFX цвет задаётся local RGB objects",
             "ModName/ClassName",
-            "effect_catalog.py",
+            "Whole-pattern aliases и archetype routers не входят в текущий контракт",
             "псевдотокены `none`/`modded`",
         ):
             check(f"lowery:{required[:24]}", required in text, f"lowery.md missing guardrail: {required}")
@@ -176,8 +173,26 @@ def report() -> dict[str, Any]:
     # Non-gameplay aliases remain intentionally finite and documented.
     check("provider_aliases_documented", all(x in transport for x in ('"openai", "openai_compat", "api", "remote"', '"local", "lmstudio", "lm_studio", "ollama", ""')), "documented provider aliases must match transport")
     check("image_backend_aliases_documented", all(x in image_config for x in ('"openai_compat_image": "image_api"', '"stable-diffusion.cpp": "sdcpp"', '"disabled": "off"')), "documented image backend aliases must match visual config")
-    check("category_aliases_documented", all(x in categories for x in ('"placeable": "furniture"', '"trinket": "accessory"', '"thrown_stack": "consumable"')), "documented UI category aliases must match identity normalization")
-    check("vfx_aliases_visual_only", all(x in vfx for x in ('"fire"', '"heat"', '"ice"', '"water"', '"electric"', '"lightning"')), "documented VFX aliases must remain confined to presentation color")
+    # Execute canonical grammar: retired category/color routers are refusal
+    # controls, not capabilities that documentation must promise to preserve.
+    from infini_local.core.runtime_authoring.program_schema import author_item_response_schema
+    from infini_local.core.schema_validation import strict_schema_errors
+    from infini_local.core.vfx_material_contract import rgb_schema
+
+    category_schema = author_item_response_schema()["properties"]["category"]
+    categories = category_schema["enum"]
+    check("current_categories_without_aliases", bool(categories)
+          and all(not strict_schema_errors(value, category_schema) for value in categories)
+          and all(strict_schema_errors(value, category_schema) for value in ("trinket", "thrown_stack", "station", "device", None)),
+          "current category values must pass; retired UI spellings and null must be refused")
+    colors = rgb_schema()
+    check("explicit_local_rgb_without_semantic_aliases",
+          all(not strict_schema_errors(value, colors) for value in ({"r": 0, "g": 0, "b": 0}, {"r": 192, "g": 192, "b": 192}, {"r": 255, "g": 255, "b": 255}))
+          and all(strict_schema_errors(value, colors) for value in ("fire", "cyan", "effect", None,
+              {"r": True, "g": 0, "b": 0}, {"r": 1.0, "g": 0, "b": 0},
+              {"r": 256, "g": 0, "b": 0}, {"r": -1, "g": 0, "b": 0},
+              {"r": 0, "g": 0}, {"r": 0, "g": 0, "b": 0, "a": 255})),
+          "local RGB bytes must preserve zero/endpoints and reject named/global colors, alpha, missing or invalid channels")
 
     total = len(checks)
     passed = sum(1 for row in checks if row["ok"])
@@ -187,7 +202,7 @@ def report() -> dict[str, Any]:
         "score": passed,
         "scoreMax": total,
         "metrics": {
-            "capabilities": len(visible_capabilities()),
+            "capabilities": len(CAPABILITY_REGISTRY),
             "canonicalDamageClasses": len(DAMAGE_CLASS_TMODLOADER_NAMES),
             "canonicalUseStyles": len(ITEM_USE_STYLE_TMODLOADER_NAMES),
             "canonicalAmmoCategories": len(AMMO_CATEGORY_TMODLOADER_NAMES),

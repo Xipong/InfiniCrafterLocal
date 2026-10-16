@@ -18,7 +18,7 @@ import contextlib
 import threading
 import time
 from infini_local.pipelines.visual_generation_pipeline import _apply_kit, _validate_kit
-from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA, _hydrate_vfx_asset_prompts
+from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA, _compile_manifest, _hydrate_vfx_asset_prompts
 from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
 from infini_local.services.sdcpp_service import ImageRequestGate
 from infini_local.web.vfx_debug_routes import _sample_data
@@ -385,14 +385,21 @@ def test_authored_asset_transaction_projects_generates_and_refuses_missing_bytes
     data = _apply_kit(_equipment_data(), kit)
     if impact:
         _hydrate_vfx_asset_prompts(data, {"slots": [{
-            "entityId": "shot", "rendererKind": "impactSprite",
+            "entityId": "shot", "rendererKind": "impactSprite", "spriteCanvasSize": 32,
             "spritePrompt": "authored amber shard impact burst",
             "spriteNegativePrompt": "text, watermark, opaque square",
         }]})
-        data["vfxManifest"] = {"schema": VFX_MANIFEST_SCHEMA, "slots": [{
-            "id": "shot_impact", "entityId": "shot", "event": "on_spawn",
-            "rendererKind": "impactSprite", "textureRole": "impact",
-        }]}
+        from test_low_level_three_stage_pipeline import _vfx_output
+        authored = _vfx_output(data)
+        authored["slots"][0].update(
+            id="shot_impact", entityId="shot", event="on_spawn",
+            rendererKind="impactSprite", textureRole="impact", spriteCanvasSize=32,
+            spritePrompt="authored amber shard impact burst",
+            spriteNegativePrompt="text, watermark, opaque square",
+        )
+        for field in ("spread", "particleSystemId", "startTick", "repeatEvery", "density"):
+            authored["slots"][0].pop(field)
+        data["vfxManifest"] = _compile_manifest(data, authored, "equipment-impact")
         assert validate_vfx_manifest_wire(data)["ok"]
         planned = next(row for row in build_visual_asset_plan(data) if row["role"] == "impact:shot")
         assert planned["required"] is True and planned["prompt"] == "authored amber shard impact burst"
@@ -539,7 +546,8 @@ def recipe(tmp_path, monkeypatch) -> dict:
     monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", tmp_path / "world-recipes")
     write_no_image_fixture_png(tmp_path / "debug.png")
     data = _sample_data()
-    data["vfxManifest"] = {"schema": VFX_MANIFEST_SCHEMA, "slots": []}
+    data["visual"] = {"preferredCanvasSize": 32, "spritePath": "debug.png", "spriteStatus": "generated"}
+    data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "asset-cache-probe")
     assert world_storage.is_deliverable_recipe_payload(data) is True
     return data
 
@@ -694,6 +702,9 @@ def test_cache_corruption_quarantine_keeps_exact_bytes(tmp_path, monkeypatch, re
     if mode == "unreadable":
         target.parent.mkdir(parents=True); target.write_bytes(value)
     else:
+        # Authenticate scope before corrupting the targeted runtime/metadata lane.
+        recipe["recipeKey"] = key
+        recipe.setdefault("recipeMeta", {})["worldId"] = "world"
         recipe[field] = value
         world_storage.atomic_write_json(target, recipe)
     raw = target.read_bytes()

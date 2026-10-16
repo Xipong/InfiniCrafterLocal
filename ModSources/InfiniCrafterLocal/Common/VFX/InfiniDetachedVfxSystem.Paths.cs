@@ -12,10 +12,10 @@ public sealed partial class InfiniDetachedVfxSystem
     private sealed record PathDesign(string TexturePath,string Layer,string Blend,float Alpha,string Source,string Anchor,int HistoryTicks,
         float MinDistance,float MaxSegment,float Width,string Domain,string Uv,float Repeat,float Scroll,
         VfxNumberRamp WidthRamp,VfxNumberRamp OpacityRamp,VfxColorRamp ColorRamp,int MaxDraw,int StartTick);
-    private static PathDesign CopyPath(VfxTexturedPathSpec p,Color effect,float alpha,string blend,string path="",string layer="BeforeProjectiles",string anchor="self",int maxDraw=512,int startTick=0)
+    private static PathDesign CopyPath(VfxTexturedPathSpec p,float alpha,string blend,string path="",string layer="BeforeProjectiles",string anchor="self",int maxDraw=512,int startTick=0)
         =>new(path,layer,blend,alpha,p.Source,anchor,p.HistoryTicks,p.MinDistancePx,p.MaxSegmentLengthPx,p.WidthPx,p.ProfileDomain,
             p.UvMode,p.RepeatLengthPx,p.ScrollPxPerTick,VfxNumberRamp.Copy(p.WidthProfile),VfxNumberRamp.Copy(p.OpacityProfile),
-            VfxColorRamp.Copy(p.ColorProfile,effect),maxDraw,startTick);
+            VfxColorRamp.Copy(p.ColorProfile),maxDraw,startTick);
     private readonly record struct PathSample(Vector2 Position,ulong Tick);
     private sealed class MaterialPath {
         internal required VfxSourceBinding Binding;
@@ -35,8 +35,7 @@ public sealed partial class InfiniDetachedVfxSystem
             if(MaterialPaths.Any(p=>ReferenceEquals(p.Binding.Generation,binding.Generation)&&p.SlotId==slot.Id))continue;
             if(OwnedRecordCount>=MaxEmissions)return;
             string texture=ResolveMaterialTexture(data,entityId,path.Texture);if(string.IsNullOrEmpty(texture))continue;
-            var effect=InfiniVfxRuntime.PresentationColor(data,InfiniVfxRuntime.LegacyPresentationColor(data.VfxManifest,Color.White));
-            MaterialPaths.Add(new MaterialPath{Binding=binding,Design=CopyPath(path,effect,slot.Alpha,slot.Blend,texture,slot.Layer,slot.Anchor,data.VfxManifest.Budget.MaxDrawCalls,slot.StartTick),
+            MaterialPaths.Add(new MaterialPath{Binding=binding,Design=CopyPath(path,slot.Alpha!.Value,slot.Blend!,texture,slot.Layer!,slot.Anchor,data.VfxManifest.Budget.MaxDrawCalls,slot.StartTick!.Value),
                 SourceKey=sourceKey,SlotId=slot.Id,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge});
         }
     }

@@ -11,7 +11,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author, llm_transpo
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema', 'off'])
 def test_actual_author_scopes_provenance_to_parent_claims_not_invented_mechanics(monkeypatch, mode):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
-    request, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'fusion', model_name='offline')
+    request, user, _ = author.build_initial_author_request({}, {}, 'fusion', model_name='offline')
     assert dossier_text(request) == user
     header = ' '.join(json.loads(user)['priorityHeader'])
     assert 'Source provenance constrains factual claims about the parents, not the mechanics you may invent' in header
@@ -26,7 +26,7 @@ def test_actual_author_scopes_provenance_to_parent_claims_not_invented_mechanics
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema', 'off'])
 def test_actual_author_does_not_turn_coherence_or_source_units_into_inheritance_rules(monkeypatch, mode):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
-    request, user, _ = author.build_initial_author_request({'name': 'A', 'damage': 0}, {'name': 'B'}, {}, {}, 'coherence', model_name='offline')
+    request, user, _ = author.build_initial_author_request({'name': 'A', 'damage': 0}, {'name': 'B'}, 'coherence', model_name='offline')
     packet = request_dossier(request)
     assert user == dossier_text(request)
     assert [row["role"] for row in request["messages"]] == ["system", "developer", "user"]
@@ -69,20 +69,20 @@ def test_actual_shared_repair_report_is_an_account_not_a_design_rejection(monkey
                            apply_llm_common_options=lambda request, **kwargs: request).items():
         monkeypatch.setattr(author, name, value)
     with pytest.raises(Captured):
-        author.repair_author_item_after_failure(source, {}, {}, {}, {}, 'report', failure_report=validate_runtime_program(source))
+        author.repair_author_item_after_failure(source, {}, {}, 'report', failure_report=validate_runtime_program(source))
     assert source == before and len(requests) == 1
     packet = request_dossier(requests[0])
     truth = packet['runtimeExecutionTruth']
     assert 'Account for the chosen inputs' in truth['authority']
     assert 'Walk every' not in truth['authority']
     assert 'A newly invented mechanic needs executable support, not parent precedent' in truth['authority']
-    assert 'not a requirement to minimize mechanics or preserve every planned ability' in truth['selfEvaluation']
-    assert 'concept drift is diagnostic, not a rejection' in truth['selfEvaluation']
+    assert 'Optional advisory' in truth['selfEvaluation']
+    assert 'No checklist' in truth['selfEvaluation']
     assert packet['repairScope']['fieldPermissions']['calls'] == [{'id': call['id'], 'paths': ['params.damage']}]
     assert packet['acceptedItemContext']['runtimeProgram'] == before['runtimeProgram']
     assert packet['acceptedItemContext']['concept'] == before['concept']
     assert 'keep every frozen value and absence unchanged' in ' '.join(packet['rules'])
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'report', model_name='offline')
+    _, user, _ = author.build_initial_author_request({}, {}, 'report', model_name='offline')
     assert json.loads(user)['diagnosticReport']['selfEvaluation'] == truth['selfEvaluation']
 
 
@@ -95,7 +95,7 @@ def test_actual_periodic_producer_guidance_discloses_exhaustion_without_forcing_
     from test_author_prompt_consistency import _stationary_periodic_shooter
 
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
-    _, user, _ = author.build_initial_author_request({}, {}, {}, {}, 'producer', model_name='offline')
+    _, user, _ = author.build_initial_author_request({}, {}, 'producer', model_name='offline')
     packet = json.loads(user)
     catalog = packet['runtimeCapabilityContract']['catalog']
     budget = catalog['fieldGuide']['descendantSpawnBudget']
@@ -128,7 +128,7 @@ def test_actual_periodic_producer_guidance_discloses_exhaustion_without_forcing_
                            apply_llm_common_options=lambda request, **kwargs: request).items():
         monkeypatch.setattr(author, name, value)
     with pytest.raises(Captured):
-        author.repair_author_item_after_failure(doc, {}, {}, {}, {}, 'producer', failure_report=validate_runtime_program(doc))
+        author.repair_author_item_after_failure(doc, {}, {}, 'producer', failure_report=validate_runtime_program(doc))
     repair = request_dossier(requests[0])
     assert repair['runtimeExecutionTruth']['units']['descendantSpawnBudget'] == budget
     assert repair['acceptedItemContext']['runtimeProgram'] == doc['runtimeProgram']

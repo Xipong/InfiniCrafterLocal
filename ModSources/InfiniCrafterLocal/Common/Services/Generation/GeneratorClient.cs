@@ -476,7 +476,6 @@ public sealed class GeneratorClient
         return "HTTP combine failure";
     }
 
-
     private static string ReadPlayerMessage(string json)
     {
         try
@@ -484,20 +483,13 @@ public sealed class GeneratorClient
             using var doc = JsonDocument.Parse(json ?? "{}");
             var root = doc.RootElement;
             if (root.TryGetProperty("playerMessage", out var playerProp) && playerProp.ValueKind == JsonValueKind.String)
-                return GenerationFailureFacts(playerProp.GetString() ?? "");
+                return playerProp.GetString() ?? "";
         }
         catch
         {
         }
         return "";
     }
-
-    // Compatibility with older LocalGenerator responses: these exact legacy
-    // delivery clauses are not generation facts. Native refund ownership decides
-    // whether delivery is complete; retain the actionable failure/retry detail.
-    internal static string GenerationFailureFacts(string message)
-        => (message ?? "").Replace("Items were returned; ", "", StringComparison.OrdinalIgnoreCase)
-            .Replace("Items were returned.", "", StringComparison.OrdinalIgnoreCase).Trim();
 
     private static bool IsFatalRecipeStatusCode(int statusCode)
     {
@@ -621,7 +613,6 @@ public sealed class GeneratorClient
         snapshot["runtimeFacts"] = native.RuntimeFacts.DeepClone();
         snapshot["autoFeatures"] = JsonSerializer.SerializeToNode(autoFeatures, WireJsonOptions);
         snapshot["nameTokens"] = JsonSerializer.SerializeToNode(nameTokens, WireJsonOptions);
-        snapshot["canonical"] = JsonSerializer.SerializeToNode(existing?.Canonical ?? CanonicalFromItem(craftItem, autoFeatures), WireJsonOptions);
         snapshot["fingerprint"] = FingerprintFromFacts(sourceMod, internalName, autoFeatures, nameTokens, native, originalPrefix,
             craftItem.ModItem is null, existing?.Name ?? craftItem.Name,
             JsonSerializer.SerializeToNode(EffectiveProjectileRawFromItem(craftItem, null), WireJsonOptions),
@@ -945,7 +936,6 @@ public sealed class GeneratorClient
         }
         catch { return ""; }
     }
-
 
     private sealed class AmmoCandidate
     {
@@ -1389,23 +1379,6 @@ public sealed class GeneratorClient
         _ => "#FFFFFF"
     };
 
-    private static CanonicalSpec CanonicalFromItem(Item item, string[] autoFeatures)
-    {
-        string head = GuessHead(item.Name, autoFeatures);
-        string material = autoFeatures.Contains("placeable_block") ? "block" : "";
-        return new CanonicalSpec
-        {
-            HeadNoun = head,
-            Modifiers = Array.Empty<string>(),
-            Material = material,
-            Class = item.accessory ? "accessory" : item.damage > 0 ? "weapon" : item.consumable ? "consumable" : item.createTile >= TileID.Dirt ? "placeable" : item.material ? "material" : "generic",
-            ShapeAnchors = new[] { head },
-            VisualAnchors = new[] { item.Name },
-            HardTags = autoFeatures.Where(t => t is "weapon" or "tool" or "accessory" or "armor" or "ammo" or "placeable" or "material" or "projectile").Distinct().ToArray(),
-            SoftTags = autoFeatures.Except(autoFeatures.Where(t => t is "weapon" or "tool" or "accessory" or "armor" or "ammo" or "placeable" or "material" or "projectile")).Distinct().ToArray()
-        };
-    }
-
     private static IEnumerable<string> AutoFeaturesFromItem(Item item)
     {
         // Mechanically derived features only. No hand-authored per-item semantic tags.
@@ -1457,19 +1430,5 @@ public sealed class GeneratorClient
 
         return tags;
     }
-
-    private static string GuessHead(string name, string[] autoFeatures)
-    {
-        if (autoFeatures.Contains("tool")) return "tool";
-        if (autoFeatures.Contains("weapon")) return "weapon";
-        if (autoFeatures.Contains("accessory")) return "accessory";
-        if (autoFeatures.Contains("armor")) return "armor";
-        if (autoFeatures.Contains("ammo")) return "ammo";
-        if (autoFeatures.Contains("placeable")) return "placeable";
-        if (autoFeatures.Contains("material")) return "material";
-        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 0 ? "item" : parts[^1].ToLowerInvariant();
-    }
-
 
 }

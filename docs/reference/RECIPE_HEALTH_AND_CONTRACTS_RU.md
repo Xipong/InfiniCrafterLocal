@@ -1,4 +1,4 @@
-# Strict world recipes, contract stamps и health
+# Strict world recipes, current diagnostics и health
 
 <a id="storage"></a>
 ## Хранилище и commit boundary
@@ -13,16 +13,16 @@ Owners: [world_recipe_runtime.py](../../LocalGenerator/infini_local/storage/worl
 | `recipes/<recipe_key>.json` | Единственный authoritative recipe file с generated data, parents/world metadata и diagnostic stamps/health |
 | `invalid/` | Quarantine unreadable/rejected recipes с причиной; не автоматическая migration |
 
-Нет monolithic index.json/health.json; debug views читают recipe files по запросу. Per-file lock + temp/write/flush/fsync/replace обеспечивают atomic replacement; directory fsync — best effort. Для cache hit чтение, полная runtime/visual/VFX/delivery assessment и возможный quarantine находятся под **одной per-file блокировкой**: устаревшая проверка не может убрать новый commit. Наличие файла само по себе не означает GREEN.
+Нет monolithic index.json/health.json; debug views читают recipe files по запросу. Per-file lock + temp/write/flush/fsync/replace обеспечивают atomic replacement; directory fsync — best effort. Для cache hit чтение, полная runtime/visual/VFX/delivery assessment и возможный quarantine находятся под **одной per-file блокировкой**: устаревшая проверка не может убрать новый commit. Наличие файла само по себе не означает GREEN. Stored payload обязан содержать точные `recipeKey` и `recipeMeta.worldId`, совпадающие с запрошенным cache slot; отсутствие не означает compatibility или wildcard. Unknown/old IR не sanitizes в current recipe, а отвергается без migration.
 
 Fresh commit разрешён только после трёх accepted stages, image delivery, final runtime/VFX/stage gates, sanitize и повторного cached-payload check ([pipeline](../development/THREE_STAGE_LLM_PIPELINE_RU.md#flow)). Recipe authority не равна station escrow/placed-item return ledger: их [world ownership](../development/ARCHITECTURE_RU.md#profiles-world) отдельна.
 
 <a id="health"></a>
 ## Что health доказывает
 
-`contractVersions` — версионные stamps от [contract_versions.py](../../LocalGenerator/infini_local/core/contract_versions.py), не proof runtime execution. `recipeHealth` схемы `infini.recipe-health.runtime-program.v2` наблюдает accepted typed wire: runtime shape, required visual slots/assets, finite VFX, deliverability, stage accounting, bounded warnings/problems. Status `healthy|warning|blocked` — результат этих gates, не оценка gameplay/art quality.
+`contractVersions` — компактная current diagnostic projection из [contract_versions.py](../../LocalGenerator/infini_local/core/contract_versions.py): `appVersion`, `recipeIdentityVersion`, `runtimeApiVersion`, `visualPipelineProfile`. Author/runtime/VFX schema IDs хранятся только у собственных payload owners, не дублируются в root diagnostic stamp. Это live identities, не биография изменений или proof runtime execution. `recipeHealth` схемы `infini.recipe-health.runtime-program.v2` наблюдает accepted typed wire: runtime shape, required visual slots/assets, finite VFX, deliverability, stage accounting, bounded warnings/problems. Status `healthy|warning|blocked` — результат этих gates, не оценка gameplay/art quality.
 
-Delivery projection удаляет internal `_llmHistory`, compile caches, `visualKit` и `runtimeContract`, ограничивает nested DTO keys и debug strings; это объявленная transport projection, не design repair. Internal receipts нужны в compile audit, но не обязательны в final C# DTO.
+Delivery projection удаляет internal compile caches, `visualKit` и `runtimeContract`, проецирует поддержанные Visual/parent-summary поля и debug strings; VFX проверяется canonical current schema, без параллельного storage allowlist; это объявленная transport projection, не design repair. Internal receipts нужны в compile audit, но не обязательны в final C# DTO.
 
 <a id="diagnostics"></a>
 ## Debug routes и grey zones

@@ -68,7 +68,7 @@ def render() -> str:
         "",
         "## READ THIS FIRST — замороженная граница",
         "",
-        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и финальный realization/selfEvaluation. "
+        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и optional advisory realization/selfEvaluation. "
         "Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.",
         "2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.",
         "3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology, hitbox topology, root executor или fallback mechanic. Он может скрывать неудобство API, но не сжимать пространство дизайна.",
@@ -199,7 +199,7 @@ def render() -> str:
         "",
         "## Удалённые gameplay aliases и archetype routers",
         "",
-        "Физически удалены `effect_catalog.py` и `effect_archetypes.json`, включая `basic/projectile/bolt → thrown_simple`, `spear/lance/pike → spear_thrust`, `slash/held/swing → slash_holdout`, `beam/laser/ray → laser_beam` и другие whole-pattern aliases. Они не являются compatibility API и не должны восстанавливаться.",
+        "Whole-pattern aliases и archetype routers не входят в текущий контракт. Name/category/prose не выбирают композицию; compatibility importer и старые spelling не являются вторым API.",
         "",
         '<a id="config-aliases"></a>',
         "",
@@ -223,36 +223,11 @@ def render() -> str:
     ])
     lines += [
         "",
-        "Это только config migration для выбора уже существующего image backend; visual topology и gameplay от spelling не зависят.",
+        "Это только выбор существующего image backend в конфигурации; visual topology и gameplay от spelling не зависят.",
         "",
-        "### Result identity/UI category normalization",
+        "### Явные presentation choices",
         "",
-    ]
-    lines += table(("incoming UI/category spelling", "canonical UI category"), [
-        ("placeable", "furniture"),
-        ("station, crafting_station", "placeable_station"),
-        ("device", "technology"),
-        ("trinket, acc", "accessory"),
-        ("consumable_item, stack_consumable, thrown_stack", "consumable"),
-    ])
-    lines += [
-        "",
-        "Эта нормализация используется только для identity/UI/parent summary. Она не выбирает runtime capability, movement или delivery.",
-        "",
-        "### VFX fallback palette",
-        "",
-    ]
-    lines += table(("visual motif spellings", "fallback color family"), [
-        ("fire, heat", "fire/orange"),
-        ("ice, water", "ice/cyan"),
-        ("poison, nature", "poison/green"),
-        ("shadow, void", "shadow/purple"),
-        ("electric, lightning", "electric/yellow"),
-        ("blood", "blood/crimson"),
-    ])
-    lines += [
-        "",
-        "Это только цветовой fallback VFX; gameplay и damage type от motif не зависят.",
+        "Категория результата проходит strict Author enum без UI/category alias routing. VFX цвет задаётся local RGB objects в slots/profile knots/library endpoints; Visual palette остаётся art context. Технические config aliases выше не выбирают механику, renderer или цвет.",
         "",
         '<a id="runtime"></a>',
         "",

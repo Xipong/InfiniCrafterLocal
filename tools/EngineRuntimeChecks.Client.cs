@@ -13,23 +13,12 @@ using InfiniCrafterLocal.Common.Services;
 internal static partial class EngineRuntimeChecks
 {
 
-    private static void VfxDescriptiveTextRoundtrip()
+    private static void VfxRetiredMetadataRefuses()
     {
-        string element = new string('ж', 180) + "🌟";
-        string shape = string.Concat(Enumerable.Repeat("🌟", 512));
-        var motif = new InfiniCrafterLocal.Common.Models.VfxMotifSpec {
-            Element = element, ShapeLanguage = shape, MotionLanguage = new string('m', 512),
-            PaletteRole = new string('p', 256), Rhythm = 1, Chaos = 0,
-        };
-        motif.Normalize();
-        Equal(element, motif.Element, "descriptive motif is not clipped");
-        Equal(shape, motif.ShapeLanguage, "Unicode motif counts scalar characters");
-        Equal(512, motif.MotionLanguage.Length, "long motion description retained");
-        Equal(256, motif.PaletteRole.Length, "long palette description retained");
-        motif.Element = new string('e', 257);
-        bool rejected = false;
-        try { motif.Normalize(); } catch (System.IO.InvalidDataException) { rejected = true; }
-        Equal(true, rejected, "outside declared bound refuses rather than truncating");
+        var wire = JsonSerializer.SerializeToNode(new InfiniCrafterLocal.Common.Models.VfxManifestSpec())!.AsObject();
+        wire["motif"] = new System.Text.Json.Nodes.JsonObject { ["element"] = "fire" };
+        Equal(false, InfiniCrafterLocal.Common.Models.VfxManifestSpec.FromJson(wire.ToJsonString()).HasSlots, "retired motif is never executed");
+        Equal(true, InfiniCrafterLocal.Common.Models.ContractJsonDiagnostics.TryGet("VfxManifestSpec.FromJson", out _), "retired motif fails strict admission");
     }
 
     private static void VisualDescriptivePaletteRoundtrip()
@@ -44,14 +33,14 @@ internal static partial class EngineRuntimeChecks
         Equal(palette, roundtrip.Visual.Palette.Single(), "palette survives definition roundtrip");
     }
 
-    private static void DescriptiveParentBehaviorRoundtrip()
+    private static void DescriptiveParentProseRoundtrip()
     {
         var source = new InfiniCrafterLocal.Common.Models.GeneratedParentSummarySpec {
-            Name = "Report context", NotableEffects = new[] { string.Concat(Enumerable.Repeat("🌟", 1000)) },
+            Name = "Advisory context", Description = string.Concat(Enumerable.Repeat("🌟", 4000)),
         };
-        string expected = source.NotableEffects.Single();
+        string expected = source.Description;
         source.Normalize();
-        Equal(expected, source.NotableEffects.Single(), "admitted behavior report survives recursive context");
+        Equal(expected, source.Description, "admitted optional prose survives recursive context");
     }
 
     private static void AuthoredNameUnicodePersistenceRoundtrip()
@@ -98,14 +87,8 @@ internal static partial class EngineRuntimeChecks
         try { asset.Validate(); } catch (System.IO.InvalidDataException) { refused = true; }
         Equal(true, refused, "independent VFX caption overflow refused");
         var source = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
-        string metadata = new string('ж', 160);
-        source.Visual.ObjectType = source.Visual.Style = metadata;
-        source.Visual.RequiredAnchors = new[] { metadata };
         source.Visual.ImagePrompt = art; source.Visual.NegativePrompt = details;
         source.Normalize();
-        Equal(metadata, source.Visual.Style, "retained style text has room");
-        Equal(metadata, source.Visual.ObjectType, "retained object description has room");
-        Equal(metadata, source.Visual.RequiredAnchors.Single(), "retained visual anchor has room");
         Equal(art, source.Visual.ImagePrompt, "root caption retained");
         Equal(details, source.Visual.NegativePrompt, "root negative caption retained");
     }
@@ -113,16 +96,15 @@ internal static partial class EngineRuntimeChecks
     private static void ParentSummaryUnicodeRoundtrip()
     {
         using var actorState = new NativeActorState();
-        // Author behaviorChecks allow 1000 Unicode code points, not UTF-16 units.
-        string boundary = new string('ж', 999) + "🌟";
-        string supplementary = string.Concat(Enumerable.Repeat("🌟", 1000));
+        // Optional Author prose uses Unicode code points, not UTF-16 units.
+        string boundary = new string('ж', 3999) + "🌟";
+        string supplementary = string.Concat(Enumerable.Repeat("🌟", 3000));
         var original = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
         original.Id = "parent_unicode_probe";
         original.Name = "Unicode parent";
         original.SourceMode = "test_fixture";
-        original.GeneratedParentSummary.NotableEffects = new[] {
-            boundary, supplementary, "  ASCII control  ", "   ", boundary + "overflow",
-        }.Concat(Enumerable.Repeat("Remaining effect", 12)).ToArray();
+        original.GeneratedParentSummary.Description = "  " + boundary + "overflow  ";
+        original.GeneratedParentSummary.PlayerExperience = supplementary;
         // Serialize without pre-normalization: exercise actual incoming JSON admission.
         string input = JsonSerializer.Serialize(original, new JsonSerializerOptions {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -142,15 +124,13 @@ internal static partial class EngineRuntimeChecks
         using var next = JsonDocument.Parse(payload);
         foreach (string side in new[] { "itemA", "itemB" })
         {
-            var effects = next.RootElement.GetProperty(side).GetProperty("generatedData")
-                .GetProperty("generatedParentSummary").GetProperty("notableEffects");
-            Equal(12, effects.GetArrayLength(), "summary item count remains bounded");
-            Equal(boundary, effects[0].GetString(), "accepted boundary never splits a surrogate");
-            Equal(supplementary, effects[1].GetString(), "accepted supplementary prose is retained");
-            Equal("ASCII control", effects[2].GetString(), "existing whitespace normalization retained");
-            Equal(boundary, effects[3].GetString(), "overbound prose clips at 1000 code points");
+            var summary = next.RootElement.GetProperty(side).GetProperty("generatedData")
+                .GetProperty("generatedParentSummary");
+            Equal(boundary, summary.GetProperty("description").GetString(), "description clips at 4000 code points without splitting surrogate");
+            Equal(supplementary, summary.GetProperty("playerExperience").GetString(), "accepted supplementary advisory prose is retained");
+            Equal(false, summary.TryGetProperty("notableEffects", out _), "no retired behavior report projection");
         }
-        Equal(boundary, original.GeneratedParentSummary.NotableEffects[0], "incoming source unchanged");
+        Equal("  " + boundary + "overflow  ", original.GeneratedParentSummary.Description, "incoming source unchanged");
     }
 
     private static void GeneratedParentPrefixIsRequestOnly()

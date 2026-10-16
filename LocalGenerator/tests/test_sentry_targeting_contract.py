@@ -88,7 +88,7 @@ def test_retained_wire_absence_is_accepted_without_inventing_choices():
 @pytest.mark.parametrize("mode", ("json_object", "json_schema"))
 def test_real_author_packet_and_nullable_inverse_preserve_every_explicit_choice(monkeypatch, mode):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    request, user, _ = build_initial_author_request({}, {}, {}, {}, "targeting", model_name="test-model")
+    request, user, _ = build_initial_author_request({}, {}, "targeting", model_name="test-model")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     card = next(c for c in catalog["capabilities"] if c["fn"] == "target_and_fire")
     for param in card["params"].values():

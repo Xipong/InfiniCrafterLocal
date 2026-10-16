@@ -64,7 +64,7 @@ def test_primary_identity_transaction(source, selection, ok):
         assert "invalid_primary_entity_reference" in {e["code"] for e in report["errors"]}
     elif source == "missing":
         assert next(e for e in report["errors"] if e["path"] == "$.runtimeProgram.primaryEntityId")["code"].startswith("shape_")
-    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report=report)
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=report)
     scope = dossier["repairScope"]
     ids = sorted(e["id"] for e in current["runtimeProgram"]["entities"])
     assert sorted(e["id"] for e in dossier["immutableProgramIndex"]["entities"]) == ids
@@ -202,7 +202,7 @@ def test_exact_call_key_deletion(scenario):
     result_call = next(c for c in result["runtimeProgram"]["calls"] if c["id"] == call["id"])
     assert key not in (result_call if scenario == "call-property" else result_call["params"])
     if scenario == "call-property":
-        dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report=report)
+        dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=report)
         assert any("callPropertyKeysDelete" in rule and "note claiming removal" in rule for rule in dossier["rules"])
     else:
         filtered_call = next(c for c in filtered["callsUpsert"] if c["id"] == call["id"])
@@ -238,7 +238,7 @@ def test_missing_dependency_creation(scenario, ok):
     assert plan["directCapabilityNames"] == ["configure_item_use"]
     assert plan["supportingCapabilityNames"] == []
     assert scope["capabilitySubset"] == ["configure_item_use"]
-    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report=report)
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=report)
     assert "blockerPlan" not in dossier
     assert dossier["repairScope"]["blockerPlan"] == plan
     candidate = copy.deepcopy(call)
@@ -433,7 +433,7 @@ def test_missing_item_body_scope_allows_required_calls_on_same_created_entity(wi
     responses, requests = wire_transport
     responses.append({**patch, "realizationReplacement": copy.deepcopy(repaired["realization"])})
     llm_repaired = gameplay_stage.repair_author_item_after_failure(
-        current, {}, {}, {}, {}, "missing-item-body", failure_report=report,
+        current, {}, {}, "missing-item-body", failure_report=report,
     )
     assert len(requests) == 1 and not responses
     repair_system = requests[0]["messages"][0]["content"]
@@ -530,7 +530,7 @@ def test_visual_repair_freezes_valid_fields_and_ignores_scope_escape() -> None:
 
 
 @pytest.mark.parametrize("scenario,paths", [
-    pytest.param("slot-params", ["duration", "fadeOut"], id="missing-slot-params-frozen-alpha-and-magnitude"),
+    pytest.param("slot-params", ["duration", "spread"], id="missing-executable-slot-params-frozen-alpha"),
     pytest.param("root-pair", ["entityId", "event"], id="root-pair-frozen-duration"),
 ])
 def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
@@ -539,8 +539,8 @@ def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
     slot = previous["slots"][0]
     if scenario == "slot-params":
         slot["duration"] = 999
-        del slot["fadeOut"]
-        changes = {"duration": 30, "fadeOut": 0.6}
+        del slot["spread"]
+        changes = {"duration": 30, "spread": 0.2}
         hostile = {"alpha": 0.1}
     else:
         slot["entityId"] = "missing_entity"
@@ -555,8 +555,8 @@ def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
     if scenario == "slot-params":
         assert scope["fieldPermissions"]["slots"] == [{"slotId": "slot_0", "paths": paths}]
     candidate = {**copy.deepcopy(slot), **changes, **hostile}
-    patch = {"schema": VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.2 if scenario == "slot-params" else None,
-             "visualBudgetClass": None, "motif": None, "slotsUpsert": [candidate],
+    patch = {"schema": VFX_REPAIR_PATCH_SCHEMA,
+             "slotsUpsert": [candidate],
              "slotIdsDelete": [], "slotIndicesDelete": [], "note": "repair only diagnosed slot leaves"}
     repaired, audit = _apply_vfx_repair_patch(data, previous, patch, scope, return_audit=True)
     expected = copy.deepcopy(previous)
@@ -758,7 +758,7 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
     if failure_envelope == "orchestration":
         failure = _failure_report(current, ValueError("bounded authored range rejection"), "gameplay_validation_or_compile")
         assert failure["errors"] == validation["errors"], "the canonical failure envelope must not truncate diagnostics"
-    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report=failure)
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=failure)
     assert dossier["exactValidationErrors"] == validation["errors"], "one Repair cannot silently drop later canonical diagnostics"
     broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == sorted(
@@ -787,7 +787,7 @@ def test_strict_author_exception_keeps_all_targets_separate_from_display(identit
     assert expected[-1]["message"] not in str(caught.value), "only the human display is truncated"
     failure = _failure_report(current, caught.value, "gameplay_validation_or_compile")
     assert failure["errors"] == expected
-    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report=failure)
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report=failure)
     assert dossier["exactValidationErrors"] == expected
     if identity_tail:
         assert expected[-1]["code"] == "uncombined_identity"
@@ -798,7 +798,7 @@ def test_complete_author_errors_do_not_override_distinct_downstream_provenance()
     current, _ = _bounded_invalid_buff_calls()
     validation = validate_runtime_program(current)
     downstream = [{"path": "$", "code": "compile_or_wire_rejection", "message": "downstream-only defect"}]
-    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, {}, {}, failure_report={"errors": downstream, "validation": validation})
+    dossier = gameplay_stage.build_gameplay_repair_dossier(current, {}, {}, failure_report={"errors": downstream, "validation": validation})
     assert dossier["exactValidationErrors"] == downstream
     assert dossier["repairScope"]["nonRepairableErrors"]
     assert all(not paths for paths in dossier["repairScope"]["fieldPermissions"].values())

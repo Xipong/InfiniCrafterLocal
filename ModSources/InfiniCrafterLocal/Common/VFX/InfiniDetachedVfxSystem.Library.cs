@@ -22,7 +22,7 @@ public sealed partial class InfiniDetachedVfxSystem
     private sealed record LibraryParticleDesign(int Count,float SpeedMin,float SpeedMax,float Spread,float Inheritance,float Drag,
         Vector2 Acceleration,float Width,float Height,float Rotation,float Spin,Vector3 ColorStart,Vector3 ColorEnd,float EndScale,float EndOpacity);
     private sealed record LibraryShakeDesign(float Strength,float Variance,float Direction,float Dissipation,float TaperStart,float TaperEnd);
-    private sealed record LibraryDesign(string Layer,string Blend,float Alpha,int Duration,int MaxDraw,int MaxPerTick,int MaxTotal,
+    private sealed record LibraryDesign(string? Layer,string? Blend,float? Alpha,int? Duration,int MaxDraw,int MaxPerTick,int MaxTotal,
         bool ItemBudget,int Seed,LibraryParticleDesign? Particle,LibraryShakeDesign? Shake);
     private sealed class LibraryEmissionState(LibraryDesign design,int count)
     {
@@ -56,18 +56,14 @@ public sealed partial class InfiniDetachedVfxSystem
     private static bool LibraryClient=>!Main.dedServ&&Main.netMode!=NetmodeID.Server;
     private static bool LibraryEnabled(LibraryDesign d)=>LibraryClient&&(d.Particle is not null
         ?InfiniVfxClientOptions.EnableParticleLibraryBackend:InfiniVfxClientOptions.EnableLuminanceScreenShakeBackend);
-    private static Color LibraryColor(string token,Color effect)=>token=="effect"?effect:token=="white"?Color.White:RuntimeColorPolicy.Resolve(token,Color.White);
     private static LibraryDesign CopyLibrary(GeneratedItemData data,VfxSlotSpec slot,bool item)
     {
         var budget=data.VfxManifest.Budget;
-        var legacy=item?RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length>0?data.Visual.Palette[0]:"white",Color.White)
-            :InfiniVfxRuntime.LegacyPresentationColor(data.VfxManifest,Color.White);
-        var effect=InfiniVfxRuntime.PresentationColor(data,legacy);
         var p=slot.Particle;var s=slot.ScreenShake;
         return new(slot.Layer,slot.Blend,slot.Alpha,slot.Duration,budget.MaxDrawCalls,budget.MaxParticlesPerTick,budget.MaxParticlesTotal,item,slot.SlotSeed,
             p is null?null:new(p.Count,p.SpeedMinPxPerTick,p.SpeedMaxPxPerTick,p.SpreadRadians,p.InheritVelocity,p.Drag,
                 new(p.AccelerationXPxPerTickSquared,p.AccelerationYPxPerTickSquared),p.WidthPx,p.HeightPx,p.RotationRadians,p.RotationSpeedRadiansPerTick,
-                LibraryColor(p.ColorStart,effect).ToVector3(),LibraryColor(p.ColorEnd,effect).ToVector3(),p.EndScaleMultiplier,p.EndOpacity),
+                p.ColorStart.ToColor().ToVector3(),p.ColorEnd.ToColor().ToVector3(),p.EndScaleMultiplier,p.EndOpacity),
             s is null?null:new(s.StrengthPx,s.AngularVarianceRadians,s.DirectionRadians,s.DissipationPxPerFrame,s.TaperStartDistancePx,s.TaperEndDistancePx));
     }
     internal static bool EnqueueLibrary(GeneratedItemData data,VfxSlotSpec slot,string sourceKey,VfxSourceFrame frame,
@@ -76,13 +72,13 @@ public sealed partial class InfiniDetachedVfxSystem
         if(!LibraryClient||LibraryUnloaded||!frame.Valid||string.IsNullOrWhiteSpace(sourceKey)||!VfxLibraryValidation.HasPayload(slot))return false;
         try {slot.NormalizeAndValidate();} catch {return false;}
         return EnqueueCopiedLibrary(CopyLibrary(data,slot,itemBudget),sourceKey,frame,
-            slot.Event==RuntimeEventKind.Periodic?0:slot.StartTick,allowance);
+            slot.Event==RuntimeEventKind.Periodic?0:slot.StartTick!.Value,allowance);
     }
     private static bool EnqueueCopiedLibrary(LibraryDesign design,string sourceKey,VfxSourceFrame frame,int delay,MaterialEventAllowance? allowance=null)
     {
         if(!LibraryEnabled(design)||LibraryUnloaded||!frame.Valid||design.MaxPerTick<=0||design.MaxTotal<=0||allowance is{Remaining:<=0}
             ||OwnedRecordCount>=MaxEmissions||LibraryRecordCount>=MaxLibraryRecords)return false;
-        if(design.Particle is { } p&&(p.Count==0||p.Width<=0||p.Height<=0||design.Alpha<=0))return false;
+        if(design.Particle is { } p&&(p.Count==0||p.Width<=0||p.Height<=0||design.Alpha!.Value<=0))return false;
         if(design.Shake is {Strength:<=0})return false;
         int count=design.Particle is {} particle?Math.Min(64,InfiniVfxClientOptions.ScaleParticleCount(particle.Count)):1;
         if(count<=0)return false;
@@ -126,10 +122,10 @@ public sealed partial class InfiniDetachedVfxSystem
             state.Particles=particles.ToArray();
         }
         if(d.Shake is not null){if(state.Shake is null||state.Shake.ShakeStrength<=0)state.Retired=true;return;}
-        int age=(int)Math.Min((uint)d.Duration,unchecked((uint)now-(uint)e.Start));
+        int age=(int)Math.Min((uint)d.Duration!.Value,unchecked((uint)now-(uint)e.Start));
         for(int t=e.IntegratedAge;t<age;t++)for(int i=0;i<state.Particles.Length;i++)AdvanceLibraryInfo(ref state.Particles[i]);
         e.IntegratedAge=age;
-        if(age>=d.Duration||state.Particles.Length==0)state.Retired=true;
+        if(age>=d.Duration!.Value||state.Particles.Length==0)state.Retired=true;
     }
     private static bool LibraryEmissionExpired(MaterialEmission e)=>e.Library!.Retired;
 
@@ -154,8 +150,8 @@ public sealed partial class InfiniDetachedVfxSystem
         var p=design.Particle!;float angle=(angleUnit-0.5f)*p.Spread;
         Vector2 velocity=frame.Rotate(new Vector2(MathF.Cos(angle),MathF.Sin(angle))*MathHelper.Lerp(p.SpeedMin,p.SpeedMax,speedUnit))+frame.Velocity*p.Inheritance;
         return new ParticleInfo(new(frame.Position.X,frame.Position.Y),new(velocity.X,velocity.Y),frame.Forward.ToRotation()+p.Rotation,
-            new(p.Width,p.Height),new Color(new Vector4(p.ColorStart,1))*design.Alpha,design.Duration,
-            p.Drag,p.Acceleration.X,p.Acceleration.Y,p.Spin,p.EndScale,p.EndOpacity,design.Alpha,
+            new(p.Width,p.Height),new Color(new Vector4(p.ColorStart,1))*design.Alpha!.Value,design.Duration!.Value,
+            p.Drag,p.Acceleration.X,p.Acceleration.Y,p.Spin,p.EndScale,p.EndOpacity,design.Alpha!.Value,
             p.ColorStart.X,p.ColorStart.Y,p.ColorStart.Z,p.ColorEnd.X,p.ColorEnd.Y,p.ColorEnd.Z);
     }
     internal static void AdvanceLibraryInfo(ref ParticleInfo info)

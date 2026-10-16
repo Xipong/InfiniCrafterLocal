@@ -1,8 +1,8 @@
-# Качество контекста и явная физика — 0.4.250
+# Качество контекста и явная физика
 
 ## Сохранность родителей
 
-`parent_context_cards.py` передаёт точные accepted gameplay/runtime facts generated-родителя, включая независимые buffs, mobility, light и scale. Это read-only context, не приказ наследовать все функции. Для Visual/Repair отдельно передаётся принятая внешность с entity identity; Gameplay не выбирается из palette/silhouette/prose. Проекции копируют источник, не изменяют recipes.
+`parent_context_cards.py` передаёт точные accepted gameplay/runtime facts generated-родителя, включая независимые buffs, mobility, light и scale. Это read-only context, не приказ наследовать все функции. Для Visual/Repair отдельно передаётся принятая внешность с entity identity; Gameplay не выбирается из palette/silhouette/prose. Проекции копируют источник, не изменяют recipes. Generated parent передаёт полный exact accepted graph, не один guessed projectile или power/digest summary. Native ammo card содержит только фактические `mode`, `ammoId`, `ammoItemRaw`, `projectileRaw`, `weaponShootFieldProjectileRaw`, когда они присутствуют в текущем источнике. Имя/теги не выбирают пример ammo или behavior; native runtime dump lookup остаётся буквальным factual tool context.
 
 Настоящий `GeneratorClient.Prepare` получает literal native tooltip через `Lang.GetTooltip`: строки, язык текущей UI culture, exact fullName и owner source. Prefix нормализуется только в request clone, оригинал и refund остаются прежними. Generated proxy tooltip не принимается за описание accepted generated definition. Если native text недоступен, он остаётся неизвестным. При более 64 строках или 16 384 символах отказывается вся optional source observation с provenance/status — предложение не обрезается и не подаётся как буквальная цитата. Tooltip не является числовым сертификатом native AI и не парсится хостом в механику.
 

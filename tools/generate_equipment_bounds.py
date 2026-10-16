@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
-    CAPABILITY_REGISTRY, LEGACY_EQUIPMENT_CLASS_DAMAGE_BOUNDS,
+    CAPABILITY_REGISTRY, EQUIPMENT_CLASS_DAMAGE_RUNTIME_BOUNDS,
 )
 
 OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedEquipmentBounds.g.cs"
@@ -48,9 +48,9 @@ def render() -> str:
             seen.add(wire)
             low, high = spec.runtime_minimum, spec.runtime_maximum
             if low is None and high is None:
-                continue  # No historical DTO clamp: preserve already-saved numeric values.
+                continue  # No declared runtime clamp: do not invent a safety envelope.
             if low is None or high is None:
-                raise ValueError(f"incomplete legacy safety envelope: {capability}.{name}")
+                raise ValueError(f"incomplete runtime safety envelope: {capability}.{name}")
             if low > spec.to_wire(spec.minimum) or high < spec.to_wire(spec.maximum):
                 raise ValueError(f"runtime envelope narrows Author: {capability}.{name}")
             member = wire[0].upper() + wire[1:]
@@ -63,11 +63,11 @@ def render() -> str:
         group = capability.removeprefix("configure_")
         class_bonus = CAPABILITY_REGISTRY["add_equipment_damage_bonus"]
         bonus = class_bonus.params["bonusPercent"]
-        for wire, (low, high) in sorted(LEGACY_EQUIPMENT_CLASS_DAMAGE_BOUNDS[group].items()):
+        for wire, (low, high) in sorted(EQUIPMENT_CLASS_DAMAGE_RUNTIME_BOUNDS[group].items()):
             if wire in seen or f"{group}.{wire}" not in class_bonus.final_wire_paths:
-                raise ValueError(f"legacy equipment clamp lacks an exact class modifier projection: {group}.{wire}")
+                raise ValueError(f"runtime equipment clamp lacks an exact class modifier projection: {group}.{wire}")
             if low > bonus.to_wire(bonus.minimum) or high < bonus.to_wire(bonus.maximum):
-                raise ValueError(f"legacy equipment clamp narrows typed Author: {group}.{wire}")
+                raise ValueError(f"runtime equipment clamp narrows typed Author: {group}.{wire}")
             member = wire[0].upper() + wire[1:]
             rows.append(f"        a.{member} = Math.Clamp(a.{member}, "
                         f"{_literal(low, integer=False)}, {_literal(high, integer=False)});")

@@ -21,7 +21,7 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
         "tooltipSource": {"source": "Lang.GetTooltip", "fullName": "Terraria/MiningPotion", "language": "ru-RU", "status": "observed_literal"},
     }
     before = copy.deepcopy(source)
-    request, user, _ = build_initial_author_request(source, source, {}, {}, "headroom", model_name="offline")
+    request, user, _ = build_initial_author_request(source, source, "headroom", model_name="offline")
     payload = json.loads(user)
     for label in ("A", "B"):
         assert payload["parents"][label]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
@@ -35,19 +35,19 @@ def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode
 
     assert prompt.PLANNER_PROMPT_LIMIT_CHARS == 220_000
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    _, initial, _ = build_initial_author_request({}, {}, {}, {}, "", model_name="offline")
+    _, initial, _ = build_initial_author_request({}, {}, "", model_name="offline")
     key = "Ж" * (220_000 - len(initial))
     before = copy.deepcopy(key)
-    request, text, _ = build_initial_author_request({}, {}, {}, {}, key, model_name="offline")
+    request, text, _ = build_initial_author_request({}, {}, key, model_name="offline")
     assert len(text) == 220_000
     assert len(text.encode("utf-8")) > 220_000
     assert request_dossier(request)["recipeKey"] == key == before
     with pytest.raises(ValueError, match="220001 chars, above configured 220000"):
-        build_initial_author_request({}, {}, {}, {}, key + "Ж", model_name="offline")
+        build_initial_author_request({}, {}, key + "Ж", model_name="offline")
 
 
 def test_oversize_author_payload_refuses_instead_of_clipping(monkeypatch):
     from infini_local.pipelines import llm_authoring_prompt as prompt
     monkeypatch.setattr(prompt, "PLANNER_PROMPT_LIMIT_CHARS", 10)
     with pytest.raises(ValueError, match="above configured 10"):
-        build_initial_author_request({}, {}, {}, {}, "oversize", model_name="offline")
+        build_initial_author_request({}, {}, "oversize", model_name="offline")

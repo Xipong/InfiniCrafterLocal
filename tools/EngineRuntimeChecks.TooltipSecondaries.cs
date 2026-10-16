@@ -126,6 +126,14 @@ internal static partial class EngineRuntimeChecks
                 if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                 {
                     var child = data.RuntimeProgram.TryGetEntity(action.EntityId)!;
+                    source.Events = new[] { new RuntimeEventActionSpec {
+                        Id = action.Id, Event = action.Event, Action = action.Action,
+                        ActionCode = action.ActionCode, EntityId = action.EntityId,
+                        Count = action.Count, SpreadRadians = action.SpreadRadians, DamageMultiplier = action.DamageMultiplier,
+                    } };
+                    Equal(false, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniSecondary")),
+                        "missing active child combat bases cannot advertise an authored-child fallback");
+                    source.Events = new[] { action };
                     string aim = child.Spawn.Aim;
                     source.Events = new[] { new RuntimeEventActionSpec { Id = action.Id, Event = action.Event,
                         Action = action.Action, ActionCode = action.ActionCode, EntityId = action.EntityId,

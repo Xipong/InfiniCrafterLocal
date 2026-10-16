@@ -99,10 +99,8 @@ def test_unused_new_request_is_rejected_in_canonical_fresh_caption_domain(offlin
     calls, _ = offline_backend
     data = _data([])
     raw = {
-        "schema": VFX_DIRECTOR_SCHEMA, "effectMagnitude": 0.5, "visualBudgetClass": "normal",
-        "motif": {"element": "amber", "shapeLanguage": "grain", "motionLanguage": "quiet",
-                  "paletteRole": "accent", "rhythm": 1.0, "chaos": 0.0},
-        "slots": [{**_slot("first", "grain"), "spritePrompt": "", "spriteNegativePrompt": ""}],
+        "schema": VFX_DIRECTOR_SCHEMA,
+        "slots": [_slot("first", "grain")],
         "assets": [_request(), _request("unused")],
     }
     # Runtime wire is a distinct domain and may retain unreferenced compiled rows.

@@ -23,16 +23,16 @@ from tests.test_vfx_dependency_delivery_contracts import visual_data, authored_v
 from tests.vfx_image_fixtures import _request, offline_backend as offline_backend
 
 BAD_SELECTORS = [
-    pytest.param("projectileAfterimage", "runtime_geometry", "entity", id="geometry-afterimage"),
+    pytest.param("spriteStampTrail", "runtime_geometry", "entity", id="geometry-afterimage"),
     pytest.param("spriteStampTrail", "no_asset", "entity", id="missing-stamp-png"),
-    pytest.param("actorAfterimage", "no_asset", "projectile", id="missing-actor-png"),
-    pytest.param("projectileAfterimage", "reuse_item_icon", "field", id="field-role-mismatch"),
+    pytest.param("spriteStampTrail", "no_asset", "projectile", id="missing-actor-png"),
+    pytest.param("spriteStampTrail", "reuse_item_icon", "field", id="field-role-mismatch"),
 ]
 
 
 def _serialized_vfx_repair(monkeypatch, data, raw, patch, case, image_calls):
     sent = _offline_transport(monkeypatch, case, [raw, patch])
-    final = vfx.attach_hybrid_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and image_calls == []
     assert [request["model"] for request in sent] == ["explicit-offline-fixture-model"] * 2
     assert vfx.validate_vfx_manifest_wire(final)["ok"]
@@ -43,25 +43,27 @@ def _serialized_vfx_repair(monkeypatch, data, raw, patch, case, image_calls):
 def test_public_vfx_boundary_rejects_invalid_tuple_after_one_repair():
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     raw = _vfx_output(data)
-    raw["slots"][0].update(rendererKind="lightCue", channel="light", lane="primary")
+    raw["slots"][0]["rendererKind"] = "lightCue"
+    for field in ("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole"):
+        raw["slots"][0].pop(field)
+    raw["slots"][0]["color"]["r"] = 256
     candidate = copy.deepcopy(raw["slots"][0])
-    candidate["lane"] = "support"
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": None,
-             "visualBudgetClass": None, "motif": None, "slotsUpsert": [candidate],
-             "slotIdsDelete": [], "slotIndicesDelete": [], "note": "still-invalid cue lane"}
+    candidate["color"]["r"] = 256
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA,
+               "slotsUpsert": [candidate],
+             "slotIdsDelete": [], "slotIndicesDelete": [], "note": "still-invalid local RGB byte"}
     replies = iter([raw, patch])
     with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
-        vfx.attach_hybrid_vfx_manifest(data, "renderer_boundary", llm_director=lambda *_a, **_kw: next(replies))
+        vfx.attach_vfx_manifest(data, "renderer_boundary", llm_director=lambda *_a, **_kw: next(replies))
     assert next(replies, None) is None
     assert "vfxManifest" not in data
     assert data["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 1
 
 
 @pytest.mark.parametrize("renderer,selector", [
-    pytest.param("projectileAfterimage", "entity", id="entity-texture"),
-    pytest.param("projectileAfterimage", "projectile", id="projectile-texture"),
-    pytest.param("projectileAfterimage", "field", id="field-texture"),
-    pytest.param("projectileAfterimage", "impact", id="impact-producer"),
+    pytest.param("spriteStampTrail", "entity", id="entity-texture"),
+
+    pytest.param("spriteStampTrail", "impact", id="impact-producer"),
     pytest.param("spriteElement", "entity", id="element-source"),
     pytest.param("texturedPath", "entity", id="path-source"),
 ])
@@ -99,7 +101,7 @@ def test_unknown_entity_pair_repairs_without_thawing_valid_texture_selector(
         selector_path = name + ".texture.source"
     else:
         candidate["textureRole"] = "item"
-    patch = _patch(slotsUpsert=[candidate], slotIdsDelete=["selected"], effectMagnitude=0.9,
+    patch = _patch(slotsUpsert=[candidate], slotIdsDelete=["selected"],
                    assetsUpsert=[_request("compensation")])
     final, director, repair = _serialized_vfx_repair(
         monkeypatch, data, raw, patch, "unknown_entity_" + renderer + "_" + selector, calls)
@@ -164,7 +166,7 @@ def test_bad_legacy_selector_repairs_only_exact_leaf_before_image_jobs(
                      rendererKind="impactSprite", spritePrompt="unrequested compensating image")
     correction = _patch(slotsUpsert=[candidate], slotIdsDelete=["selected"],
                         assetsUpsert=[{"id": "compensation", "prompt": "unrequested art", "negativePrompt": "",
-                                       "canvasSize": 64, "layout": "strip"}], effectMagnitude=0.9)
+                                       "canvasSize": 64, "layout": "strip"}])
     final, director, repair = _serialized_vfx_repair(
         monkeypatch, data, raw, correction, "legacy_" + renderer + "_" + mode + "_" + selector, calls)
     assert not report["ok"], "legacy PNG consumer admitted a producer that cannot resolve"
@@ -197,13 +199,26 @@ FROZEN_MERGES = json.loads((Path(__file__).parent / "fixtures/vfx_image_frozen_m
 def test_frozen_material_boundary(case):
     data = _data()
     templates = {"sprite": _sprite(data), "asset": _with_asset(data), "legacy": _legacy(data)}
-    raw = apply_edits(templates[case["base"]], case["rawEdits"])
-    # Adapt only the old sound witnesses to the new fresh-author requirement;
-    # captured edits/scopes stay byte-identical and keep their original oracle.
-    for slot in raw["slots"]:
-        if isinstance(slot, dict) and slot.get("rendererKind") == "soundCue":
-            slot["soundId"] = "Item1"
-            slot["sound"] = {"volume": 0.4, "pitch": 0, "pitchVariance": 0}
+    raw = apply_edits(copy.deepcopy(templates[case["base"]]), case["rawEdits"])
+    # Literal whole-slot replacements retain retired placeholder controls. Their
+    # historical successful merges are refusal witnesses, not current inputs.
+    retired = any(isinstance(slot, dict) and (
+        set(slot) & {"spritePrompt", "spriteNegativePrompt"}
+        or slot.get("rendererKind") == "texturedPath" and set(slot) & {"duration", "repeatEvery"}
+        or slot.get("rendererKind") in {"spriteElement", "texturedPath", "soundCue"}
+        and set(slot) & {"scale", "density", "spread", "particleSystemId", "textureRole"}
+    ) for slot in raw["slots"])
+    if retired:
+        before = copy.deepcopy(raw)
+        assert not vfx.validate_vfx_director_output(raw, data)["ok"]
+        historical_merge = apply_edits(copy.deepcopy(raw), case["mergedEdits"])
+        assert not vfx.validate_vfx_director_output(historical_merge, data)["ok"]
+        current = templates[case["base"]]
+        assert vfx.validate_vfx_director_output(current, data)["ok"]
+        final = vfx.attach_vfx_manifest(data, "current-control-for-retired-witness", llm_director=lambda *_a, **_k: current)
+        assert vfx.validate_vfx_manifest_wire(final)["ok"]
+        assert raw == before
+        return
     before, gameplay = copy.deepcopy(raw), copy.deepcopy(data["runtimeProgram"])
     report = vfx.validate_vfx_director_output(raw, data)
     assert not report["ok"]
@@ -227,17 +242,18 @@ def test_frozen_material_boundary(case):
             packets.append(request_dossier(kwargs))
         return next(responses)
     if case["validMerged"]:
-        final = vfx.attach_hybrid_vfx_manifest(data, "frozen_material", llm_director=reply)
+        final = vfx.attach_vfx_manifest(data, "frozen_material", llm_director=reply)
         assert final["debug"]["vfxDirectorRaw"] == expected
         assert vfx.validate_vfx_manifest_wire(final)["ok"]
         assert len(final["vfxManifest"]["slots"]) == len(expected["slots"])
         for compiled, accepted in zip(final["vfxManifest"]["slots"], expected["slots"]):
             for payload in ("element", "path"):
                 assert compiled.get(payload) == accepted.get(payload)
-            assert compiled["alpha"] == accepted["alpha"]
+            assert ("alpha" in compiled) == ("alpha" in accepted)
+            assert compiled.get("alpha") == accepted.get("alpha")
     else:
         with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
-            vfx.attach_hybrid_vfx_manifest(data, "frozen_material", llm_director=reply)
+            vfx.attach_vfx_manifest(data, "frozen_material", llm_director=reply)
         assert "vfxManifest" not in data
     assert len(packets) == 1 and packets[0]["repairScope"] == scope
     assert data["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 1

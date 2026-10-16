@@ -24,7 +24,7 @@ def test_author_vocabulary_is_finite_and_alias_free() -> None:
 def test_damage_class_prompt_explains_choices_without_engine_documentation() -> None:
     from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 
-    payload = build_llm_author_payload({}, {}, {}, {}, "class_guide")
+    payload = build_llm_author_payload({}, {}, "class_guide")
     guide = payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["damageClass"]
     meanings = guide["meaningByToken"]
     assert set(meanings) == set(DAMAGE_CLASS_TOKENS)
@@ -161,5 +161,5 @@ def test_held_sprite_visibility_is_only_presentation_metadata() -> None:
     assert dict(release.wire_enum) == {"hidden": "immediate", "visible": "on_release", "inherit": ""}
     assert "Custom held-root visibility only" in release.description
     assert "not gameplay release timing" in release.description
-    assert "declared-size presentations" in release.description
-    assert "historical keep behavior" in release.description
+    assert "inherit or omission follows hideUseGraphic" in release.description
+    assert "does not schedule gameplay release" in release.description

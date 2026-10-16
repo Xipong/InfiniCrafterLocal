@@ -22,11 +22,13 @@ SOUND_IDS = tuple(sorted(set(_INVENTORY["historicalCatalog"].values()) | set(_IN
 def _sound(data, sound_id: Any = "Item4", *, projectile=False):
     raw = _legacy(data)
     slot = raw["slots"][0]
-    slot.update(id="explicit_sound", rendererKind="soundCue", channel="sound", lane="cue",
-                emissionMode="none", particleSystemId="none", textureRole="none", soundId=sound_id,
+    slot.update(id="explicit_sound", rendererKind="soundCue",
+                particleSystemId="none", textureRole="none", soundId=sound_id,
                 sound={"volume": 0.37, "pitch": -0.2, "pitchVariance": 0.12})
     if projectile:
         slot.update(entityId=next(e["id"] for e in data["runtimeProgram"]["entities"] if e["kind"] != "item_body"), event="on_spawn")
+    for field in ("color", "scale", "spread", "particleSystemId", "textureRole", "duration", "alpha", "blend", "layer", "density", "startTick", "repeatEvery"):
+        slot.pop(field)
     return raw
 
 
@@ -46,7 +48,7 @@ def test_selected_sample_survives_director_compiler_and_wire(monkeypatch, sound_
     assert report["ok"], report["errors"]
     assert report["normalized"]["slots"][0]["soundId"] == sound_id
     sent = _offline_transport(monkeypatch, f"sound_{projectile}_{sound_id}", [raw])
-    final = vfx.attach_hybrid_vfx_manifest(data, "exact-sound", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "exact-sound", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 1
     packet = request_dossier(sent[0])
     assert packet["runtimeVocabulary"]["soundId"] == list(SOUND_IDS)
@@ -73,7 +75,8 @@ def test_invalid_present_sound_is_rejected_by_director_and_persisted_wire(bad, r
     raw = _sound(data) if renderer == "soundCue" else _legacy(data)
     raw["slots"][0].update(rendererKind=renderer)
     if renderer == "lightCue":
-        raw["slots"][0].update(channel="light", lane="cue")
+        for unused in ("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole", "startTick", "repeatEvery", "density"):
+            raw["slots"][0].pop(unused, None)
     raw["slots"][0][field] = bad
     before = copy.deepcopy(raw)
     report = vfx.validate_vfx_director_output(raw, data)
@@ -92,7 +95,7 @@ def test_invalid_present_sound_is_rejected_by_director_and_persisted_wire(bad, r
     pytest.param(("soundId",), id="selector-absence"),
     pytest.param(("sound",), id="old-alpha-phase-controls-absence"),
 ])
-def test_sound_absence_refuses_director_persisted_wire_and_cache_without_defaults(missing, tmp_path):
+def test_sound_absence_refuses_director_persisted_wire_and_cache_without_defaults(missing, tmp_path, monkeypatch):
     from infini_local.storage import world_storage
     data = _data()
     raw = _sound(data)
@@ -109,7 +112,7 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     before = copy.deepcopy(persisted)
     report = vfx.validate_vfx_manifest_wire(persisted)
     assert not report["ok"], report
-    assert {e["path"] for e in report["errors"]} == {"$.vfxManifest.slots[0]." + field for field in missing}
+    assert {e["path"] for e in report["errors"]} == {"$.vfxManifest.slots[0]." + field for field in (*missing, "alpha")}
     assert not world_storage.is_deliverable_recipe_payload(persisted, check_assets=False)
     assert persisted == before and raw == raw_before
     assert all(field not in persisted["vfxManifest"]["slots"][0] for field in missing)
@@ -120,6 +123,13 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
     current.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                    sourceMode="offline_contract_fixture")
+    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
+    current["visual"] = {"preferredCanvasSize": 32}
+    for entity in current["runtimeProgram"]["entities"]:
+        entity["visual"]["assetMode"] = "reuse_item_icon" if entity["kind"] != "item_body" else "baked_sprite"
+    hydrate_no_image_fixture_assets(current, write_no_image_fixture_png(tmp_path / "sound.png"))
     world_storage.write_world_recipe_cache(tmp_path, "sound-test", "sound", "world", current)
     cached = world_storage.read_world_recipe_cache(tmp_path, "sound-test", "v5", "sound", "world")
     assert cached is not None and cached["vfxManifest"]["slots"] == current["vfxManifest"]["slots"]
@@ -138,7 +148,7 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     assert len(originals) == 1 and originals[0].read_bytes() == old_bytes
     reason = json.loads(originals[0].with_suffix(".reason.json").read_text())
     assert {row["path"] for row in reason["details"]["vfx"]["errors"]} == {
-        "$.vfxManifest.slots[0]." + field for field in missing}
+        "$.vfxManifest.slots[0]." + field for field in (*missing, "alpha")}
 
 
 @pytest.mark.parametrize("bad,mode", [
@@ -167,12 +177,12 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     scope = vfx._build_vfx_repair_scope(raw, report["errors"])
     assert scope["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "explicit_sound", "paths": paths}], "assets": []}
     candidate = copy.deepcopy(accepted["slots"][0])
-    candidate.update(alpha=0.1, rendererKind="lightCue", channel="light", lane="support", entityId=data["runtimeProgram"]["entities"][1]["id"], event="on_kill")
+    candidate.update(alpha=0.1, rendererKind="lightCue",  entityId=data["runtimeProgram"]["entities"][1]["id"], event="on_kill")
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "sound only", "slotsUpsert": [candidate], "slotIdsDelete": ["explicit_sound"]}
     raw_before = copy.deepcopy(raw)
     sent = _offline_transport(monkeypatch, "sound_repair_" + str(bad) + mode, [raw, patch])
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
-    final = vfx.attach_hybrid_vfx_manifest(data, "sound-repair", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "sound-repair", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert raw == raw_before
     assert final["gameplay"] == before["gameplay"] and final["runtimeProgram"] == before["runtimeProgram"]
@@ -190,7 +200,7 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
 
 
 @pytest.mark.parametrize("sound_id", ["Item1", "ResearchComplete"], ids=["explicit-item1", "explicit-named-sample"])
-def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(sound_id, tmp_path):
+def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(sound_id, tmp_path, monkeypatch):
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
     from infini_local.storage import world_storage
     data = _data()
@@ -198,6 +208,13 @@ def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(
                 sourceMode="offline_contract_fixture")
     raw = _sound(data, sound_id)
     data["vfxManifest"] = vfx._compile_manifest(data, raw, "cache-sound")
+    from infini_local.pipelines import visual_delivery_gate
+    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
+    data["visual"] = {"preferredCanvasSize": 32}
+    for entity in data["runtimeProgram"]["entities"]:
+        entity["visual"]["assetMode"] = "reuse_item_icon" if entity["kind"] != "item_body" else "baked_sprite"
+    hydrate_no_image_fixture_assets(data, write_no_image_fixture_png(tmp_path / "sound.png"))
     data = json.loads(json.dumps(data))
     before = copy.deepcopy(data)
     assert world_storage.is_deliverable_recipe_payload(data, check_assets=False)
@@ -241,7 +258,7 @@ def test_real_transport_never_strips_present_null_to_legacy_absence(monkeypatch,
     sent = _offline_transport(monkeypatch, "null_sound_noop_" + mode, [raw, patch])
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
     with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
-        vfx.attach_hybrid_vfx_manifest(data, "null-audio", llm_director=stage.call_llm_vfx_director)
+        vfx.attach_vfx_manifest(data, "null-audio", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and "vfxManifest" not in data
     assert raw["slots"][0]["soundId"] is None
     assert request_dossier(sent[1])["repairScope"]["fieldPermissions"]["slots"] == [{"slotId": "explicit_sound", "paths": ["soundId"]}]
@@ -257,9 +274,9 @@ def test_foreign_sound_leaf_can_be_deleted_without_thawing_valid_renderer(monkey
     scope = vfx._build_vfx_repair_scope(raw, report["errors"])
     assert scope["fieldPermissions"]["slots"] == [{"slotId": "old_slot", "paths": ["soundId"], "deletePaths": ["soundId"]}]
     candidate = copy.deepcopy(accepted["slots"][0])
-    candidate.update(rendererKind="lightCue", channel="light", lane="cue", alpha=0.1)
+    candidate.update(rendererKind="lightCue",  alpha=0.1)
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "delete only foreign sound field", "slotsUpsert": [candidate]}
     _offline_transport(monkeypatch, "foreign_sound_delete", [raw, patch])
-    final = vfx.attach_hybrid_vfx_manifest(data, "foreign-sound", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "foreign-sound", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert vfx.validate_vfx_manifest_wire(final)["ok"]

@@ -171,10 +171,10 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
     else:
         # Dedicated impacts and UV ingredients do not use main-body R.
         return ""
+    if "runtimeProgram" in data and any(field not in owner for field in ("renderSizePx", "forwardAngleDegrees")):
+        raise ValueError("Selected main PNG requires explicit renderSizePx and forwardAngleDegrees")
     if not any(field in owner for field in ("renderSizePx", "forwardAngleDegrees")):
-        # Retain delivered legacy prompts and metadata absence; do not give a
-        # guessed display budget to an old project or a manual-only fixture.
-        return ""
+        return ""  # Standalone image diagnostics have no runtime display project.
     facts: dict[str, Any] = {"canvasSizePx": final_sprite_canvas(canvas)}
     if entity is not None:
         facts["entityId"] = entity["id"]
@@ -248,9 +248,11 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
 
 
 def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas: int, *, entity_id: str = "") -> str:
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError(f"{role}: explicit non-empty authored image prompt required")
     authored = compact_visual_words(prompt, 1400)
     clause = role_contract_prompt_clause(role, canvas)
-    text = compact_visual_words(f"{authored}. {clause}" if authored else clause, 1800)
+    text = compact_visual_words(f"{authored}. {clause}", 1800)
     visual = data.get("visual")
     if role == "item" and isinstance(visual, Mapping) and "grip" in visual:
         # The Visual stage validates this atomic object. Forward it literally;
@@ -260,7 +262,7 @@ def normalize_asset_prompt(data: dict[str, Any], role: str, prompt: str, canvas:
             f". Place the handle/hand-contact point at normalized final canvas coordinates {grip}; "
             "upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips."
         )
-    # Append outside the historical authored-art bound: style must not displace
+    # Append after the authored-art bound: style must not displace
     # literal geometry, framing/background or the accepted hand-contact point.
     return text + image_final_frame_prompt_clause(data, role, canvas, entity_id=entity_id) + image_generation_prompt_suffix()
 

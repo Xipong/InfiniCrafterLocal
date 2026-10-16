@@ -57,7 +57,7 @@ def canvas(columns, rows):
     image = Image.new("RGB", (CELL[0] * columns, CELL[1] * rows + 64), BG)
     draw = ImageDraw.Draw(image)
     draw.text((12, 8), "OFFLINE GEOMETRY / NOT GAME GPU", fill=(255, 205, 90))
-    draw.text((12, 26), "REAL FNA CPU QUADS | synthetic input | solid 2x3 texels | explicit effectColor: cyan", fill="white")
+    draw.text((12, 26), "REAL FNA CPU QUADS | synthetic input | solid 2x3 texels | explicit local RGB: (0,255,255)", fill="white")
     draw.text((12, 43), "No shader, texture sampling, game scene, author backend or visual-quality acceptance claim.", fill=(160, 175, 195))
     return image
 

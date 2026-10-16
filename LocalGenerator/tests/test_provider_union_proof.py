@@ -158,7 +158,7 @@ def test_typed_registry_schema_reaches_actual_author_request_and_repair_inverse(
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_schema")
     call = next(row for row in item["runtimeProgram"]["calls"] if row["fn"] == original.name)
     call["params"]["proofChoice"] = value
-    request, text, _ = build_initial_author_request({}, {}, {}, {}, "offline-union-proof", model_name="offline")
+    request, text, _ = build_initial_author_request({}, {}, "offline-union-proof", model_name="offline")
     assert json.loads(text)["recipeKey"] == "offline-union-proof"
     local = contract.author_item_response_schema()
     encoded = _encode_nullable_fixture(item, local)

@@ -4,8 +4,8 @@
   "additionalProperties": false,
   "properties": {
     "animationPlan": {
+      "description": "Optional advisory presentation intent for later generators; never executable or a Repair requirement.",
       "maxLength": 1200,
-      "minLength": 1,
       "type": "string"
     },
     "entities": {
@@ -288,27 +288,6 @@
     "item": {
       "additionalProperties": false,
       "properties": {
-        "effectColor": {
-          "description": "Optional exact runtime rendering color token shared by item, projectile and detached VFX. Independent of the rich descriptive palette used for sprite art; no hex or prose parsing. Omission preserves historical rendering behavior.",
-          "enum": [
-            "white",
-            "gray",
-            "silver",
-            "brown",
-            "tan",
-            "red",
-            "orange",
-            "yellow",
-            "gold",
-            "green",
-            "cyan",
-            "blue",
-            "purple",
-            "pink",
-            "black"
-          ],
-          "type": "string"
-        },
         "forwardAngleDegrees": {
           "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override; no image/prose inference.",
           "maximum": 180,
@@ -417,8 +396,7 @@
   "required": [
     "schema",
     "item",
-    "entities",
-    "animationPlan"
+    "entities"
   ],
   "type": "object",
   "x-infini-generated": true

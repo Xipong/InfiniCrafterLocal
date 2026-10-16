@@ -12,7 +12,7 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-from infini_local.pipelines.parent_context_pipeline import _generated_runtime_primary_projectile
+from infini_local.pipelines.parent_context_pipeline import projectile_profile_of, effective_projectile_profile_of
 from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
@@ -22,29 +22,19 @@ def _codes(report):
     return {str(e.get("code")) for e in report.get("errors") or []}
 
 
-def test_generated_parent_projectile_projection_follows_canonical_primary_binding() -> None:
-    generated = {
-        "runtimeProgram": {
-            "entities": [
-                {"id": "body", "kind": "item_body"},
-                {"id": "support_first", "kind": "projectile"},
-                {"id": "authored_primary", "kind": "projectile"},
-            ],
-            "bindings": [
-                {
-                    "id": "primary",
-                    "input": "primary_use",
-                    "usePolicy": {
-                        "action": {"kind": "spawn_entity", "targetId": "authored_primary"},
-                        "stackCost": 0,
-                        "contactDamage": False,
-                    },
-                }
-            ],
-        },
-    }
-    projected = _generated_runtime_primary_projectile(generated)
-    assert projected["id"] == "authored_primary"
+def test_generated_parent_retains_complete_graph_instead_of_fabricating_primary_projectile() -> None:
+    generated = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    parent = {"name": generated["name"], "generatedData": generated,
+              "directProjectileRaw": {"type": 1}, "effectiveProjectileRaw": {"type": 2}}
+    before = copy.deepcopy(parent)
+    assert projectile_profile_of(parent) == effective_projectile_profile_of(parent) == {}
+    card = raw_parent_card_for_llm(parent)
+    expected = copy.deepcopy(generated["runtimeProgram"])
+    for entity in expected["entities"]:
+        entity.pop("visual", None)
+    assert card["raw"]["generatedParent"]["runtimeProgram"] == expected
+    assert "directProjectile" not in card["raw"] and "effectiveProjectile" not in card["raw"]
+    assert parent == before
 
 
 def test_generated_parent_summary_uses_late_report_and_behavior_checks() -> None:
@@ -57,7 +47,7 @@ def test_generated_parent_summary_uses_late_report_and_behavior_checks() -> None
             "playerExperience": "Late accepted player experience.",
         }
     )
-    authored["realization"]["selfEvaluation"]["programVsReport"] = {
+    authored["realization"]["selfEvaluation"] = {"programVsReport": {
         "verdict": "aligned",
         "summary": "The report covers both executable lanes.",
         "behaviorChecks": [
@@ -76,17 +66,14 @@ def test_generated_parent_summary_uses_late_report_and_behavior_checks() -> None
                 "reason": "The final report overstates the exact event count.",
             },
         ],
-    }
+    }}
     summary = generated_parent_summary_from_data(authored)
     assert summary["identity"] == "generated:generated_summary_fixture"
     assert summary["description"] == "Late accepted blade realization."
     assert summary["playerExperience"] == "Late accepted player experience."
     assert "EARLY CONCEPT MUST NOT LEAK" not in json.dumps(summary)
-    assert summary["notableEffects"] == [
-        "Primary use launches the authored workbench projectile.",
-        "A hit releases five nails.",
-    ]
-    assert "ten nails" not in json.dumps(summary)
+    assert "notableEffects" not in summary
+    assert "runtimePrimaryEntityId" not in summary and "runtimeEntityIds" not in summary
     assert "backedByClaims" not in summary
     assert "parentComposition" not in summary
 
@@ -99,7 +86,7 @@ def test_generated_parent_summary_uses_late_report_and_behavior_checks() -> None
     recursive_summary = recursive["raw"]["generatedParent"]["summary"]
     assert recursive_summary["description"] == "Late accepted blade realization."
     assert recursive_summary["playerExperience"] == "Late accepted player experience."
-    assert recursive_summary["notableEffects"] == summary["notableEffects"]
+    assert "notableEffects" not in recursive_summary
     assert recursive_summary["schema"] == "infini.generated-parent-summary.v2"
     assert recursive_summary["identity"] == summary["identity"]
     assert "fantasy" not in recursive_summary
@@ -118,7 +105,7 @@ def test_author_context_contains_only_source_backed_parent_packets_and_numeric_b
     }
     generated_parent = copy.deepcopy(parent)
     generated_parent["generatedData"] = {"recipeMeta": {"generationDepth": 9}}
-    payload = build_llm_author_payload(generated_parent, parent, {"headNoun": "wings"}, {"headNoun": "ore"}, "facts-only")
+    payload = build_llm_author_payload(generated_parent, parent, "facts-only")
     encoded_parents = json.dumps(payload["parents"], ensure_ascii=False).casefold()
     assert "canonical" not in encoded_parents
     assert "headnoun" not in encoded_parents
@@ -158,7 +145,7 @@ def test_author_context_contains_only_source_backed_parent_packets_and_numeric_b
             },
         },
     }
-    ammo_payload = build_llm_author_payload(ammo_parent, parent, {}, {}, "nested-ammo-facts-only")
+    ammo_payload = build_llm_author_payload(ammo_parent, parent, "nested-ammo-facts-only")
     encoded_ammo = json.dumps(ammo_payload["parents"], ensure_ascii=False)
     assert "behaviorDigest" not in encoded_ammo
     assert "mechanicalHint" not in encoded_ammo

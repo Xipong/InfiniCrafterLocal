@@ -252,7 +252,6 @@ public sealed class InfiniAgentContractSelfTestSystem : ModSystem
             },
             Visual = new VisualSpec
             {
-                ObjectType = "workbench_blade",
                 SpriteStatus = "test_fixture",
                 PreferredCanvasSize = 32,
             },

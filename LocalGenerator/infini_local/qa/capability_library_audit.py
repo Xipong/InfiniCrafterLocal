@@ -24,7 +24,6 @@ from infini_local.core.runtime_authoring.capability_registry import (
     NETWORK_AUTHORITIES,
     CapabilitySpec,
     ParamSpec,
-    visible_capabilities,
     capability_provider_union,
     compact_capability_catalog,
     runtime_authoring_registry_manifest,
@@ -225,7 +224,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         "configure_item_contact_hitbox": ("RuntimeItemContactSpec", ""),
     }
     rows: list[dict[str, Any]] = []
-    for cap in visible_capabilities():
+    for cap in CAPABILITY_REGISTRY.values():
         if cap.category in {"movement", "controller"} and cap.name != "target_and_fire":
             class_name = "RuntimeParamsSpec"
         elif cap.name == "target_and_fire":
@@ -349,15 +348,13 @@ def capability_library_audit() -> dict[str, Any]:
         issues.append(AuditIssue("warning", code, path, message))
 
     capability_names = set(CAPABILITY_REGISTRY)
-    public_names = {name for name, cap in CAPABILITY_REGISTRY.items()
-                    if cap.prompt_visible and cap.decision == "expose"}
     provider_names = {row["properties"]["fn"]["const"] for row in capability_provider_union()}
     prompt_names = {row["fn"] for row in compact_capability_catalog()}
     manifest = runtime_authoring_registry_manifest()
     manifest_names = {row["fn"] for row in manifest["capabilities"]}
     for projection, names in (("provider", provider_names), ("prompt", prompt_names), ("manifest", manifest_names)):
-        if names != public_names:
-            error("registry_projection_mismatch", projection, f"missing={sorted(public_names - names)} extra={sorted(names - public_names)}")
+        if names != capability_names:
+            error("registry_projection_mismatch", projection, f"missing={sorted(capability_names - names)} extra={sorted(names - capability_names)}")
 
     known_slots: dict[str, list[str]] = {}
     reference_params = 0
@@ -366,7 +363,7 @@ def capability_library_audit() -> dict[str, Any]:
     bounded_numeric_params = 0
     semantic_params = 0
     exact_wire_paths = 0
-    for cap in visible_capabilities():
+    for cap in CAPABILITY_REGISTRY.values():
         base = f"capabilities.{cap.name}"
         if not cap.summary or not cap.category or not cap.component_slot:
             error("incomplete_capability_identity", base, "summary/category/componentSlot must be declared")
@@ -374,8 +371,8 @@ def capability_library_audit() -> dict[str, Any]:
             error("invalid_target_kinds", f"{base}.targetKinds", str(cap.target_kinds))
         if cap.network_authority not in NETWORK_AUTHORITIES:
             error("unknown_network_authority", f"{base}.networkAuthority", cap.network_authority)
-        if not cap.performance_budget or not cap.compiler_owner or not cap.csharp_owner or not cap.provenance or not cap.repair_group:
-            error("missing_runtime_ownership", base, "budget/compiler/C#/provenance/repairGroup are required")
+        if not cap.performance_budget or not cap.compiler_owner or not cap.csharp_owner:
+            error("missing_runtime_ownership", base, "budget/compiler/C# are required")
         python_owner_issue = _python_owner_issue(cap.compiler_owner)
         if python_owner_issue:
             error("missing_python_owner", f"{base}.pythonOwner", f"{cap.compiler_owner}: {python_owner_issue}")
@@ -573,28 +570,26 @@ def capability_library_audit() -> dict[str, Any]:
     score = sum(weight for name, weight in weights.items() if criteria[name])
     metrics.update({
         "capabilities": len(CAPABILITY_REGISTRY),
-        "publicCapabilities": len(public_names),
-        "retainedCapabilities": len(capability_names - public_names),
         "entityKinds": len(ENTITY_KIND_REGISTRY),
         "inputs": len(INPUT_KIND_REGISTRY),
         "bindingActions": len(BINDING_ACTION_REGISTRY),
         "events": len(EVENT_KIND_REGISTRY),
-        "parameters": sum(len(cap.params) for cap in visible_capabilities()),
+        "parameters": sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values()),
         "numericParameters": numeric_params,
         "boundedNumericParameters": bounded_numeric_params,
         "semanticParameters": semantic_params,
         "typedEntityReferences": reference_params,
         "typedCallReferences": call_reference_params,
-        "requirements": sum(len(cap.requirements) for cap in visible_capabilities()),
+        "requirements": sum(len(cap.requirements) for cap in CAPABILITY_REGISTRY.values()),
         "bindingDependencyEdges": sum(len(row.required_item_capabilities_any_of) for row in INPUT_KIND_REGISTRY.values()) + sum(len(row.required_item_capabilities_any_of) for row in BINDING_ACTION_REGISTRY.values()),
-        "spawnBudgetCapabilities": sum(bool(cap.activation_spawn_count_param) for cap in visible_capabilities()),
-        "stationaryMeaningfulCapabilities": sum(cap.meaningful_for_stationary for cap in visible_capabilities()),
+        "spawnBudgetCapabilities": sum(bool(cap.activation_spawn_count_param) for cap in CAPABILITY_REGISTRY.values()),
+        "stationaryMeaningfulCapabilities": sum(cap.meaningful_for_stationary for cap in CAPABILITY_REGISTRY.values()),
         "exactWirePaths": exact_wire_paths,
         "globalTechnicalLowerers": len(GLOBAL_TECHNICAL_LOWERINGS),
         "globalTechnicalLowererOutputs": global_lowerer_output_count,
         "exclusiveGroups": {name: sorted(values) for name, values in known_slots.items()},
         "authorityDistribution": {
-            authority: sum(cap.network_authority == authority for cap in visible_capabilities())
+            authority: sum(cap.network_authority == authority for cap in CAPABILITY_REGISTRY.values())
             for authority in NETWORK_AUTHORITIES
         },
         "rangeParityRows": len(bound_rows),

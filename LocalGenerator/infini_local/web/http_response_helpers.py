@@ -65,24 +65,20 @@ def _combine_failure_http_response(error: BaseException | str, failure: dict[str
     if "http 400:" in message and "invalid schema for response_format" in message:
         return 424, "llm_request_rejected", False, "LLM provider rejected the request schema before generation; update the generator before retrying"
 
-    if "09b_visual_delivery_gate" in stage or ("visual" in stage and any(token in message for token in ("asset", "sprite", "delivery"))):
+    if stage == "09_visual_delivery_gate" or ("visual" in stage and any(token in message for token in ("asset", "sprite", "delivery"))):
         return 424, "visual_dependency_failed", True, "visual asset generation/delivery did not produce a deliverable item sprite"
 
     schema_stage = any(token in stage for token in ("schema", "validate", "repair"))
     llm_shape_error = any(token in message for token in (
-        "runtimeplan failed",
-        "engine-call validation",
-        "lacks set_item_stats",
         "invalid runtime",
-        "unsupported gameplay promises",
         "schema",
         "validation",
         "json",
     ))
     if schema_stage or llm_shape_error:
-        return 422, "llm_output_invalid", True, "LLM returned an invalid/unsupported item plan after repair attempts"
+        return 422, "llm_output_invalid", True, "LLM returned invalid or unsupported authored output"
 
-    if stage in {"01_author_llm_plan", "01_gameplay_author"} or "planner unavailable" in message or "llm planner unavailable" in message:
+    if stage == "01_gameplay_author" or "planner unavailable" in message:
         return 424, "planner_unavailable", True, "LLM planner did not return a usable item plan"
 
     return 424, "combine_failed", True, "combine pipeline failed before a deliverable recipe was committed"
@@ -93,7 +89,7 @@ def _combine_failure_player_message(status: int, code: str, message: str, failur
     if code in {"llm_auth_failed", "llm_model_unavailable", "llm_profile_unavailable", "llm_endpoint_unavailable", "llm_quota_exhausted", "llm_rate_limited", "llm_admission_timeout", "llm_timeout", "llm_transport_unavailable", "llm_request_rejected"}:
         return "Generation failed: " + message.rstrip(".") + "."
     if code == "llm_output_invalid":
-        return "Generation failed: LLM item plan was invalid after repair. Try crafting again."
+        return "Generation failed: LLM authored output was invalid. Try crafting again."
     if code == "visual_dependency_failed":
         return "Generation failed: required visual asset was not deliverable. Try again."
     if code == "planner_unavailable":

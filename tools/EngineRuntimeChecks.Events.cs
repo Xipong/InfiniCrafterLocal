@@ -108,6 +108,7 @@ internal static partial class EngineRuntimeChecks
         Equal(0, PendingActions(), "periodic action retires");
         var spawn = new RuntimeEventActionSpec {
             Event = RuntimeEventKind.Periodic, ActionCode = RuntimeEventActionCode.SpawnEntity,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild,
             DelayTicks = 2, PeriodTicks = 6, Count = 1,
         };
         var budget = new RuntimeSpawnBudget(2);
@@ -126,7 +127,8 @@ internal static partial class EngineRuntimeChecks
         Terraria.Main.netMode = NetmodeID.SinglePlayer;
         var owner = Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
         var projectile = Terraria.Main.projectile[0] = new Projectile { whoAmI = 0, owner = 0, identity = 2, active = true };
-        var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2 };
+        var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, DelayTicks = 2, Count = 2 };
         var budget = new RuntimeSpawnBudget(3);
         Equal(false, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
             new RuntimeEntitySpec { Kind = RuntimeEntityKind.ItemBody }, spawn, owner,
@@ -156,7 +158,8 @@ internal static partial class EngineRuntimeChecks
         var generation = Attach(projectile);
         typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, generation);
         var source = projectile.GetSource_FromThis();
-        var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2 };
+        var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, DelayTicks = 2, Count = 2 };
         var budget = new RuntimeSpawnBudget(3);
         Equal(true, RuntimeDelayedActionScheduler.TrySchedule(GeneratedItemData.Placeholder(),
             new RuntimeEntitySpec { Kind = RuntimeEntityKind.FreeProjectile }, spawn,
@@ -270,7 +273,8 @@ internal static partial class EngineRuntimeChecks
         var data = GeneratedItemData.Placeholder();
         var entity = new RuntimeEntitySpec { Id = "source_item", Kind = RuntimeEntityKind.ItemBody };
         var spawn = new RuntimeEventActionSpec {
-            ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2,
+            ActionCode = RuntimeEventActionCode.SpawnEntity,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, DelayTicks = 2, Count = 2,
         };
         var itemSource = owner.GetSource_ItemUse(item);
         Equal(true, itemSource is IEntitySource_WithStatsFromItem, "item source carries stat lineage");
@@ -346,6 +350,7 @@ internal static partial class EngineRuntimeChecks
         projectileEntity.Kind = RuntimeEntityKind.FreeProjectile;
         projectileEntity.Events = new[] { new RuntimeEventActionSpec {
             Event = "on_kill", ActionCode = RuntimeEventActionCode.SpawnEntity,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild,
             DelayTicks = 2, Count = 2,
         } };
         generatedProjectile.Configure(data, projectileEntity, 0, 3, Vector2.UnitX, activationBudget: projectileEventBudget);
@@ -421,7 +426,8 @@ internal static partial class EngineRuntimeChecks
                 Terraria.Main.netMode = NetmodeID.SinglePlayer;
         Terraria.Main.player[0] = new Player { whoAmI = 0, active = true };
         var delayed = new RuntimeEventActionSpec {
-            ActionCode = RuntimeEventActionCode.SpawnEntity, DelayTicks = 2, Count = 2,
+            ActionCode = RuntimeEventActionCode.SpawnEntity,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, DelayTicks = 2, Count = 2,
         };
         var delayedLedger = new RuntimeSpawnBudget(3);
         Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, a, delayed,

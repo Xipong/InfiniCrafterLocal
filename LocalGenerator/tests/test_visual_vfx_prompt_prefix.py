@@ -41,7 +41,7 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
                 "previous": {"schema": visual.VISUAL_KIT_SCHEMA, "item": {"inventoryScale": 99}, "entities": []},
                 "repair_scope": {"fieldPermissions": {"itemPaths": ["inventoryScale"]}},
             }
-            visual._request_visual_kit(data, parent, {}, {}, {}, **kwargs)
+            visual._request_visual_kit(data, parent, {}, **kwargs)
         else:
             kwargs = {} if not repair else {
                 "repair_errors": [{"path": "$.slots[0].alpha", "message": "invalid"}],
@@ -91,11 +91,11 @@ def test_catalog_revision_reaches_outgoing_instruction_not_recipe_tail(wire_tran
     responses, sent = wire_transport
     data = _accepted_visual_data("door_on_chain")
     responses.extend([{}, {}])
-    visual._request_visual_kit(data, {}, {}, {}, {})
+    visual._request_visual_kit(data, {}, {})
     catalog = copy.deepcopy(visual.visual_asset_mode_catalog())
     catalog[0]["runtimeEffect"] += " Explicit catalog revision."
     monkeypatch.setattr(visual, "visual_asset_mode_catalog", lambda: catalog)
-    visual._request_visual_kit(data, {}, {}, {}, {})
+    visual._request_visual_kit(data, {}, {})
     assert sent[0]["messages"][1]["content"] != sent[1]["messages"][1]["content"]
     assert sent[0]["messages"][2]["content"] == sent[1]["messages"][2]["content"]
     assert request_dossier(sent[1])["assetModeCatalog"] == catalog
@@ -110,7 +110,7 @@ def test_visual_receives_authored_hitbox_curve_without_selecting_sprite_scale(wi
     before = copy.deepcopy(data)
     responses, sent = wire_transport
     responses.append({})
-    visual._request_visual_kit(data, {}, {}, {}, {})
+    visual._request_visual_kit(data, {}, {})
     packet = request_dossier(sent[0])
     entity = next(row for row in packet["runtimeEntities"] if "hitboxCurve" in row)
     assert entity["hitboxCurve"]["startScale"] == 0.25
@@ -130,12 +130,12 @@ def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_
     authored["slots"] = []
     responses, sent = wire_transport
     responses.extend([raw, authored])
-    projected = visual.apply_visual_director(beam, {}, {}, {}, {})
+    projected = visual.apply_visual_director(beam, {}, {})
     packet = request_dossier(sent[0])
     entity = next(row for row in packet["runtimeEntities"] if row["controller"].get("name") == "channel_beam")
     assert entity["controller"]["params"]["rangeTiles"] == 1.0
     assert "collision" in entity["driverMeaningReadOnly"]["controller"]
-    final = vfx.attach_hybrid_vfx_manifest(projected, "beam-geometry", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(projected, "beam-geometry", llm_director=stage.call_llm_vfx_director)
     surface = request_dossier(sent[1])["runtimeSurface"]
     assert "beam" in next(row["sources"] for row in surface["texturedPathSources"] if row["entityId"] == "witness_entity")
     assert final["vfxManifest"]["slots"] == []
@@ -150,9 +150,9 @@ def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
     responses, sent = wire_transport
     responses.extend([{}, {}])
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Default", raising=False)
-    visual._request_visual_kit(data, {}, {}, {}, {})
+    visual._request_visual_kit(data, {}, {})
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Terraria Like", raising=False)
-    visual._request_visual_kit(data, {}, {}, {}, {})
+    visual._request_visual_kit(data, {}, {})
     assert "Terraria Like art direction" in sent[1]["messages"][0]["content"]
     assert sent[0]["messages"][1:] == sent[1]["messages"][1:]
     assert sent[0]["response_format"] == sent[1]["response_format"]
@@ -161,7 +161,7 @@ def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
 def test_invalid_prompt_style_is_not_silently_defaulted(monkeypatch):
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Unknown", raising=False)
     with pytest.raises(ValueError, match="INFINI_PROMPT_STYLE"):
-        build_initial_author_request({}, {}, {}, {}, "invalid-style", model_name="test-model")
+        build_initial_author_request({}, {}, "invalid-style", model_name="test-model")
 
 
 def test_generated_parent_visual_calibration_stays_in_visual_tail_not_gameplay(wire_transport):
@@ -173,15 +173,15 @@ def test_generated_parent_visual_calibration_stays_in_visual_tail_not_gameplay(w
     data = _accepted_visual_data("door_on_chain")
     responses, sent = wire_transport
     responses.extend([{}, {}])
-    visual._request_visual_kit(data, parent, {}, {}, {})
+    visual._request_visual_kit(data, parent, {})
     parent["generatedData"]["visual"]["renderSizePx"] = 48
-    visual._request_visual_kit(data, parent, {}, {}, {})
+    visual._request_visual_kit(data, parent, {})
     packets = [request_dossier(request)["parents"]["parentA"]["packet"] for request in sent]
     assert packets[0]["raw"]["generatedParent"]["visual"] == {"renderSizePx": 47, "preferredCanvasSize": 32}
     assert packets[1]["raw"]["generatedParent"]["visual"]["renderSizePx"] == 48
     assert sent[0]["messages"][1]["content"] == sent[1]["messages"][1]["content"]
     assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
-    request, _, _ = build_initial_author_request(before, {}, {}, {}, "parent-control", model_name="test-model")
+    request, _, _ = build_initial_author_request(before, {}, "parent-control", model_name="test-model")
     gameplay = request_dossier(request)["parents"]["A"]["packet"]
     assert gameplay["raw"]["generatedParent"]["gameplay"] == {"damage": 19}
     assert "visual" not in gameplay["raw"]["generatedParent"]
@@ -215,7 +215,8 @@ def test_parent_reference_never_invents_pixels_from_gameplay_bounds(defect):
 def test_public_visual_schemas_share_owner_catalogs_without_per_token_cases():
     director = visual.visual_response_schema(["item", "body"], True, item_body_id="item")["properties"]
     repair = visual.visual_repair_schema(["item", "body"], True, item_body_id="item")["properties"]
-    assert director["item"]["properties"]["effectColor"]["enum"] == repair["itemPatch"]["anyOf"][0]["properties"]["effectColor"]["enum"]
+    assert "effectColor" not in director["item"]["properties"]
+    assert "effectColor" not in repair["itemPatch"]["anyOf"][0]["properties"]
     assert director["equipOverlay"]["properties"]["accessoryMount"]["enum"] == repair["equipOverlayPatch"]["anyOf"][0]["properties"]["accessoryMount"]["enum"]
     modes = {branch["properties"]["assetMode"]["const"] for branch in director["entities"]["items"]["oneOf"]}
     assert modes == {row["mode"] for row in visual.visual_asset_mode_catalog()}

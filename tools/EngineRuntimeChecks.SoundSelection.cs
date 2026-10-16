@@ -40,8 +40,7 @@ internal static partial class EngineRuntimeChecks
 
     private static VfxSlotSpec SoundSelectionSlot(string entity, string eventName) => new() {
         Id = "exact_sound", EntityId = entity, Event = eventName, RendererKind = "soundCue",
-        Channel = "sound", Lane = "cue", TextureRole = "none", ParticleRole = "none",
-        ParticleSystemId = "none", EmissionMode = "none", Anchor = "self", RepeatEvery = 1, SlotSeed = 0,
+        Anchor = "self", SlotSeed = 0,
         SoundId = "Item1", Sound = new VfxSoundSpec { Volume = 0.4f, Pitch = 0, PitchVariance = 0 },
     };
 
@@ -50,8 +49,10 @@ internal static partial class EngineRuntimeChecks
     {
         var slot = SoundSelectionSlot("item", RuntimeEventKind.OnUse);
         slot.RendererKind = renderer;
-        if (renderer == "lightCue") slot.Channel = "light";
-        if (renderer == "impactRing") { slot.Channel = "impactShape"; slot.Lane = "primary"; }
+        if (renderer != "soundCue") {
+            slot.Color = Rgb(255,255,255); slot.Scale=1; slot.Spread=0; slot.ParticleSystemId="none";
+            slot.StartTick=0; slot.RepeatEvery=1; slot.Density=0; slot.Duration=10; slot.Alpha=.65f; slot.Blend="alpha"; slot.Layer="BeforeProjectiles";
+        }
         string json = System.Text.Json.JsonSerializer.Serialize(new VfxManifestSpec { Slots = new[] { slot } });
         var node = JsonNode.Parse(json)!.AsObject();
         var row = node["Slots"]![0]!.AsObject();
@@ -172,7 +173,11 @@ internal static partial class EngineRuntimeChecks
                     bool isItem = route.StartsWith("item", StringComparison.Ordinal);
                     slot.EntityId = isItem ? data.RuntimeProgram.ItemEntityId : entity.Id;
                     slot.Event = route.EndsWith("periodic", StringComparison.Ordinal) ? RuntimeEventKind.Periodic : isItem ? RuntimeEventKind.OnUse : RuntimeEventKind.OnSpawn;
-                    slot.Alpha = alpha; slot.PhaseOffset = phase;
+                    if (slot.Event == RuntimeEventKind.Periodic) {
+                        slot.RepeatEvery=1;
+                        if (!isItem) slot.StartTick=0;
+                    }
+                    slot.PhaseOffset = phase;
                     if (sample.Sound is not null) slot.Sound = sample.Sound;
                     data.VfxManifest.NormalizeAndValidate();
                     string serialized = data.VfxManifest.ToJson();
@@ -185,7 +190,7 @@ internal static partial class EngineRuntimeChecks
                     else if (route == "item_periodic") InfiniItemVfxRuntime.OnPeriodic(owner, data, slot.EntityId);
                     else if (route == "projectile_event") InfiniVfxRuntime.OnEvent(projectile, data, slot.EntityId, slot.Event, data.VfxManifest, ref state, projectile.Center);
                     else if (route == "projectile_periodic") InfiniVfxRuntime.OnTick(projectile, data, slot.EntityId, data.VfxManifest, ref state);
-                    else InfiniVfxRuntime.OnDetachedEvent(data, slot.EntityId, slot.Event, data.VfxManifest, projectile.Center, projectile.velocity, "sound_probe");
+                    else InfiniVfxRuntime.OnDetachedEvent(data, slot.EntityId, slot.Event, data.VfxManifest, projectile.Center, projectile.velocity, "sound_probe", InfiniVfxProjectileSnapshot.Capture(projectile,data,slot.EntityId));
                     string label = sample.Name;
                     Equal(sample.Sound?.Volume == 0f ? 0 : 1, calls, label + " exact API call count");
                     if (sample.Sound?.Volume == 0f) {
@@ -244,7 +249,7 @@ internal static partial class EngineRuntimeChecks
                     var state = new InfiniVfxState();
                     InfiniItemVfxRuntime.EmitAndSyncEvent(owner, data, item, RuntimeEventKind.OnUse);
                     InfiniVfxRuntime.OnEvent(projectile, data, item, RuntimeEventKind.OnUse, data.VfxManifest, ref state, projectile.Center);
-                    InfiniVfxRuntime.OnDetachedEvent(data, item, RuntimeEventKind.OnUse, data.VfxManifest, projectile.Center, projectile.velocity, "silent_probe");
+                    InfiniVfxRuntime.OnDetachedEvent(data, item, RuntimeEventKind.OnUse, data.VfxManifest, projectile.Center, projectile.velocity, "silent_probe", InfiniVfxProjectileSnapshot.Capture(projectile,data,item));
                     Equal(0, calls, server ? "dedicated server never reaches audio" : "empty slots retain deliberate silence");
                 }
             }

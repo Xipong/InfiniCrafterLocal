@@ -47,7 +47,7 @@ def _author_request(monkeypatch, mode, source):
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
     before = json.dumps(source, ensure_ascii=False)
     request, user, system = author.build_initial_author_request(
-        source, {}, {}, {}, "offline-unit-source", model_name="offline-unit-guidance")
+        source, {}, "offline-unit-source", model_name="offline-unit-guidance")
     assert request["response_format"]["type"] == mode
     assert request["messages"][0]["content"] == system
     assert dossier_text(request) == user
@@ -155,7 +155,7 @@ def _repair_request(monkeypatch, mode, source, item):
     before = json.dumps([source, item], ensure_ascii=False)
     with pytest.raises(_Captured):
         author.repair_author_item_after_failure(
-            item, source, {}, {}, {}, "offline-unit-repair", failure_report=validate_runtime_program(item))
+            item, source, {}, "offline-unit-repair", failure_report=validate_runtime_program(item))
     assert json.dumps([source, item], ensure_ascii=False) == before
     assert len(requests) == 1
     request = requests[0]
@@ -307,7 +307,10 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
         "arbitraryRate": replace(spec, wire_name="another", wire_divisor=1, wire_multiplier=7, units="probe rate"),
         "identityAmount": replace(spec, wire_name="same", wire_divisor=1, units="probe units"),
     }), final_wire_paths=("armor.unfamiliar", "gameplay.generatedBuff.another", "accessory.same", "gameplay.not_a_param"))
-    monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", {**registry.CAPABILITY_REGISTRY, arbitrary.name: arbitrary})
+    mutated = {**registry.CAPABILITY_REGISTRY, arbitrary.name: arbitrary}
+    monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", mutated)
+    from infini_local.pipelines import llm_authoring_prompt
+    monkeypatch.setattr(llm_authoring_prompt, "CAPABILITY_REGISTRY", mutated)
     source = _source()
     source["generatedData"]["armor"]["unfamiliar"] = 0.2
     source["generatedData"]["gameplay"]["generatedBuff"]["another"] = 7

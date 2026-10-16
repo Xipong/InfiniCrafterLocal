@@ -24,17 +24,13 @@ def _profile(value: float) -> dict:
 def _slot(slot_id: str, asset_id: str, *, renderer: str = "spriteElement") -> dict:
     slot = {
         "id": slot_id, "entityId": "orb", "event": "periodic",
-        "rendererKind": renderer, "backend": "Sprite" if renderer == "spriteElement" else "Primitive",
-        "textureRole": "none", "particleRole": "none", "anchor": "self", "channel": "motionTrail",
-        "lane": "primary", "emissionMode": "none", "blend": "alpha", "layer": "AfterProjectiles",
-        "particleSystemId": "none", "scale": 1.0, "density": 0.0,
-        "duration": 12 if renderer == "spriteElement" else 3, "alpha": 1.0,
-        "spread": 0.0, "jitter": 0.0, "fadeIn": 0.0, "fadeOut": 0.0, "budgetWeight": 1.0,
-        "signatureWeight": 0.0, "visualCost": 0.0, "startTick": 0,
-        "repeatEvery": 4 if renderer == "spriteElement" else 0,
+        "rendererKind": renderer,
+        "anchor": "self", "blend": "alpha", "layer": "AfterProjectiles",
+        "alpha": 1.0, "startTick": 0,
+        **({"duration": 12, "repeatEvery": 4} if renderer == "spriteElement" else {}),
     }
     texture = {"source": "asset", "assetId": asset_id}
-    color = {"start": "white", "middle": "white", "end": "white", "curve": "linear"}
+    color = {"start": {"r": 255, "g": 255, "b": 255}, "middle": {"r": 255, "g": 255, "b": 255}, "end": {"r": 255, "g": 255, "b": 255}, "curve": "linear"}
     if renderer == "spriteElement":
         slot["element"] = {
             "texture": texture, "attachment": "world", "count": 1,
@@ -59,9 +55,7 @@ def _data(requests: list[dict] | None = None) -> dict:
     data["id"] = "vfx_png_probe"
     requests = [_request()] if requests is None else requests
     authored = {
-        "schema": VFX_DIRECTOR_SCHEMA, "effectMagnitude": 0.5, "visualBudgetClass": "normal",
-        "motif": {"element": "amber", "shapeLanguage": "grain", "motionLanguage": "quiet",
-                  "paletteRole": "accent", "rhythm": 1.0, "chaos": 0.0},
+        "schema": VFX_DIRECTOR_SCHEMA,
         "slots": [_slot("first", requests[0]["id"]), _slot("second", requests[0]["id"], renderer="texturedPath")]
         if requests else [],
     }
@@ -70,7 +64,7 @@ def _data(requests: list[dict] | None = None) -> dict:
         for index, request in enumerate(requests[1:], start=2):
             authored["slots"].append(_slot(f"extra_{index}", request["id"]))
     data["vfxManifest"] = _compile_manifest(data, authored, "offline_recipe")
-    data["visual"] = {"imagePrompt": "offline item fixture", "preferredCanvasSize": 32}
+    data["visual"] = {"imagePrompt": "offline item fixture", "preferredCanvasSize": 32, "renderSizePx": 40, "forwardAngleDegrees": 45}
     return data
 
 def _raw_fixture(path: Path, *, layout: str = "cutout", size: int = 64, alpha: int = 144) -> str:
@@ -126,13 +120,16 @@ def _existing_texture_data(source: str, renderer: str = "spriteElement") -> dict
     slot[payload]["texture"] = {"source": source, "assetId": ""}
     orb = next(row for row in data["runtimeProgram"]["entities"] if row["id"] == "orb")
     if source == "entity":
-        orb["visual"]["assetMode"] = "baked_sprite"
+        orb["visual"].update(assetMode="baked_sprite", preferredCanvasSize=32, prompt="literal amber orb", renderSizePx=24, forwardAngleDegrees=0)
     data["vfxManifest"]["slots"] = [slot]
     if source == "impact":
-        producer = {key: copy.deepcopy(value) for key, value in slot.items() if key not in {"element", "path"}}
-        producer.update(id="impact_source", rendererKind="impactSprite", backend="Sprite", textureRole="impact")
+        from tests.vfx_material_fixtures import _legacy
+        producer = _legacy(data)["slots"][0]
+        producer.update(id="impact_source", entityId="orb", event="periodic", repeatEvery=4,
+                        duration=12, rendererKind="impactSprite", textureRole="impact", layer="AfterProjectiles")
+        producer.pop("spread"); producer.pop("particleSystemId"); producer.pop("density")
         data["vfxManifest"]["slots"].append(producer)
-        orb["visual"].update(impactPrompt="one isolated impact ingredient", impactNegativePrompt="UI, text, atlas")
+        orb["visual"].update(impactPrompt="one isolated impact ingredient", impactNegativePrompt="UI, text, atlas", impactCanvasSize=32)
     return data
 
 def frozen_value(value):

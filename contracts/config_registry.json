@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 132,
+  "documentedFieldCount": 130,
   "entries": [
     {
       "declarations": [
@@ -381,20 +381,6 @@
       "visibility": "gui"
     },
     {
-      "declarations": [],
-      "default": [],
-      "documented": true,
-      "example": "safety",
-      "gui": true,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_BALANCE_MODE",
-      "owners": [],
-      "secret": false,
-      "type": "unknown",
-      "visibility": "gui"
-    },
-    {
       "declarations": [
         {
           "default": "magenta",
@@ -479,6 +465,7 @@
       "name": "INFINI_CACHE_DIR",
       "owners": [
         "LocalGenerator/infini_local/core/config_bootstrap.py",
+        "tools/measure_llm_request_sizes.py",
         "tools/replay_generation_case.py"
       ],
       "secret": false,
@@ -508,30 +495,6 @@
       "secret": false,
       "type": "number",
       "visibility": "documented"
-    },
-    {
-      "declarations": [
-        {
-          "default": 24,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 24,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_CHILD_SPRITE_CANVAS",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -1354,30 +1317,6 @@
       "visibility": "documented"
     },
     {
-      "declarations": [
-        {
-          "default": 32,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 32,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_FIELD_SPRITE_CANVAS",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
       "declarations": [],
       "default": [],
       "documented": true,
@@ -1708,30 +1647,6 @@
     {
       "declarations": [
         {
-          "default": 32,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 32,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_IMPACT_SPRITE_CANVAS",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": 0.91,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
           "maximum": null,
@@ -1752,82 +1667,6 @@
       "secret": false,
       "type": "number",
       "visibility": "documented"
-    },
-    {
-      "declarations": [
-        {
-          "default": {
-            "expression": "DATA_DIR / \"item_knowledge.json\""
-          },
-          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "path"
-        }
-      ],
-      "default": {
-        "expression": "DATA_DIR / \"item_knowledge.json\""
-      },
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_ITEM_KNOWLEDGE_PATH",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
-      ],
-      "secret": false,
-      "type": "path",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_KNOWLEDGE_ENABLED",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": 3,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 3,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_AMMO_REP_LIMIT",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -2608,30 +2447,6 @@
     {
       "declarations": [
         {
-          "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": true,
-      "example": "1",
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_PROJECTILE_BEHAVIOR_DIGEST",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "documented"
-    },
-    {
-      "declarations": [
-        {
           "default": "",
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
@@ -2652,30 +2467,6 @@
       "secret": false,
       "type": "string",
       "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": "<redacted>",
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "string"
-        }
-      ],
-      "default": "<redacted>",
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_LLM_RAW_TOKEN_MODE",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
-      ],
-      "secret": true,
-      "type": "string",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -2849,30 +2640,6 @@
       "secret": false,
       "type": "string",
       "visibility": "gui"
-    },
-    {
-      "declarations": [
-        {
-          "default": 5,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py",
-          "maximum": 16,
-          "minimum": 1,
-          "type": "integer"
-        }
-      ],
-      "default": 5,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": 16,
-      "minimum": 1,
-      "name": "INFINI_LLM_RUNTIME_MAX_CONCEPT_CANDIDATES",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
     },
     {
       "declarations": [
@@ -3554,30 +3321,6 @@
     {
       "declarations": [
         {
-          "default": 32,
-          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "integer"
-        }
-      ],
-      "default": 32,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_PROJECTILE_SPRITE_CANVAS",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
-      ],
-      "secret": false,
-      "type": "integer",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": "Default",
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
@@ -3613,30 +3356,6 @@
       ],
       "secret": false,
       "type": "unknown",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
-          "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_RARITY_BASELINE_ENABLED",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_rarity_baseline.py"
-      ],
-      "secret": false,
-      "type": "boolean",
       "visibility": "internal"
     },
     {
@@ -4021,7 +3740,8 @@
       "minimum": null,
       "name": "INFINI_SDCPP_SERVER_AUTOSTART",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+        "tools/measure_llm_request_sizes.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -4485,7 +4205,8 @@
       "minimum": null,
       "name": "INFINI_SKIP_CONFIG_FILE",
       "owners": [
-        "LocalGenerator/infini_local/core/env_utils.py"
+        "LocalGenerator/infini_local/core/env_utils.py",
+        "tools/measure_llm_request_sizes.py"
       ],
       "secret": false,
       "type": "unknown",
@@ -4975,30 +4696,6 @@
     {
       "declarations": [
         {
-          "default": true,
-          "file": "LocalGenerator/infini_local/pipelines/item_power_knowledge.py",
-          "maximum": null,
-          "minimum": null,
-          "type": "boolean"
-        }
-      ],
-      "default": true,
-      "documented": false,
-      "example": null,
-      "gui": false,
-      "maximum": null,
-      "minimum": null,
-      "name": "INFINI_UNIVERSAL_RECIPE_MODE",
-      "owners": [
-        "LocalGenerator/infini_local/pipelines/item_power_knowledge.py"
-      ],
-      "secret": false,
-      "type": "boolean",
-      "visibility": "internal"
-    },
-    {
-      "declarations": [
-        {
           "default": false,
           "file": "LocalGenerator/infini_local/core/llm_config.py",
           "maximum": null,
@@ -5014,7 +4711,8 @@
       "minimum": null,
       "name": "INFINI_USE_LLM",
       "owners": [
-        "LocalGenerator/infini_local/core/llm_config.py"
+        "LocalGenerator/infini_local/core/llm_config.py",
+        "tools/measure_llm_request_sizes.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5576,6 +5274,7 @@
       "name": "INFINI_WORLD_RECIPES_DIR",
       "owners": [
         "LocalGenerator/infini_local/core/config_bootstrap.py",
+        "tools/measure_llm_request_sizes.py",
         "tools/replay_generation_case.py"
       ],
       "secret": false,
@@ -5670,23 +5369,19 @@
     }
   ],
   "errors": [],
-  "fieldCount": 231,
-  "fingerprint": "7637ab58ca7bc83ce783b69e1097d9f14e93cd6456d35c6c77bc3c6917985e1a",
+  "fieldCount": 218,
+  "fingerprint": "ea15bcf9d05451e0ca869425c98c90460a396b0d41a89291480324ea6e7e059f",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 131,
+  "guiFieldCount": 130,
   "ok": true,
   "schema": "infini.config-registry.v1",
-  "secretFieldCount": 13,
+  "secretFieldCount": 12,
   "warnings": [
-    {
-      "field": "INFINI_BALANCE_MODE",
-      "kind": "presented_without_env_helper_declaration"
-    },
     {
       "field": "INFINI_CRAFT_HTTP_ATTEMPTS",
       "kind": "presented_without_env_helper_declaration"

@@ -51,9 +51,12 @@ from infini_local.services.runtime_dump_service import runtime_projectile_lookup
 profile = projectile_profile_of({"shoot": 42})
 assert profile["tileCollide"] is True and profile["fromRuntimeDump"] is True
 assert profile["fromItemShoot"] == 42
-ammo = ammo_profile_of({"useAmmo": 97})
-assert ammo["exampleAmmo"] == "LiveAmmo"
-assert ammo["exampleProjectile"]["internalName"] == "LiveBolt"
+# A native useAmmo ID does not authorize scanning for a guessed example.
+assert ammo_profile_of({"useAmmo": 97}) == {}
+literal = {"mode": "weapon_uses_ammo", "ammoId": 97,
+           "ammoItemRaw": {"type": 97, "internalName": "LiveAmmo"},
+           "projectileRaw": {"type": 42, "internalName": "LiveBolt"}}
+assert ammo_profile_of({"ammoRaw": literal}) == literal
 assert runtime_projectile_lookup("42")["tileCollide"] is True
 assert runtime_projectile_lookup("invalid") == {}
 assert runtime_projectile_lookup(99999) == {}

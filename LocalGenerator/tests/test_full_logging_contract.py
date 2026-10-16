@@ -37,7 +37,7 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         kwargs = {"repair_errors": [{"path": "$.item.silhouette", "message": "required"}],
                   "previous": {"item": {"prompt": "frozen"}},
                   "repair_scope": {"itemMutable": True, "fieldPermissions": {"itemPaths": ["silhouette"]}}} if stage.endswith("repair") else {}
-        result = visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
+        result = visual._request_visual_kit(data, {}, {}, **kwargs)
         assert data == before
     else:
         from infini_local.core import vfx_manifest as vfx

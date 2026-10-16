@@ -133,7 +133,7 @@ def test_real_serialized_author_repair_carries_independent_placed_light(wire_tra
     from infini_local.pipelines import llm_authoring_pipeline as gameplay
     responses, requests = wire_transport
     document = lit(); responses.append(document)
-    accepted = gameplay.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "offline-placed-light")
+    accepted = gameplay.try_llm_plan({"name": "A"}, {"name": "B"}, "offline-placed-light")
     assert accepted is not None
     payload = request_dossier(requests[-1])
     card = next(c for c in payload["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
@@ -145,7 +145,7 @@ def test_real_serialized_author_repair_carries_independent_placed_light(wire_tra
     incoming = copy.deepcopy(document["runtimeProgram"]["calls"][-1])
     incoming["params"].update(placementCallId="install_tile", strength=1.5, color="red")
     responses.append({"note": "exact reference", "realizationReplacement": copy.deepcopy(document["realization"]), "callsUpsert": [incoming]})
-    repaired = gameplay.repair_author_item_after_failure(document, {}, {}, {}, {}, "offline-placed-light-repair", failure_report=validate_runtime_program(document))
+    repaired = gameplay.repair_author_item_after_failure(document, {}, {}, "offline-placed-light-repair", failure_report=validate_runtime_program(document))
     dossier = request_dossier(requests[-1])
     permission = next(p for p in dossier["repairScope"]["fieldPermissions"]["calls"] if p["id"] == "station_light")
     assert permission["paths"] == ["params.placementCallId"]

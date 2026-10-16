@@ -22,7 +22,6 @@ public readonly record struct InfiniVfxSlotEmissionKey(
 public sealed class InfiniVfxState
 {
     public int Tick;
-    public int LocalSeed;
     public int ParticlesThisTick;
     public int ParticlesTotal;
     public int DrawCallsThisFrame;
@@ -70,9 +69,9 @@ internal readonly record struct InfiniVfxProjectileSnapshot(
     Vector2 Center, Vector2 Tip, Vector2 Forward, Vector2? OwnerCenter, InfiniVfxSpritePose Pose)
 {
     internal Vector2? MaterialTip { get; init; }
-    // New owned-element units are pixels per world tick. Preserve the raw
-    // engine velocity in the legacy event payload; copy this technical value
-    // before retirement so remote/delayed effects never need a source lookup.
+    // Owned-element units are pixels per world tick. The event payload also
+    // carries raw projectile-update velocity for the simple native consumers.
+    // Copy this technical value before source retirement.
     internal Vector2 MaterialVelocity { get; init; }
     internal bool TryMaterialAnchor(string anchor,Vector2 point,out Vector2 result)
     {
@@ -142,7 +141,6 @@ public static class InfiniVfxRuntime
         BeginPresentationTick(projectile, data, entityId, ref state);
         InfiniDetachedVfxSystem.RegisterPeriodicElements(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
         InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
-        if (state.LocalSeed == 0) state.LocalSeed = manifest.Seed == 0 ? projectile.identity + 1337 : manifest.Seed;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
             if (InfiniDetachedVfxSystem.HasOwnedVfx(slot)) continue;
@@ -157,7 +155,6 @@ public static class InfiniVfxRuntime
     {
         if (Main.dedServ || manifest is null || !manifest.HasSlots) return false;
         BeginPresentationTick(projectile, data, entityId, ref state);
-        if (state.LocalSeed == 0) state.LocalSeed = manifest.Seed == 0 ? projectile.identity + 1337 : manifest.Seed;
         InfiniVfxProjectileSnapshot snapshot = InfiniVfxProjectileSnapshot.Capture(projectile, data, entityId);
         if (!snapshot.IsValidFor(data.RuntimeProgram.TryGetEntity(entityId))) return false;
         if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
@@ -263,38 +260,37 @@ public static class InfiniVfxRuntime
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
             if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal)) continue;
-            if (VfxLibraryValidation.HasPayload(slot)) continue;
+            if (InfiniDetachedVfxSystem.HasOwnedVfx(slot) || slot.RendererKind is "soundCue" or "lightCue") continue;
             // Nonperiodic procedural/sprite effects have detached event lifetimes.
             // History renderers need live samples; retain their on_spawn trail path.
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
             if (slot.Event != RuntimeEventKind.Periodic
                 && !(slot.Event == RuntimeEventKind.OnSpawn && kind is InfiniVfxRendererKind.HistoryRibbon or InfiniVfxRendererKind.TipTrail)) continue;
+            if (kind is InfiniVfxRendererKind.LightCue or InfiniVfxRendererKind.SoundCue or InfiniVfxRendererKind.ChildMotes) continue;
             bool over = slot.Layer == "AfterProjectiles";
             if (pass == InfiniVfxDrawPass.UnderProjectile && over) continue;
             if (pass == InfiniVfxDrawPass.OverProjectile && !over) continue;
             if (!TryAnchor(projectile, data, entityId, slot.Anchor, projectile.Center, out Vector2 anchor)) continue;
             Vector2 forward = slot.Anchor == "velocity"
                 ? projectile.velocity.SafeNormalize(projectile.rotation.ToRotationVector2()) : ForwardAxis(projectile, data, entityId);
-            Color color = ApplyBlend(PresentationColor(data, LegacyPresentationColor(manifest, lightColor)) * slot.Alpha, slot.Blend);
+            Color color = ApplyBlend(slot.Color!.ToColor() * slot.Alpha!.Value, slot.Blend!);
             switch (VfxRendererRegistry.Resolve(slot))
             {
-                case InfiniVfxRendererKind.ProjectileAfterimage:
                 case InfiniVfxRendererKind.SpriteStampTrail:
-                case InfiniVfxRendererKind.ActorAfterimage:
-                    SpritePresentationSelection selected = SpritePresentation.Resolve(data, entityId, slot.TextureRole);
+                    SpritePresentationSelection selected = SpritePresentation.Resolve(data, entityId, slot.TextureRole!);
                     Texture2D? texture = InfiniCrafterLocalMod.Sprites.TryGet(selected.Path);
                     if (texture is not null)
-                        DrawSelectedSpriteTrail(texture, projectile, data.RuntimeProgram.TryGetEntity(entityId), selected, manifest, ref state, color, slot.Scale);
+                        DrawSelectedSpriteTrail(texture, projectile, data.RuntimeProgram.TryGetEntity(entityId), selected, manifest, ref state, color, slot.Scale!.Value);
                     break;
                 case InfiniVfxRendererKind.TipTrail:
-                    DrawHistory(pixel, manifest, ref state, state.TipHistory, state.TipHistoryCount, color, Math.Max(1f, slot.Scale * 2f));
+                    DrawHistory(pixel, manifest, ref state, state.TipHistory, state.TipHistoryCount, color, Math.Max(1f, slot.Scale!.Value * 2f));
                     break;
                 case InfiniVfxRendererKind.HistoryRibbon:
-                    DrawTrail(pixel, manifest, ref state, color, Math.Max(1f, slot.Scale * 2f));
+                    DrawTrail(pixel, manifest, ref state, color, Math.Max(1f, slot.Scale!.Value * 2f));
                     break;
                 case InfiniVfxRendererKind.BeamLine:
                     if (SpendDraw(manifest, ref state, 1))
-                        DrawLine(pixel, anchor - Main.screenPosition, anchor - Main.screenPosition + forward * Math.Max(20f, slot.Scale * 48f), color, Math.Max(1f, slot.Scale * 2f));
+                        DrawLine(pixel, anchor - Main.screenPosition, anchor - Main.screenPosition + forward * Math.Max(20f, slot.Scale!.Value * 48f), color, Math.Max(1f, slot.Scale!.Value * 2f));
                     break;
                 case InfiniVfxRendererKind.WavyStrip:
                 case InfiniVfxRendererKind.ImpactRing:
@@ -316,26 +312,13 @@ public static class InfiniVfxRuntime
         return color;
     }
 
-    internal static string ResolveTexturePath(GeneratedItemData data, string entityId, string textureRole)
-        => data is null ? "" : SpritePresentation.Resolve(data, entityId, textureRole).Path;
-
-    public static bool OnDetachedEvent(
-        GeneratedItemData data,
-        string entityId,
-        string eventName,
-        VfxManifestSpec manifest,
-        Vector2 center,
-        Vector2 inheritedVelocity,
-        string sourceKey)
-        => OnDetachedEvent(data, entityId, eventName, manifest, center, inheritedVelocity, sourceKey, null);
-
     internal static bool OnDetachedEvent(GeneratedItemData data, string entityId, string eventName,
         VfxManifestSpec manifest, Vector2 center, Vector2 inheritedVelocity, string sourceKey,
-        InfiniVfxProjectileSnapshot? snapshot,VfxSourceBinding? binding=null,ulong occurrence=0)
+        InfiniVfxProjectileSnapshot snapshot,VfxSourceBinding? binding=null,ulong occurrence=0)
     {
         if (Main.dedServ || data is null || manifest is null || !manifest.HasSlots || string.IsNullOrWhiteSpace(sourceKey))
             return false;
-        if (snapshot.HasValue && !snapshot.Value.IsValidFor(data.RuntimeProgram.TryGetEntity(entityId))) return false;
+        if (!snapshot.IsValidFor(data.RuntimeProgram.TryGetEntity(entityId))) return false;
         var state = new InfiniVfxState { Tick = (int)Main.GameUpdateCount, SourceKey = sourceKey };
         bool relay=occurrence!=0;
         if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
@@ -345,20 +328,19 @@ public static class InfiniVfxRuntime
         {
             if (!Matches(slot, entityId, eventName)) continue;
             Vector2 anchor = center;
-            if (snapshot is { } captured && !captured.TryAnchor(slot.Anchor, center, out anchor)) continue;
-            if (!VfxLibraryValidation.HasPayload(slot)) emitted = true;
-            if (slot.Element is not null && snapshot.HasValue || VfxLibraryValidation.HasPayload(slot)) {
-                if(!admitMaterials||snapshot is not {} materialSnapshot||!materialSnapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
+            if (!snapshot.TryAnchor(slot.Anchor, center, out anchor)) continue;
+            if (slot.Path is not null) continue; // live geometry requires its registered source binding
+            if (!InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) emitted = true;
+            if (InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
+                if(!admitMaterials||!snapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
                 emitted |= InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,sourceKey,new(anchor,
-                    slot.Anchor=="velocity"?inheritedVelocity.SafeNormalize(materialSnapshot.Forward):materialSnapshot.Forward,materialSnapshot.MaterialVelocity){SourceCenter=materialSnapshot.Center},binding);
+                    slot.Anchor=="velocity"?inheritedVelocity.SafeNormalize(snapshot.Forward):snapshot.Forward,snapshot.MaterialVelocity){SourceCenter=snapshot.Center},binding);
                 continue;
             }
-            EmitPrimitive(data, anchor, snapshot.HasValue && slot.Anchor != "velocity" ? snapshot.Value.Forward : inheritedVelocity,
+            EmitPrimitive(data, anchor, slot.Anchor != "velocity" ? snapshot.Forward : inheritedVelocity,
                 slot, manifest, sourceKey);
-            if (snapshot.HasValue && VfxRendererRegistry.Resolve(slot) != InfiniVfxRendererKind.ImpactSprite)
-                EmitEventSprite(data, entityId, anchor, inheritedVelocity, slot, manifest, sourceKey, snapshot.Value.Pose);
-            // The old velocity-only API cannot fabricate a source body snapshot.
-            // Directional impactSprite and old cue/particle API calls remain intact.
+            if (VfxRendererRegistry.Resolve(slot) != InfiniVfxRendererKind.ImpactSprite)
+                EmitEventSprite(data, entityId, anchor, inheritedVelocity, slot, manifest, sourceKey, snapshot.Pose);
             EmitSlot(data, entityId, anchor, inheritedVelocity, slot, manifest, ref state, sourceKey, detachedParticleBudget: true);
         }
         return emitted;
@@ -371,25 +353,25 @@ public static class InfiniVfxRuntime
 
     private static bool Cadence(VfxSlotSpec slot, int tick)
     {
-        int repeat = slot.RepeatEvery > 0 ? slot.RepeatEvery : Math.Clamp(14 - (int)MathF.Round(slot.Density * 8f), 4, 18);
-        return tick >= slot.StartTick && (tick - slot.StartTick + slot.SlotSeed) % Math.Max(1, repeat) == 0;
+        int repeat = slot.RepeatEvery!.Value > 0 ? slot.RepeatEvery!.Value : Math.Clamp(14 - (int)MathF.Round(slot.Density!.Value * 8f), 4, 18);
+        return tick >= slot.StartTick!.Value && (tick - slot.StartTick!.Value + slot.SlotSeed) % Math.Max(1, repeat) == 0;
     }
 
     private static void EmitSlot(GeneratedItemData data, string entityId, Vector2 center, Vector2 inheritedVelocity, VfxSlotSpec slot, VfxManifestSpec manifest, ref InfiniVfxState state, string sourceKey, bool detachedParticleBudget = false)
     {
         InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
-        Color color = PresentationColor(data, LegacyPresentationColor(manifest, Color.White));
-        if (kind == InfiniVfxRendererKind.LightCue)
-        {
-            float strength = Math.Clamp(slot.Scale * 0.22f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;
-            if (strength > 0f)
-                Lighting.AddLight(center, color.ToVector3() * strength);
-            return;
-        }
         if (kind == InfiniVfxRendererKind.SoundCue)
         {
             SoundStyle sound = slot.ResolveSoundStyle();
             if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);
+            return;
+        }
+        Color color = slot.Color!.ToColor();
+        if (kind == InfiniVfxRendererKind.LightCue)
+        {
+            float strength = Math.Clamp(slot.Scale!.Value * 0.22f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;
+            if (strength > 0f)
+                Lighting.AddLight(center, color.ToVector3() * strength);
             return;
         }
         if (kind == InfiniVfxRendererKind.ImpactSprite)
@@ -401,7 +383,7 @@ public static class InfiniVfxRuntime
         // Keep sprite/light/sound execution above independent of this selector.
         if (slot.ParticleSystemId == "none") return;
         int count = kind is InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.ChildMotes
-            ? Math.Clamp(2 + (int)MathF.Round(slot.Density * 8f), 2, 10)
+            ? Math.Clamp(2 + (int)MathF.Round(slot.Density!.Value * 8f), 2, 10)
             : 1;
         count = InfiniVfxClientOptions.ScaleParticleCount(count);
         for (int i = 0; i < count; i++)
@@ -411,10 +393,10 @@ public static class InfiniVfxRuntime
                 : SpendParticle(manifest, ref state);
             if (!accepted) break;
             float angle = count == 1 ? Main.rand.NextFloat(MathHelper.TwoPi) : MathHelper.TwoPi * i / count;
-            float speed = Math.Clamp(0.35f + slot.Spread * 1.7f, 0.2f, 4f);
+            float speed = Math.Clamp(0.35f + slot.Spread!.Value * 1.7f, 0.2f, 4f);
             Vector2 velocity = angle.ToRotationVector2() * speed + inheritedVelocity * 0.08f;
-            Dust dust = Dust.NewDustPerfect(center, DustId(slot), velocity, 100, color, Math.Clamp(slot.Scale, 0.2f, 3f));
-            dust.noGravity = slot.ParticleSystemId is not "pl:smoke";
+            Dust dust = Dust.NewDustPerfect(center, VfxRendererRegistry.DustId(slot.ParticleSystemId), velocity, 100, color, Math.Clamp(slot.Scale!.Value, 0.2f, 3f));
+            dust.noGravity = slot.ParticleSystemId is not "Smoke";
         }
     }
 
@@ -425,26 +407,25 @@ public static class InfiniVfxRuntime
         InfiniVfxSpritePose? pose = null)
     {
         if (VfxRendererRegistry.Resolve(slot) is not (InfiniVfxRendererKind.ImpactSprite
-            or InfiniVfxRendererKind.ProjectileAfterimage or InfiniVfxRendererKind.SpriteStampTrail
-            or InfiniVfxRendererKind.ActorAfterimage)) return false;
+            or InfiniVfxRendererKind.SpriteStampTrail)) return false;
         if (VfxRendererRegistry.Resolve(slot) == InfiniVfxRendererKind.ImpactSprite)
         {
-            // Dedicated impacts retain their own old units and directional convention.
+            // Dedicated impacts use a directional convention independent of body pose.
             EmitImpactSprite(data, entityId, center, inheritedVelocity, slot, manifest, sourceKey);
             return true;
         }
-        SpritePresentationSelection selected = SpritePresentation.Resolve(data, entityId, slot.TextureRole);
-        if (string.IsNullOrWhiteSpace(selected.Path)) return !pose.HasValue; // legacy directional callers report kind admission
-        Color color = ApplyBlend(PresentationColor(data, LegacyPresentationColor(manifest, Color.White)), slot.Blend);
+        SpritePresentationSelection selected = SpritePresentation.Resolve(data, entityId, slot.TextureRole!);
+        if (string.IsNullOrWhiteSpace(selected.Path) || !selected.ImpactTexture && (!selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue)) return false;
+        Color color = ApplyBlend(slot.Color!.ToColor(), slot.Blend!);
         if (pose is { } captured)
         {
             // Snapshot/network remains raw native pose + dimensionless body scale;
             // only explicit code20 curves bypass the historical capture clamp.
             // Capture the selected texture's corrected pose and base size only here.
             var selectedPose = captured with { Rotation = selected.ProjectileRotation(data.RuntimeProgram.TryGetEntity(entityId), captured.Rotation, captured.Effects) };
-            InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer, center + new Vector2(0, captured.GfxOffY),
-                selectedPose.Rotation, captured.Scale * slot.Scale, slot.Alpha, color,
-                slot.Duration, manifest.Budget.MaxDrawCalls, selectedPose, selected.RenderSizePx,
+            InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer!, center + new Vector2(0, captured.GfxOffY),
+                selectedPose.Rotation, captured.Scale * slot.Scale!.Value, slot.Alpha!.Value, color,
+                slot.Duration!.Value, manifest.Budget.MaxDrawCalls, selectedPose, selected.RenderSizePx,
                 selected.FrontHandBody && selected.Grip is { } grip && selected.ForwardAngleDegrees is { } angle
                     ? new InfiniVfxSpriteAnchor((float)grip.NormalizedX, (float)grip.NormalizedY, angle,
                         data.RuntimeProgram.TryGetEntity(entityId)!.Movement.Params.HitboxOffsetPx!.Value) : null);
@@ -458,25 +439,25 @@ public static class InfiniVfxRuntime
                 rotation = SpritePresentation.AlignForward(rotation, axis, SpriteEffects.None);
                 selectedPose = new(rotation, 1f, SpriteEffects.None, 0f);
             }
-            // No pose was authored/captured by the item caller. Preserve its old
-            // directional/clamp convention; declared axis only replaces PCA metadata.
-            InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer, center, rotation,
-                Math.Clamp(slot.Scale, 0.05f, 8f), slot.Alpha, color, slot.Duration, manifest.Budget.MaxDrawCalls,
+            // Item callers provide a direction rather than a projectile body pose.
+            // A declared axis aligns the selected image in that frame.
+            InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer!, center, rotation,
+                Math.Clamp(slot.Scale!.Value, 0.05f, 8f), slot.Alpha!.Value, color, slot.Duration!.Value, manifest.Budget.MaxDrawCalls,
                 selectedPose, selected.RenderSizePx);
         }
         return true;
     }
 
     internal static bool EmitPrimitive(GeneratedItemData data, Vector2 center, Vector2 inheritedVelocity,
-        VfxSlotSpec slot, VfxManifestSpec manifest, string sourceKey, Color? legacyColor = null)
+        VfxSlotSpec slot, VfxManifestSpec manifest, string sourceKey)
     {
         InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
         if (kind is not (InfiniVfxRendererKind.WavyStrip or InfiniVfxRendererKind.FieldPulse
             or InfiniVfxRendererKind.OrbitingMotes or InfiniVfxRendererKind.GhostArc
             or InfiniVfxRendererKind.ImpactRing or InfiniVfxRendererKind.BeamLine)) return false;
-        InfiniDetachedVfxSystem.EnqueuePrimitive(sourceKey, kind, slot.Layer, center,
-            inheritedVelocity.SafeNormalize(Vector2.UnitX), slot.Scale, slot.Density, slot.PhaseOffset,
-            slot.RepeatEvery, slot.Duration, ApplyBlend(PresentationColor(data, legacyColor ?? LegacyPresentationColor(manifest, Color.White)) * slot.Alpha, slot.Blend),
+        InfiniDetachedVfxSystem.EnqueuePrimitive(sourceKey, kind, slot.Layer!, center,
+            inheritedVelocity.SafeNormalize(Vector2.UnitX), slot.Scale!.Value, slot.Density!.Value, slot.PhaseOffset,
+            slot.RepeatEvery!.Value, slot.Duration!.Value, ApplyBlend(slot.Color!.ToColor() * slot.Alpha!.Value, slot.Blend!),
             manifest.Budget.MaxDrawCalls);
         return true;
     }
@@ -486,40 +467,14 @@ public static class InfiniVfxRuntime
     internal static void EmitImpactSprite(GeneratedItemData data, string entityId, Vector2 center,
         Vector2 inheritedVelocity, VfxSlotSpec slot, VfxManifestSpec manifest, string sourceKey)
     {
-        string texturePath = ResolveTexturePath(data, entityId, slot.TextureRole);
+        string texturePath = SpritePresentation.Resolve(data, entityId, slot.TextureRole!).Path;
         if (string.IsNullOrWhiteSpace(texturePath)) return;
         InfiniDetachedVfxSystem.Enqueue(
-            sourceKey, texturePath, slot.Layer, center,
+            sourceKey, texturePath, slot.Layer!, center,
             inheritedVelocity.LengthSquared() > 0.01f ? inheritedVelocity.ToRotation() : 0f,
-            slot.Scale, slot.Alpha, ApplyBlend(PresentationColor(data, LegacyPresentationColor(manifest, Color.White)), slot.Blend),
-            slot.Duration, manifest.Budget.MaxDrawCalls);
+            slot.Scale!.Value, slot.Alpha!.Value, ApplyBlend(slot.Color!.ToColor(), slot.Blend!),
+            slot.Duration!.Value, manifest.Budget.MaxDrawCalls);
     }
-
-    private static int DustId(VfxSlotSpec slot) => slot.ParticleSystemId switch
-    {
-        "pl:smoke" => DustID.Smoke,
-        "pl:shard" => DustID.Glass,
-        "pl:spark" => DustID.Electric,
-        "pl:glow" => DustID.TintableDustLighted,
-        _ => DustID.GemDiamond,
-    };
-
-    // Explicit Visual color wins. The caller supplies its exact historical
-    // color for old definitions without EffectColor; palette prose is not parsed.
-    internal static Color PresentationColor(GeneratedItemData? data, Color fallback)
-        => RuntimeColorPolicy.Resolve(data?.Visual?.EffectColor, fallback);
-
-    internal static Color LegacyPresentationColor(VfxManifestSpec manifest, Color fallback)
-        => manifest.Motif.Element.ToLowerInvariant() switch
-        {
-            "fire" or "heat" => Color.OrangeRed,
-            "ice" or "water" => Color.Cyan,
-            "poison" or "nature" => Color.LimeGreen,
-            "shadow" or "void" => Color.MediumPurple,
-            "electric" or "lightning" => Color.Yellow,
-            "blood" => Color.Crimson,
-            _ => fallback == default ? Color.White : fallback,
-        };
 
     private static bool SpendParticle(VfxManifestSpec manifest, ref InfiniVfxState state)
     {
@@ -538,16 +493,11 @@ public static class InfiniVfxRuntime
     private static void DrawSelectedSpriteTrail(Texture2D texture, Projectile projectile, RuntimeEntitySpec? entity,
         SpritePresentationSelection selected, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float scale)
     {
-        if (!selected.RenderSizePx.HasValue && !selected.ForwardAngleDegrees.HasValue)
-        {
-            DrawSpriteTrail(texture, projectile, manifest, ref state, color, scale);
-            return; // literal legacy live-copy floor, including unclamped P
-        }
+        if (!selected.ImpactTexture && (!selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue)) return;
         SpriteEffects effects = projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         float rotation = selected.ProjectileRotation(entity, projectile.rotation, effects);
-        float drawScale = selected.RenderSizePx.HasValue
-            ? Math.Clamp(projectile.scale, 0.1f, 8f) * scale * selected.FrameScale(texture.Width, texture.Height)
-            : Math.Max(0.05f, projectile.scale * scale);
+        float drawScale = selected.ImpactTexture ? Math.Max(0.05f, projectile.scale * scale)
+            : Math.Clamp(projectile.scale, 0.1f, 8f) * scale * selected.FrameScale(texture.Width, texture.Height);
         if (selected.FrontHandBody && entity is not null && (entity.HitboxCurve?.MirrorToSprite == true || entity.VisualScaleCurve is not null))
             drawScale = projectile.scale * scale * selected.FrameScale(texture.Width, texture.Height);
         Vector2 origin = selected.ProjectileOrigin(entity, texture.Width, texture.Height, drawScale, effects);
@@ -557,30 +507,6 @@ public static class InfiniVfxRuntime
             float fade = 1f - i / (float)state.CenterHistory.Length;
             Main.spriteBatch.Draw(texture, state.CenterHistory[i] - Main.screenPosition + new Vector2(0f, projectile.gfxOffY),
                 null, color * fade, rotation, origin, drawScale, effects, 0f);
-        }
-    }
-
-    private static void DrawSpriteTrail(Texture2D texture, Projectile projectile, VfxManifestSpec manifest, ref InfiniVfxState state, Color color, float scale)
-    {
-        // Match the live sprite consumer, including authored spinning motion.
-        // Re-aiming only the afterimage by velocity produces a different pose.
-        float rotation = projectile.rotation;
-        Vector2 origin = new(texture.Width * 0.5f, texture.Height * 0.5f);
-        for (int i = 2; i < state.HistoryCount; i += 3)
-        {
-            Vector2 center = state.CenterHistory[i];
-            if (!SpendDraw(manifest, ref state, 1)) break;
-            float fade = 1f - i / (float)state.CenterHistory.Length;
-            Main.spriteBatch.Draw(
-                texture,
-                center - Main.screenPosition + new Vector2(0f, projectile.gfxOffY),
-                null,
-                color * fade,
-                rotation,
-                origin,
-                Math.Max(0.05f, projectile.scale * scale),
-                projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None,
-                0f);
         }
     }
 
@@ -605,7 +531,7 @@ public static class InfiniVfxRuntime
         if (!ShapePhase(slot, state.Tick, out float phase)) return;
         InfiniVfxState budgetState = state;
         DrawPrimitive(pixel, VfxRendererRegistry.Resolve(slot), center - Main.screenPosition,
-            forward, slot.Scale, slot.Density, phase, color,
+            forward, slot.Scale!.Value, slot.Density!.Value, phase, color,
             () => SpendDraw(manifest, ref budgetState, 1));
     }
 
@@ -684,10 +610,10 @@ public static class InfiniVfxRuntime
     // Periodic shapes remain live; this clock does not change Dust cadence.
     private static bool ShapePhase(VfxSlotSpec slot, int tick, out float phase)
     {
-        int age = tick - slot.StartTick;
+        int age = tick - slot.StartTick!.Value;
         phase = 0f;
         if (age < 0) return false;
-        float turns = age / (float)Math.Max(1, slot.RepeatEvery > 0 ? slot.RepeatEvery : slot.Duration) + slot.PhaseOffset;
+        float turns = age / (float)Math.Max(1, slot.RepeatEvery!.Value > 0 ? slot.RepeatEvery!.Value : slot.Duration!.Value) + slot.PhaseOffset;
         phase = turns - MathF.Floor(turns);
         return true;
     }

@@ -69,8 +69,7 @@ _PARENT_VISUAL_FIELDS = (
     "role", "assetMode", "visualProjectRef", "prompt", "imagePrompt", "negativePrompt",
     "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "renderSizePx",
     "forwardAngleDegrees", "inventoryScale", "worldScale", "scale", "grip",
-    "drawOffsetX", "drawOffsetY", "effectColor", "accessoryMount", "equipOverlayPrompt",
-    "dominantColorHex", "accentColorHex", "style", "objectType", "requiredAnchors",
+    "drawOffsetX", "drawOffsetY", "accessoryMount", "equipOverlayPrompt",
 )
 
 
@@ -123,8 +122,6 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     if not gd:
         direct = compact_projectile_profile(projectile_profile_of(item))
         effective = compact_projectile_profile(effective_projectile_profile_of(item))
-        direct.pop("behaviorDigest", None)
-        effective.pop("behaviorDigest", None)
         ammo = compact_ammo_profile(item)
     if direct:
         card["raw"]["directProjectile"] = direct
@@ -132,13 +129,6 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
         card["raw"]["effectiveProjectile"] = effective
 
     if ammo:
-        # v0.4.49: do not feed fallback/player-inventory ammo examples to the LLM.
-        # They are useful debug context, but small models confuse them with parent identity.
-        for noisy_key in [
-            "fallbackAmmoRaw", "fallbackProjectileRaw", "representativeAmmoRaw", "representativeProjectileRaw",
-            "playerInventoryAmmoRaw", "playerInventoryProjectileRaw", "exampleAmmo", "exampleProjectile",
-        ]:
-            ammo.pop(noisy_key, None)
         if direct:
             _dedupe_projectile_profile(card["raw"], "effectiveProjectile", "directProjectile", direct)
             _dedupe_projectile_profile(ammo, "projectileRaw", "directProjectile", direct)
@@ -173,8 +163,7 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
                 generated_parent[key] = copy.deepcopy(value)
         if summary:
             generated_parent["summary"] = {key: copy.deepcopy(summary.get(key)) for key in (
-                "schema", "name", "identity", "description", "playerExperience", "notableEffects",
-                "runtimePrimaryEntityId", "runtimeEntityIds",
+                "schema", "name", "identity", "description", "playerExperience",
             ) if _compact_keep(summary.get(key))}
         if include_visual_reference:
             visual = _accepted_visual_facts(dict_get_ci(gd, "visual", {}))

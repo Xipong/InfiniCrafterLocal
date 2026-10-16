@@ -33,7 +33,7 @@ def test_native_crit_reaches_actual_author_message_unchanged(monkeypatch, mode, 
     parent = {"name": "native base crit source", "damage": 40, "damageClass": "ranged"}
     parent.update({"crit": crit} if surface == "top_level" else {"fingerprint": {"crit": crit}})
     before = copy.deepcopy(parent)
-    request, user, _ = author.build_initial_author_request(parent, {}, {}, {}, "native-base-crit", model_name="offline-test-model")
+    request, user, _ = author.build_initial_author_request(parent, {}, "native-base-crit", model_name="offline-test-model")
     if mode == "off":
         assert request["response_format"] is None
     else:
@@ -52,7 +52,7 @@ def test_source_crit_is_not_confused_with_generated_equipment_bonus(monkeypatch,
     data["accessory"]["genericCrit"] = 17.0
     parent = {"name": "generated equipped bonus source", "crit": 0, "generatedData": data}
     before = copy.deepcopy(parent)
-    request, _, _ = author.build_initial_author_request(parent, {}, {}, {}, "generated-crit-separation", model_name="offline-test-model")
+    request, _, _ = author.build_initial_author_request(parent, {}, "generated-crit-separation", model_name="offline-test-model")
     raw = request_dossier(request)["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["crit"] == 0
     assert raw["generatedParent"]["accessory"]["genericCrit"] == 17.0

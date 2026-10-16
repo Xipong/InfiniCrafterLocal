@@ -21,7 +21,7 @@ def test_author_does_not_build_unused_provider_schema(monkeypatch, mode):
         return {"type": "object", "properties": {"marker": {"type": "string"}}}
 
     monkeypatch.setattr(author, "author_item_provider_response_schema", schema)
-    request, _, _ = author.build_initial_author_request({}, {}, {}, {}, "one", model_name="test-model")
+    request, _, _ = author.build_initial_author_request({}, {}, "one", model_name="test-model")
     assert calls == []
     assert request.get("response_format") == ({"type": "json_object"} if mode == "json_object" else None)
 
@@ -59,7 +59,7 @@ def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, s
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
     before = deepcopy((source_a, source_b))
     request, user, _ = author.build_initial_author_request(
-        source_a, source_b, {}, {}, "no-damage-advice", model_name="test-model",
+        source_a, source_b, "no-damage-advice", model_name="test-model",
     )
     assert dossier_text(request) == user
     payload = json.loads(user)
@@ -88,10 +88,10 @@ def _marked_prefix(request):
 def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     first, first_user, _ = author.build_initial_author_request(
-        {"name": "Workbench"}, {"name": "Sword"}, {}, {}, "workbench+sword", model_name="test-model",
+        {"name": "Workbench"}, {"name": "Sword"}, "workbench+sword", model_name="test-model",
     )
     second, second_user, _ = author.build_initial_author_request(
-        {"name": "Lens"}, {"name": "Bird"}, {}, {}, "lens+bird", model_name="test-model",
+        {"name": "Lens"}, {"name": "Bird"}, "lens+bird", model_name="test-model",
     )
     static, prefix, full = _marked_prefix(first)
     other_static, other_prefix, other_full = _marked_prefix(second)
@@ -102,8 +102,8 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
     assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
     assert full["recipeKey"] != other_full["recipeKey"]
     capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    assert len(capabilities) == sum(cap.prompt_visible and cap.decision == "expose" for cap in author.CAPABILITY_REGISTRY.values())
-    assert {card["fn"] for card in capabilities} == {name for name, cap in author.CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    assert len(capabilities) == len(author.CAPABILITY_REGISTRY)
+    assert {card["fn"] for card in capabilities} == {name for name, cap in author.CAPABILITY_REGISTRY.items() }
     assert "present_placed_item_sprite" in {card["fn"] for card in capabilities}
     assert dossier_text(first) == first_user
     assert dossier_text(second) == second_user
@@ -143,7 +143,7 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
                 use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")
                 del use["params"]["useStyle"]
                 report = validate_runtime_program(item)
-                author.repair_author_item_after_failure(item, {"name": label}, {}, {}, {}, label, failure_report=report)
+                author.repair_author_item_after_failure(item, {"name": label}, {}, label, failure_report=report)
     static, prefix, full = _marked_prefix(requests[0])
     other_static, other_prefix, other_full = _marked_prefix(requests[1])
     assert static == other_static

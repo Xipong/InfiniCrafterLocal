@@ -35,11 +35,11 @@ def test_exact_controls_reach_source_receipts_wire_and_cache_without_alpha_coupl
     from infini_local.storage import world_storage
     data = _data()
     raw = _sound(data, "Item26")
-    raw["slots"][0].update(alpha=0.01, sound=controls)
+    raw["slots"][0].update(sound=controls)
     before = copy.deepcopy(raw)
-    final = vfx.attach_hybrid_vfx_manifest(data, "sound-controls", llm_director=lambda *_args, **_kwargs: raw)
+    final = vfx.attach_vfx_manifest(data, "sound-controls", llm_director=lambda *_args, **_kwargs: raw)
     assert final["vfxManifest"]["slots"][0]["sound"] == controls
-    assert final["vfxManifest"]["slots"][0]["alpha"] == 0.01
+    assert "alpha" not in final["vfxManifest"]["slots"][0]
     assert raw == before and vfx.validate_vfx_manifest_wire(final)["ok"]
     receipts = final["debug"]["vfxSoundReceipts"]
     assert len(receipts) == 4
@@ -166,7 +166,7 @@ def test_actual_repair_transport_restores_only_sound_scope_and_keeps_other_choic
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "restore diagnosed sound choices", "slotsUpsert": [candidate]}
     sent = _offline_transport(monkeypatch, "sound_controls_" + mode + str(missing_container), [raw, patch])
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
-    final = vfx.attach_hybrid_vfx_manifest(data, "sound-control-repair", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "sound-control-repair", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == [
         "$.slotsUpsert[0].sound" if missing_container else "$.slotsUpsert[0].sound.volume"]
@@ -181,8 +181,8 @@ def test_foreign_sound_object_can_only_be_deleted_without_changing_renderer(rend
     data = _data()
     accepted = _legacy(data)
     accepted["slots"][0]["rendererKind"] = renderer
-    if renderer == "lightCue":
-        accepted["slots"][0].update(channel="light", lane="cue")
+    for field in (("alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole", "startTick", "repeatEvery", "density") if renderer == "lightCue" else ("alpha", "blend", "layer", "duration") if renderer == "childMotes" else ()):
+        accepted["slots"][0].pop(field, None)
     raw = copy.deepcopy(accepted)
     raw["slots"][0]["sound"] = {"volume": 1, "pitch": 0, "pitchVariance": 0}
     # Unknown branch payload is the error; its presence must not require a new sample.
@@ -239,15 +239,16 @@ def test_unrelated_repair_cannot_unmute_explicit_zero_volume(monkeypatch):
     accepted = _sound(data)
     accepted["slots"][0]["sound"]["volume"] = 0
     raw = copy.deepcopy(accepted)
-    raw["effectMagnitude"] = 2
+    raw["slots"][0]["sound"]["pitch"] = 2
     hostile = copy.deepcopy(accepted["slots"][0])
     hostile["sound"]["volume"] = 1
-    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "repair magnitude", "effectMagnitude": accepted["effectMagnitude"], "slotsUpsert": [hostile]}
+    hostile["sound"]["pitch"] = accepted["slots"][0]["sound"]["pitch"]
+    patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "repair pitch", "slotsUpsert": [hostile]}
     _offline_transport(monkeypatch, "sound-frozen-zero", [raw, patch])
-    final = vfx.attach_hybrid_vfx_manifest(data, "sound-frozen-zero", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "sound-frozen-zero", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert final["vfxManifest"]["slots"][0]["sound"]["volume"] == 0
-    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.effectMagnitude"]
+    assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == ["$.slotsUpsert[0].sound.pitch"]
 
 
 @pytest.mark.parametrize("valid_fix", [False, True])
@@ -261,14 +262,14 @@ def test_frozen_out_of_bounds_numeric_attempt_is_ignored_before_strict_mutable_v
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "fix volume while leaving other choices frozen", "slotsUpsert": [candidate]}
     sent = _offline_transport(monkeypatch, "sound-numeric-frozen-" + str(valid_fix), [raw, patch])
     if valid_fix:
-        final = vfx.attach_hybrid_vfx_manifest(data, "sound-numeric-frozen", llm_director=stage.call_llm_vfx_director)
+        final = vfx.attach_vfx_manifest(data, "sound-numeric-frozen", llm_director=stage.call_llm_vfx_director)
         assert final["debug"]["vfxDirectorRaw"] == accepted
         audit = final["debug"]["vfxRepairFilterAudit"]
         assert audit["acceptedPaths"] == ["$.slotsUpsert[0].sound.volume"]
         assert {row["path"] for row in audit["ignoredChanges"]} == {"$.slotsUpsert[0].sound.pitch", "$.slotsUpsert[0].sound.pitchVariance"}
     else:
         with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
-            vfx.attach_hybrid_vfx_manifest(data, "sound-numeric-frozen", llm_director=stage.call_llm_vfx_director)
+            vfx.attach_vfx_manifest(data, "sound-numeric-frozen", llm_director=stage.call_llm_vfx_director)
         assert "vfxManifest" not in data
     assert len(sent) == 2
 
@@ -301,5 +302,5 @@ def test_actual_vfx_attachment_refuses_a_mutated_compiler_projection(monkeypatch
 
     monkeypatch.setattr(vfx, "_compile_manifest", corrupt)
     with pytest.raises(PlannerUnavailable, match="sound projection lost"):
-        vfx.attach_hybrid_vfx_manifest(data, "refuse-corrupt-sound", llm_director=lambda *_args, **_kwargs: raw)
+        vfx.attach_vfx_manifest(data, "refuse-corrupt-sound", llm_director=lambda *_args, **_kwargs: raw)
     assert "vfxManifest" not in data

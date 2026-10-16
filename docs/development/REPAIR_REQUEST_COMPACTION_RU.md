@@ -1,12 +1,8 @@
 # Scoped grammar и syntax-only context Gameplay Repair
 
-## Что меняется
+## Текущая граница
 
-Gameplay Repair уже получал exact scope, frozen source и несколько blocker cards,
-но provider schema всегда включала все capabilities. Format Repair дополнительно
-копировал полный original Author prompt с каталогом и общими инструкциями.
-
-Теперь schema `callsUpsert` — request-local projection **того же** canonical
+Schema `callsUpsert` — request-local projection **того же** canonical
 `program_schema.author_item_repair_schema`. Выбор registry variants задаёт
 `repair_scope.runtime_repair_schema_capabilities`:
 
@@ -48,28 +44,13 @@ parent facts. Equality с синтаксически восстановимым 
 ограниченная grammar projection, не новый Author API и не Repair permissions.
 Compiler receipts и C# wire/execution не изменяются.
 
-## Измерение production requests
-
-База `62762da` имеет тот же исполняемый код, что `ff039fc`. Offline-скрипт использует
-настоящие builders, Chat/Responses/Codex adapters и production JSON serializer;
-все сетевые и LLM calls блокируются. Parent/craft данные — synthetic fixtures.
-Default style, фиксированный model route label gpt-6.1, max tokens 9000.
-
-| Запрос | User до → после | Provider schema до → после | Полный Chat HTTP до → после |
-|---|---:|---:|---:|
-| Missing configure_item_use.useStyle, json_schema | 35 622 → 35 622 | 140 705 → 19 950 | 192 873 → 64 548 |
-| Syntax-only repair, json_object | 134 428 → 17 296 | отсутствует | 147 167 → 20 643 |
-| Syntax-only repair, json_schema | 134 428 → 17 296 | 138 811 → 138 811 | 295 648 → 169 124 |
-
-Initial Author request в этом независимом PR не изменяется. Общая очистка
-provider annotations и Author context вынесены в отдельную категорию; savings
-двух PR нужно измерять вместе, не складывать независимо полученные проценты.
-Частота Repair, billed tokens, latency и model quality не измерены.
+## Offline capture production requests
 
 ```bash
 PYTHONPATH=LocalGenerator python tools/measure_llm_request_sizes.py --out request-sizes.json
-PYTHONPATH=LocalGenerator python tools/measure_llm_request_sizes.py --repo /path/to/base-checkout --out base-request-sizes.json
 ```
+
+Скрипт использует реальные builders/adapters/serializers и блокирует network/LLM calls. Родители — synthetic fixtures; measured JSON bytes/chars не являются billed tokens, latency или model quality. Сравнение baseline допускается отдельным `--repo /path/to/base-checkout`, не через восстановление старого контракта в production.
 
 ## Проверки и hostile responses
 
@@ -85,9 +66,4 @@ Strict provider grammar теперь отвергает out-of-scope fn ещё �
 правки frozen nodes игнорируются с audit. Это не утверждение, что hostile ответ
 schema-valid; malformed types/unknown shapes сохраняют прежний отказ.
 
-Полный offline suite: **7108 passed**. Все 11 portable gates из `AGENTS.md`
-пройдены, включая generated docs parity, frozen Repair audit и dependency-free
-sandbox validation.
-
-Native build/game/MP и live LLM quality comparison: **notRun**. Эти размеры не
-доказывают качество синтаксического восстановления или игровые lifecycle.
+Актуальные команды и границы proof — [TESTING](TESTING_RU.md). Offline request/merge checks не доказывают live LLM quality, native game-loop/GPU или MP match.

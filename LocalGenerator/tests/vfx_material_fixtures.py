@@ -14,16 +14,14 @@ def _data(capability: str = "") -> dict[str, Any]:
 def _legacy(data: dict[str, Any]) -> dict[str, Any]:
     item_id = data["runtimeProgram"]["itemEntityId"]
     return {
-        "schema": vfx.VFX_DIRECTOR_SCHEMA, "effectMagnitude": 0.5, "visualBudgetClass": "normal",
-        "motif": {"element": "metal", "shapeLanguage": "sparks", "motionLanguage": "short wake", "paletteRole": "accent", "rhythm": 1.0, "chaos": 0.2},
+        "schema": vfx.VFX_DIRECTOR_SCHEMA,
         "slots": [{
+            "color": {"r": 17, "g": 93, "b": 241},
             "id": "old_slot", "entityId": item_id, "event": "on_use", "rendererKind": "impactRing",
-            "backend": "Realtime", "textureRole": "none", "particleRole": "none", "anchor": "self",
-            "channel": "impactShape", "lane": "primary", "emissionMode": "burst", "blend": "alpha",
+            "anchor": "self", "blend": "alpha",
             "layer": "BeforeProjectiles", "particleSystemId": "none", "scale": 1.0,
-            "density": 0.4, "duration": 20, "alpha": 0.8, "spread": 0.1, "jitter": 0.1,
-            "fadeIn": 0.1, "fadeOut": 0.4, "budgetWeight": 1.0, "signatureWeight": 0.5,
-            "visualCost": 0.5, "startTick": 0, "repeatEvery": 0, "spritePrompt": "", "spriteNegativePrompt": "",
+            "density": 0.4, "duration": 20, "alpha": 0.8, "spread": 0.1,
+            "startTick": 0, "repeatEvery": 0,
         }],
     }
 
@@ -32,10 +30,10 @@ def _profile(start: Any = 1.0, middle: Any = 1.0, end: Any = 0.0, curve: str = "
 
 def _sprite(data: dict[str, Any]) -> dict[str, Any]:
     raw = _legacy(data)
+    for field in ("color", "scale", "density", "spread", "particleSystemId", "textureRole"):
+        raw["slots"][0].pop(field, None)
     raw["slots"][0].update({
-        "id": "ingredient_element", "rendererKind": "spriteElement", "backend": "Sprite", "emissionMode": "none",
-        "scale": 1.0, "density": 0.0, "spread": 0.0, "jitter": 0.0, "fadeIn": 0.0, "fadeOut": 0.0,
-        "signatureWeight": 0.0, "visualCost": 0.0,
+        "id": "ingredient_element", "rendererKind": "spriteElement",
         "element": {
             "texture": {"source": "item", "assetId": ""}, "attachment": "world", "count": 2,
             "offsetForwardPx": 8.0, "offsetSidePx": -3.0, "speedMinPxPerTick": 1.0, "speedMaxPxPerTick": 2.0,
@@ -43,7 +41,7 @@ def _sprite(data: dict[str, Any]) -> dict[str, Any]:
             "accelerationXPxPerTickSquared": 0.0, "accelerationYPxPerTickSquared": 0.05,
             "rotationRadians": 0.0, "rotationSpeedRadiansPerTick": -0.1, "widthPx": 12.0, "heightPx": 5.0,
             "widthProfile": _profile(0.0, 1.0, 2.0, "easeIn"), "heightProfile": _profile(2.0, 1.0, 0.0, "easeOut"),
-            "opacityProfile": _profile(0.0, 0.8, 0.0, "smoothStep"), "colorProfile": _profile("white", "effect", "tan"),
+            "opacityProfile": _profile(0.0, 0.8, 0.0, "smoothStep"), "colorProfile": _profile({'r': 255, 'g': 255, 'b': 255}, {'r': 17, 'g': 93, 'b': 241}, {'r': 210, 'g': 180, 'b': 140}),
         },
     })
     return raw
@@ -77,12 +75,14 @@ def _path(data: dict[str, Any], source: str = "anchorHistory") -> dict[str, Any]
     slot = raw["slots"][0]
     slot.pop("element")
     projectile = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
-    slot.update(id="connected_path", entityId=projectile["id"], event="periodic", rendererKind="texturedPath", backend="Primitive", duration=3)
+    slot.update(id="connected_path", entityId=projectile["id"], event="periodic", rendererKind="texturedPath")
+    slot.pop("duration")
+    slot.pop("repeatEvery")
     slot["path"] = {
         "texture": {"source": "item", "assetId": ""}, "source": source,
         "historyTicks": 12 if source == "anchorHistory" else 0, "minDistancePx": 2.0 if source == "anchorHistory" else 0.0,
         "maxSegmentLengthPx": 64.0, "widthPx": 8.0, "widthProfile": _profile(0.0, 2.0, 0.0),
-        "opacityProfile": _profile(0.0, 1.0, 0.0), "colorProfile": _profile("gold", "effect", "white"),
+        "opacityProfile": _profile(0.0, 1.0, 0.0), "colorProfile": _profile({'r': 255, 'g': 215, 'b': 0}, {'r': 17, 'g': 93, 'b': 241}, {'r': 255, 'g': 255, 'b': 255}),
         "profileDomain": "age" if source == "anchorHistory" else "length", "uvMode": "repeat",
         "repeatLengthPx": 24.0, "scrollPxPerTick": -2.0,
     }

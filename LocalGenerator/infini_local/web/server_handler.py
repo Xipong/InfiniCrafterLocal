@@ -29,7 +29,6 @@ _GET_LOOPBACK_REQUIRED_PREFIX_ROUTES = (
     "/sdcpp",
     "/debug/",
     "/visual_doctor",
-    "/zimage_doctor",
 )
 _POST_LOOPBACK_REQUIRED_EXACT_ROUTES = {"/combine"}
 _POST_LOOPBACK_REQUIRED_PREFIX_ROUTES = ("/debug/vfx",)
@@ -67,7 +66,6 @@ def build_handler(
     world_scope_missing: type[BaseException],
     visual_delivery_blocked: type[BaseException],
     planner_unavailable: type[BaseException],
-    last_combine_failure_summary: Callable[[], dict[str, Any]],
     clear_combine_failure: Callable[[str], None],
     combine_failure_http_response: Callable[..., tuple[int, str, bool, str]],
     combine_failure_payload: Callable[..., dict[str, Any]],
@@ -127,7 +125,6 @@ def build_handler(
                         trace_event=trace_event,
                         json=self.json,
                         json_status=self.json_status,
-                        last_failure_summary=last_combine_failure_summary,
                         clear_failure_state=clear_combine_failure,
                         cache_lookup_passthrough_errors=(world_scope_missing,),
                     )

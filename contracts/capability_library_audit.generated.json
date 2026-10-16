@@ -14,26 +14,24 @@
     "verticalSlices": true
   },
   "metrics": {
-    "capabilities": 73,
-    "publicCapabilities": 69,
-    "retainedCapabilities": 4,
+    "capabilities": 70,
     "entityKinds": 7,
     "inputs": 4,
     "bindingActions": 5,
     "events": 10,
-    "parameters": 308,
-    "numericParameters": 214,
-    "boundedNumericParameters": 214,
-    "semanticParameters": 308,
+    "parameters": 314,
+    "numericParameters": 217,
+    "boundedNumericParameters": 217,
+    "semanticParameters": 314,
     "typedEntityReferences": 4,
     "typedCallReferences": 2,
-    "requirements": 74,
+    "requirements": 85,
     "bindingDependencyEdges": 9,
     "spawnBudgetCapabilities": 3,
     "stationaryMeaningfulCapabilities": 14,
-    "exactWirePaths": 455,
+    "exactWirePaths": 464,
     "globalTechnicalLowerers": 8,
-    "globalTechnicalLowererOutputs": 168,
+    "globalTechnicalLowererOutputs": 169,
     "exclusiveGroups": {
       "ammo_role": [
         "configure_vanilla_ammo_item",
@@ -55,6 +53,7 @@
         "move_expanding_wave",
         "move_flail_tether",
         "move_forward_then_retract",
+        "move_front_hand",
         "move_gravity_arc",
         "move_orbit",
         "move_phase",
@@ -77,11 +76,11 @@
     "authorityDistribution": {
       "owner_request_server_execute": 14,
       "server_execute": 3,
-      "owner_execute_sync": 49,
+      "owner_execute_sync": 50,
       "client_visual_only": 3
     },
-    "rangeParityRows": 151,
-    "verticalSliceCount": 69
+    "rangeParityRows": 152,
+    "verticalSliceCount": 70
   },
   "issues": [],
   "errorCount": 0,
@@ -1664,6 +1663,25 @@
     },
     {
       "capability": "move_forward_then_retract",
+      "param": "durationTicks",
+      "wireParam": "durationTicks",
+      "csharpClass": "RuntimeParamsSpec",
+      "authorBounds": [
+        2,
+        240
+      ],
+      "wireBounds": [
+        2,
+        240
+      ],
+      "csharpBounds": [
+        0.0,
+        600.0
+      ],
+      "preserved": true
+    },
+    {
+      "capability": "move_front_hand",
       "param": "durationTicks",
       "wireParam": "durationTicks",
       "csharpClass": "RuntimeParamsSpec",

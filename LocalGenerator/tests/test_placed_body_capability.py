@@ -83,7 +83,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     responses, requests = wire_transport
     document = placed()
     responses.append(document)
-    accepted = gameplay.try_llm_plan({"name":"A"}, {"name":"B"}, {}, {}, "placed-body-offline")
+    accepted = gameplay.try_llm_plan({"name":"A"}, {"name":"B"}, "placed-body-offline")
     assert accepted is not None
     payload = request_dossier(requests[-1])
     cards = payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
@@ -99,7 +99,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     kit = _visual_kit(wire)
     for repair in (False, True):
         responses.append(kit if not repair else {"schema":visual.VISUAL_REPAIR_PATCH_SCHEMA, "note":"offline no-op"})
-        visual._request_visual_kit(wire, {}, {}, {}, {}, **({"repair_errors":[], "previous":kit, "repair_scope":{}} if repair else {}))
+        visual._request_visual_kit(wire, {}, {}, **({"repair_errors":[], "previous":kit, "repair_scope":{}} if repair else {}))
         packet = request_dossier(requests[-1])
         assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == wire["runtimeProgram"]["bindings"]
         guidance = packet["spritePresentationReadOnly"]["placedBody"]
@@ -284,7 +284,7 @@ def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(w
     broken["params"].update(placementCallId="install_tile", renderSizePx=512, rotationDegrees=150)
     patch = {"note":"explicit exact call reference", "realizationReplacement":copy.deepcopy(document["realization"]), "callsUpsert":[broken]}
     responses.append(patch)
-    result = gameplay.repair_author_item_after_failure(document, {}, {}, {}, {}, "offline-placed-repair",
+    result = gameplay.repair_author_item_after_failure(document, {}, {}, "offline-placed-repair",
                                                       failure_report=validate_runtime_program(document))
     dossier = request_dossier(requests[-1])
     permission = next(p for p in dossier["repairScope"]["fieldPermissions"]["calls"] if p["id"] == "placed_body")
@@ -306,9 +306,9 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     Image.new("RGBA", (32,32), (240,90,20,255)).save(png)
     wire = compile_runtime_program(placed())
     wire = visual._apply_kit(wire, _visual_kit(wire))
-    from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
+    from infini_local.core.vfx_manifest import attach_vfx_manifest
     from test_low_level_three_stage_pipeline import _vfx_output
-    wire = attach_hybrid_vfx_manifest(wire, "offline-placed-delivery", llm_director=lambda *_args, **_kwargs: _vfx_output(wire))
+    wire = attach_vfx_manifest(wire, "offline-placed-delivery", llm_director=lambda *_args, **_kwargs: _vfx_output(wire))
     wire.update(id="explicit_placed_fixture", sourceMode="llm", schemaVersion=5, runtimeApiVersion="infini.runtime-program.v5")
     wire["visual"].update(spritePath="placed.png", spriteStatus="generated")
     for entity in wire["runtimeProgram"]["entities"]:
@@ -381,7 +381,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     responses, requests = wire_transport
     payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
     responses.append(payload)
-    accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "combined-offline")
+    accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, "combined-offline")
     assert accepted is not None and len(requests) == 1 and not responses
     request = requests[0]
     assert request["response_format"]["type"] == format_mode

@@ -21,10 +21,8 @@ internal readonly record struct VfxNumberRamp(float Start, float Middle, float E
 }
 internal readonly record struct VfxColorRamp(Vector3 Start, Vector3 Middle, Vector3 End, string Curve)
 {
-    internal static VfxColorRamp Copy(VfxColorProfileSpec p,Color effect) {
-        Vector3 Resolve(string token) => (token=="effect" ? effect : token=="white" ? Color.White : RuntimeColorPolicy.Resolve(token,Color.White)).ToVector3();
-        return new(Resolve(p.Start),Resolve(p.Middle),Resolve(p.End),p.Curve);
-    }
+    internal static VfxColorRamp Copy(VfxColorProfileSpec p)
+        => new(p.Start.ToColor().ToVector3(),p.Middle.ToColor().ToVector3(),p.End.ToColor().ToVector3(),p.Curve);
     internal Color At(float age,float opacity,string blend) {
         age=Math.Clamp(age,0,1); bool first=age<=0.5f;
         Vector3 rgb=Vector3.Lerp(first?Start:Middle,first?Middle:End,VfxNumberRamp.Ease(first?age*2:(age-0.5f)*2,Curve));
@@ -98,13 +96,13 @@ public sealed partial class InfiniDetachedVfxSystem
             if(PeriodicElements.Count>=MaxEmissions)return;
             if(slot.Particle is not null) {
                 PeriodicElements.Add(new PeriodicElement{Binding=binding,Library=new LibraryEmissionState(CopyLibrary(data,slot,item),0),SourceKey=sourceKey,
-                    SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick,RepeatEvery=slot.RepeatEvery,Item=item});
+                    SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=slot.RepeatEvery!.Value,Item=item});
                 continue;
             }
             string texture=ResolveMaterialTexture(data,entityId,slot.Element!.Texture);
             if(string.IsNullOrEmpty(texture))continue;
             PeriodicElements.Add(new PeriodicElement{Binding=binding,Design=CopyElement(data,slot,texture,item),SourceKey=sourceKey,
-                SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick,RepeatEvery=Math.Max(1,slot.RepeatEvery),Item=item});
+                SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=Math.Max(1,slot.RepeatEvery!.Value),Item=item});
         }
     }
     private static ulong LastMaterialsTick=ulong.MaxValue;
@@ -125,7 +123,7 @@ public sealed partial class InfiniDetachedVfxSystem
     internal static string ResolveMaterialTexture(GeneratedItemData data,string entityId,VfxTextureSpec texture)
     {
         if(texture.Source=="asset") return data.VfxManifest.Assets?.FirstOrDefault(a=>a.Id==texture.AssetId)?.SpritePath??"";
-        return InfiniVfxRuntime.ResolveTexturePath(data,entityId,texture.Source);
+        return SpritePresentation.Resolve(data,entityId,texture.Source).Path;
     }
     internal static bool EnqueueElement(GeneratedItemData data,string entityId,VfxSlotSpec slot,string sourceKey,VfxSourceFrame frame,
         VfxSourceBinding? binding=null,bool itemBudget=false,MaterialEventAllowance? allowance=null)
@@ -135,20 +133,17 @@ public sealed partial class InfiniDetachedVfxSystem
         if(string.IsNullOrEmpty(texture)||e.Count==0||e.Attachment=="source"&&binding is null) return false;
         if(OwnedRecordCount>=MaxEmissions) return false;
         var design=CopyElement(data,slot,texture,itemBudget);
-        return EnqueueCopiedElement(design,sourceKey,frame,binding,slot.Anchor,slot.Event==RuntimeEventKind.Periodic?0:slot.StartTick,allowance);
+        return EnqueueCopiedElement(design,sourceKey,frame,binding,slot.Anchor,slot.Event==RuntimeEventKind.Periodic?0:slot.StartTick!.Value,allowance);
     }
     private static ElementDesign CopyElement(GeneratedItemData data,VfxSlotSpec slot,string texture,bool itemBudget)
     {
         var e=slot.Element!;
         var budget=data.VfxManifest.Budget;
-        var fallback=itemBudget?RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length>0?data.Visual.Palette[0]:"white",Color.White)
-            :InfiniVfxRuntime.LegacyPresentationColor(data.VfxManifest,Color.White);
-        var effect=InfiniVfxRuntime.PresentationColor(data,fallback);
-        var design=new ElementDesign(texture,slot.Layer,slot.Blend,slot.Alpha,slot.Duration,e.Count,e.Attachment=="source",
+        var design=new ElementDesign(texture,slot.Layer!,slot.Blend!,slot.Alpha!.Value,slot.Duration!.Value,e.Count,e.Attachment=="source",
             new(e.OffsetForwardPx,e.OffsetSidePx),e.SpeedMinPxPerTick,e.SpeedMaxPxPerTick,e.SpreadRadians,e.InheritVelocity,e.Drag,
             new(e.AccelerationXPxPerTickSquared,e.AccelerationYPxPerTickSquared),e.RotationRadians,e.RotationSpeedRadiansPerTick,
             e.WidthPx,e.HeightPx,VfxNumberRamp.Copy(e.WidthProfile),VfxNumberRamp.Copy(e.HeightProfile),VfxNumberRamp.Copy(e.OpacityProfile),
-            VfxColorRamp.Copy(e.ColorProfile,effect),budget.MaxDrawCalls,budget.MaxParticlesPerTick,budget.MaxParticlesTotal,itemBudget,slot.SlotSeed);
+            VfxColorRamp.Copy(e.ColorProfile),budget.MaxDrawCalls,budget.MaxParticlesPerTick,budget.MaxParticlesTotal,itemBudget,slot.SlotSeed);
         return design;
     }
     private static bool EnqueueCopiedElement(ElementDesign design,string sourceKey,VfxSourceFrame frame,VfxSourceBinding? binding,string anchor,int delay,MaterialEventAllowance? allowance=null)
@@ -234,7 +229,7 @@ public sealed partial class InfiniDetachedVfxSystem
             }
         }
     }
-    private static void MakeRoomForLegacyEmission()
+    private static void MakeRoomForSimpleEmission()
     {
         if(OwnedRecordCount<MaxEmissions)return;
         if(Emissions.Count>0)Emissions.RemoveAt(0);

@@ -99,6 +99,7 @@ internal static partial class EngineRuntimeChecks
         Reset();
         var action = new InfiniCrafterLocal.Common.Models.RuntimeEventActionSpec {
             Event = RuntimeEventKind.OnUse, ActionCode = RuntimeEventActionCode.SpawnEntity,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild,
             EntityId = "root", Count = 1, DelayTicks = 2,
         };
         var ledger = new InfiniCrafterLocal.Common.Runtime.RuntimeSpawnBudget(3);

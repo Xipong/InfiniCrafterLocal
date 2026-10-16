@@ -12,6 +12,7 @@ import json
 from typing import Any, Mapping
 
 from infini_local.pipelines.visual_asset_modes import VISUAL_ASSET_MODES
+from infini_local.core.visual_contract_schema import SPRITE_CANVAS_SIZES
 
 
 _ALLOWED_MODES = set(VISUAL_ASSET_MODES)
@@ -122,36 +123,33 @@ def finalize_visual_asset_runtime_gates(data: dict[str, Any]) -> dict[str, Any]:
 def _canvas_for(entity: Mapping[str, Any], data: Mapping[str, Any]) -> int:
     raw_visual = entity.get("visual")
     visual = raw_visual if isinstance(raw_visual, Mapping) else {}
-    root = data.get("visual") if isinstance(data.get("visual"), Mapping) else {}
+    raw_root = data.get("visual")
+    item_visual: Mapping[str, Any] = raw_root if isinstance(raw_root, Mapping) else {}
     if entity.get("kind") == "item_body" or visual.get("assetMode") == "reuse_item_icon":
-        return int(root.get("preferredCanvasSize") or 32)
-    if visual.get("assetMode") == "baked_sprite":
-        if "preferredCanvasSize" in visual:
-            return visual["preferredCanvasSize"]
-        if "renderSizePx" in root or "renderSizePx" in visual:
-            raise ValueError("A new distinct baked project requires authored preferredCanvasSize")
-    # Delivered legacy DTOs have no new choices and retain the historical policy.
-    return _impact_canvas_for(entity, data)
+        owner, path = item_visual, "$.visual.preferredCanvasSize"
+    elif visual.get("assetMode") == "baked_sprite":
+        owner, path = visual, f"$.runtimeProgram.entities[{entity.get('id')!r}].visual.preferredCanvasSize"
+    else:
+        raise ValueError("An image canvas is defined only for an authored image project")
+    canvas = owner.get("preferredCanvasSize")
+    if type(canvas) is not int or canvas not in SPRITE_CANVAS_SIZES:
+        raise ValueError(path + ": explicit supported canvas size required")
+    return canvas
 
 
-def _impact_canvas_for(entity: Mapping[str, Any], data: Mapping[str, Any]) -> int:
-    if entity.get("kind") == "item_body":
-        visual = data.get("visual") if isinstance(data.get("visual"), Mapping) else {}
-        return int(visual.get("preferredCanvasSize") or 32)
-    hitbox = entity.get("hitbox") if isinstance(entity.get("hitbox"), Mapping) else {}
-    largest = max(int(hitbox.get("widthPx") or 16), int(hitbox.get("heightPx") or 16))
-    if largest <= 24: return 24
-    if largest <= 32: return 32
-    if largest <= 48: return 48
-    if largest <= 64: return 64
-    if largest <= 96: return 96
-    return 128
+def _impact_canvas_for(entity: Mapping[str, Any]) -> int:
+    raw_visual = entity.get("visual")
+    visual = raw_visual if isinstance(raw_visual, Mapping) else {}
+    canvas = visual.get("impactCanvasSize")
+    if type(canvas) is not int or canvas not in SPRITE_CANVAS_SIZES:
+        raise ValueError(f"entity {entity.get('id')!r}.visual.impactCanvasSize: explicit supported canvas size required")
+    return canvas
 
 
 def vfx_asset_job_id(data: Mapping[str, Any], asset: Mapping[str, Any]) -> str:
     """Reserved intermediate identity; never expose an authored ID as a filename."""
     manifest = data.get("vfxManifest")
-    recipe_id = manifest.get("recipeId") if isinstance(manifest, Mapping) and "recipeId" in manifest else data.get("id")
+    recipe_id = manifest["recipeId"]
     identity = [recipe_id, *[asset[field] for field in ("id", "prompt", "negativePrompt", "canvasSize", "layout")]]
     wire = json.dumps(identity, ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode("ascii")
     return "infini_vfx_job_" + hashlib.sha256(wire).hexdigest()
@@ -209,7 +207,7 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
             "runtimeGateReason": reason,
             "assetId": f"{str(data.get('id') or 'generated')}_{entity_id}",
             "prompt": prompt[:1400],
-            "canvas": _canvas_for(entity, data),
+            **({"canvas": _canvas_for(entity, data)} if mode in {"baked_sprite", "reuse_item_icon"} else {}),
             "status": status,
             "path": path,
             "url": url,
@@ -237,7 +235,7 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
                 "assetId": f"{str(data.get('id') or 'generated')}_{entity_id}_impact",
                 "prompt": str(entity_visual.get("impactPrompt") or "")[:1400],
                 "negativePrompt": str(entity_visual.get("impactNegativePrompt") or "")[:700],
-                "canvas": _impact_canvas_for(entity, data),
+                "canvas": _impact_canvas_for(entity),
                 "required": True,
                 "status": str(entity_visual.get("impactSpriteStatus") or "pending"),
                 "path": str(entity_visual.get("impactSpritePath") or ""),

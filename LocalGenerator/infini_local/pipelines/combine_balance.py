@@ -13,31 +13,6 @@ from infini_local.core.item_identity_tools import item_num
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
 
-def _clamp(value: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, value))
-
-
-def _numeric_power(item: dict[str, Any]) -> float:
-    damage = max(0.0, float(item_num(item, "damage", 0)))
-    use_time = max(1.0, float(item_num(item, "useTime", 20)))
-    combat = damage * _clamp(20.0 / use_time, 0.25, 4.0)
-    tool = max(
-        0.0,
-        float(item_num(item, "pickPower", 0)),
-        float(item_num(item, "axePower", 0)) * 5.0,
-        float(item_num(item, "hammerPower", 0)),
-    )
-    sustain = max(
-        float(item_num(item, "defense", 0)) * 5.0,
-        float(item_num(item, "healLife", 0)) * 2.0,
-        float(item_num(item, "healMana", 0)),
-    )
-    rarity = max(0.0, float(item_num(item, "rare", 0))) * 7.0
-    value = max(0.0, float(item_num(item, "value", 0)))
-    value_signal = value ** 0.5 / 7.0 if value else 0.0
-    return max(combat, tool, sustain, rarity, value_signal)
-
-
 def _source_progression_fact(item: dict[str, Any], parent: str) -> dict[str, Any] | None:
     generated = item.get("generatedData")
     if not isinstance(generated, dict):
@@ -59,14 +34,7 @@ def _source_progression_fact(item: dict[str, Any], parent: str) -> dict[str, Any
 
 
 def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    scores = [_numeric_power(a), _numeric_power(b)]
-    damages = [max(0, int(item_num(a, "damage", 0))), max(0, int(item_num(b, "damage", 0)))]
-    fastest_use = min([
-        max(1.0, float(item_num(item, "useTime", 20)))
-        for item in (a, b) if item_num(item, "damage", 0) > 0
-    ] or [20.0])
-    combined = max(scores) + min(scores) * 0.28
-    power_budget = round(_clamp(0.9 + combined / 55.0, 0.9, 8.0), 2)
+    damages = [max(0, int(item_num(parent, "damage", 0))) for parent in (a, b)]
     progression_facts = [
         fact for fact in (
             _source_progression_fact(a, "A"),
@@ -76,14 +44,10 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     return {
         "authority": "source_numeric_facts_only",
         "gameplayRouter": False,
-        "scores": [round(scores[0], 2), round(scores[1], 2)],
         "sourceDamage": damages,
-        "sourceFastestUseTime": fastest_use,
         "sourceNumericProgressionFacts": progression_facts,
-        "derivedPower": round(combined, 2),
-        "powerBudget": power_budget,
         "balanceEnvelope": {
-            "useTimeTicks": {"minimum": 4, "suggested": int(_clamp(fastest_use, 4, 600)), "maximum": 600},
+            "useTimeTicks": {"minimum": 4, "maximum": 600},
             "lifetimeTicks": {
                 "minimum": 1,
                 "maximum": CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeTicks"].maximum,

@@ -43,6 +43,7 @@ internal static partial class EngineRuntimeChecks
         var wire = System.Text.Json.Nodes.JsonNode.Parse(GeneratedItemData.Placeholder().ToJson())!.AsObject();
         wire["id"] = id; wire["sourceMode"] = "generated";
         wire["visual"]!["spritePath"] = path; wire["visual"]!["spriteStatus"] = "generated";
+        wire["visual"]!["renderSizePx"] = 32; wire["visual"]!["forwardAngleDegrees"] = 0;
         var data = ParseMaterialElement(wire);
         GeneratedItemRegistryService.StampCurrentWorld(data);
         return data;
@@ -542,6 +543,7 @@ internal static partial class EngineRuntimeChecks
                         var wire = System.Text.Json.Nodes.JsonNode.Parse(GeneratedItemData.Placeholder().ToJson())!.AsObject();
                         wire["id"] = "asset_owner_review"; wire["sourceMode"] = "generated";
                         wire["visual"]!["spritePath"] = originalPath; wire["visual"]!["spriteStatus"] = "generated";
+                        wire["visual"]!["renderSizePx"] = 32; wire["visual"]!["forwardAngleDegrees"] = 0;
                         var data = ParseMaterialElement(wire); peers.Register(data);
                         // Real runtime asset lifecycle verifies before the Draw entry.
                         if (scenario != "no-sync-local") sync.EnsureAssetsForData(data);

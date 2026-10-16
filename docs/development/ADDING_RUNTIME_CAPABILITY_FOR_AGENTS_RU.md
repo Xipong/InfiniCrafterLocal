@@ -5,7 +5,7 @@
 <a id="vertical-slice"></a>
 ## Порядок реализации
 
-Capability существует только после полного `registry → provider schema/prompt → validator → compiler receipts → strict wire → C# DTO/executor → tests → docs`.
+Начинай с [consumer-first границы](ARCHITECTURE_RU.md#consumer-first): назови конкретный executor/generation/advisory/diagnostic reader каждого нового поля, его observable effect и refusal path. Затем меняй owner, не facade. Capability существует только после полного `registry → provider schema/prompt → validator → compiler receipts → strict wire → C# DTO/executor → tests → docs`. Поле без reader удаляется, а не сохраняется как inert обязательная нейтраль. Старые contracts/semantic routing не добавляются ради совместимости.
 
 1. В `capability_registry.py` объяви exact meaning, target kinds, typed params с **units/neutral/Author range/one-to-one wire projection/execution phase**, component slot/exclusivity, dependencies/events, authority/budget, finite wire paths и Python callable/C# method symbols. Percent, percentage points и multiplier различны. Runtime envelope ради исторических DTO может быть шире Author, но не уже.
    Механические факты задаются рядом с capability в `_cap(...)`: `cs`, `component_slot`, `authority`/`authority_by_effect`, ownership/events и локальные `requirements`. Не добавляй параллельную таблицу по имени capability. Для особой проекции `wire` содержит точные пути; для уже поддержанной простой component-проекции оставь его пустым: пути выводятся из `ParamSpec`. Dependencies/conflicts, effect-group paths и общие параметрические требования выводятся при финализации. Для movement общие факты задаёт `_movement`; индивидуальные требования остаются в вызове. Изменение C# executor по-прежнему требует полного vertical slice.
@@ -14,7 +14,7 @@ Capability существует только после полного `registry
 4. Compiler пишет declared paths и receipts; [classification](TECHNICAL_LOWERING_POLICY_RU.md#transformations) и lossless proof обязательны. [Новые omission permissions](../reference/DECLARED_NEUTRAL_OMISSIONS_RU.md#dependencies) требуют совместных комбинаций, provenance и C# consumer проверки, не только optional flag.
 5. Расширь strict final wire, C# DTO validation/normalize и bounded consumer; unknown opcode/reference остаётся fail closed. Authority/net sync добавь лишь для нужного instance state; owner trust нельзя выдавать за server collision proof.
 6. Добавь vertical witness и acceptance fixture для нового композиционного класса; RED→GREEN regression должен ловить executable C# field без Author primitive. Deliberately internal field требует проверяемой причины в `qa/primitive_loss_audit.py`; wire-only audit полноту C# не доказывает.
-7. Обнови generated outputs штатными owners, затем проверь source/generated parity, mutations, full tests и доступные C#/game seams. `notRun` фиксируется отдельно, не маскируется green static tests.
+7. Захвати actual outgoing Author/Visual/VFX/Repair packets у затронутого sender (offline, до auth/network): проверь schema, значения, instructions/read-only split и frozen permissions. Advisory reports не открывают Repair; required runtime/art choices дают strict technical refusal без guessed defaults. Обнови generated outputs штатными owners, затем проверь source/generated parity, mutations, full tests и доступные C#/game seams. `notRun` фиксируется отдельно, не маскируется green static tests.
 
 <a id="generation"></a>
 ## Генераторы и проверки

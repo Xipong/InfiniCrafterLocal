@@ -50,7 +50,7 @@ def _observe(*, stages, repair, corrupt_budget):
     from infini_local.pipelines import gameplay_stage as combine
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
-    from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest, VFX_REPAIR_PATCH_SCHEMA
+    from infini_local.core.vfx_manifest import attach_vfx_manifest, VFX_REPAIR_PATCH_SCHEMA
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     from test_low_level_three_stage_pipeline import _visual_kit, _visual_patch, _vfx_output
 
@@ -88,11 +88,11 @@ def _observe(*, stages, repair, corrupt_budget):
         replies.append(authored)
 
     with patch.object(transport, "http_json", http_reply), patch.object(transport, "http_get_json", refuse_discovery):
-        data = author.try_llm_plan({}, {}, {}, {}, "budget-observer")
+        data = author.try_llm_plan({}, {}, "budget-observer")
         assert data is not None
         if repair == "semantic":
             data = combine.compile_and_validate_authored_runtime(
-                data, {}, {}, {}, {}, "budget-observer",
+                data, {}, {}, "budget-observer",
                 run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
         else:
             data = compile_runtime_program(data)
@@ -104,17 +104,19 @@ def _observe(*, stages, repair, corrupt_budget):
                                  "animationPlan": "frozen animation"}, _visual_patch(data)])
             else:
                 replies.append(kit)
-            data = visual.apply_visual_director(data, {}, {}, {}, {})
+            data = visual.apply_visual_director(data, {}, {})
             if repair != "none":
                 assert data["visualKit"]["animationPlan"] == "frozen animation"
             vfx = _vfx_output(data)
             if repair != "none":
-                replies.extend([dict(vfx, effectMagnitude=2.0), {
-                    "schema": VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.5,
-                    "note": "restore only invalid magnitude"}])
+                broken_vfx = copy.deepcopy(vfx)
+                broken_vfx["slots"][0]["alpha"] = 2.0
+                replies.extend([broken_vfx, {
+                    "schema": VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": vfx["slots"],
+                    "note": "restore only invalid alpha"}])
             else:
                 replies.append(vfx)
-            data = attach_hybrid_vfx_manifest(data, "budget-observer", llm_director=vfx_transport.call_llm_vfx_director)
+            data = attach_vfx_manifest(data, "budget-observer", llm_director=vfx_transport.call_llm_vfx_director)
             assert data["vfxManifest"]["slots"][0]["id"] == vfx["slots"][0]["id"]
         assert not replies
     return {"calls": calls, "accounting": data["debug"]["llmStageAccounting"]}

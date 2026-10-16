@@ -41,42 +41,6 @@ def _offline_transport(monkeypatch, case, replies):
     return captured
 
 
-def test_descriptive_vfx_motif_survives_director_without_metadata_repair(monkeypatch):
-    data = _data()
-    raw = _legacy(data)
-    raw["slots"] = []
-    raw["motif"].update(
-        element="Frostspark Boots with Obsidian Shield shin plates",
-        shapeLanguage="Connected shield-armored frost footwear; " + "readable physical details " * 8,
-        motionLanguage="Static wearable badge; " + "no extra gameplay motion " * 8,
-        paletteRole="Icy cyan footwear and charcoal-purple shield plates with " + "restrained highlights " * 4,
-    )
-    expected = copy.deepcopy(raw)
-    sent = _offline_transport(monkeypatch, "descriptive_motif", [raw])
-    final = vfx.attach_hybrid_vfx_manifest(data, "descriptive_motif", llm_director=stage.call_llm_vfx_director)
-    assert final["vfxManifest"]["motif"] == expected["motif"]
-    assert final["debug"]["vfxDirectorRaw"] == expected
-    assert final["debug"]["llmStageAccounting"]["vfxRepairCalls"] == 0
-    assert len(sent) == 1 and raw == expected
-    assert vfx.validate_vfx_manifest_wire(final)["ok"]
-
-
-@pytest.mark.parametrize("field,maximum", [("element", 256), ("shapeLanguage", 512), ("motionLanguage", 512), ("paletteRole", 256)])
-def test_vfx_motif_bounds_preserve_unicode_and_reject_only_overflow(field, maximum):
-    data = _data()
-    raw = _legacy(data)
-    raw["slots"] = []
-    raw["motif"][field] = "🌟" * maximum
-    original = copy.deepcopy(raw)
-    report = vfx.validate_vfx_director_output(raw, data)
-    assert report["ok"], report["errors"]
-    assert report["normalized"]["motif"][field] == original["motif"][field]
-    raw["motif"][field] += "🌟"
-    report = vfx.validate_vfx_director_output(raw, data)
-    assert not report["ok"] and any(row["path"] == f"$.motif.{field}" for row in report["errors"])
-    assert len(raw["motif"][field]) == maximum + 1
-
-
 # Exercise each empty-domain outcome and both payload consumers without
 # repeating their Cartesian product. Nonempty domains freeze source per renderer.
 @pytest.mark.parametrize("renderer,payload,domain,outcome", [
@@ -91,6 +55,7 @@ def test_vfx_motif_bounds_preserve_unicode_and_reject_only_overflow(field, maxim
 ])
 def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain, outcome):
     data = _data()
+    data["visual"] = {"preferredCanvasSize": 32}
     for entity in data["runtimeProgram"]["entities"]:
         entity["visual"]["assetMode"] = "baked_sprite" if entity["kind"] == "item_body" else "reuse_item_icon"
     raw = _sprite(data) if renderer == "spriteElement" else _path(data)
@@ -111,15 +76,15 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         candidate = copy.deepcopy(raw["slots"][0])
         candidate[payload]["texture"] = texture
         candidate[payload]["widthProfile"].update(start=4.0, middle=4.0, end=4.0)
-        candidate[payload]["colorProfile"]["middle"] = "pink"
+        candidate[payload]["colorProfile"]["middle"] = {"r": 255, "g": 192, "b": 203}
         candidate[payload]["widthPx"] = 1.0
         if payload == "path":
             candidate[payload]["source"] = "beam"
-        candidate.update(entityId=next(row["id"] for row in data["runtimeProgram"]["entities"] if row["id"] != candidate["entityId"]), event="on_hit", alpha=0.1, channel="light", lane="cue", textureRole="impact", spritePrompt="unrequested replacement Visual/image design")
+        candidate.update(entityId=next(row["id"] for row in data["runtimeProgram"]["entities"] if row["id"] != candidate["entityId"]), event="on_hit", alpha=0.1,  textureRole="impact", spritePrompt="unrequested replacement Visual/image design")
         new_slot = {**copy.deepcopy(_legacy(data)["slots"][0]), "id": "unrequested_slot"}
         assets = [{**_asset(), "prompt": "unrequested redesign", "canvasSize": 64, "layout": "strip"}] if raw.get("assets") else []
-        correction = _patch(slotsUpsert=[candidate, new_slot], slotIdsDelete=[raw["slots"][0]["id"]], effectMagnitude=0.9,
-                            motif={**raw["motif"], "shapeLanguage": "unrequested redesign"}, assetsUpsert=[*assets, _asset("missing")], assetIdsDelete=[_asset()["id"]])
+        correction = _patch(slotsUpsert=[candidate, new_slot], slotIdsDelete=[raw["slots"][0]["id"]],
+                             assetsUpsert=[*assets, _asset("missing")], assetIdsDelete=[_asset()["id"]])
     case = renderer + "_" + domain + "_" + outcome
     sent = _offline_transport(monkeypatch, case, [raw] if outcome == "valid" else [raw, correction])
     if outcome == "noop":
@@ -128,7 +93,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         assert merged == raw_before and audit["acceptedPaths"] == []
         assert not vfx.validate_vfx_director_output(merged, data)["ok"]
         with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
-            vfx.attach_hybrid_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+            vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
         assert len(sent) == 2 and "vfxManifest" not in data
         final = data
     else:
@@ -136,7 +101,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         if outcome != "valid":
             expected["slots"][0][payload]["texture"] = ({"source": "asset", "assetId": _asset()["id"]} if domain == "nonempty" else texture)
         expected_plan = build_visual_asset_plan({**before, "vfxManifest": vfx._compile_manifest(before, expected, case)}) if domain == "nonempty" else plan_before
-        final = vfx.attach_hybrid_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+        final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
         assert final["debug"]["vfxDirectorRaw"] == expected, "only_diagnosed_texture_leaves_change"
         assert final["vfxManifest"] == vfx._compile_manifest(before, expected, case)
         assert vfx.validate_vfx_manifest_wire(final)["ok"]
@@ -152,7 +117,7 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
             paths = [f"$.slotsUpsert[0].{payload}.texture.assetId", *([f"$.slotsUpsert[0].{payload}.texture.source"] if domain != "nonempty" else [])]
             assert audit["acceptedPaths"] == paths
             ignored = {row["path"] for row in audit["ignoredChanges"]}
-            assert {"$.effectMagnitude", "$.motif", "$.slotIdsDelete[0]", "$.slotsUpsert[0].entityId", "$.slotsUpsert[0].event", "$.slotsUpsert[0].textureRole", "$.slotsUpsert[0].spritePrompt", f"$.slotsUpsert[0].{payload}.widthProfile.middle", "$.slotsUpsert[1]", "$.assetsUpsert[0]", "$.assetIdsDelete[0]"} <= ignored
+            assert {"$.slotIdsDelete[0]", "$.slotsUpsert[0].entityId", "$.slotsUpsert[0].event", "$.slotsUpsert[0].textureRole", "$.slotsUpsert[0].spritePrompt", f"$.slotsUpsert[0].{payload}.widthProfile.middle", "$.slotsUpsert[1]", "$.assetsUpsert[0]", "$.assetIdsDelete[0]"} <= ignored
             if payload == "path":
                 assert "$.slotsUpsert[0].path.source" in ignored
             if domain == "nonempty":
@@ -208,7 +173,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
     else:
         raw["slots"][0]["scale"] = 1 if case == "scale-type-frozen" else True
         candidate["scale"] = 1.0 if case == "scale-type-frozen" else 1
-        patch = _patch(slotsUpsert=[candidate], effectMagnitude=None, visualBudgetClass=None, motif=None, slotIdsDelete=[], slotIndicesDelete=[])
+        patch = _patch(slotsUpsert=[candidate],   slotIdsDelete=[], slotIndicesDelete=[])
     before, patch_before = copy.deepcopy(raw), json.dumps(patch)
     report = vfx.validate_vfx_director_output(raw, data)
     assert report["ok"] is (case == "scale-type-frozen")
@@ -246,7 +211,7 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
     if case == "asset-canvas":
         assert any(row["path"].endswith(".prompt") for row in audit["ignoredChanges"])
     sent = _offline_transport(monkeypatch, case, [raw] if case == "scale-type-frozen" else [raw, patch])
-    final = vfx.attach_hybrid_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, case, llm_director=stage.call_llm_vfx_director)
     assert json.dumps(final["debug"]["vfxDirectorRaw"], sort_keys=True) == json.dumps(expected, sort_keys=True)
     assert final["vfxManifest"] == vfx._compile_manifest(data, expected, case)
     assert vfx.validate_vfx_manifest_wire(final)["ok"]

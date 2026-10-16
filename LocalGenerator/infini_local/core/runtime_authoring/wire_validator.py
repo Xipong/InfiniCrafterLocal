@@ -27,6 +27,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
 )
+from infini_local.core.runtime_authoring.program_schema import GENERATED_ITEM_ROOT_FIELDS
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, _wire_projection_witness
 from infini_local.core.runtime_authoring.validator import (
@@ -67,7 +68,7 @@ _ENTITY_KEYS = frozenset({"id", "kind", "visualRole", "visual", "spawn", "damage
 _VISUAL_KEYS = frozenset({
     "role", "assetMode", "prompt", "silhouette", "visualIdentity", "impactPrompt", "impactNegativePrompt",
     "scale", "spritePath", "spriteUrl", "spriteStatus", "spriteTechnicalScore", "impactSpritePath",
-    "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore",
+    "impactSpriteUrl", "impactSpriteStatus", "impactSpriteTechnicalScore", "impactCanvasSize",
     "renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "grip",
 })
 _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", "offsetPx", "aim", "placement", "overTarget", "velocityDistribution"}) | frozenset(
@@ -135,13 +136,16 @@ def _validate_child_combat(
     wire: Mapping[str, Any], capability: str, source_kind: str, active: bool,
     path: str, errors: list[dict[str, Any]],
 ) -> None:
-    """New present leaves are exact; omitted saved-wire leaves retain their old lane."""
+    """Active child producers require their current explicit combat choices."""
     cap = CAPABILITY_REGISTRY[capability]
     names = ("damageBasis", "knockbackBasis", "damageMultiplier") if capability == "target_and_fire" else ("damageBasis", "knockbackBasis")
     for name in names:
-        if name not in wire:
-            continue
         leaf_path = f"{path}.{name}"
+        if name not in wire:
+            if active and cap.params[name].required:
+                errors.append({"path": leaf_path, "code": "required_field",
+                               "message": "Active child spawning requires an explicit combat choice."})
+            continue
         if not active:
             errors.append({"path": leaf_path, "code": "inactive_child_combat_field",
                            "message": "Child combat choices require this component's exact child-spawn consumer."})
@@ -379,12 +383,15 @@ def _walk_forbidden(value: Any, path: str = "$") -> list[dict[str, str]]:
 
 
 def _validate_sprite_presentation(visual: Mapping[str, Any], path: str, errors: list[dict[str, Any]], *, entity_kind: str | None = None) -> None:
-    """Additive DTO compatibility: omission stays omitted, present choices are strict."""
+    """Validate presentation choices at their explicit image owner."""
     from infini_local.core.visual_contract_schema import grip_schema, sprite_presentation_properties
     from infini_local.pipelines.visual_generation_pipeline import _visual_item_schema
     fields = ("renderSizePx", "forwardAngleDegrees", "grip") if entity_kind is None else ("renderSizePx", "forwardAngleDegrees", "preferredCanvasSize", "grip")
     properties = {**sprite_presentation_properties(), "grip": grip_schema(),
                   "preferredCanvasSize": _visual_item_schema()["properties"]["preferredCanvasSize"]}
+    if entity_kind is not None and "impactCanvasSize" in visual:
+        for error in strict_schema_errors(visual["impactCanvasSize"], properties["preferredCanvasSize"], path=path + ".impactCanvasSize"):
+            errors.append({"path": error["path"], "code": "invalid_impact_canvas", "message": "Impact canvas must be an explicit supported integer pixel size."})
     for field in fields:
         if field not in visual:
             continue
@@ -511,6 +518,7 @@ def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[M
 def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     """Validate the final Python -> C# low-level runtime wire without authoring defaults."""
     errors: list[dict[str, Any]] = []
+    _reject_unknown(data, GENERATED_ITEM_ROOT_FIELDS, "$", errors)
     root_visual = data.get("visual")
     if isinstance(root_visual, Mapping):
         _validate_sprite_presentation(root_visual, "$.visual", errors)
@@ -750,6 +758,11 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             elif code == 0 and name:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].controller", "code": "controller_name_opcode_mismatch", "message": "Neutral controller opcode 0 requires an empty name."})
         targeting = entity.get("targeting")
+        _validate_child_combat(targeting if isinstance(targeting, Mapping) else {}, "target_and_fire", kind,
+                               isinstance(controller, Mapping) and type(controller.get("code")) is int
+                               and controller["code"] == CONTROLLER_OPCODE["target_and_fire"]
+                               and controller.get("name") == "target_and_fire",
+                               f"$.runtimeProgram.entities[{index}].targeting", errors)
         if isinstance(targeting, Mapping):
             # Delivery without provenance still obeys the current scalar domain.
             bias_spec = CAPABILITY_REGISTRY["target_and_fire"].params["sameTargetBias"]
@@ -758,13 +771,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"{entity_path}.targeting.{bias_key}",
                                "code": "invalid_target_bias",
                                "message": "Present target bias must match its current declared domain without coercion or rewriting."})
-            _validate_child_combat(targeting, "target_and_fire", kind,
-                                   isinstance(controller, Mapping) and type(controller.get("code")) is int
-                                   and controller["code"] == CONTROLLER_OPCODE["target_and_fire"]
-                                   and controller.get("name") == "target_and_fire",
-                                   f"$.runtimeProgram.entities[{index}].targeting", errors)
-            # New options are absent in retained v5 wire. Any present option is
-            # checked by its canonical ParamSpec without supplying a value.
+            # Declared optional targeting neutrals may remain absent. Present
+            # choices are checked without supplying or rewriting a value.
             option_names = ("count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange")
             present_options = set(option_names).intersection(targeting)
             if present_options and (
@@ -1012,9 +1020,9 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     accessory = data.get("accessory") if isinstance(data.get("accessory"), Mapping) else {}
     armor = data.get("armor") if isinstance(data.get("armor"), Mapping) else {}
-    # New explicit equipment leaves have registry-owned domains even when
-    # delivery has intentionally stripped provenance. Historical absent leaves
-    # remain absent; this does not impose fresh Author ranges on legacy stats.
+    # Equipment leaves marked wire_presence_requires_receipt retain their
+    # registry-owned domains after delivery strips provenance. This check
+    # does not change the current declared omission semantics.
     for fn in ("configure_accessory", "configure_armor"):
         component = fn.removeprefix("configure_")
         node = data.get(component)

@@ -75,13 +75,14 @@ public sealed class VfxNumericProfileSpec
 
 public sealed class VfxColorProfileSpec
 {
-    [JsonRequired] public string Start { get; set; } = "";
-    [JsonRequired] public string Middle { get; set; } = "";
-    [JsonRequired] public string End { get; set; } = "";
+    [JsonRequired] public RuntimeRgbSpec Start { get; set; } = null!;
+    [JsonRequired] public RuntimeRgbSpec Middle { get; set; } = null!;
+    [JsonRequired] public RuntimeRgbSpec End { get; set; } = null!;
     [JsonRequired] public string Curve { get; set; } = "";
     internal void Validate()
     {
-        foreach (string token in new[] { Start, Middle, End }) if (token != "effect") RuntimeColorPolicy.RequireRenderingToken(token);
+        if (Start is null || Middle is null || End is null) throw new InvalidDataException("VFX color profile requires local RGB at every knot");
+        Start.Validate(); Middle.Validate(); End.Validate();
         VfxMaterialValidation.Choice(Curve, "color curve", "linear", "easeIn", "easeOut", "smoothStep");
     }
 }
@@ -153,6 +154,6 @@ public sealed class VfxTexturedPathSpec
         if (Source == "anchorHistory" ? HistoryTicks is < 2 or > 32 : HistoryTicks != 0 || MinDistancePx != 0 || ProfileDomain != "length") throw new InvalidDataException("invalid VFX path sampling controls");
         if (Source != "anchorHistory" && slot.Anchor != "self") throw new InvalidDataException("geometry path requires anchor=self");
         if (UvMode == "stretch" && (RepeatLengthPx != 1 || ScrollPxPerTick != 0)) throw new InvalidDataException("stretch UV requires neutral repeat/scroll");
-        if (slot.Event is not ("periodic" or "on_spawn") || slot.RepeatEvery != 0 || slot.Duration != 3) throw new InvalidDataException("texturedPath requires live periodic/on_spawn and neutral duration/cadence");
+        if (slot.Event is not ("periodic" or "on_spawn")) throw new InvalidDataException("texturedPath requires live periodic/on_spawn");
     }
 }

@@ -149,7 +149,6 @@ def _generate_backend_variants(
 
 def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
     visual = data.setdefault("visual", {})
-    visual.setdefault("authoringPolicy", "ai_primary_non_procedural")
     canvas = int(visual.get("preferredCanvasSize") or 32)
     prompt = normalize_asset_prompt(data, "item", str(visual.get("imagePrompt") or ""), canvas)
     visual["imagePrompt"] = prompt
@@ -158,7 +157,7 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
         logical_asset_id=str(data.get("id") or "sprite"), audit_role="item", processing_role="item",
         prompt=prompt, negative=str(visual.get("negativePrompt") or ""), canvas=canvas,
         topology=topology, part_count_min=minimum, part_count_max=maximum,
-        policy=_PublicationPolicy.ITEM, publication_identity=_legacy_publication_identity(data, "item", "", str(data.get("id") or "sprite")),
+        policy=_PublicationPolicy.ITEM, publication_identity=_runtime_publication_identity(data, "item", "", str(data.get("id") or "sprite")),
         final_frame_clause=image_final_frame_prompt_clause(data, "item", canvas),
     )
     result = _execute_image_request(data, request)
@@ -170,7 +169,6 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
     if result.status == "backend_config_error":
         return data
     visual["spriteTechnicalScore"] = round(result.technical_score, 3)
-    visual["semanticReviewStatus"] = "not_performed"
     visual.pop("visualJudgeScore", None)
     if result.public_path:
         if result.status != "fallback_after_failed_generation":
@@ -268,14 +266,14 @@ def _publish_image_png(identity: bytes, path: str, *, prefix: str = "infini_asse
 def _publish_vfx_png(data: dict[str, Any], asset_id: str, path: str) -> str:
     """Keep the accepted VFX exact recipe/asset + NUL + bytes identity."""
     manifest = data["vfxManifest"]
-    recipe_id = manifest["recipeId"] if "recipeId" in manifest else data["id"]
+    recipe_id = manifest["recipeId"]
     identity = json.dumps([recipe_id, asset_id], ensure_ascii=True, separators=(",", ":"), allow_nan=False).encode("ascii")
     return _publish_image_png(identity, path, prefix="infini_vfx_png_")
 
 
 class _PublicationPolicy(Enum):
     ITEM = "item"
-    LEGACY_ASSET = "legacy_asset"
+    RUNTIME_ASSET = "runtime_asset"
     REQUIRED_VFX = "required_vfx"
 
 
@@ -318,7 +316,7 @@ class _ImageResult:
         return f"/sprite/{Path(self.public_path).name}" if self.public_path else ""
 
 
-def _legacy_publication_identity(data: dict[str, Any], role: str, entity_id: str, asset_id: str) -> bytes:
+def _runtime_publication_identity(data: dict[str, Any], role: str, entity_id: str, asset_id: str) -> bytes:
     # Structured exact identities cannot alias role/entity concatenations.
     return json.dumps([data.get("id"), role, entity_id, asset_id], ensure_ascii=True,
                       separators=(",", ":"), allow_nan=False).encode("ascii")
@@ -493,7 +491,7 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                 result = replace(result, public_path=published, status=status, failure_phase="")
                 return _finish_image_request(data, request, result, attempts)
         except Exception as exc:
-            # The legacy Codex adapter wraps OSError, including TimeoutError.
+            # The Codex adapter wraps OSError, including TimeoutError.
             # Restore transport deadline attribution without retrying the image
             # lifecycle (or misreporting a deadline as a local PNG write fault).
             if isinstance(exc, ImageOutputIOError) and isinstance(exc.__cause__, HttpDeadlineExceeded):
@@ -508,9 +506,9 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
                 break
     if last_path:
         result = replace(result, discarded_path=str(Path(last_path).resolve()))
-        # Separate legacy compatibility recovery after a projection-tail fault;
+        # Retain a technically usable processed PNG after a nonterminal tail fault;
         # it never turns a local commit failure or VFX failure into a usable PNG.
-        if not terminal and request.policy is _PublicationPolicy.LEGACY_ASSET and not sprite_validation_fatal(result.validation) and Path(last_path).exists():
+        if not terminal and request.policy is _PublicationPolicy.RUNTIME_ASSET and not sprite_validation_fatal(result.validation) and Path(last_path).exists():
             try:
                 published = _publish_image_png(request.publication_identity, last_path)
                 result = replace(result, public_path=published, status="generated_warn_invalid", failure_phase="", late_warning=True)
@@ -550,11 +548,11 @@ def generate_visual_asset(data: dict[str, Any], role: str, prompt: str, negative
     debug[f"{role}FinalPrompt"] = base_prompt if frame_clause else truncate_prompt_at_boundary(base_prompt, 1800)
     debug[f"{role}AuthoringPolicy"] = "ai_primary_non_procedural"
     topology, minimum, maximum = _authored_sprite_topology(data, "entity:" + entity_id if entity_id else role)
-    policy = _PublicationPolicy.REQUIRED_VFX if contract_role in {"vfx_cutout", "vfx_strip"} else _PublicationPolicy.LEGACY_ASSET
+    policy = _PublicationPolicy.REQUIRED_VFX if contract_role in {"vfx_cutout", "vfx_strip"} else _PublicationPolicy.RUNTIME_ASSET
     request = _ImageRequest(logical_asset_id=asset_id, audit_role=role, processing_role=contract_role,
         prompt=base_prompt, negative=str(negative or ""), canvas=canvas, topology=topology,
         part_count_min=minimum, part_count_max=maximum, policy=policy,
-        publication_identity=_legacy_publication_identity(data, role, publication_entity_id or entity_id, asset_id),
+        publication_identity=_runtime_publication_identity(data, role, publication_entity_id or entity_id, asset_id),
         final_frame_clause=frame_clause)
     result = _execute_image_request(data, request)
     return result.public_path, result.url, round(result.technical_score, 3), result.status
@@ -573,7 +571,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
     ``assetMode``.
     """
     # Validate declared requests/references before any image job, including item.
-    # Rebuild the ordinary plan after item hydration to retain legacy projections.
+    # Rebuild the ordinary plan after item PNG hydration.
     build_visual_asset_plan(data)
     data = maybe_generate_sprite(data)
     visual = data.setdefault("visual", {})

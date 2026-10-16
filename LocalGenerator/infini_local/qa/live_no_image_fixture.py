@@ -78,7 +78,6 @@ def hydrate_no_image_fixture_assets(data: dict[str, Any], fixture_path: Path) ->
         str(slot.get("role") or "") == "equip_overlay"
         for slot in asset_plan
     )
-    attack = data.setdefault("attack", {})
     for entity in program.get("entities") or []:
         if not isinstance(entity, dict):
             continue
@@ -113,11 +112,6 @@ def hydrate_no_image_fixture_assets(data: dict[str, Any], fixture_path: Path) ->
                     "spritePath": "",
                     "spriteUrl": "",
                 })
-            role = str(entity.get("visualRole") or "")
-            if role in {"projectile", "impact", "child", "field"}:
-                attack[f"{role}SpriteStatus"] = str(entity_visual.get("spriteStatus") or "")
-                attack[f"{role}SpritePath"] = str(entity_visual.get("spritePath") or "")
-                attack[f"{role}SpriteUrl"] = ""
         if str(entity.get("id") or "") in required_impact_entity_ids:
             entity_visual.update({
                 "impactSpriteStatus": "qa_no_image_fixture",

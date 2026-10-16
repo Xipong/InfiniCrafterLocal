@@ -64,7 +64,7 @@ def test_aim_none_serialized_repair_offers_exact_axis_choices_and_freezes_siblin
     spawn["params"]["aim"] = "none"
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
-    dossier = stage.build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=report)
+    dossier = stage.build_gameplay_repair_dossier(doc, {}, {}, failure_report=report)
     scope = dossier["repairScope"]
     index = doc["runtimeProgram"]["calls"].index(spawn)
     assert scope["fieldPermissions"] == {"entities": [], "bindings": [],
@@ -254,7 +254,7 @@ def test_structured_zero_velocity_dossier_and_frozen_repair_join():
     before = json.dumps(doc, sort_keys=True)
     report = validate_runtime_program(doc)
     assert {row["code"] for row in report["errors"]} == {"missing_item_capability_param"}
-    dossier = build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=report)
+    dossier = build_gameplay_repair_dossier(doc, {}, {}, failure_report=report)
     scope = dossier["repairScope"]
     constraint = next(c for r in scope["repairRequirements"] for c in r["exactCapabilityParams"]
                       if c["param"] == "velocity")

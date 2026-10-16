@@ -15,8 +15,6 @@ from infini_local.core.llm_prompt_cache import with_instruction_segments
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_stage_messages import (
     generation_system_suffix,
-    ATTRIBUTED_PLANNER_HISTORY_KIND,
-    attributed_planner_history,
     stage_chat_message,
 )
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA, CAPABILITY_REGISTRY
@@ -74,9 +72,9 @@ _FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "allowedCallParam
 _AUTHOR_SYSTEM = (
     "You are Gameplay Author for InfiniCrafterLocal. Construct a single immutable JSON object "
     "matching requiredJsonShape, using the supplied capability catalog. "
-    "concept sets the initial design trajectory; runtimeProgram alone defines executable gameplay; "
-    "realization describes your interpretation of that program, with selfEvaluation last as a diagnostic "
-    "report for humans, not evidence of an observed run. Code does not invent missing mechanics. "
+    "runtimeProgram alone defines executable gameplay. Optional concept, realization and selfEvaluation "
+    "may help your design and self-check, but are advisory only: no mandatory report ceremony, "
+    "acceptance evidence or prose-based rejection. Code does not invent missing mechanics. "
     "Apply the construction contracts beside each JSON fragment. Return strict JSON only: "
     "double-quoted keys and strings, no trailing commas, JavaScript expressions, markdown or external reasoning."
 )
@@ -127,13 +125,11 @@ def _gameplay_repair_temperature() -> float:
 def build_initial_author_request(
     a: dict[str, Any],
     b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
     key: str,
     *,
     model_name: str | None = None,
 ) -> tuple[dict[str, Any], str, str]:
-    payload = build_llm_author_payload(a, b, ca, cb, key)
+    payload = build_llm_author_payload(a, b, key)
     selected_model = model_name or resolve_llm_model()
     system = _AUTHOR_SYSTEM + generation_system_suffix() + llm_reasoning_system_suffix(selected_model)
     user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -187,7 +183,7 @@ def _repair_malformed_author_json(
             "Return exactly one strict full Author JSON object with no markdown or prose.",
         ],
         "allowedCallParamsReadOnly": {
-            name: sorted(cap.params) for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible
+            name: sorted(cap.params) for name, cap in CAPABILITY_REGISTRY.items()
         },
         "requiredJsonShape": author_item_prompt_shape_card(),
         "parseError": f"{type(parse_error).__name__}: {parse_error}",
@@ -256,8 +252,6 @@ def _repair_malformed_author_json(
 def try_llm_plan(
     a: dict[str, Any],
     b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
     key: str,
 ) -> dict[str, Any] | None:
     """Perform exactly one baseline Gameplay Author call.
@@ -269,7 +263,7 @@ def try_llm_plan(
     if not USE_LLM:
         return None
     model_name = resolve_llm_model()
-    request, user_content, system = build_initial_author_request(a, b, ca, cb, key, model_name=model_name)
+    request, user_content, _ = build_initial_author_request(a, b, key, model_name=model_name)
     try:
         trace_event(
             "prompt",
@@ -324,18 +318,12 @@ def try_llm_plan(
             "runtimeAuthorSchema": RUNTIME_PROGRAM_SCHEMA,
             "runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION,
             "llmRawOutput": str(content)[:12000],
-            "llmHistoryStored": ATTRIBUTED_PLANNER_HISTORY_KIND,
         })
         if format_repaired:
             debug["gameplayFormatRepairRawOutput"] = format_repair_content[:12000]
         accounting = _stage_accounting(item)
         accounting["gameplayAuthorCalls"] = 1
         accounting["gameplayRepairCalls"] = 1 if format_repaired else 0
-        item["_llmHistory"] = attributed_planner_history(
-            system,
-            user_content,
-            format_repair_content or str(content),
-        )
         return item
     except PlannerUnavailable:
         raise
@@ -385,8 +373,6 @@ def build_gameplay_repair_dossier(
     current: Mapping[str, Any],
     a: Mapping[str, Any],
     b: Mapping[str, Any],
-    ca: Mapping[str, Any],
-    cb: Mapping[str, Any],
     *,
     failure_report: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -398,7 +384,6 @@ def build_gameplay_repair_dossier(
     cards remain limited to current blockers; source visibility grants no edits.
     """
 
-    _ = (ca, cb)
     assert_bounded_author_input(current)
     exact_errors = _repair_error_rows(failure_report)
     scope = build_runtime_repair_scope(current, exact_errors)
@@ -429,7 +414,7 @@ def build_gameplay_repair_dossier(
             "immutableProgramIndex.entities[*].id is the exact allowlist for every target and entity-reference value that points to an existing entity in this patch; never carry an id from another item. When repairScope.create.calls.allowedTargetKinds is non-empty, a new call may instead target an id emitted exactly once in entitiesUpsert whose kind is listed there; use that same new id consistently and do not invent any other target.",
             "Do not introduce a weapon family, archetype, semantic root, or code-authored default.",
             "Resolve every exact error and re-check references, target kinds, inputs, cycles, and budgets.",
-            "Always return realizationReplacement as an interpretation of the exact post-merge program, not an observed run. acceptedItemContext.concept is the original non-binding intent; acceptedItemContext.runtimeProgram is the exact read-only pre-repair source, including invalid fields. Overlay only edits admitted by repairScope on that source; keep every frozen value and absence unchanged. acceptedItemContext.realization is the previous report, not execution evidence. Obey runtimeExecutionTruth and rebuild selfEvaluation.planVsProgram and selfEvaluation.programVsReport against the resulting program; realizationReplacement is never deterministically synthesized.",
+            "realizationReplacement is optional advisory context about the post-merge program, never an observed run or an acceptance requirement. Do not repair or complete prose or self-evaluation. acceptedItemContext.runtimeProgram is the exact read-only pre-repair source, including invalid fields; overlay only edits admitted by repairScope and keep every frozen value and absence unchanged.",
             f"When repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.allowed is true, set {PRIMARY_ENTITY_SELECTION_FIELD} to exactly one listed candidate; Lowery materializes technical wire roles from that exact authored identity.",
             "For each repairRequirements row with requiredBindingUpdates, emit every listed existing binding exactly once using one of its complete allowed transactions; mustApplyAll means these updates are one coupled repair, not alternatives. When mustCreateExactlyOne is true, emit exactly one allowedBindingTransactions row and it must have a new id. When mustChooseExactlyOne is true without mustCreateExactlyOne, emit exactly one complete allowedBindingTransactions choice: an existing id is eligible only when it appears in that row's allowedExistingBindingIds and its complete tuple is projected by bindingAlternatives; a new id is eligible only when repairScope.create.bindings permits it. Global mutability never authorizes an id for another requirement; never update every listed lane.",
             "For each repairTransactions.exclusiveInputSelections group, either retarget/delete conflicting bindings through exact fieldPermissions or emit one exclusiveInputSelections row choosing the keepBindingId; do not do both after the conflict is resolved.",
@@ -473,8 +458,6 @@ def repair_author_item_after_failure(
     current: dict[str, Any],
     a: dict[str, Any],
     b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
     key: str,
     *,
     failure_report: Mapping[str, Any],
@@ -490,7 +473,7 @@ def repair_author_item_after_failure(
         raise PlannerUnavailable("Gameplay Repair required but LLM is disabled")
     model_name = resolve_llm_model()
     repair_context = build_gameplay_repair_dossier(
-        current, a, b, ca, cb, failure_report=failure_report,
+        current, a, b, failure_report=failure_report,
     )
     exact_errors = copy.deepcopy(repair_context["exactValidationErrors"])
     scope = copy.deepcopy(repair_context["repairScope"])
@@ -500,7 +483,7 @@ def repair_author_item_after_failure(
             + bounded_json_dumps(scope["nonRepairableErrors"], max_chars=5000)
         )
     local_repair_schema = author_item_repair_response_schema(
-        capability_names=runtime_repair_schema_capabilities(scope), require_realization=True)
+        capability_names=runtime_repair_schema_capabilities(scope))
     repair_user = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     repair_system = (
         "You are the conditional Gameplay Repair for InfiniCrafterLocal. Close exactValidationErrors through repairScope permissions, repairTransactions, eventAlternatives and repairScope.blockerPlan; never repair the whole item. "
@@ -511,7 +494,7 @@ def repair_author_item_after_failure(
         "Every llmRepairable repairRequirement whose requiredOneOfCapabilities is non-empty must be absent after the patch. An independently authorized delete/retarget may close it structurally; otherwise callsUpsert must patch or create one complete listed call on an affected target. A note claiming closure does not satisfy it. "
         "For an exact shape_additional_property under calls[*].params, remove only the matching repairScope.deletable.callParamKeys entry: either emit callParamKeysDelete or omit that key from the complete callsUpsert row. "
 
-        "Omit unchanged root patch fields: absent optional arrays/metadataPatch mean no change; note and realizationReplacement are required. Do not copy dossier keys into the patch, especially readOnlySourceFragments or any of its diagnostic children. Every upsert row must be complete and schema-valid; copy every unchanged required field from readOnlySourceFragments.brokenFragments and modify only permitted paths. "
+        "Omit unchanged root patch fields: absent optional arrays/metadataPatch mean no change; note is required; realizationReplacement is optional advisory text. Do not copy dossier keys into the patch, especially readOnlySourceFragments or any of its diagnostic children. Every upsert row must be complete and schema-valid; copy every unchanged required field from readOnlySourceFragments.brokenFragments and modify only permitted paths. "
         "Deterministic merge will freeze already-valid old values and accept the exact broken or mandatory missing fields. Independent valid nodes and optional unreported fields are read-only; extra "
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. The final requiredJsonShape field of the user JSON is solely the output patch shape; emit only its listed root keys with your chosen values, never source-context keys or requiredJsonShape itself. Return strict patch JSON only."
     )
@@ -560,8 +543,8 @@ def repair_author_item_after_failure(
             parsed, local_schema=local_repair_schema,
             response_format=effective_response_format(request, raw),
         )
-        if not isinstance(patch, Mapping) or not isinstance(patch.get("realizationReplacement"), Mapping):
-            raise PlannerUnavailable("Gameplay Repair must return a non-null realizationReplacement")
+        if not isinstance(patch, Mapping):
+            raise PlannerUnavailable("Gameplay Repair must return a patch object")
         report = strict_repair_structure_report(patch)
         if not report.get("ok"):
             raise PlannerUnavailable("Gameplay Repair patch shape rejected: " + bounded_json_dumps(report, max_chars=6000))

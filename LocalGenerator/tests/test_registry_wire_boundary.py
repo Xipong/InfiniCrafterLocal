@@ -15,6 +15,37 @@ from infini_local.core.vfx_manifest import _compile_manifest
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
 
 
+def test_unknown_author_root_cannot_survive_validation_and_compilation():
+    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+    from infini_local.pipelines.llm_authoring_pipeline import _prepare_parsed_author_item
+
+    source = build_runtime_fixture("workbench_blade")
+    assert validate_runtime_program(source)["ok"]
+    source["unexpectedRoot"] = {"value": "unrecognized"}
+    before = deepcopy(source)
+    parsed = _prepare_parsed_author_item(source, response_format={"type": "json_object"})
+    report = validate_runtime_program(parsed)
+    assert not report["ok"], "unknown authored root must not be projected out of validation"
+    assert any(row["path"] == "$.unexpectedRoot" for row in report["errors"])
+    with pytest.raises(ValueError, match="unexpectedRoot"):
+        compile_runtime_program(parsed)
+    assert source == before and parsed == before
+
+
+def test_unknown_delivered_root_is_refused_not_sanitized(wire):
+    delivered = sanitize_recipe_for_delivery(wire)
+    assert validate_runtime_wire(delivered)["ok"]
+    delivered["unexpectedRoot"] = {"value": "unrecognized"}
+    before = deepcopy(delivered)
+    projected = sanitize_recipe_for_delivery(delivered)
+    report = validate_runtime_wire(projected)
+    assert not report["ok"], "Python must not approve a root rejected by the native DTO"
+    assert any(row["path"] == "$.unexpectedRoot" and row["code"] == "unknown_final_wire_field"
+               for row in report["errors"])
+    assert projected["unexpectedRoot"] == before["unexpectedRoot"]
+    assert delivered == before
+
+
 @pytest.fixture
 def wire():
     data = _sample_data()
@@ -265,12 +296,9 @@ def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch
     payload = {"worldId": "audit-world", "itemA": {"type": 1}, "itemB": {"type": 2}}
     key, cached = combine_cache_lookup(payload)
     assert cached is None
+    wire["visual"] = {"preferredCanvasSize": 32}
     hydrate_no_image_fixture_assets(wire, write_no_image_fixture_png(tmp_path / "cache-control.png"))
-    wire["vfxManifest"] = _compile_manifest(wire, {
-        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
-        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
-                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0}, "slots": [],
-    }, key)
+    wire["vfxManifest"] = _compile_manifest(wire, {"slots": []}, key)
     assert _cached_payload_report(wire)["ok"]
     path = world_storage.world_recipe_file(tmp_path, "audit-world", key)
     world_storage.write_world_recipe_cache(tmp_path, "test", key, "audit-world", wire)
@@ -278,6 +306,7 @@ def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch
     assert isinstance(valid_cached, dict)
     assert valid_cached["runtimeProgram"] == wire["runtimeProgram"]
     assert path.exists()
+    wire = deepcopy(valid_cached)
     runtime = wire["runtimeProgram"]
     if mutation == "entity_row":
         runtime["entities"].insert(0, None)
@@ -326,24 +355,12 @@ def test_a7_storage_delivery_gate_rejects_malformed_neighbour(field, value):
     # a schema marker. This observer isolates the malformed buff neighbour.
     delivery["vfxManifest"] = _compile_manifest(
         delivery,
-        {
-            "effectMagnitude": 0.0,
-            "visualBudgetClass": "tiny",
-            "motif": {
-                "element": "neutral",
-                "shapeLanguage": "none",
-                "motionLanguage": "none",
-                "paletteRole": "primary",
-                "rhythm": 1.0,
-                "chaos": 0.0,
-            },
-            "slots": [],
-        },
+        {"slots": []},
         "receipt_probe",
     )
-    assert is_deliverable_recipe_payload(delivery)
+    assert is_deliverable_recipe_payload(delivery, check_assets=False)
     delivery["gameplay"]["generatedBuff"][field] = value
-    assert not is_deliverable_recipe_payload(delivery)
+    assert not is_deliverable_recipe_payload(delivery, check_assets=False)
 
 
 @pytest.mark.parametrize("bad", [None, [], 0, "buff"])

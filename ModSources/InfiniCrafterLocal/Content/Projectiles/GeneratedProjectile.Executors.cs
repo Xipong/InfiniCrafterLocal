@@ -241,7 +241,8 @@ public sealed partial class GeneratedProjectile
         string shotId = _entity.Targeting.ShotEntityId;
         Vector2 direction = Projectile.DirectionTo(target.Center);
         RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
-        float damageMultiplier = _entity.Targeting.DamageMultiplier ?? 1f;
+        if (_entity.Targeting.DamageMultiplier is not float damageMultiplier)
+            return true;
         if (!RuntimeChildCombat.TryResolve(_entity.Targeting.DamageBasis, _entity.Targeting.KnockbackBasis,
             damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), Owner()),
             out int? damageOverride, out float? knockbackOverride))

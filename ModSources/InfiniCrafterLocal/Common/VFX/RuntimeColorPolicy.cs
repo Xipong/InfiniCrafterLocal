@@ -5,7 +5,7 @@ using System.IO;
 namespace InfiniCrafterLocal.Common.VFX;
 
 /// <summary>
-/// Exact bounded color vocabulary shared by generated item lights and VFX.
+/// Exact bounded native gameplay/light capability vocabulary.
 /// Rich visual prose/palettes never enter this runtime selector.
 /// </summary>
 public static class RuntimeColorPolicy
@@ -21,37 +21,14 @@ public static class RuntimeColorPolicy
         throw new InvalidDataException($"unknown runtime color '{token}'");
     }
 
-    private static string NormalizeForRendering(string? value)
-    {
-        string token = (value ?? "").Trim().ToLowerInvariant();
-        return token is "white" or "gray" or "silver" or "brown" or "tan" or "red" or "orange" or
-            "yellow" or "gold" or "green" or "cyan" or "blue" or "purple" or "pink" or "black"
-            ? token
-            : "";
-    }
-
-    // Visual's optional effectColor uses the rendering vocabulary, not the narrower
-    // gameplay/light contract. Present values are exact tokens, never prose/hex or
-    // silently normalized strings; omission is represented by the DTO property.
-    public static string RequireRenderingToken(string? value)
-    {
-        if (!string.IsNullOrEmpty(value) && NormalizeForRendering(value) == value)
-            return value;
-        throw new InvalidDataException("visual.effectColor must be an exact supported runtime rendering token when present");
-    }
-
     public static Color Resolve(string? value, Color fallback)
-        => NormalizeForRendering(value) switch
+        => (value ?? "").Trim().ToLowerInvariant() switch
         {
             "white" => new Color(235, 235, 235),
             "gray" => new Color(170, 170, 180),
-            "silver" => new Color(192, 192, 192),
-            "brown" => new Color(150, 100, 65),
-            "tan" => new Color(225, 190, 120),
             "red" => new Color(255, 85, 85),
             "orange" => new Color(255, 155, 70),
             "yellow" => new Color(255, 235, 90),
-            "gold" => new Color(255, 205, 70),
             "green" => new Color(110, 255, 145),
             "cyan" => new Color(90, 235, 255),
             "blue" => new Color(120, 190, 255),

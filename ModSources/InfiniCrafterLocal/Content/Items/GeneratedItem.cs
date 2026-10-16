@@ -903,6 +903,7 @@ public partial class GeneratedItem : ModItem
         if (texture is null) return true;
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() / 2f;
+        if (!data.Visual.RenderSizePx.HasValue || !data.Visual.ForwardAngleDegrees.HasValue) return true;
         float finalScale = scale * data.Visual.WorldScale * SpritePresentation.FrameScale(data.Visual.RenderSizePx, source.Width, source.Height);
         Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0f, origin.Y * finalScale) + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, origin, finalScale, SpriteEffects.None, 0f);

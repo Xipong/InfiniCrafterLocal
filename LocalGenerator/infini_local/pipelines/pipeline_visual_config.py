@@ -126,8 +126,7 @@ IMAGE_MAX_CONCURRENCY = env_int("INFINI_IMAGE_MAX_CONCURRENCY", 1, lo=1, hi=4)
 IMAGE_GENERATION_GATE = sdcpp_service.ImageRequestGate(IMAGE_MAX_CONCURRENCY)
 # Visual asset generation mode. "item" = inventory icon only; "full" = item + projectile + impact briefs.
 VISUAL_ASSET_MODE = env_str("INFINI_VISUAL_ASSET_MODE", "full").lower()
-# v0.3.9: merged author-first visual pipeline. Planner writes the toy, visual-director
-# builds a role-separated asset pack, generator produces item/projectile/impact/child/field PNGs.
+# A diagnostic pipeline label; selected assets are authored per exact entity.
 VISUAL_DIRECTOR_LLM = env_bool("INFINI_VISUAL_DIRECTOR_LLM", True)
 VISUAL_PIPELINE_PROFILE = env_str("INFINI_VISUAL_PIPELINE_PROFILE", "author_visualpack_v2")
 
@@ -140,10 +139,6 @@ def contract_versions_payload() -> dict[str, Any]:
         visual_pipeline_profile=VISUAL_PIPELINE_PROFILE,
     )
 VISUAL_GENERATION_TIMEOUT = env_int("INFINI_VISUAL_GENERATION_TIMEOUT", 240)
-PROJECTILE_SPRITE_CANVAS = env_int("INFINI_PROJECTILE_SPRITE_CANVAS", 32)
-IMPACT_SPRITE_CANVAS = env_int("INFINI_IMPACT_SPRITE_CANVAS", 32)
-CHILD_SPRITE_CANVAS = env_int("INFINI_CHILD_SPRITE_CANVAS", 24)
-FIELD_SPRITE_CANVAS = env_int("INFINI_FIELD_SPRITE_CANVAS", 32)
 # VFX manifest pipeline constants/functions are imported from vfx_manifest.py after config.env is loaded.
 # v0.3.9 one-shot sprite alpha pipeline. Default path:
 # 1 generated image per asset -> local alpha removal -> crop/fit/downscale ->
@@ -275,10 +270,6 @@ __all__ = [
     "VISUAL_PIPELINE_PROFILE",
     "contract_versions_payload",
     "VISUAL_GENERATION_TIMEOUT",
-    "PROJECTILE_SPRITE_CANVAS",
-    "IMPACT_SPRITE_CANVAS",
-    "CHILD_SPRITE_CANVAS",
-    "FIELD_SPRITE_CANVAS",
     "REMOVE_BG",
     "BG_REMOVE_MODE",
     "BG_COLOR",

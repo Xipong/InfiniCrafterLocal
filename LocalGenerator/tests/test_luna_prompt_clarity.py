@@ -9,7 +9,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author, llm_transpo
 
 def packet(monkeypatch, a=None, b=None):
     monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
-    request, user, _ = author.build_initial_author_request(a or {}, b or {}, {}, {}, 'cold-clarity', model_name='test-model')
+    request, user, _ = author.build_initial_author_request(a or {}, b or {}, 'cold-clarity', model_name='test-model')
     assert dossier_text(request) == user
     return json.loads(user)
 

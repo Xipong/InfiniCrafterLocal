@@ -1182,7 +1182,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "customHeldSprite": {
-                    "description": "Custom held-root visibility only, not gameplay release timing: hidden suppresses it; visible keeps it while use is active; inherit or omission follows hideUseGraphic for declared-size presentations and historical keep behavior without that metadata. This does not schedule gameplay release or change vanilla hideUseGraphic.",
+                    "description": "Custom held-root visibility only, not gameplay release timing: hidden suppresses it; visible keeps it while use is active; inherit or omission follows hideUseGraphic. This does not schedule gameplay release or change vanilla hideUseGraphic.",
                     "enum": [
                       "hidden",
                       "visible",
@@ -1209,7 +1209,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "hideUseGraphic": {
-                    "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), customHeldSprite=inherit or omission also hides the custom generated root; explicit visible keeps it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless hidden is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
+                    "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. customHeldSprite=inherit or omission also follows this flag for the custom generated root; explicit visible keeps that root visible while active, so true may intentionally hide vanilla while retaining the custom body. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },

@@ -103,7 +103,7 @@ def test_delivered_visual_rules_match_raw_background_transport(monkeypatch, colo
         return {"choices": [{"message": {"content": "{}"}}]}
     monkeypatch.setattr(stage, "llm_chat_json", transport)
     monkeypatch.setattr(stage, "resolve_llm_model", lambda: "test-model")
-    stage._request_visual_kit({}, {}, {}, {}, {}, repair_errors=[] if repair else None)
+    stage._request_visual_kit({}, {}, {}, repair_errors=[] if repair else None)
     rules = request_dossier(captured)["rules"]
     rule = next((rule for rule in rules if "final PNG" in rule), "")
     assert "transparent background" in rule
@@ -210,7 +210,7 @@ def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp
         supplied.save(source)
         return [str(source)]
     monkeypatch.setattr(generation, "_generate_backend_variants", producer)
-    data = {"id": "native-fixture", "vfxManifest": {}}
+    data = {"id": "native-fixture", "vfxManifest": {"recipeId": "native-fixture"}}
     published, _, _, status = generation.generate_visual_asset(data, role, authored, "", "native-producer", 32)
     assert published and status == "generated", data
     assert len(captured) == 2
@@ -245,10 +245,10 @@ def run_plan(tmp_path, monkeypatch, entity_id, kind, declared=None):
     monkeypatch.setattr(generation, "_generate_backend_variants", backend)
     entity = {"id": entity_id, "kind": kind, "visualRole": declared if declared is not None else VISUAL_ROLE_BY_ENTITY_KIND[kind],
               "hitbox": {"widthPx": 32, "heightPx": 32},
-              "visual": {"assetMode": "baked_sprite", "prompt": "blue authored shape"}}
+              "visual": {"assetMode": "baked_sprite", "prompt": "blue authored shape", "preferredCanvasSize": 32, "renderSizePx": 32, "forwardAngleDegrees": 0}}
     data = {"id": "fixture", "runtimeProgram": {"entities": [entity]},
             "vfxManifest": {"slots": [{"entityId": entity_id, "rendererKind": "impactSprite"}]}}
-    entity["visual"]["impactPrompt"] = "blue authored impact"
+    entity["visual"].update(impactPrompt="blue authored impact", impactCanvasSize=32)
     plan = build_visual_asset_plan(copy.deepcopy(data))
     result = generation.maybe_generate_visual_assets(data)
     return plan, result, calls
@@ -260,14 +260,26 @@ def test_plan_backend_postprocess_is_independent_of_entity_id(tmp_path, monkeypa
         plan, result, calls = run_plan(tmp_path, monkeypatch, entity_id, kind)
         assert plan[0]["visualRole"] == VISUAL_ROLE_BY_ENTITY_KIND[kind]
         assert [c["role"] for c in calls] == ["runtime:" + VISUAL_ROLE_BY_ENTITY_KIND[kind], "impact"]
-        assert all(entity_id not in c["prompt"] for c in calls)
+        # Identity is now an explicit final-frame owner fact, never design prose.
+        import json
+        normalized_prompts = []
+        for call in calls:
+            prompt = call["prompt"]
+            marker = "Read-only final-frame facts: "
+            if marker in prompt:
+                prefix, framed = prompt.split(marker, 1)
+                facts, end = json.JSONDecoder().raw_decode(framed)
+                assert facts["entityId"] == entity_id
+                facts["entityId"] = "same_explicit_owner"
+                prompt = prefix + marker + json.dumps(facts, sort_keys=True) + framed[end:]
+            normalized_prompts.append(prompt)
         visual = result["runtimeProgram"]["entities"][0]["visual"]
         assert visual["spritePath"] and visual["impactSpritePath"]
         body = Image.open(visual["spritePath"]).convert("RGBA")
         impact = Image.open(visual["impactSpritePath"]).convert("RGBA")
         assert bool(set(body.getchannel("A").tobytes()) - {0, 255}) == (kind == "field")
         assert set(impact.getchannel("A").tobytes()) - {0, 255}
-        snapshots.append((body.tobytes(), impact.tobytes(), [c["prompt"] for c in calls]))
+        snapshots.append((body.tobytes(), impact.tobytes(), normalized_prompts))
     assert snapshots[0] == snapshots[1]
 
 @pytest.mark.parametrize("role", ["impact", "runtime:field"])
@@ -309,7 +321,7 @@ def test_canvas_consumer_pixels(tmp_path, monkeypatch, canvas, entry, role):
         "visual": {"preferredCanvasSize": canvas}, "visualKit": {"equipOverlay": {"preferredCanvasSize": canvas}},
         "runtimeProgram": {"itemEntityId": "item", "entities": [
             {"id": "item", "kind": "item_body", "visual": {"assetMode": "baked_sprite"}},
-            {"id": "bolt", "kind": "projectile", "hitbox": {"widthPx": canvas, "heightPx": canvas}, "visual": {"assetMode": "baked_sprite"}},
+            {"id": "bolt", "kind": "projectile", "hitbox": {"widthPx": canvas, "heightPx": canvas}, "visual": {"assetMode": "baked_sprite", "preferredCanvasSize": canvas}},
         ]},
     }
     target = {row["role"].replace(":", "_"): row for row in build_visual_asset_plan(data)}[role]["canvas"]
@@ -337,6 +349,35 @@ def test_canvas_consumer_pixels(tmp_path, monkeypatch, canvas, entry, role):
         if entry != "procedural":
             assert image.mode == "RGBA" and image.getchannel("A").getextrema() == (0, 255)
     assert contracts.sprite_contract_for(role, target)["size"] == canvas
+
+@pytest.mark.parametrize("owner", ["item", "reuse", "distinct"])
+@pytest.mark.parametrize("value", [None, True, "32", 32.0, 33], ids=["missing", "bool", "string", "float", "unsupported"])
+def test_asset_plan_requires_explicit_image_project_canvas_without_hitbox_fallback(owner, value):
+    data = {"visual": {"preferredCanvasSize": 96}, "runtimeProgram": {"itemEntityId": "item", "entities": []}}
+    entity = {"id": "item" if owner == "item" else "body", "kind": "item_body" if owner == "item" else "free_projectile",
+              "hitbox": {"widthPx": 32, "heightPx": 32},
+              "visual": {"assetMode": "reuse_item_icon" if owner == "reuse" else "baked_sprite", "preferredCanvasSize": 64}}
+    data["runtimeProgram"]["entities"].append(entity)
+    assert build_visual_asset_plan(data)[0]["canvas"] == (64 if owner == "distinct" else 96)
+    canvas_owner = entity["visual"] if owner == "distinct" else data["visual"]
+    if value is None:
+        canvas_owner.pop("preferredCanvasSize")
+    else:
+        canvas_owner["preferredCanvasSize"] = value
+    before = copy.deepcopy(data)
+    with pytest.raises(ValueError, match="explicit supported canvas size required"):
+        build_visual_asset_plan(data)
+    assert data == before
+
+
+@pytest.mark.parametrize("root", [None, [], "32", 32, True])
+def test_asset_plan_refuses_nonobject_root_visual_for_item_canvas(root):
+    data = {"visual": root, "runtimeProgram": {"itemEntityId": "item", "entities": [
+        {"id": "item", "kind": "item_body", "hitbox": {"widthPx": 32, "heightPx": 32},
+         "visual": {"assetMode": "baked_sprite", "preferredCanvasSize": 64}}]}}
+    with pytest.raises(ValueError, match=r"\$\.visual\.preferredCanvasSize"):
+        build_visual_asset_plan(data)
+
 
 @pytest.mark.parametrize("entry,canvas", [
     ("bake_sprite_from_master", -1), ("bake_sprite_from_master", 129),
@@ -383,7 +424,7 @@ def test_main_canvas_and_presentation_do_not_leak_to_dedicated_impact(canvas):
         "runtimeProgram": {"itemEntityId": "opaque_root", "entities": [
             {"id": "opaque_root", "kind": "item_body", "visual": {"assetMode": "baked_sprite"}},
             {"id": "opaque_body", "kind": "free_projectile", "visualRole": "projectile", "hitbox": {"widthPx": 21, "heightPx": 21},
-             "visual": {"assetMode": "baked_sprite", "preferredCanvasSize": canvas, "renderSizePx": 48, "forwardAngleDegrees": -30, "impactPrompt": "authored impact"}},
+             "visual": {"assetMode": "baked_sprite", "preferredCanvasSize": canvas, "renderSizePx": 48, "forwardAngleDegrees": -30, "impactPrompt": "authored impact", "impactCanvasSize": 24}},
             {"id": "alias", "kind": "free_projectile", "visual": {"assetMode": "reuse_item_icon"}},
         ]}, "vfxManifest": {"slots": [{"entityId": "opaque_body", "rendererKind": "impactSprite"}]}}
     before = copy.deepcopy(data)

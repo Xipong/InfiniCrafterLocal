@@ -13,6 +13,9 @@ from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.capability_registry import MOVEMENT_OPCODE
 
 
+SPRITE_CANVAS_SIZES = (24, 32, 48, 64, 96, 128)
+
+
 def sprite_presentation_properties() -> dict[str, Any]:
     # Direct authored projection, never inferred from hitbox, canvas or prose.
     return {

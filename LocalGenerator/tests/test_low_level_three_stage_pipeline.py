@@ -16,7 +16,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA, attach_hybrid_vfx_manifest, vfx_director_surface
+from infini_local.core.vfx_manifest import VFX_DIRECTOR_SCHEMA, VFX_REPAIR_PATCH_SCHEMA, attach_vfx_manifest, vfx_director_surface
 from infini_local.pipelines.combine_pipeline import _assert_stage_topology
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from collections import deque
@@ -116,7 +116,6 @@ def _visual_patch(data: dict) -> dict:
         "entitiesUpsert": kit["entities"],
         "entityIdsDelete": [],
         "entityIndicesDelete": [],
-        "animationPlan": None,
         "note": "repair only invalid item and missing entity rows",
     }
 
@@ -125,20 +124,15 @@ def _vfx_output(data: dict) -> dict:
     pair = vfx_director_surface(data)["runtimePairs"][0]
     return {
         "schema": VFX_DIRECTOR_SCHEMA,
-        "effectMagnitude": 0.5,
-        "visualBudgetClass": "normal",
-        "motif": {"element": "metal", "shapeLanguage": "sparks", "motionLanguage": "short wake", "paletteRole": "accent", "rhythm": 1.0, "chaos": 0.2},
         "slots": [{
+            "color": {"r": 17, "g": 93, "b": 241},
             "id": "slot_0", "entityId": pair["entityId"], "event": pair["event"],
-            "rendererKind": "projectileAfterimage", "backend": "Realtime",
-            "textureRole": "entity", "particleRole": "none", "anchor": "self",
-            "channel": "motionTrail", "lane": "primary", "emissionMode": "wake",
+            "rendererKind": "spriteStampTrail",
+            "textureRole": "entity", "anchor": "self",
             "blend": "alpha", "layer": "BeforeProjectiles",
             "particleSystemId": "none", "scale": 1.0,
             "density": 0.4, "duration": 20, "alpha": 0.8, "spread": 0.1,
-            "jitter": 0.1, "fadeIn": 0.1, "fadeOut": 0.4, "budgetWeight": 1.0,
-            "signatureWeight": 0.4, "visualCost": 0.3, "startTick": 0, "repeatEvery": 0,
-            "spritePrompt": "", "spriteNegativePrompt": "",
+            "startTick": 0, "repeatEvery": 0,
         }],
     }
 
@@ -186,7 +180,7 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
     responses, requests = wire_transport
     authored = build_runtime_fixture(fixture_name)
     responses.append(authored)
-    planned = gameplay_stage.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "a+b")
+    planned = gameplay_stage.try_llm_plan({"name": "A"}, {"name": "B"}, "a+b")
     assert planned is not None
     assert planned["debug"]["llmStageAccounting"]["gameplayAuthorCalls"] == 1
     compiled = compile_runtime_program(planned)
@@ -195,23 +189,28 @@ def test_three_stage_wire_and_conditional_repairs(wire_transport, fixture_name, 
                       "animationPlan": "already valid animation"} if repair_needed else _visual_kit(compiled))
     if repair_needed:
         responses.append(_visual_patch(compiled))
-    visual = visual_stage.apply_visual_director(compiled, {}, {}, {}, {})
+    visual = visual_stage.apply_visual_director(compiled, {}, {})
     assert visual["debug"]["llmStageAccounting"]["visualDirectorCalls"] == 1
     assert visual["debug"]["llmStageAccounting"]["visualRepairCalls"] == int(repair_needed)
     if repair_needed:
         assert visual["visualKit"]["animationPlan"] == "already valid animation"
     authored_vfx = _vfx_output(visual)
-    responses.append(dict(authored_vfx, effectMagnitude=2.0) if repair_needed else authored_vfx)
+    broken_vfx = copy.deepcopy(authored_vfx)
     if repair_needed:
-        responses.append({"schema": VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": 0.5,
-                          "visualBudgetClass": None, "motif": None, "slotsUpsert": [],
-                          "slotIdsDelete": [], "slotIndicesDelete": [], "note": "repair only magnitude"})
-    final = attach_hybrid_vfx_manifest(visual, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
+        broken_vfx["slots"][0]["alpha"] = 2
+    responses.append(broken_vfx)
+    if repair_needed:
+        responses.append({"schema": VFX_REPAIR_PATCH_SCHEMA,
+                          "slotsUpsert": authored_vfx["slots"],
+                          "note": "repair only alpha"})
+    final = attach_vfx_manifest(visual, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
     expected_stages = ["planner", "visual_director"] + (["visual_repair"] if repair_needed else [])
     expected_stages += ["vfx_director"] + (["vfx_repair"] if repair_needed else [])
     assert [request["_infini_stage"] for request in requests] == expected_stages
     packet = request_dossier(next(request for request in requests if request["_infini_stage"] == "vfx_director"))
-    assert packet["item"]["behaviorChecks"] == visual["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"]
+    assert packet["item"]["description"] == visual["realization"]["description"]
+    assert packet["item"]["playerExperience"] == visual["realization"]["playerExperience"]
+    assert "behaviorChecks" not in packet["item"]
     assert packet["acceptedVisualKit"] == visual["visualKit"]
     mechanics = copy.deepcopy(visual["runtimeProgram"])
     for entity in mechanics["entities"]:
@@ -275,27 +274,26 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
         elif scenario in {"absent", "empty"}:
             raw = '{"schema":'
             if scenario == "empty":
-                patch.update(itemPatch=None, entitiesUpsert=[], animationPlan=None)
+                patch.update(itemPatch=None, entitiesUpsert=[])
     else:
         data = visual_stage._apply_kit(data, _visual_kit(data))
         valid = _vfx_output(data)
         raw = json.dumps(valid).replace('"layer": "BeforeProjectiles"', '"layer": "Projectiles" if false else "BeforeProjectiles"', 1)
-        patch = {"schema": VFX_REPAIR_PATCH_SCHEMA, "effectMagnitude": valid["effectMagnitude"],
-                 "visualBudgetClass": valid["visualBudgetClass"], "motif": valid["motif"],
+        patch = {"schema": VFX_REPAIR_PATCH_SCHEMA,
                  "slotsUpsert": valid["slots"], "slotIdsDelete": [], "slotIndicesDelete": [], "note": "strict JSON"}
     responses.extend([raw, patch])
     result = None
     with pytest.raises(PlannerUnavailable, match=rejection) if rejection else nullcontext():
         if stage == "gameplay":
-            result = gameplay_stage.try_llm_plan({}, {}, {}, {}, "a+b")
+            result = gameplay_stage.try_llm_plan({}, {}, "a+b")
             assert result is not None
             if scenario == "budget":
-                combine_stage.compile_and_validate_authored_runtime(result, {}, {}, {}, {}, "a+b",
+                combine_stage.compile_and_validate_authored_runtime(result, {}, {}, "a+b",
                     run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
         elif stage == "visual":
-            result = visual_stage.apply_visual_director(data, {}, {}, {}, {})
+            result = visual_stage.apply_visual_director(data, {}, {})
         else:
-            result = attach_hybrid_vfx_manifest(data, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
+            result = attach_vfx_manifest(data, "a+b", llm_director=vfx_transport.call_llm_vfx_director)
     names = {"gameplay": ["planner", "author_repair"], "visual": ["visual_director", "visual_repair"], "vfx": ["vfx_director", "vfx_repair"]}[stage]
     assert [request["_infini_stage"] for request in requests] == names
     assert not responses  # Any unbounded third request fails the recording transport too.
@@ -315,7 +313,8 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
                 "visual": ("visualDirectorCalls", "visualRepairCalls"), "vfx": ("vfxDirectorCalls", "vfxRepairCalls")}[stage]
         assert [result["debug"]["llmStageAccounting"][key] for key in keys] == [1, 1]
         if stage == "gameplay":
-            assert json.loads(result["_llmHistory"]["messages"][-1]["content"])["runtimeProgram"] == authored["runtimeProgram"]
+            assert result["runtimeProgram"] == authored["runtimeProgram"]
+            assert "_llmHistory" not in result
         elif stage == "visual":
             assert result["visualKit"]["item"]["visualIdentity"] == "literal composition"
             assert result["visualKit"]["animationPlan"] == kit["animationPlan"]
@@ -361,7 +360,7 @@ def test_author_repair_wire_admission_and_frozen_results(wire_transport, scenari
         responses.append(patch)
     match = {"echo-read-only": "additional_property", "registry-defect": "registry/runtime defect"}.get(scenario)
     with pytest.raises(PlannerUnavailable, match=match) if match else nullcontext():
-        repaired = gameplay_stage.repair_author_item_after_failure(current, {}, {}, {}, {}, "key", failure_report=failure)
+        repaired = gameplay_stage.repair_author_item_after_failure(current, {}, {}, "key", failure_report=failure)
     if scenario == "registry-defect":
         assert requests == []
         return
@@ -430,13 +429,13 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
             paths = ["params.healLife", "params.healMana"]
         permissions = [{"id": node["id"], "paths": paths}]
     responses.extend([json.dumps(current, allow_nan=False), json.dumps(patch, allow_nan=False)])
-    planned = gameplay_stage.try_llm_plan({}, {}, {}, {}, "scoped-author-repair")
+    planned = gameplay_stage.try_llm_plan({}, {}, "scoped-author-repair")
     assert planned is not None and planned["runtimeProgram"] == current["runtimeProgram"]
     original = copy.deepcopy(planned)
     match = "leaves a reported repair error open" if case == "malformed-noop" else None
     with pytest.raises(PlannerUnavailable, match=match) if match else nullcontext():
         result = combine_stage.compile_and_validate_authored_runtime(
-            planned, {}, {}, {}, {}, "scoped-author-repair", run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+            planned, {}, {}, "scoped-author-repair", run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
         assert validate_runtime_wire(result)["ok"]
         assert result["runtimeProgram"] == compile_runtime_program(good)["runtimeProgram"]
         assert result["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 1
@@ -469,9 +468,9 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
     candidates[0]["params"]["damage"] = 100
     patch = {"note": "repair every diagnosed duration", "realizationReplacement": good["realization"], "callsUpsert": candidates}
     responses.extend([json.dumps(current, allow_nan=False), json.dumps(patch, allow_nan=False)])
-    planned = gameplay_stage.try_llm_plan({}, {}, {}, {}, "complete-bounded-diagnostics")
+    planned = gameplay_stage.try_llm_plan({}, {}, "complete-bounded-diagnostics")
     assert planned is not None
-    result = combine_stage.compile_and_validate_authored_runtime(planned, {}, {}, {}, {}, "complete-bounded-diagnostics", run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
+    result = combine_stage.compile_and_validate_authored_runtime(planned, {}, {}, "complete-bounded-diagnostics", run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
     assert validate_runtime_wire(result)["ok"]
     expected = compile_runtime_program(good)
     assert result["runtimeProgram"] == expected["runtimeProgram"]
@@ -504,7 +503,7 @@ def test_oversized_author_response_refuses_before_format_or_gameplay_repair(wire
         current["not_pipeline_metadata"] = [None] * (nodes + 1)
     responses.append(json.dumps(current))
     with pytest.raises(PlannerUnavailable, match="Author input exceeds schema-derived work bounds"):
-        gameplay_stage.try_llm_plan({}, {}, {}, {}, "oversized-author-input")
+        gameplay_stage.try_llm_plan({}, {}, "oversized-author-input")
     assert [request["_infini_stage"] for request in requests] == ["planner"]
     assert requests[0]["response_format"]["type"] == mode
     assert not responses
@@ -563,7 +562,7 @@ def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario
 
     match = {"no-op": "leaves a reported repair error open", "spent-budget": "repair budget already consumed"}.get(scenario)
     with pytest.raises(PlannerUnavailable, match=match) if match else nullcontext():
-        result = combine_stage.compile_and_validate_authored_runtime(current, {}, {}, {}, {}, "a+b", run_stage=observe)
+        result = combine_stage.compile_and_validate_authored_runtime(current, {}, {}, "a+b", run_stage=observe)
         assert result["runtimeProgram"]["entities"]
     assert_pipeline_phase_order(labels, *expected)
     if cutoff:
@@ -575,7 +574,7 @@ def test_author_compile_phase_order_and_failure_cutoffs(wire_transport, scenario
     assert [r["_infini_stage"] for r in requests] == (["author_repair"] if scenario in {"scoped-fix", "no-op"} else [])
     assert not responses
 
-    domain_labels = ["strict_runtime_program", "parent_power_context", "compile_runtime_program", "wire_boundary"]
+    domain_labels = ["strict_runtime_program", "compile_runtime_program", "wire_boundary"]
     expected_labels = {
         "valid": ["02_" + label for label in domain_labels],
         "scoped-fix": ["02_strict_runtime_program", "02r_conditional_gameplay_repair"]
@@ -608,7 +607,7 @@ def test_compiler_faults_propagate_without_gameplay_repair(monkeypatch, error_ty
     monkeypatch.setattr(combine_stage, "repair_author_item_after_failure", repair)
     with pytest.raises(error_type) as caught:
         combine_stage.compile_and_validate_authored_runtime(
-            current, {}, {}, {}, {}, "compiler-fault", run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
+            current, {}, {}, "compiler-fault", run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
     assert caught.value is fault
     assert len(repair_calls) == int(after_repair)
 
@@ -623,7 +622,7 @@ def test_runtime_wire_admission_once_and_final_gate_still_rejects_mutation(monke
 
     monkeypatch.setattr(combine_stage, "validate_runtime_wire", observe)
     result = combine_stage.compile_and_validate_authored_runtime(
-        build_runtime_fixture("workbench_blade"), {}, {}, {}, {}, "single-admission",
+        build_runtime_fixture("workbench_blade"), {}, {}, "single-admission",
         run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
     assert len(calls) == 1
     result["runtimeProgram"]["schema"] = "invalid-after-presentation"
@@ -650,7 +649,7 @@ def test_wire_rejection_preserves_exact_repair_targets(monkeypatch):
     monkeypatch.setattr(combine_stage, "validate_runtime_wire", reject_once)
     monkeypatch.setattr(combine_stage, "repair_author_item_after_failure", repair)
     result = combine_stage.compile_and_validate_authored_runtime(
-        build_runtime_fixture("workbench_blade"), {}, {}, {}, {}, "wire-rejection",
+        build_runtime_fixture("workbench_blade"), {}, {}, "wire-rejection",
         run_stage=lambda _label, fn, *a, **kw: fn(*a, **kw))
     assert validate(result)["ok"]
     assert count == 2 and len(reports) == 1

@@ -129,7 +129,7 @@ def test_spawn_item_hit_repair_names_projectile_action_target_not_event_source()
     _body_event(authored, "on_hit")
     report = validate_runtime_program(authored)
     assert [row["code"] for row in report["errors"]] == ["event_not_emitted"]
-    dossier = build_gameplay_repair_dossier(authored, {}, {}, {}, {}, failure_report=report)
+    dossier = build_gameplay_repair_dossier(authored, {}, {}, failure_report=report)
     scope = dossier["repairScope"]
     alternative = next(row for row in scope["eventAlternatives"] if row["callId"] == "body_status")
     assert alternative["targetId"] == "item"
@@ -163,7 +163,7 @@ def test_frozen_contact_suppression_repair_never_offers_unexecutable_contact(sup
     _body_event(authored, "on_hit")
     report = validate_runtime_program(authored)
     assert "event_not_emitted" in {row["code"] for row in report["errors"]}
-    dossier = build_gameplay_repair_dossier(authored, {}, {}, {}, {}, failure_report=report)
+    dossier = build_gameplay_repair_dossier(authored, {}, {}, failure_report=report)
     scope = dossier["repairScope"]
     assert not any(row["callId"] == "body_status" for row in scope["eventAlternatives"])
     assert "body_status" in scope["deletable"]["callIds"]

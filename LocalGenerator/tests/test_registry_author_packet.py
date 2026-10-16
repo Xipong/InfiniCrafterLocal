@@ -1,7 +1,7 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import json
@@ -42,7 +42,7 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
     compiled_before = compile_runtime_program(item)
     # Constructing the new advisory packet must neither edit an existing design
     # nor turn guidance into a validator prohibition or deterministic selection.
-    request, user, _ = build_initial_author_request(item, {}, item, {}, "preserve-design", model_name="offline-test")
+    request, user, _ = build_initial_author_request(item, {}, "preserve-design", model_name="offline-test")
     intent = json.loads(user)["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
     assert "placement and multiple purposeful actions remain legal" in intent
     assert dossier_text(request) == user
@@ -70,7 +70,7 @@ def test_format_repair_with_coherence_advice_preserves_existing_placement(monkey
     item = build_runtime_fixture("fishing_platform_tool")
     before = copy.deepcopy(item)
     content = json.dumps(item)
-    _, recipe_context, _ = build_initial_author_request({}, {}, {}, {}, "syntax-only", model_name="offline-test")
+    _, recipe_context, _ = build_initial_author_request({}, {}, "syntax-only", model_name="offline-test")
     requests = []
 
     def respond(request, **kwargs):
@@ -113,7 +113,8 @@ def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(m
 def test_author_shape_card_and_schema_share_public_members():
     card = author_item_prompt_shape_card()
     schema = author_item_response_schema()
-    assert set(card["root"]) == set(schema["properties"])
+    assert set(card["root"]) == set(schema["required"])
+    assert set(card["root"]) | set(card["optionalAdvisory"]) == set(schema["properties"])
     assert {row["input"] for row in card["runtimeProgram"]["bindings"]} == set(INPUT_KIND_REGISTRY)
     assert all(not strict_schema_errors(row, binding_schema()) for row in card["runtimeProgram"]["bindings"])
     repair_card = author_item_repair_prompt_shape_card()
@@ -124,7 +125,7 @@ def test_author_shape_card_and_schema_share_public_members():
 def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
     a = build_runtime_fixture("held_and_deployed") if rich else {"id": "a", "name": "A", "damage": 10, "useTime": 20}
     b = a if rich else {"id": "b", "name": "B", "damage": 20, "useTime": 30}
-    catalog = build_llm_author_payload(a, b, a, b, "budget-proof")["runtimeCapabilityContract"]["catalog"]
+    catalog = build_llm_author_payload(a, b, "budget-proof")["runtimeCapabilityContract"]["catalog"]
     guide = catalog["fieldGuide"]
     canonical = runtime_authoring_prompt_field_guide()
     assert {k: guide[k] for k in canonical if k not in {"stackCost", "bindingTarget"}} == {
@@ -132,10 +133,10 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
     }
     assert guide["bindingTarget"].startswith(canonical["bindingTarget"])
     assert "whole generated item" in guide["stackCost"]
-    report = planner_prompt_usability_report(a, b, a, b, "budget-proof")
+    report = planner_prompt_usability_report(a, b, "budget-proof")
     assert report["ok"] and report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
-    assert report["visibleCapabilities"] == len(visible_capabilities())
+    assert report["visibleCapabilities"] == len(CAPABILITY_REGISTRY.values())
     assert report["missingCapabilities"] == report["extraCapabilities"] == []
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False
 
@@ -232,7 +233,7 @@ def test_author_entrypoint_uses_effective_format_preserves_raw_and_carries_mode_
         return {"choices": [{"message": {"content": next(responses)}}], "_debug": {"responseFormatType": actual}}
 
     offline_builder(monkeypatch, mode, respond)
-    result = pipeline.try_llm_plan({}, {}, {}, {}, "nullable-test")
+    result = pipeline.try_llm_plan({}, {}, "nullable-test")
     assert result is not None
     assert ("manaCost" not in _stats(result)["params"]) is (actual == "json_schema")
     assert validate_runtime_program(result)["ok"] is (actual == "json_schema")
@@ -298,7 +299,7 @@ def test_format_repair_preserves_source_contract_without_mode_upgrade(monkeypatc
         pytest.param("json_schema", None, 7, {"description": "incomplete"}, id="incomplete-realization"),
     ],
 )
-def test_repair_entrypoint_preserves_frozen_semantics_raw_and_realization_guard(monkeypatch, mode, actual, mana, variant):
+def test_repair_entrypoint_preserves_frozen_semantics_raw_and_optional_realization(monkeypatch, mode, actual, mana, variant):
     from infini_local.core.errors import PlannerUnavailable
     from infini_local.core.runtime_authoring.program_schema import strict_repair_shape_report
 
@@ -325,14 +326,20 @@ def test_repair_entrypoint_preserves_frozen_semantics_raw_and_realization_guard(
     if actual is not None:
         response["_debug"] = {"responseFormatType": actual}
     offline_builder(monkeypatch, mode, lambda *a, **kw: response)
-    args = (item, {}, {}, {}, {}, "repair-contract")
-    if shape_guard or (variant == "nullable" and actual != "json_schema"):
+    args = (item, {}, {}, "repair-contract")
+    if variant == "nullable" and actual != "json_schema":
         with pytest.raises(PlannerUnavailable):
             pipeline.repair_author_item_after_failure(*args, failure_report=validate_runtime_program(item))
     else:
         result = pipeline.repair_author_item_after_failure(*args, failure_report=validate_runtime_program(item))
         assert validate_runtime_program(result)["ok"] and _stats(result)["params"]["damage"] == 42
         assert ("manaCost" in _stats(result)["params"]) is (mana is not None)
+        if shape_guard:
+            expected = copy.deepcopy(item)
+            _stats(expected)["params"]["damage"] = 42
+            if variant is not None:
+                expected["realization"] = variant
+            assert {k: v for k, v in result.items() if k != "debug"} == expected
         if mana is not None:
             assert _stats(result)["params"]["manaCost"] == mana
         if variant == "nullable":

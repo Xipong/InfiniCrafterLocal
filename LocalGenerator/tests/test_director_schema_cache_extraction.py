@@ -97,7 +97,10 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
         for field in ("prompt", "silhouette", "visualIdentity"):
             assert field not in branches[0]["properties"]
             assert branches[1]["properties"][field] == {"$ref": "#/$defs/entity_" + field}
-        assert dynamic["responseSchema"]["properties"]["animationPlan"] == {"$ref": "#/$defs/animationPlan"}
+        if stage.endswith("repair"):
+            assert "animationPlan" not in dynamic["responseSchema"]["properties"]
+        else:
+            assert dynamic["responseSchema"]["properties"]["animationPlan"] == {"$ref": "#/$defs/animationPlan"}
         ids = [row["id"] for row in data["runtimeProgram"]["entities"]]
         canonical = (visual._visual_repair_schema if stage.endswith("repair") else visual._response_schema)(ids, False, data["runtimeProgram"]["itemEntityId"])
         if mode == "json_schema":
@@ -257,7 +260,7 @@ def test_reference_schema_reconstructs_owner_admission_and_refusal(monkeypatch, 
     if visual_stage:
         valid = ({"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"inventoryScale": 1.0},
                   "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
-                  "animationPlan": None, "note": "one leaf"} if repair else _visual_kit(data))
+                  "note": "one leaf"} if repair else _visual_kit(data))
         if mode == "json_schema":
             ids = [e["id"] for e in data["runtimeProgram"]["entities"]]
             local = visual._response_schema(ids, False, data["runtimeProgram"]["itemEntityId"])

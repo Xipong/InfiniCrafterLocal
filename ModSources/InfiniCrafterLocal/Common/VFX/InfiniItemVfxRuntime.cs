@@ -166,17 +166,6 @@ public static partial class InfiniItemVfxRuntime
         catch { }
     }
 
-    // Same exact authored particle-system mapping as projectile event emission.
-    // Keep item density/velocity/color presentation unchanged.
-    private static int ItemDustId(VfxSlotSpec slot) => slot.ParticleSystemId switch
-    {
-        "pl:smoke" => DustID.Smoke,
-        "pl:shard" => DustID.Glass,
-        "pl:spark" => DustID.Electric,
-        "pl:glow" => DustID.TintableDustLighted,
-        _ => DustID.GemDiamond,
-    };
-
     private static bool HasExactSlot(GeneratedItemData data, string entityId, string eventName)
     {
         foreach (VfxSlotSpec slot in data.VfxManifest.Slots)
@@ -198,7 +187,7 @@ public static partial class InfiniItemVfxRuntime
                     VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,null,data),itemBudget:true,allowance:eventAllowance);
                 continue;
             }
-            int repeat = slot.RepeatEvery > 0 ? slot.RepeatEvery : 10;
+            int repeat = cadence && slot.RepeatEvery!.Value > 0 ? slot.RepeatEvery!.Value : 10;
             // The wire contract defines StartTick for projectile age only.
             // Item periodic cadence uses the world clock, not an invented item age.
             if (cadence && (Main.GameUpdateCount + (ulong)Math.Abs((long)slot.SlotSeed)) % (ulong)Math.Max(1, repeat) != 0) continue;
@@ -209,8 +198,14 @@ public static partial class InfiniItemVfxRuntime
             // Mark only after cadence and anchor eligibility: an invalid held pose
             // must not suppress a later valid equipment path in this same tick.
             if (cadence && !TryMarkPeriodicSlot(player, data, entityId, slot)) continue;
-            Color color = InfiniVfxRuntime.PresentationColor(data, RuntimeColorPolicy.Resolve(data.Visual?.Palette?.Length > 0 ? data.Visual.Palette[0] : "white", Color.White));
             InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
+            if (kind == InfiniVfxRendererKind.SoundCue)
+            {
+                SoundStyle sound = slot.ResolveSoundStyle();
+                if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);
+                continue;
+            }
+            Color color = slot.Color!.ToColor();
             // Share this tick's allowance across events, slots and periodic presentation.
             string sourceKey = $"item:{player.whoAmI}:{data.Id}:{entityId}";
             if (kind == InfiniVfxRendererKind.ImpactSprite)
@@ -223,33 +218,27 @@ public static partial class InfiniItemVfxRuntime
             }
             if (kind == InfiniVfxRendererKind.LightCue)
             {
-                float strength = Math.Clamp(slot.Scale * 0.2f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;
+                float strength = Math.Clamp(slot.Scale!.Value * 0.2f, 0.04f, 1.2f) * InfiniVfxClientOptions.PresentationLightMultiplier;
                 if (strength > 0f)
                     Lighting.AddLight(center, color.ToVector3() * strength);
-                continue;
-            }
-            if (kind == InfiniVfxRendererKind.SoundCue)
-            {
-                SoundStyle sound = slot.ResolveSoundStyle();
-                if (sound.Volume > 0f) SoundEngine.PlaySound(sound, center);
                 continue;
             }
             // Item-location effects follow the weapon-facing axis; velocity is an
             // explicit alternate anchor, not an implicit replacement for that aim.
             Vector2 forward = player.itemRotation.ToRotationVector2() * player.direction;
             if (slot.Anchor == "velocity") forward = player.velocity.SafeNormalize(forward);
-            InfiniVfxRuntime.EmitPrimitive(data, center, forward, slot, data.VfxManifest, sourceKey, color);
+            InfiniVfxRuntime.EmitPrimitive(data, center, forward, slot, data.VfxManifest, sourceKey);
             InfiniVfxRuntime.EmitEventSprite(data, entityId, center, forward, slot, data.VfxManifest, sourceKey);
             // Authored particles accompany the shape/snapshot; none disables only this lane.
             if (slot.ParticleSystemId is "none") continue;
-            int count = InfiniVfxClientOptions.ScaleParticleCount(Math.Clamp(1 + (int)MathF.Round(slot.Density * 7f), 1, 8));
+            int count = InfiniVfxClientOptions.ScaleParticleCount(Math.Clamp(1 + (int)MathF.Round(slot.Density!.Value * 7f), 1, 8));
             for (int i = 0; i < count; i++)
             {
                 if ((!cadence && eventAllowance.Remaining <= 0) || !TrySpendItemParticle(sourceKey, data.VfxManifest.Budget)) break;
                 if (!cadence) eventAllowance.Remaining--;
-                Vector2 velocity = Main.rand.NextVector2Circular(1f + slot.Spread, 1f + slot.Spread);
-                Dust dust = Dust.NewDustPerfect(center, ItemDustId(slot), velocity, 100, color, Math.Clamp(slot.Scale, 0.2f, 3f));
-                dust.noGravity = slot.ParticleSystemId is not "pl:smoke";
+                Vector2 velocity = Main.rand.NextVector2Circular(1f + slot.Spread!.Value, 1f + slot.Spread!.Value);
+                Dust dust = Dust.NewDustPerfect(center, VfxRendererRegistry.DustId(slot.ParticleSystemId), velocity, 100, color, Math.Clamp(slot.Scale!.Value, 0.2f, 3f));
+                dust.noGravity = slot.ParticleSystemId is not "Smoke";
             }
         }
     }

@@ -138,6 +138,6 @@ internal static partial class EngineRuntimeChecks
     private static VfxSlotSpec Cue(string id, string eventName, float scale)
         => new() {
             Id = id, EntityId = "proximity_probe", Event = eventName,
-            RendererKind = "lightCue", Channel = "light", Lane = "cue", Scale = scale,
+            RendererKind = "lightCue", Color = Rgb(255, 255, 255), Scale = scale,
         };
 }
