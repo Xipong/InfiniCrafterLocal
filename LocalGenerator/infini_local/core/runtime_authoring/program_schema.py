@@ -20,6 +20,17 @@ PRIMARY_ENTITY_JSON_PATH = f"$.{PRIMARY_ENTITY_AUTHOR_PATH}"
 PRIMARY_ENTITY_SELECTION_FIELD = "primaryEntitySelection"
 PRIMARY_ENTITY_SELECTION_JSON_PATH = f"$.{PRIMARY_ENTITY_SELECTION_FIELD}"
 
+# Exact current item envelope shared by Author's metadata projection and the
+# compiled-wire gate. Only the two declared stage artifacts are removed at
+# delivery; arbitrary provider fields must remain visible as validation errors.
+GENERATED_ITEM_ROOT_FIELDS = frozenset({
+    "schemaVersion", "runtimeApiVersion", "id", "recipeKey", "name", "parentA", "parentB",
+    "mergeMode", "category", "sourceMode", "tags", "recipeMeta", "generatedParentSummary",
+    "gameplay", "accessory", "armor", "runtimeProgram", "visual", "vfxManifest", "debug",
+    "concept", "realization", "llmStageAccounting", "contractVersions", "recipeHealth",
+    "runtimeContract", "visualKit",
+})
+
 
 def authored_primary_entity_id(program: Mapping[str, Any]) -> str:
     return str(program.get(PRIMARY_ENTITY_FIELD) or "")
@@ -154,76 +165,17 @@ def runtime_program_author_schema() -> dict[str, Any]:
 
 
 def realization_schema() -> dict[str, Any]:
-    runtime_refs = {
-        "type": "array",
-        "items": _strict_string(min_len=1, max_len=48, pattern=_ID_PATTERN),
-        "minItems": 1,
-        "maxItems": 16,
-    }
-    deviation = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "plannedIntent": _strict_string(min_len=1, max_len=1000),
-            "implementedBehavior": _strict_string(min_len=1, max_len=1000),
-            "runtimeRefs": copy.deepcopy(runtime_refs),
-            "result": {"type": "string", "enum": ["aligned", "changed", "dropped", "added", "uncertain"]},
-            "intentionality": {"type": "string", "enum": ["intentional", "accidental", "uncertain"]},
-            "reason": _strict_string(min_len=1, max_len=400),
-        },
-        "required": ["plannedIntent", "implementedBehavior", "runtimeRefs", "result", "intentionality", "reason"],
-    }
-    mismatch = {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "runtimeRefs": copy.deepcopy(runtime_refs),
-            "programBehavior": _strict_string(min_len=1, max_len=1000),
-            "reportedBehavior": _strict_string(min_len=1, max_len=1000),
-            "result": {"type": "string", "enum": ["aligned", "mismatch", "omitted", "uncertain"]},
-            "reason": _strict_string(min_len=1, max_len=400),
-        },
-        "required": ["runtimeRefs", "programBehavior", "reportedBehavior", "result", "reason"],
-    }
+    # Optional model scratch text: finite provider guidance is not local gameplay
+    # admission. is_advisory_path keeps all report-only diagnostics out of Repair.
     return {
         "type": "object",
         "additionalProperties": False,
         "properties": {
-            # Full post-program prose, not a short UI/debug preview. Author,
-            # Repair and provider/prompt projections share this finite authority.
-            "description": _strict_string(min_len=1, max_len=4000),
-            "playerExperience": _strict_string(min_len=1, max_len=3000),
-            # Deliberately last: the same Author independently compares the
-            # non-binding draft with the program, then the program with its report.
-            "selfEvaluation": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "planVsProgram": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "verdict": {"type": "string", "enum": ["aligned", "changed", "uncertain"]},
-                            "summary": _strict_string(min_len=1, max_len=500),
-                            "actionChecks": {"type": "array", "items": deviation, "minItems": 1, "maxItems": 24},
-                        },
-                        "required": ["verdict", "summary", "actionChecks"],
-                    },
-                    "programVsReport": {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "properties": {
-                            "verdict": {"type": "string", "enum": ["aligned", "mismatch", "uncertain"]},
-                            "summary": _strict_string(min_len=1, max_len=500),
-                            "behaviorChecks": {"type": "array", "items": mismatch, "minItems": 1, "maxItems": 24},
-                        },
-                        "required": ["verdict", "summary", "behaviorChecks"],
-                    },
-                },
-                "required": ["planVsProgram", "programVsReport"],
-            },
+            "description": _strict_string(max_len=4000),
+            "playerExperience": _strict_string(max_len=3000),
+            "selfEvaluation": _strict_string(max_len=4000),
         },
-        "required": ["description", "playerExperience", "selfEvaluation"],
+        "required": [],
     }
 
 
@@ -276,20 +228,19 @@ def author_item_response_schema() -> dict[str, Any]:
             # of what the accepted executable draft actually realizes.
             "realization": realization_schema(),
         },
-        "required": ["name", "category", "concept", "runtimeProgram", "realization"],
+        "required": ["name", "category", "runtimeProgram"],
     }
 
 
 def author_item_repair_schema(
-    *, capability_names: Iterable[str] | None = None, require_realization: bool = False,
+    *, capability_names: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Canonical patch shape, optionally restricted to request-visible calls.
 
     None requests the complete local contract. An explicit empty set permits
     only an empty callsUpsert array, never the full catalog. Scope permissions
-    and the frozen merge remain separate authorities after parsing. The LLM
-    request requires the existing realizationReplacement field; generic patch
-    utilities keep its omission-as-no-change semantics.
+    and the frozen merge remain separate authorities after parsing. Optional
+    realizationReplacement is advisory; omission leaves existing prose unchanged.
     """
     variants = capability_provider_union()
     if capability_names is not None:
@@ -373,7 +324,7 @@ def author_item_repair_schema(
             "realizationReplacement": realization_schema(),
             "note": _strict_string(min_len=1, max_len=500),
         },
-        "required": ["note", "realizationReplacement"] if require_realization else ["note"],
+        "required": ["note"],
     }
 
 
@@ -441,7 +392,8 @@ def assert_bounded_author_input(
     if isinstance(value, Mapping) and len(value) > max_nodes:
         refuse("$", "object members")
     candidate = (
-        {key: item for key, item in value.items() if key in schema["properties"]}
+        {key: item for key, item in value.items()
+         if key in schema["properties"] or key not in GENERATED_ITEM_ROOT_FIELDS}
         if authored_only and isinstance(value, Mapping) else value
     )
     pending = [(candidate, 0, "$")]
@@ -518,19 +470,18 @@ def _repair_structure_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-def is_plan_report_diagnostic_path(path: str, *, repair: bool = False) -> bool:
-    """Only the plan comparison is non-blocking; its ancestors/siblings stay strict."""
-    field = "realizationReplacement" if repair else "realization"
-    root = f"$.{field}.selfEvaluation.planVsProgram"
-    return path == root or path.startswith((root + ".", root + "["))
+def is_advisory_path(path: str, *, repair: bool = False) -> bool:
+    """Intent and reports are non-executable context, never Repair blockers."""
+    roots = ("realizationReplacement",) if repair else ("concept", "realization")
+    return any(path == f"$.{root}" or path.startswith((f"$.{root}.", f"$.{root}[")) for root in roots)
 
 
 def _repair_acceptance_shape_report(value: Any, schema: Mapping[str, Any], report_schema: str) -> dict[str, Any]:
-    # Collect all bounded diagnostics before classifying them: a long plan report
-    # must not hide a later programVsReport/note error behind a display limit.
+    # Collect bounded diagnostics before classification: advisory text must not
+    # hide a later executable patch error behind a display limit.
     candidate, limit = assert_bounded_author_input(value, schema=schema, authored_only=False)
     shape_errors = strict_schema_errors(candidate, schema, limit=limit)
-    errors = [row for row in shape_errors if not is_plan_report_diagnostic_path(str(row.get("path") or ""), repair=True)]
+    errors = [row for row in shape_errors if not is_advisory_path(str(row.get("path") or ""), repair=True)]
     return {
         "schema": report_schema, "ok": not errors, "errors": errors,
         "shape": {"ok": not shape_errors, "errors": shape_errors},
@@ -648,6 +599,7 @@ def apply_repair_patch(current: Mapping[str, Any], patch: Mapping[str, Any]) -> 
 
 
 __all__ = [
+    "GENERATED_ITEM_ROOT_FIELDS",
     "PRIMARY_ENTITY_AUTHOR_PATH",
     "PRIMARY_ENTITY_FIELD",
     "PRIMARY_ENTITY_JSON_PATH",

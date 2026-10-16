@@ -43,9 +43,9 @@ _CURRENT_GENERATION: ContextVar["_GenerationAdmission | None"] = ContextVar("inf
 _GENERATION_WAIT_REASONS = frozenset({"none", "generation_slot", "profile_slot", "rate_queue", "provider_cooldown", "provider_quota", "token_window", "pacing", "retry_backoff"})
 _GENERATION_STAGES = frozenset({
     "admission", "00_prepare", "00_llm_lease", "01_gameplay_author", "01_dev_only_low_level_fixture",
-    "02_strict_runtime_program", "02_parent_power_context", "02_compile_runtime_program", "02_wire_boundary",
-    "02r_conditional_gameplay_repair", "02r_strict_runtime_program", "02r_parent_power_context", "02r_compile_runtime_program", "02r_wire_boundary",
-    "03_result_knowledge_card", "04_visual_technical_init", "05_visual_director", "06_vfx_director",
+    "02_strict_runtime_program", "02_compile_runtime_program", "02_wire_boundary",
+    "02r_conditional_gameplay_repair", "02r_strict_runtime_program", "02r_compile_runtime_program", "02r_wire_boundary",
+    "04_visual_technical_init", "05_visual_director", "06_vfx_director",
     "07_visual_asset_runtime_gates", "08_visual_asset_generation", "09_visual_delivery_gate",
     "10_generated_parent_summary", "11_final_normalize", "12_final_runtime_wire_gate", "13_stage_accounting",
 })
@@ -217,7 +217,6 @@ def handle_combine_request(
     trace_event: TraceEvent,
     json: JsonSender,
     json_status: JsonStatusSender,
-    last_failure_summary: Callable[[], dict[str, Any]] | None = None,
     clear_failure_state: Callable[[str], None] | None = None,
     cache_lookup_passthrough_errors: tuple[type[BaseException], ...] = (),
 ) -> None:

@@ -39,18 +39,18 @@ internal static partial class EngineRuntimeChecks
                 for (int i = 0; i < Terraria.Main.dust.Length; i++) Terraria.Main.dust[i] = new Dust { dustIndex = i };
                 Dust.dCount = 0;
                 player.active = true; player.whoAmI = 4; player.Center = new Vector2(160f); player.direction = 1;
-                var data = GeneratedItemData.Placeholder(); data.Visual.SpritePath = "authored_periodic.png";
+                var data = GeneratedItemData.Placeholder(); data.Visual.SpritePath = "authored_periodic.png"; data.Visual.RenderSizePx=32; data.Visual.ForwardAngleDegrees=0;
                 data.Accessory.Enabled = true;
                 string entity = data.RuntimeProgram.ItemEntityId;
                 data.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec { Id = "equip", Input = RuntimeInputKind.Equipped,
                     UsePolicy = new RuntimeBindingUsePolicySpec { Action = new RuntimeBindingActionSpec {
                         Kind = RuntimeBindingAction.EquipPassive, TargetId = entity } } } };
                 var shape = new VfxSlotSpec { Id = "shape", EntityId = entity, Event = RuntimeEventKind.Periodic,
-                    Anchor = "tip", RendererKind = "impactRing", ParticleSystemId = "dust", Density = 0f, RepeatEvery = 1, Duration = 20 };
+                    Anchor = "tip", RendererKind = "impactRing", Color = Rgb(255, 255, 255), ParticleSystemId = "GemDiamond", Density = 0f, RepeatEvery = 1, Duration = 20, Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Spread = 0, Alpha = .65f, StartTick = 0 };
                 var sprite = new VfxSlotSpec { Id = "sprite", EntityId = entity, Event = RuntimeEventKind.Periodic,
-                    Anchor = "tip", RendererKind = "spriteStampTrail", TextureRole = "item", ParticleSystemId = "none", RepeatEvery = 1, Duration = 20 };
+                    Anchor = "tip", RendererKind = "spriteStampTrail", Color = Rgb(255, 255, 255), TextureRole = "item", ParticleSystemId = "none", RepeatEvery = 1, Duration = 20, Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Density = 0, Spread = 0, Alpha = .65f, StartTick = 0 };
                 var light = new VfxSlotSpec { Id = "light", EntityId = entity, Event = RuntimeEventKind.Periodic,
-                    Anchor = "tip", RendererKind = "lightCue", ParticleSystemId = "none", RepeatEvery = 1 };
+                    Anchor = "tip", RendererKind = "lightCue", Color = Rgb(255, 255, 255), RepeatEvery = 1, Scale = 1 };
                 data.VfxManifest.Slots = new[] { shape, sprite, light };
                 data.VfxManifest.Budget.MaxParticlesPerTick = 100; data.VfxManifest.Budget.MaxParticlesTotal = 100;
                 var generated = new GeneratedItem(); var item = new Item { type = 1, stack = 1 };
@@ -195,7 +195,7 @@ internal static partial class EngineRuntimeChecks
                 var generated = new GeneratedItem();
                 AttachItem(generated, item, data);
                 var slot = new VfxSlotSpec { Id = "event", EntityId = entity, Event = RuntimeEventKind.OnHit,
-                    Anchor = "hitPoint", RendererKind = "impactRing", ParticleSystemId = "dust", Density = 1f };
+                    Anchor = "hitPoint", RendererKind = "impactRing", Color = Rgb(255, 255, 255), ParticleSystemId = "GemDiamond", Density = 1f, Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Spread = 0, Duration = 10, RepeatEvery = 0, Alpha = .65f, StartTick = 0 };
                 data.VfxManifest.Slots = new[] { slot };
                 data.VfxManifest.Budget.MaxParticlesPerTick = 32;
                 data.VfxManifest.Budget.MaxParticlesTotal = 3;

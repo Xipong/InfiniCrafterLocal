@@ -73,7 +73,7 @@ Buff movement использует тот же percent adapter и guard `nonneut
 
 `false`, `0`, `0.0`, absent и `null` не взаимозаменяемы; frozen equality type-aware (true ≠ 1 ≠ 1.0). Только optional params с одинаковыми declared default/neutral допускают Author omission с отдельным receipt после всей composition validation. Missing dependency/invalid present value/empty required effect остаются RED. Repair omission — no-change; accepted absence не заполняется вне exact permissions. Правила — [declared neutrals](DECLARED_NEUTRAL_OMISSIONS_RU.md) и [targeted Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md).
 
-Структурные `entity/binding/call` IDs, schema version, primary selection и self-evaluation refs — не физические units. `bindings[].usePolicy.stackCost` — точно 0 или 1 экземпляр generated item/accepted use; contactDamage — независимый bool. `*IndicesDelete` — zero-based array position, не tick. Author array maxima/Repair bounds — schema transport limits; compiler-owned runtime maxEntityCount/maxChildDepth/maxEventSpawnsPerActivation — bounded graph/ledger, не model-authored размеры.
+Структурные `entity/binding/call` IDs, schema version, primary selection и diagnostic paths — не физические units. `bindings[].usePolicy.stackCost` — точно 0 или 1 экземпляр generated item/accepted use; contactDamage — независимый bool. `*IndicesDelete` — zero-based array position, не tick. Author array maxima/Repair bounds — schema transport limits; compiler-owned runtime maxEntityCount/maxChildDepth/maxEventSpawnsPerActivation — bounded graph/ledger, не model-authored размеры.
 
 <a id="visual"></a>
 ## Visual числа и schema transport
@@ -91,30 +91,26 @@ VFX Director/Repair получают точный `acceptedGameplayReadOnly`: в
 
 | Common field | Текущее использование |
 |---|---|
-| effectMagnitude, motif.rhythm/chaos | Retained metadata без renderer consumer: не physical intensity/BPM/probability. Motif.element может участвовать в legacy color; explicit effectColor приоритетнее. |
 | scale | Renderer-specific multiplier: procedural dimensions, sprite pose/texture size, lighting/dust имеют разные clamps; не единый sizePx. |
 | density | Procedural tessellation/mote count и отдельный particle count/cadence coefficient, не particles/tick. |
-| duration | Legacy detached sprite/primitive lifetime + linear fade; periodic procedural period при repeatEvery=0. Active history/straight beam не consume duration; event rings имеют дополнительный phase fade. spriteElement — individual lifetime с opacityProfile без implicit linear fade; texturedPath neutral=3. |
+| duration | Legacy detached sprite/primitive lifetime + linear fade; periodic procedural period при repeatEvery=0. Active history/straight beam не consume duration; event rings имеют дополнительный phase fade. spriteElement — individual lifetime с opacityProfile без implicit linear fade; texturedPath не имеет `duration`. |
 | alpha | Sprite/primitive opacity; audio volume принадлежит только обязательному `sound.volume`, без alpha/phase fallback. Dust не использует slot alpha. Material alpha × opacityProfile один раз с отдельным RGB tint; explicit zero молчит. |
 | spread | Legacy particle-speed coefficient, не radians/full cone; material spreadRadians задаёт угол отдельно. |
-| jitter/fadeIn/fadeOut/budgetWeight/signatureWeight/visualCost | Retained metadata без renderer consumer, не px/time/lifetime fraction/enforced draw budget. Material требует объявленные нейтрали. |
 | startTick | Legacy projectile periodic particle/cue gate и procedural visibility delay; не item/detached lifetime, не active history/sprite/straight beam timing. Material: nonperiodic delay либо projectile age gate; item periodic=0; texturedPath sampling age gate. |
-| repeatEvery | Legacy positive cadence/procedural period; 0 выбирает auto particle cadence (projectile density-derived, item=10 global updates) и duration procedural period. Item имеет global clock + seed phase, projectile — state world ticks. Material periodic ≥1, event=0; texturedPath neutral=0 без повторной detached emission. |
+| repeatEvery | Legacy positive cadence/procedural period; 0 выбирает auto particle cadence (projectile density-derived, item=10 global updates) и duration procedural period. Item имеет global clock + seed phase, projectile — state world ticks. Material periodic ≥1, event=0; texturedPath не имеет `repeatEvery`, без повторной detached emission. |
 
-Ordinary slots обязаны передать все common fields; element/path conditional, assets optional. Repair использует slotsUpsert/slot IDs/zero-based indices и metadata patch с frozen-first permissions: schema null формы читать у текущих builders. Seed/slotSeed/phaseOffset/baked-command fields/spawnRateMultiplier/budget caps не становятся ordinary model choices из-за присутствия в compiled DTO.
+Ordinary slots передают schema-required common fields и conditional renderer payload; assets optional. Local `color`, profile knots и library endpoints — RGB objects с integer каналами 0..255, alpha отдельно; sound/camera не имеют цвета. Repair использует slots/assets upsert, IDs и zero-based indices, без global metadata patch. Wire хранит только три реальные caps `maxParticlesPerTick/maxParticlesTotal/maxDrawCalls`, `slotSeed`/optional `phaseOffset` и `recipeId` для runtime/PNG identity. Это технические consumer fields, не дополнительные model choices. [Exact VFX contract](VFX_MATERIAL_ELEMENTS_RU.md#runtime).
 
 <a id="verification"></a>
 ## Проверка отдельно от старого census
 
-### Локальное уточнение 0.4.252.3
+### Текущие numeric boundaries
 
-- Исходные `raw.item` и `raw.generatedParent` сохраняют engine/wire units. `sourceWireUnits` guide строится из `ParamSpec`/declared wire paths и показывает scoped соответствия: axePower9→axePowerTooltipPercent45; equipment и generatedBuff movementSpeed.15→moveSpeedBonusPercent15; lifeRegen2→1HP/s. Initial Author получает только присутствующие exact parent paths в динамической части packet, после cache boundary; полный registry guide остаётся доступен standalone и Gameplay Repair. Это пояснение, не преобразование raw facts/tooltip и не обязанность копировать механику родителя. Все capabilities сохраняются в статическом каталоге. [Сокращение request и nullable boundary](../development/AUTHOR_REQUEST_COMPACTION_RU.md).
-- Ненулевой percent, исчезающий в binary64 `/100` либо float32 storage, отвергается на точном authored leaf через `consumer_representability`. Число не округляется/заменяется; exact zero и обычные decimals остаются допустимы. 303 контрольных полных compiled outputs/receipts сохранили прежние bytes. Guard не гарантирует заметность после последующего сложения с большими player stats.
-- `sameAs` больше не сравнивает только неполный набор projectile полей: все retained факты, типы и presence должны совпасть; top-level provenance `source` хранится отдельно. Speed/cooldown/penetration различия не скрываются.
-- Charge release больше не поднимает явную spawn speed0/0.25 до1. `channel_complete` требует точного целочисленного числа projectile updates, а не `ratio>=.999`. Это два исправления executor; wire и authored решения не переписываются.
-- Global Lowery proof связан с source primary/entity/binding identity и type/representation-aware declared projection. Wire-only consistency явно не называется source proof; старые корректные compiler/receipt bytes сохранены.
-
-Фактический аудит/RED/GREEN/native/доставка привязаны к `artifacts/lowery-units-followup`; новые live LLM/world/GPU/MP тесты в этой работе не выполнялись. Не переносить GREEN этого bounded аудита на неизвестные механические комбинации.
+- `raw.item` и `raw.generatedParent` сохраняют engine/wire units. `sourceWireUnits` строится из `ParamSpec`/declared wire paths для реально присутствующих parent facts и не преобразует их. Initial Author получает scoped glossary, полный registry guide доступен standalone/Repair. [Request boundary](../development/AUTHOR_REQUEST_COMPACTION_RU.md).
+- Ненулевой percent, исчезающий при `/100` или float32 storage, отвергается на точном authored leaf через `consumer_representability`. Число не округляется/заменяется; exact zero и обычные decimals остаются допустимы. Это не гарантия заметности после сложения с большими player stats.
+- `sameAs` требует полного совпадения retained фактов, типов и presence; provenance `source` хранится отдельно. Speed/cooldown/penetration различия не скрываются.
+- Charge release сохраняет explicit spawn speed, включая0; `channel_complete` требует целочисленного числа projectile updates, не приблизительного ratio threshold.
+- Global Lowery proof связывает source primary/entity/binding identity и type/representation-aware projection. Wire-only consistency не является source proof.
 
 Current owners: `test_registry_author_units.py`, `test_registry_wire_boundary.py`, `test_registry_receipt_identity.py`, `test_repair_frozen_contract.py`, `test_visual_presentation_metadata.py`, `test_vfx_packet_contracts.py`, `test_vfx_material_admission_contracts.py`; C# — existing `EngineRuntimeChecks`. [Test owners](../development/TESTING_RU.md) задаёт команды и isolation. Инвентарный static trace, executable CPU test, native/GPU, live model и игровой/MP результат — разные доказательства.
 

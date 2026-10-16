@@ -300,41 +300,17 @@
     "preferredCanvasSize": 32,
     "inventoryScale": 1.0,
     "worldScale": 1.0,
-    "effectColor": "silver",
     "renderSizePx": 40,
     "forwardAngleDegrees": 45,
     "spritePath": "fixture_played_silver.png",
     "spriteStatus": "generated"
   },
   "vfxManifest": {
-    "schema": "infini.vfx.runtime-events.v15",
-    "recipeId": "silver-tracer",
-    "effectName": "runtime_entity_events",
-    "inspirationNames": [],
-    "playbackMode": "Realtime",
-    "seed": 1127087425,
-    "confidence": 1.0,
-    "effectMagnitude": 0.5,
-    "visualBudgetClass": "normal",
-    "motif": {
-      "element": "metal",
-      "shapeLanguage": "sparks",
-      "motionLanguage": "short wake",
-      "paletteRole": "accent",
-      "rhythm": 1.0,
-      "chaos": 0.2
-    },
+    "schema": "infini.vfx.runtime-events.v16",
     "budget": {
-      "effectMagnitude": 0.5,
-      "visualBudgetClass": "normal",
-      "emergencyCap": true,
       "maxParticlesPerTick": 80,
       "maxParticlesTotal": 3400,
-      "maxDrawCalls": 136,
-      "spawnRateMultiplier": 1.0,
-      "enableSoftGlow": true,
-      "enablePointSparks": true,
-      "enablePersistentSmoke": false
+      "maxDrawCalls": 136
     },
     "slots": [
       {
@@ -342,27 +318,11 @@
         "entityId": "item",
         "event": "on_use",
         "rendererKind": "spriteElement",
-        "backend": "Sprite",
-        "textureRole": "none",
-        "particleRole": "none",
         "anchor": "self",
-        "channel": "impactShape",
-        "lane": "primary",
-        "emissionMode": "none",
         "blend": "alpha",
         "layer": "BeforeProjectiles",
-        "particleSystemId": "none",
-        "scale": 1.0,
-        "density": 0.0,
         "duration": 20,
         "alpha": 0.8,
-        "spread": 0.0,
-        "jitter": 0.0,
-        "fadeIn": 0.0,
-        "fadeOut": 0.0,
-        "budgetWeight": 1.0,
-        "signatureWeight": 0.0,
-        "visualCost": 0.0,
         "startTick": 0,
         "repeatEvery": 0,
         "element": {
@@ -404,48 +364,36 @@
             "curve": "smoothStep"
           },
           "colorProfile": {
-            "start": "silver",
-            "middle": "effect",
-            "end": "silver",
+            "start": {
+              "r": 192,
+              "g": 192,
+              "b": 192
+            },
+            "middle": {
+              "r": 192,
+              "g": 192,
+              "b": 192
+            },
+            "end": {
+              "r": 192,
+              "g": 192,
+              "b": 192
+            },
             "curve": "linear"
           }
         },
-        "eventGroup": "auto",
-        "stage": "loop",
-        "source": "llm_vfx_director",
-        "slotSeed": 1738596944,
-        "bakedClipId": "",
-        "bakedClipHash": "",
-        "bakedCommandCount": 0,
-        "bakedCommands": [],
-        "effectName": ""
+        "slotSeed": 1738596944
       },
       {
         "id": "library_star",
         "entityId": "item",
         "event": "on_use",
         "rendererKind": "libraryParticle",
-        "backend": "Particle",
-        "textureRole": "none",
-        "particleRole": "none",
         "anchor": "self",
-        "channel": "impactParticles",
-        "lane": "accent",
-        "emissionMode": "none",
         "blend": "additive",
         "layer": "BeforeProjectiles",
-        "particleSystemId": "none",
-        "scale": 1.0,
-        "density": 0.0,
         "duration": 20,
         "alpha": 0.8,
-        "spread": 0.0,
-        "jitter": 0.0,
-        "fadeIn": 0.0,
-        "fadeOut": 0.0,
-        "budgetWeight": 1.0,
-        "signatureWeight": 0.0,
-        "visualCost": 0.0,
         "startTick": 0,
         "repeatEvery": 0,
         "particle": {
@@ -462,36 +410,22 @@
           "heightPx": 2.0,
           "rotationRadians": 0.0,
           "rotationSpeedRadiansPerTick": 0.1,
-          "colorStart": "silver",
-          "colorEnd": "effect",
+          "colorStart": {
+            "r": 192,
+            "g": 192,
+            "b": 192
+          },
+          "colorEnd": {
+            "r": 192,
+            "g": 192,
+            "b": 192
+          },
           "endScaleMultiplier": 0.0,
           "endOpacity": 0.0
         },
-        "eventGroup": "auto",
-        "stage": "loop",
-        "source": "llm_vfx_director",
-        "slotSeed": 1588066476,
-        "bakedClipId": "",
-        "bakedClipHash": "",
-        "bakedCommandCount": 0,
-        "bakedCommands": [],
-        "effectName": ""
+        "slotSeed": 1588066476
       }
     ],
-    "overlayPolicy": "LocalOnly",
-    "debug": {
-      "pattern": "runtime_entity_events",
-      "roles": [
-        "inventory_item",
-        "held_body",
-        "child_projectile"
-      ],
-      "selectedScore": 1.0,
-      "selectedReasons": [
-        "exact_entity_event_binding"
-      ],
-      "topCandidates": [],
-      "wordProbe": []
-    }
+    "recipeId": "silver-tracer"
   }
 }

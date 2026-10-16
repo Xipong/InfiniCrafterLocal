@@ -87,7 +87,7 @@ def repair_with_response(monkeypatch, doc, incoming, format_mode, *, out_of_scop
     offline_builder(monkeypatch, format_mode, respond)
     try:
         result = author.repair_author_item_after_failure(
-            doc, {}, {}, {}, {}, "offline-only", failure_report=validate_runtime_program(doc))
+            doc, {}, {}, "offline-only", failure_report=validate_runtime_program(doc))
     finally:
         if invalid_report:
             assert len(requests) == 1

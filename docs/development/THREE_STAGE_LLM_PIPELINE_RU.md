@@ -1,4 +1,4 @@
-# Трёхстадийный LLM pipeline — 0.4.248
+# Трёхстадийный LLM pipeline
 
 [System authority](ARCHITECTURE_RU.md#authority) · [Author](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) · [Repair](TARGETED_REPAIR_PROTOCOL_RU.md)
 
@@ -16,14 +16,14 @@
 
 Stage-level Gameplay admission/compile/wire/conditional Repair находится в [gameplay_stage](../../LocalGenerator/infini_local/pipelines/gameplay_stage.py); VFX transport — в [vfx_generation_pipeline](../../LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py). Их внутренние imports не являются compatibility API.
 
-Parent context: `parent_context_cards.raw_parent_card_for_llm` — единственный assembler Author/Visual packets; `parent_context_pipeline` извлекает source facts и сохраняет активный parent-power profile для `item_power_knowledge`. Identity primitives импортируются прямо из `core.item_identity_tools`. Неиспользуемый alternative `llm_parent_card`, derived-semantics и behavior-policy builders удалены: они не участвовали в requests. Exact accepted runtime, provenance, zeros/false и Visual-only appearance сохраняют прежнюю проекцию.
+Parent context: `parent_context_cards.raw_parent_card_for_llm` собирает Author/Visual packets из source facts и exact accepted generated runtime. `parent_context_pipeline` извлекает current native numeric/projectile/ammo facts, generated parents сохраняют полный exact graph без single-projectile compatibility projection; identity primitives принадлежат `core.item_identity_tools`. Parent prose — advisory context, не authority или отдельная knowledge/category/power стадия. Provenance, zeros/false и Visual-only appearance сохраняются в соответствующем handoff.
 
 Orchestration owner — [combine_pipeline.combine](../../LocalGenerator/infini_local/pipelines/combine_pipeline.py); assets — [image lifecycle](IMAGE_ASSET_LIFECYCLE_RU.md) / [VFX materials](../reference/VFX_MATERIAL_ELEMENTS_RU.md). Cache/dev path отдельно от fresh LLM craft.
 
 <a id="repairs-accounting"></a>
 ## Conditional repairs и accounting
 
-Gameplay rejection открывает только Gameplay Repair; Visual contract rejection — Visual Repair; VFX rejection — VFX Repair. Невалидный initial Author/Visual JSON может израсходовать тот же единственный Repair как format pass. Ошибка image generation/final delivery не разрешает новый бесконечный reauthor loop.
+Executable Gameplay rejection открывает только Gameplay Repair; required Visual contract rejection — Visual Repair; VFX rejection — VFX Repair. Optional `concept`/`realization` и текстовый `selfEvaluation`, как и Visual `animationPlan`, advisory: их отсутствие/оформление не вызывает Repair и не блокирует валидный executable/art contract. Невалидный initial Author/Visual JSON может израсходовать тот же единственный Repair как format pass. Ошибка image generation/final delivery не разрешает новый бесконечный reauthor loop.
 
 [Frozen-first protocol](TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) применяется во всех трёх доменах: exact invalid leaves/dependencies, read-only accepted context, audit проигнорированных лишних правок, полная повторная валидация. Repair предыдущий валидный stage не перезапускает; обязательного judge/critic нет.
 
@@ -45,15 +45,4 @@ Visual и VFX включают явно выбранные application-owned can
 
 Offline contract: `test_craft_instruction_segments.py` и `test_stable_schema_data.py` проходят все семь builders через реальные senders с остановкой до auth/network: Nous/OpenAI/OpenRouter Chat, native Codex и OpenAI Responses × json_object/json_schema/off. Проверяются roles, полный provider schema, static/key invariance, parent/runtime-enum tail controls, canonical owner revision invalidation, valid/invalid `$defs` validator parity и malformed declaration refusal. Semantic tests читают derived dossier через `prompt_packet_helpers.py`, не подменяя production packets. Live/game/GPU acceptance отдельно.
 
-Историческое offline сравнение static-USER варианта с `28621ad`: 42 real builder packets, 210 candidate wire packets; literal dossier inverse, system/options parity и Author/Gameplay Repair/Format Repair wire+key parity. Пример workbench fixture, json_object, точные chars (UTF-8 bytes static block здесь равны chars):
-
-| Stage | Новый static USER schema block | Dynamic USER было → стало | Inline schema → case schema | Total text delta |
-|---|---:|---:|---:|---:|
-| Visual | 2877 | 14025 → 11212 | 7367 → 4554 | +281 |
-| Visual Repair | 2732 | 15724 → 13066 | 7745 → 5087 | +291 |
-| VFX | 19663 | 47972 → 28527 | 42863 → 23418 | +435 |
-| VFX Repair | 19663 | 49605 → 30160 | 43226 → 23781 | +435 |
-
-Это перенос уже существующих owner definitions, не удаление выразительных полей и не token/hit measurement. Overlapping payload и packaged definitions не складываются как независимая экономия. Full-schema HTTP constraints и все frozen permissions неизменны. Исторический static-USER прогон на Nous Luna дал changed-tail reuse только SYSTEM/DEVELOPER: Visual 3024 и VFX 4009 cached tokens; отдельные USER definitions не увеличили наблюдаемый cache. Текущий application-owned DEVELOPER grammar framing проверяется отдельно; bounded short-output cache diagnostics не доказывают качество полной генерации, latency speedup или игровые/GPU smoke. Source-bound receipts и итог — `artifacts/developer-grammar-cache/` (локальные, не packaged).
-
-Transport retries/continuation — [отдельная boundary](ARCHITECTURE_RU.md#pipeline), не новые authoring stages. [Provider-aware admission и quota feedback](LLM_PROVIDER_ADMISSION_RU.md): известный Nous OpenAI route не получает выдуманный char/4 token window; unknown routes сохраняют conservative policy, FIFO/deadline/429 общие. Offline tests: `test_low_level_three_stage_pipeline.py`, `test_pipeline_repair_contract.py` из [test owners](TESTING_RU.md); green не означает live/game/MP прогон.
+Transport retries и self-contained requests — [отдельная boundary](ARCHITECTURE_RU.md#pipeline), не новые authoring stages. [Provider-aware admission и quota feedback](LLM_PROVIDER_ADMISSION_RU.md): известный Nous OpenAI route не получает выдуманный char/4 token window; unknown routes сохраняют conservative policy, FIFO/deadline/429 общие. Offline tests: `test_low_level_three_stage_pipeline.py`, `test_pipeline_repair_contract.py` из [test owners](TESTING_RU.md); green не означает live/game/MP прогон.

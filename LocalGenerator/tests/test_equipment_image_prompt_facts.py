@@ -127,7 +127,7 @@ def test_exact_mount_repair_reaches_adapter_and_preserves_frozen_design(offline)
     repaired, audit = visual._apply_visual_repair_patch(raw, {
         "schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None,
         "equipOverlayPatch": dict(original_overlay, accessoryMount="waist", silhouette="unrequested replacement"),
-        "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "animationPlan": None,
+        "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "note": "Repair only the invalid mount.",
     }, scope, ["item"], return_audit=True)
     accepted, errors = visual._validate_kit(repaired, ["item"], "item", equipment_overlay_required=True)

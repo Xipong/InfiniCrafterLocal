@@ -1,6 +1,6 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
 
-from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA, visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA, CAPABILITY_REGISTRY
 from copy import deepcopy
 import hashlib
 import json
@@ -55,9 +55,9 @@ def _get(document, path):
 
 @pytest.fixture(scope="module")
 def author_cards():
-    _, user, _ = build_initial_author_request({}, {}, {}, {}, "unit-proof", model_name="test-model")
+    _, user, _ = build_initial_author_request({}, {}, "unit-proof", model_name="test-model")
     cards = {c["fn"]: c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    assert set(cards) == {cap.name for cap in visible_capabilities()}
+    assert set(cards) == {cap.name for cap in CAPABILITY_REGISTRY.values()}
     return cards
 
 
@@ -338,7 +338,7 @@ def test_numeric_constraints_reach_serialized_author_and_exact_repair(monkeypatc
     from test_gameplay_repair_readonly_context import _capture_request
 
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
-    request, text, _ = build_initial_author_request({}, {}, {}, {}, "numeric-contract", model_name="offline-test")
+    request, text, _ = build_initial_author_request({}, {}, "numeric-contract", model_name="offline-test")
     assert request["response_format"]["type"] == mode
     catalog = json.loads(text)["runtimeCapabilityContract"]["catalog"]
     cards = {row["fn"]: row for row in catalog["capabilities"]}

@@ -29,7 +29,7 @@ def test_director_projects_root_and_distinct_art_without_changing_mechanics(wire
     before = copy.deepcopy(data)
     raw = _visual_kit(data)
     raw["item"].update(preferredCanvasSize=96, renderSizePx=40, forwardAngleDegrees=45,
-                       grip={"normalizedX": 0.25, "normalizedY": 0.75}, effectColor="gold",
+                       grip={"normalizedX": 0.25, "normalizedY": 0.75},
                        palette=["copper and verdigris"], negativePrompt="")
     body = next(row for row in raw["entities"] if row["entityId"] == "chained_door")
     body.update(assetMode="baked_sprite", visualProjectRef="entity", prompt="independent door",
@@ -37,7 +37,7 @@ def test_director_projects_root_and_distinct_art_without_changing_mechanics(wire
                 renderSizePx=48, forwardAngleDegrees=-30)
     responses, requests = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {}, {}, {})
+    projected = visual.apply_visual_director(data, {}, {})
     plan = {row["entityId"]: row for row in build_visual_asset_plan(projected)}
     assert (plan["item"]["canvas"], plan["item"]["renderSizePx"], plan["item"]["forwardAngleDegrees"]) == (96, 40, 45)
     assert (plan["chained_door"]["canvas"], plan["chained_door"]["renderSizePx"], plan["chained_door"]["forwardAngleDegrees"]) == (64, 48, -30)
@@ -46,7 +46,6 @@ def test_director_projects_root_and_distinct_art_without_changing_mechanics(wire
     assert validate_runtime_wire(delivered)["ok"]
     assert "visualKit" not in delivered
     assert delivered["visual"]["grip"] == {"normalizedX": 0.25, "normalizedY": 0.75}
-    assert delivered["visual"]["effectColor"] == "gold"
     assert delivered["visual"]["palette"] == ["copper and verdigris"]
     assert comfyui_mapping("literal item", delivered["visual"]["negativePrompt"], "exact", seed=123)["{{NEGATIVE_PROMPT}}"] == ""
     entities = {row["id"]: row for row in delivered["runtimeProgram"]["entities"]}
@@ -73,7 +72,7 @@ def test_item_body_references_root_visual_project_without_duplicate_design(wire_
     responses, requests = wire_transport
     responses.append(raw)
 
-    projected = visual.apply_visual_director(data, {}, {}, {}, {})
+    projected = visual.apply_visual_director(data, {}, {})
 
     assert projected["visualKit"]["item"] == root_before
     accepted_body = next(row for row in projected["visualKit"]["entities"] if row["entityId"] == "item")
@@ -94,11 +93,11 @@ def test_root_design_repair_does_not_open_entity_permissions(wire_transport, fie
     entities_before = copy.deepcopy(raw["entities"])
     patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
                  itemPatch={field: "repaired root design"}, entitiesUpsert=[],
-                 entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="root leaf only")
+                 entityIdsDelete=[], entityIndicesDelete=[], note="root leaf only")
     responses, requests = wire_transport
     responses.extend([raw, patch])
 
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+    result = visual.apply_visual_director(data, {}, {})
 
     assert result["visualKit"]["item"][field] == "repaired root design"
     assert result["visualKit"]["entities"] == entities_before
@@ -125,11 +124,11 @@ def test_repair_removes_only_forbidden_body_copies_without_reauthoring_root(wire
     root_before = copy.deepcopy(raw["item"])
     patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
                  itemPatch={"prompt": "unrequested root rewrite"}, entitiesUpsert=[reference],
-                 entityIdsDelete=[], entityIndicesDelete=[], animationPlan=None, note="remove duplicate leaves only")
+                 entityIdsDelete=[], entityIndicesDelete=[], note="remove duplicate leaves only")
     responses, requests = wire_transport
     responses.extend([raw, patch])
 
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+    result = visual.apply_visual_director(data, {}, {})
 
     assert result["visualKit"]["item"] == root_before
     assert result["visualKit"]["entities"][0] == reference
@@ -141,6 +140,28 @@ def test_repair_removes_only_forbidden_body_copies_without_reauthoring_root(wire
     assert len(requests) == 2 and not responses
 
 
+def test_visual_refuses_retired_global_effect_color_without_changing_art():
+    raw = kit()
+    raw["item"]["effectColor"] = "gold"
+    before = copy.deepcopy(raw)
+    accepted, errors = visual._validate_kit(raw, ["opaque_id"], "opaque_id", equipment_overlay_required=True)
+    assert accepted is None
+    assert any(row["path"] == "$.item.effectColor" for row in errors)
+    assert raw == before
+
+
+@pytest.mark.parametrize("plan", [None, 42, "", "informal visual direction"])
+def test_animation_advisory_never_spends_visual_repair(wire_transport, plan):
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    raw = _visual_kit(data)
+    raw["animationPlan"] = plan
+    responses, requests = wire_transport
+    responses.append(raw)
+    result = visual.apply_visual_director(data, {}, {})
+    assert result["visualKit"].get("animationPlan") == plan
+    assert len(requests) == 1 and not responses
+
+
 def test_descriptive_palette_survives_director_and_delivery_without_repair(wire_transport):
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     raw = _visual_kit(data)
@@ -148,7 +169,7 @@ def test_descriptive_palette_survives_director_and_delivery_without_repair(wire_
     raw["item"]["palette"] = [description]
     responses, requests = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {}, {}, {})
+    projected = visual.apply_visual_director(data, {}, {})
     assert projected["visual"]["palette"] == [description]
     assert sanitize_recipe_for_delivery(projected)["visual"]["palette"] == [description]
     assert len(requests) == 1 and not responses
@@ -162,7 +183,7 @@ def test_equipment_overlay_keeps_authored_mount_and_single_badge_plan(wire_trans
     raw["equipOverlay"] = dict(kit()["equipOverlay"], accessoryMount="back")
     responses, _ = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {}, {}, {})
+    projected = visual.apply_visual_director(data, {}, {})
     badge = next(row for row in build_visual_asset_plan(projected) if row["role"] == "equip_overlay")
     assert (badge["entityId"], badge["canvas"], badge["prompt"], badge["equipmentSlot"]) == ("item", 32, "badge", "accessory")
     assert sanitize_recipe_for_delivery(projected)["visual"]["accessoryMount"] == "back"
@@ -170,9 +191,6 @@ def test_equipment_overlay_keeps_authored_mount_and_single_badge_plan(wire_trans
 
 
 @pytest.mark.parametrize("container,field,value", [
-    pytest.param("item", "effectColor", None, id="present-color-null"),
-    pytest.param("item", "effectColor", True, id="color-wrong-type"),
-    pytest.param("item", "effectColor", "verdigris", id="color-not-prose"),
     pytest.param("equipOverlay", "accessoryMount", {}, id="mount-wrong-type"),
     pytest.param("equipOverlay", "accessoryMount", "wing", id="mount-unknown"),
     pytest.param("item", "grip", [], id="grip-not-object"),
@@ -217,12 +235,12 @@ def test_scoped_visual_repair_preserves_good_siblings_absence_and_mechanics(wire
     hostile_entity = dict(raw["entities"][1], scale=4)
     patch = dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
                  itemPatch={"grip": {"normalizedX": 0.9, "normalizedY": 0.75}, "inventoryScale": 2,
-                            "effectColor": "pink", "prompt": "unrequested replacement"},
+                            "negativePrompt": "unrequested palette rewrite", "prompt": "unrequested replacement"},
                  entitiesUpsert=[hostile_entity], entityIdsDelete=["chained_door"], entityIndicesDelete=[],
                  animationPlan="unrequested animation", note="repair only the bad leaf")
     responses, requests = wire_transport
     responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+    result = visual.apply_visual_director(data, {}, {})
     repaired = result["visualKit"]
     if repair_grip:
         assert repaired["item"]["grip"] == {"normalizedX": 0.25, "normalizedY": 0.75}
@@ -230,7 +248,8 @@ def test_scoped_visual_repair_preserves_good_siblings_absence_and_mechanics(wire
     else:
         assert repaired["item"]["inventoryScale"] == 2
         assert "grip" not in repaired["item"] and "grip" not in result["visual"]
-    assert "effectColor" not in repaired["item"] and "accessoryMount" not in result["visual"]
+    assert repaired["item"]["negativePrompt"] == raw_before["item"]["negativePrompt"]
+    assert "accessoryMount" not in result["visual"]
     assert repaired["item"]["prompt"] == "literal Terraria item"
     assert repaired["entities"] == raw_before["entities"]
     assert repaired["animationPlan"] == raw_before["animationPlan"]
@@ -299,29 +318,31 @@ def test_legacy_absence_remains_absent_and_fresh_director_clears_stale_metadata(
     legacy = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     assert validate_runtime_wire(legacy)["ok"]
     delivered = sanitize_recipe_for_delivery(legacy)
-    assert all(field not in delivered.get("visual", {}) for field in ("renderSizePx", "grip", "effectColor", "accessoryMount"))
-    legacy["visual"] = {"grip": {"normalizedX": 0, "normalizedY": 0}, "effectColor": "red", "accessoryMount": "chest"}
+    assert all(field not in delivered.get("visual", {}) for field in ("renderSizePx", "grip", "accessoryMount"))
+    legacy["visual"] = {"grip": {"normalizedX": 0, "normalizedY": 0}, "accessoryMount": "chest"}
     projected = visual._apply_kit(legacy, _visual_kit(legacy))
-    assert all(field not in projected["visual"] for field in ("grip", "effectColor", "accessoryMount"))
+    assert all(field not in projected["visual"] for field in ("grip", "accessoryMount"))
 
 
-def test_vfx_consumes_visual_color_and_exact_impact_binding_without_prose_or_audio_inference(wire_transport):
+def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audio_inference(wire_transport):
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     raw = _visual_kit(data)
-    raw["item"].update(effectColor="cyan", palette=["dark blue copper"], grip={"normalizedX": 0.25, "normalizedY": 0.75})
+    raw["item"].update(palette=["dark blue copper"], grip={"normalizedX": 0.25, "normalizedY": 0.75})
     data = visual._apply_kit(data, raw)
     before = copy.deepcopy(data)
     authored = _vfx_output(data)
     authored["slots"][0].update(id="door_impact", entityId="chained_door", event="on_hit", rendererKind="impactSprite",
-                                backend="Sprite", textureRole="impact", anchor="hitPoint", channel="impactShape",
-                                emissionMode="burst", layer="AfterProjectiles", spritePrompt="literal door impact", spriteNegativePrompt="")
+                                textureRole="impact", spriteCanvasSize=32, anchor="hitPoint", layer="AfterProjectiles",
+                                spritePrompt="literal door impact", spriteNegativePrompt="")
+    for field in ("spread", "particleSystemId", "startTick", "repeatEvery", "density"):
+        authored["slots"][0].pop(field)
     responses, requests = wire_transport
     responses.append(authored)
-    final = vfx.attach_hybrid_vfx_manifest(data, "door-impact", llm_director=stage.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "door-impact", llm_director=stage.call_llm_vfx_director)
     packet = request_dossier(requests[0])
-    assert packet["acceptedVisualKit"]["item"]["effectColor"] == "cyan"
+    assert packet["acceptedVisualKit"]["item"]["palette"] == ["dark blue copper"]
     assert {("chained_door", "on_hit"), ("item", "on_use")}.issubset({(row["entityId"], row["event"]) for row in packet["runtimeSurface"]["runtimePairs"]})
-    assert final["visual"]["effectColor"] == "cyan" and final["visual"]["palette"] == ["dark blue copper"]
+    assert final["visual"]["palette"] == ["dark blue copper"]
     slot, = final["vfxManifest"]["slots"]
     assert (slot["entityId"], slot["event"], slot["layer"]) == ("chained_door", "on_hit", "AfterProjectiles")
     assert "sound" not in slot and "soundId" not in slot and "spritePrompt" not in slot

@@ -322,6 +322,8 @@ internal static partial class EngineRuntimeChecks
                     var action = new RuntimeEventActionSpec { Event = ev, DelayTicks = 2, ActionCode = variant.Code, Mode = variant.Mode,
                         EntityId = "root", Count = 2, Strength = 2, RadiusTiles = 8, RadiusPx = 128, RangeTiles = 8, BuffId = BuffID.OnFire,
                         DurationTicks = 90, DamageMultiplier = 1, DamageFraction = 0.5f, MaxHeal = 10 };
+                    if (variant.Code == RuntimeEventActionCode.SpawnEntity)
+                        action.DamageBasis = action.KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild;
                     bool expected = Expected(role);
                     string label = $"authority role={role.Name} event={ev} action={variant.Name}";
                     Equal(true, owner.statLife < owner.statLifeMax2, label + " wounded owner is effect-capable");
@@ -404,7 +406,8 @@ internal static partial class EngineRuntimeChecks
                 var data = SwarmGameplayFixture(); var entity = data.RuntimeProgram.TryGetEntity("root")!;
                 var owner = Terraria.Main.player[0];
                 var source = owner.GetSource_ItemUse(new Item { type = ItemID.CopperShortsword, stack = 1 });
-                var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity, EntityId = "root", DelayTicks = 2, Count = 2 };
+                var spawn = new RuntimeEventActionSpec { ActionCode = RuntimeEventActionCode.SpawnEntity,
+                    DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, EntityId = "root", DelayTicks = 2, Count = 2 };
                 var budget = new RuntimeSpawnBudget(5);
                 Equal(true, RuntimeDelayedActionScheduler.TrySchedule(data, entity, spawn, owner, source, Vector2.Zero, Vector2.UnitX, null, 0, 0, budget), "authorized spawn reserved");
                 Equal(3, budget.Remaining, "dispatch-transition reservation taken");

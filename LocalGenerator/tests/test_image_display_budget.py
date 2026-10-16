@@ -113,7 +113,9 @@ def test_absent_presentation_stays_absent_and_special_assets_do_not_borrow_root_
         owner.pop("forwardAngleDegrees", None)
     frozen = copy.deepcopy(legacy)
     for role, entity_id in (("item", ""), ("runtime:child_projectile", "nail")):
-        assert "Read-only final-frame facts:" not in normalize_asset_prompt(legacy, role, "literal subject", 32, entity_id=entity_id)
+        with pytest.raises(ValueError, match="explicit renderSizePx and forwardAngleDegrees"):
+            normalize_asset_prompt(legacy, role, "literal subject", 32, entity_id=entity_id)
+        assert "Read-only final-frame facts:" not in normalize_asset_prompt({}, role, "literal doctor subject", 32)
     assert legacy == frozen
     for role in ("impact", "equip_overlay", "vfx_strip", "vfx_cutout"):
         prompt = normalize_asset_prompt(data, role, "literal subject", 32, entity_id="nail")
@@ -191,7 +193,7 @@ def test_image_composition_preserves_prospective_grip_and_literal_topology(monke
     assert "not the guard, blade or empty space" in root_prompt
     assert "not a RAW-image coordinate" in root_prompt
     assert "not a RAW-image coordinate" not in arrow_prompt
-    assert result["visual"]["semanticReviewStatus"] == "not_performed"
+    assert "semanticReviewStatus" not in result["visual"]
 
 
 @pytest.mark.parametrize("style", ["Default", "Terraria Like"])
@@ -221,7 +223,7 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     assert frozen["runtimeProgram"]["entities"][2]["visual"]["prompt"] in calls[1]["prompt"]
     assert result["gameplay"] == frozen["gameplay"]
     assert result["visualKit"] == frozen["visualKit"]
-    assert result["visual"]["semanticReviewStatus"] == "not_performed"
+    assert "semanticReviewStatus" not in result["visual"]
     for entity, before in zip(result["runtimeProgram"]["entities"], frozen["runtimeProgram"]["entities"]):
         assert {key: value for key, value in entity.items() if key != "visual"} == {key: value for key, value in before.items() if key != "visual"}
         for key in ("renderSizePx", "preferredCanvasSize", "forwardAngleDegrees", "scale", "prompt", "silhouette", "visualIdentity"):

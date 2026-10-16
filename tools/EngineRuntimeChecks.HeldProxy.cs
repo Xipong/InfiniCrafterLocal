@@ -44,7 +44,7 @@ internal static partial class EngineRuntimeChecks
 
         string path = System.IO.Path.Combine(Terraria.Program.SavePath, "held_proxy_cpu.png");
         var data = GeneratedItemData.Placeholder();
-        data.Visual.SpritePath = path; data.Visual.RenderSizePx = 32;
+        data.Visual.SpritePath = path; data.Visual.RenderSizePx = 32; data.Visual.ForwardAngleDegrees = 0;
         data.Gameplay.UseStyleName = "hold_up"; data.RuntimeProgram.ItemUse.UseStyle = "hold_up";
         var item = new Item(); item.SetDefaults(ItemID.WoodenSword);
         var generated = new GeneratedItem();

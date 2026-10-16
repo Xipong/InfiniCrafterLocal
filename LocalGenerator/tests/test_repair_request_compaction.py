@@ -21,9 +21,9 @@ from test_codex_subscription_contract import _encode_nullable_fixture
 from test_gameplay_repair_readonly_context import _offline_builder
 
 
-def _local(scope, *, require_realization=False):
+def _local(scope):
     return contract.author_item_repair_response_schema(
-        capability_names=runtime_repair_schema_capabilities(scope), require_realization=require_realization)
+        capability_names=runtime_repair_schema_capabilities(scope))
 
 
 def _call(item, fn):
@@ -51,7 +51,7 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
     failure = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, failure["errors"])
     assert runtime_repair_schema_capabilities(scope) == ["configure_item_stats"]
-    local = _local(scope, require_realization=True)
+    local = _local(scope)
     fixed = copy.deepcopy(_call(expected, "configure_item_stats"))
     patch = {"note": "Repair exact damage only", "callsUpsert": [fixed], "realizationReplacement": item["realization"]}
     provider, encoded = _wire_roundtrip(patch, local)
@@ -67,7 +67,7 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
 
     _offline_builder(monkeypatch, mode, respond)
     before = copy.deepcopy(item)
-    repaired = author.repair_author_item_after_failure(item, {}, {}, {}, {}, "scoped-request", failure_report=failure)
+    repaired = author.repair_author_item_after_failure(item, {}, {}, "scoped-request", failure_report=failure)
     assert len(requests) == 1
     assert repaired["debug"]["gameplayRepairScope"] == scope
     repaired.pop("debug")
@@ -77,18 +77,22 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("report_value", [pytest.param("absent", id="missing"), pytest.param(None, id="null")])
-def test_real_repair_request_and_stage_reject_missing_report_without_mutating_source(monkeypatch, mode, report_value):
+def test_real_repair_accepts_missing_optional_report_without_mutating_source(monkeypatch, mode, report_value):
     from repair_test_helpers import gameplay_repair
 
     item = build_runtime_fixture("workbench_blade")
     fixed = copy.deepcopy(_call(item, "configure_item_stats"))
     _call(item, "configure_item_stats")["params"]["damage"] = -1
     before = copy.deepcopy(item)
-    patch = {"note": "exact correction still needs an authored report", "callsUpsert": [fixed]}
+    patch = {"note": "exact executable correction only", "callsUpsert": [fixed]}
     if report_value != "absent":
         patch["realizationReplacement"] = report_value
-    with pytest.raises(PlannerUnavailable, match="non-null realizationReplacement"):
-        gameplay_repair(monkeypatch, item, patch, mode, invalid_report=True)
+    repaired, _ = gameplay_repair(monkeypatch, item, patch, mode)
+    assert _call(repaired, "configure_item_stats")["params"]["damage"] == fixed["params"]["damage"]
+    if mode == "json_schema" or report_value == "absent":
+        assert repaired["realization"] == before["realization"]
+    else:
+        assert repaired["realization"] is None
     assert item == before
 
 
@@ -108,7 +112,7 @@ def test_single_function_schema_never_decodes_an_unknown_function_by_object_type
     pytest.param({"fieldPermissions": {"calls": [{"id": "move", "paths": [""]}]}}, id="whole-call"),
 ])
 def test_authorized_function_or_whole_call_edits_keep_every_registered_variant(scope):
-    assert set(runtime_repair_schema_capabilities(scope)) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible}
+    assert set(runtime_repair_schema_capabilities(scope)) == {name for name, cap in CAPABILITY_REGISTRY.items() }
 
 
 @pytest.mark.parametrize("rows,valid", [
@@ -121,7 +125,7 @@ def test_empty_scope_never_becomes_full_catalog_and_unknown_names_fail_closed(ro
     assert contract.author_item_repair_prompt_shape_card(capability_names=[])["callsUpsert"] == []
     assert Draft202012Validator(local).is_valid({"note": "no call changes", "callsUpsert": rows}) is valid
     _wire_roundtrip({"note": "empty call list", "callsUpsert": []}, local)
-    with pytest.raises(ValueError, match="non-public"):
+    with pytest.raises(ValueError, match="unregistered"):
         runtime_repair_schema_capabilities({"capabilitySubset": ["not_registered"]})
     with pytest.raises(ValueError, match="Unknown"):
         contract.author_item_repair_response_schema(capability_names=["not_registered"])
@@ -189,4 +193,4 @@ def test_format_repair_keeps_exact_dynamic_facts_and_rejects_gameplay_rewriting(
     assert packet["originalRecipeContext"] == expected_context
     assert packet["malformedRawText"] == raw
     assert packet["requiredJsonShape"] == contract.author_item_prompt_shape_card()
-    assert set(packet["allowedCallParamsReadOnly"]) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible}
+    assert set(packet["allowedCallParamsReadOnly"]) == {name for name, cap in CAPABILITY_REGISTRY.items() }

@@ -234,7 +234,7 @@ def test_real_author_packet_explains_center_travel_vs_native_front_hand_without_
     import json
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    request, user, _ = build_initial_author_request({}, {}, {}, {}, "unrelated", model_name="test-model")
+    request, user, _ = build_initial_author_request({}, {}, "unrelated", model_name="test-model")
     packet = json.dumps(request, ensure_ascii=False)
     assert "move_front_hand" in packet and "hitboxOffsetPx" in packet
     assert "18px" in packet and "triangular" in packet and "not hand-attached" in packet

@@ -1,15 +1,13 @@
 # Технические исправления текущего мира
 
-Локальный кандидат **0.4.252.2**, не опубликован и не установлен. Диагностический scope — world `1647275982`; исправления общих технических владельцев применимы к другим принятым экземплярам без правки сохранений. Старый мир исключён из выводов.
+Действующие контракты технических owners; отдельные fixture observations ниже не являются общим game/GPU/MP stamp. Сохранения и личная конфигурация не редактируются.
 
 ## Отчёты Author/Repair
 
-- Canonical owner: `LocalGenerator/infini_local/core/runtime_authoring/program_schema.py`. `realization.description` допускает 1…4000, `playerExperience` 1…3000 Unicode code points.
-- Реальные Author и complete-replacement Repair shape cards читают эти границы из canonical schema; это важно и при `json_object`/schema-off, где provider schema не раскрывает ограничения.
-- Слишком длинное значение отвергается без подрезания authored смысла. Набор ранее допустимых значений не сужается; gameplay/Visual/VFX не меняются.
-- `GeneratedParentSummarySpec` в `GeneratedItemData.Model.cs` сохраняет эти длины при full/network transport, считая Unicode scalars, а не UTF-16 units. Compact player save остаётся reference-only.
-- Независимый review воспроизвёл escaped Unicode report >100000 bytes и потерю ID при native `Item.Clone`. Serializer теперь использует существующий 256 KiB потолок registry chunk transport как единую константу; local clone отдельно копирует тот же stripped/normalized graph без сетевого byte admission. Предел конечный, report не обрезается. Это не обещание вместить любой DTO: сверх256KiB network явно отказывает, но локальный clone не превращается в placeholder из-за сетевого размера.
-- Прежние 700/500 появились при binding-policy refactor `3831d93`; явного технического обоснования этих чисел в исследованной истории не найдено. Конечный предел защищает от неограниченного отчёта, но прежний был недостаточен для составных предметов.
+- Canonical owner — `core/runtime_authoring/program_schema.py`; optional `concept`/`realization` и текстовый `selfEvaluation` — advisory context, не gameplay authority. Report-only ошибки не требуют Repair. Полная [Author boundary](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#construction).
+- Optional `description` до 4000 и `playerExperience` до 3000 Unicode code points потребляются parent summary; `selfEvaluation` до 4000 — advisory текст, без обязательных verdict/check rows. Код не дописывает отчёт и не меняет runtime по prose.
+- `GeneratedParentSummarySpec` сохраняет name/identity/description/playerExperience при full/network transport, считая Unicode scalars. Compact player save остаётся reference-only.
+- Network serializer использует общий 256 KiB предел registry chunk transport. Local clone отдельно копирует тот же normalized graph без сетевого byte admission: превышение network bound даёт явный отказ, а не clipping report или placeholder clone. Это не обещание вместить любой DTO.
 
 ## Повторы транспорта и redaction
 
@@ -27,26 +25,20 @@
 - `GeneratedItem.ModifyItemDraw` подавляет только совпадающий готовый static held proxy. Unrelated colored/glow textures, cache entries, authored `hideUseGraphic`/release timing и custom AfterParent слой не меняются.
 - Native checks используют exact frozen game-saved `Campfire Twin Wooden Sword` DTO из текущего мира, включая identity, два экземпляра shared type, missing-PNG/foreign/disabled controls и source-shape mutant. Это CPU native consumer evidence, не GPU/world/MP acceptance.
 
-## Future-only контракт и design-вопросы
+## Явные runtime choices
 
 ### Повторный returning бросок
 
-У `g_44202b25cacbee06` и `g_c606cc2b5adac118` повторный ручной launch до возврата воспроизведён. `spawn.count=1` ограничивает одну активацию, `autoReuse=false` — удержание кнопки; ни одно не задаёт live cardinality. В исходной генерации отсутствовал explicit live cap; owner-attached guard неприменим к free projectile.
+`spawn.count` ограничивает одну активацию, `autoReuse=false` — удержание кнопки; ни одно не задаёт live cardinality. Для free projectile owner-attached singleton не является общим cap.
 
-Добавлен opt-in `set_projectile_concurrency(maxActive: integer 1…96)` → `entity.spawn.maxActive`. Модель сама выбирает 1 или больше; отсутствие не создаёт cap. Считаются live экземпляры по owner + generated item ID + entity ID, независимо от inventory copy/binding/input/root/descendant. Pending delayed work не live; due dispatch проверяет admission заново и возвращает неиспользованный event budget. Shared SpawnRuntimeEntity отказывает целой effective batch после existing global/depth/event limits, не режет её по остаточным entity slots. CanUseItem/CanSpawnRoot применяют тот же ранний gate. Existing owner-attached repeat-use singleton и Hold одной existing batch сохранены; cap не является refill mode или rollback native costs/других activation events.
+Opt-in `set_projectile_concurrency(maxActive: integer 1…96)` → `entity.spawn.maxActive`. Модель сама выбирает 1 или больше; отсутствие не создаёт cap. Считаются live экземпляры по owner + generated item ID + entity ID, независимо от inventory copy/binding/input/root/descendant. Pending delayed work не live; due dispatch проверяет admission заново и возвращает неиспользованный event budget. Shared SpawnRuntimeEntity отказывает целой effective batch после existing global/depth/event limits, не режет её по остаточным entity slots. CanUseItem/CanSpawnRoot применяют тот же ранний gate. Existing owner-attached repeat-use singleton и Hold одной existing batch сохранены; cap не является refill mode или rollback native costs/других activation events.
 
 Saved definitions по решению пользователя не правятся, runtime не классифицирует предметы по names/movement. Legacy omission/full/network/definition hash сохранены; present null/type/out-of-range и cap на item_body отвергаются. Headless consumer evidence покрывает последовательные production producers; OS-thread concurrency и synchronous foreign GlobalProjectile.OnSpawn reentry не приняты как проверенный scope.
 
-### Grenade-Bomb Bundle
+### Явная detonation и terminal events
 
-`g_a63f559cb7957389`: speed5.5, gravity0.2/update, life180, шесть отскоков, бесконечное penetration, один contact hit по каждому NPC, отдельный terminal AoE radius64/base60. Horizontal friction отсутствует; на ровном полу X сохраняется, отскоки происходят на updates15/39/59/76/91/105, седьмой contact убивает на118 раньше fuse180. Первый NPC hit не детонирует. Это объясняет непривычное движение/взрыв, но на проверенных реальных Update/Damage/Kill boundaries runtime defect не найден. Contact и blast — две authored damage paths, не double dispatch.
-
-Пользователь уточнил симптом: ожидается detonation при попадании в NPC. Existing primitives уже выражают её через explicit `pierce=1` + `on_kill` AoE: native contact исчерпывает penetration, затем Update вызывает Kill/OnKill. Новый kill opcode/preset не нужен. Registry cards в реальных Author/Repair раскрывают pierce1/-1, отсутствие implicit on_hit explosion, terminal event, N отскоков/смерть на следующем contact, ×0.78 collided-axis reflection, gravity без horizontal friction и ранний return/disabling tile collision при wall contact. Это факты executor, не инструкция выбирать взрыв или сохранять родительские capabilities. Saved Bundle/баланс не меняются.
-
-Ошибочное описание returning предмета (гибель от стены вместо возврата) показывает расхождение authored prose и последствий выбранной композиции. Guidance исправлено у canonical capability owner; отдельный semantic verifier и автоматическая подгонка runtime под описание не добавлены. Это не доказательство, что будущая модель больше не ошибётся.
+`pierce=1` + `on_kill` AoE выражает взрыв после исчерпания penetration: native contact, затем Kill/OnKill. `on_hit` сам по себе не убивает projectile. Bounce count, collided-axis reflection, gravity, tile collision и terminal events имеют независимые consumers; код не выводит detonation/fuse/friction из названия или prose. Parent behavior — read-only context, не требование наследовать capabilities. Полные [event distinctions](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#validation-events) принадлежат canonical registry/consumer.
 
 ## Проверка и границы
 
-Есть сохранённые RED→GREEN для report validation/prompt disclosure/C# parent transport, transport retry/redaction и exact native cursor output. Generated schemas, Repair audit и config registry обновляются canonical tools. Независимые review и integrated checks/SDK build записаны в task artifacts; окончательные counts/hash находятся в delivery receipt, а не в исторических release notes.
-
-Не запускались игра, live AI/provider, новые генерации или MP-матч; worlds/players/config/auth и установленный мод не менялись. Поставка обновляет мод и LocalGenerator вместе, сохраняя личные config/cache/recipes/PNG.
+Generated schemas, Repair audit и config registry проверяются canonical tools; команды и доступные уровни proof — [TESTING](TESTING_RU.md). Offline/headless output не доказывает game-loop, GPU, live AI/provider или MP match. Обновление мода и LocalGenerator не требует редактирования личных config/cache/recipes/PNG.

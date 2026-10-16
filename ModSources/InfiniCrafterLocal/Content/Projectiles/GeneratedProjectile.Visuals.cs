@@ -39,12 +39,12 @@ public sealed partial class GeneratedProjectile
         }
         SpritePresentationSelection selected = SpritePresentation.Entity(_data!, _entity!);
         string path = selected.Path;
-        if (string.IsNullOrWhiteSpace(path)) return; // missing required PNG fails closed; never draw a placeholder.
+        if (string.IsNullOrWhiteSpace(path) || !selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue) return; // incomplete selected PNG fails closed; never infer frame metadata.
         Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(path);
         if (texture is null) return;
         Rectangle source = texture.Bounds;
         // An explicit mirror or visual curve owns the complete bounded product.
-        // Legacy live sprite scale retains its old clamp without either owner.
+        // Ordinary drivers retain the native bounded scale without either curve owner.
         float scale = (PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
             * selected.FrameScale(source.Width, source.Height);
         SpriteEffects effects = Projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;

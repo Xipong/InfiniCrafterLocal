@@ -8,7 +8,7 @@ from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_R
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
@@ -35,10 +35,10 @@ def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monk
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     from test_codex_subscription_contract import _encode_nullable_fixture
     # Heavy serialized observers cover each distinct branch, not the registry x format product.
-    shapes = {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in visible_capabilities()}
+    shapes = {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in CAPABILITY_REGISTRY.values()}
     assert shapes == {(True, True), (False, True), (False, False)}
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    request, user, _ = build_initial_author_request({}, {}, {}, {}, "call-envelope", model_name="offline")
+    request, user, _ = build_initial_author_request({}, {}, "call-envelope", model_name="offline")
     packet = json.loads(user)
     assert [set(row) for row in packet["requiredJsonShape"]["runtimeProgram"]["calls"]] == [{"id", "fn", "target", "params"}]
     assert "one explicit id/fn/target/params envelope" in packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["rowShapes"]
@@ -98,7 +98,7 @@ def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monke
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     from test_codex_subscription_contract import _encode_nullable_fixture
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    request, _, _ = build_initial_author_request({}, {}, {}, {}, "invalid-call-envelope", model_name="offline")
+    request, _, _ = build_initial_author_request({}, {}, "invalid-call-envelope", model_name="offline")
     source = _explicit_calls(build_runtime_fixture("workbench_blade"))
     encoded = _encode_nullable_fixture(source, author_item_response_schema()) if mode == "json_schema" else deepcopy(source)
     noarg = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
@@ -170,7 +170,7 @@ def test_real_repair_preserves_valid_envelope_presence_and_frozen_siblings(monke
     assert broken == before
 
 
-@pytest.mark.parametrize("fn", [cap.name for cap in visible_capabilities() if cap.target_kinds == ("item_body",)])
+@pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.target_kinds == ("item_body",)])
 def test_source_provenance_rejects_global_item_target_forgery(fn):
     from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
     source = build_capability_witness(fn)
@@ -451,7 +451,7 @@ def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(
     source = build_runtime_fixture("workbench_blade")
     for mode in ("json_object", "json_schema"):
         monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
-        request, user, _ = pipeline.build_initial_author_request({}, {}, {}, {}, "canonical-offline", model_name="offline")
+        request, user, _ = pipeline.build_initial_author_request({}, {}, "canonical-offline", model_name="offline")
         card = json.loads(user)["runtimeCapabilityContract"]["shape"] if "shape" in json.loads(user)["runtimeCapabilityContract"] else json.loads(user)["requiredJsonShape"]
         assert "usePolicy" not in json.dumps(card)
         assert "authoring.v5" in json.dumps(card)
@@ -584,7 +584,7 @@ def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     from infini_local.core.runtime_authoring.capability_registry import capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
-    request, _, _ = build_initial_author_request({}, {}, {}, {}, "current-call-grammar", model_name="offline")
+    request, _, _ = build_initial_author_request({}, {}, "current-call-grammar", model_name="offline")
     packet = request_dossier(request)
     calls = packet["requiredJsonShape"]["runtimeProgram"]["calls"]
     assert {frozenset(row) for row in calls} == {
@@ -593,7 +593,7 @@ def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
     assert "one explicit id/fn/target/params envelope" in guide["rowShapes"]
     assert "zero-argument calls use params={}" in guide["rowShapes"]
-    assert "Exact existing omissions remain valid in the same grammar" in guide["rowShapes"]
+    assert "exact declared wire equivalences" in guide["rowShapes"]
     assert "not a literal item alias" in guide["rowShapes"]
     assert "usePolicy" not in guide["bindingTarget"] and "omit" in guide["rowShapes"]
 

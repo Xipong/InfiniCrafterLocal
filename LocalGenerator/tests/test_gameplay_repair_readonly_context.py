@@ -30,7 +30,7 @@ def _capture_request(monkeypatch, item, format_mode):
     assert not report["ok"]
     with pytest.raises(_CapturedBeforeTransport):
         author.repair_author_item_after_failure(
-            item, {}, {}, {}, {}, "offline-readonly-context", failure_report=report)
+            item, {}, {}, "offline-readonly-context", failure_report=report)
     assert json.dumps(item, ensure_ascii=False) == before
     assert len(captured) == 1
     assert captured[0]["response_format"]["type"] == format_mode
@@ -111,10 +111,10 @@ def test_serialized_report_instructions_distinguish_source_from_permitted_overla
     _, dossier = _capture_request(monkeypatch, _broken_held_and_deployed(), "json_object")
     rules = " ".join(dossier["rules"])
     for required in (
-        "acceptedItemContext.concept", "original non-binding intent",
+        "optional advisory context", "never an observed run or an acceptance requirement",
         "acceptedItemContext.runtimeProgram", "pre-repair source", "including invalid fields",
-        "only edits admitted by repairScope", "acceptedItemContext.realization", "not execution evidence",
-        "interpretation of the exact post-merge program, not an observed run",
+        "only edits admitted by repairScope", "keep every frozen value and absence unchanged",
+        "Do not repair or complete prose or self-evaluation",
     ):
         assert required in rules
     assert "literal post-repair execution report" not in rules
@@ -129,7 +129,7 @@ def test_readonly_projection_preserves_exact_values_absences_and_is_detached(mon
     _, dossier = _capture_request(monkeypatch, item, format_mode)
     for key in ("concept", "runtimeProgram"):
         assert json.dumps(dossier["acceptedItemContext"][key], ensure_ascii=False) == json.dumps(item[key], ensure_ascii=False)
-    projected = author.build_gameplay_repair_dossier(item, {}, {}, {}, {}, failure_report=validate_runtime_program(item))
+    projected = author.build_gameplay_repair_dossier(item, {}, {}, failure_report=validate_runtime_program(item))
     projected["acceptedItemContext"]["concept"]["plannedPlayerActions"][0]["intent"] = "only in detached view"
     _call(projected["acceptedItemContext"], "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
     projected["immutableProgramIndex"]["bindings"][0]["action"]["targetId"] = "only in detached index"
@@ -145,7 +145,7 @@ def test_readonly_source_never_invents_values_when_source_is_missing_or_malforme
     else:
         item[field] = copy.deepcopy(value)
     before = copy.deepcopy(item)
-    dossier = author.build_gameplay_repair_dossier(item, {}, {}, {}, {}, failure_report={"errors": []})
+    dossier = author.build_gameplay_repair_dossier(item, {}, {}, failure_report={"errors": []})
     context = dossier["acceptedItemContext"]
     assert (field in context) == (field in item)
     if field in item:

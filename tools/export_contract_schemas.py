@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export deterministic v5 Author/Repair/Visual/VFX schemas and registry manifests."""
+"""Export deterministic current Author/Repair/Visual/VFX schemas and registry manifests."""
 from __future__ import annotations
 import argparse,json,sys
 from pathlib import Path
@@ -39,8 +39,7 @@ def render()->dict[Path,str]:
     rows: dict[Path, str] = {}
     for filename, payload in payloads.items():
         # Author root/property order is a model-facing autoregressive contract.
-        # Keep the legacy stable sorted serialization for every other artifact
-        # so this change does not create unrelated formatting churn.
+        # Other artifacts use deterministic sorted serialization.
         preserve_model_order = filename == "author_item_response.schema.json"
         rows[OUT / filename] = json.dumps(
             payload,
@@ -58,7 +57,7 @@ def main()->int:
         if not p.exists() or p.read_text(encoding="utf-8")!=t: bad.append(p.relative_to(ROOT).as_posix())
       if bad:
         print("[FAIL] stale/missing generated contracts:",", ".join(bad)); return 1
-      print(f"[OK] {len(rows)} v5 contract artifacts are current"); return 0
+      print(f"[OK] {len(rows)} current contract artifacts match canonical owners"); return 0
     OUT.mkdir(parents=True,exist_ok=True)
     if not a.only:
       for old in OUT.glob("*.json"): old.unlink()

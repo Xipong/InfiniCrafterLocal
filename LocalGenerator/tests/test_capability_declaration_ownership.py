@@ -32,7 +32,6 @@ def test_one_declaration_is_enough_for_a_new_explicit_metadata_projection():
         exclusive_group="probe_group", position_ownership="probe_position",
         emitted_events=("on_hit",), requirements=(requirement,),
         activation_spawn_count_param="count", meaningful_for_stationary=True,
-        provenance="test only", repair_group="probe",
     )
     final = registry._enrich_capability(declared)
     assert final.csharp_owner == "Probe.cs::Execute"

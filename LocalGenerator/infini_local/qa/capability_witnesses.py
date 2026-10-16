@@ -300,31 +300,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
         "realization": {
             "description": f"A minimal runtime witness executing {fn}.",
             "playerExperience": "The selected capability runs without inferred archetype behaviour.",
-            "selfEvaluation": {
-                "planVsProgram": {
-                    "verdict": "aligned",
-                    "summary": "The witness draft selects the same public capability emitted by the program.",
-                    "actionChecks": [{
-                        "plannedIntent": f"Execute {fn} through its public typed contract.",
-                        "implementedBehavior": f"The runtime program contains the {fn} capability call.",
-                        "runtimeRefs": ["witness_call"],
-                        "result": "aligned",
-                        "intentionality": "intentional",
-                        "reason": "The witness directly emits the selected public capability.",
-                    }],
-                },
-                "programVsReport": {
-                    "verdict": "aligned",
-                    "summary": "The witness report names the exact emitted capability.",
-                    "behaviorChecks": [{
-                        "runtimeRefs": ["witness_call"],
-                        "programBehavior": f"The runtime executes {fn}.",
-                        "reportedBehavior": f"The report says that the runtime executes {fn}.",
-                        "result": "aligned",
-                        "reason": "The report names the exact cited capability.",
-                    }],
-                },
-            },
+            "selfEvaluation": "Optional fixture self-check; not observed execution.",
         },
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
@@ -340,9 +316,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
 def capability_vertical_slice_report() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     ok = True
-    for fn, cap in CAPABILITY_REGISTRY.items():
-        if not cap.prompt_visible or cap.decision != "expose":
-            continue
+    for fn in CAPABILITY_REGISTRY:
         authored = build_capability_witness(fn)
         author = validate_runtime_program(authored)
         row: dict[str, Any] = {"fn": fn, "authorValid": bool(author.get("ok")), "authorErrors": author.get("errors") or []}

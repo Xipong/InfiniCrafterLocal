@@ -15,7 +15,7 @@ from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROG
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory
 from infini_local.core.vfx_manifest import (
     VFX_MANIFEST_SCHEMA,
-    attach_hybrid_vfx_manifest,
+    attach_vfx_manifest,
     validate_vfx_director_output,
     vfx_director_surface,
 )
@@ -105,7 +105,7 @@ class VfxDebugRoutes:
             meta.pop("vfxForcedRecipeId", None)
             meta.pop("vfxRerollSalt", None)
         key = str(payload.get("recipeKey") or data.get("recipeKey") or data.get("id") or "debug_vfx")
-        out = attach_hybrid_vfx_manifest(data, key)
+        out = attach_vfx_manifest(data, key)
         return {"ok": True, "version": self.app_version, "recipeKey": key, "runtimeEvents": runtime_event_inventory(out), "vfxManifest": out.get("vfxManifest")}
 
     def reroll_cached_manifest(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -122,7 +122,7 @@ class VfxDebugRoutes:
             meta.pop("vfxForcedRecipeId", None)
             meta.pop("vfxRerollSalt", None)
         data.setdefault("debug", {})["vfxRerollRequestedAt"] = time.time()
-        data = attach_hybrid_vfx_manifest(data, recipe_key_value)
+        data = attach_vfx_manifest(data, recipe_key_value)
         data = self.final_normalize(data)
         self.write_world_recipe_cache(recipe_key_value, world_id, data, world_name=world_name)
         return {"ok": True, "version": self.app_version, "worldId": str(world_id), "recipeKey": recipe_key_value, "vfxManifest": data.get("vfxManifest"), "data": data if bool(payload.get("returnData")) else None}

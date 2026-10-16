@@ -17,7 +17,7 @@ Python vocabulary — `core/runtime_authoring/terraria_vocabulary.py`; mechanica
 - Rarity/buff/tile/wall IDs C# проверяет по текущим RarityLoader/BuffLoader/TileLoader/WallLoader counts, не произвольным clamps. Special negative rarity не заменяет expert/master/quest flags. Author получает exact parent IDs/names и не угадывает их.
 - Parent packets содержат canonical useStyleName/ammoCategoryName/potion/notAmmo и damage-class content ID; это source facts, не semantic helper.
 
-Author-visible gameplay aliases отсутствуют. Конечные technical/config/UI/VFX aliases перечислены в generated Lowery; internal migration normalization вне gameplay не означает разрешение legacy recipe importer.
+Author-visible gameplay aliases отсутствуют. Конечные technical/config aliases перечислены в generated Lowery; internal migration normalization вне gameplay не означает разрешение legacy recipe importer.
 
 <a id="ammo-healing"></a>
 ## Ammo и healing: независимые решения

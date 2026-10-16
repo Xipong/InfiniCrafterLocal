@@ -118,7 +118,7 @@ def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0
         trace_event=lambda *_a, **_k: None, log_event=lambda *_a, **_k: None,
         is_client_disconnect=lambda _e: False, world_scope_missing=WorldScopeMissing,
         visual_delivery_blocked=VisualDeliveryBlocked, planner_unavailable=PlannerUnavailable,
-        last_combine_failure_summary=lambda: {}, clear_combine_failure=lambda _r: None,
+        clear_combine_failure=lambda _r: None,
         combine_failure_http_response=lambda _e, _s: (500, "failure", False, "failure"),
         combine_failure_payload=lambda *_a, **_k: {"ok": False, "error": "failure"}, ascii_reason=lambda _m: "error",
     )
@@ -142,7 +142,7 @@ def utility_routes(root):
         trace_snapshot=lambda: {}, trace_snapshot_html=lambda: "<html/>", trace_event=lambda *_a, **_k: None,
         sdcpp_start=lambda: True, sdcpp_debug_snapshot=lambda include_log_tail: {"ok": True},
         read_json_file=lambda _: None, last_combine_failure_payload=lambda: {}, cleanup_for_shutdown=lambda _: None,
-        build_image_prompt=lambda *_a, **_k: "", maybe_generate_sprite=lambda p: p,
+        maybe_generate_sprite=lambda p: p,
         normalize_asset_prompt=lambda *_a, **_k: "", generate_visual_asset=lambda *_a, **_k: ("", "", 0.0, {}),
         asset_negative_prompt=lambda _: "", alpha_stats=lambda _: {}, image_module=None,
     )
@@ -522,7 +522,7 @@ def test_debug_manifest_never_adopts_forced_authority(monkeypatch) -> None:
         ),
         final_normalize=lambda data: data,
     )
-    monkeypatch.setattr(vfx_routes, "attach_hybrid_vfx_manifest", attach)
+    monkeypatch.setattr(vfx_routes, "attach_vfx_manifest", attach)
 
     routes.select_manifest({
         "data": {"id": "probe", "recipeMeta": {}, "attack": {"enabled": True}},
@@ -552,7 +552,7 @@ def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypa
     routes.read_json_file = world_storage.read_json_file
 
     from infini_local.web.vfx_debug_routes import _sample_data
-    from infini_local.core.vfx_manifest import attach_hybrid_vfx_manifest
+    from infini_local.core.vfx_manifest import attach_vfx_manifest
     from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
 
     for suffix, parents, versions in [
@@ -564,7 +564,7 @@ def test_debug_views_consume_authoritative_recipe_files(tmp_path: Path, monkeypa
                        "visual": {"spriteStatus": "generated", "spritePath": f"generated-{suffix}.png"}})
         if versions is not None:
             recipe["contractVersions"] = versions
-        recipe = attach_hybrid_vfx_manifest(recipe, f"recipe-{suffix}")
+        recipe = attach_vfx_manifest(recipe, f"recipe-{suffix}")
         world_storage.write_world_recipe_cache(
             tmp_path, "9.9.9", f"recipe-{suffix}", "debug-world", recipe,
             parent_a_name=parents[0], parent_b_name=parents[1], world_name="Debug World",
@@ -630,7 +630,8 @@ def test_cache_only_stale_validation_never_quarantines_fresh_writer(tmp_path, mo
     path = recipes.world_recipe_file("race", key)
     recipes.cache_put(key, payload["itemA"], payload["itemB"], good, "race")
     assert pipeline.combine_cache_lookup(payload)[1]["id"] == good["id"]
-    bad = deepcopy(good)
+    bad = world_storage.read_json_file(path)
+    assert bad is not None
     bad["runtimeProgram"]["bindings"][0]["id"] = ""
     world_storage.atomic_write_json(path, bad)
     fresh = deepcopy(good)
@@ -714,7 +715,7 @@ PROVIDER_SCHEMA_ERROR = (
     pytest.param("exception", PROVIDER_SCHEMA_ERROR, (424, "llm_request_rejected", False), id="provider-schema-exception"),
     pytest.param("authored", "Gameplay Author failed: schema validation rejected the authored runtimeProgram", (422, "llm_output_invalid", True), id="authored-schema"),
     pytest.param("authored", "Gameplay Author failed: invalid JSON output after repair", (422, "llm_output_invalid", True), id="authored-json"),
-    pytest.param("promise", "PlannerUnavailable('planner repeated unsupported gameplay promises after 2 re-author attempts: orbiting_companion')", (422, "llm_output_invalid", True), id="promise-exhaustion"),
+    pytest.param("promise", "PlannerUnavailable('planner repeated unsupported gameplay promises after 2 re-author attempts: orbiting_companion')", (424, "combine_failed", True), id="promise-exhaustion"),
 ])
 def test_http_failure_classification_preserves_boundary_and_retry_authority(scenario, error_text, expected):
     from infini_local.services.codex_auth import CodexError
@@ -740,7 +741,7 @@ def test_http_failure_classification_preserves_boundary_and_retry_authority(scen
         assert "update" in player_message
         assert "schema" in payload["message"].lower()
     elif scenario == "promise":
-        assert "invalid" in payload["playerMessage"].lower()
+        assert payload["error"] == "combine_failed"
 
 
 @pytest.mark.parametrize("flag", ["cacheOnly", "cacheOnlyIfReady"])

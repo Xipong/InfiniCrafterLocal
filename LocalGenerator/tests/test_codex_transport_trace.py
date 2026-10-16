@@ -104,7 +104,9 @@ assert entered.wait(1)
 # must drain it before interpreter teardown, without a caller flush.
 atexit.register(release.set)
 """
-    env = {**os.environ, "INFINI_CACHE_DIR": str(recording), "INFINI_TRACE_PROMPTS": "true", "INFINI_SKIP_CONFIG_FILE": "1"}
+    from pathlib import Path
+    pythonpath = os.pathsep.join((str(Path(__file__).resolve().parents[1]), os.environ.get("PYTHONPATH", "")))
+    env = {**os.environ, "PYTHONPATH": pythonpath, "INFINI_CACHE_DIR": str(recording), "INFINI_TRACE_PROMPTS": "true", "INFINI_SKIP_CONFIG_FILE": "1"}
     result = subprocess.run([sys.executable, "-c", script], env=env, capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, result.stdout + result.stderr
     observed = rows(recording)

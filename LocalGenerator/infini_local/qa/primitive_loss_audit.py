@@ -21,11 +21,9 @@ from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_R
 
 _PARSER = Parser(Language(tree_sitter_c_sharp.language()))
 _MODEL_ROOT = Path(__file__).resolve().parents[3] / "ModSources" / "InfiniCrafterLocal"
-# These C# fields are not gameplay choices. Archetype is historical metadata;
-# changing it cannot change an equipped player's stats or set matching.
+# Capability presence determines equipment activation; it is not a model choice.
 _HIDDEN = {
     "Enabled": "Derived exactly from presence of the configured capability.",
-    "Archetype": "Historical unused DTO metadata; never dispatched as gameplay.",
 }
 
 
@@ -139,7 +137,7 @@ def _declared(group: str) -> set[str]:
               for name, spec in capability.params.items()
               for wire in spec.wire_field_names(name)}
     # Class selectors are Author params of a separate typed operation, but lower
-    # into the existing legacy equipment DTO fields consumed by C#.
+    # into the current equipment DTO fields consumed by C#.
     prefix = group + "."
     class_paths = CAPABILITY_REGISTRY["add_equipment_damage_bonus"].final_wire_paths
     return direct | {path[len(prefix):][0].upper() + path[len(prefix):][1:]
@@ -291,8 +289,6 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     hidden = {
         "GameplaySpec": {
             "Kind": "Display-only category; never a gameplay router.",
-            "Stage": "Historical generation-stage metadata; not executed as an effect.",
-            "PowerBudget": "Historical planning metadata; not an engine mechanic.",
             "UseStyle": "Resolved Terraria ItemUseStyleID from authored useStyleName.",
             "ExtraBuffs": "Nested list of authored BuffEntrySpec fields.",
             "GeneratedBuff": "Nested authored GeneratedBuffSpec fields.",
@@ -426,7 +422,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     visual_schema = visual_response_schema(["audit_entity"])
     visual_variants = visual_schema["properties"]["entities"]["items"]["oneOf"]
     visual_model_fields = set().union(*(row["properties"] for row in visual_variants))
-    vfx_director_fields = {"ImpactPrompt", "ImpactNegativePrompt"}
+    vfx_director_fields = {"ImpactPrompt", "ImpactNegativePrompt", "ImpactCanvasSize"}
     visual_internal = {
         "Role", "SpritePath", "SpriteUrl",
         "SpriteStatus", "SpriteTechnicalScore", "ImpactSpritePath", "ImpactSpriteUrl",

@@ -17,7 +17,6 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LENGTH, strict_author_shape_report
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.item_power_knowledge import apply_item_knowledge
 from infini_local.pipelines.llm_authoring_pipeline import repair_author_item_after_failure
 
 
@@ -118,10 +117,7 @@ def attach_gameplay_and_runtime_program(
     data: dict[str, Any],
     a: dict[str, Any],
     b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
 ) -> dict[str, Any]:
-    del ca, cb  # Parent cards informed the Author; they never route compilation.
     compiled = compile_runtime_program(data)
     compiled["runtimeApiVersion"] = RUNTIME_PROGRAM_API_VERSION
     compiled.setdefault("schemaVersion", 5)
@@ -169,8 +165,6 @@ def compile_and_validate_authored_runtime(
     data: dict[str, Any],
     a: dict[str, Any],
     b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
     key: str,
     *,
     run_stage: Callable[..., Any],
@@ -179,8 +173,7 @@ def compile_and_validate_authored_runtime(
 
     def domain_pass(item: dict[str, Any], prefix: str) -> dict[str, Any]:
         item = run_stage(prefix + "_strict_runtime_program", strict_validate_authored_item, item, a, b)
-        item = run_stage(prefix + "_parent_power_context", apply_item_knowledge, item, a, b, ca, cb)
-        item = run_stage(prefix + "_compile_runtime_program", attach_gameplay_and_runtime_program, item, a, b, ca, cb)
+        item = run_stage(prefix + "_compile_runtime_program", attach_gameplay_and_runtime_program, item, a, b)
         run_stage(prefix + "_wire_boundary", validate_final_runtime_wire_boundary, item)
         return item
 
@@ -201,8 +194,6 @@ def compile_and_validate_authored_runtime(
         authored,
         a,
         b,
-        ca,
-        cb,
         key,
         failure_report=report,
     )

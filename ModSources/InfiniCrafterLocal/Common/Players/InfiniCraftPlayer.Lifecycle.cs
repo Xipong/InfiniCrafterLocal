@@ -39,8 +39,7 @@ public sealed partial class InfiniCraftPlayer
     private void SetCraftLaneOutcome(int laneIndex, CraftLaneOutcomeKind kind, string message, CraftLaneMaterialDisposition materials = CraftLaneMaterialDisposition.Unobserved)
     {
         if (laneIndex is < 0 or > 2) return;
-        string bounded = (kind is CraftLaneOutcomeKind.Failed or CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
-            ? Services.GeneratorClient.GenerationFailureFacts(message) : message ?? "").Replace('\r', ' ').Replace('\n', ' ');
+        string bounded = (message ?? "").Replace('\r', ' ').Replace('\n', ' ');
         if (kind is CraftLaneOutcomeKind.Failed or CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
             && IsCraftLanePending(laneIndex) && (Main.netMode == NetmodeID.Server || _stationEscrowUsesRemoteAuthority))
             materials = CraftLaneMaterialDisposition.ServerRetained;

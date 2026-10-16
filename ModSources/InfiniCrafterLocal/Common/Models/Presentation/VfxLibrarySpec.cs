@@ -22,8 +22,8 @@ public sealed class VfxLibraryParticleSpec
     [JsonRequired] public float HeightPx { get; set; }
     [JsonRequired] public float RotationRadians { get; set; }
     [JsonRequired] public float RotationSpeedRadiansPerTick { get; set; }
-    [JsonRequired] public string ColorStart { get; set; } = "";
-    [JsonRequired] public string ColorEnd { get; set; } = "";
+    [JsonRequired] public RuntimeRgbSpec ColorStart { get; set; } = null!;
+    [JsonRequired] public RuntimeRgbSpec ColorEnd { get; set; } = null!;
     [JsonRequired] public float EndScaleMultiplier { get; set; }
     [JsonRequired] public float EndOpacity { get; set; }
 
@@ -43,14 +43,12 @@ public sealed class VfxLibraryParticleSpec
         VfxMaterialValidation.Range(HeightPx,0,128,"particle.heightPx");
         VfxMaterialValidation.Range(RotationRadians,-MathF.Tau,MathF.Tau,"particle.rotationRadians");
         VfxMaterialValidation.Range(RotationSpeedRadiansPerTick,-1,1,"particle.rotationSpeedRadiansPerTick");
-        ValidateColor(ColorStart);ValidateColor(ColorEnd);
+        if (ColorStart is null || ColorEnd is null) throw new InvalidDataException("VFX particle requires local RGB endpoints");
+        ColorStart.Validate(); ColorEnd.Validate();
         VfxMaterialValidation.Range(EndScaleMultiplier,0,4,"particle.endScaleMultiplier");
         VfxMaterialValidation.Range(EndOpacity,0,1,"particle.endOpacity");
     }
-    private static void ValidateColor(string token)
-    {
-        if (token != "effect") RuntimeColorPolicy.RequireRenderingToken(token);
-    }
+
 }
 
 public sealed class VfxScreenShakeSpec
@@ -85,18 +83,14 @@ internal static class VfxLibraryValidation
         }
         if(slot.Element is not null||slot.Path is not null||particle&&(slot.Particle is null||slot.ScreenShake is not null)
             ||shake&&(slot.ScreenShake is null||slot.Particle is not null))throw new InvalidDataException("library renderer requires only its exact typed payload");
-        if(slot.Scale!=1||slot.Density!=0||slot.Spread!=0||slot.Jitter!=0||slot.FadeIn!=0||slot.FadeOut!=0
-            ||slot.PhaseOffset!=0||slot.SignatureWeight!=0||slot.VisualCost!=0||slot.BudgetWeight!=1||slot.EmissionMode!="none"
-            ||slot.ParticleRole!="none"||slot.ParticleSystemId!="none"||slot.TextureRole!="none")throw new InvalidDataException("library renderer requires neutral unconsumed common controls");
+        if(slot.PhaseOffset!=0)throw new InvalidDataException("library renderer does not consume phaseOffset");
         if(slot.StartTick is <0 or >120)throw new InvalidDataException("invalid VFX library startTick");
         if(particle) {
-            if(slot.Backend!="Particle"||slot.Duration is <3 or >120||slot.Channel is not ("ambientParticles" or "impactParticles" or "decaySmoke")
-                ||slot.Lane is not ("primary" or "support" or "accent" or "ornament")
+            if(slot.Duration is <3 or >120
                 ||(slot.Event==RuntimeEventKind.Periodic?slot.RepeatEvery is <1 or >120:slot.RepeatEvery!=0))throw new InvalidDataException("invalid VFX library particle controls");
-            VfxMaterialValidation.Range(slot.Alpha,0,1,"library alpha");slot.Particle!.Validate();
+            VfxMaterialValidation.Range(slot.Alpha!.Value,0,1,"library alpha");slot.Particle!.Validate();
         }else {
-            if(slot.Backend!="Realtime"||slot.Event==RuntimeEventKind.Periodic||slot.RepeatEvery!=0||slot.Duration!=3||slot.Alpha!=1
-                ||slot.Blend!="alpha"||slot.Layer!="BeforeProjectiles"||slot.Channel!="screenShake"||slot.Lane!="cue")throw new InvalidDataException("invalid VFX screenShake cue controls");
+            if(slot.Event==RuntimeEventKind.Periodic)throw new InvalidDataException("screenShakeCue requires nonperiodic event");
             slot.ScreenShake!.Validate();
         }
     }

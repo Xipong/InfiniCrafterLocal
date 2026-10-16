@@ -67,21 +67,7 @@ def _dual_use_placeable() -> dict[str, Any]:
         "input": "alternate_use",
         "action": {"kind": "place_item", "placementCallId": "install_tile"},
     })
-    authored["realization"]["selfEvaluation"]["planVsProgram"]["actionChecks"].append({
-        "plannedIntent": "No corresponding initial action.",
-        "implementedBehavior": "Alternate use installs the exact authored tile.",
-        "runtimeRefs": ["alternate_install", "install_tile"],
-        "result": "added",
-        "intentionality": "intentional",
-        "reason": "The test adds an explicit placement lane to the executable program.",
-    })
-    authored["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"].append({
-        "runtimeRefs": ["alternate_install", "install_tile"],
-        "programBehavior": "Alternate use installs the exact authored tile.",
-        "reportedBehavior": "Alternate use installs the exact authored tile.",
-        "result": "aligned",
-        "reason": "The test report names the added placement lane.",
-    })
+    authored["realization"]["selfEvaluation"] = "An explicit alternate placement lane was added."
     return authored
 
 
@@ -337,7 +323,7 @@ def test_repair_placement_reference_changes_only_the_rejected_source_leaf() -> N
 
 
 def test_place_item_is_discoverable_but_not_recommended_by_high_salience_prompt() -> None:
-    payload = build_llm_author_payload({}, {}, {}, {}, "prompt-neutrality")
+    payload = build_llm_author_payload({}, {}, "prompt-neutrality")
     high_salience = json.dumps({
         "priorityHeader": payload["priorityHeader"],
         "runtimeProgramInvariants": payload["runtimeProgramInvariants"],

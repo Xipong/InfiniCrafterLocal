@@ -249,9 +249,8 @@ internal static partial class EngineRuntimeChecks
                         string eventName = route is "item_periodic" or "projectile_tick" ? RuntimeEventKind.Periodic : RuntimeEventKind.OnUse;
                         var particle = new VfxSlotSpec {
                             Id = "particles_probe", EntityId = entityId, Event = eventName,
-                            RendererKind = "impactRing", ParticleSystemId = "dust", Density = 1f, RepeatEvery = 1,
-                        };
-                        var light = LightManifest(entityId, eventName).Slots[0];
+                            RendererKind = "impactRing", Color = Rgb(17, 83, 241), ParticleSystemId = "GemDiamond", Density = 1f, RepeatEvery = 1, Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Spread = 0, Duration = 10, Alpha = .65f, StartTick = 0 };
+                        var light = LightManifest(entityId, eventName, projectile: route == "projectile_tick").Slots[0];
                         data.VfxManifest = new VfxManifestSpec { Slots = new[] { particle, light } };
                         data.VfxManifest.Budget.MaxParticlesPerTick = cap.Tick;
                         data.VfxManifest.Budget.MaxParticlesTotal = cap.Total;
@@ -264,14 +263,14 @@ internal static partial class EngineRuntimeChecks
                         else if (route == "projectile_tick")
                             InfiniVfxRuntime.OnTick(projectile, data, entityId, data.VfxManifest, ref state);
                         else if (route == "detached")
-                            InfiniVfxRuntime.OnDetachedEvent(data, entityId, eventName, data.VfxManifest, player.Center, Vector2.Zero, "dust_probe");
+                            InfiniVfxRuntime.OnDetachedEvent(data, entityId, eventName, data.VfxManifest, player.Center, Vector2.Zero, "dust_probe", InfiniVfxProjectileSnapshot.Capture(projectile,data,entityId));
                         else if (route == "item_use")
                             InfiniItemVfxRuntime.EmitAndSyncEvent(player, data, entityId, eventName);
                         else
                             InfiniItemVfxRuntime.OnPeriodic(player, data, entityId);
                         int actual = 0;
                         foreach (Dust dust in Terraria.Main.dust)
-                            if (dust.active) { actual++; Equal(player.Center, dust.position, label + " spawn position"); }
+                            if (dust.active) { actual++; Equal(player.Center, dust.position, label + " spawn position"); Equal(new Color(17,83,241), dust.color, label + " exact local RGB reaches real Dust"); }
                         int expected = (int)((route.StartsWith("item") ? 8 : 10) * multiplier);
                         if (!route.StartsWith("item")) expected = Math.Min(expected, Math.Min(cap.Tick, cap.Total));
                         Equal(expected, actual, label + " actual CPU dust count");
@@ -334,15 +333,17 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static VfxManifestSpec LightManifest(string entityId, string eventName)
+    private static VfxManifestSpec LightManifest(string entityId, string eventName, bool projectile = false)
     {
         var manifest = new VfxManifestSpec {
             Slots = new[] { new VfxSlotSpec {
                 Id = "light_probe", EntityId = entityId, Event = eventName,
-                RendererKind = "lightCue", Channel = "light", Lane = "cue",
-                RepeatEvery = 1, Scale = 1f,
-            } },
+                RendererKind = "lightCue", Color = Rgb(255, 255, 255), Scale = 1f } },
         };
+        if (eventName == RuntimeEventKind.Periodic) {
+            manifest.Slots[0].RepeatEvery = 1;
+            if (projectile) manifest.Slots[0].StartTick = 0;
+        }
         manifest.NormalizeAndValidate();
         return manifest;
     }
@@ -516,18 +517,18 @@ internal static partial class EngineRuntimeChecks
         {
             var projectile = new Projectile { Center = new Vector2(160f, 320f) };
             var data = new GeneratedItemData();
-            var manifest = LightManifest("light_entity", RuntimeEventKind.Periodic);
+            var manifest = LightManifest("light_entity", RuntimeEventKind.Periodic, projectile: true);
             AssertLightMultiplier(config, lights, () => {
                 var state = new InfiniVfxState();
                 InfiniVfxRuntime.OnTick(projectile, data, "light_entity", manifest, ref state);
             }, "projectile periodic");
-            manifest.Slots[0].Event = RuntimeEventKind.OnHit;
+            manifest = LightManifest("light_entity", RuntimeEventKind.OnHit);
             AssertLightMultiplier(config, lights, () => {
                 var state = new InfiniVfxState();
                 InfiniVfxRuntime.OnEvent(projectile, data, "light_entity", RuntimeEventKind.OnHit, manifest, ref state, projectile.Center);
             }, "projectile hit");
             AssertLightMultiplier(config, lights, () => {
-                InfiniVfxRuntime.OnDetachedEvent(data, "light_entity", RuntimeEventKind.OnHit, manifest, projectile.Center, Vector2.Zero, "light_probe");
+                InfiniVfxRuntime.OnDetachedEvent(data, "light_entity", RuntimeEventKind.OnHit, manifest, projectile.Center, Vector2.Zero, "light_probe", InfiniVfxProjectileSnapshot.Capture(projectile,data,"light_entity"));
             }, "detached event");
         });
     }

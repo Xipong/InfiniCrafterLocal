@@ -15,7 +15,7 @@
 
 Remote presets: `json_object` + `chat_completions`; local сохраняют schema. Это starting point, не availability guarantee. Codex — отдельный subscription Responses adapter: [auth/limits](../user/CODEX_IMAGE_OAUTH_RU.md#качество-размер-и-расход).
 
-`json_object` не semantic fallback: `requiredJsonShape`, `runtimeProgramInvariants`, `selfCheck` остаются в prompt; invalid response → условный Repair/RED. Без constrained grammar синтаксического брака **может стать больше**, но provider schema не gameplay authority.
+`json_object` не semantic fallback: `requiredJsonShape`, `runtimeProgramInvariants` и полный capability catalog остаются в prompt; optional advisory report не является validation verdict; invalid response → условный Repair/RED. Без constrained grammar синтаксического брака **может стать больше**, но provider schema не gameplay authority.
 
 ## Retries и границы ошибок
 
@@ -68,20 +68,9 @@ Native Codex text request запрашивает `reasoning.summary="auto"` с �
 
 Pre-Author failure snapshot сохраняет полные безопасные itemA/itemB и вычисленный recipeKey через существующий generation_debug/redaction owner; candidate поздних стадий остаётся прежним. Ни provider headers, ни посторонний config туда не копируются.
 
-## Исторический Gemini reproducer
+## Provider complexity boundary
 
-Прежний конкретный Gemini Chat endpoint отклонял полную Author schema (400), Responses дал 404: **не запрет strict output всех нынешних Gemini**. Schema тогда: 85579 chars, 4043 nodes, depth 16, 519 constraints; calls `oneOf` 51 вариантов, maxItems 48.
-
-| Изоляция | Прежний ответ |
-|---|---|
-| name/category/concept; entities; одиночный capability; oneOf 2 real / 32 synthetic objects | 200 |
-| Полный runtimeProgram; calls 51 вариантов | 400 |
-| Real variant maxItems 8 / 48 | 200 / 400 |
-| String items maxItems 48 | 200 |
-
-`pattern`, `const`, array bounds, `oneOf`, `$schema`, `x-infini-*` отдельно проходили; снятие pattern/min/max/всех constraints полную форму не исправляло. Complexity комбинации, не правило «до N chars»: [Google limitations](https://ai.google.dev/gemini-api/docs/structured-output).
-
-Другой старый Live20 (json_object/Chat/parallel=3): три ~94k-char 400 при activeHttp=3 рядом с Connection refused/RemoteDisconnected. Concurrency — гипотеза, не доказанная причина; format не лечит network/rate-limit. Прежние free-tier 15 RPM — та конфигурация, не общий лимит новых моделей/аккаунтов.
+Один endpoint/model может отвергнуть составную schema, даже если отдельные constraints проходят. Нет универсального порога chars/числа variants и нельзя ослаблять local validation ради provider acceptance. [Google structured-output limitations](https://ai.google.dev/gemini-api/docs/structured-output) описывают provider constraints; offline serializer не доказывает current quota, availability или billing. Network/concurrency/rate errors не лечатся заменой gameplay contract.
 
 ## Проверка
 

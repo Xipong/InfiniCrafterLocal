@@ -76,7 +76,7 @@ public static partial class InfiniItemVfxRuntime
         VfxSourceBinding? binding=player?.HeldItem?.ModItem is GeneratedItem live&&live.PresentationToken==p.Token?VfxSourceBinding.Capture(player,player.HeldItem,data):null;
         var allowance=new MaterialEventAllowance(data.VfxManifest.Budget.MaxParticlesTotal);
         EmitMaterialItemSnapshot(data,p,binding,allowance);
-        // Preserve historical live-player anchors/cooldown only for legacy slots.
+        // Simple renderers retain their live-player anchors and event cadence.
         if(player is{active:true}&&AcceptRemoteEvent(player,p.ItemId,p.EntityId,p.Event))EmitLocal(player,data,p.EntityId,p.Event,eventPosition:p.Event is "on_hit" or "on_crit"?p.Point:null,includeMaterials:false,sharedAllowance:allowance);
     }
 }

@@ -197,50 +197,7 @@ class _Builder:
             "realization": {
                 "description": f"{composition} {self.mechanic}",
                 "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
-                "selfEvaluation": {
-                    "planVsProgram": {
-                        "verdict": "aligned",
-                        "summary": "Every fixture draft action is represented by the explicit runtime program.",
-                        "actionChecks": [
-                            {
-                                "plannedIntent": f"Execute the authored {binding_action_kind(row)} action.",
-                                "implementedBehavior": f"The binding executes {binding_action_kind(row)}.",
-                                "runtimeRefs": [str(row["id"])],
-                                "result": "aligned",
-                                "intentionality": "intentional",
-                                "reason": "The fixture draft and binding were authored from the same explicit action.",
-                            }
-                            for row in self.bindings
-                        ] or [{
-                            "plannedIntent": "Execute the authored passive or event-driven behavior.",
-                            "implementedBehavior": "The runtime calls implement the passive or event-driven behavior.",
-                            "runtimeRefs": [str(self.calls[0]["id"])],
-                            "result": "aligned",
-                            "intentionality": "intentional",
-                            "reason": "The fixture directly authors the cited runtime call.",
-                        }],
-                    },
-                    "programVsReport": {
-                        "verdict": "aligned",
-                        "summary": "The fixture report describes the explicit entities, inputs, calls, and events.",
-                        "behaviorChecks": [
-                            {
-                                "runtimeRefs": [str(row["id"])],
-                                "programBehavior": f"The binding executes {binding_action_kind(row)}.",
-                                "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
-                                "result": "aligned",
-                                "reason": "The fixture report is the accepted description of this explicit binding lane.",
-                            }
-                            for row in self.bindings
-                        ] or [{
-                            "runtimeRefs": [str(self.calls[0]["id"])],
-                            "programBehavior": "The runtime call executes the passive or event-driven behavior.",
-                            "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
-                            "result": "aligned",
-                            "reason": "The fixture report covers the cited runtime call.",
-                        }],
-                    },
-                },
+                "selfEvaluation": "Optional fixture self-check; not observed execution.",
             },
             "runtimeProgram": {
                 "apiVersion": RUNTIME_PROGRAM_API_VERSION,

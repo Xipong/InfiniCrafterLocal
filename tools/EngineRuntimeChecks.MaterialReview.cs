@@ -108,11 +108,10 @@ internal static partial class EngineRuntimeChecks
             using var peers = new ReviewPeers();
             var data = ReviewProjectileData("on_spawn");
             var template = data.VfxManifest.Slots[0];
-            var path = new VfxSlotSpec { Id = "live_path", EntityId = "actor", Event = "on_spawn", RendererKind = "texturedPath", Backend = "Primitive", Duration = 3,
-                Path = new VfxTexturedPathSpec { Texture = template.Element!.Texture, Source = "anchorHistory", HistoryTicks = 8, MinDistancePx = 0, MaxSegmentLengthPx = 100,
+            var path = new VfxSlotSpec { Id = "live_path", EntityId = "actor", Event = "on_spawn", RendererKind = "texturedPath", Path = new VfxTexturedPathSpec { Texture = template.Element!.Texture, Source = "anchorHistory", HistoryTicks = 8, MinDistancePx = 0, MaxSegmentLengthPx = 100,
                     WidthPx = 8, WidthProfile = template.Element.WidthProfile, OpacityProfile = template.Element.OpacityProfile, ColorProfile = template.Element.ColorProfile,
-                    ProfileDomain = "age", UvMode = "stretch", RepeatLengthPx = 1, ScrollPxPerTick = 0 } };
-            var legacy = new VfxSlotSpec { Id = "legacy", EntityId = "actor", Event = "on_spawn", RendererKind = "impactRing", Backend = "Primitive", ParticleSystemId = "none", TextureRole = "none", Duration = 12 };
+                    ProfileDomain = "age", UvMode = "stretch", RepeatLengthPx = 1, ScrollPxPerTick = 0 }, Blend = "alpha", Layer = "BeforeProjectiles", Alpha = 1, StartTick = 0 };
+            var legacy = new VfxSlotSpec { Id = "legacy", EntityId = "actor", Event = "on_spawn", RendererKind = "impactRing", Color = Rgb(255, 255, 255), ParticleSystemId = "none", Duration = 12, Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Density = 0, Spread = 0, RepeatEvery = 0, Alpha = .65f, StartTick = 0 };
             data.VfxManifest.Slots = new[] { path, legacy }; peers.Register(data);
             peers.Mode(NetmodeID.MultiplayerClient, 2); var remote = peers.Host(data, 5);
             typeof(GeneratedProjectile).GetMethod("EmitAndSyncVfxEvent", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(remote, new object[] { "on_spawn", remote.Projectile.Center });

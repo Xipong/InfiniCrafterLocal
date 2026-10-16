@@ -76,5 +76,5 @@
     }
   ],
   "schema": "infini.low-level-delivery-proof.v1",
-  "wireSchema": "infini.runtime-program.wire.v2"
+  "wireSchema": "infini.runtime-program.wire.v3"
 }

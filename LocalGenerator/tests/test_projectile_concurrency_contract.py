@@ -88,7 +88,7 @@ def test_present_malformed_concurrency_is_refused_at_author_and_saved_wire(value
 def test_registry_concurrency_choice_reaches_actual_model_packet(monkeypatch, format_mode):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
-    request, content, _ = build_initial_author_request(parent, parent, parent, parent, "concurrency", model_name="test-model")
+    request, content, _ = build_initial_author_request(parent, parent, "concurrency", model_name="test-model")
     assert dossier_text(request) == content
     cards = json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(row for row in cards if row["fn"] == CAPABILITY)
@@ -314,7 +314,7 @@ def _assert_contact_facts(card):
 def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_transport, monkeypatch, mode, fn, leaf, bad, phrases):
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
-    _, content, _ = build_initial_author_request(parent, parent, parent, parent, "contact-facts", model_name="test-model")
+    _, content, _ = build_initial_author_request(parent, parent, "contact-facts", model_name="test-model")
     cards = {row["fn"]: row for row in json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     _assert_contact_facts(cards["set_projectile_collision"])
     assert all(term in cards["configure_spawn"]["does"] for term in ("per activation", "separate", CAPABILITY))
@@ -328,7 +328,7 @@ def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_tra
     response = copy.deepcopy(next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == fn))
     responses, requests = wire_transport
     responses.append({"callsUpsert": [response], "realizationReplacement": good["realization"], "note": "Exact contact leaf"})
-    fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, parent, parent, "contact-facts", failure_report={"stage": "validation", "errors": report["errors"]})
+    fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, "contact-facts", failure_report={"stage": "validation", "errors": report["errors"]})
     packet = request_dossier(requests[-1])
     repair_card = next(row for row in packet["existingBrokenCapabilityCards"] if row["fn"] == fn)
     assert all(term in repair_card["does"] for term in phrases)

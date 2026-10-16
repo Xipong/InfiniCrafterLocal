@@ -19,7 +19,7 @@ def test_real_author_visual_frozen_grip_repair_survives_strict_delivery(wire_tra
     author, _ = fixture()
     responses, requests = wire_transport
     responses.append(author)
-    planned = llm_authoring_pipeline.try_llm_plan({}, {}, {}, {}, "offline-hand-join")
+    planned = llm_authoring_pipeline.try_llm_plan({}, {}, "offline-hand-join")
     assert planned is not None
     compiled = compile_runtime_program(planned)
     kit = _visual_kit(compiled)
@@ -31,8 +31,8 @@ def test_real_author_visual_frozen_grip_repair_survives_strict_delivery(wire_tra
     corrected = dict(body, grip={"normalizedX": .2, "normalizedY": .6})
     responses.extend([kit, {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA,
         "itemPatch": None, "entitiesUpsert": [corrected], "entityIdsDelete": [],
-        "entityIndicesDelete": [], "animationPlan": None, "note": "selected grip only"}])
-    projected = visual.apply_visual_director(compiled, {}, {}, {}, {})
+        "entityIndicesDelete": [], "note": "selected grip only"}])
+    projected = visual.apply_visual_director(compiled, {}, {})
     delivered = sanitize_recipe_for_delivery(projected)
     assert not responses
     assert [r["_infini_stage"] for r in requests] == ["planner", "visual_director", "visual_repair"]

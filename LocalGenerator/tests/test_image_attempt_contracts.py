@@ -184,7 +184,7 @@ def test_real_plan_body_impact_must_have_distinct_publications(offline, monkeypa
     orb['visual'].update(impactPrompt='one isolated impact fixture', impactNegativePrompt='UI, text, atlas')
     body = copy.deepcopy(orb)
     body['id'] = 'orb_impact'
-    body['visual'] = {'role': 'projectile', 'assetMode': 'baked_sprite', 'prompt': 'one isolated amber body fixture', 'silhouette': 'round', 'visualIdentity': 'amber core'}
+    body['visual'] = {'role': 'projectile', 'assetMode': 'baked_sprite', 'prompt': 'one isolated amber body fixture', 'preferredCanvasSize': 32, 'renderSizePx': 24, 'forwardAngleDegrees': 0, 'silhouette': 'round', 'visualIdentity': 'amber core'}
     data['runtimeProgram']['entities'].append(body)
     data['runtimeProgram']['bindings'].append({'id': 'secondary', 'input': 'alternate_use', 'role': 'secondary', 'usePolicy': {'action': {'kind': 'spawn_entity', 'targetId': 'orb_impact'}, 'stackCost': 0, 'contactDamage': False}})
     watched = []

@@ -26,9 +26,9 @@ internal static class RuntimeChildCombat
     {
         damageOverride = null;
         knockbackOverride = null;
-        // Null is only the old saved-wire meaning. Fresh Author must select both.
-        if (damageBasis is not (null or RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
-            || knockbackBasis is not (null or RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
+        // An active child producer must select both bases explicitly.
+        if (damageBasis is not (RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
+            || knockbackBasis is not (RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
             || !float.IsFinite(damageMultiplier) || damageMultiplier < 0f || damageMultiplier > 10f)
             return false;
         if ((damageBasis == RuntimeChildCombatBasis.LiveParent || knockbackBasis == RuntimeChildCombatBasis.LiveParent)

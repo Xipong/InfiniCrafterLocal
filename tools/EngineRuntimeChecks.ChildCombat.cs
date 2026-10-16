@@ -48,6 +48,72 @@ internal static partial class EngineRuntimeChecks
         return SwarmWire(data);
     }
 
+    private static void ChildCombatCurrentWireRequiresEveryActiveChoice()
+    {
+        foreach (bool targeting in new[] { false, true })
+        {
+            var current = ChildCombatFixture(targeting);
+            string json = current.ToNetworkJson();
+            var admitted = GeneratedItemData.FromJson(json);
+            Equal(true, admitted is not null, "explicit current child combat definition admitted");
+            foreach (string field in targeting
+                ? new[] { "damageBasis", "knockbackBasis", "damageMultiplier" }
+                : new[] { "damageBasis", "knockbackBasis" })
+            {
+                var document = JsonNode.Parse(json)!.AsObject();
+                var parent = document["runtimeProgram"]!["entities"]!.AsArray()
+                    .Single(e => (string?)e!["id"] == "root")!;
+                var component = targeting ? parent["targeting"]!.AsObject() : parent["events"]![0]!.AsObject();
+                Equal(true, component.Remove(field), "positive control contains " + field);
+                Equal(true, GeneratedItemData.FromJson(document.ToJsonString()) is null,
+                    "active child producer refuses missing " + field);
+            }
+        }
+        var inactive = new RuntimeTargetingSpec();
+        inactive.Normalize();
+        Equal(true, inactive.DamageBasis is null && inactive.KnockbackBasis is null
+            && inactive.DamageMultiplier is null, "inactive targeting placeholder does not acquire authored choices");
+        var neutral = ChildCombatFixture(targeting: true);
+        var shot = neutral.RuntimeProgram.TryGetEntity("root")!.Targeting;
+        Equal(true, shot.Count is null && shot.SpreadRadians is null && shot.TargetPolicy is null
+            && shot.RequireLineOfSight is null && shot.HardRange is null,
+            "declared optional targeting neutral omissions remain absent");
+        Equal(true, GeneratedItemData.FromJson(neutral.ToNetworkJson()) is not null,
+            "current explicit combat accepts optional targeting omissions");
+    }
+
+    private static void ChildCombatConsumerRefusesAbsentChoicesBeforeBudgetAdmission()
+    {
+        foreach (bool missingDamage in new[] { false, true })
+        {
+            string? damageBasis = missingDamage ? null : RuntimeChildCombatBasis.AuthoredChild;
+            string? knockbackBasis = missingDamage ? RuntimeChildCombatBasis.AuthoredChild : null;
+            Equal(false, RuntimeChildCombat.TryResolve(damageBasis, knockbackBasis, 1f,
+                new RuntimeParentCombat(137, 7.25f, true), out _, out _),
+                "missing basis cannot select authored child stats");
+        }
+        using var scope = new SwarmRuntimeScope();
+        var data = ChildCombatFixture(targeting: true);
+        var parent = data.RuntimeProgram.TryGetEntity("root")!;
+        var generated = SwarmHost(data, parent, damage: 137, knockback: 7.25f);
+        // A native technical placeholder is not an authored active shot component.
+        parent.Targeting = new RuntimeTargetingSpec {
+            ShotEntityId = "child", IntervalTicks = 6, RangeTiles = 20,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild,
+            KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild,
+        };
+        var npc = Terraria.Main.npc[0]; npc.SetDefaults(NPCID.BlueSlime); npc.active = true;
+        npc.Center = generated.Projectile.Center + new Vector2(64, 0);
+        var budget = (RuntimeSpawnBudget)typeof(GeneratedProjectile)
+            .GetField("_activationSpawnBudget", RootPrivate)!.GetValue(generated)!;
+        int before = budget.Remaining;
+        typeof(GeneratedProjectile).GetField("_controllerTimer", RootPrivate)!.SetValue(generated, 5);
+        Equal(false, ObserveChildCombatBoundary(() => typeof(GeneratedProjectile)
+            .GetMethod("ApplyTargetAndFire", RootPrivate)!.Invoke(generated, null), generated.Projectile, 23, 2.5f),
+            "missing targeting multiplier cannot default to one and emit a child");
+        Equal(before, budget.Remaining, "missing combat choice does not reserve spawn budget");
+    }
+
     private static void InvokeChildCombatEvent(GeneratedProjectile parent, string eventName, int damageDone = 1)
         => typeof(GeneratedProjectile).GetMethod("RunRuntimeEvent", RootPrivate)!
             .Invoke(parent, new object?[] { eventName, null, damageDone });

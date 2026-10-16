@@ -113,7 +113,6 @@ def real_route():
         world_scope_missing=recipes.WorldScopeMissing,
         visual_delivery_blocked=VisualDeliveryBlocked,
         planner_unavailable=PlannerUnavailable,
-        last_combine_failure_summary=generation_debug.last_combine_failure_summary,
         clear_combine_failure=generation_debug.clear_combine_failure,
         combine_failure_http_response=helpers._combine_failure_http_response,
         combine_failure_payload=helpers._combine_failure_payload,
@@ -144,7 +143,7 @@ def valid_cached_recipe(tmp_path, monkeypatch):
     good = deliverable_recipe(tmp_path, monkeypatch, manifest_key="read-error-test")
     key, _ = pipeline.combine_cache_lookup(PAYLOAD)
     target = recipes.world_recipe_file(PAYLOAD["worldId"], key)
-    world_storage.atomic_write_json(target, good)
+    recipes.cache_put(key, PAYLOAD["itemA"], PAYLOAD["itemB"], good, PAYLOAD["worldId"])
     return target, good
 
 
@@ -289,7 +288,6 @@ def test_endpoint_never_attaches_unjoined_global_failure(monkeypatch):
                 combine=lambda _: (_ for _ in ()).throw(error),
                 json=lambda _: None,
                 json_status=lambda *_: None,
-                last_failure_summary=lambda: pytest.fail('global summary cannot identify this request'),
             ),
         )
     assert caught.value._infini_failure_snapshot == {}

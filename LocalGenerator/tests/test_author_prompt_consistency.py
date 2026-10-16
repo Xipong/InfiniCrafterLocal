@@ -38,7 +38,7 @@ def test_serialized_initial_packet_preserves_registry_and_source_without_repeate
     parents = ({"name": "Native source", "useAmmo": 97},
                {"name": "Generated source", "generatedData": compile_runtime_program(build_capability_witness("configure_weapon_ammo"))})
     before = deepcopy(parents)
-    request, user, system = author.build_initial_author_request(*parents, {}, {}, "consistency", model_name="offline")
+    request, user, system = author.build_initial_author_request(*parents, "consistency", model_name="offline")
     assert dossier_text(request) == user
     assert (request["response_format"] or {}).get("type") == (None if mode == "off" else mode)
     packet = json.loads(user)

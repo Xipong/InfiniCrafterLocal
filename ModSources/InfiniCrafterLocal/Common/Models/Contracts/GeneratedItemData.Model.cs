@@ -13,8 +13,9 @@ using Terraria.ID;
 namespace InfiniCrafterLocal.Common.Models;
 
 // AGENT MAP: game-facing wire/cache/runtime DTO.
-// Python may preserve extra/future data, but C# executes only explicit supported
-// sub-specs below (Gameplay, Accessory, Armor, RuntimeProgram, Visual, VfxManifest).
+// Python and C# admit the same explicit current item envelope; stage-only
+// runtimeContract/visualKit are removed by Python's delivery projection.
+// C# executes only the supported sub-specs below.
 // Adding a property here is not enough: wire it through Normalize,
 // Apply, runtime executors, tests, and docs before treating it as gameplay.
 public sealed partial class GeneratedItemData
@@ -31,12 +32,8 @@ public sealed partial class GeneratedItemData
     public string SourceMode { get; set; } = "generated"; // generated, vanilla_match, fallback
 
     public string[] Tags { get; set; } = Array.Empty<string>();
-    public CanonicalSpec Canonical { get; set; } = new();
-    public SourceRepresentationSpec[] SourceRepresentation { get; set; } = Array.Empty<SourceRepresentationSpec>();
-    public InheritanceSpec[] Inheritance { get; set; } = Array.Empty<InheritanceSpec>();
-    public LossBudgetSpec LossBudget { get; set; } = new();
     public RecipeMetaSpec RecipeMeta { get; set; } = new();
-    public ItemKnowledgeSpec ItemKnowledge { get; set; } = new();
+
     public GeneratedParentSummarySpec GeneratedParentSummary { get; set; } = new();
 
     public GameplaySpec Gameplay { get; set; } = new();
@@ -46,60 +43,26 @@ public sealed partial class GeneratedItemData
     public VisualSpec Visual { get; set; } = new();
     public VfxManifestSpec VfxManifest { get; set; } = new();
 
-
     public Dictionary<string, JsonElement> Debug { get; set; } = new();
 
-    // Preserve non-executable diagnostics such as recipeHealth and contractVersions.
-    // Retired executable shapes are explicitly rejected during Normalize.
-    [JsonExtensionData]
-    public Dictionary<string, JsonElement> ExtensionData { get; set; } = new();
+    // Exact current Python sidecars. They are advisory/diagnostic, never gameplay
+    // authority; the root remains closed to unknown or retired contract fields.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Concept { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? Realization { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? LlmStageAccounting { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? ContractVersions { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonElement? RecipeHealth { get; set; }
 
 }
 
 // =============================================================================
 // NAV: GENERATED_ITEM_SUBSPECS
 // =============================================================================
-public sealed class CanonicalSpec
-{
-    public string HeadNoun { get; set; } = "item";
-    public string[] Modifiers { get; set; } = Array.Empty<string>();
-    public string Material { get; set; } = "";
-    public string Class { get; set; } = "generic";
-    public string[] ShapeAnchors { get; set; } = Array.Empty<string>();
-    public string[] VisualAnchors { get; set; } = Array.Empty<string>();
-    public string[] HardTags { get; set; } = Array.Empty<string>();
-    public string[] SoftTags { get; set; } = Array.Empty<string>();
-}
-
-public sealed class SourceRepresentationSpec
-{
-    public string Parent { get; set; } = "Unknown";
-    public string Mode { get; set; } = "visual"; // visual, gameplay, semantic, discarded
-    public string Importance { get; set; } = "secondary";
-    public string VisualAnchor { get; set; } = "";
-    public string Placement { get; set; } = "";
-    public string Rationale { get; set; } = "";
-}
-
-public sealed class InheritanceSpec
-{
-    public string Parent { get; set; } = "Unknown";
-    public string Role { get; set; } = "influence"; // base_shape, material, attachment, effect, semantic, function
-    public string[] PreservedFeatures { get; set; } = Array.Empty<string>();
-    public string[] VisualAnchors { get; set; } = Array.Empty<string>();
-    public string[] GameplayAnchors { get; set; } = Array.Empty<string>();
-    public string LossPolicy { get; set; } = "preserve_hard_tags";
-}
-
-public sealed class LossBudgetSpec
-{
-    public int RequiredParentPresence { get; set; } = 2;
-    public int MaxDroppedHardTags { get; set; } = 0;
-    public bool MustPreserveHeadNounFromAtLeastOneParent { get; set; } = true;
-    public bool MustPreserveMaterialIfPresent { get; set; } = true;
-    public float MinPreservationScore { get; set; } = 0.65f;
-}
-
 public sealed class RecipeMetaSpec
 {
     public bool UniversalRecipe { get; set; } = true;
@@ -119,33 +82,6 @@ public sealed class RecipeMetaSpec
     public string[] AssetFiles { get; set; } = Array.Empty<string>();
 }
 
-
-public sealed class ItemKnowledgeSpec
-{
-    public bool Enabled { get; set; } = true;
-    public ParentItemCardSpec[] Parents { get; set; } = Array.Empty<ParentItemCardSpec>();
-    public ParentItemCardSpec ResultCard { get; set; } = new();
-    public string StrongestTier { get; set; } = "unknown";
-    public float StrongestPowerScore { get; set; } = 0f;
-    public string StrongestSourceHint { get; set; } = "";
-    public string StrongestMaterialTier { get; set; } = "";
-    public float StrongestMaterialPowerScore { get; set; } = 0f;
-    public string[] TagsFromKnowledge { get; set; } = Array.Empty<string>();
-}
-
-public sealed class ParentItemCardSpec
-{
-    public string Name { get; set; } = "Unknown";
-    public string Identity { get; set; } = "";
-    public string Category { get; set; } = "generic";
-    public string Tier { get; set; } = "unknown";
-    public float PowerScore { get; set; } = 0f;
-    public float Confidence { get; set; } = 0f;
-    public string SourceHint { get; set; } = "";
-    public string[] Tags { get; set; } = Array.Empty<string>();
-    public int GeneratedDepth { get; set; } = 0;
-}
-
 public sealed class GeneratedParentSummarySpec
 {
     public const string CurrentSchema = "infini.generated-parent-summary.v2";
@@ -155,22 +91,12 @@ public sealed class GeneratedParentSummarySpec
     public string Identity { get; set; } = "";
     public string Description { get; set; } = "";
     public string PlayerExperience { get; set; } = "";
-    public string[] NotableEffects { get; set; } = Array.Empty<string>();
-    public string RuntimePrimaryEntityId { get; set; } = "";
-    public string[] RuntimeEntityIds { get; set; } = Array.Empty<string>();
 
     private static string Bounded(string? value, int maxLength)
     {
         string text = (value ?? "").Trim();
         return text.Length <= maxLength ? text : text[..maxLength];
     }
-
-    private static string[] BoundedArray(string[]? values, int maxItems, int maxLength)
-        => (values ?? Array.Empty<string>())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => Bounded(x, maxLength))
-            .Take(maxItems)
-            .ToArray();
 
     private static string BoundedReport(string? value, int maxScalars)
     {
@@ -196,17 +122,9 @@ public sealed class GeneratedParentSummarySpec
         Identity = Bounded(Identity, 180);
         Description = BoundedReport(Description, 4000);
         PlayerExperience = BoundedReport(PlayerExperience, 3000);
-        // These are copied Author behavior reports with the same code-point bound.
-        NotableEffects = (NotableEffects ?? Array.Empty<string>())
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Select(x => BoundedReport(x, 1000))
-            .Take(12)
-            .ToArray();
-        RuntimePrimaryEntityId = Bounded(RuntimePrimaryEntityId, 48);
-        RuntimeEntityIds = BoundedArray(RuntimeEntityIds, 24, 48);
+
     }
 }
-
 
 public sealed class GeneratedBuffSpec
 {
@@ -274,8 +192,6 @@ public sealed class GeneratedBuffExhaustionTicksConverter : JsonConverter<int?>
 public sealed class GameplaySpec : IItemEffectsSpec
 {
     public string Kind { get; set; } = "generic"; // weapon, potion, accessory, furniture, material, generic
-    public string Stage { get; set; } = "early";
-    public float PowerBudget { get; set; } = 1f;
     public string DamageClass { get; set; } = "generic";
     public int Damage { get; set; } = 0;
     public float Knockback { get; set; } = 2f;
@@ -359,7 +275,6 @@ public sealed class AccessorySpec
         set => _rocketBoots = value is >= 0 and <= 5 ? value
             : throw new System.IO.InvalidDataException("rocketBoots requires native mode 0..5");
     }
-    public string Archetype { get; set; } = "generic"; // Legacy metadata only; never selects an equipment effect.
     public int Defense { get; set; } = 0;
     public int MaxLife { get; set; } = 0;
     public int MaxMana { get; set; } = 0;
@@ -404,7 +319,6 @@ public sealed class ArmorSpec
     public bool Enabled { get; set; } = false;
     public string Slot { get; set; } = ""; // head, body, legs; required when enabled
     public string SetKey { get; set; } = "";
-    public string Archetype { get; set; } = "hybrid";
     public int Defense { get; set; } = 0;
     public int MaxLife { get; set; } = 0;
     public int MaxMana { get; set; } = 0;
@@ -462,7 +376,6 @@ public sealed class ArmorSpec
         || WhipRange != 0f || SummonTagDamage != 0f || LightStrength != 0f;
 }
 
-
 // =============================================================================
 // NAV: ATTACK_SPEC_CONTRACT
 // =============================================================================
@@ -501,13 +414,6 @@ public sealed class VisualSpec
 
     private ItemGripSpec? grip;
     private string? accessoryMount;
-    private string? effectColor;
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? EffectColor
-    {
-        get => effectColor;
-        set => effectColor = RuntimeColorPolicy.RequireRenderingToken(value);
-    }
     // Omission keeps historical presentation; explicit null is not an authored choice.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public ItemGripSpec? Grip
@@ -522,9 +428,6 @@ public sealed class VisualSpec
         set => accessoryMount = value is "chest" or "back" or "waist" or "shoulder" or "orbit"
             ? value : throw new System.IO.InvalidDataException("visual.accessoryMount must be chest/back/waist/shoulder/orbit when present");
     }
-    public string ObjectType { get; set; } = "generic_item";
-    public string Style { get; set; } = "terraria_item_sprite";
-    public string[] RequiredAnchors { get; set; } = Array.Empty<string>();
     public string[] Palette { get; set; } = Array.Empty<string>();
     public string ImagePrompt { get; set; } = "small pixel art item icon, solid magenta key background";
     public string EquipOverlayPrompt { get; set; } = "";
@@ -538,20 +441,10 @@ public sealed class VisualSpec
     public string EquipOverlayPath { get; set; } = "";
     public string EquipOverlayUrl { get; set; } = "";
     public float EquipOverlayScore { get; set; } = 0f;
-    public float PreservationScore { get; set; } = 0f;
     public float SpriteTechnicalScore { get; set; } = 0f;
-    public string SemanticReviewStatus { get; set; } = "not_performed";
     public int PreferredCanvasSize { get; set; } = 32;
     public float InventoryScale { get; set; } = 1f;
     public float WorldScale { get; set; } = 1f;
     public int DrawOffsetX { get; set; } = 0;
     public int DrawOffsetY { get; set; } = 0;
-    public string VisualSoulSignature { get; set; } = "";
-    public string VisualSoulArchetype { get; set; } = "quiet";
-    public string DominantColorHex { get; set; } = "#ffffff";
-    public string AccentColorHex { get; set; } = "#ffffff";
-    public float VisualSoulGlow { get; set; } = 0f;
-    public float VisualSoulPulse { get; set; } = 0f;
-    public float VisualSoulCoverage { get; set; } = 0f;
-    public float VisualSoulEdgeDensity { get; set; } = 0f;
 }

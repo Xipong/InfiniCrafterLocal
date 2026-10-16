@@ -541,7 +541,7 @@ def test_binding_atomic_transaction_requires_exact_identity(attempt):
         assert filtered["bindingsUpsert"] != [candidate]
 
 
-@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose" and cap.provider_variant_schema()["properties"].get("params", {}).get("required", [])])
+@pytest.mark.parametrize("fn", [fn for fn, cap in CAPABILITY_REGISTRY.items() if cap.provider_variant_schema()["properties"].get("params", {}).get("required", [])])
 def test_registry_discriminator_reports_own_missing_fields(fn):
     variants = {name: cap.provider_variant_schema() for name, cap in CAPABILITY_REGISTRY.items()}
     required = variants[fn]["properties"]["params"]["required"]

@@ -291,7 +291,7 @@ def test_item_effects_require_their_executable_binding(fn):
     [
         fn
         for fn, cap in CAPABILITY_REGISTRY.items()
-        if cap.category == "event" and cap.prompt_visible and cap.decision == "expose"
+        if cap.category == "event"
         and "delayTicks" in cap.params and fn != "spawn_entity_on_event"
     ],
 )

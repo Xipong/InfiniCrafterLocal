@@ -89,7 +89,7 @@ def test_real_author_packet_and_nullable_inverse_preserve_full_emission_choice(w
                stepCount=12, stepRangeTiles=59.99999999999999, initialIgnoreCountdownUpdates=0, delayTicks=1)
     payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if mode == "json_schema" else doc
     responses.append(payload)
-    result = author.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "explicit links")
+    result = author.try_llm_plan({"name": "A"}, {"name": "B"}, "explicit links")
     assert result is not None
     assert len(requests) == 1
     request = requests[0]
@@ -341,7 +341,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     responses, requests = wire_transport
     payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
     responses.append(payload)
-    accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, {}, {}, "combined-offline")
+    accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, "combined-offline")
     assert accepted is not None and len(requests) == 1 and not responses
     request = requests[0]
     assert request["response_format"]["type"] == format_mode

@@ -51,18 +51,21 @@ internal static partial class EngineRuntimeChecks
                         new RuntimeEventActionSpec { Id = "immediate", Event = RuntimeEventKind.Periodic,
                             ActionCode = RuntimeEventActionCode.Pull, PeriodTicks = 6, Mode = "target_to_point", RadiusTiles = 4, Strength = 0.5f },
                         new RuntimeEventActionSpec { Id = "delayed_a", Event = RuntimeEventKind.Periodic,
-                            ActionCode = RuntimeEventActionCode.SpawnEntity, PeriodTicks = 6, DelayTicks = 2, Count = 1 },
+                            ActionCode = RuntimeEventActionCode.SpawnEntity,
+                            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, PeriodTicks = 6, DelayTicks = 2, Count = 1 },
                         new RuntimeEventActionSpec { Id = "delayed_b", Event = RuntimeEventKind.Periodic,
-                            ActionCode = RuntimeEventActionCode.SpawnEntity, PeriodTicks = 6, DelayTicks = 3, Count = 1 },
+                            ActionCode = RuntimeEventActionCode.SpawnEntity,
+                            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, PeriodTicks = 6, DelayTicks = 3, Count = 1 },
                         new RuntimeEventActionSpec { Id = "delayed_c", Event = RuntimeEventKind.Periodic,
-                            ActionCode = RuntimeEventActionCode.SpawnEntity, PeriodTicks = 12, DelayTicks = 4, Count = 1 },
+                            ActionCode = RuntimeEventActionCode.SpawnEntity,
+                            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild, PeriodTicks = 12, DelayTicks = 4, Count = 1 },
                     } : Array.Empty<RuntimeEventActionSpec>();
                     var data = GeneratedItemData.Placeholder(); data.RuntimeProgram.Entities = new[] { entity };
                     data.VfxManifest.Slots = new[] {
                         new VfxSlotSpec { Id = "periodic_shape", EntityId = entity.Id, Event = RuntimeEventKind.Periodic,
-                            RendererKind = "impactRing", ParticleSystemId = "none", RepeatEvery = 5, StartTick = 0, SlotSeed = 0 },
+                            RendererKind = "impactRing", Color = Rgb(255, 255, 255), ParticleSystemId = "none", RepeatEvery = 5, StartTick = 0, SlotSeed = 0, Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Density = 0, Spread = 0, Duration = 10, Alpha = .65f },
                         new VfxSlotSpec { Id = "periodic_light", EntityId = entity.Id, Event = RuntimeEventKind.Periodic,
-                            RendererKind = "lightCue", ParticleSystemId = "none", RepeatEvery = 5, StartTick = 0, SlotSeed = 0 },
+                            RendererKind = "lightCue", Color = Rgb(255, 255, 255), RepeatEvery = 5, StartTick = 0, SlotSeed = 0, Scale = 1, },
                     };
                     var projectile = new Projectile { active = true, owner = 0, Center = new Vector2(160f), damage = 100 };
                     var generated = Attach(projectile); generated.Configure(data, entity, 0, 8, Vector2.UnitX);
@@ -91,7 +94,7 @@ internal static partial class EngineRuntimeChecks
                     // Exact event lanes remain independent after removing only the periodic relay.
                     data.VfxManifest.Slots = new[] { RuntimeEventKind.OnHit, RuntimeEventKind.OnCrit,
                         RuntimeEventKind.OnExpire, RuntimeEventKind.OnKill }.Select(ev => new VfxSlotSpec {
-                            Id = ev, EntityId = entity.Id, Event = ev, RendererKind = "impactRing", ParticleSystemId = "none" }).ToArray();
+                            Id = ev, EntityId = entity.Id, Event = ev, RendererKind = "impactRing", Color = Rgb(255, 255, 255), ParticleSystemId = "none", Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Density = 0, Spread = 0, Duration = 10, RepeatEvery = 0, Alpha = .65f, StartTick = 0 }).ToArray();
                     clock.SetValue(null, 13u);
                     generated.OnHitNPC(npc, new NPC.HitInfo { Crit = true }, 1);
                     Equal(2, queue.Count, "actual critical hit keeps both hit and crit presentation");
@@ -122,14 +125,14 @@ internal static partial class EngineRuntimeChecks
                 string entity = data.RuntimeProgram.ItemEntityId;
                 data.VfxManifest = LightManifest(entity, RuntimeEventKind.Periodic);
                 var slot = data.VfxManifest.Slots[0];
-                slot.StartTick = 5; slot.RepeatEvery = 3; slot.SlotSeed = 0;
+                slot.RepeatEvery = 3; slot.SlotSeed = 0;
                 for (uint tick = 0; tick < 10; tick++)
                 {
                     clock.SetValue(null, tick); lights.Clear();
                     InfiniItemVfxRuntime.OnPeriodic(player, data, entity);
-                    Equal(tick % 3 == 0 ? 1 : 0, lights.Count, "item world-clock cadence ignores projectile-only StartTick tick=" + tick);
+                    Equal(tick % 3 == 0 ? 1 : 0, lights.Count, "item world-clock cadence requires no projectile-only StartTick tick=" + tick);
                 }
-                slot.Event = RuntimeEventKind.OnUse;
+                data.VfxManifest = LightManifest(entity, RuntimeEventKind.OnUse);
                 clock.SetValue(null, 0u); lights.Clear();
                 InfiniItemVfxRuntime.EmitAndSyncEvent(player, data, entity, RuntimeEventKind.OnUse);
                 Equal(1, lights.Count, "nonperiodic event is not filtered by periodic cadence");

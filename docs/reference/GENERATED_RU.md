@@ -20,6 +20,21 @@ python tools/validate_release.py --refresh runtime
 
 Команда вызывает существующие schema, bounds, parity, Lowery, inventory и audit producers, затем обновляет офлайн-книгу. Для настроек — `--refresh config`; только для документации — `--refresh docs`. Сами producers по-прежнему доступны отдельно для точечной работы. Проверка всех производных артефактов без записи: `python tools/validate_release.py --group static`.
 
+Для scoped docs/schema-only задачи без записи native generated bounds можно запускать producers отдельно:
+
+```bash
+python tools/export_contract_schemas.py
+python tools/generate_primitive_parity.py
+python tools/generate_lowery.py
+python tools/generate_low_level_runtime_docs.py
+python tools/audit_targeted_repair.py --output contracts/targeted_repair_audit.generated.json
+python tools/audit_terraria_standardization.py --write
+python tools/config_registry.py
+python tools/build_documentation.py
+```
+
+После записи выполнить соответствующие `--check`; `build_documentation.py --check` проверяет также все local links/anchors встроенной книги. Native bounds проверяются отдельно `generate_equipment_bounds.py --check`, не перезаписываются в docs-only scope. Исторические `contracts/reports/` receipts не перегенерируются как нынешний PASS.
+
 ## Источники
 
 - [capability_registry.py](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — операции, параметры, единицы и ограничения.

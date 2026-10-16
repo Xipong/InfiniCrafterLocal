@@ -22,12 +22,9 @@ def cache_record(tmp_path, monkeypatch):
     monkeypatch.setattr(visual_delivery_gate, "WORLD_RECIPES_DIR", root)
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path / "sprites")
     data = _sample_data()
+    data["visual"] = {"preferredCanvasSize": 32}
     hydrate_no_image_fixture_assets(data, write_no_image_fixture_png(tmp_path / "sprites" / "offline.png"))
-    data["vfxManifest"] = _compile_manifest(data, {
-        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
-        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
-                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0}, "slots": [],
-    }, "offline-cache-admission")
+    data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "offline-cache-admission")
     assert world_storage.is_deliverable_recipe_payload(data)
     assert combine_pipeline._cached_payload_report(data)["ok"]
     request = {
@@ -119,7 +116,7 @@ def test_default_debug_reroll_refuses_unsupported_runtime_before_vfx_stage(cache
         stages.append("vfx")
         raise AssertionError("default debug path started VFX for non-admitted runtime")
 
-    monkeypatch.setattr(vfx_debug_routes, "attach_hybrid_vfx_manifest", forbidden_stage)
+    monkeypatch.setattr(vfx_debug_routes, "attach_vfx_manifest", forbidden_stage)
     routes = vfx_debug_routes.VfxDebugRoutes(
         app_version="storage-regression",
         normalize_world_id_from_payload=world_recipe_runtime.normalize_world_id_from_payload,
@@ -190,7 +187,7 @@ def test_explicit_invalid_identity_is_not_historical_absence(cache_record, field
 
 
 @pytest.mark.parametrize("omitted", ["recipeKey", "worldId", "recipeMeta", "all-metadata"])
-def test_historical_metadata_absence_preserves_authored_payload_and_disk(cache_record, omitted):
+def test_missing_current_cache_scope_is_refused_without_guessing_identity(cache_record, omitted):
     _, request, key, path, data = cache_record
     if omitted in {"recipeKey", "all-metadata"}:
         data.pop("recipeKey")
@@ -210,12 +207,28 @@ def test_historical_metadata_absence_preserves_authored_payload_and_disk(cache_r
 
     delivered = world_recipe_runtime.read_world_recipe_cache(key, request["worldId"], validate_payload=caller)
 
-    assert delivered is not None and snapshots == [delivered]
-    for field in ("runtimeProgram", "vfxManifest", "visual", "parentA", "parentB", "id", "name"):
-        assert delivered[field] == data[field]
+    assert delivered is None and snapshots == []
+    receipt = _assert_whole_record_quarantine(path, raw, "cache_identity_mismatch")
+    expected = {}
+    if omitted in {"recipeKey", "all-metadata"}:
+        expected["recipeKey"] = {"expected": key, "stored": None}
+    if omitted in {"worldId", "recipeMeta", "all-metadata"}:
+        expected["recipeMeta.worldId"] = {"expected": request["worldId"], "stored": None}
+    assert receipt["details"]["identityMismatches"] == expected
+    assert _cache_only_endpoint(request)[0] == 404
+
+
+def test_current_writer_supplies_exact_cache_scope_and_reader_preserves_bytes(cache_record):
+    _, request, key, path, committed = cache_record
+    raw = path.read_bytes()
+    assert committed["recipeKey"] == key
+    assert committed["recipeMeta"]["worldId"] == request["worldId"]
+    delivered = world_recipe_runtime.read_world_recipe_cache(key, request["worldId"])
+    assert delivered is not None
+    assert delivered["recipeKey"] == key
     assert delivered["recipeMeta"]["worldId"] == request["worldId"]
-    assert delivered["recipeMeta"]["worldScoped"] is True
-    assert ("recipeKey" in delivered) is ("recipeKey" in data), "reader guessed absent recipe identity"
+    for field in ("runtimeProgram", "vfxManifest", "visual", "parentA", "parentB", "id", "name"):
+        assert delivered[field] == committed[field]
     assert path.read_bytes() == raw
     assert not (path.parent.parent / "invalid").exists()
     assert _cache_only_endpoint(request)[0] == 200
@@ -289,7 +302,7 @@ def test_default_debug_positive_control_uses_admitted_gameplay(cache_record, mon
         observed.append(copy.deepcopy(admitted))
         return admitted  # identity-only offline stage, no model or generation
 
-    monkeypatch.setattr(vfx_debug_routes, "attach_hybrid_vfx_manifest", offline_vfx_stage)
+    monkeypatch.setattr(vfx_debug_routes, "attach_vfx_manifest", offline_vfx_stage)
     routes = vfx_debug_routes.VfxDebugRoutes(
         app_version="storage-regression",
         normalize_world_id_from_payload=world_recipe_runtime.normalize_world_id_from_payload,
@@ -307,33 +320,44 @@ def test_default_debug_positive_control_uses_admitted_gameplay(cache_record, mon
     assert _cache_only_endpoint(request)[0] == 200
 
 
-def test_historical_no_image_policy_does_not_relax_strict_combine(cache_record):
-    _, request, key, path, data = cache_record
-    # Existing storage-only historical policy: no assets declaration, no VFX PNG
-    # dependencies and no present PNG consumers. Fresh/combine visual delivery
-    # still requires the authored item PNG; absence is not a repair.
-    from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA
+def test_unknown_root_cannot_be_cached_or_replayed(cache_record):
+    _, request, key, path, good = cache_record
+    assert _cache_only_endpoint(request)[0] == 200
+    corrupt = copy.deepcopy(good)
+    corrupt["unexpectedRoot"] = {"value": "unrecognized"}
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="non-deliverable"):
+        world_recipe_runtime.cache_put(key, request["itemA"], request["itemB"], corrupt, request["worldId"])
+    assert path.read_bytes() == original
+    world_storage.atomic_write_json(path, corrupt)
+    raw = path.read_bytes()
+    assert not combine_pipeline._cached_payload_report(corrupt)["ok"]
+    assert _cache_only_endpoint(request)[0] == 404
+    _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
 
-    data["vfxManifest"] = {"schema": VFX_MANIFEST_SCHEMA, "slots": []}
+
+def test_no_image_record_is_refused_by_both_storage_and_strict_combine(cache_record):
+    _, request, key, path, data = cache_record
+    # No-assets/no-VFX-PNG is not permission to omit the required item PNG.
+    # This explicitly corrupt durable witness must be refused, never completed.
+    from infini_local.core.vfx_manifest import _compile_manifest
+
+    data["vfxManifest"] = _compile_manifest(data, {"slots": []}, key)
     data.pop("visual", None)
     for entity in data["runtimeProgram"]["entities"]:
         for field in ("spritePath", "spriteUrl", "spriteStatus"):
             entity["visual"].pop(field, None)
-    assert world_storage.is_deliverable_recipe_payload(data)
+    assert not world_storage.is_deliverable_recipe_payload(data)
     assert not combine_pipeline._cached_payload_report(data)["ok"]
     world_storage.atomic_write_json(path, data)
     raw = path.read_bytes()
 
     delivered = world_recipe_runtime.read_world_recipe_cache(key, request["worldId"])
 
-    assert delivered is not None
-    assert delivered["runtimeProgram"] == data["runtimeProgram"]
-    assert delivered["vfxManifest"] == data["vfxManifest"]
-    assert path.read_bytes() == raw
-    assert _cache_only_endpoint(request)[0] == 404
+    assert delivered is None
     receipt = _assert_whole_record_quarantine(path, raw, "low_level_runtime_contract_invalid")
-    assert receipt["details"]["runtimeReady"] is True and receipt["details"]["assetsReady"] is True
-    assert receipt["details"]["errors"], "strict combine visual refusal was lost"
+    assert receipt["details"]["runtimeReady"] is True and receipt["details"]["assetsReady"] is False
+    assert _cache_only_endpoint(request)[0] == 404
 
 
 @pytest.mark.parametrize(("raw", "component"), [

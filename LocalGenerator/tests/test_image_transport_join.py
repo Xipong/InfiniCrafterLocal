@@ -182,7 +182,7 @@ def test_concurrent_identical_prompts_keep_invocation_and_variant_joins_separate
         asset_id = "shared-asset" if same_asset else f"literal-asset-{index}"
         image_request = request(asset_id=asset_id)
         if not required_vfx:
-            image_request = replace(image_request, policy=visual._PublicationPolicy.LEGACY_ASSET)
+            image_request = replace(image_request, policy=visual._PublicationPolicy.RUNTIME_ASSET)
         return execute(image_request)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -281,7 +281,7 @@ def test_semantic_retry_binds_actual_attempt_before_filename_truncation(recordin
         logical_asset_id=asset_id, audit_role="runtime:child_projectile", processing_role="runtime:child_projectile",
         prompt="same authored fixture prompt", negative="avoid text", canvas=32,
         topology="", part_count_min=0, part_count_max=0,
-        policy=visual._PublicationPolicy.LEGACY_ASSET, publication_identity=b"fixture",
+        policy=visual._PublicationPolicy.RUNTIME_ASSET, publication_identity=b"fixture",
     )
     result = execute(image_request)
     assert result.status == "generated", result

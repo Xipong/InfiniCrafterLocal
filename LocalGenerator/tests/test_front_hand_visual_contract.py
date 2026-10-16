@@ -34,7 +34,7 @@ def test_distinct_grip_survives_fresh_director_and_delivery(wire_transport):
     before = copy.deepcopy(data)
     responses, requests = wire_transport
     responses.append(raw)
-    projected = visual.apply_visual_director(data, {}, {}, {}, {})
+    projected = visual.apply_visual_director(data, {}, {})
     delivered = sanitize_recipe_for_delivery(projected)
     entity = next(row for row in delivered["runtimeProgram"]["entities"] if row["id"] == "chained_door")
     assert entity["visual"]["grip"] == ENTITY_GRIP
@@ -74,7 +74,7 @@ def test_missing_selected_grip_repairs_only_that_owner(wire_transport, mode):
                  animationPlan="hostile animation", note="only selected grip")
     responses, requests = wire_transport
     responses.extend([raw, patch])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+    result = visual.apply_visual_director(data, {}, {})
     assert len(requests) == 2 and not responses
     scope = request_dossier(requests[1])["repairScope"]
     expected = copy.deepcopy(before)
@@ -120,8 +120,8 @@ def test_director_and_frozen_repair_packets_explain_exact_hand_dependencies(wire
     responses, requests = wire_transport
     responses.extend([raw, dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
                                itemPatch={"grip": ROOT_GRIP}, entitiesUpsert=[], entityIdsDelete=[],
-                               entityIndicesDelete=[], animationPlan=None, note="missing root grip")])
-    visual.apply_visual_director(data, {}, {}, {}, {})
+                               entityIndicesDelete=[], note="missing root grip")])
+    visual.apply_visual_director(data, {}, {})
     for request, key in zip(requests, ("runtimeEntities", "runtimeEntitiesReadOnly")):
         assert request["response_format"]["type"] == format_name
         packet = request_dossier(request)
@@ -167,7 +167,7 @@ def test_non_png_hand_modes_do_not_require_grip(wire_transport, mode):
     data, raw = _hand_input(mode)
     responses, requests = wire_transport
     responses.append(raw)
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+    result = visual.apply_visual_director(data, {}, {})
     assert not front_hand_sprite_errors(result)
     assert "grip" not in result["visual"]
     assert "grip" not in result["runtimeProgram"]["entities"][1]["visual"]
@@ -213,8 +213,8 @@ def test_partial_distinct_grip_repair_preserves_valid_coordinate(wire_transport)
     responses, requests = wire_transport
     responses.extend([raw, dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,
                                itemPatch=None, entitiesUpsert=[corrected], entityIdsDelete=[],
-                               entityIndicesDelete=[], animationPlan=None, note="Y only")])
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+                               entityIndicesDelete=[], note="Y only")])
+    result = visual.apply_visual_director(data, {}, {})
     assert result["visualKit"]["entities"][1]["grip"] == ENTITY_GRIP
     assert request_dossier(requests[1])["repairScope"]["fieldPermissions"]["entities"] == [
         {"entityId": "chained_door", "paths": ["grip.normalizedY"]}]
@@ -278,7 +278,7 @@ def test_legacy_driver_omission_and_absent_grip_remain_unchanged(wire_transport)
     raw = _visual_kit(data)
     responses, requests = wire_transport
     responses.append(raw)
-    result = visual.apply_visual_director(data, {}, {}, {}, {})
+    result = visual.apply_visual_director(data, {}, {})
     assert not front_hand_sprite_errors(result)
     assert "grip" not in result["visual"]
     assert all("grip" not in row["visual"] for row in result["runtimeProgram"]["entities"])

@@ -92,12 +92,9 @@ def deliverable_recipe(tmp_path, monkeypatch, *, manifest_key):
     monkeypatch.setattr(visual, "WORLD_RECIPES_DIR", tmp_path / "worlds")
     monkeypatch.setattr(visual, "SPRITE_DIR", tmp_path / "sprites")
     good = _sample_data()
+    good["visual"] = {"preferredCanvasSize": 32}
     hydrate_no_image_fixture_assets(good, write_no_image_fixture_png(tmp_path / "sprites" / "test.png"))
-    good["vfxManifest"] = _compile_manifest(good, {
-        "effectMagnitude": 0.0, "visualBudgetClass": "tiny",
-        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none",
-                  "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0}, "slots": [],
-    }, manifest_key)
+    good["vfxManifest"] = _compile_manifest(good, {"slots": []}, manifest_key)
     assert pipeline._cached_payload_report(good)["ok"]
     return good
 

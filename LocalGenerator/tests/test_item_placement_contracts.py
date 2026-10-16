@@ -63,7 +63,7 @@ PLACEMENT_FACT_CASES = [
 @pytest.mark.parametrize("item,expected_item,expected_flags,absent", PLACEMENT_FACT_CASES)
 def test_placement_facts_survive_serialized_author(item, expected_item, expected_flags, absent):
     source = copy.deepcopy(item)
-    payload = build_llm_author_payload(item, {"name": "Other"}, {}, {}, "placement_fact_probe")
+    payload = build_llm_author_payload(item, {"name": "Other"}, "placement_fact_probe")
     packet = json.loads(json.dumps(payload, ensure_ascii=False))["parents"]["A"]["packet"]
     raw = packet["raw"]
     for field, value in expected_item.items():

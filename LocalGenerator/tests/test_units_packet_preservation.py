@@ -56,18 +56,18 @@ def offline_packets(monkeypatch, request):
 
 
 def _source_packets(parent, captured):
-    request, _, _ = author.build_initial_author_request(parent, {}, {}, {}, "source-fact-units", model_name="offline-test-model")
+    request, _, _ = author.build_initial_author_request(parent, {}, "source-fact-units", model_name="offline-test-model")
     captured.append(request)
     broken = build_runtime_fixture("workbench_blade")
     next(call for call in broken["runtimeProgram"]["calls"] if call["fn"] == "set_projectile_lifetime")["params"]["lifetimeTicks"] = 0
     report = validate_runtime_program(broken)
     assert not report["ok"]
     with pytest.raises(_CapturedRequest):
-        author.repair_author_item_after_failure(broken, parent, {}, {}, {}, "source-fact-units", failure_report=report)
+        author.repair_author_item_after_failure(broken, parent, {}, "source-fact-units", failure_report=report)
     data = _accepted_visual_data("workbench_blade")
     for repair in (False, True):
         with pytest.raises(_CapturedRequest):
-            visual._request_visual_kit(data, parent, {}, {}, {}, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
+            visual._request_visual_kit(data, parent, {}, **({"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}))
     a, r, vd, vr = [request_dossier(row) for row in captured]
     return [a["parents"]["A"]["packet"]["raw"], r["parents"]["a"]["packet"]["raw"],
             vd["parents"]["parentA"]["packet"]["raw"], vr["parentFactsReadOnly"]["parentA"]["packet"]["raw"]]
@@ -165,11 +165,11 @@ def test_actual_vfx_scale_descriptions_separate_frame_legacy_impact_and_material
         "R=selected renderSizePx", "q_selected=R/max(actual final PNG frame width, height)",
         "not canvas, alpha-bbox or hitbox", "reuse_item_icon selects root item R",
         "P=projectile.scale", "initial P=D*E", "not another E or gameplay.itemScale",
-        "declared R: clamp(P,0.1,8)*scale*q_selected", "absent R: max(0.05,P*scale)",
+        "Periodic sprite trail: clamp(P,0.1,8)*scale*q_selected",
         "Projectile event body copy: clamp(P,0.1,8)*scale*q_selected",
         "Exception only for explicit move_front_hand (opcode 20)",
         "hitboxCurve.mirrorToSprite=true or a present visualScaleCurve",
-        "declared-R periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P",
+        "Periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P",
         "Other drivers and front-hand without either scale owner keep the formulas above",
         "Directional item body stamp: clamp(scale,0.05,8)*q_selected",
         "Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion",
@@ -196,7 +196,7 @@ def test_new_gameplay_context_does_not_widen_actual_vfx_repair_permissions(monke
     monkeypatch.setattr(author, "llm_chat_json", respond)
 
     monkeypatch.setattr(vfx_transport, "llm_chat_json", respond)
-    final = vfx.attach_hybrid_vfx_manifest(data, "units-frozen-repair", llm_director=vfx_transport.call_llm_vfx_director)
+    final = vfx.attach_vfx_manifest(data, "units-frozen-repair", llm_director=vfx_transport.call_llm_vfx_director)
     assert len(captured) == 2
     director, repair = [request_dossier(row) for row in captured]
     assert director["acceptedGameplayReadOnly"] == repair["acceptedGameplayReadOnly"] == before["gameplay"]
@@ -216,12 +216,12 @@ def test_old_ammo_keys_are_not_promoted(mode):
     raw = {"selectedPlayerAmmoRaw": {"type": 97}, "selectedPlayerProjectileRaw": {"type": 1}} if mode == "selected" else {
         "representativeAmmoRaw": [{"type": 97}], "representativeProjectileRaw": [{"type": 1}]}
     item = {"ammoRaw": raw}
-    assert compact_ammo_profile(item) == {"mode": "legacy_profile"}
+    assert compact_ammo_profile(item) == {}
     assert effective_projectile_profile_of(item) == {}
     from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
     raw = raw_parent_card_for_llm(item)["raw"]
     assert "effectiveProjectile" not in raw and "directProjectile" not in raw
-    assert raw["ammo"] == {"mode": "legacy_profile"}
+    assert "ammo" not in raw
 
 
 def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
@@ -230,21 +230,34 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
         "playerInventoryAmmoRaw": [{"type": 97, "damage": 5}], "playerInventoryProjectileRaw": [{"type": 1}],
         "fallbackAmmoRaw": [{"type": 97}], "fallbackProjectileRaw": [{"type": 1}]}}
     compact = parents.compact_ammo_profile(item)
-    assert compact["playerInventoryAmmoRaw"][0]["type"] == 97
-    assert compact["fallbackProjectileRaw"][0]["type"] == 1
-    assert parents.effective_projectile_profile_of(item)["type"] == 1
-    monkeypatch.setattr(parents, "RUNTIME_ITEMS", [{"ammo": 97, "shoot": 1, "type": 97, "internalName": "CurrentAmmo"}])
-    monkeypatch.setattr(parents, "runtime_projectile_lookup", lambda _: {"type": 1, "tileCollide": True})
+    assert compact == {"mode": "weapon_uses_ammo", "ammoId": 97}
+    assert parents.effective_projectile_profile_of(item) == {}
+    looked_up = []
+    def lookup(projectile_id):
+        looked_up.append(projectile_id)
+        return {"type": 1, "tileCollide": True}
+    monkeypatch.setattr(parents, "runtime_projectile_lookup", lookup)
     dump = {"useAmmo": 97}
-    assert parents.compact_ammo_profile(dump)["exampleAmmo"] == "CurrentAmmo"
-    assert parents.effective_projectile_profile_of(dump)["type"] == 1
+    assert parents.compact_ammo_profile(dump) == {}
+    assert parents.effective_projectile_profile_of(dump) == {} and looked_up == []
+    dump["shoot"] = 1
+    effective = parents.effective_projectile_profile_of(dump)
+    assert effective["type"] == 1 and effective["tileCollide"] is True
+    assert looked_up == [1]
     from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
     live = {"name": "Weapon identity", "directProjectileRaw": {"type": 42, "damage": 11},
             "ammoRaw": {**item["ammoRaw"], "ammoItemRaw": {"type": 97, "damage": 5},
                         "projectileRaw": {"type": 42, "damage": 11},
                         "weaponShootFieldProjectileRaw": {"type": 42, "damage": 11}}}
+    live["effectiveProjectileRaw"] = {"type": 43, "damage": 19, "source": "literal native observation"}
     before = copy.deepcopy(live)
+    assert parents.compact_ammo_profile(live) == {
+        "mode": "weapon_uses_ammo", "ammoId": 97, "ammoItemRaw": {"type": 97, "damage": 5},
+        "projectileRaw": {"type": 42}, "weaponShootFieldProjectileRaw": {"type": 42},
+    }
+    assert parents.effective_projectile_profile_of(live) == live["effectiveProjectileRaw"]
     raw = raw_parent_card_for_llm(live)["raw"]
+    assert raw["effectiveProjectile"] == {"type": 43, "source": "literal native observation"}
     assert raw["directProjectile"]["type"] == 42
     assert raw["ammo"]["ammoItemRaw"]["type"] == 97
     assert all(key not in raw["ammo"] for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw",

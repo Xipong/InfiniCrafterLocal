@@ -1368,7 +1368,7 @@
                       },
                       "hideUseGraphic": {
                         "type": "boolean",
-                        "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. For declared-size presentations (visual.renderSizePx), customHeldSprite=inherit or omission also hides the custom generated root; explicit visible keeps it visible while active, so true may intentionally hide vanilla while retaining that custom body. Legacy definitions without renderSizePx retain the custom root unless hidden is chosen. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
+                        "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. customHeldSprite=inherit or omission also follows this flag for the custom generated root; explicit visible keeps that root visible while active, so true may intentionally hide vanilla while retaining the custom body. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "disableMeleeHitbox": {
@@ -1420,7 +1420,7 @@
                           "visible",
                           "inherit"
                         ],
-                        "description": "Custom held-root visibility only, not gameplay release timing: hidden suppresses it; visible keeps it while use is active; inherit or omission follows hideUseGraphic for declared-size presentations and historical keep behavior without that metadata. This does not schedule gameplay release or change vanilla hideUseGraphic.",
+                        "description": "Custom held-root visibility only, not gameplay release timing: hidden suppresses it; visible keeps it while use is active; inherit or omission follows hideUseGraphic. This does not schedule gameplay release or change vanilla hideUseGraphic.",
                         "x-infini-semanticType": "bounded_text"
                       }
                     },
@@ -8122,202 +8122,27 @@
       "properties": {
         "description": {
           "type": "string",
-          "minLength": 1,
+          "minLength": 0,
           "maxLength": 4000
         },
         "playerExperience": {
           "type": "string",
-          "minLength": 1,
+          "minLength": 0,
           "maxLength": 3000
         },
         "selfEvaluation": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "planVsProgram": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "verdict": {
-                  "type": "string",
-                  "enum": [
-                    "aligned",
-                    "changed",
-                    "uncertain"
-                  ]
-                },
-                "summary": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 500
-                },
-                "actionChecks": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "plannedIntent": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 1000
-                      },
-                      "implementedBehavior": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 1000
-                      },
-                      "runtimeRefs": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 48,
-                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
-                        },
-                        "minItems": 1,
-                        "maxItems": 16
-                      },
-                      "result": {
-                        "type": "string",
-                        "enum": [
-                          "aligned",
-                          "changed",
-                          "dropped",
-                          "added",
-                          "uncertain"
-                        ]
-                      },
-                      "intentionality": {
-                        "type": "string",
-                        "enum": [
-                          "intentional",
-                          "accidental",
-                          "uncertain"
-                        ]
-                      },
-                      "reason": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 400
-                      }
-                    },
-                    "required": [
-                      "plannedIntent",
-                      "implementedBehavior",
-                      "runtimeRefs",
-                      "result",
-                      "intentionality",
-                      "reason"
-                    ]
-                  },
-                  "minItems": 1,
-                  "maxItems": 24
-                }
-              },
-              "required": [
-                "verdict",
-                "summary",
-                "actionChecks"
-              ]
-            },
-            "programVsReport": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "verdict": {
-                  "type": "string",
-                  "enum": [
-                    "aligned",
-                    "mismatch",
-                    "uncertain"
-                  ]
-                },
-                "summary": {
-                  "type": "string",
-                  "minLength": 1,
-                  "maxLength": 500
-                },
-                "behaviorChecks": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "properties": {
-                      "runtimeRefs": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "minLength": 1,
-                          "maxLength": 48,
-                          "pattern": "^[a-z][a-z0-9_]{0,47}$"
-                        },
-                        "minItems": 1,
-                        "maxItems": 16
-                      },
-                      "programBehavior": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 1000
-                      },
-                      "reportedBehavior": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 1000
-                      },
-                      "result": {
-                        "type": "string",
-                        "enum": [
-                          "aligned",
-                          "mismatch",
-                          "omitted",
-                          "uncertain"
-                        ]
-                      },
-                      "reason": {
-                        "type": "string",
-                        "minLength": 1,
-                        "maxLength": 400
-                      }
-                    },
-                    "required": [
-                      "runtimeRefs",
-                      "programBehavior",
-                      "reportedBehavior",
-                      "result",
-                      "reason"
-                    ]
-                  },
-                  "minItems": 1,
-                  "maxItems": 24
-                }
-              },
-              "required": [
-                "verdict",
-                "summary",
-                "behaviorChecks"
-              ]
-            }
-          },
-          "required": [
-            "planVsProgram",
-            "programVsReport"
-          ]
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 4000
         }
       },
-      "required": [
-        "description",
-        "playerExperience",
-        "selfEvaluation"
-      ]
+      "required": []
     }
   },
   "required": [
     "name",
     "category",
-    "concept",
-    "runtimeProgram",
-    "realization"
+    "runtimeProgram"
   ],
   "$id": "https://infinicrafter.local/contracts/author_item_response.schema.json",
   "x-infini-generated": true

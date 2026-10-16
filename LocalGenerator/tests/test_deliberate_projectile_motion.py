@@ -17,7 +17,7 @@ def test_actual_author_packet_explains_no_hidden_ballistics(monkeypatch, mode):
     monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
     parent = {"id": 39, "name": "Wooden Bow", "shoot": 1, "directProjectileRaw": {"type": 1, "fullName": "Terraria/WoodenArrowFriendly", "aiStyle": 1, "arrow": True}}
     before = copy.deepcopy(parent)
-    _, user, _ = build_initial_author_request(parent, {}, {}, {}, "physics-choice", model_name="offline")
+    _, user, _ = build_initial_author_request(parent, {}, "physics-choice", model_name="offline")
     cards = {row["fn"]: row for row in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     meaning = CAPABILITY_REGISTRY["move_straight"].summary
     assert "no gravity" in meaning and "never invokes native projectile AI" in meaning

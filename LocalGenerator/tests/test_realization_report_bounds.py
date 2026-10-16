@@ -1,6 +1,6 @@
 """Finite report bounds preserve authored prose and never change gameplay."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 
 import copy
 import json
@@ -17,15 +17,20 @@ from infini_local.core.runtime_authoring.program_schema import (
     strict_repair_shape_report,
 )
 from infini_local.pipelines.author_item_contract import (
-    author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
     author_item_response_schema,
 )
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
 from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture as _runtime_fixture
 from infini_local.storage.world_storage import atomic_write_json, sanitize_recipe_for_delivery
+
+
+def build_runtime_fixture(name):
+    item = _runtime_fixture(name)
+    item["realization"]["selfEvaluation"] = "Optional self-check, not observed execution."
+    return item
 
 
 @pytest.mark.parametrize("length,accepted", [(80, True), (81, False)])
@@ -49,14 +54,14 @@ def test_descriptive_contribution_and_behavior_reports_survive_recursive_handoff
     prose = "🌟" * 600
     item["concept"]["parentAContribution"] = prose
     item["concept"]["parentBContribution"] = prose
-    report_row = item["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"][0]
-    report_row["programBehavior"] = report_row["reportedBehavior"] = prose
+    item["realization"]["selfEvaluation"] = prose
     before = copy.deepcopy(item)
     assert strict_author_shape_report(item)["ok"]
     compiled = compile_runtime_program(item)
     compiled["generatedParentSummary"] = generated_parent_summary_from_data(compiled)
     delivered = sanitize_recipe_for_delivery(compiled)
-    assert delivered["generatedParentSummary"]["notableEffects"][0] == prose
+    assert "notableEffects" not in delivered["generatedParentSummary"]
+    assert delivered["realization"]["selfEvaluation"] == prose
     assert delivered["realization"] == before["realization"]
     assert delivered["concept"] == before["concept"]
     assert item == before
@@ -73,11 +78,11 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
     report = validate_runtime_program(prepared)
     assert report["ok"], report["errors"]
     assert strict_author_shape_report(prepared)["ok"]
-    jsonschema.validate(prepared["realization"], author_item_provider_response_schema()["properties"]["realization"])
+    jsonschema.validate(prepared["realization"], author_item_response_schema()["properties"]["realization"])
     patch = {"note": "Replace only the report", "realizationReplacement": copy.deepcopy(item["realization"])}
     patch_before = copy.deepcopy(patch)
     assert strict_repair_shape_report(patch)["ok"]
-    jsonschema.validate(patch["realizationReplacement"], author_item_provider_repair_response_schema()["properties"]["realizationReplacement"])
+    jsonschema.validate(patch["realizationReplacement"], author_item_response_schema()["properties"]["realization"])
     repaired = apply_repair_patch(build_runtime_fixture("workbench_blade"), patch)
     assert repaired["realization"] == before["realization"]
     assert repaired["runtimeProgram"] == before["runtimeProgram"]
@@ -93,8 +98,7 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
     stored = json.loads(path.read_text(encoding="utf-8"))
     assert stored["realization"] == before["realization"]
     summary = stored["generatedParentSummary"]
-    # Existing summary whitespace normalization is not a prose length limit.
-    assert summary[field] == before["realization"][field].strip()
+    assert summary[field] == before["realization"][field]
     recursive = raw_parent_card_for_llm({"generatedData": stored})
     assert recursive["raw"]["generatedParent"]["summary"][field] == summary[field]
     assert item == before and patch == patch_before
@@ -134,8 +138,8 @@ def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(mo
     monkeypatch.setattr(pipeline, "llm_chat_json", respond)
     monkeypatch.setattr(pipeline, "trace_event", lambda *args, **kwargs: None)
     monkeypatch.setattr(pipeline, "trace_stage_request", lambda *args, **kwargs: None)
-    author, _, _ = pipeline.build_initial_author_request({}, {}, {}, {}, "report-card", model_name="offline-report-test")
-    result = pipeline.repair_author_item_after_failure(item, {}, {}, {}, {}, "report-card", failure_report={"errors": []})
+    author, _, _ = pipeline.build_initial_author_request({}, {}, "report-card", model_name="offline-report-test")
+    result = pipeline.repair_author_item_after_failure(item, {}, {}, "report-card", failure_report={"errors": []})
     repair = requests[0]
     expected_format = {"type": "json_object"} if mode == "json_object" else None
     for request, root in ((author, "realization"), (repair, "realizationReplacement")):
@@ -148,28 +152,21 @@ def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(mo
             assert f"minLength={schema['minLength']}" in text, (root, field, text)
             assert f"maxLength={schema['maxLength']}" in text, (root, field, text)
             assert "Unicode code points" in text
-            assert ("final interpretation" if field == "description" else "executable program") in text
+            assert "optional advisory" in text
     assert result["runtimeProgram"] == before["runtimeProgram"]
     assert result["realization"] == before["realization"] and item == before
 
 
-@pytest.mark.parametrize("field,maximum,old_maximum", [("description", 4000, 700), ("playerExperience", 3000, 500)])
-@pytest.mark.parametrize("size", [0, 1, "old-bound", "old-plus-one", "maximum-plus-one"])
-def test_report_bounds_remain_finite_nonempty_and_preserve_legacy_values(field, maximum, old_maximum, size):
-    length = {"old-bound": old_maximum, "old-plus-one": old_maximum + 1, "maximum-plus-one": maximum + 1}.get(size, size)
+@pytest.mark.parametrize("field,maximum", [("description", 4000), ("playerExperience", 3000)])
+@pytest.mark.parametrize("size", [0, 1, 5000])
+def test_report_guidance_does_not_reject_empty_or_long_advisory_text(field, maximum, size):
     item = build_runtime_fixture("workbench_blade")
-    item["realization"][field] = "я" * length
-    patch = {"note": "Report boundary control", "realizationReplacement": copy.deepcopy(item["realization"])}
+    item["realization"][field] = "я" * size
+    patch = {"note": "Optional report", "realizationReplacement": copy.deepcopy(item["realization"])}
     before = copy.deepcopy((item, patch))
-    expected_kind = "min_length" if length == 0 else ("max_length" if length > maximum else None)
-    author = strict_author_shape_report(item)
-    repair = strict_repair_shape_report(patch)
-    for report, root in ((author, "realization"), (repair, "realizationReplacement")):
-        assert report["ok"] is (expected_kind is None)
-        assert report["errors"] == ([] if expected_kind is None else [{
-            "path": f"$.{root}.{field}", "kind": expected_kind,
-            "expected": 1 if length == 0 else maximum, "actual": length,
-        }])
+    assert validate_runtime_program(item)["ok"]
+    assert strict_repair_shape_report(patch)["ok"]
+    assert apply_repair_patch(item, patch)["realization"] == item["realization"]
     assert (item, patch) == before
 
 
@@ -193,18 +190,7 @@ def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
     report_schema = schema["properties"]["realization"]["properties"]
     for field in ("description", "playerExperience"):
         item["realization"][field] = "🌟" * report_schema[field]["maxLength"]
-    sections = report_schema["selfEvaluation"]["properties"]
-    for section, rows in (("planVsProgram", "actionChecks"), ("programVsReport", "behaviorChecks")):
-        properties = sections[section]["properties"]
-        item["realization"]["selfEvaluation"][section]["summary"] = "я" * properties["summary"]["maxLength"]
-        row = copy.deepcopy(item["realization"]["selfEvaluation"][section][rows][0])
-        row_schema = properties[rows]["items"]["properties"]
-        for field, child in row_schema.items():
-            if field == "runtimeRefs":
-                row[field] = ["r" * child["items"]["maxLength"]] * child["maxItems"]
-            elif "maxLength" in child:
-                row[field] = "я" * child["maxLength"]
-        item["realization"]["selfEvaluation"][section][rows] = [copy.deepcopy(row) for _ in range(properties[rows]["maxItems"])]
+    item["realization"]["selfEvaluation"] = "я" * report_schema["selfEvaluation"]["maxLength"]
     actions = schema["properties"]["concept"]["properties"]["plannedPlayerActions"]
     item["concept"]["plannedPlayerActions"] = [{"input": "primary_use", "intent": "я" * actions["items"]["properties"]["intent"]["maxLength"]} for _ in range(actions["maxItems"])]
     item = {key: item[key] for key in schema["properties"]}
@@ -218,8 +204,5 @@ def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
     jsonschema.Draft202012Validator(provider).validate(encoded)
     candidate, _ = program_schema.assert_bounded_author_input(encoded, schema=provider, authored_only=False)
     assert candidate == encoded
-    item["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"][-1]["runtimeRefs"][-1] = 0
-    errors = program_schema.strict_author_shape_report(item)["errors"]
-    assert len(errors) == 1 and errors[0]["kind"] == "type"
-    checks = item["realization"]["selfEvaluation"]["programVsReport"]["behaviorChecks"]
-    assert errors[0]["path"] == f"$.realization.selfEvaluation.programVsReport.behaviorChecks[{len(checks) - 1}].runtimeRefs[{len(checks[-1]['runtimeRefs']) - 1}]"
+    item["runtimeProgram"]["calls"][-1]["fn"] = "unknown_operation"
+    assert not validate_runtime_program(item)["ok"]

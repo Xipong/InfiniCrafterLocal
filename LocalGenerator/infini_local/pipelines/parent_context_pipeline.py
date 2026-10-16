@@ -12,20 +12,15 @@ from infini_local.core.item_identity_tools import (
     dict_get_ci,
     fingerprint_of,
     generated_data_of,
-    item_bool,
     item_field,
-    item_num,
 )
 from infini_local.pipelines.pipeline_runtime_constants import (
     LLM_AMMO_ITEM_KEYS,
-    LLM_AMMO_REP_LIMIT,
     LLM_INCLUDE_AISTYLE_RAW,
-    LLM_INCLUDE_PROJECTILE_BEHAVIOR_DIGEST,
     LLM_ITEM_RAW_KEYS,
     LLM_PROJECTILE_RAW_KEYS,
 )
 from infini_local.services.runtime_dump_service import (
-    RUNTIME_ITEMS,
     runtime_projectile_lookup,
 )
 
@@ -55,92 +50,12 @@ def _strip_texture_metrics_for_llm(profile: dict[str, Any]) -> dict[str, Any]:
     out.pop("sourceTextureMetrics", None)
     return out
 
-def _generated_runtime_primary_projectile(generated: dict[str, Any]) -> dict[str, Any]:
-    """Return the explicitly bound runtime entity used as a compact projectile profile.
-
-    This is a compatibility projection for parent fact cards, not a gameplay router. The
-    complete generated runtimeProgram is preserved separately by parent_context_cards.
-    Selection follows authored binding order (primary, alternate, hold), then entity order.
-    """
-    runtime_raw = dict_get_ci(generated, "runtimeProgram", {})
-    runtime = runtime_raw if isinstance(runtime_raw, dict) else {}
-    entities = [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
-    by_id = {str(row.get("id") or ""): row for row in entities}
-    input_rank = {"primary_use": 0, "alternate_use": 1, "hold": 2}
-    bindings = sorted(
-        [
-            row for row in runtime.get("bindings") or []
-            if isinstance(row, dict) and binding_action_kind(row) == "spawn_entity"
-        ],
-        key=lambda row: input_rank.get(str(row.get("input") or ""), 99),
-    )
-    for binding in bindings:
-        entity = by_id.get(binding_target_id(binding))
-        if isinstance(entity, dict) and str(entity.get("kind") or "") != "item_body":
-            return entity
-    return next((row for row in entities if str(row.get("kind") or "") != "item_body"), {})
-
-
 def projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
-    """Return a factual projectile profile for vanilla/modded or generated parents.
-
-    Generated parents are projected from their accepted v5 runtimeProgram. No category,
-    name, weapon family, or prose is used to choose movement/delivery. The full entity graph
-    is also carried in ``raw.generatedParent.runtimeProgram`` by parent_context_cards.
-    """
-    gd = generated_data_of(item)
-    if isinstance(gd, dict) and gd:
-        entity = _generated_runtime_primary_projectile(gd)
-        if entity:
-            spawn = entity.get("spawn") if isinstance(entity.get("spawn"), dict) else {}
-            hitbox = entity.get("hitbox") if isinstance(entity.get("hitbox"), dict) else {}
-            collision = entity.get("collision") if isinstance(entity.get("collision"), dict) else {}
-            damage = entity.get("damage") if isinstance(entity.get("damage"), dict) else {}
-            movement = entity.get("movement") if isinstance(entity.get("movement"), dict) else {}
-            controller = entity.get("controller") if isinstance(entity.get("controller"), dict) else {}
-            targeting = entity.get("targeting") if isinstance(entity.get("targeting"), dict) else {}
-            return {
-                "type": int(item_num(item, "shoot", 0)),
-                "sourceMod": "InfiniCrafterLocal",
-                "internalName": "GeneratedProjectile",
-                "fullName": "InfiniCrafterLocal/GeneratedProjectile",
-                "generatedEntityId": str(entity.get("id") or ""),
-                "generatedEntityKind": str(entity.get("kind") or ""),
-                "itemShootSpeed": float(spawn.get("speedPxPerTick") or item_num(item, "shootSpeed", 0)),
-                "width": int(float(hitbox.get("widthPx") or 14)),
-                "height": int(float(hitbox.get("heightPx") or 14)),
-                "scale": float(hitbox.get("drawScale") or 1.0),
-                "aiStyle": 0,
-                "penetrate": int(float(collision.get("pierce") if collision.get("pierce") is not None else 1)),
-                "maxPenetrate": int(float(collision.get("pierce") if collision.get("pierce") is not None else 1)),
-                "timeLeft": int(float(entity.get("lifetimeTicks") or 90)),
-                "extraUpdates": int(float(collision.get("extraUpdates") or 0)),
-                "tileCollide": bool(collision.get("tileCollide", True)),
-                "ignoreWater": bool(collision.get("ignoreWater", False)),
-                "friendly": bool(damage.get("enabled", False)),
-                "hostile": False,
-                "arrow": False,
-                "minion": str(damage.get("damageClass") or "").lower() == "summon",
-                "sentry": str(entity.get("kind") or "") == "stationary_projectile",
-                "minionSlots": 0,
-                "ownerHitCheck": bool(damage.get("ownerHitCheck", False)),
-                "usesLocalNPCImmunity": str(collision.get("npcImmunityMode") or "owner") == "local",
-                "localNPCHitCooldown": int(float(collision.get("localNpcHitCooldownTicks") if collision.get("localNpcHitCooldownTicks") is not None else -1)),
-                "usesIDStaticNPCImmunity": False,
-                "idStaticNPCHitCooldown": -1,
-                "stopsDealingDamageAfterPenetrateHits": False,
-                "light": float((entity.get("light") or {}).get("strength") or 0) if isinstance(entity.get("light"), dict) else 0,
-                "alpha": 0,
-                "netImportant": str(entity.get("kind") or "") in {"owner_attached_projectile", "stationary_projectile", "temporary_helper", "field"},
-                "fromGeneratedRuntimeProgram": True,
-                "movement": {"name": movement.get("name"), "params": movement.get("params") or {}},
-                "controller": {"name": controller.get("name"), "params": controller.get("params") or {}},
-                "targeting": targeting,
-                "events": [
-                    {"event": row.get("event"), "action": row.get("action"), "entityId": row.get("entityId")}
-                    for row in entity.get("events") or [] if isinstance(row, dict)
-                ],
-            }
+    """Read native projectile facts; generated parents use their full accepted graph."""
+    if generated_data_of(item):
+        # Generated parents expose their complete accepted entity graph. There
+        # is no truthful single vanilla projectile profile to select for it.
+        return {}
     raw_direct = _raw_section_dict(item, "directProjectileRaw")
     if raw_direct:
         out = _strip_texture_metrics_for_llm(raw_direct)
@@ -170,241 +85,16 @@ def ammo_profile_of(item: dict[str, Any]) -> dict[str, Any]:
     Ammo examples are not the canonical weapon identity: a modded gun/bow may have
     important item.shoot mechanics independent of the player's current bullets.
     """
-    raw_ammo = _raw_section_dict(item, "ammoRaw")
-    if raw_ammo:
-        out = dict(raw_ammo)
-        out.setdefault("fromLiveWireRaw", True)
-        return out
-    use_ammo = int(item_num(item, "useAmmo", 0))
-    if use_ammo <= 0 or not RUNTIME_ITEMS:
-        return {}
-    candidates = []
-    source = str(item_field(item, "sourceMod", "Terraria") or "Terraria")
-    for row in RUNTIME_ITEMS:
-        try:
-            if int(row.get("ammo") or 0) != use_ammo:
-                continue
-            if int(row.get("shoot") or 0) <= 0:
-                continue
-            candidates.append(row)
-        except Exception:
-            continue
-    if not candidates:
-        return {"ammoId": use_ammo}
-    def score(row: dict[str, Any]) -> tuple[int, int, int, int]:
-        # Prefer same-source basic/cheap ammo; avoid endless pouches as the canonical example.
-        internal = str(row.get("internalName") or "").lower()
-        same_source = 0 if str(row.get("sourceMod") or "") == source else 1
-        endless = 1 if "endless" in internal or "infinite" in internal else 0
-        rare = int(row.get("rare") or 0)
-        value = int(row.get("value") or 0)
-        return (same_source, endless, rare, value)
-    ammo = sorted(candidates, key=score)[0]
-    projectile = runtime_projectile_lookup(ammo.get("shoot"))
-    profile = {
-        "ammoId": use_ammo,
-        "exampleAmmo": ammo.get("internalName") or ammo.get("name"),
-        "exampleAmmoType": ammo.get("type"),
-        "exampleAmmoSourceMod": ammo.get("sourceMod"),
-        "exampleAmmoDamage": ammo.get("damage"),
-        "exampleAmmoShoot": ammo.get("shoot"),
-        "exampleAmmoShootSpeed": ammo.get("shootSpeed"),
-        "exampleAmmoKnockback": ammo.get("knockback"),
-    }
-    if projectile:
-        profile["exampleProjectile"] = _strip_texture_metrics_for_llm(projectile)
-    return profile
+    return _raw_section_dict(item, "ammoRaw")
+
 
 def effective_projectile_profile_of(item: dict[str, Any]) -> dict[str, Any]:
+    if generated_data_of(item):
+        return {}
     raw_effective = _raw_section_dict(item, "effectiveProjectileRaw")
-    raw_direct = _raw_section_dict(item, "directProjectileRaw")
     if raw_effective:
-        # Older live-wire dumps sometimes used representative ammo as "effective".
-        # If the weapon has its own direct shoot field, keep that as the primary executable profile.
-        src = str(raw_effective.get("source") or "").lower() if isinstance(raw_effective, dict) else ""
-        if raw_direct and ("representative" in src or "fallback" in src or "player_inventory" in src):
-            out = _strip_texture_metrics_for_llm(raw_direct)
-            out.setdefault("fromLiveWireRaw", True)
-            out.setdefault("effective", True)
-            out.setdefault("effectiveSourcePolicy", "prefer_weapon_direct_over_ammo_candidate")
-            return out
-        out = _strip_texture_metrics_for_llm(raw_effective)
-        out.setdefault("fromLiveWireRaw", True)
-        out.setdefault("effective", True)
-        return out
-    if raw_direct:
-        out = _strip_texture_metrics_for_llm(raw_direct)
-        out.setdefault("fromLiveWireRaw", True)
-        out.setdefault("effective", True)
-        return out
-    ammo = ammo_profile_of(item)
-    ep = ammo.get("exampleProjectile") if isinstance(ammo, dict) else None
-    if isinstance(ep, dict) and ep:
-        out = _strip_texture_metrics_for_llm(ep)
-        out["fromAmmoProfile"] = True
-        return out
-    inv_eps = ammo.get("playerInventoryProjectileRaw") if isinstance(ammo, dict) else None
-    if isinstance(inv_eps, list) and inv_eps and isinstance(inv_eps[0], dict):
-        out = dict(inv_eps[0])
-        out["fromAmmoProfile"] = True
-        out["fromPlayerInventoryAmmoCandidate"] = True
-        return out
-    fb_eps = ammo.get("fallbackProjectileRaw") if isinstance(ammo, dict) else None
-    if isinstance(fb_eps, list) and fb_eps and isinstance(fb_eps[0], dict):
-        out = dict(fb_eps[0])
-        out["fromAmmoProfile"] = True
-        out["fromFallbackAmmoCandidate"] = True
-        return out
+        return _strip_texture_metrics_for_llm(raw_effective)
     return projectile_profile_of(item)
-
-def proj_num(proj: dict[str, Any], name: str, default: float = 0.0) -> float:
-    try:
-        return float(proj.get(name, default) or 0)
-    except Exception:
-        return default
-
-def proj_bool(proj: dict[str, Any], name: str) -> bool:
-    v = proj.get(name, False)
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, str):
-        return v.lower() in {"1", "true", "yes", "y"}
-    return bool(v)
-
-def projectile_behavior_tags(item: dict[str, Any]) -> set[str]:
-    tags: set[str] = set()
-    proj = effective_projectile_profile_of(item)
-    if not proj or proj.get("unavailable"):
-        return tags
-    tags.add("projectile")
-    ai_style = int(proj_num(proj, "aiStyle", 0))
-    penetrate = int(proj_num(proj, "penetrate", 1))
-    time_left = int(proj_num(proj, "timeLeft", 0))
-    extra_updates = int(proj_num(proj, "extraUpdates", 0))
-    if proj_bool(proj, "arrow"):
-        tags.add("arrow")
-    disposable_throwable = item_bool(item, "consumable") and item_num(item, "maxStack", 1) > 1 and proj_bool(proj, "tileCollide") and item_num(item, "damage", 0) <= 20
-    owner_checked = proj_bool(proj, "ownerHitCheck")
-    if penetrate == -1 or penetrate > 1:
-        tags.add("piercing")
-    if penetrate == -1 and not disposable_throwable and not owner_checked:
-        tags.add("infinite_pierce")
-    if disposable_throwable:
-        tags.add("disposable_throwable")
-    if extra_updates > 0:
-        tags.add("fast_projectile")
-    if extra_updates >= 2:
-        tags.add("very_fast_projectile")
-    if not proj_bool(proj, "tileCollide"):
-        tags.add("noncolliding_projectile")
-    if owner_checked:
-        tags.add("melee_projection")
-    if proj_bool(proj, "minion"):
-        tags.update({"summon", "minion"})
-    if proj_bool(proj, "sentry"):
-        tags.update({"summon", "sentry"})
-    if proj_bool(proj, "usesLocalNPCImmunity") or proj_bool(proj, "usesIDStaticNPCImmunity"):
-        tags.add("multi_hit_projectile")
-    if time_left >= 240 and not owner_checked and not (item_bool(item, "consumable") and item_num(item, "maxStack", 1) > 1 and proj_bool(proj, "tileCollide")):
-        tags.add("long_lived_projectile")
-    if ai_style > 0:
-        tags.add("vanilla_ai_style")
-    return tags
-
-def source_weapon_profile(item: dict[str, Any]) -> dict[str, Any]:
-    """Observable parent weapon profile. No named Calamity/vanilla recipes, no per-item hand scores.
-    In runtime-authoring mode the weapon's own shoot field remains primary; ammoRaw is
-    additional candidate context for the LLM, not a code-authored override.
-    """
-    proj = effective_projectile_profile_of(item)
-    damage = max(0.0, item_num(item, "damage"))
-    use_time = max(6.0, item_num(item, "useTime", item_num(item, "useAnimation", 30)))
-    use_anim = max(6.0, item_num(item, "useAnimation", use_time))
-    shoot = item_num(item, "shoot")
-    shoot_speed = item_num(item, "shootSpeed")
-    no_melee = item_bool(item, "noMelee")
-    channel = item_bool(item, "channel")
-    damage_class = str(item_field(item, "damageClass", "generic") or "generic").lower()
-    proj_count = 1.0
-    pierce = 0.0
-    lifetime = 0.0
-    extra_updates = 0.0
-    tile_collide = True
-    owner_hit_check = False
-    local_immune = False
-    ai_style = 0
-    minion = False
-    sentry = False
-    uses_external_ammo = item_num(item, "useAmmo", 0) > 0
-    # For ammo-consuming items, Item.shoot is only the fallback projectile type; the
-    # consumed ammo owns the real projectile behavior. Preserve the raw profile for
-    # author context, but do not price its lifetime/pierce as parent power.
-    if proj and not proj.get("unavailable") and not uses_external_ammo:
-        penetrate = int(proj_num(proj, "penetrate", 1))
-        tile_collide = proj_bool(proj, "tileCollide")
-        disposable_throwable = item_bool(item, "consumable") and item_num(item, "maxStack", 1) > 1 and tile_collide and damage <= 20
-        pierce = 8.0 if penetrate == -1 else max(0.0, float(penetrate - 1))
-        lifetime = max(0.0, min(1800.0, proj_num(proj, "timeLeft", 0)))
-        if disposable_throwable:
-            # Raw timeLeft on vanilla shuriken/throwing knife is a technical expiry value,
-            # not real target uptime. Do not let starter stackables become mech-tier.
-            pierce = min(pierce, 2.0)
-            lifetime = min(lifetime, 120.0)
-        owner_hit_check = proj_bool(proj, "ownerHitCheck")
-        if owner_hit_check:
-            # Vanilla spears/held melee projections often expose indefinite pierce and long
-            # technical timeLeft, but that is the held-hitbox implementation, not free-flight uptime.
-            pierce = min(pierce, 2.0)
-            lifetime = min(lifetime, 90.0)
-        extra_updates = max(0.0, min(4.0, proj_num(proj, "extraUpdates", 0)))
-        local_immune = proj_bool(proj, "usesLocalNPCImmunity") or proj_bool(proj, "usesIDStaticNPCImmunity")
-        ai_style = int(proj_num(proj, "aiStyle", 0))
-        minion = proj_bool(proj, "minion")
-        sentry = proj_bool(proj, "sentry")
-    # Conservative effective-power approximation. It prices delivery reliability, not exact AI DPS.
-    attacks_per_second = 60.0 / max(6.0, use_time)
-    pierce_mult = 1.0 + min(1.15, pierce * 0.18)
-    lifetime_mult = 1.0 + min(0.55, lifetime / 900.0) if shoot > 0 else 1.0
-    speed_mult = 1.0 + min(0.28, max(0.0, shoot_speed - 8.0) / 40.0)
-    update_mult = 1.0 + min(0.35, extra_updates * 0.12)
-    safety_mult = 1.0
-    if shoot > 0 and no_melee:
-        safety_mult += 0.12
-    if not tile_collide and shoot > 0:
-        safety_mult += 0.18
-    if owner_hit_check:
-        safety_mult -= 0.12
-    if channel:
-        safety_mult += 0.08
-    if minion or sentry:
-        safety_mult += 0.25
-    immune_mult = 1.10 if local_immune else 1.0
-    raw_dps = damage * attacks_per_second
-    effective = raw_dps * proj_count * pierce_mult * lifetime_mult * speed_mult * update_mult * max(0.65, safety_mult) * immune_mult
-    return {
-        "damage": round(damage, 3),
-        "useTime": round(use_time, 3),
-        "useAnimation": round(use_anim, 3),
-        "attacksPerSecond": round(attacks_per_second, 3),
-        "damageClass": damage_class,
-        "shoot": int(shoot),
-        "shootSpeed": round(shoot_speed, 3),
-        "noMelee": no_melee,
-        "channel": channel,
-        "aiStyle": ai_style,
-        "piercePotential": round(pierce, 3),
-        "lifetime": round(lifetime, 3),
-        "extraUpdates": round(extra_updates, 3),
-        "tileCollide": tile_collide,
-        "ownerHitCheck": owner_hit_check,
-        "localImmunity": local_immune,
-        "minion": minion,
-        "sentry": sentry,
-        "ammoProfile": ammo_profile_of(item),
-        "effectiveDpsSignal": round(effective, 3),
-        "behaviorTags": sorted(projectile_behavior_tags(item)),
-        "projectileProfile": proj,
-    }
 
 
 def _compact_keep(value: Any) -> bool:
@@ -430,9 +120,8 @@ def _select_raw_keys(d: dict[str, Any], keys: list[str]) -> dict[str, Any]:
     return out
 
 def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
-    raw = _raw_item_fields_for_llm(item)
-    # If the live client sent richer fields, keep them; if older payload, itemRaw is built from item fields.
-    raw.update({k: item_field(item, k, None) for k in LLM_ITEM_RAW_KEYS if item_field(item, k, None) is not None})
+    raw = {key: item_field(item, key, None) for key in LLM_ITEM_RAW_KEYS
+           if item_field(item, key, None) is not None}
     out = _select_raw_keys(raw, LLM_ITEM_RAW_KEYS)
     # Literal source text/provenance is one observation: preserve line order,
     # whitespace, empty lines and source-bound refusal without compacting it.
@@ -473,102 +162,6 @@ def _generated_placement_fields(item: dict[str, Any]) -> dict[str, Any]:
         ("createTile", "tileId"), ("createWall", "wallId"), ("placeStyle", "placeStyle")
     ) if source in placement and placement[source] is not None}
 
-def _pnum(proj: dict[str, Any], key: str, default: float = 0.0) -> float:
-    try:
-        return float(proj.get(key, default) or default)
-    except Exception:
-        return default
-
-def _pbool(proj: dict[str, Any], key: str) -> bool:
-    v = proj.get(key, False)
-    if isinstance(v, bool):
-        return v
-    if isinstance(v, str):
-        return v.strip().lower() in {"1", "true", "yes", "y"}
-    return bool(v)
-
-def projectile_behavior_digest_for_llm(proj: dict[str, Any]) -> dict[str, Any]:
-    """Compact raw-flag digest for LLM input.
-
-    Keep this deliberately non-semantic: no aiStyle example names and no vanilla family
-    prose are exposed to the planner. aiStyle buckets are too broad (for example knives,
-    shurikens, bones and sparks can share one bucket), so the LLM should see stable
-    mechanical flags rather than inherited item-family suggestions.
-    """
-    if not isinstance(proj, dict) or not proj:
-        return {}
-    owner_checked = _pbool(proj, "ownerHitCheck")
-    tile_collide = _pbool(proj, "tileCollide")
-    if owner_checked:
-        mechanical_hint = "owner_checked_close_or_held_hitbox"
-    elif tile_collide:
-        mechanical_hint = "free_projectile_with_tile_collision"
-    else:
-        mechanical_hint = "free_projectile_without_tile_collision"
-    out: dict[str, Any] = {
-        "mechanicalHint": mechanical_hint,
-        "facts": [],
-        "basis": [],
-        "note": "Raw flag digest only. It is not an item family, not a visual instruction, and not a command to copy source behavior.",
-    }
-    facts: list[str] = []
-    basis: list[str] = []
-    if _pbool(proj, "arrow"):
-        facts.append("arrow flag is true")
-        basis.append("arrow=true")
-    if _pbool(proj, "minion"):
-        facts.append("minion flag is true")
-        basis.append("minion=true")
-    if _pbool(proj, "sentry"):
-        facts.append("sentry flag is true")
-        basis.append("sentry=true")
-    if owner_checked:
-        facts.append("hit validation depends on player/owner contact; this often means close or held hitbox behavior")
-        basis.append("ownerHitCheck=true")
-    if tile_collide:
-        facts.append("collides with tiles")
-        basis.append("tileCollide=true")
-    else:
-        facts.append("does not collide with tiles")
-        basis.append("tileCollide=false")
-    if _pbool(proj, "ignoreWater"):
-        facts.append("ignores water")
-        basis.append("ignoreWater=true")
-    penetrate = int(_pnum(proj, "penetrate", 0))
-    if penetrate == -1:
-        facts.append("raw penetrate is infinite/indefinite")
-        basis.append("penetrate=-1")
-    elif penetrate > 1:
-        facts.append(f"raw penetrate allows up to {penetrate} hits before expiry")
-        basis.append("penetrate>1")
-    elif penetrate == 1:
-        facts.append("raw penetrate usually expires after one hit")
-        basis.append("penetrate=1")
-    time_left = int(_pnum(proj, "timeLeft", 0))
-    if 0 < time_left <= 30:
-        facts.append("raw timeLeft is very short")
-        basis.append("timeLeft<=30")
-    elif time_left >= 600:
-        if owner_checked:
-            facts.append("raw timeLeft is high; for owner-checked/held projectiles this is not evidence of long free flight")
-        else:
-            facts.append("raw timeLeft is high; treat it as an engine lifetime budget, not a fantasy instruction")
-        basis.append("timeLeft>=600")
-    extra = int(_pnum(proj, "extraUpdates", 0))
-    if extra > 0:
-        facts.append(f"uses extra update steps ({extra})")
-        basis.append("extraUpdates>0")
-    w = int(_pnum(proj, "width", 0)); h = int(_pnum(proj, "height", 0))
-    if w > 0 and h > 0:
-        facts.append(f"projectile hitbox size {w}x{h}")
-        basis.append("width/height")
-    if _pbool(proj, "fromGeneratedAttack"):
-        facts.append("parent is another InfiniCraft generated projectile; behavior comes from generated runtime fields")
-        basis.append("fromGeneratedAttack=true")
-    out["facts"] = facts[:10]
-    out["basis"] = basis[:12]
-    return {k: v for k, v in out.items() if _compact_keep(v)}
-
 def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
@@ -579,10 +172,6 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
         out["motionReference"] = copy.deepcopy(proj["motionReference"])
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
-    if LLM_INCLUDE_PROJECTILE_BEHAVIOR_DIGEST:
-        digest = projectile_behavior_digest_for_llm(proj)
-        if digest:
-            out["behaviorDigest"] = digest
     return out
 
 def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
@@ -590,68 +179,16 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(ap, dict) or not ap:
         return {}
     out: dict[str, Any] = {}
-    mode = ap.get("mode") or ("legacy_profile" if ap else "")
-    if mode:
-        out["mode"] = mode
+    if _compact_keep(ap.get("mode")):
+        out["mode"] = ap["mode"]
     if _compact_keep(ap.get("ammoId")):
-        out["ammoId"] = ap.get("ammoId")
+        out["ammoId"] = ap["ammoId"]
     if isinstance(ap.get("ammoItemRaw"), dict):
         out["ammoItemRaw"] = _select_raw_keys(ap["ammoItemRaw"], LLM_AMMO_ITEM_KEYS)
-    if isinstance(ap.get("projectileRaw"), dict):
-        out["projectileRaw"] = compact_projectile_profile(ap["projectileRaw"])
-
-    # v0.4.24: ammo examples are context, not the canonical identity of the weapon.
-    # The weapon's own item.shoot field is separate from inventory/fallback ammo candidates.
-    if isinstance(ap.get("weaponShootFieldProjectileRaw"), dict):
-        out["weaponShootFieldProjectileRaw"] = compact_projectile_profile(ap["weaponShootFieldProjectileRaw"])
-
-    inv_ammo = ap.get("playerInventoryAmmoRaw")
-    if isinstance(inv_ammo, list):
-        out["playerInventoryAmmoRaw"] = [_select_raw_keys(x, LLM_AMMO_ITEM_KEYS) for x in inv_ammo if isinstance(x, dict)][:max(0, LLM_AMMO_REP_LIMIT)]
-    inv_proj = ap.get("playerInventoryProjectileRaw")
-    if isinstance(inv_proj, list):
-        out["playerInventoryProjectileRaw"] = [compact_projectile_profile(x) for x in inv_proj if isinstance(x, dict)][:max(0, LLM_AMMO_REP_LIMIT)]
-    fb_ammo = ap.get("fallbackAmmoRaw")
-    if isinstance(fb_ammo, list):
-        out["fallbackAmmoRaw"] = [_select_raw_keys(x, LLM_AMMO_ITEM_KEYS) for x in fb_ammo if isinstance(x, dict)][:max(0, LLM_AMMO_REP_LIMIT)]
-    fb_proj = ap.get("fallbackProjectileRaw")
-    if isinstance(fb_proj, list):
-        out["fallbackProjectileRaw"] = [compact_projectile_profile(x) for x in fb_proj if isinstance(x, dict)][:max(0, LLM_AMMO_REP_LIMIT)]
-
-    # Legacy runtime dump fallback.
-    if not out or mode == "legacy_profile":
-        for k in ["ammoId", "exampleAmmo", "exampleAmmoType", "exampleAmmoSourceMod", "exampleAmmoDamage", "exampleAmmoShoot", "exampleAmmoShootSpeed", "exampleAmmoKnockback"]:
-            if k in ap and _compact_keep(ap.get(k)):
-                out[k] = ap.get(k)
-        if isinstance(ap.get("exampleProjectile"), dict):
-            out["exampleProjectile"] = compact_projectile_profile(ap["exampleProjectile"])
+    for key in ("projectileRaw", "weaponShootFieldProjectileRaw"):
+        if isinstance(ap.get(key), dict):
+            out[key] = compact_projectile_profile(ap[key])
     return {k: v for k, v in out.items() if _compact_keep(v)}
-
-def _raw_item_fields_for_llm(item: dict[str, Any]) -> dict[str, Any]:
-    """Raw-ish item fields for the planner.
-
-    Do not add interpretations such as "no magic observed" or "wood implies chips" here.
-    Missing projectile/probe sections are simply omitted; Gemma does the source reading.
-    """
-    keys = [
-        "type", "name", "internalName", "fullName", "sourceMod", "tooltipLines", "tooltipSource",
-        "damage", "damageClass", "useStyle", "useStyleName", "useTime", "useAnimation",
-        "rare", "rarityDetails", "value", "maxStack", "stack", "consumable", "material",
-        "accessory", "defense", "createTile", "createWall", "placeStyle",
-        "pickPower", "axePower", "hammerPower", "pick", "axe", "hammer",
-        "healLife", "healMana", "potion", "manaCost", "buffType", "buffTime",
-        "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "knockback", "knockBack",
-        "questItem", "expert", "master",
-        "mountType", "cartTrack", "pet", "lightPet",
-        "fishingPole", "bait",
-        "autoReuse", "channel", "noMelee", "noUseGraphic",
-    ]
-    out: dict[str, Any] = {}
-    for k in keys:
-        v = item_field(item, k, None)
-        if v is not None and v != "":
-            out[k] = v
-    return out
 
 def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     """Compact raw Terraria item role flags for planner context.

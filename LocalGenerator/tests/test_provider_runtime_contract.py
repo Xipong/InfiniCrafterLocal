@@ -75,7 +75,6 @@ def test_combine_endpoint_preserves_admission_cache_and_failure_owner(endpoint, 
         options["combine"] = lambda _: (_ for _ in ()).throw(craft_error)
         if scenario == "craft-error":
             setattr(craft_error, "_infini_failure_snapshot", dict(failure))
-        options["last_failure_summary"] = lambda: pytest.fail("unjoined global summary must never be read")
     if scenario.endswith("error") and scenario != "cache-error":
         with pytest.raises(RuntimeError, match="craft failed") as caught:
             combine_endpoint.handle_combine_request({}, **options)

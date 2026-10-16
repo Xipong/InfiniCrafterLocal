@@ -1,8 +1,8 @@
 # Точная звуковая палитра и явные параметры воспроизведения
 
-## Что восстановлено
+## Текущий selector domain
 
-Исторический `InfiniSoundLibrary` в `f04ee02` содержал 92 acoustic IDs, соответствующие 71 уникальному `SoundID`. До этого изменения VFX-owned `soundId` уже поддерживал 20 native members: семь пересекались с историческим набором, 13 были новыми. Теперь доступны **84 exact `SoundID`** — объединение обоих наборов; все 64 недостающих исторических members возвращены. [Независимый inventory fixture](../../LocalGenerator/tests/fixtures/vfx_sound_inventory.json) сохраняет исходные таблицы и commits для проверки этого утверждения.
+Доступны **84 exact `SoundID`**. Canonical domain берётся у owner ниже; [независимый inventory fixture](../../LocalGenerator/tests/fixtures/vfx_sound_inventory.json) сохраняет reference mapping, не альтернативный runtime selector.
 
 Канонический runtime-facing owner — [`vfx_manifest.py`](../../LocalGenerator/infini_local/core/vfx_manifest.py): `_SOUND_IDS` определяет один finite selector domain, `_sound_schema()` — три playback controls. Director, Repair и persisted wire берут определения отсюда. Gameplay Author не получает звуковых capabilities. Выбор не зависит от названия, класса урона, parent prose, размера visual budget или категории оружия.
 
@@ -15,8 +15,6 @@
 ```json
 {
   "rendererKind": "soundCue",
-  "channel": "sound",
-  "lane": "cue",
   "soundId": "Item26",
   "sound": {
     "volume": 0.55,
@@ -35,9 +33,9 @@
 
 Дополнительно весь интервал должен помещаться в native диапазон `[-1,1]`: `abs(pitch) + pitchVariance/2 <= 1`. Например, `pitch=0.9, pitchVariance=0.2` допустимы, а `0.9/0.6` — нет. Это refusal с точной диагностикой, а не скрытый clamp authored variance. Название `pitchVariance` следует API Terraria; величина не является статистической дисперсией.
 
-`volume=0` — явная тишина: slot не вызывает `SoundEngine.PlaySound` и не занимает native sound instance. Пустой `slots` тоже остаётся допустимым решением. Native `Item.UseSound` у generated items по-прежнему отключён: отсутствие audio slot не дополняется звуком. Звук может существовать без particles, trails или PNG.
+`volume=0` — явная тишина: slot не вызывает `SoundEngine.PlaySound` и не занимает native sound instance. Пустой `slots` тоже остаётся допустимым решением. Native `Item.UseSound` у generated items по-прежнему отключён: отсутствие audio slot не дополняется звуком. Звук может существовать без particles, trails или PNG. Sound branch не принимает `scale`, `spread`, `particleSystemId`, `textureRole`, `duration`, `alpha`, `blend`, `layer` или image-request fields. Nonperiodic audio также не имеет `startTick`, `repeatEvery`, `density`. Для periodic audio `repeatEvery` обязателен; item audio не имеет `startTick`/`density`, projectile audio требует `startTick` и требует `density` только при `repeatEvery=0` для существующей automatic cadence. При положительном repeatEvery `density` запрещён: исполнением управляет явный cadence.
 
-У `sound` только один владелец громкости — `sound.volume`. Общий `alpha` остаётся в форме VFX slot, но не влияет на аудио. У `pitch` нет дополнительного `phaseOffset`, sample pitch, seed jitter или `Main.musicPitch`. Дистанция до слушателя, пользовательская громкость и native sound settings действуют дальше обычным образом.
+У `sound` только один владелец громкости — `sound.volume`. Неиспользуемые visual controls не являются audio choices; допустимые поля `soundCue` определяет его renderer branch, не общий набор placeholders. У `pitch` нет дополнительного `phaseOffset`, sample pitch, seed jitter или `Main.musicPitch`. Дистанция до слушателя, пользовательская громкость и native sound settings действуют дальше обычным образом.
 
 ## Native projection
 
@@ -66,7 +64,7 @@ Runtime packet identities, event cadence, anchor resolution и существу�
 
 ## Repair и compiler receipts
 
-Repair использует обычный frozen-first subtree merge. Неверный `sound.volume` открывает только эту leaf; корректные pitch, variance, sample, entity/event, alpha и остальные slots остаются frozen. Если отсутствует весь `sound`, модель может передать только эту недостающую тройку, сохранив ранее выбранный sample. При нарушении интервала диагностируется `sound.pitchVariance`, чтобы сохранить уже валидный центральный pitch. При невалидном самом pitch это правило не расширяет scope на его валидного соседа.
+Repair использует обычный frozen-first subtree merge. Неверный `sound.volume` открывает только эту leaf; корректные pitch, variance, sample, entity/event и остальные slots остаются frozen. Если отсутствует весь `sound`, модель может передать только эту недостающую тройку, сохранив ранее выбранный sample. При нарушении интервала диагностируется `sound.pitchVariance`, чтобы сохранить уже валидный центральный pitch. При невалидном самом pitch это правило не расширяет scope на его валидного соседа.
 
 Canonical VFX structural prefilter теперь снимает numeric bounds до frozen merge. Поэтому typed попытка заменить frozen pitch на `99` игнорируется с audit и не отменяет полезное исправление volume. Числовые типы, объявленные keys и required shape проверяются до merge; все bounds и зависимости — после него. Если сама разрешённая для исправления volume остаётся вне диапазона, итоговый manifest отклоняется. Это изменение общей границы VFX Repair, без отдельного sound-specific repair API.
 
@@ -80,4 +78,4 @@ Python tests сверяют все 84 selectors с независимым invent
 
 [`EngineRuntimeChecks.SoundSelection.cs`](../../tools/EngineRuntimeChecks.SoundSelection.cs) проверяет явные selections/controls по всем samples и item/projectile periodic/event и detached routes. Отказ старой absence через native readers и playback resolver покрывает [`EngineRuntimeChecks.NativeDtoRetirement.cs`](../../tools/EngineRuntimeChecks.NativeDtoRetirement.cs). SoundSelection наблюдает настоящий `SoundEngine.PlaySound` boundary, JSON roundtrips, interval rejection, явную тишину, native policy copy и `GetRandomPitch`; instrument flag наблюдается только в тесте. Тесты не открывают audio device и не доказывают художественное качество или audibility в игре.
 
-Нативный runner исполняется отдельно от Python tests и требует matching tModLoader/dependency assemblies. Приёмка этого follow-up включает SDK build и headless EngineRuntimeChecks, в том числе sound consumers и отказ old-absence; точные результаты привязаны к финальной source/delivery receipt. Это не SP/MP game/audio smoke: игра, audio device и художественное качество звучания не проверялись.
+Нативный runner исполняется отдельно от Python tests и требует matching tModLoader/dependency assemblies. Команды SDK build/headless EngineRuntimeChecks и границы среды — [TESTING](../development/TESTING_RU.md). Исполненный headless sound seam не является SP/MP game/audio smoke или художественной приёмкой.

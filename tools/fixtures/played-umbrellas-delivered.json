@@ -108,123 +108,10 @@
       "description": "The program defines a retained item whose hidden use graphic is replaced by the primary owner-attached swordbrella jab. The intended presentation preserves both nested canopies and incorporates the Wand of Sparking as their shaft; no image asset is delivered by this gameplay object. Primary use has a 24-tick base interval and animation, no automatic reuse, and base mana cost 2. The jab has a 13-tick initial-axis native front-hand cycle and a 30-by-30 collision rectangle centered 24 pixels beyond the hand. It deals 10 base melee damage with 5 knockback, owner hit checking, unlimited penetration and once-per-NPC immunity. Each actual direct hit requests one independent spark at the jab's event origin, aimed toward the cursor at that spawn. Sparks start at speed 7, gain 0.08 downward velocity per update, deal 8 base magic damage with zero knockback, and emit orange light. Each lasts at most 45 ticks, collides with tiles without bouncing, and has penetration 2 with shared owner immunity. The acyclic jab-to-spark graph retains the default finite allowance of 32 successful descendant spawns per activation; there is no replenishing pool. No area impact, status, alternate use or passive defensive effect is authored.",
       "identity": "generated:g_9e339be4540919d3",
       "name": "Double-Canopy Spark Swordbrella",
-      "notableEffects": [
-        "Click-driven retained weapon with native animation-start mana payment and a projectile replacing the hidden body.",
-        "Short fixed-axis jab that can contact several distinct enemies without sprite-derived reach.",
-        "Contact produces cursor-aimed follow-through sparks, bounded by 32 successful descendant spawns rather than guaranteed output.",
-        "Short-lived curving spark with 8 base magic damage, no guaranteed follow-up hit and no status effect."
-      ],
       "playerExperience": "Click near an enemy for a short jab that does not track later cursor movement. Direct contact can launch a small curving spark toward the cursor, allowing deliberate follow-through into a group. A spark is not guaranteed to hit either the original enemy or a second enemy: shared immunity, terrain and ordinary NPC eligibility still apply. Multiple distinct enemies contacted by the jab can each request a spark, subject to runtime budgets. Misses produce no spark. The item is never consumed and uses no ammunition. Native mana payment is attempted at animation start, including misses; the stated timing and mana values are authored bases rather than measured totals after player modifiers.",
-      "runtimeEntityIds": [
-        "sparkbrella_item",
-        "sparkbrella_jab",
-        "sparkbrella_ember"
-      ],
-      "runtimePrimaryEntityId": "sparkbrella_jab",
       "schema": "infini.generated-parent-summary.v2"
     },
     "id": "g_9e339be4540919d3",
-    "itemKnowledge": {
-      "enabled": true,
-      "parents": [
-        {
-          "category": "weapon",
-          "confidence": 0.66,
-          "generatedDepth": 1,
-          "identity": "generated:g_60d18fd7593d52d8",
-          "name": "Double-Canopy Copper Swordbrella",
-          "powerScore": 95.74,
-          "sourceHint": "live rarity metadata + Terraria mechanics",
-          "tags": [
-            "canopy",
-            "copper",
-            "double",
-            "generated",
-            "hidden_use_graphic",
-            "item",
-            "long_lived_projectile",
-            "melee",
-            "mod_infinicrafterlocal",
-            "modded",
-            "no_melee",
-            "noncolliding_projectile",
-            "placeable",
-            "projectile",
-            "sword",
-            "swordbrella",
-            "weapon"
-          ],
-          "tier": "hardmode_early"
-        },
-        {
-          "category": "weapon",
-          "confidence": 0.66,
-          "generatedDepth": 0,
-          "identity": "item:Terraria/WandofSparking:3069",
-          "name": "Жезл искр",
-          "powerScore": 100.54,
-          "sourceHint": "live rarity metadata + Terraria mechanics",
-          "tags": [
-            "long_lived_projectile",
-            "magic",
-            "material",
-            "no_melee",
-            "piercing",
-            "piercing_projectile",
-            "projectile",
-            "sparking",
-            "vanilla_ai_style",
-            "wand",
-            "wandof",
-            "weapon"
-          ],
-          "tier": "hardmode_early"
-        }
-      ],
-      "resultCard": {
-        "category": "generic",
-        "confidence": 0.74,
-        "generatedDepth": 1,
-        "identity": "generated:g_9e339be4540919d3",
-        "name": "Double-Canopy Spark Swordbrella",
-        "powerScore": 84.44,
-        "sourceHint": "generated result card from gameplay + parent knowledge",
-        "tags": [],
-        "tier": "hardmode_early"
-      },
-      "strongestMaterialPowerScore": 0,
-      "strongestMaterialTier": "",
-      "strongestPowerScore": 100.54,
-      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
-      "strongestTier": "hardmode_early",
-      "tagsFromKnowledge": [
-        "canopy",
-        "copper",
-        "double",
-        "generated",
-        "hidden_use_graphic",
-        "item",
-        "long_lived_projectile",
-        "magic",
-        "material",
-        "melee",
-        "mod_infinicrafterlocal",
-        "modded",
-        "no_melee",
-        "noncolliding_projectile",
-        "piercing",
-        "piercing_projectile",
-        "placeable",
-        "projectile",
-        "sparking",
-        "sword",
-        "swordbrella",
-        "vanilla_ai_style",
-        "wand",
-        "wandof",
-        "weapon"
-      ]
-    },
     "llmStageAccounting": {
       "gameplayAuthorCalls": 1,
       "gameplayRepairCalls": 0,
@@ -540,100 +427,32 @@
     "tags": [],
     "vfxManifest": {
       "budget": {
-        "effectMagnitude": 0.12,
-        "emergencyCap": true,
-        "enablePersistentSmoke": false,
-        "enablePointSparks": true,
-        "enableSoftGlow": true,
         "maxDrawCalls": 100,
         "maxParticlesPerTick": 56,
-        "maxParticlesTotal": 2200,
-        "spawnRateMultiplier": 1.0,
-        "visualBudgetClass": "tiny"
+        "maxParticlesTotal": 2200
       },
-      "confidence": 1.0,
-      "debug": {
-        "pattern": "runtime_entity_events",
-        "roles": [
-          "inventory_item",
-          "held_body",
-          "child_projectile"
-        ],
-        "selectedReasons": [
-          "exact_entity_event_binding"
-        ],
-        "selectedScore": 1.0,
-        "topCandidates": [],
-        "wordProbe": []
-      },
-      "effectMagnitude": 0.12,
-      "effectName": "runtime_entity_events",
-      "inspirationNames": [],
-      "motif": {
-        "chaos": 0.0,
-        "element": "Literal nested golden-fabric and copper-ribbed canopies sharing the Wand of Sparking shaft.",
-        "motionLanguage": "Leave the accepted initial-axis front-hand jab and independently launched downward-curving spark visually unobscured. Add only a quiet use-time audio cue.",
-        "paletteRole": "Retain the accepted golden fabric, copper ribs, walnut shaft and orange spark color without supplementary glow or lighting.",
-        "rhythm": 1.0,
-        "shapeLanguage": "Preserve the rigid double-canopy body and compact orange traveling spark. No area rings, explosions, duplicate bodies or additional particle emissions."
-      },
-      "overlayPolicy": "LocalOnly",
-      "playbackMode": "Realtime",
-      "recipeId": "r_37b4930348fc75c6fe3462f0",
-      "schema": "infini.vfx.runtime-events.v15",
-      "seed": 368535799,
+      "schema": "infini.vfx.runtime-events.v16",
       "slots": [
         {
-          "alpha": 1.0,
           "anchor": "self",
-          "backend": "Auto",
-          "bakedClipHash": "",
-          "bakedClipId": "",
-          "bakedCommandCount": 0,
-          "bakedCommands": [],
-          "blend": "alpha",
-          "budgetWeight": 1.0,
-          "channel": "sound",
-          "density": 0.0,
-          "duration": 3,
-          "effectName": "",
-          "emissionMode": "none",
           "entityId": "sparkbrella_item",
           "event": "on_use",
-          "eventGroup": "auto",
-          "fadeIn": 0.0,
-          "fadeOut": 0.0,
           "id": "quiet_jab_use",
-          "jitter": 0.0,
-          "lane": "cue",
-          "layer": "BeforeProjectiles",
-          "particleRole": "none",
-          "particleSystemId": "none",
           "rendererKind": "soundCue",
-          "repeatEvery": 0,
-          "scale": 1.0,
-          "signatureWeight": 0.0,
           "slotSeed": 1738303756,
           "sound": {
             "pitch": 0.15,
             "pitchVariance": 0.08,
             "volume": 0.45
           },
-          "soundId": "Item1",
-          "source": "llm_vfx_director",
-          "spread": 0.0,
-          "stage": "loop",
-          "startTick": 0,
-          "textureRole": "none",
-          "visualCost": 0.0
+          "soundId": "Item1"
         }
       ],
-      "visualBudgetClass": "tiny"
+      "recipeId": "r_37b4930348fc75c6fe3462f0"
     },
     "visual": {
       "drawOffsetX": 0,
       "drawOffsetY": 0,
-      "effectColor": "orange",
       "forwardAngleDegrees": 0,
       "grip": {
         "normalizedX": 0.1875,
@@ -654,13 +473,10 @@
       ],
       "preferredCanvasSize": 64,
       "renderSizePx": 54,
-      "requiredAnchors": [],
-      "semanticReviewStatus": "not_performed",
       "spritePath": "infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
       "spriteStatus": "generated",
       "spriteTechnicalScore": 0.97,
       "spriteUrl": "/sprite/infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
-      "style": "terraria_item_sprite",
       "worldScale": 1.0
     }
   },
@@ -777,101 +593,10 @@
       "description": "The program defines one reusable item and one primary owner-attached thrust body. Primary use spawns one body, capped at one live copy for this owner and generated item. The vanilla item-use graphic and item contact hitbox are disabled; the projectile is the physical held representation. Its native front-hand pose extends and retracts on the initial cursor axis over a 13-tick cycle, with its 30-by-30-pixel collision rectangle centered 24 pixels beyond the hand. The body lasts 13 ticks, while base item use and animation both last 22 ticks. Direct projectile contact has 10 base melee damage, 4 knockback, owner hit checking, unlimited penetration and once-per-NPC immunity for that physical thrust. Each direct hit invokes a 1.5-tile-radius damage action at the event position, excluding that event's directly hit NPC. Its multiplier is 0.4 of the authored projectile base damage, or 4 before target defense and applicable native damage rules. It creates no child entities. The literal visual concept is a copper-pointed umbrella with copper blade ribs; no slow fall, guarding, flight or alternate-use mechanic is authored.",
       "identity": "generated:g_a68f03dee9621149",
       "name": "Copper-Ribbed Swordbrella",
-      "notableEffects": [
-        "A click-driven reusable jab without mana, ammunition or stack expenditure, using authored base timing.",
-        "The projectile replaces the hidden item-use graphic and performs a short fixed-axis hand thrust.",
-        "Direct hits deliver 10 base damage and trigger weaker nearby impacts, excluding only the current direct target."
-      ],
       "playerExperience": "Click toward a nearby enemy to make a short copper-umbrella jab. Aim is fixed at activation rather than continuously tracking the cursor. Closely grouped enemies can receive weaker canopy-impact damage when a direct hit occurs. The same nearby enemy may be eligible for separate impact events from hits on other enemies; this is not a once-per-thrust area-damage cap. The item remains in inventory and has no mana, ammunition or stack cost. It does not automatically repeat while the button is held. The stated timings are authored base values, not measured timings after player modifiers.",
-      "runtimeEntityIds": [
-        "swordbrella_item",
-        "swordbrella_thrust"
-      ],
-      "runtimePrimaryEntityId": "swordbrella_thrust",
       "schema": "infini.generated-parent-summary.v2"
     },
     "id": "g_a68f03dee9621149",
-    "itemKnowledge": {
-      "enabled": true,
-      "parents": [
-        {
-          "category": "weapon",
-          "confidence": 0.66,
-          "generatedDepth": 0,
-          "identity": "item:Terraria/Umbrella:946",
-          "name": "Зонт",
-          "powerScore": 40.92,
-          "sourceHint": "live rarity metadata + Terraria mechanics",
-          "tags": [
-            "melee",
-            "umbrella",
-            "weapon"
-          ],
-          "tier": "pre_boss"
-        },
-        {
-          "category": "weapon",
-          "confidence": 0.66,
-          "generatedDepth": 0,
-          "identity": "item:Terraria/CopperShortsword:3507",
-          "name": "Медный короткий меч",
-          "powerScore": 42.81,
-          "sourceHint": "live rarity metadata + Terraria mechanics",
-          "tags": [
-            "copper",
-            "fast_projectile",
-            "hidden_use_graphic",
-            "material",
-            "melee",
-            "melee_projection",
-            "no_melee",
-            "noncolliding_projectile",
-            "piercing",
-            "piercing_projectile",
-            "projectile",
-            "shortsword",
-            "sword",
-            "vanilla_ai_style",
-            "weapon"
-          ],
-          "tier": "pre_boss"
-        }
-      ],
-      "resultCard": {
-        "category": "generic",
-        "confidence": 0.74,
-        "generatedDepth": 1,
-        "identity": "generated:g_a68f03dee9621149",
-        "name": "Copper-Ribbed Swordbrella",
-        "powerScore": 50.85,
-        "sourceHint": "generated result card from gameplay + parent knowledge",
-        "tags": [],
-        "tier": "pre_boss"
-      },
-      "strongestMaterialPowerScore": 0,
-      "strongestMaterialTier": "",
-      "strongestPowerScore": 42.81,
-      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
-      "strongestTier": "pre_boss",
-      "tagsFromKnowledge": [
-        "copper",
-        "fast_projectile",
-        "hidden_use_graphic",
-        "material",
-        "melee",
-        "melee_projection",
-        "no_melee",
-        "noncolliding_projectile",
-        "piercing",
-        "piercing_projectile",
-        "projectile",
-        "shortsword",
-        "sword",
-        "umbrella",
-        "vanilla_ai_style",
-        "weapon"
-      ]
-    },
     "llmStageAccounting": {
       "gameplayAuthorCalls": 1,
       "gameplayRepairCalls": 0,
@@ -1115,159 +840,71 @@
     "tags": [],
     "vfxManifest": {
       "budget": {
-        "effectMagnitude": 0.25,
-        "emergencyCap": true,
-        "enablePersistentSmoke": false,
-        "enablePointSparks": true,
-        "enableSoftGlow": true,
         "maxDrawCalls": 172,
         "maxParticlesPerTick": 104,
-        "maxParticlesTotal": 4600,
-        "spawnRateMultiplier": 1.0,
-        "visualBudgetClass": "small"
+        "maxParticlesTotal": 4600
       },
-      "confidence": 1.0,
-      "debug": {
-        "pattern": "runtime_entity_events",
-        "roles": [
-          "inventory_item",
-          "held_body"
-        ],
-        "selectedReasons": [
-          "exact_entity_event_binding"
-        ],
-        "selectedScore": 1.0,
-        "topCandidates": [],
-        "wordProbe": []
-      },
-      "effectMagnitude": 0.25,
-      "effectName": "runtime_entity_events",
-      "inspirationNames": [],
-      "motif": {
-        "chaos": 0.1,
-        "element": "Copper contact glints on the literal copper-ribbed umbrella.",
-        "motionLanguage": "No added body motion or persistent trail. Brief detached contact accents fade at the captured hit point.",
-        "paletteRole": "Accepted orange effect color supports the copper highlights without recoloring the physical umbrella.",
-        "rhythm": 1.0,
-        "shapeLanguage": "A thin orange contact ring and a few tiny metallic glints; leave the ochre canopy and attached copper ribs unobscured."
-      },
-      "overlayPolicy": "LocalOnly",
-      "playbackMode": "Realtime",
-      "recipeId": "r_59477a82bb68df39d164ce59",
-      "schema": "infini.vfx.runtime-events.v15",
-      "seed": 1461722243,
+      "schema": "infini.vfx.runtime-events.v16",
       "slots": [
         {
-          "alpha": 1.0,
           "anchor": "self",
-          "backend": "Auto",
-          "bakedClipHash": "",
-          "bakedClipId": "",
-          "bakedCommandCount": 0,
-          "bakedCommands": [],
-          "blend": "alpha",
-          "budgetWeight": 1.0,
-          "channel": "sound",
-          "density": 0.0,
-          "duration": 3,
-          "effectName": "",
-          "emissionMode": "none",
           "entityId": "swordbrella_item",
           "event": "on_use",
-          "eventGroup": "auto",
-          "fadeIn": 0.0,
-          "fadeOut": 0.0,
           "id": "use_swish",
-          "jitter": 0.0,
-          "lane": "cue",
-          "layer": "BeforeProjectiles",
-          "particleRole": "none",
-          "particleSystemId": "none",
           "rendererKind": "soundCue",
-          "repeatEvery": 0,
-          "scale": 1.0,
-          "signatureWeight": 0.0,
           "slotSeed": 71111543,
           "sound": {
             "pitch": 0.15,
             "pitchVariance": 0.08,
             "volume": 0.45
           },
-          "soundId": "Item1",
-          "source": "llm_vfx_director",
-          "spread": 0.0,
-          "stage": "loop",
-          "startTick": 0,
-          "textureRole": "none",
-          "visualCost": 0.0
+          "soundId": "Item1"
         },
         {
           "alpha": 0.36,
           "anchor": "hitPoint",
-          "backend": "Primitive",
-          "bakedClipHash": "",
-          "bakedClipId": "",
-          "bakedCommandCount": 0,
-          "bakedCommands": [],
           "blend": "additive",
-          "budgetWeight": 1.0,
-          "channel": "impactShape",
           "density": 0.0,
           "duration": 8,
-          "effectName": "",
-          "emissionMode": "none",
           "entityId": "swordbrella_thrust",
           "event": "on_hit",
-          "eventGroup": "auto",
-          "fadeIn": 0.0,
-          "fadeOut": 0.0,
           "id": "canopy_contact_ring",
-          "jitter": 0.0,
-          "lane": "support",
           "layer": "AfterProjectiles",
-          "particleRole": "none",
           "particleSystemId": "none",
           "rendererKind": "impactRing",
           "repeatEvery": 0,
           "scale": 0.75,
-          "signatureWeight": 0.15,
           "slotSeed": 524543554,
-          "source": "llm_vfx_director",
           "spread": 0.0,
-          "stage": "loop",
           "startTick": 0,
-          "textureRole": "none",
-          "visualCost": 0.15
+          "color": {
+            "r": 255,
+            "g": 155,
+            "b": 70
+          }
         },
         {
           "alpha": 0.65,
           "anchor": "hitPoint",
-          "backend": "Particle",
-          "bakedClipHash": "",
-          "bakedClipId": "",
-          "bakedCommandCount": 0,
-          "bakedCommands": [],
           "blend": "additive",
-          "budgetWeight": 1.0,
-          "channel": "impactParticles",
-          "density": 0.0,
           "duration": 9,
-          "effectName": "",
-          "emissionMode": "none",
           "entityId": "swordbrella_thrust",
           "event": "on_hit",
-          "eventGroup": "auto",
-          "fadeIn": 0.0,
-          "fadeOut": 0.0,
           "id": "copper_contact_glints",
-          "jitter": 0.0,
-          "lane": "accent",
           "layer": "AfterProjectiles",
           "particle": {
             "accelerationXPxPerTickSquared": 0,
             "accelerationYPxPerTickSquared": 0.04,
-            "colorEnd": "effect",
-            "colorStart": "gold",
+            "colorEnd": {
+              "r": 255,
+              "g": 155,
+              "b": 70
+            },
+            "colorStart": {
+              "r": 255,
+              "g": 205,
+              "b": 70
+            },
             "count": 4,
             "drag": 0.9,
             "endOpacity": 0,
@@ -1282,27 +919,17 @@
             "textureId": "star",
             "widthPx": 4
           },
-          "particleRole": "none",
-          "particleSystemId": "none",
           "rendererKind": "libraryParticle",
           "repeatEvery": 0,
-          "scale": 1.0,
-          "signatureWeight": 0.0,
           "slotSeed": 1814550861,
-          "source": "llm_vfx_director",
-          "spread": 0.0,
-          "stage": "loop",
-          "startTick": 0,
-          "textureRole": "none",
-          "visualCost": 0.0
+          "startTick": 0
         }
       ],
-      "visualBudgetClass": "small"
+      "recipeId": "r_59477a82bb68df39d164ce59"
     },
     "visual": {
       "drawOffsetX": 0,
       "drawOffsetY": 0,
-      "effectColor": "orange",
       "forwardAngleDegrees": 0,
       "grip": {
         "normalizedX": 0.1875,
@@ -1321,13 +948,10 @@
       ],
       "preferredCanvasSize": 64,
       "renderSizePx": 54,
-      "requiredAnchors": [],
-      "semanticReviewStatus": "not_performed",
       "spritePath": "infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
       "spriteStatus": "generated",
       "spriteTechnicalScore": 0.97,
       "spriteUrl": "/sprite/infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
-      "style": "terraria_item_sprite",
       "worldScale": 1.0
     }
   },
@@ -1440,104 +1064,10 @@
       "description": "The program defines a reusable melee item and one primary owner-attached jab body. The intended generated-item presentation is a literal double umbrella: the Copper-Ribbed Swordbrella's copper ribs and crown point nested beneath the fabric canopy of Зонт. No image asset is supplied by this gameplay object. The item-use graphic and custom held root are hidden during use, leaving the primary projectile as the intended physical held representation. Primary use requests one jab, with an explicit same-owner/item/entity live cap of one. Its 13-tick native front-hand cycle extends and retracts along the initial cursor axis. The 30-by-30-pixel collision rectangle is centered 24 pixels beyond the native hand, independently of sprite geometry. Contact deals 10 base melee damage with 5 knockback and owner hit checking. Unlimited penetration and once-per-NPC immunity allow the same physical jab to contact multiple different enemies. Each direct hit triggers a 2-tile-radius area action at the event position, excluding only that event's direct target, with 0.4 times the authored projectile base damage: 4 before defense and applicable native rules. No children are spawned. Base item use and animation are both 22 ticks, with no automatic reuse or channeling. No slow fall, guarding, passive utility or alternate use is authored.",
       "identity": "generated:g_60d18fd7593d52d8",
       "name": "Double-Canopy Copper Swordbrella",
-      "notableEffects": [
-        "A retained, click-driven weapon with no mana or ammunition requirement and 22-tick authored base cadence.",
-        "A short fixed-axis hand jab replaces the hidden item-use representation; sprite geometry does not determine contact reach.",
-        "The jab can contact multiple different enemies, with owner hit checking and the stated direct damage and knockback.",
-        "Each contact can deal weaker surrounding impacts with a base of 4 before defense; separate hit events may affect the same neighboring NPC."
-      ],
       "playerExperience": "Click toward a nearby enemy for a short fixed-axis jab. Turning the cursor after activation does not redirect that jab. Contacting grouped enemies can produce weaker surrounding impacts; a neighboring enemy is not guaranteed to take damage, and separate direct-hit events can make the same nearby NPC eligible for multiple area actions. The weapon is retained and requires neither mana nor ammunition. Its attack cadence and animation values are authored bases, not measured effective timings after player modifiers. The extra canopy improves the inherited impact radius without adding ranged shots or defensive movement abilities.",
-      "runtimeEntityIds": [
-        "double_canopy_item",
-        "double_canopy_jab"
-      ],
-      "runtimePrimaryEntityId": "double_canopy_jab",
       "schema": "infini.generated-parent-summary.v2"
     },
     "id": "g_60d18fd7593d52d8",
-    "itemKnowledge": {
-      "enabled": true,
-      "parents": [
-        {
-          "category": "weapon",
-          "confidence": 0.66,
-          "generatedDepth": 1,
-          "identity": "generated:g_a68f03dee9621149",
-          "name": "Copper-Ribbed Swordbrella",
-          "powerScore": 95.74,
-          "sourceHint": "live rarity metadata + Terraria mechanics",
-          "tags": [
-            "copper",
-            "generated",
-            "hidden_use_graphic",
-            "item",
-            "long_lived_projectile",
-            "melee",
-            "mod_infinicrafterlocal",
-            "modded",
-            "no_melee",
-            "noncolliding_projectile",
-            "placeable",
-            "projectile",
-            "ribbed",
-            "sword",
-            "swordbrella",
-            "weapon"
-          ],
-          "tier": "hardmode_early"
-        },
-        {
-          "category": "weapon",
-          "confidence": 0.66,
-          "generatedDepth": 0,
-          "identity": "item:Terraria/Umbrella:946",
-          "name": "Зонт",
-          "powerScore": 40.92,
-          "sourceHint": "live rarity metadata + Terraria mechanics",
-          "tags": [
-            "melee",
-            "umbrella",
-            "weapon"
-          ],
-          "tier": "pre_boss"
-        }
-      ],
-      "resultCard": {
-        "category": "generic",
-        "confidence": 0.74,
-        "generatedDepth": 1,
-        "identity": "generated:g_60d18fd7593d52d8",
-        "name": "Double-Canopy Copper Swordbrella",
-        "powerScore": 80.51,
-        "sourceHint": "generated result card from gameplay + parent knowledge",
-        "tags": [],
-        "tier": "hardmode_early"
-      },
-      "strongestMaterialPowerScore": 0,
-      "strongestMaterialTier": "",
-      "strongestPowerScore": 95.74,
-      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
-      "strongestTier": "hardmode_early",
-      "tagsFromKnowledge": [
-        "copper",
-        "generated",
-        "hidden_use_graphic",
-        "item",
-        "long_lived_projectile",
-        "melee",
-        "mod_infinicrafterlocal",
-        "modded",
-        "no_melee",
-        "noncolliding_projectile",
-        "placeable",
-        "projectile",
-        "ribbed",
-        "sword",
-        "swordbrella",
-        "umbrella",
-        "weapon"
-      ]
-    },
     "llmStageAccounting": {
       "gameplayAuthorCalls": 1,
       "gameplayRepairCalls": 0,
@@ -1776,137 +1306,55 @@
     "tags": [],
     "vfxManifest": {
       "budget": {
-        "effectMagnitude": 0.22,
-        "emergencyCap": true,
-        "enablePersistentSmoke": false,
-        "enablePointSparks": true,
-        "enableSoftGlow": true,
         "maxDrawCalls": 136,
         "maxParticlesPerTick": 80,
-        "maxParticlesTotal": 3400,
-        "spawnRateMultiplier": 1.0,
-        "visualBudgetClass": "small"
+        "maxParticlesTotal": 3400
       },
-      "confidence": 1.0,
-      "debug": {
-        "pattern": "runtime_entity_events",
-        "roles": [
-          "inventory_item",
-          "held_body"
-        ],
-        "selectedReasons": [
-          "exact_entity_event_binding"
-        ],
-        "selectedScore": 1.0,
-        "topCandidates": [],
-        "wordProbe": []
-      },
-      "effectMagnitude": 0.22,
-      "effectName": "runtime_entity_events",
-      "inspirationNames": [],
-      "motif": {
-        "chaos": 0.0,
-        "element": "Copper contact accents beneath nested golden fabric canopies.",
-        "motionLanguage": "The accepted rigid front-hand jab supplies all body motion. A brief detached ring expands at each direct-hit point; no idle trails or expiry flourish.",
-        "paletteRole": "Use the accepted orange effect color for the contact accent, leaving the copper ribs and golden fabric readable.",
-        "rhythm": 1.0,
-        "shapeLanguage": "Keep the literal double umbrella unobscured; use only a small, thin contact ring without additional umbrella silhouettes."
-      },
-      "overlayPolicy": "LocalOnly",
-      "playbackMode": "Realtime",
-      "recipeId": "r_1a429b93c78699bc28cd2b48",
-      "schema": "infini.vfx.runtime-events.v15",
-      "seed": 1063122019,
+      "schema": "infini.vfx.runtime-events.v16",
       "slots": [
         {
-          "alpha": 1.0,
           "anchor": "self",
-          "backend": "Auto",
-          "bakedClipHash": "",
-          "bakedClipId": "",
-          "bakedCommandCount": 0,
-          "bakedCommands": [],
-          "blend": "alpha",
-          "budgetWeight": 1.0,
-          "channel": "sound",
-          "density": 0.0,
-          "duration": 3,
-          "effectName": "",
-          "emissionMode": "none",
           "entityId": "double_canopy_item",
           "event": "on_use",
-          "eventGroup": "auto",
-          "fadeIn": 0.0,
-          "fadeOut": 0.0,
           "id": "jab_use_sound",
-          "jitter": 0.0,
-          "lane": "cue",
-          "layer": "BeforeProjectiles",
-          "particleRole": "none",
-          "particleSystemId": "none",
           "rendererKind": "soundCue",
-          "repeatEvery": 0,
-          "scale": 1.0,
-          "signatureWeight": 0.0,
           "slotSeed": 1150851355,
           "sound": {
             "pitch": 0.12,
             "pitchVariance": 0.08,
             "volume": 0.45
           },
-          "soundId": "Item1",
-          "source": "llm_vfx_director",
-          "spread": 0.0,
-          "stage": "loop",
-          "startTick": 0,
-          "textureRole": "none",
-          "visualCost": 0.0
+          "soundId": "Item1"
         },
         {
           "alpha": 0.48,
           "anchor": "hitPoint",
-          "backend": "Primitive",
-          "bakedClipHash": "",
-          "bakedClipId": "",
-          "bakedCommandCount": 0,
-          "bakedCommands": [],
           "blend": "additive",
-          "budgetWeight": 1.0,
-          "channel": "impactShape",
           "density": 0.0,
           "duration": 8,
-          "effectName": "",
-          "emissionMode": "none",
           "entityId": "double_canopy_jab",
           "event": "on_hit",
-          "eventGroup": "auto",
-          "fadeIn": 0.0,
-          "fadeOut": 0.0,
           "id": "copper_contact_ring",
-          "jitter": 0.0,
-          "lane": "accent",
           "layer": "AfterProjectiles",
-          "particleRole": "none",
           "particleSystemId": "none",
           "rendererKind": "impactRing",
           "repeatEvery": 0,
           "scale": 0.7,
-          "signatureWeight": 0.0,
           "slotSeed": 86298594,
-          "source": "llm_vfx_director",
           "spread": 0.0,
-          "stage": "loop",
           "startTick": 0,
-          "textureRole": "none",
-          "visualCost": 0.15
+          "color": {
+            "r": 255,
+            "g": 155,
+            "b": 70
+          }
         }
       ],
-      "visualBudgetClass": "small"
+      "recipeId": "r_1a429b93c78699bc28cd2b48"
     },
     "visual": {
       "drawOffsetX": 0,
       "drawOffsetY": 0,
-      "effectColor": "orange",
       "forwardAngleDegrees": 0,
       "grip": {
         "normalizedX": 0.1875,
@@ -1926,13 +1374,10 @@
       ],
       "preferredCanvasSize": 64,
       "renderSizePx": 54,
-      "requiredAnchors": [],
-      "semanticReviewStatus": "not_performed",
       "spritePath": "infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
       "spriteStatus": "generated",
       "spriteTechnicalScore": 0.97,
       "spriteUrl": "/sprite/infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
-      "style": "terraria_item_sprite",
       "worldScale": 1.0
     }
   }

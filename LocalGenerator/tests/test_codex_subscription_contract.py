@@ -54,7 +54,7 @@ def test_subscription_sends_supported_schema_without_mutating_authored_packet(mo
     monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     if stage == "author":
         request, _, _ = author.build_initial_author_request(
-            {"name": "Workbench"}, {"name": "Sword"}, {}, {}, "schema-replay", model_name="gpt-6-sol")
+            {"name": "Workbench"}, {"name": "Sword"}, "schema-replay", model_name="gpt-6-sol")
     else:
         request = {"model": "gpt-6-sol", "messages": [{"role": "user", "content": "Repair the exact invalid leaf."}],
                    "response_format": llm.llm_json_response_format(
@@ -132,7 +132,7 @@ def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_inva
     monkeypatch.setattr(author, "trace_stage_request", lambda *_a, **_kw: None)
     monkeypatch.setattr(author, "llm_chat_json", lambda payload, **_kw: sent.append(copy.deepcopy(payload)) or {
         "choices": [{"message": {"content": json.dumps(encoded)}}], "_debug": {"responseFormatType": "json_schema"}})
-    parsed = author.try_llm_plan({}, {}, {}, {}, "subscription-parse")
+    parsed = author.try_llm_plan({}, {}, "subscription-parse")
     assert len(sent) == 1 and encoded == before
     report = validate_runtime_program(parsed)
     if control == "nullable-valid":
@@ -178,7 +178,7 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
         return original_filter(current, delta, scope)
     monkeypatch.setattr(author, "llm_chat_json", respond)
     monkeypatch.setattr(author, "filter_repair_patch_scope", observe)
-    repaired = author.repair_author_item_after_failure(item, {}, {}, {}, {}, "provider-offline", failure_report=failure)
+    repaired = author.repair_author_item_after_failure(item, {}, {}, "provider-offline", failure_report=failure)
     assert len(requests) == len(premerge) == 1
     _assert_structured_outputs_subset(requests[0]["text"]["format"]["schema"])
     assert requests[0]["model"] == "gpt-6-sol" and requests[0]["text"]["format"]["strict"] is True

@@ -16,7 +16,6 @@ from infini_local.desktop.settings_paths import ROOT
 FIELD_ORDER = [
     "INFINI_USE_LLM",
     "INFINI_PROMPT_STYLE",
-    "INFINI_BALANCE_MODE",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
     "INFINI_GUI_PIPELINE_PRESET",
     "INFINI_LLM_PROVIDER",
@@ -189,7 +188,6 @@ def repair_sdcpp_command_template(template: str) -> tuple[str, bool, str]:
 DEFAULTS = {
     "INFINI_USE_LLM": "1",
     "INFINI_PROMPT_STYLE": "Default",
-    "INFINI_BALANCE_MODE": "safety",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK": "0",
     "INFINI_GUI_PIPELINE_PRESET": "Локалка: LM Studio + FLUX.2 Klein 4B hybrid",
     "INFINI_LLM_PROVIDER": "local",
@@ -483,7 +481,6 @@ FIELD_HELP = {
     "INFINI_LLM_TIMEOUT": "Общее ожидание каждой LLM-стадии и её условного Repair, секунды; по умолчанию 600. Не HTTP-дедлайн игрового клиента.",
     "INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS": "Лимит ответа VFX Director/Repair. Пусто = общий INFINI_LLM_MAX_TOKENS; явный лимит сохраняется.",
     "INFINI_VFX_LLM_DIRECTOR_TIMEOUT": "Ожидание VFX Director/Repair. Пусто = общий INFINI_LLM_TIMEOUT; явное значение сохраняется.",
-    "INFINI_BALANCE_MODE": "Режим пост-авторского баланса: safety сохраняет authored значения и применяет только технические guards; normalize включает старую мягкую нормализацию; report оставляет рекомендации и C# hard clamps.",
     "INFINI_LLM_REASONING_MODE": "Управляет reasoning/thinking API у OpenRouter или prompt-only приватной проверкой для локалок.",
     "INFINI_LLM_REASONING_MAX_TOKENS": "Бюджет thinking-токенов. Работает только когда reasoning mode = tokens и провайдер поддерживает reasoning object.",
     "INFINI_LLM_REASONING_EXCLUDE": "Просит провайдера не возвращать reasoning в content. Нужен только для API reasoning, чтобы не ломать JSON-парсер.",
@@ -563,11 +560,6 @@ OPTION_HELP = {
         "local": "Локальная LLM через LM Studio/Ollama/OpenAI-compatible endpoint. Активны LM Studio URL/model, OpenRouter/Compat поля блокируются.",
         "openrouter": "LLM-контракт пишет модель с OpenRouter. Активны OpenRouter key/model/referer/title, локальные/compat поля блокируются.",
         "openai_compat": "Любой другой OpenAI-compatible API. Активны compat base URL/key/model.",
-    },
-    "INFINI_BALANCE_MODE": {
-        "safety": "Дефолт: authored damage/stats сохраняются; Python ограничивает только технически опасные projectile-параметры, C# hard clamps остаются активны.",
-        "normalize": "Старое поведение: дополнительно применять stage/DPS и equipment soft budgets.",
-        "report": "Диагностика: Python soft balance и runtime safety corridor не мутируют значения; рекомендации пишутся в balanceReport, C# hard clamps остаются.",
     },
     "INFINI_LLM_RESPONSE_FORMAT": {
         "auto": "Дефолт: сервер сам выбирает безопасный формат под провайдера/модель. Для удалённых OpenAI-compatible API это strict json_schema, поэтому на Gemini auto тоже упирается в лимит сложности схемы.",

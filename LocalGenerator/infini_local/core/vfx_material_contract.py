@@ -8,12 +8,6 @@ from typing import Any
 MATERIAL_RENDERERS = ("spriteElement", "texturedPath")
 ASSET_ID_PATTERN = r"^[A-Za-z0-9_-]{1,48}$"
 CURVES = ("linear", "easeIn", "easeOut", "smoothStep")
-COLOR_TOKENS = ("white", "gray", "silver", "brown", "tan", "red", "orange", "yellow", "gold", "green", "cyan", "blue", "purple", "pink", "black", "effect")
-NEUTRAL_FIELDS = {
-    "scale": 1, "density": 0, "spread": 0, "jitter": 0, "fadeIn": 0, "fadeOut": 0,
-    "signatureWeight": 0, "visualCost": 0, "budgetWeight": 1,
-    "emissionMode": "none", "particleRole": "none", "particleSystemId": "none", "textureRole": "none",
-}
 
 
 def _object(properties: dict[str, Any]) -> dict[str, Any]:
@@ -24,8 +18,15 @@ def _number(low: float, high: float, description: str, *, integer: bool = False)
     return {"type": "integer" if integer else "number", "minimum": low, "maximum": high, "description": description}
 
 
+def rgb_schema() -> dict[str, Any]:
+    """Canonical opaque RGB shape shared by presentation owners; opacity is separate."""
+    return {**_object({channel: {"type": "integer", "minimum": 0, "maximum": 255}
+                       for channel in ("r", "g", "b")}),
+            "description": "Explicit local RGB bytes; no named colors, global color references or alpha. White preserves texture RGB; opacity is separate."}
+
+
 def _profile(maximum: float | None = None) -> dict[str, Any]:
-    knot = {"type": "string", "enum": list(COLOR_TOKENS), "description": "Exact RGB token; effect captures existing effect color, white preserves texture RGB. Opacity is separate."} if maximum is None else _number(0, maximum, "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.")
+    knot = rgb_schema() if maximum is None else _number(0, maximum, "Dimensionless multiplier (opacity coefficient for opacityProfile); explicit zero stays zero.")
     return {
         **_object({"start": dict(knot), "middle": dict(knot), "end": dict(knot), "curve": {"type": "string", "enum": list(CURVES)}}),
         "description": "Knots at normalized profile coordinate 0, 0.5, 1: sprite lifetime age, or path profileDomain age/length. Curve per half interval: linear=t; easeIn=t*t; easeOut=1-(1-t)^2; smoothStep=t*t*(3-2*t). Captured immutably at emission.",
@@ -69,14 +70,13 @@ def _when(values: dict[str, Any], consequent: dict[str, Any]) -> dict[str, Any]:
     return {"if": {"properties": values, "required": list(values)}, "then": consequent}
 
 
-def material_slot_clauses(item_ids: list[str], legacy_renderers: list[str], events: list[str], channels: list[str], path_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def material_slot_clauses(item_ids: list[str], simple_renderers: list[str], events: list[str], path_sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
     sprite = {"rendererKind": {"const": "spriteElement"}}
     path = {"rendererKind": {"const": "texturedPath"}}
     return [
-        _when({"rendererKind": {"enum": list(MATERIAL_RENDERERS)}}, {"properties": {"channel": {"enum": [c for c in channels if c not in {"light", "sound"}]}}}),
         _when(sprite, {"required": ["element"], "properties": {"path": {"enum": []}}}),
         _when(path, {"required": ["path"], "properties": {"element": {"enum": []}, "event": {"enum": ["periodic", "on_spawn"]}, "entityId": {"enum": [row["entityId"] for row in path_sources]}}}),
-        _when({"rendererKind": {"enum": legacy_renderers}}, {"properties": {"element": {"enum": []}, "path": {"enum": []}}}),
+        _when({"rendererKind": {"enum": simple_renderers}}, {"properties": {"element": {"enum": []}, "path": {"enum": []}}}),
         _when({**sprite, "event": {"const": "periodic"}}, {"properties": {"repeatEvery": {"minimum": 1}}}),
         _when({**sprite, "event": {"enum": [event for event in events if event != "periodic"]}}, {"properties": {"repeatEvery": {"const": 0}}}),
         _when({**sprite, "event": {"const": "periodic"}, "entityId": {"enum": item_ids}}, {"properties": {"startTick": {"const": 0}}}),
@@ -120,7 +120,7 @@ def element_schema() -> dict[str, Any]:
         "speedMinPxPerTick": _number(0, 24, "Pixels per world tick, uniform speed minimum."),
         "speedMaxPxPerTick": _number(0, 24, "Pixels per world tick, uniform speed maximum >= speedMinPxPerTick."),
         "spreadRadians": _number(0, math.tau, "Radians: full cone around captured forward."),
-        "inheritVelocity": _number(0, 1, "Fraction of captured engine velocity, converted to pixels per world tick and added once: Projectile.velocity * (1 + extraUpdates), Player.velocity unchanged. This is not measured anchor displacement; a position-driven controller can use engine velocity as steering. Runtime captures the conversion before source retirement; legacy Dust velocity semantics are unchanged."),
+        "inheritVelocity": _number(0, 1, "Fraction of captured engine velocity, converted to pixels per world tick and added once: Projectile.velocity * (1 + extraUpdates), Player.velocity unchanged. This is not measured anchor displacement; a position-driven controller can use engine velocity as steering. Runtime captures the conversion before source retirement; Terraria Dust velocity is independent."),
         "drag": _number(0, 1, "Velocity retention per world tick (1 keeps velocity; 0 removes it)."),
         "accelerationXPxPerTickSquared": _number(-2, 2, "Pixels per world tick squared, X in selected attachment frame."),
         "accelerationYPxPerTickSquared": _number(-2, 2, "Pixels per world tick squared, Y in selected attachment frame."),
@@ -147,8 +147,8 @@ def library_particle_schema() -> dict[str, Any]:
         "heightPx": _number(0, 128, "Full initial height of the library unit quad in world pixels; zero stays zero."),
         "rotationRadians": _number(-math.tau, math.tau, "Initial rotation relative to captured source forward, radians."),
         "rotationSpeedRadiansPerTick": _number(-1, 1, "Spin in radians/world tick."),
-        "colorStart": {"type": "string", "enum": list(COLOR_TOKENS), "description": "Initial opaque RGB token; effect captures accepted effect color; no palette-prose parsing."},
-        "colorEnd": {"type": "string", "enum": list(COLOR_TOKENS), "description": "Final RGB token, linearly interpolated over individual lifetime."},
+        "colorStart": rgb_schema(),
+        "colorEnd": rgb_schema(),
         "endScaleMultiplier": _number(0, 4, "Final width/height multiplier, linearly interpolated from 1; zero contracts to nothing."),
         "endOpacity": _number(0, 1, "Final opacity multiplier, linearly interpolated from 1 and multiplied by common alpha once."),
     })

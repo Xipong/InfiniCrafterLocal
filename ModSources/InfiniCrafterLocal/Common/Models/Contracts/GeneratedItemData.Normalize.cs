@@ -44,14 +44,6 @@ public sealed partial class GeneratedItemData
             .Take(maxItems)
             .ToArray();
 
-    private static string NormalizeRequiredHexColor(string? value, string label)
-    {
-        string text = (value ?? "").Trim().ToLowerInvariant();
-        if (text.Length == 7 && text[0] == '#' && text.Skip(1).All(Uri.IsHexDigit))
-            return text;
-        throw new InvalidDataException($"{label} must be a #RRGGBB color");
-    }
-
     public void Normalize()
     {
         if (SchemaVersion != 5)
@@ -72,12 +64,8 @@ public sealed partial class GeneratedItemData
         SourceMode = SafeText(SourceMode, 32).ToLowerInvariant();
         Tags = SafeTextArray(Tags, 32, 64);
 
-        Canonical ??= new CanonicalSpec();
-        SourceRepresentation ??= Array.Empty<SourceRepresentationSpec>();
-        Inheritance ??= Array.Empty<InheritanceSpec>();
-        LossBudget ??= new LossBudgetSpec();
         RecipeMeta ??= new RecipeMetaSpec();
-        ItemKnowledge ??= new ItemKnowledgeSpec();
+
         GeneratedParentSummary ??= new GeneratedParentSummarySpec();
         Gameplay ??= new GameplaySpec();
         Accessory ??= new AccessorySpec();
@@ -86,9 +74,7 @@ public sealed partial class GeneratedItemData
         Visual ??= new VisualSpec();
         VfxManifest ??= new VfxManifestSpec();
         Debug ??= new Dictionary<string, System.Text.Json.JsonElement>();
-        ExtensionData ??= new Dictionary<string, System.Text.Json.JsonElement>();
 
-        RejectRetiredArchitectureFields();
         NormalizeGameplay();
         NormalizeEquipment();
         NormalizeVisual();
@@ -104,7 +90,7 @@ public sealed partial class GeneratedItemData
         ValidateBindingCapabilityProjection();
         if (!string.Equals(RuntimeProgram.ApiVersion, RuntimeApiVersion, StringComparison.Ordinal))
             throw new InvalidDataException("top-level runtimeApiVersion does not match runtimeProgram.apiVersion");
-        VfxManifest.Normalize();
+        VfxManifest.NormalizeAndValidate();
         ValidateVfxEntityEventReferences();
         GeneratedParentSummary.Normalize();
 
@@ -132,18 +118,6 @@ public sealed partial class GeneratedItemData
             if (action == RuntimeBindingAction.EquipPassive && !hasExplicitEquipment)
                 throw new InvalidDataException($"binding '{binding.Id}' equip_passive has no compiled accessory/armor capability");
         }
-    }
-
-    private void RejectRetiredArchitectureFields()
-    {
-        string[] retired =
-        {
-            "attack", "runtimePlan", "runtimeCompiled", "runtimeAffordance",
-            "runtimeArchetype", "weaponFamily", "runtimeFamily", "presentationGenome",
-        };
-        foreach (string key in retired)
-            if (ExtensionData.ContainsKey(key))
-                throw new InvalidDataException($"Retired generated-item field '{key}' is not accepted by runtime v5");
     }
 
     private void NormalizeGameplay()
@@ -237,11 +211,14 @@ public sealed partial class GeneratedItemData
     private void NormalizeVisual()
     {
         Visual.Grip?.Validate();
-        Visual.ObjectType = RuntimeText.Prose(Visual.ObjectType, 256);
-        Visual.Style = RuntimeText.Prose(Visual.Style, 256);
-        Visual.RequiredAnchors = (Visual.RequiredAnchors ?? Array.Empty<string>())
-            .Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => RuntimeText.Prose(x, 280))
-            .Distinct(StringComparer.OrdinalIgnoreCase).Take(16).ToArray();
+        bool deliveredDefinition = SourceMode is not ("player_save_ref" or "corrupt_reference" or "test_fixture" or "developer_fixture");
+        if (deliveredDefinition && (!Visual.RenderSizePx.HasValue || !Visual.ForwardAngleDegrees.HasValue))
+            throw new InvalidDataException("current item PNG requires explicit renderSizePx and forwardAngleDegrees");
+        if (deliveredDefinition) foreach (RuntimeEntitySpec entity in RuntimeProgram.Entities) {
+            if (entity.Kind == RuntimeEntityKind.ItemBody || entity.Visual.AssetMode != "baked_sprite") continue;
+            if (!entity.Visual.RenderSizePx.HasValue || !entity.Visual.ForwardAngleDegrees.HasValue)
+                throw new InvalidDataException("current distinct entity PNG requires explicit renderSizePx and forwardAngleDegrees");
+        }
         Visual.Palette = (Visual.Palette ?? Array.Empty<string>())
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => DescriptiveText(x, 256))
@@ -261,8 +238,6 @@ public sealed partial class GeneratedItemData
         Visual.WorldScale = ClampFloat(Visual.WorldScale, 0.25f, 4f);
         Visual.DrawOffsetX = ClampInt(Visual.DrawOffsetX, -256, 256);
         Visual.DrawOffsetY = ClampInt(Visual.DrawOffsetY, -256, 256);
-        Visual.DominantColorHex = NormalizeRequiredHexColor(Visual.DominantColorHex, "visual.dominantColorHex");
-        Visual.AccentColorHex = NormalizeRequiredHexColor(Visual.AccentColorHex, "visual.accentColorHex");
         Visual.SpriteTechnicalScore = ClampFloat(Visual.SpriteTechnicalScore, 0f, 1f);
         Visual.EquipOverlayScore = ClampFloat(Visual.EquipOverlayScore, 0f, 1f);
         bool inertReference = SourceMode is "player_save_ref" or "corrupt_reference";
@@ -299,6 +274,15 @@ public sealed partial class GeneratedItemData
             {
                 throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}': {error.Message}", error);
             }
+            if ((slot.RendererKind is "soundCue" or "lightCue" or "impactSprite") && slot.Event == RuntimeEventKind.Periodic) {
+                if (entity.Kind == RuntimeEntityKind.ItemBody) {
+                    if (slot.StartTick is not null || slot.Density is not null)
+                        throw new InvalidDataException("item periodic sound/light/impact cue forbids unconsumed startTick/density");
+                } else {
+                    if (slot.StartTick is null || slot.RepeatEvery == 0 && slot.Density is null)
+                        throw new InvalidDataException("projectile periodic sound/light/impact cue requires startTick and automatic-cadence density");
+                }
+            }
             var texture = slot.Element?.Texture ?? slot.Path?.Texture;
             if (slot.Element is not null && entity.Kind == RuntimeEntityKind.ItemBody && slot.Event == RuntimeEventKind.Periodic && slot.StartTick != 0)
                 throw new InvalidDataException("item spriteElement periodic requires startTick=0");
@@ -309,18 +293,16 @@ public sealed partial class GeneratedItemData
                 if (path.Source == "beam" && entity.Controller.Code != RuntimeControllerCode.ChannelBeam
                     || path.Source == "whip" && (entity.Movement.Code != 18 || entity.Controller.Code == RuntimeControllerCode.ChannelBeam)) throw new InvalidDataException("VFX path lacks exact collision geometry producer");
             }
-            bool legacyTexture = VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(slot));
-            string? selected = texture?.Source ?? (legacyTexture ? slot.TextureRole : null);
+            bool spriteTexture = VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(slot));
+            string? selected = texture?.Source ?? (spriteTexture ? slot.TextureRole : null);
             string selector = texture is null ? "textureRole" : slot.Element is not null ? "element.texture.source" : "path.texture.source";
-            if (selected is "entity" or "projectile" or "field") {
-                if (selected != "entity" && !string.Equals(selected, entity.VisualRole, StringComparison.Ordinal))
-                    throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} must match exact entity visualRole");
+            if (selected == "entity") {
                 if (entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon"))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires exact entity baked_sprite/reuse_item_icon PNG producer");
             }
             if (selected == "item" && texture is not null && string.IsNullOrWhiteSpace(Visual.SpritePath))
                 throw new InvalidDataException($"VFX slot '{slot.Id}' {selector}: item texture unavailable");
-            if (selected is "item" or "entity" or "projectile" or "field"
+            if (selected is "item" or "entity"
                 && SourceMode is not ("developer_fixture" or "test_fixture")) {
                 bool itemProducer = selected == "item" || entity.Visual.AssetMode == "reuse_item_icon";
                 string png = itemProducer ? Visual.SpritePath : entity.Visual.SpritePath;
@@ -330,6 +312,8 @@ public sealed partial class GeneratedItemData
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires its selected producer's ready PNG");
             }
             if (selected == "impact") {
+                if (entity.Visual.ImpactCanvasSize is null)
+                    throw new InvalidDataException("selected impact PNG requires explicit impactCanvasSize");
                 if (!(VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Any(s => s.EntityId == entity.Id && s.RendererKind == "impactSprite"))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires exact same-entity impactSprite producer");
                 if ((texture is not null || SourceMode is not ("developer_fixture" or "test_fixture"))

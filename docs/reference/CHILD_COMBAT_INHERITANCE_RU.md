@@ -1,6 +1,6 @@
 # Явное наследование текущего combat state родителя
 
-`spawn_entity_on_event` и `target_and_fire` задают `damageBasis`, `knockbackBasis` и `damageMultiplier`. Оба basis обязательны в новом Author и выбираются независимо:
+`spawn_entity_on_event` и `target_and_fire` задают `damageBasis`, `knockbackBasis` и `damageMultiplier`. Оба basis обязательны в Author и в активном wire consumer и выбираются независимо:
 
 | Значение | Урон ребёнка | Отбрасывание ребёнка |
 |---|---|---|
@@ -38,9 +38,11 @@ Terminal `on_kill`/`on_expire` может сохранить уже неакти
 
 ## Сохранённые определения и provenance
 
-Старые wire opcodes, entity/call IDs и receipts сохраняются. Отсутствующие `damageBasis`/`knockbackBasis` в старом wire сохраняют прежний authored-child consumer; отсутствующий targeting multiplier — прежний `1`. Nullable DTO storage не дописывает эти поля при save/network round-trip. Это wire-only совместимость: fresh Author с отсутствующим selector или targeting multiplier остаётся RED, production importer старого Author отсутствует.
+Активные `spawn_entity_on_event` и `target_and_fire` требуют явных `damageBasis`/`knockbackBasis` в Author и доставленном wire. `target_and_fire` также требует явный `damageMultiplier`: его отсутствие не означает `1`. Неполное определение отвергается без миграции, выбора authored-child политики и дописывания решения при save/network round-trip. Nullable DTO storage остаётся техническим состоянием неактивного `RuntimeTargetingSpec`, не совместимостью активного выстрела.
 
-Присутствующие поля проверяются строго: `null`, иная капитализация, пробелы, неизвестный enum и нечисловой/выходящий за range targeting multiplier отвергаются. Новые поля допустимы только у своего spawn consumer. `ParamSpec.wire_presence_requires_receipt` требует единственный receipt для каждого присутствующего нового поля в полном wire с provenance; receipt должен принадлежать exact entity/event call. Старое отсутствие не позволяет добавить новый selector без его источника. При наличии исходного Author проверяются его actual path/value/target; wire-only audit не утверждает восстановление отсутствующего Author.
+Настоящие optional targeting параметры сохраняют объявленные нейтральные пропуски: `count=1`, `spreadRadians=0`, `targetPolicy=distance_score`, `requireLineOfSight=false`, `hardRange=false`. Они не становятся обязательными; присутствующие значения и gameplay/resource bounds не меняются.
+
+Присутствующие поля проверяются строго: `null`, иная капитализация, пробелы, неизвестный enum и нечисловой/выходящий за range targeting multiplier отвергаются. Новые поля допустимы только у своего spawn consumer. `ParamSpec.wire_presence_requires_receipt` требует единственный receipt для каждого присутствующего нового поля в полном wire с provenance; receipt должен принадлежать exact entity/event call. Отсутствие обязательного selector остаётся RED и после удаления provenance из delivery. При наличии исходного Author проверяются его actual path/value/target; wire-only audit не утверждает восстановление отсутствующего Author.
 
 `damage_area_on_event` и `chain_damage_on_event` продолжают использовать свой documented authored source-entity base. Это отдельные direct-damage actions, их семантика данным расширением не меняется.
 
@@ -48,6 +50,6 @@ Terminal `on_kill`/`on_expire` может сохранить уже неакти
 
 Registry и требования: [capability_registry.py](../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py). Exact projection/receipt audit: [technical_lowering.py](../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). DTO admission: [RuntimeProgramSpec.cs](../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs). Snapshot/selection: [RuntimeChildCombat.cs](../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeChildCombat.cs). Producers используют существующие executor, delayed scheduler и `GeneratedProjectile.ApplyTargetAndFire`.
 
-[test_runtime_parent_combat.py](../../LocalGenerator/tests/test_runtime_parent_combat.py) проходит реальный schema/provider inverse/compiler/receipt/Repair путь, проверяет старые wire receipts и malformed/missing/source-tampering cases. Архивы seed/Live20 не переписываются: test-only replay adapter явно задаёт прежний authored-child выбор и удаляет лишь эти проверенные эквиваленты перед старым delivery hash comparison.
+[test_runtime_parent_combat.py](../../LocalGenerator/tests/test_runtime_parent_combat.py) проходит реальный schema/provider inverse/compiler/receipt/Repair путь, проверяет current positive, malformed/missing/source-tampering cases и refusal архивного wire без изменения его байтов. Отдельные delivery tests удаляют provenance и каждый обязательный combat leaf, сохраняя RED; positive control допускает declared optional targeting omissions и неактивные placeholders. Архивы seed/Live20 не переписываются и не мигрируют в поддерживаемый контракт.
 
 [EngineRuntimeChecks.ChildCombat.cs](../../tools/EngineRuntimeChecks.ChildCombat.cs) включён в canonical engine harness: strict JSON admission, immediate/terminal events, charge/delay, sentry firing, authority и reservation refusal. Наблюдатель останавливается на настоящем `NewProjectileDirect` в headless процессе; он не возвращает fake spawn и не заменяет game/MP smoke. Для исполнения этого harness нужны .NET 8, tModLoader и declared external references; portable source checks не считаются его выполнением.

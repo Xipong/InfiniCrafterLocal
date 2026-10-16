@@ -20,29 +20,18 @@
 | «Оружие не в руке / кривой thrust / pivot» | **Item-body PNG:** `Common/Players/GeneratedHeldItemDrawLayer.cs::Draw/HeldSpriteOrigin` + `Content/Items/GeneratedItem.UseStyle.cs::UseStyle`. **Explicit hand body:** `Content/Projectiles/GeneratedProjectile.FrontHand.cs::MoveFrontHand/TryProjectFrontHandUseStyle` → `.Visuals.cs::PreDraw` → `Common/Models/Presentation/SpritePresentation.cs::Entity/ProjectileOrigin`. **Legacy code19:** `.Executors.cs::ForwardRetract`, не hand attachment | `tools/EngineRuntimeChecks.FrontHand.cs`, `.HeldProxy.cs`, `.BodyGeometry.cs`; Author/Visual join — `test_front_hand_wire_integration.py`; exact selected grip/axis, native H и collision C проверяются отдельно |
 | «PNG здоров у генератора, но неверный в игре» | Python `services/asset_sync_service.py::runtime_asset_files/find_asset_file` + `pipelines/visual_delivery_gate.py::visual_delivery_report`; C# `Common/Services/Assets/GeneratedAssetSyncService.cs` → `RuntimeSpriteCache.cs` | `test_asset_transfer_cache_contracts.py`, `tools/EngineRuntimeChecks.AssetIdentity.cs`, `.AssetLifecycle.cs`; declared bytes/hash и выбранный cache source отдельно |
 | «Recall КД не виден / нет статов экипировки / секунды и дробные проценты» | `Content/Items/GeneratedItem.Tooltips.cs` + `.Tooltips.Equipment.cs` / `.Tooltips.Secondaries.cs`; typed event AoE/children проходят read-only reachability; mobility read-only view — `Common/UI/GeneratedMobilityCooldownStatusView.cs` → существующий `GeneratedUtilityBuffUISystem`. Таймер `InfiniCraftPlayer.GeneratedMobilityCooldownTicks` отдельно от item exhaustion | native `EngineRuntimeChecks.PlayedPresentation.cs`, `.ExhaustionPresentation.cs`; реальные RU/EN tooltip/HUD, failure не продлевает, без native debuff/штрафов |
-| «Зонтик короткий / secondary AoE/chips не видны / silver rejected» | `capability_registry.py::move_front_hand` (6px stretch vs fixed hitbox offset) → `.FrontHand.cs`/`.Visuals.cs`; `visual_generation_pipeline.py` hand geometry и `vfx_manifest.py` readability. Цвет — `vfx_material_contract.COLOR_TOKENS` ↔ `RuntimeColorPolicy` | `test_played_presentation_contracts.py`, native `.PlayedSilver.cs`/`.PlayedUmbrella.cs`; wrong-scale отдельно от осознанного short-jab, prompt guidance отдельно от нового artwork |
+| «Secondary AoE/chips не видны / цвет отвергнут» | `capability_registry.py::move_front_hand` (6px stretch vs fixed hitbox offset) → `.FrontHand.cs`/`.Visuals.cs`; `visual_generation_pipeline.py` hand geometry и `vfx_manifest.py` readability. Цвет — `vfx_material_contract.rgb_schema` ↔ `Common/Models/Presentation/RuntimeRgbSpec.cs` | `test_played_presentation_contracts.py`, native `.PlayedSilver.cs`/`.PlayedUmbrella.cs`; wrong-scale отдельно от осознанного short-jab, prompt guidance отдельно от нового artwork |
 | «Где read-only статус бафа / tooltip?» | `Content/Items/GeneratedItem.Tooltips.cs`; active generated HUD: `Common/UI/GeneratedUtilityBuffUISystem.cs` + `GeneratedUtilityBuffStatusView.cs`; source snapshot: `Common/Players/InfiniCraftPlayer` | `tools/EngineRuntimeChecks.Tooltips.cs`; статус не должен добавлять vanilla buff или повторять effect execution |
 
 ### Короткий рабочий цикл агента
 
-1. Открой [OWNERS](OWNERS_RU.md) для границы задачи и строку выше для entrypoint; [MODULES](MODULES_RU.md) нужен только для затронутого owner. Перед runtime-правкой выполни prerequisites из [AGENTS](../../AGENTS.md#перед-изменением-runtime).
+1. Соблюдай [consumer-first workflow](ARCHITECTURE_RU.md#consumer-first); открой [OWNERS](OWNERS_RU.md) для границы задачи и строку выше для entrypoint; [MODULES](MODULES_RU.md) нужен только для затронутого owner. Перед runtime-правкой выполни prerequisites из [AGENTS](../../AGENTS.md#перед-изменением-runtime).
 2. Найди **symbol в указанном файле**, его caller и точный saved input. Расширяй поиск лишь если этот seam уходит в другой owner. Не читай целиком generated catalogs и все `artifacts/` ради одного метода.
 3. Найди существующее behavioral test family в [TESTING](TESTING_RU.md). Native Compile roster — `tools/EngineRuntimeChecks.csproj`; invocation/filter roster — `tools/EngineRuntimeChecks.cs`. Новый файл без обеих регистраций не исполняется.
 4. Для headless native запуска нужны actual tML/FNA и external DLL paths, private SavePath и **source-root cwd** для locale/fixture readers. Запускай точную свежесобранную DLL; успешный `dotnet build` не доказывает, что `dotnet run` выбрал её.
 5. Для historical audit не называй builder messages exact HTTP wire; пустой physical-attempt list с unobserved owner — unknown, не «0 retries». Debug/manifest previews отдельно от полного сохранённого trace.
 
-### Почему маршрут короче
-
-Сравнение с baseline `6e4c901` относится к поиску владельца, а не к новому gameplay контракту:
-
-| Задача | Раньше | Сейчас |
-|---|---|---|
-| Проследить stage-level Author admission, compile, wire gate и retry cutoff | `combine_pipeline` + `combine_validation` + `combine_gameplay` + `llm_authoring_pipeline` | Всё это в `gameplay_stage`; model request/Repair packet открывается отдельно только при необходимости |
-| Изменить общий native parent fact | Три независимых поля в root, fingerprint и runtimeFacts | Одно поле в `CaptureParentNativeFacts`; envelopes явно добавляют/исключают только свои поля |
-| Найти VFX provider request | Перейти из VFX в Gameplay Author helper | `vfx_generation_pipeline.call_llm_vfx_director` |
-| Прочитать события/visual roles сохранённого wire | Импорт compiler через eager package barrel | Прямой `wire_views` без compiler и Repair |
-
-Canonical registry → schema → validator → compiler → C# vertical slice намеренно сохраняется: эти owners отвечают на разные вопросы. Удалены именно случайные переходы, повторные field maps и пустые wrappers. Проверка import isolation/order — `test_runtime_import_boundaries.py`; она не заменяет behavior tests.
+Canonical registry → schema → validator → compiler → C# vertical slice сохраняет отдельных owners по ответственности. Import isolation/order проверяет `test_runtime_import_boundaries.py`; это не замена behavioral tests.
 
 <a id="tree"></a>
 ## Репозиторий
@@ -131,7 +120,7 @@ Fresh Author принимает только `authoring.v5`: flat `action`/`stac
 | Definitions и generator HTTP | `Common/Services/Generation/GeneratedItemRegistryService.cs`, `Common/Services/Generation/GeneratorClient.cs` |
 | PNG validation/chunks/queue/cache | `Common/Services/Assets/GeneratedAssetSyncService.cs`, `Common/Services/Assets/GeneratedTransferSystem.cs`, `Common/Services/Assets/RuntimeSpriteCache.cs` |
 | Authority predicates / HTTP cooldown | `Common/Services/Networking/InfiniRuntimeAuthority.cs`, `Common/Services/Networking/LocalHttpQuietFailure.cs` |
-| Sprite geometry / typed VFX | `Common/Models/Presentation/SpritePresentation.cs`, `Common/Models/Presentation/VfxManifestSpec.cs`; [VFX split](MODULES_RU.md#vfx) |
+| Sprite geometry / typed VFX | `Common/Models/Presentation/SpritePresentation.cs`, `Common/Models/Presentation/VfxManifestSpec.cs`, `Common/Models/Presentation/RuntimeRgbSpec.cs`; [VFX split](MODULES_RU.md#vfx) |
 | Limits, packet IDs, Terraria sentinels | `Common/InfiniRuntimeLimits.cs`, `Common/InfiniNetPacketIds.cs`, `Common/InfiniTerrariaSentinels.cs` |
 | Station UI и localization | `Common/UI/InfiniCraftStationUISystem.cs`, `Localization/en-US_Mods.InfiniCrafterLocal.hjson`, `Localization/ru-RU_Mods.InfiniCrafterLocal.hjson` |
 | Heart/proxies/config/diagnostics | `Content/Items/InfiniCore.cs`, `Content/Items/GeneratedArmorItems.cs`, `Common/Config/InfiniGameplayQolConfig.cs`, `Common/Config/InfiniVfxClientConfig.cs`, `Common/Commands/`, `Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs` |

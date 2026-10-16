@@ -115,7 +115,8 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         controller = module.StudioController(app, server)
         before = controller.snapshot()
         assert before['configPath'] == str(config)
-        assert len(before['fields']) == 129
+        assert len(before['fields']) == 128
+        assert 'INFINI_BALANCE_MODE' not in {field['key'] for field in before['fields']}
         assert {field['page'] for field in before['fields']} == {'configure','providers','images','sprites','models','multiplayer','diagnostics'}
         assert next(field for field in before['fields'] if field['key'] == 'INFINI_OPENAI_COMPAT_API_KEY')['secret'] is True
         controller.apply({'id':'save-proof','action':'save','values':{'INFINI_PROMPT_STYLE':'Terraria Like'},'extra':{}})

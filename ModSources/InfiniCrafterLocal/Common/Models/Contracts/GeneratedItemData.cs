@@ -174,7 +174,6 @@ public sealed partial class GeneratedItemData
             Category = "generic",
             SourceMode = sourceMode,
             Tags = new[] { "generated", "unavailable" },
-            Canonical = new CanonicalSpec { HeadNoun = "item", Class = "generic" },
             Gameplay = new GameplaySpec
             {
                 Kind = "generic", DamageClass = "generic", Damage = 0,
@@ -204,7 +203,6 @@ public sealed partial class GeneratedItemData
             Armor = new ArmorSpec { Enabled = false },
             Visual = new VisualSpec
             {
-                ObjectType = "unavailable_item",
                 SpriteStatus = "unavailable",
                 PreferredCanvasSize = 32,
                 InventoryScale = 1f,
@@ -224,10 +222,12 @@ public sealed partial class GeneratedItemData
     private static void StripAuthoringBulkForTransport(GeneratedItemData clone)
     {
         clone.Debug = new Dictionary<string, JsonElement>();
-        clone.ExtensionData = new Dictionary<string, JsonElement>();
-        clone.SourceRepresentation = Array.Empty<SourceRepresentationSpec>();
-        clone.Inheritance = Array.Empty<InheritanceSpec>();
-        clone.ItemKnowledge = new ItemKnowledgeSpec();
+        clone.Concept = null;
+        clone.Realization = null;
+        clone.LlmStageAccounting = null;
+        clone.ContractVersions = null;
+        clone.RecipeHealth = null;
+
         clone.Tags = SafeTextArray(clone.Tags, 12, 32);
         clone.Visual.ImagePrompt = "";
         clone.Visual.NegativePrompt = "";
@@ -249,16 +249,6 @@ public sealed partial class GeneratedItemData
             asset.Prompt = "";
             asset.NegativePrompt = "";
             asset.SpritePath = FileNameOnly(asset.SpritePath);
-        }
-        clone.VfxManifest.Debug = new VfxDebugSpec();
-        clone.VfxManifest.InspirationNames = Array.Empty<string>();
-        foreach (VfxSlotSpec slot in clone.VfxManifest.Slots)
-        {
-            slot.EffectName = "";
-            slot.BakedClipId = "";
-            slot.BakedClipHash = "";
-            slot.BakedCommandCount = 0;
-            slot.BakedCommands = Array.Empty<VfxBakedCommandSpec>();
         }
         if (clone.RecipeMeta is not null)
         {

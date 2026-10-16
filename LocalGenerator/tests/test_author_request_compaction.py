@@ -48,7 +48,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
                {"name": "B", "damage": 0, "useTime": 20})
     before = copy.deepcopy(parents)
     request, serialized, _ = author.build_initial_author_request(
-        *parents, {}, {}, "lifetime-guidance", model_name="offline-readonly-context")
+        *parents, "lifetime-guidance", model_name="offline-readonly-context")
     assert request["response_format"]["type"] == mode
     assert dossier_text(request) == serialized
     packet = json.loads(serialized)
@@ -103,7 +103,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert not validate_runtime_wire(wire)["ok"]
     with pytest.raises(_CapturedBeforeTransport):
         author.repair_author_item_after_failure(
-            item, *parents, {}, {}, "lifetime-guidance", failure_report=failure)
+            item, *parents, "lifetime-guidance", failure_report=failure)
     assert len(captured) == 1
     repair_request = captured[0]
     assert repair_request["response_format"]["type"] == mode
@@ -130,7 +130,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     changed = replace(cap, params={**cap.params, "lifetimeTicks": replace(spec, maximum=21000)})
     monkeypatch.setattr(balance, "CAPABILITY_REGISTRY", {**CAPABILITY_REGISTRY, cap.name: changed})
     variant_request, variant_serialized, _ = author.build_initial_author_request(
-        *parents, {}, {}, "lifetime-guidance", model_name="offline-readonly-context")
+        *parents, "lifetime-guidance", model_name="offline-readonly-context")
     variant_packet = json.loads(variant_serialized)
     assert variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] == 21000
     variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] = spec.maximum
@@ -177,7 +177,7 @@ def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutati
     expanded = _expand_constraint_references(catalog["capabilities"], profiles)
     assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
             for card in expanded] == [cap.author_prompt_card() for cap in CAPABILITY_REGISTRY.values()
-                                      if cap.prompt_visible and cap.decision == "expose"]
+                                      ]
     # The double rule is retained separately; it is not recast as a float32 guard.
     doubles = [value for value in profiles.values() if value["storage"] == "float64"]
     assert len(doubles) == 1 and doubles[0]["rule"] == "finite_double_no_normalization"
@@ -281,4 +281,4 @@ def test_source_units_keep_zero_null_and_exact_namespaces_without_selecting_capa
     }
     assert prompt.source_wire_units_for_llm([])["scopes"] == []
     assert packets == before
-    assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == {name for name, cap in CAPABILITY_REGISTRY.items() }

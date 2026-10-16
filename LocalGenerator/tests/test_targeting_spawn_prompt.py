@@ -15,7 +15,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_targeting_card_uses_current_spawn_position_in_author_and_repair(monkeypatch, mode):
     monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
-    request, user, _ = author.build_initial_author_request({}, {}, {}, {}, "targeting-position", model_name="test-model")
+    request, user, _ = author.build_initial_author_request({}, {}, "targeting-position", model_name="test-model")
     assert dossier_text(request) == user
     cards = json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(row for row in cards if row["fn"] == "target_and_fire")
@@ -29,7 +29,7 @@ def test_targeting_card_uses_current_spawn_position_in_author_and_repair(monkeyp
     del call["params"]["intervalTicks"]
     report = validate_runtime_program(document)
     assert not report["ok"]
-    dossier = author.build_gameplay_repair_dossier(document, {}, {}, {}, {}, failure_report=report)
+    dossier = author.build_gameplay_repair_dossier(document, {}, {}, failure_report=report)
     repair_card = next(row for row in dossier["existingBrokenCapabilityCards"] if row["fn"] == "target_and_fire")
     assert repair_card["does"] == card["does"]
 

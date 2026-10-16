@@ -375,7 +375,7 @@ def test_retired_author_call_is_absent_from_schema_prompt_repair_and_registry(fn
     assert not validate_runtime_program(document)["ok"]
     scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
     assert fn not in scope["create"]["calls"]["allowedFns"]
-    dossier = build_gameplay_repair_dossier(document, {}, {}, {}, {}, failure_report=validate_runtime_program(document))
+    dossier = build_gameplay_repair_dossier(document, {}, {}, failure_report=validate_runtime_program(document))
     for section in ("blockerCapabilities", "supportingCapabilities", "existingBrokenCapabilityCards"):
         assert fn not in {row["fn"] for row in dossier[section]}
     assert "move_bounce" not in MOVEMENT_OPCODE and MOVEMENT_OPCODE["move_gravity_arc"] == 2

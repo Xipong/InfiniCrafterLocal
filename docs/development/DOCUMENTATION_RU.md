@@ -20,7 +20,7 @@
 ## Источники и обновление
 
 - Canonical source/registry/schema и реальный consumer имеют приоритет над описанием. [OWNERS](OWNERS_RU.md) выбирает точку изменения; [AGENTS](../../AGENTS.md) определяет transformation/vertical-slice правила.
-- Автор изменения обновляет соответствующий guide и прямые ссылки. Не дублируй инструкции запуска в architecture, exhaustive catalog — в overview, исторический PASS — в текущую гарантию.
+- Автор изменения обновляет соответствующий guide и прямые ссылки по [consumer-first workflow](ARCHITECTURE_RU.md#consumer-first). Не дублируй инструкции запуска в architecture, exhaustive catalog — в overview, исторический PASS — в текущую гарантию.
 - Generated Markdown живёт в `docs/reference/generated/`; JSON/schema — в `contracts/`. Изменяй producer, а не output вручную. Полный список source → output → refresh/check — [GENERATED](../reference/GENERATED_RU.md).
 - Сохраняй selectors/units/type/zero/null/absence и пределы proof в тематическом контракте. Не превращай legacy proposal, stale metadata version или fixture prose в текущую механику. Лицензии и upstream notices не сокращаются и не заменяются лицензией проекта.
 

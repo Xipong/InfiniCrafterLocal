@@ -64,7 +64,7 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
-    request, user, _ = build_initial_author_request({}, {}, {}, {}, "combined-combat", model_name="test-model")
+    request, user, _ = build_initial_author_request({}, {}, "combined-combat", model_name="test-model")
     packet = json.loads(user)
     names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     source = _accepted_main_combat_composition(damage_basis, knockback_basis, multiplier)
@@ -200,6 +200,53 @@ def test_fresh_missing_choice_requires_leaf_repair_without_reauthoring_valid_sib
     repaired, final = frozen_call_repair(document, [candidate],
         [{"id": call["id"], "paths": ["params." + name]}], expected, note="fill exact missing choice")
     assert _wire_component(final, call)[name] == value
+
+
+@pytest.mark.parametrize("fn,name", [(fn, name) for fn in _PRODUCERS for name in ("damageBasis", "knockbackBasis")]
+                         + [("target_and_fire", "damageMultiplier")])
+def test_active_delivered_wire_requires_each_combat_choice_without_provenance(fn, name):
+    authored = build_capability_witness(fn)
+    call = _call(authored, fn)
+    wire = compile_runtime_program(authored)
+    wire.pop("runtimeContract")
+    assert validate_runtime_wire(wire)["ok"]
+    component = _wire_component(wire, call)
+    component.pop(name)
+    before = deepcopy(wire)
+    report = validate_runtime_wire(wire)
+    assert any(error["code"] == "required_field" and error["path"].endswith("." + name)
+               for error in report["errors"]), report
+    assert not report["ok"]
+    assert wire == before
+
+
+def test_active_controller_cannot_hide_required_combat_by_omitting_targeting_component():
+    authored = build_capability_witness("target_and_fire")
+    call = _call(authored, "target_and_fire")
+    wire = compile_runtime_program(authored)
+    wire.pop("runtimeContract")
+    entity = next(entity for entity in wire["runtimeProgram"]["entities"] if entity["id"] == call["target"])
+    entity.pop("targeting")
+    report = validate_runtime_wire(wire)
+    assert {error["path"].rsplit(".", 1)[-1] for error in report["errors"]
+            if error["code"] == "required_field"} == {"damageBasis", "knockbackBasis", "damageMultiplier"}
+    assert not report["ok"]
+
+
+def test_targeting_neutral_omissions_and_inactive_components_remain_valid():
+    authored = build_capability_witness("target_and_fire")
+    call = _call(authored, "target_and_fire")
+    wire = compile_runtime_program(authored)
+    wire.pop("runtimeContract")
+    targeting = _wire_component(wire, call)
+    for name in ("count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange"):
+        targeting.pop(name, None)
+    for entity in wire["runtimeProgram"]["entities"]:
+        if entity["id"] != call["target"]:
+            entity["targeting"] = {}
+    before = deepcopy(wire)
+    assert validate_runtime_wire(wire)["ok"]
+    assert wire == before
 
 
 @pytest.mark.parametrize("name", ["damageBasis", "knockbackBasis"])

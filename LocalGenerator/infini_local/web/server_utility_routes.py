@@ -45,10 +45,9 @@ class ServerUtilityRoutes:
         read_json_file: Callable[[Path], dict[str, Any] | None],
         last_combine_failure_payload: Callable[[], dict[str, Any]],
         cleanup_for_shutdown: Callable[[str], None],
-        build_image_prompt: Callable[[dict[str, Any], dict[str, Any]], str],
         maybe_generate_sprite: Callable[[dict[str, Any]], dict[str, Any]],
         normalize_asset_prompt: Callable[[dict[str, Any], str, str, int], str],
-        generate_visual_asset: Callable[[dict[str, Any], str, str, str, str, int], tuple[str, str, float, dict[str, Any]]],
+        generate_visual_asset: Callable[[dict[str, Any], str, str, str, str, int], tuple[str, str, float, str]],
         asset_negative_prompt: Callable[[str], str],
         alpha_stats: Callable[[Any], dict[str, Any]],
         image_module: Any,
@@ -71,7 +70,6 @@ class ServerUtilityRoutes:
         self.read_json_file = read_json_file
         self.last_combine_failure_payload = last_combine_failure_payload
         self.cleanup_for_shutdown = cleanup_for_shutdown
-        self.build_image_prompt = build_image_prompt
         self.maybe_generate_sprite = maybe_generate_sprite
         self.normalize_asset_prompt = normalize_asset_prompt
         self.generate_visual_asset = generate_visual_asset
@@ -95,7 +93,7 @@ class ServerUtilityRoutes:
         if request_path == "/mp_connect":
             self.mp_connect_html(handler)
             return True
-        if request_path == "/trace.json" or request_path == "/debug/trace":
+        if request_path == "/trace.json":
             handler.json(self.trace_snapshot())
             return True
         if request_path == "/trace_clear":
@@ -112,14 +110,11 @@ class ServerUtilityRoutes:
                 handler.json(self.sdcpp_debug_snapshot(include_log_tail=True))
                 return True
             return False
-        if request_path in {"/visual_doctor.json", "/zimage_doctor.json"}:
+        if request_path == "/visual_doctor.json":
             handler.json(self.visual_doctor_payload(path))
             return True
-        if request_path in {"/visual_doctor", "/zimage_doctor"}:
+        if request_path == "/visual_doctor":
             self.visual_doctor_html(handler, path)
-            return True
-        if request_path == "/debug/generate_test_sprite":
-            self.generate_test_sprite(handler, path)
             return True
         if request_path == "/debug/last_combine_failure":
             handler.json(self.last_combine_failure_payload())
@@ -130,7 +125,7 @@ class ServerUtilityRoutes:
         if request_path == "/debug/contracts":
             handler.json(self.debug_contracts())
             return True
-        if request_path in {"/debug/latest_recipe", "/debug/recipe_dump"}:
+        if request_path == "/debug/latest_recipe":
             handler.json(self.debug_latest_recipe_dump(path))
             return True
         if request_path == "/debug/recipes":
@@ -237,18 +232,13 @@ class ServerUtilityRoutes:
         role = (role or "item").lower()
         role = role if role in {"item", "projectile", "impact", "child", "field"} else "item"
         test_id = f"doctor_{role}_{int(time.time())}"
-        dummy = {
-            "id": test_id,
-            "name": "Z-Image Doctor Blade",
-            "concept": {"fantasy": "a crystal slime blade with starlight circuitry"},
-            "visual": {"palette": ["cyan", "white", "violet"], "preferredCanvasSize": 32, "requiredAnchors": ["crystal blade", "slime edge", "star circuit"]},
-            "runtimeProgram": {"entities": [{"id": "item", "kind": "item_body", "visualRole": "inventory_item"}, {"id": "doctor_entity", "kind": "free_projectile", "visualRole": "projectile"}]},
-            "tags": ["doctor", "zimage", "sprite", "magic"],
-            "debug": {},
-        }
+        # Explicit diagnostic art, not an old authored-item packet whose prose
+        # or name is expected to synthesize a missing prompt or gameplay.
+        prompt = prompt or "One cyan crystal blade with a violet slime edge and white star-shaped circuit inlay."
+        dummy = {"id": test_id, "visual": {"preferredCanvasSize": 32}, "debug": {}}
         canvas = 32 if role == "item" else 48 if role == "projectile" else 32
         if role == "item":
-            dummy["visual"]["imagePrompt"] = prompt or self.build_image_prompt(dummy, dummy["visual"])
+            dummy["visual"]["imagePrompt"] = prompt
             before = time.time()
             dummy = self.maybe_generate_sprite(dummy)
             visual = dummy.get("visual") if isinstance(dummy.get("visual"), dict) else {}
@@ -257,7 +247,7 @@ class ServerUtilityRoutes:
             if path and self.Image is not None and Path(path).exists():
                 alpha = self.alpha_stats(self.Image.open(path).convert("RGBA"))
             return {"ok": bool(path and Path(path).exists()), "role": role, "ms": int((time.time() - before) * 1000), "visual": visual, "alpha": alpha, "debug": dummy.get("debug")}
-        prompt = prompt or self.normalize_asset_prompt(dummy, role, "", canvas)
+        prompt = self.normalize_asset_prompt(dummy, role, prompt, canvas)
         before = time.time()
         sprite_path, url, score, status = self.generate_visual_asset(dummy, role, prompt, self.asset_negative_prompt(role), test_id, canvas)
         alpha = {}
@@ -357,44 +347,6 @@ class ServerUtilityRoutes:
         <h2>Raw payload</h2><pre>{json.dumps(payload, ensure_ascii=False, indent=2)}</pre>
         """
         self.write_html(handler, html)
-
-    def generate_test_sprite(self, handler: Any, path: str) -> None:
-        q = parse_qs(urlparse(path).query)
-        role = (q.get("role", ["projectile"])[0] or "projectile").lower()
-        role = role if role in {"item", "projectile", "impact", "child", "field"} else "projectile"
-        test_id = f"debug_{role}_{int(time.time())}"
-        dummy = {
-            "id": test_id,
-            "name": q.get("name", ["Debug Pixel Sprite"])[0],
-            "concept": {"fantasy": q.get("fantasy", ["a tiny magic sword made of slime and starlight"])[0]},
-            "visual": {"palette": ["cyan", "white", "violet"], "preferredCanvasSize": 32, "requiredAnchors": ["magic sword", "slime", "starlight"]},
-            "runtimeProgram": {"entities": [{"id": "item", "kind": "item_body", "visualRole": "inventory_item"}, {"id": "debug_entity", "kind": "free_projectile", "visualRole": "projectile"}]},
-            "tags": ["debug", "sprite", "magic"],
-            "debug": {},
-        }
-        canvas = int(q.get("canvas", ["32"])[0] or "32")
-        prompt = q.get("prompt", [""])[0]
-        if role == "item":
-            dummy["visual"]["imagePrompt"] = prompt or self.build_image_prompt(dummy, dummy["visual"])
-            dummy = self.maybe_generate_sprite(dummy)
-            handler.json({"ok": True, "role": role, "version": self.app_version, "visual": dummy.get("visual"), "debug": dummy.get("debug")})
-            return
-        prompt = prompt or self.normalize_asset_prompt(dummy, role, "", canvas)
-        sprite_path, url, score, status = self.generate_visual_asset(dummy, role, prompt, self.asset_negative_prompt(role), test_id, canvas)
-        stats = {}
-        if sprite_path and self.Image is not None and Path(sprite_path).exists():
-            stats = self.alpha_stats(self.Image.open(sprite_path).convert("RGBA"))
-        handler.json({
-            "ok": True,
-            "role": role,
-            "version": self.app_version,
-            "status": status,
-            "path": sprite_path,
-            "url": url,
-            "score": score,
-            "alpha": stats,
-            "debug": dummy.get("debug"),
-        })
 
     def _iter_recipe_records(self, world_dir: Path | None = None) -> Iterator[dict[str, Any]]:
         """Order file metadata first, then read only bodies the consumer needs.
@@ -516,7 +468,7 @@ class ServerUtilityRoutes:
             "version": self.app_version,
             "latestRecipeContractVersions": latest,
             "worldRecipesDir": str(self.world_recipes_dir),
-            "note": "Contract stamps are diagnostic only; they do not migrate or block recipes.",
+            "note": "Contract stamps identify generation contracts; this read-only endpoint never migrates recipes.",
         }
 
     def debug_worlds(self) -> list[dict[str, Any]]:

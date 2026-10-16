@@ -65,7 +65,7 @@ def test_declared_omission_roster_matches_registry_and_serialized_contract():
         if any(s.default is not None for s in c.params.values())
     }
     assert actual == DECLARED
-    _, user, _ = build_initial_author_request({}, {}, {}, {}, "omission-proof", model_name="test-model")
+    _, user, _ = build_initial_author_request({}, {}, "omission-proof", model_name="test-model")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     cards = {c["fn"]: c for c in catalog["capabilities"]}
     for fn, values in actual.items():
@@ -79,7 +79,7 @@ def test_declared_omission_roster_matches_registry_and_serialized_contract():
     assert "default" in guide and "full Author" in guide and "not universal" in guide
     doc = build_capability_witness("configure_item_stats")
     _call(doc, "configure_item_stats")["params"]["damage"] = -1
-    dossier = build_gameplay_repair_dossier(doc, {}, {}, {}, {}, failure_report=validate_runtime_program(doc))
+    dossier = build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
     assert "omission means no change" in " ".join(json.loads(json.dumps(dossier))["rules"])
 
 

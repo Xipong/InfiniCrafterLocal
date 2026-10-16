@@ -146,8 +146,8 @@ public partial class GeneratedItem
             && child?.IsProjectileEntity == true && child.Spawn.Enabled
             && action.Count is > 0 and <= InfiniRuntimeLimits.MaxRuntimeSpawnCount
             && RuntimeTooltipFinite(action.DamageMultiplier, 0f, 10f)
-            && action.DamageBasis is (null or RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
-            && action.KnockbackBasis is (null or RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
+            && action.DamageBasis is (RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
+            && action.KnockbackBasis is (RuntimeChildCombatBasis.AuthoredChild or RuntimeChildCombatBasis.LiveParent)
             && (source.IsProjectileEntity || (action.DamageBasis != RuntimeChildCombatBasis.LiveParent && action.KnockbackBasis != RuntimeChildCombatBasis.LiveParent))
             && child!.Spawn.AcceptsEmissionSpread(action.SpreadRadians)
             && (action.HitTargetSpawn is null || (action.HitTargetSpawn.IsValid && action.SpreadRadians == 0f

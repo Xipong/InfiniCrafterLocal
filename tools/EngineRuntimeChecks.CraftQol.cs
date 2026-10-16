@@ -86,7 +86,7 @@ internal static partial class EngineRuntimeChecks
         Terraria.Main.timeItemSlotCannotBeReusedFor = new int[Terraria.Main.maxItems + 1];
         Terraria.Main.combatText = Enumerable.Range(0, 100).Select(_ => new CombatText { active = true }).ToArray();
         await using var server = new CraftHttpFixture(0) { FatalGeneration = true, FailureStatus = 424,
-            FailureJson = "{\"error\":\"llm_auth_failed\",\"playerMessage\":\"Generation failed: check credentials and access before retrying. Items were returned.\"}" };
+            FailureJson = "{\"error\":\"llm_auth_failed\",\"playerMessage\":\"Generation failed: check credentials and access before retrying.\"}" };
         var client = new GeneratorClient { Endpoint = server.Endpoint };
         foreach (bool full in new[] { true, false })
         {
@@ -103,7 +103,7 @@ internal static partial class EngineRuntimeChecks
                 var save = new TagCompound(); owner.SaveData(save);
                 Equal(full ? 2 : 0, save.GetList<TagCompound>("infiniDeferredCraftRefundsV1").Count, "sole native refund owner retains exact remainders");
                 Equal(full ? 0 : 2, player.inventory.Take(58).Count(i => i.type == ItemID.CopperShortsword || i.type == ItemID.WoodenSword), "actual ingredient delivery, not message inference");
-                Equal(false, owner.GetCraftLaneOutcome(0).Message.Contains("Items were returned"), "generation detail cannot assert material delivery");
+                Equal("Generation failed: check credentials and access before retrying.", owner.GetCraftLaneOutcome(0).Message, "current generation detail survives without historical prose rewriting");
                 Equal(true, owner.CraftLaneStatus(0).Contains(full ? (locale == "ru-RU" ? "Возврат ожидает свободного места" : "Return waiting for free space") : (locale == "ru-RU" ? "Материалы доставлены" : "Ingredients delivered")), "native terminal presentation distinguishes pending and delivered");
                 if (full)
                 {

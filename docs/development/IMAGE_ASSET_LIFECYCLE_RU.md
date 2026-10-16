@@ -1,4 +1,4 @@
-# Image/VFX asset lifecycle — активный контракт 0.4.248
+# Image/VFX asset lifecycle — текущий контракт
 
 <a id="owners"></a>
 ## Канонический путь и владельцы
@@ -62,14 +62,13 @@ Explicit dev-only procedural policy отдельно требует `VISUAL_ALLO
 
 - `item` выбирает inventory image.
 - `entity` требует того же exact entity с `baked_sprite` либо `reuse_item_icon`.
-- Legacy `projectile`/`field` дополнительно должны совпадать с actual entity `visualRole`.
-- `impact` требует same-entity `impactSprite` producer.
+- `impact` требует same-entity `impactSprite` producer с explicit `spritePrompt`, `spriteNegativePrompt`, `spriteCanvasSize` (24/32/48/64/96/128). Они losslessly проецируются в `entity.visual.impactPrompt/impactNegativePrompt/impactCanvasSize`; planner не выбирает canvas из hitbox.
 - `asset` ссылается на точный объявленный ingredient ID; несколько consumers не создают несколько jobs.
 - Primitive/Dust/cue renderer не получает PNG requirement только из проигнорированного texture hint.
 
 Некорректная ссылка становится exact selector-leaf error для прежнего frozen-first Repair. Код не меняет Visual mode, не выбирает inventory icon и не создаёт compensating artwork. Уже валидные поля, gameplay и Visual остаются frozen. При неизвестном target сначала исправляется его identity; зависимая диагностика не должна размораживать корректный selector по отсутствующему контексту.
 
-Прежде принятые, но неисполняемые legacy selectors теперь отклоняются явно. Это не silent migration. Старые корректные варианты и их отрисовка сохраняются.
+Current selectors проверяются exact schema; неизвестные и старые spellings отвергаются без alias/migration. Невложенные sprite slots выбирают `textureRole=item|entity|impact|none`; nested material consumers имеют собственный selector.
 
 Material `{source,assetId}` требует пустой assetId при `item|entity|impact` и точный declared ID при `asset`. Дубликаты IDs, dangling references и unused requests отвергаются; один ingredient request даёт одну job независимо от числа consumers. Null не означает отсутствие optional `assets`. Подробнее о layout/движении — [material contract](../reference/VFX_MATERIAL_ELEMENTS_RU.md#assets).
 

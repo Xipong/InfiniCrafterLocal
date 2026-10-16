@@ -1,4 +1,4 @@
-"""Attributed chat messages and Planner history for the finite LLM pipeline.
+"""Attributed chat messages for the finite LLM pipeline.
 
 ``role`` preserves Chat Completions authority, stage-specific system content and the
 latest user packet define model-visible authority/current truth, and ``name`` is a
@@ -6,8 +6,6 @@ finite trace/provider hint.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from infini_local.core import llm_config
 
@@ -45,27 +43,17 @@ def generation_system_suffix() -> str:
 STAGE_MESSAGE_NAMES = frozenset({
     "item_author_contract",
     "recipe_context",
-    "item_planner",
-    "final_wire_compiler",
-    "authoring_contract_gate",
     "author_repair_contract",
     "author_repair_context",
     "visual_director_contract",
     "visual_director_context",
-    "visual_director",
     "visual_repair_contract",
     "visual_repair_context",
     "vfx_director_contract",
     "vfx_director_context",
-    "vfx_director",
     "vfx_repair_contract",
     "vfx_repair_context",
-    "vfx_validator",
-    "pipeline_orchestrator",
-
 })
-
-ATTRIBUTED_PLANNER_HISTORY_KIND = "attributed_planner_history_v1"
 
 
 def stage_chat_message(role: str, name: str, content: str) -> dict[str, str]:
@@ -80,23 +68,9 @@ def stage_chat_message(role: str, name: str, content: str) -> dict[str, str]:
     return {"role": role, "name": name, "content": content}
 
 
-def attributed_planner_history(system: str, user: str, assistant: str) -> dict[str, Any]:
-    """Store Planner continuation as canonical named messages, not parallel string fields."""
-    return {
-        "kind": ATTRIBUTED_PLANNER_HISTORY_KIND,
-        "messages": [
-            stage_chat_message("system", "item_author_contract", system),
-            stage_chat_message("user", "recipe_context", user),
-            stage_chat_message("assistant", "item_planner", assistant),
-        ],
-    }
-
-
 __all__ = [
     "STAGE_MESSAGE_NAMES",
     "generation_system_suffix",
     "generation_art_direction",
-    "ATTRIBUTED_PLANNER_HISTORY_KIND",
     "stage_chat_message",
-    "attributed_planner_history",
 ]

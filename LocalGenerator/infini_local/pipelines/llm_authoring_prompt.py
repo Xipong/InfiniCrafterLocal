@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from infini_local.core.runtime_authoring.capability_registry import visible_capabilities
 import json
 from typing import Any, Mapping, Sequence
 
@@ -16,7 +15,6 @@ from infini_local.core.runtime_authoring.capability_registry import (
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     runtime_authoring_prompt_field_guide,
-    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS, ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TOKENS,
@@ -42,15 +40,6 @@ COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "movement/controllers, damage, collision, lifecycle and event links from the catalog."
 )
 VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(CAPABILITY_REGISTRY))
-
-
-def terraria_tick_guide_for_llm() -> dict[str, Any]:
-    return {
-        "ticksPerSecond": 60,
-        "commonDurations": {"0.1s": 6, "0.25s": 15, "0.5s": 30, "1s": 60, "2s": 120, "5s": 300},
-        "tilesToPixels": "1 tile = 16 pixels",
-        "angles": "spreadRadians is the full angular span, not degrees",
-    }
 
 
 def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
@@ -100,7 +89,7 @@ def source_wire_units_for_llm(
     units. Selector-dependent and boolean projections are deliberately excluded.
     """
     scopes: dict[tuple[str, str], dict[str, list[str]]] = {}
-    for capability in visible_capabilities():
+    for capability in CAPABILITY_REGISTRY.values():
         for name, spec in capability.params.items():
             if not spec.wire_name or spec.kind not in {"integer", "number"}:
                 continue
@@ -137,7 +126,7 @@ def source_wire_units_for_llm(
             "Read a source number in the listed Author param's units using sourceToAuthor; source means unchanged magnitude. "
             "Only direct numeric wire mappings are listed: no rule is implied for unlisted fields, boolean projections "
             "or selector-dependent mappings. Use the exact scope and fn, never the bare field name. "
-            "This is a unit explanation, not a bit-exact inverse for arbitrary legacy floating-point values; "
+            "This is a unit explanation, not a bit-exact inverse for arbitrary floating-point values; "
             "do not rewrite source, round it or replace it with tooltip prose. Values still must satisfy the selected "
             "card's bounds/dependencies. This reading aid does not require an inherited ability for each new mechanic "
             "or authorize code-selected rebalancing, defaults or additional Repair permissions."
@@ -328,10 +317,6 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     stage = stat_profile_for(a, b)
     envelope = {key: dict(value) if isinstance(value, dict) else value
                 for key, value in (stage.get("balanceEnvelope") or {}).items()}
-    # A combat-only derived/default cadence is not a literal parent observation.
-    # Retain the broad envelope, but leave timing choices to the Author.
-    if isinstance(envelope.get("useTimeTicks"), dict):
-        envelope["useTimeTicks"].pop("suggested", None)
     return {
         "authority": stage.get("authority"),
         "parentDamage": stage.get("sourceDamage"),
@@ -350,7 +335,7 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
 
 def realization_execution_truth_for_llm() -> dict[str, str]:
     return {
-        "authority": "realization.description, realization.playerExperience and realization.selfEvaluation are the final post-authoring report of the emitted runtimeProgram, not a repetition of the non-binding concept. Account for the chosen inputs, entities, subscribed events and terminal paths; report only behaviors supported by that exact topology, including their conditions and limits. A newly invented mechanic needs executable support, not parent precedent.",
+        "authority": "Optional realization.description, realization.playerExperience and realization.selfEvaluation are advisory context, never executable facts or required reports. Account for the chosen inputs, entities, subscribed events and terminal paths; report only behaviors supported by that exact topology, including their conditions and limits. A newly invented mechanic needs executable support, not parent precedent.",
         "placementUse": "The placement binding action performs the authored placement transaction and does not emit item_body.on_use; contactDamage must be false. If the result must both attack/use its body and place, author those as separate supported inputs. Never describe them as simultaneous on one placement binding.",
         "terminationEvents": "on_expire fires on natural lifetime expiry and move_proximity_missile proximity detonation; a kill before the final lifetime update does not emit it. on_kill fires on projectile termination, including collision death, penetration exhaustion, proximity detonation, natural expiry, ordinary return-to-owner completion and controller cancellation. Only explicitly attached actions execute. on_hit needs actual collision, not proximity alone; on_tile_collision means each collision. An on_expire effect is not guaranteed at an earlier final bounce/collision. Area damage excludes the direct NPC only for on_hit/on_crit; on_kill has no remembered direct target.",
         "entityTopology": "Stationary kind alone does not fire. Explicit periodic spawn_entity_on_event can shoot a referenced entity; target_and_fire separately provides NPC acquisition and timed shooting. An admitted free_projectile spawn creates independent projectiles; configure_spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive. Do not claim a singleton minion/companion, minion-slot behavior or a per-owner cap unless explicitly authored.",
@@ -358,14 +343,11 @@ def realization_execution_truth_for_llm() -> dict[str, str]:
         "stackCost": "For a non-placement active use, stackCost=1 consumes one whole generated item. There is no hidden charge counter; do not call whole-item consumption a charge unless an explicit supported state mechanic exists.",
         "durablePlacedForm": "When a hybrid has a reusable spawn_entity/use_item_body active use (stackCost=0), configure_item_stats.maxStack must be 1: one durable unit switches between inventory and escrowed placed form. A one-shot non-placement use (stackCost=1) is not subject to this particular maxStack rule; choose its stack size deliberately.",
         "placementEscrow": "For a successful placement binding, the committed generated item is held by the world-persistent placement ledger and returned as that same generated item when the placed tile is destroyed. Describe it as placed/recoverable, not permanently consumed; it remains unavailable while placed.",
-        "selfEvaluation": "Write realization.selfEvaluation last. planVsProgram.actionChecks covers each concept.plannedPlayerActions row and each implemented player action; mark an implementation with no concept counterpart as added. programVsReport.behaviorChecks covers the chosen inputs, entity behavior and authored event actions against description/playerExperience. You may group related calls into one behavior row with their exact runtimeProgram ids; include aligned rows as well as mismatches, with a concrete reason. A potential event without a subscribed action needs no separate row unless necessary to explain a claimed behavior. State intentionality for plan drift, and use uncertain for unresolved semantics. This is a textual comparison, not an observed run; it is not a requirement to minimize mechanics or preserve every planned ability. concept drift is diagnostic, not a rejection.",
+        "selfEvaluation": "Optional advisory self-check for the model's own use. No checklist, verdict, cited-id coverage or report replacement is required. Prose and self-evaluation never establish execution, reject gameplay or trigger Repair.",
     }
 
 
-def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
-    # Legacy deterministic/debug callers still provide ca/cb, but inferred
-    # canonical/category/tag/head-noun data is never model-facing.
-    _ = (ca, cb)
+def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> dict[str, Any]:
     corridor = _balance_corridor(a, b)
     parents = {
         "A": {"packet": raw_parent_card_for_llm(a)},
@@ -394,11 +376,11 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], ca: dict[str,
     return payload
 
 
-def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any], key: str) -> dict[str, Any]:
-    payload = build_llm_author_payload(a, b, ca, cb, key)
+def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], key: str) -> dict[str, Any]:
+    payload = build_llm_author_payload(a, b, key)
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     catalog_names = [row["fn"] for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]]
-    expected_names = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible and cap.decision == "expose"}
+    expected_names = set(CAPABILITY_REGISTRY)
     return {
         "schema": "infini.low-level-author-prompt-usability.v1",
         "ok": len(encoded) <= PLANNER_PROMPT_LIMIT_CHARS and set(catalog_names) == expected_names,
@@ -433,5 +415,4 @@ __all__ = [
     "planner_priority_header_for_llm",
     "planner_prompt_usability_report",
     "sharp_engine_fn_catalog_for_llm",
-    "terraria_tick_guide_for_llm",
 ]

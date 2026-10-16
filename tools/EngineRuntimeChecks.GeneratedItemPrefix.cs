@@ -148,15 +148,22 @@ internal static partial class EngineRuntimeChecks
                 }
                 catch (Exception error) { failures.Add(boundary + " prefix " + prefix + ": " + error); }
             }
-            // Legacy full-data native prefix import still works. This invokes the
-            // real installed importer with an already-resolved item, not a legacy JSON migration.
-            var legacy = GeneratedPrefixHost(GeneratedPrefixFixture());
+            // Native ItemIO remains interoperable on an already-resolved host;
+            // this is an engine API, not an old generated-save reader.
+            var nativeHost = GeneratedPrefixHost(GeneratedPrefixFixture());
             typeof(ItemIO).GetMethod("LoadModdedPrefix", BindingFlags.Static | BindingFlags.NonPublic)!
-                .Invoke(null, new object[] { legacy.Item, new TagCompound { ["prefix"] = (byte)PrefixID.Legendary } });
-            Equal((int)PrefixID.Legendary, (int)legacy.Item.prefix, "legacy native token is recognized after full data");
-            string legacyStats = GeneratedPrefixStats(legacy.Item);
-            GeneratedPrefixSetData(legacy, legacy.Data);
-            Equal(legacyStats, GeneratedPrefixStats(legacy.Item), "legacy live prefix survives reapplication");
+                .Invoke(null, new object[] { nativeHost.Item, new TagCompound { ["prefix"] = (byte)PrefixID.Legendary } });
+            Equal((int)PrefixID.Legendary, (int)nativeHost.Item.prefix, "native token is recognized after full data");
+            string nativeStats = GeneratedPrefixStats(nativeHost.Item);
+            GeneratedPrefixSetData(nativeHost, nativeHost.Data);
+            Equal(nativeStats, GeneratedPrefixStats(nativeHost.Item), "native live prefix survives reapplication");
+            var missingTagHost = GeneratedPrefixHost(GeneratedPrefixFixture());
+            Equal(true, missingTagHost.Item.Prefix(PrefixID.Legendary), "missing-tag control starts prefixed");
+            string currentReference = missingTagHost.Data.ToPlayerSaveJson();
+            missingTagHost.LoadData(new TagCompound { ["infiniJson"] = currentReference });
+            Equal(true, GeneratedItemData.IsPlayerSaveReferenceOnly(missingTagHost.Data), "missing instance metadata never erases valid recipe reference");
+            GeneratedPrefixSetData(missingTagHost, GeneratedPrefixFixture());
+            Equal(0, (int)missingTagHost.Item.prefix, "absent custom prefix identity does not import preexisting native token");
             foreach (int version in new[] { 5, 6 })
             {
                 var legacyReceiver = GeneratedPrefixHost(GeneratedPrefixFixture());

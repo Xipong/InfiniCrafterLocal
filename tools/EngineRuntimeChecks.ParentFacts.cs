@@ -80,7 +80,7 @@ internal static partial class EngineRuntimeChecks
             JsonElement root = request.RootElement.GetProperty("itemA");
             JsonElement facts = root.GetProperty("runtimeFacts");
             JsonElement fingerprint = root.GetProperty("fingerprint");
-            Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,canonical,channel,"
+            Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,channel,"
                 + "consumable,craftInput,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,"
                 + "effectiveProjectileRaw,fingerprint,fishingPole,fullName,generatedData,hammerPower,headSlot,healLife,healMana,"
                 + "id,internalName,knockback,legSlot,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"

@@ -22,6 +22,65 @@ using Terraria.ID;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void NDTO05RetiredKnowledgeAndSummaryRefuse()
+    {
+        var source = GeneratedItemData.Placeholder();
+        source.GeneratedParentSummary.Description = "Optional Author description";
+        source.GeneratedParentSummary.PlayerExperience = "Advisory player experience";
+        foreach (string json in new[] { source.ToJson(), source.ToNetworkJson() })
+        {
+            var current = JsonNode.Parse(json)!;
+            foreach (string field in new[] { "itemKnowledge", "canonical", "sourceRepresentation", "inheritance", "lossBudget" })
+                Equal(false, current.AsObject().ContainsKey(field), "no dead classifier payload is emitted: " + field);
+            var summary = current["generatedParentSummary"]!.AsObject();
+            foreach (string key in new[] { "notableEffects", "runtimePrimaryEntityId", "runtimeEntityIds" })
+                Equal(false, summary.ContainsKey(key), "no dead recursive summary field is emitted: " + key);
+            var accepted = GeneratedItemData.FromJson(json)
+                ?? throw new InvalidOperationException("current advisory summary rejected");
+            Equal(source.GeneratedParentSummary.Description, accepted.GeneratedParentSummary.Description, "optional description retained");
+            Equal(source.GeneratedParentSummary.PlayerExperience, accepted.GeneratedParentSummary.PlayerExperience, "optional experience retained");
+        }
+        foreach (string field in new[] { "itemKnowledge", "canonical", "sourceRepresentation", "inheritance", "lossBudget" }) {
+            var retired = JsonNode.Parse(source.ToJson())!;
+            retired[field] = field is "sourceRepresentation" or "inheritance" ? new JsonArray() : new JsonObject();
+            Equal(true, GeneratedItemData.FromJson(retired.ToJsonString()) is null, "retired root classifier refuses, never hides in extension data: " + field);
+        }
+        foreach (string field in new[] { "objectType", "style", "requiredAnchors", "dominantColorHex", "accentColorHex", "semanticReviewStatus" }) {
+            var retired = JsonNode.Parse(source.ToJson())!;
+            retired["visual"]![field] = field == "requiredAnchors" ? new JsonArray() : JsonValue.Create("unused");
+            Equal(true, GeneratedItemData.FromJson(retired.ToJsonString()) is null, "retired visual metadata refuses: " + field);
+        }
+        foreach (string field in new[] { "stage", "powerBudget" }) {
+            var retired=JsonNode.Parse(source.ToJson())!;
+            Equal(false,retired["gameplay"]!.AsObject().ContainsKey(field),"no inert gameplay metadata serialized: "+field);
+            retired["gameplay"]![field]=field=="stage"?JsonValue.Create("early"):JsonValue.Create(1);
+            Equal(true,GeneratedItemData.FromJson(retired.ToJsonString()) is null,"inert gameplay metadata is refused: "+field);
+        }
+        var sidecars = JsonNode.Parse(source.ToJson())!;
+        foreach (string field in new[] { "concept", "realization", "llmStageAccounting", "contractVersions", "recipeHealth" })
+            sidecars[field] = new JsonObject { ["advisory"] = field, ["explicitZero"] = 0, ["unknownNestedProse"] = "read only" };
+        var currentSidecars = GeneratedItemData.FromJson(sidecars.ToJsonString()) ?? throw new InvalidOperationException("current sidecars refused");
+        var local = JsonNode.Parse(currentSidecars.ToJson())!;
+        var network = JsonNode.Parse(currentSidecars.ToNetworkJson())!;
+        foreach (string field in new[] { "concept", "realization", "llmStageAccounting", "contractVersions", "recipeHealth" }) {
+            Equal(sidecars[field]!.ToJsonString(), local[field]!.ToJsonString(), "current sidecar retained locally: " + field);
+            Equal(false, network.AsObject().ContainsKey(field), "advisory sidecar omitted from native network definition: " + field);
+        }
+        foreach (string unknown in new[] { "futureGameplay", "runtimeContract", "visualKit", "stageAccounting" }) {
+            var invalid = JsonNode.Parse(source.ToJson())!; invalid[unknown] = new JsonObject();
+            Equal(true, GeneratedItemData.FromJson(invalid.ToJsonString()) is null, "unknown root field is refused: " + unknown);
+        }
+        JsonNode wire;
+        foreach (var field in new (string Key, string Literal)[] {
+            ("notableEffects", "[]"), ("runtimePrimaryEntityId", "\"unavailable_item\""), ("runtimeEntityIds", "[]"),
+        })
+        {
+            wire = JsonNode.Parse(source.ToJson())!;
+            wire["generatedParentSummary"]![field.Key] = JsonNode.Parse(field.Literal);
+            Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "retired recursive summary refuses: " + field.Key);
+        }
+    }
+
     // Match current Python delivery: it never emits these old default members.
     // This makes baseline/candidate tests share the SAME literal current input.
     private static JsonNode NativeDtoCurrentWire(GeneratedItemData data)
@@ -168,14 +227,13 @@ internal static partial class EngineRuntimeChecks
             foreach (string absent in new[] { "selector", "controls", "both" }) {
                 var slot = SoundSelectionSlot(item, RuntimeEventKind.OnUse);
                 slot.SoundId = "Item1"; slot.Sound = new VfxSoundSpec { Volume = 0.4f, Pitch = 0.2f, PitchVariance = 0 };
-                slot.RepeatEvery = 0;
                 slot.NormalizeAndValidate();
                 string currentJson = new VfxManifestSpec { Slots = new[] { slot } }.ToJson();
                 Equal(1, VfxManifestSpec.FromJson(currentJson).Slots.Length, "explicit current sound reader positive control");
                 var root = JsonNode.Parse(currentJson)!;
-                var row = root["Slots"]![0]!.AsObject();
-                if (absent is "selector" or "both") row.Remove("SoundId");
-                if (absent is "controls" or "both") row.Remove("Sound");
+                var row = root["slots"]![0]!.AsObject();
+                if (absent is "selector" or "both") row.Remove("soundId");
+                if (absent is "controls" or "both") row.Remove("sound");
                 data.VfxManifest = VfxManifestSpec.FromJson(root.ToJsonString());
                 Equal(0, data.VfxManifest.Slots.Length, "retired sound " + absent + " refuses real manifest reader");
                 var full = NativeDtoCurrentWire(GeneratedItemData.Placeholder());
@@ -186,7 +244,7 @@ internal static partial class EngineRuntimeChecks
                 InfiniItemVfxRuntime.ClearUseEventCaches();
                 InfiniItemVfxRuntime.EmitAndSyncEvent(owner, data, item, RuntimeEventKind.OnUse);
                 InfiniVfxRuntime.OnEvent(projectile, data, item, RuntimeEventKind.OnUse, data.VfxManifest, ref state, projectile.Center);
-                InfiniVfxRuntime.OnDetachedEvent(data, item, RuntimeEventKind.OnUse, data.VfxManifest, projectile.Center, projectile.velocity, "retired_sound");
+                InfiniVfxRuntime.OnDetachedEvent(data, item, RuntimeEventKind.OnUse, data.VfxManifest, projectile.Center, projectile.velocity, "retired_sound", InfiniVfxProjectileSnapshot.Capture(projectile,data,item));
                 Equal(0, calls, "refused old sound never reaches item/projectile/detached audio API");
                 // The playback projection itself is strict even when DTO reading is bypassed.
                 if (absent is "selector" or "both") slot = new VfxSlotSpec { Sound = slot.Sound };

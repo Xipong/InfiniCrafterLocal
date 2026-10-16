@@ -31,13 +31,12 @@ from infini_local.core.runtime_authoring.capability_registry import (
     event_alternative_is_present,
     event_dependency_alternatives,
     event_dependency_descriptors,
-    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_event_produced
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_JSON_PATH,
     authored_primary_entity_id,
-    is_plan_report_diagnostic_path,
+    is_advisory_path,
     strict_author_shape_report,
 )
 
@@ -835,9 +834,9 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
         cap = CAPABILITY_REGISTRY.get(fn)
         entity = entities_by_id.get(target_id)
-        if cap is None or not cap.prompt_visible or cap.decision != "expose":
-            public_names = tuple(name for name, row in CAPABILITY_REGISTRY.items() if row.prompt_visible and row.decision == "expose")
-            issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown public capability '{fn}'.", public_names, (call_id,)))
+        if cap is None:
+            registered_names = tuple(CAPABILITY_REGISTRY)
+            issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown capability '{fn}'.", registered_names, (call_id,)))
             continue
         if not body_resolved and cap.target_kinds == ("item_body",):
             continue  # no writable synthetic target for an implied body reference
@@ -996,14 +995,14 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             issues.append(ValidationIssue("$.runtimeProgram.entities", "unreachable_entity", f"Entity '{entity_id}' is not reached by a binding or typed entity reference.", ("bind it", "reference it", "delete it"), (entity_id,)))
         position_drivers = [CAPABILITY_REGISTRY[fn] for fn in fns if fn in CAPABILITY_REGISTRY and CAPABILITY_REGISTRY[fn].position_ownership != "none"]
         if kind_spec.requires_position_driver and not position_drivers:
-            allowed = tuple(sorted(name for name, row in CAPABILITY_REGISTRY.items() if row.prompt_visible and row.decision == "expose" and kind in row.target_kinds and row.position_ownership != "none"))
+            allowed = tuple(sorted(name for name, row in CAPABILITY_REGISTRY.items() if kind in row.target_kinds and row.position_ownership != "none"))
             issues.append(ValidationIssue("$.runtimeProgram.calls", "missing_movement_component", f"{kind} '{entity_id}' requires explicit movement/controller; none is inferred.", allowed, (entity_id,)))
         if kind in {"stationary_projectile", "temporary_helper", "field"}:
             meaningful = any(CAPABILITY_REGISTRY[fn].meaningful_for_stationary for fn in fns if fn in CAPABILITY_REGISTRY)
             if not meaningful:
                 allowed = tuple(sorted(
                     cap.name
-                    for cap in visible_capabilities()
+                    for cap in CAPABILITY_REGISTRY.values()
                     if kind in cap.target_kinds and cap.meaningful_for_stationary
                 ))
                 issues.append(ValidationIssue(
@@ -1188,18 +1187,13 @@ def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     if shape["ok"]:
         return _validate_runtime_program_semantics(document)
 
-    # Concept and its plan-vs-program comparison are diagnostic-only. Keep the
-    # provider's requested shape and raw shape report, but never reject gameplay
-    # for this report's formatting. No prose is filled in or rewritten; report
-    # ancestors, description/playerExperience and programVsReport remain strict.
+    # Intent, realization and self-evaluation are advisory only. Keep raw shape
+    # diagnostics for inspection, but never spend Repair on prose or synthesize
+    # missing reports. Only executable shape and identity own acceptance.
     raw_shape_errors = [
         row for row in shape.get("errors") or []
         if isinstance(row, Mapping)
-        and not (
-            str(row.get("path") or "") == "$.concept"
-            or str(row.get("path") or "").startswith("$.concept.")
-            or is_plan_report_diagnostic_path(str(row.get("path") or ""))
-        )
+        and not is_advisory_path(str(row.get("path") or ""))
     ]
     if not raw_shape_errors and _traversable_runtime_shell(document):
         return _validate_runtime_program_semantics(document)

@@ -31,7 +31,6 @@ FIELDS = [
     _field('INFINI_CONSOLE_EVENT_LEVEL', 'Сообщения в консоли', 'diagnostics', options=['warn', 'error', 'info', 'debug', 'off'], hint='Эхо событий в окно сервера. При полном логировании OFF остаются только краткие фатальные ошибки; off отключает и их эхо.'),
     _field('INFINI_USE_LLM', 'Использовать модель', 'providers', options=['1', '0'], hint='Главный переключатель LLM-авторинга. 0 допустим только для явных debug/dev сценариев.'),
     _field('INFINI_PROMPT_STYLE', 'Стиль промпта', 'providers', options=['Default', 'Terraria Like'], hint='Все режимы генерируют предметы для Terraria. Terraria Like — vanilla-like спрайты, палитра, читаемость и согласованные эффекты; не пресет механик.'),
-    _field('INFINI_BALANCE_MODE', 'Balance mode', 'providers', options=['safety', 'normalize', 'report']),
     _field('INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK', 'Deterministic dev fallback', 'providers', options=['0', '1'], hint='Только для разработки: разрешает кодовый fallback, если LLM недоступна. В обычной игре оставлять 0.'),
     _field('INFINI_LLM_PROVIDER', 'Источник текста', 'providers', options=['local', 'openrouter', 'openai_compat', 'openai_codex']),
     _field('INFINI_CODEX_LLM_MODEL', 'Codex text model', 'providers', options=[], hint='Slug редактируемый. Перед генерацией выбери модель; пустое значение не запускает Codex. Ошибка обновления не стирает сохранённый slug.'),

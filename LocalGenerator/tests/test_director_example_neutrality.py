@@ -32,7 +32,7 @@ def _capture_visual(monkeypatch, data, *, repair=False):
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(visual, "llm_chat_json", offline_response)
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
-    visual._request_visual_kit(data, {}, {}, {}, {}, **kwargs)
+    visual._request_visual_kit(data, {}, {}, **kwargs)
     assert len(sent) == 1
     return sent[0], request_dossier(sent[0])
 
@@ -116,7 +116,7 @@ def test_shared_geometry_guidance_remains_neutral_in_serialized_repair(monkeypat
 def test_author_packet_retains_full_grammar_without_counterexample_item_anecdotes(monkeypatch):
     from infini_local.core.runtime_authoring.capability_registry import (
         BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY,
-        INPUT_KIND_REGISTRY, visible_capabilities,
+        INPUT_KIND_REGISTRY, CAPABILITY_REGISTRY,
     )
     from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
 
@@ -124,13 +124,13 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     parent = {"name": "Source object", "damage": 13, "useTime": 21,
               "tooltipLines": ["Exact source fact, not a recipe example."]}
     frozen = deepcopy(parent)
-    request, _, _ = author.build_initial_author_request(parent, {}, {}, {}, "neutrality", model_name="test-model")
+    request, _, _ = author.build_initial_author_request(parent, {}, "neutrality", model_name="test-model")
     packet = request_dossier(request)
     catalog = packet["runtimeCapabilityContract"]["catalog"]
     assert catalog == sharp_engine_fn_catalog_for_llm(include_source_units=False)
     cards = {card["fn"]: card for card in catalog["capabilities"]}
-    assert set(cards) == {cap.name for cap in visible_capabilities()}
-    for cap in visible_capabilities():
+    assert set(cards) == {cap.name for cap in CAPABILITY_REGISTRY.values()}
+    for cap in CAPABILITY_REGISTRY.values():
         expected = cap.author_prompt_card()
         for key, value in expected.items():
             if key != "params":

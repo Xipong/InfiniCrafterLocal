@@ -56,7 +56,7 @@ public sealed partial class GeneratedProjectile
             return;
         }
         // Nonowner element events have one producer: the validated server relay.
-        // Keep local legacy callbacks and live path registration independent.
+        // Keep local simple-renderer callbacks and live path registration independent.
         InfiniVfxRuntime.OnEvent(Projectile, _data, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center,
             includeMaterialElements: Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient || Projectile.owner == Main.myPlayer);
         SendOwnerHitVfxEvent(eventName,center);

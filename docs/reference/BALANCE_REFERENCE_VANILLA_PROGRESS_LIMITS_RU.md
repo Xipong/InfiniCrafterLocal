@@ -10,13 +10,6 @@
 Active flow: numeric parent facts → one Author packet → [strict compile/conditional Repair](../development/THREE_STAGE_LLM_PIPELINE_RU.md#flow) → exact wire → C# hard safety. Sparse explicit zero/default сохраняет provenance; [declared omission](DECLARED_NEUTRAL_OMISSIONS_RU.md#contract) — отдельная семантика, не soft balance clamp. Limits/packet IDs принадлежат `InfiniRuntimeLimits.cs`/`InfiniNetPacketIds.cs` ([map](../development/CODE_MAP_RU.md#csharp)), не баланс-документу.
 
 <a id="legacy"></a>
-## Legacy v0.4.220–0.4.226 — не действующий contract
+## Граница ответственности
 
-Старые `balance_mode.py/balance_policy.py/balance_report.py` отсутствуют в текущем дереве. Перечень ниже сохранён как объяснение исторических отчётов, **не команды включения и не обещание сохранённых knobs**:
-
-- `INFINI_BALANCE_MODE=report|safety|normalize`: safety сохранял authored numbers от soft envelopes, применял Python technical corridor и писал suggestions `applied=false`; normalize применял weapon DPS/equipment envelopes + corridor с provenance; report оставлял advice без Python clamps. C# hard safety во всех случаях не отключался.
-- Taxonomy: `balance/balanceClamp` — advice или soft normalization; `safety/safetyClamp/runtime compiler clamps` — FPS/network/runtime caps; `contract/contractClamp` — shape/unsupported/validation. `debug.balanceReport.balanceMode`, advice `applied=false`, mutation `applied=true` и explicit equipment `apply_clamps` относились к этому пути, не новой v5 гарантии.
-- v0.4.220 narrow patch surface: runtimePlan/engineCalls, attack и explicit repairPatch.gameplay; name/tooltip/concept/visual/tags/parents/ids frozen, rejected rewrites шли в `debug.runtimePlanRepairPatchContract` / balanceReport.clamps.contract. Эти **legacy fields не принимаются** нынешним [leaf-local Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first).
-- v0.4.226 единые power bands/envelopes тогда принадлежали balance_policy; report/pipeline только использовали их. `accessoryBudgetReport/armorBudgetReport` и сравнение authored engineCalls с compiler defaults были legacy provenance, не reason to restore a parallel scorer.
-
-Removed prompt fields `softDamageCapPerHit/softAoeTilesCap/softActiveProjectileCap/sourceEnvelope/terrariaProgressionReference` остаются неактивной историей. Не возвращать category routing, dynamic caps, progression ontology или второй judge под видом balance guidance.
+Balance guidance не вводит post-Author scorer/clamp mode, dynamic damage caps, category router или второй judge. Исторические policy knobs/IR не входят в текущий API; техническая validation/Repair работает только с current contract. Advisory сравнение ингредиентов не меняет уже принятую программу.

@@ -16,44 +16,28 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
 )
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.vfx_manifest import validate_vfx_manifest_wire, vfx_png_dependencies
-from infini_local.services.asset_sync_service import runtime_asset_paths
+from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
 
 
 # Exact lower-camel nested DTO surfaces accepted by strict C# v5 deserialization.
 VISUAL_DELIVERY_FIELDS = frozenset({
-    "accentColorHex", "assetManifestPath", "dominantColorHex", "drawOffsetX", "drawOffsetY",
+    "assetManifestPath", "drawOffsetX", "drawOffsetY",
     "equipOverlayPath", "equipOverlayPrompt", "equipOverlayScore", "equipOverlayStatus", "equipOverlayUrl",
-    "imagePrompt", "inventoryScale", "negativePrompt", "objectType", "palette", "preferredCanvasSize",
-    "preservationScore", "requiredAnchors", "semanticReviewStatus", "spritePath", "spriteRawPath",
-    "spriteStatus", "spriteTechnicalScore", "spriteUrl", "style", "visualSoulArchetype",
-    "visualSoulCoverage", "visualSoulEdgeDensity", "visualSoulGlow", "visualSoulPulse",
-    "visualSoulSignature", "worldScale", "grip", "accessoryMount", "effectColor",
+    "imagePrompt", "inventoryScale", "negativePrompt", "palette", "preferredCanvasSize",
+    "spritePath", "spriteRawPath",
+    "spriteStatus", "spriteTechnicalScore", "spriteUrl",
+    "worldScale", "grip", "accessoryMount",
     "renderSizePx", "forwardAngleDegrees",
 })
 
 GENERATED_PARENT_SUMMARY_DELIVERY_FIELDS = frozenset({
-    "schema", "name", "identity", "description", "playerExperience", "notableEffects",
-    "runtimePrimaryEntityId", "runtimeEntityIds",
-})
-
-PARENT_ITEM_CARD_DELIVERY_FIELDS = frozenset({
-    "category", "confidence", "generatedDepth", "identity", "name", "powerScore", "sourceHint", "tags", "tier",
+    "schema", "name", "identity", "description", "playerExperience",
 })
 
 RECIPE_META_DELIVERY_FIELDS = frozenset({
     "assetBaseUrl", "assetFiles", "assetTransport", "generationDepth",
     "parentCategories", "parentGeneratedDepths", "parentIdentities",
     "worldId", "worldScoped",
-})
-
-VFX_QUALITY_BUDGET_DELIVERY_FIELDS = frozenset({
-    "effectMagnitude", "emergencyCap", "enablePersistentSmoke", "enablePointSparks", "enableSoftGlow",
-    "maxDrawCalls", "maxParticlesPerTick", "maxParticlesTotal", "spawnRateMultiplier", "visualBudgetClass",
-})
-
-VFX_DEBUG_DELIVERY_FIELDS = frozenset({
-    "pattern", "roles", "selectedReasons", "selectedScore", "topCandidates", "wordProbe",
 })
 
 _STORAGE_LOCKS_GUARD = threading.Lock()
@@ -282,15 +266,6 @@ def write_world_manifest(world_recipes_dir: Path, app_version: str, world_id: An
         atomic_write_json(manifest_path, {**stable, "createdAt": old.get("createdAt", now), "updatedAt": now})
 
 
-def strip_runtime_only_fields(data: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(data, dict):
-        return data
-    out = copy.deepcopy(data)
-    for key in ("_llmHistory", "_runtimeProgramCompileCache", "_runtimePlanCompileCache"):
-        out.pop(key, None)
-    return out
-
-
 def delivery_safe_debug(debug: Any) -> dict[str, str]:
     if not isinstance(debug, dict):
         return {}
@@ -315,9 +290,7 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
     """Project the accepted v5 wire; never translate legacy contracts."""
     if not isinstance(data, dict):
         return data
-    out = strip_runtime_only_fields(data)
-    for retired in ("attack", "runtimePlan", "runtimeCompiled", "runtimeAffordance", "runtimeArchetype", "presentationGenome"):
-        out.pop(retired, None)
+    out = copy.deepcopy(data)
     out.pop("visualKit", None)
     out.pop("runtimeContract", None)
     out["debug"] = delivery_safe_debug(out.get("debug"))
@@ -332,29 +305,6 @@ def sanitize_recipe_for_delivery(data: Any) -> Any:
     if recipe_meta is not None:
         out["recipeMeta"] = recipe_meta
 
-    item_knowledge = out.get("itemKnowledge")
-    if isinstance(item_knowledge, dict):
-        clean_knowledge = copy.deepcopy(item_knowledge)
-        if isinstance(clean_knowledge.get("parents"), list):
-            clean_knowledge["parents"] = [
-                _project_delivery_fields(row, PARENT_ITEM_CARD_DELIVERY_FIELDS) if isinstance(row, dict) else row
-                for row in clean_knowledge["parents"]
-            ]
-        result_card = _project_delivery_fields(clean_knowledge.get("resultCard"), PARENT_ITEM_CARD_DELIVERY_FIELDS)
-        if result_card is not None:
-            clean_knowledge["resultCard"] = result_card
-        out["itemKnowledge"] = clean_knowledge
-
-    manifest = out.get("vfxManifest")
-    if isinstance(manifest, dict):
-        clean_manifest = copy.deepcopy(manifest)
-        budget = _project_delivery_fields(clean_manifest.get("budget"), VFX_QUALITY_BUDGET_DELIVERY_FIELDS)
-        if budget is not None:
-            clean_manifest["budget"] = budget
-        vfx_debug = _project_delivery_fields(clean_manifest.get("debug"), VFX_DEBUG_DELIVERY_FIELDS)
-        if vfx_debug is not None:
-            clean_manifest["debug"] = vfx_debug
-        out["vfxManifest"] = clean_manifest
     return out
 
 
@@ -433,18 +383,13 @@ def quarantine_world_recipe_cache(
 def _cache_assets_ready(data: dict[str, Any]) -> bool:
     """Use the delivery owner for the exact canonical transfer roster.
 
-    Legacy records with no images stay optional; present paths are not optional
-    downloads. Every actual PNG consumer requires its selected producer's ready
+    Present paths are not optional downloads. Every actual PNG consumer
+    requires its selected producer's ready
     status; ingredient canvas and alpha remain owned by the delivery gate.
     """
-    from infini_local.pipelines.visual_delivery_gate import _asset_roster_problems, visual_delivery_report
+    from infini_local.pipelines.visual_delivery_gate import visual_delivery_report
 
-    raw_manifest = data.get("vfxManifest")
-    manifest = raw_manifest if isinstance(raw_manifest, dict) else {}
-    from infini_local.core.runtime_authoring.binding_use_policy import placed_body_binding_ids
-    if "assets" in manifest or vfx_png_dependencies(data)["dependencies"] or placed_body_binding_ids(data):
-        return bool(visual_delivery_report(data, check_backend_config=False)["ok"])
-    return not _asset_roster_problems(runtime_asset_paths(data))
+    return bool(visual_delivery_report(data, check_backend_config=False)["ok"])
 
 
 def read_world_recipe_cache(
@@ -486,16 +431,15 @@ def read_world_recipe_cache(
                 except (OSError, ValueError, TypeError):
                     pass
             return None
-        # Historical v5 records may omit storage metadata, but an explicit
-        # identity must agree literally with the requested scope before restamp.
-        # Never infer a replacement key/world from parents or migrate the record.
+        # File location is not proof of identity. Require the writer's exact
+        # recipe/world scope before admitting a cached definition.
         mismatches = {}
         for field, owner, key, expected in (
             ("recipeKey", data, "recipeKey", str(recipe_key_value)),
             ("recipeMeta.worldId", data.get("recipeMeta", {}), "worldId", str(world_id)),
         ):
-            if key in owner and owner[key] != expected:
-                mismatches[field] = {"expected": expected, "stored": owner[key]}
+            if owner.get(key) != expected:
+                mismatches[field] = {"expected": expected, "stored": owner.get(key)}
         if mismatches:
             from infini_local.storage.trace_runtime import trace_event
 
@@ -516,7 +460,6 @@ def read_world_recipe_cache(
         runtime_ready = is_deliverable_recipe_payload(data, check_assets=False)
         vfx_report = validate_vfx_manifest_wire(data)
         assets_ready = runtime_ready and _cache_assets_ready(data)
-        data.pop("_llmHistory", None)
         debug = data.setdefault("debug", {})
         debug.update({"cacheHit": "world_file", "cacheScope": "world"})
         debug.setdefault("recipeIdentityVersion", recipe_identity_version)

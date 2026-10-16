@@ -22,10 +22,10 @@ from infini_local.core.repair_merge import json_path_relative, json_values_equal
 from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
 from infini_local.core.schema_validation import strict_schema_errors
+from infini_local.core.visual_contract_schema import SPRITE_CANVAS_SIZES
 from infini_local.core.vfx_material_contract import (
     ASSET_ID_PATTERN,
     MATERIAL_RENDERERS,
-    NEUTRAL_FIELDS,
     asset_schema,
     element_schema,
     library_particle_schema,
@@ -33,6 +33,7 @@ from infini_local.core.vfx_material_contract import (
     material_texture_clauses,
     path_schema,
     runtime_asset_schema,
+    rgb_schema,
     screen_shake_schema,
 )
 from infini_local.core.vfx_manifest_config import (
@@ -44,17 +45,16 @@ from infini_local.core.vfx_manifest_config import (
 )
 
 
-VFX_MANIFEST_SCHEMA = "infini.vfx.runtime-events.v15"
-VFX_DIRECTOR_SCHEMA = "infini.vfx-director.runtime-events.v2"
-VFX_REPAIR_PATCH_SCHEMA = "infini.vfx-repair-patch.runtime-events.v1"
+VFX_MANIFEST_SCHEMA = "infini.vfx.runtime-events.v16"
+VFX_DIRECTOR_SCHEMA = "infini.vfx-director.runtime-events.v3"
+VFX_REPAIR_PATCH_SCHEMA = "infini.vfx-repair-patch.runtime-events.v2"
 # Project invariant vocabulary from the canonical surface, never a second catalog.
 # Unlisted fields stay dynamic, including exact pairs/roles, texture/path sources
 # and the output schema derived from the accepted runtime program.
 _VFX_RUNTIME_VOCABULARY_KEYS = (
     "schema", "rendererKind", "rendererRequirements", "rendererSemantics",
-    "colorPolicy", "heldRootVisibility", "soundId", "sound", "backend", "textureRole", "particleRole", "anchor", "channel",
-    "lane", "emissionMode", "blend", "layer", "particleSystemId",
-    "visualBudgetClass", "numericRanges", "textureDependencyTuples", "maxSlots",
+    "colorPolicy", "heldRootVisibility", "soundId", "sound", "textureRole", "anchor",
+    "blend", "layer", "particleSystemId", "numericRanges", "textureDependencyTuples", "maxSlots",
 )
 VFX_PROMPT_STATIC_KEYS = ("schema", "rules", "runtimeVocabulary")
 VFX_REPAIR_PROMPT_STATIC_KEYS = ("task", "rules", "runtimeVocabularyReadOnly")
@@ -74,33 +74,47 @@ class MalformedVfxDirectorOutput:
 
 
 _RENDERERS = (
-    "projectileAfterimage", "spriteStampTrail", "historyRibbon", "tipTrail",
+    "spriteStampTrail", "historyRibbon", "tipTrail",
     "ghostArc", "wavyStrip", "beamLine", "fieldPulse", "orbitingMotes",
-    "actorAfterimage", "impactRing", "impactSprite", "childMotes",
+    "impactRing", "impactSprite", "childMotes",
     "lightCue", "soundCue", "screenShakeCue", "libraryParticle", *MATERIAL_RENDERERS,
 )
 SPRITE_TEXTURE_RENDERERS = frozenset({
-    "projectileAfterimage", "spriteStampTrail", "actorAfterimage", "impactSprite",
+    "spriteStampTrail", "impactSprite",
 })
 # Existing runtime invariants, shared by the model-facing surface/schema and
 # semantic diagnostics. These constrain authored fields; they never fill them.
-_RENDERER_REQUIREMENTS = {
-    "lightCue": {"channel": "light", "lane": "cue"},
-    "soundCue": {"channel": "sound", "lane": "cue"},
-    "libraryParticle": {**NEUTRAL_FIELDS, "backend": "Particle"},
-    "screenShakeCue": {**NEUTRAL_FIELDS, "backend": "Realtime", "channel": "screenShake", "lane": "cue", "duration": 3, "repeatEvery": 0, "alpha": 1, "blend": "alpha", "layer": "BeforeProjectiles"},
-    "impactSprite": {"textureRole": "impact"},
-    "spriteElement": {**NEUTRAL_FIELDS, "backend": "Sprite"},
-    "texturedPath": {**NEUTRAL_FIELDS, "backend": "Primitive", "repeatEvery": 0, "duration": 3},
+_RENDERER_REQUIREMENTS = {"impactSprite": {"textureRole": "impact"}}
+# These controls have no executor in the selected branch. They are forbidden,
+# not optional defaults, and neither validation nor compilation materializes them.
+_NESTED_RENDERERS = ("spriteElement", "texturedPath", "libraryParticle", "screenShakeCue")
+_RENDERER_UNUSED_FIELDS = {
+    renderer: frozenset({"scale", "density", "spread", "particleSystemId", "textureRole"})
+    | ({"duration", "repeatEvery"} if renderer == "texturedPath" else set())
+    | ({"duration", "repeatEvery", "alpha", "blend", "layer"} if renderer == "screenShakeCue" else set())
+    for renderer in _NESTED_RENDERERS
 }
+_RENDERER_UNUSED_FIELDS["soundCue"] = frozenset({
+    "scale", "spread", "particleSystemId", "textureRole", "duration", "alpha", "blend", "layer",
+})
+_RENDERER_UNUSED_FIELDS["lightCue"] = frozenset({
+    "alpha", "blend", "layer", "duration", "spread", "particleSystemId", "textureRole",
+})
+_RENDERER_UNUSED_FIELDS["childMotes"] = frozenset({"alpha", "blend", "layer", "duration"})
+_RENDERER_UNUSED_FIELDS["impactSprite"] = frozenset({"spread", "particleSystemId"})
+for _renderer in _RENDERERS:
+    if _renderer not in SPRITE_TEXTURE_RENDERERS:
+        _RENDERER_UNUSED_FIELDS[_renderer] = _RENDERER_UNUSED_FIELDS.get(_renderer, frozenset()) | {"textureRole"}
+_CADENCE_ONLY_RENDERERS = ("soundCue", "lightCue", "impactSprite")
+_COLORLESS_RENDERERS = ("soundCue", "screenShakeCue", "libraryParticle", *MATERIAL_RENDERERS)
 _READABILITY_RULE = (
     "Compose presentation readable at gameplay zoom for intended visible attacks and secondary effects; "
     "sound-only is not a visible gameplay cue. Consider the accepted delayed area action's event anchor, "
     "radiusPx and delayTicks, and actual child bodies' size, contrast, lifetime and movement separately. "
     "A few tiny fading particles or dark small PNGs can be technically valid yet unreadable. "
     "Choose count, world-pixel dimensions, opacity and lifetime together using actual renderer controls, "
-    "not effectMagnitude, visualCost or motif prose (these do not increase visible intensity). "
-    "For delayed cues spriteElement/libraryParticle use event-relative startTick; legacy impactRing ignores event startTick. "
+    "not prose metadata. "
+    "For delayed cues spriteElement/libraryParticle use event-relative startTick; impactRing ignores event startTick. "
     "An on_hit cue starts from that hit occurrence, not automatically from a gameplay action's delayed execution; "
     "match the accepted delay explicitly only with a renderer that consumes it. "
     "For a physical child's visibility, prefer accents on that exact child's available spawn/periodic/hit pairs "
@@ -111,11 +125,9 @@ _READABILITY_RULE = (
 )
 
 _RENDERER_SEMANTICS = {
-    "libraryParticle": "Real ParticleLibrary V3 instanced Star particles, not the legacy pl:* Terraria Dust selectors. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
-    "screenShakeCue": "Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks with repeatEvery=0; the captured anchor/forward survive source retirement. duration=3 is neutral, not camera lifetime. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
-    "projectileAfterimage": "Periodic projectile: textured history samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
-    "spriteStampTrail": "Periodic projectile: spaced textured history stamps, same history consumer as projectileAfterimage. Projectile event: one captured body-pose snapshot; item emission: one directional texture stamp.",
-    "actorAfterimage": "Textured afterimages of the bound entity, not a copied player animation atlas. Periodic projectile uses history; projectile event freezes body pose; item emission is a directional texture stamp.",
+    "libraryParticle": "Real ParticleLibrary V3 instanced Star particles, separate from Terraria Dust. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
+    "screenShakeCue": "Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks; the captured anchor/forward survive source retirement. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
+    "spriteStampTrail": "Periodic projectile: textured history stamps at samples 2,5,... in a 20-world-tick history, using body rotation/flip. Projectile event: one fading snapshot of captured body rotation/scale/flip/gfx offset at the resolved event-time anchor; item emission is a directional texture stamp, not a player/held-pose snapshot. No fabricated history.",
     "historyRibbon": "Connected center-history segments (20 world samples), fading toward the oldest point. Uses actual center history, not a relocated owner trajectory; on_spawn can start a live trail.",
     "tipTrail": "Connected captured geometric tip history: center + forward * projectile.width * projectile.scale/2. Not an image-nose/PCA guess; on_spawn can start a live trail.",
     "wavyStrip": "One animated sine wave: length 48*scale world px, amplitude 6*scale px, thickness max(1,2*scale); 8+round(16*density) segments.",
@@ -124,12 +136,12 @@ _RENDERER_SEMANTICS = {
     "orbitingMotes": "2+round(6*density) square motes, each 3*scale world px, orbiting radius 18*scale px. One revolution per procedural period.",
     "ghostArc": "Rotating open 120-degree arc, radius 24*scale world px; 8+round(12*density) segments, fading from head to tail.",
     "impactRing": "Expanding fading ring: radius scale*(4+28*phase) world px, 12+round(20*density) segments. Selected Terraria particles are independent and can accompany it.",
-    "impactSprite": "One dedicated generated impact PNG, lasting duration world ticks with linear fade. Requires its own spritePrompt and impact texture; no inventory/dust substitute.",
-    "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread rules. Does not spawn gameplay child entities.",
-    "lightCue": "World lighting at the resolved anchor, not a drawn sprite; independent of particle selector and particle budget.",
-    "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: soundCue requires an explicit soundId from the general palette in both Director output and persisted wire. Item1 is valid only as an explicit selection. Only soundCue may carry soundId or sound; present null, unknown names, aliases and free paths are invalid. Every soundCue also requires sound={volume,pitch,pitchVariance}: exact final playback controls, independent of common alpha and phaseOffset. Volume zero is deliberate silence. Pitch is absolute relative to the unpitched sample, not added to native SoundID pitch or Main.musicPitch. Variance is the full random pitch width, not a statistical variance; pitch +/- pitchVariance/2 must remain within [-1,1]. Preserve native asset/variants/weights and instance/pause policies. Missing soundId or sound is invalid and never selects a sample or derives playback controls from alpha/phaseOffset. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice: tiny visualBudgetClass and effectMagnitude do not select or mute sound. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
+    "impactSprite": "One dedicated generated impact PNG, lasting duration world ticks with linear fade. Requires its own spritePrompt/spriteNegativePrompt/spriteCanvasSize and impact texture; no inventory/dust substitute, particleSystemId or spread. Nonperiodic events omit startTick/repeatEvery/density. Item periodic requires only repeatEvery; projectile periodic requires startTick/repeatEvery and density only when repeatEvery=0. No Dust accompaniment is emitted by this renderer.",
+    "childMotes": "Bounded particles using the selected Terraria dust ID and existing density/spread/cadence rules. No alpha/blend/layer/duration: native Dust owns its lifetime and drawing. Does not spawn gameplay child entities.",
+    "lightCue": "World lighting from local color/scale at the resolved anchor, not a drawn sprite; no alpha/blend/layer/duration/spread/particleSystemId/textureRole. Nonperiodic events omit startTick/repeatEvery/density. Item periodic requires only repeatEvery; projectile periodic requires startTick/repeatEvery and density only when repeatEvery=0. Existing world-clock cadence is unchanged; no particle budget is spent.",
+    "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: soundCue requires an explicit soundId from the general palette in both Director output and persisted wire. Item1 is valid only as an explicit selection. Only soundCue may carry soundId or sound; present null, unknown names, aliases and free paths are invalid. Nonperiodic sound omits all scheduling/draw/Dust fields. Item periodic adds repeatEvery (0 means 10 world ticks). Projectile periodic adds startTick and repeatEvery; only repeatEvery=0 requires density for automatic cadence, otherwise omit density. Every soundCue also requires sound={volume,pitch,pitchVariance}: exact final playback controls, independent of common alpha and phaseOffset. Volume zero is deliberate silence. Pitch is absolute relative to the unpitched sample, not added to native SoundID pitch or Main.musicPitch. Variance is the full random pitch width, not a statistical variance; pitch +/- pitchVariance/2 must remain within [-1,1]. Preserve native asset/variants/weights and instance/pause policies. Missing soundId or sound is invalid and never selects a sample or derives playback controls from alpha/phaseOffset. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice, never selected or muted by visual metadata. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
     "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
-    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. Path coverage is independent of PNG-body presentation; source=whip/beam uses that exact accepted geometry. runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; duration=3 is neutral, repeatEvery=0. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
+    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. Path coverage is independent of PNG-body presentation; source=whip/beam uses that exact accepted geometry. runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; history/source owns path lifetime. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
 }
 
 
@@ -149,60 +161,36 @@ _SOUND_IDS = (
     "Shatter", "Splash", "Tink", "Unlock",
 )
 
-_BACKENDS = ("Auto", "Realtime", "Primitive", "Sprite", "Particle")
-_TEXTURE_ROLES = ("item", "entity", "projectile", "field", "impact", "none")
+_TEXTURE_ROLES = ("item", "entity", "impact", "none")
 _ANCHORS = ("self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field")
-_CHANNELS = ("motionTrail", "coreGlow", "ambientParticles", "impactShape", "impactParticles", "decaySmoke", "light", "sound", "screenShake")
-_LANES = ("primary", "support", "accent", "ornament", "cue")
-_EMISSIONS = ("wake", "orbit", "residue", "burst", "cone", "ring", "spiral", "none")
 _BLENDS = ("alpha", "additive")
 _LAYERS = ("BeforeProjectiles", "AfterProjectiles")
-_PARTICLES = ("dust", "pl:glow", "pl:shard", "pl:smoke", "pl:spark", "none")
-_BUDGET_CLASSES = ("tiny", "small", "normal", "large", "signature")
-
-# These are annotations on the existing wire fields, not a conversion or an
-# alternative semantic contract. Repair reuses the ordinary field schemas.
-_MOTIF_TEXT_LIMITS = {
-    "element": 256,
-    "shapeLanguage": 512,
-    "motionLanguage": 512,
-    "paletteRole": 256,
-}
-
+_PARTICLES = ("GemDiamond", "TintableDustLighted", "Glass", "Smoke", "Electric", "none")
 _VFX_NUMERIC_DESCRIPTIONS = {
-    "effectMagnitude": "Engine units: Retained presentation metadata; currently no renderer consumer. Not a physical intensity or budget multiplier.",
-    "rhythm": "Engine units: Retained motif metadata; currently no renderer consumer. Not beats per minute or a time unit.",
-    "chaos": "Engine units: Retained motif metadata; currently no renderer consumer. Not a probability.",
     "scale": (
         "Engine units: Renderer-specific scale (1 nominal); procedural dimensions/thickness are specified in rendererSemantics. "
-        "For projectileAfterimage/spriteStampTrail/actorAfterimage, R=selected renderSizePx from acceptedVisualKit; "
+        "For spriteStampTrail, R=selected renderSizePx from acceptedVisualKit; "
         "q_selected=R/max(actual final PNG frame width, height), not canvas, alpha-bbox or hitbox. "
-        "item/reuse_item_icon selects root item R; a distinct baked entity selects its own R; absent R gives q_selected=1. "
+        "item/reuse_item_icon selects root item R; a distinct baked entity selects its own R. "
         "P=projectile.scale, initial P=D*E (D=hitbox.drawScale, E=accepted entity visual scale); "
         "current P already includes growth, not another E or gameplay.itemScale. "
-        "Periodic sprite trail with declared R: clamp(P,0.1,8)*scale*q_selected; absent R: max(0.05,P*scale). "
+        "Periodic sprite trail: clamp(P,0.1,8)*scale*q_selected. "
         "Projectile event body copy: clamp(P,0.1,8)*scale*q_selected, using captured P. "
         "Exception only for explicit move_front_hand (opcode 20) with hitboxCurve.mirrorToSprite=true or a present visualScaleCurve: "
-        "declared-R periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P. "
-        "Other drivers and front-hand without either scale owner keep the formulas above; absent-R periodic trails still use max(0.05,P*scale). "
+        "Periodic sprite trail and projectile event body copy use P*scale*q_selected without clamping P. "
+        "Other drivers and front-hand without either scale owner keep the formulas above. "
         "Directional item body stamp: clamp(scale,0.05,8)*q_selected, not a held-pose copy. "
         "Dedicated impactSprite: clamp(scale,0.05,8), no main-PNG conversion. "
-        "spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected; common scale is neutral=1. "
+        "spriteElement/texturedPath use explicit world-pixel dimensions/profiles, not q_selected or common scale. "
         "Light strength clamp(0.22*scale,0.04,1.2) on projectile or clamp(0.2*scale,0.04,1.2) on item, then client multiplier. "
         "Dust size clamp(scale,0.2,3). Not a universal pixel size."
     ),
     "density": "Engine units: Procedural tessellation/mote count as specified in rendererSemantics. Particle count/cadence remains separate: projectile periodic repeatEvery=0 uses clamp(14-round(8*density),4,18) world ticks; projectile impactRing/childMotes count clamp(2+round(8*density),2,10), item dust count clamp(1+round(7*density),1,8), subject to client scaling and budgets. Not particles per world tick.",
-    "duration": "Legacy world ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath: neutral=3, history/source owns lifetime.",
+    "duration": "World ticks: detached sprite and primitive lifetime with linear lifetime fade; procedural periodic animation period when repeatEvery=0. Active history trails and straight beams do not consume duration. Event rings also have their own phase fade. spriteElement: individual lifetime in world ticks, opacityProfile owns lifetime opacity (no extra linear fade). texturedPath omits duration; history/source owns lifetime.",
     "alpha": "Engine units: Draw opacity coefficient: sprite/primitive RGB and alpha are scaled together; detached effects fade over lifetime; sound.volume alone owns audio volume and alpha does not multiply it. Additive zeroes vertex alpha after scaling RGB. Dust color paths do not use slot alpha; not universal opacity. spriteElement and texturedPath: multiply alpha by opacityProfile once, apply tint to RGB separately, no extra implicit lifetime fade; explicit zero is silence.",
     "spread": "Engine units: Particle-speed coefficient, not angle or radians: projectile dust speed clamp(0.35+1.7*spread, 0.2, 4) plus inherited velocity; item dust velocity sampled from circular radii 1+spread. Angle is selected separately; not one common physical speed.",
-    "jitter": "Engine units: Retained metadata; currently no renderer consumer. No pixel, angle, or time unit.",
-    "fadeIn": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction.",
-    "fadeOut": "Engine units: Retained metadata; currently no renderer consumer. Not seconds, world ticks, or a lifetime fraction; impactSprite has its own fixed linear fade.",
-    "budgetWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Does not multiply an enforced particle/draw budget.",
-    "signatureWeight": "Engine units: Retained weighting metadata; currently no renderer consumer. Not an enforced budget fraction.",
-    "visualCost": "Engine units: Retained cost metadata; currently no renderer consumer. Not draw calls or an enforced budget fraction.",
-    "startTick": "Legacy projectile periodic only: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Legacy item periodic and detached/event lifetimes ignore startTick. spriteElement/libraryParticle: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. screenShakeCue: nonperiodic event-relative delay in world ticks, not camera lifetime. texturedPath: projectile age gate for live sampling.",
-    "repeatEvery": "Legacy world ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration. spriteElement: periodic cadence >=1 world tick, nonperiodic requires 0; overlap is literal and bounded. texturedPath: neutral=0; no repeated detached path emission.",
+    "startTick": "Simple renderer projectile periodic: initial particle/cue gate on per-projectile world ticks; also delays periodic procedural wave/ring/arc/orbit visibility. Active history/sprite trails and straight beams retain their existing draw timing. Simple renderer item periodic and detached/event lifetimes ignore startTick. spriteElement/libraryParticle: nonperiodic event-relative emission delay; periodic projectile age gate, item periodic requires 0. screenShakeCue: nonperiodic event-relative delay in world ticks, not camera lifetime. texturedPath: projectile age gate for live sampling.",
+    "repeatEvery": "World ticks: positive value sets periodic particle/cue cadence and procedural animation period. 0 selects automatic particle cadence (projectile clamp(14-round(8*density),4,18), item 10) and uses duration for procedural period. Item periodic uses global ticks plus seed phase; projectile uses its state world ticks. Event particles do not repeat, but detached procedural shapes may animate within their duration. spriteElement: periodic cadence >=1 world tick, nonperiodic requires 0; overlap is literal and bounded. texturedPath omits repeatEvery; no repeated detached path emission.",
 }
 
 
@@ -290,30 +278,21 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
             field: CAPABILITY_REGISTRY["configure_item_use"].params[field].description
             for field in ("hideUseGraphic", "customHeldSprite")
         },
-        "colorPolicy": "Explicit Visual effectColor is shared by item, projectile and detached VFX. Its absence preserves legacy color paths. Rich palette prose is not parsed into a color and motif does not override explicit effectColor.",
-        "backend": list(_BACKENDS),
+        "colorPolicy": "Every simple visible renderer requires local color={r,g,b}, integer bytes 0..255; opacity stays separate. spriteElement/texturedPath own RGB colorProfile knots, libraryParticle owns RGB colorStart/colorEnd. soundCue, screenShakeCue and nested color owners forbid common color. No effect reference, named-color enum or prose-based selection.",
         "textureRole": list(_TEXTURE_ROLES),
-        "particleRole": list(_TEXTURE_ROLES),
         "anchor": list(_ANCHORS),
-        "channel": list(_CHANNELS),
-        "lane": list(_LANES),
-        "emissionMode": list(_EMISSIONS),
         "blend": list(_BLENDS),
         "layer": list(_LAYERS),
         "particleSystemId": list(_PARTICLES),
-        "visualBudgetClass": list(_BUDGET_CLASSES),
         "numericRanges": {
-            "effectMagnitude": [0.0, 1.0], "scale": [0.15, 5.0],
-            "density": [0.0, 1.0], "duration": [3, 120], "alpha": [0.0, 1.0],
-            "spread": [0.0, 2.0], "jitter": [0.0, 1.5], "fadeIn": [0.0, 0.8],
-            "fadeOut": [0.0, 0.8], "budgetWeight": [0.1, 4.0],
-            "signatureWeight": [0.0, 1.0], "visualCost": [0.0, 1.0],
+            "scale": [0.15, 5.0], "density": [0.0, 1.0],
+            "duration": [3, 120], "alpha": [0.0, 1.0], "spread": [0.0, 2.0],
             "startTick": [0, 120], "repeatEvery": [0, 120],
         },
         "texturedPathSources": _textured_path_sources(data),
         "textureDependencyTuples": {
             "item": "existing accepted item image; assetId empty",
-            "entity": "same exact entity baked_sprite/reuse_item_icon image; assetId empty; no_asset/runtime_geometry forbidden; legacy projectile/field aliases require exact bound visualRole and the same mode requirement",
+            "entity": "same exact entity baked_sprite/reuse_item_icon image; assetId empty; no_asset/runtime_geometry forbidden",
             "impact": "same-entity impactSprite slot must produce the dedicated impact image; assetId empty",
             "asset": "exact declared VFX asset ID; no compensating artwork for a bad reference",
         },
@@ -381,44 +360,34 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "event": {"type": "string", "enum": events},
             "rendererKind": {
                 "type": "string", "enum": list(_RENDERERS),
-                "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound/light cues use lane=cue, not a visual emphasis lane.",
+                "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound and camera cues own only their explicit payload controls.",
             },
-            "backend": {"type": "string", "enum": list(_BACKENDS), "description": "Legacy retained implementation hint; rendererKind selects the implemented Dust/FNA path. Installing ParticleLibrary does not redirect slots. Auto is sufficient for legacy renderers. spriteElement requires Sprite; texturedPath requires Primitive, both use owned stock FNA paths."},
             "textureRole": {
                 "type": "string", "enum": list(_TEXTURE_ROLES),
                 "description": (
-                    "Legacy PNG selector for " + ", ".join(renderer for renderer in _RENDERERS if renderer in SPRITE_TEXTURE_RENDERERS) + ": "
+                    "PNG selector for " + ", ".join(renderer for renderer in _RENDERERS if renderer in SPRITE_TEXTURE_RENDERERS) + ": "
                     "item=accepted item PNG; entity=bound entity baked_sprite/reuse_item_icon PNG "
-                    "(no_asset/runtime_geometry cannot supply one); projectile/field alias entity only when equal to bound visualRole, "
-                    "with the same mode requirement; impact=same-entity impactSprite producer "
+                    "(no_asset/runtime_geometry cannot supply one); impact=same-entity impactSprite producer "
                     "(required companion slot for other sprite renderers); none invalid for sprites. "
-                    "Primitive/Dust/cue renderer hints require no PNG. spriteElement and texturedPath require none here "
-                    "and consume only their explicit nested texture selector and textureDependencyTuples."
+                    "Every non-sprite renderer forbids this common field. spriteElement and texturedPath "
+                    "consume only their explicit nested texture selector and textureDependencyTuples."
                 ),
             },
-            "particleRole": {"type": "string", "enum": list(_TEXTURE_ROLES)},
             "anchor": {"type": "string", "enum": list(_ANCHORS), "description": "Primitive/cue/event placement: self/field=bound entity center; owner=active owner center; tip/tipHistory=projectile geometric tip (item uses engine itemLocation); velocity=center with motion axis; hitPoint=captured event point, NPC center for item hit/crit. Item hitPoint without a captured point is silent. Projectile event anchors and sprite pose are frozen at emission and carried through the relay, including after source removal; unavailable owner is silent. History renderers use their named center/tip histories instead of relocating the path."},
-            "channel": {"type": "string", "enum": list(_CHANNELS)},
-            "lane": {"type": "string", "enum": list(_LANES)},
-            "emissionMode": {"type": "string", "enum": list(_EMISSIONS)},
             "blend": {"type": "string", "enum": list(_BLENDS)},
             "layer": {"type": "string", "enum": list(_LAYERS)},
-            "particleSystemId": {"type": "string", "enum": list(_PARTICLES), "description": "Exact Terraria dust selectors, not ParticleLibrary instances: dust=GemDiamond, pl:glow=TintableDustLighted, pl:shard=Glass, pl:smoke=Smoke, pl:spark=Electric. none suppresses particles, not independently selected primitive/sprite/light/sound rendering."},
+            "particleSystemId": {"type": "string", "enum": list(_PARTICLES), "description": "Exact Terraria.ID.DustID member, separate from ParticleLibrary instances: GemDiamond, TintableDustLighted, Glass, Smoke, Electric. none suppresses particles, not independently selected primitive/sprite/light/sound rendering."},
             "scale": {"type": "number", "minimum": 0.15, "maximum": 5.0},
             "density": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "duration": {"type": "integer", "minimum": 3, "maximum": 120},
             "alpha": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "spread": {"type": "number", "minimum": 0.0, "maximum": 2.0},
-            "jitter": {"type": "number", "minimum": 0.0, "maximum": 1.5},
-            "fadeIn": {"type": "number", "minimum": 0.0, "maximum": 0.8},
-            "fadeOut": {"type": "number", "minimum": 0.0, "maximum": 0.8},
-            "budgetWeight": {"type": "number", "minimum": 0.1, "maximum": 4.0},
-            "signatureWeight": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "visualCost": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "startTick": {"type": "integer", "minimum": 0, "maximum": 120},
             "repeatEvery": {"type": "integer", "minimum": 0, "maximum": 120},
             "spritePrompt": {"type": "string", "maxLength": 1400, "description": _impact_sprite_background_rule()},
+            "spriteCanvasSize": {"type": "integer", "enum": list(SPRITE_CANVAS_SIZES), "description": "Exact final square impact PNG canvas in pixels, independent of gameplay hitbox or world scale; only impactSprite owns this request."},
             "spriteNegativePrompt": {"type": "string", "maxLength": 700},
+            "color": rgb_schema(),
             "element": element_schema(),
             "path": path_schema(),
             "screenShake": screen_shake_schema(),
@@ -426,13 +395,7 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "sound": _sound_schema(),
             "soundId": {"type": "string", "enum": list(_SOUND_IDS), "description": "Exact Terraria.ID.SoundID member, selected independently of entity kind, item name, useStyle or damage class. General sample palette, no weapon presets. Only soundCue may carry it; every soundCue requires an explicit selection and complete sound playback controls in Director output and persisted wire. No absent/unknown/null replacement."},
         },
-        "required": [
-            "id", "entityId", "event", "rendererKind", "backend", "textureRole",
-            "particleRole", "anchor", "channel", "lane", "emissionMode", "blend",
-            "layer", "particleSystemId", "scale", "density", "duration", "alpha", "spread",
-            "jitter", "fadeIn", "fadeOut", "budgetWeight", "signatureWeight",
-            "visualCost", "startTick", "repeatEvery", "spritePrompt", "spriteNegativePrompt",
-        ],
+        "required": ["id", "entityId", "event", "rendererKind", "anchor"],
     }
     slot["allOf"] = [
         {
@@ -441,12 +404,48 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
         }
         for renderer, required in _RENDERER_REQUIREMENTS.items()
     ]
+    branch_fields = set().union(*_RENDERER_UNUSED_FIELDS.values())
+    branch_fields.add("startTick")
+    slot["allOf"].extend({
+        "if": {"properties": {"rendererKind": {"const": renderer}}, "required": ["rendererKind"]},
+        "then": {
+            "required": sorted(branch_fields - _RENDERER_UNUSED_FIELDS.get(renderer, frozenset())
+                               - ({"startTick", "repeatEvery", "density"} if renderer in _CADENCE_ONLY_RENDERERS else set())),
+            "properties": {field: {"enum": []} for field in sorted(_RENDERER_UNUSED_FIELDS.get(renderer, ()))},
+        },
+    } for renderer in _RENDERERS)
     runtime = data.get("runtimeProgram")
     entities = runtime.get("entities") if isinstance(runtime, Mapping) else []
     item_ids = [row["id"] for row in entities or [] if isinstance(row, Mapping) and row.get("kind") == "item_body" and isinstance(row.get("id"), str)]
-    slot["allOf"].extend(material_slot_clauses(item_ids, [r for r in _RENDERERS if r not in MATERIAL_RENDERERS], events, list(_CHANNELS), _textured_path_sources(data)))
+    slot["allOf"].extend(material_slot_clauses(item_ids, [r for r in _RENDERERS if r not in MATERIAL_RENDERERS], events, _textured_path_sources(data)))
     slot["allOf"].extend(material_texture_clauses(_entity_texture_sources(data)))
-    # Director and persisted wire require the same explicit audio choices.
+    slot["allOf"].extend([
+        {"if": {"properties": {"rendererKind": {"const": "impactSprite"}}, "required": ["rendererKind"]},
+         "then": {"required": ["spritePrompt", "spriteNegativePrompt", "spriteCanvasSize"]}},
+        {"if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "impactSprite"]}}, "required": ["rendererKind"]},
+         "then": {"properties": {field: {"enum": []} for field in ("spritePrompt", "spriteNegativePrompt", "spriteCanvasSize")}}},
+        {"if": {"properties": {"rendererKind": {"enum": list(_CADENCE_ONLY_RENDERERS)}, "event": {"enum": [event for event in events if event != "periodic"]}}, "required": ["rendererKind", "event"]},
+         "then": {"properties": {field: {"enum": []} for field in ("startTick", "repeatEvery", "density")}}},
+        {"if": {"properties": {"rendererKind": {"enum": list(_COLORLESS_RENDERERS)}}, "required": ["rendererKind"]},
+         "then": {"properties": {"color": {"enum": []}}}},
+        {"if": {"properties": {"rendererKind": {"enum": [r for r in _RENDERERS if r not in _COLORLESS_RENDERERS]}}, "required": ["rendererKind"]},
+         "then": {"required": ["color"]}},
+    ])
+    # Early-return cues have only caller-consumed cadence; events never schedule here.
+    slot["allOf"].extend([
+        {"if": {"properties": {"rendererKind": {"enum": list(_CADENCE_ONLY_RENDERERS)}, "event": {"const": "periodic"}}, "required": ["rendererKind", "event"]},
+         "then": {"required": ["repeatEvery"]}},
+        {"if": {"properties": {"rendererKind": {"enum": list(_CADENCE_ONLY_RENDERERS)}, "event": {"const": "periodic"}, "entityId": {"enum": item_ids}}, "required": ["rendererKind", "event", "entityId"]},
+         "then": {"properties": {field: {"enum": []} for field in ("startTick", "density")}}},
+        {"if": {"properties": {"rendererKind": {"enum": list(_CADENCE_ONLY_RENDERERS)}, "event": {"const": "periodic"}, "entityId": {"enum": [entity_id for entity_id in entity_ids if entity_id not in item_ids]}}, "required": ["rendererKind", "event", "entityId"]},
+         "then": {
+             "required": ["startTick"],
+             "allOf": [
+                 {"if": {"properties": {"repeatEvery": {"const": 0}}, "required": ["repeatEvery"]}, "then": {"required": ["density"]}},
+                 {"if": {"properties": {"repeatEvery": {"minimum": 1}}, "required": ["repeatEvery"]}, "then": {"properties": {"density": {"enum": []}}}},
+             ],
+         }},
+    ])
     slot["allOf"].append({
         "if": {"properties": {"rendererKind": {"const": "soundCue"}}, "required": ["rendererKind"]},
         "then": {"required": ["soundId", "sound"]},
@@ -457,7 +456,7 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     })
     slot["allOf"].extend([
         {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}}, "required": ["rendererKind"]},
-         "then": {"required": ["particle"], "properties": {"channel": {"enum": ["ambientParticles", "impactParticles", "decaySmoke"]}, "lane": {"enum": ["primary", "support", "accent", "ornament"]}}}},
+         "then": {"required": ["particle"]}},
         {"if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "libraryParticle"]}}, "required": ["rendererKind"]},
          "then": {"properties": {"particle": {"enum": []}}}},
         {"if": {"properties": {"rendererKind": {"const": "libraryParticle"}, "event": {"const": "periodic"}}, "required": ["rendererKind", "event"]},
@@ -469,35 +468,17 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
         {"if": {"properties": {"rendererKind": {"const": "screenShakeCue"}}, "required": ["rendererKind"]},
          "then": {"required": ["screenShake"], "properties": {"event": {"enum": [event for event in events if event != "periodic"]}}}},
         {"if": {"properties": {"rendererKind": {"enum": [renderer for renderer in _RENDERERS if renderer != "screenShakeCue"]}}, "required": ["rendererKind"]},
-         "then": {"properties": {"screenShake": {"enum": []}, "channel": {"enum": [channel for channel in _CHANNELS if channel != "screenShake"]}}}},
+         "then": {"properties": {"screenShake": {"enum": []}}}},
     ])
     schema: dict[str, Any] = {
         "type": "object", "additionalProperties": False,
         "properties": {
             "schema": {"const": VFX_DIRECTOR_SCHEMA},
-            "effectMagnitude": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-            "visualBudgetClass": {"type": "string", "enum": list(_BUDGET_CLASSES)},
-            "motif": {
-                "type": "object", "additionalProperties": False,
-                "properties": {
-                    "element": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["element"]},
-                    "shapeLanguage": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["shapeLanguage"]},
-                    "motionLanguage": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["motionLanguage"]},
-                    "paletteRole": {"type": "string", "minLength": 1, "maxLength": _MOTIF_TEXT_LIMITS["paletteRole"]},
-                    "rhythm": {"type": "number", "minimum": 0.2, "maximum": 3.0},
-                    "chaos": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                },
-                "required": ["element", "shapeLanguage", "motionLanguage", "paletteRole", "rhythm", "chaos"],
-            },
             "slots": {"type": "array", "items": slot, "minItems": 0, "maxItems": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS)))},
             "assets": {"type": "array", "items": asset_schema(), "maxItems": 4, "description": "Optional independent VFX ingredients, declared once and reused by exact ID. Absence requests none; null invalid. Every new request must be used. Image pipeline alone writes execution metadata."},
         },
-        "required": ["schema", "effectMagnitude", "visualBudgetClass", "motif", "slots"],
+        "required": ["schema", "slots"],
     }
-    properties = schema["properties"]
-    properties["effectMagnitude"]["description"] = _VFX_NUMERIC_DESCRIPTIONS["effectMagnitude"]
-    for field in ("rhythm", "chaos"):
-        properties["motif"]["properties"][field]["description"] = _VFX_NUMERIC_DESCRIPTIONS[field]
     for field in slot["properties"]:
         if field in _VFX_NUMERIC_DESCRIPTIONS:
             slot["properties"][field]["description"] = _VFX_NUMERIC_DESCRIPTIONS[field]
@@ -527,8 +508,7 @@ def vfx_png_dependencies(
     """Read-only projection of the PNG producers actually consumed by slots.
 
     Producer roles name the existing image owners, not another asset registry or
-    request. Primitive, Dust and cue renderers consume no PNG, regardless of the
-    legacy hint. Admission checks selectors; delivery checks these exact owners'
+    request. Primitive, Dust and cue renderers consume no PNG. Admission checks selectors; delivery checks these exact owners'
     execution results. No mode, reference, image request or saved wire is changed.
     """
     if manifest is None:
@@ -573,7 +553,7 @@ def vfx_png_dependencies(
         elif renderer in SPRITE_TEXTURE_RENDERERS:
             source = slot.get("textureRole")
             if not isinstance(source, str) or source not in _TEXTURE_ROLES:
-                errors.append({"path": selector, "message": "exact legacy textureRole enum required"})
+                errors.append({"path": selector, "message": "exact textureRole enum required"})
                 continue
         else:
             continue
@@ -582,9 +562,9 @@ def vfx_png_dependencies(
         entity_id = slot.get("entityId")
         if not isinstance(entity_id, str):
             continue
-        if entity_id not in entities and source in ("entity", "projectile", "field", "impact"):
+        if entity_id not in entities and source in ("entity", "impact"):
             # Pair validation owns the unresolved entity; it cannot diagnose
-            # that entity's mode, alias or impact producer. Independent item/
+            # that entity's mode or impact producer. Independent item/
             # asset references still resolve below, including asset usage.
             continue
         entity = entities.get(entity_id, {})
@@ -610,10 +590,7 @@ def vfx_png_dependencies(
                 errors.append({"path": selector, "message": "impact texture requires a same-entity impactSprite image producer"})
                 continue
             role = "impact:" + entity_id
-        elif source in ("entity", "projectile", "field"):
-            if source != "entity" and source != entity.get("visualRole"):
-                errors.append({"path": selector, "message": "textureRole must match the exact bound entity visualRole"})
-                continue
+        elif source == "entity":
             if mode not in ("baked_sprite", "reuse_item_icon"):
                 errors.append({"path": selector, "message": "entity texture requires the exact entity baked_sprite/reuse_item_icon producer; no_asset/runtime_geometry provide no PNG"})
                 continue
@@ -625,7 +602,7 @@ def vfx_png_dependencies(
             continue  # Unsupported enum values already have exact shape errors.
         if source == "asset":
             producer = next(row for row in assets if isinstance(row, Mapping) and row.get("id") == asset_id)
-        elif source == "item" or (source in ("entity", "projectile", "field") and mode == "reuse_item_icon"):
+        elif source == "item" or (source == "entity" and mode == "reuse_item_icon"):
             raw_visual = data.get("visual")
             producer = raw_visual if isinstance(raw_visual, Mapping) else {}
         else:
@@ -682,22 +659,6 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
     if str(raw.get("schema") or "") != VFX_DIRECTOR_SCHEMA:
         errors.append({"path": "$.schema", "message": f"expected {VFX_DIRECTOR_SCHEMA}"})
     allowed = {(row["entityId"], row["event"]) for row in _allowed_pairs(data)}
-    budget_class = str(raw.get("visualBudgetClass") or "")
-    if budget_class not in _BUDGET_CLASSES:
-        errors.append({"path": "$.visualBudgetClass", "message": "unsupported budget class"})
-    magnitude = _number(raw.get("effectMagnitude"), 0.0, 1.0, "$.effectMagnitude", errors)
-    raw_motif = raw.get("motif")
-    motif = raw_motif if isinstance(raw_motif, Mapping) else {}
-    if not isinstance(raw_motif, Mapping):
-        errors.append({"path": "$.motif", "message": "object required"})
-    motif_text: dict[str, str] = {}
-    for field, maximum in _MOTIF_TEXT_LIMITS.items():
-        value = motif.get(field)
-        if not isinstance(value, str) or not value.strip() or len(value) > maximum:
-            errors.append({"path": f"$.motif.{field}", "message": f"exact non-empty string of at most {maximum} chars required"})
-        motif_text[field] = value if isinstance(value, str) else ""
-    motif_rhythm = _number(motif.get("rhythm"), 0.2, 3.0, "$.motif.rhythm", errors)
-    motif_chaos = _number(motif.get("chaos"), 0.0, 1.0, "$.motif.chaos", errors)
     slots = raw.get("slots")
     if not isinstance(slots, list):
         errors.append({"path": "$.slots", "message": "array required"})
@@ -709,19 +670,15 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
     impact_sprite_entities: set[str] = set()
     normalized_slots: list[dict[str, Any]] = []
     enum_fields = {
-        "rendererKind": _RENDERERS, "backend": _BACKENDS, "textureRole": _TEXTURE_ROLES,
-        "particleRole": _TEXTURE_ROLES, "anchor": _ANCHORS, "channel": _CHANNELS,
-        "lane": _LANES, "emissionMode": _EMISSIONS, "blend": _BLENDS,
+        "rendererKind": _RENDERERS, "textureRole": _TEXTURE_ROLES,
+        "anchor": _ANCHORS, "blend": _BLENDS,
         "layer": _LAYERS,
         "particleSystemId": _PARTICLES,
     }
     number_fields = {
         "scale": (0.15, 5.0, False), "density": (0.0, 1.0, False),
         "duration": (3, 120, True), "alpha": (0.0, 1.0, False),
-        "spread": (0.0, 2.0, False), "jitter": (0.0, 1.5, False),
-        "fadeIn": (0.0, 0.8, False), "fadeOut": (0.0, 0.8, False),
-        "budgetWeight": (0.1, 4.0, False), "signatureWeight": (0.0, 1.0, False),
-        "visualCost": (0.0, 1.0, False), "startTick": (0, 120, True),
+        "spread": (0.0, 2.0, False), "startTick": (0, 120, True),
         "repeatEvery": (0, 120, True),
     }
     for index, slot in enumerate(slots):
@@ -741,15 +698,17 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             errors.append({"path": path, "message": f"entity/event pair {(entity_id, event)!r} is absent from runtimeProgram"})
         clean: dict[str, Any] = {"id": slot_id, "entityId": entity_id, "event": event}
         for field, values in enum_fields.items():
+            if field not in slot:
+                continue  # The canonical branch schema owns requiredness.
             value = str(slot.get(field) or "")
             if value not in values:
                 errors.append({"path": f"{path}.{field}", "message": f"unsupported value {value!r}"})
             clean[field] = value
         for field, (low, high, integer) in number_fields.items():
-            clean[field] = _number(slot.get(field), low, high, f"{path}.{field}", errors, integer=integer)
+            if field in slot:
+                clean[field] = _number(slot[field], low, high, f"{path}.{field}", errors, integer=integer)
         sprite_prompt = str(slot.get("spritePrompt") or "")
-        sprite_negative = str(slot.get("spriteNegativePrompt") or "")
-        if clean["rendererKind"] == "impactSprite":
+        if clean.get("rendererKind") == "impactSprite":
             if not sprite_prompt.strip():
                 errors.append({"path": path + ".spritePrompt", "message": "impactSprite requires a dedicated non-empty transparent sprite prompt"})
             if clean["textureRole"] != _RENDERER_REQUIREMENTS["impactSprite"]["textureRole"]:
@@ -757,12 +716,11 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             if entity_id in impact_sprite_entities:
                 errors.append({"path": path + ".entityId", "message": "runtime wire supports at most one impactSprite asset per entity"})
             impact_sprite_entities.add(entity_id)
-        else:
-            for field, value in (("spritePrompt", sprite_prompt), ("spriteNegativePrompt", sprite_negative)):
-                if value:
-                    errors.append({"path": f"{path}.{field}", "message": "sprite prompts are owned only by impactSprite slots and must be empty otherwise"})
-        clean["spritePrompt"] = sprite_prompt
-        clean["spriteNegativePrompt"] = sprite_negative
+        for field in ("spritePrompt", "spriteNegativePrompt", "spriteCanvasSize"):
+            if field in slot:
+                clean[field] = copy.deepcopy(slot[field])
+        if "color" in slot:
+            clean["color"] = copy.deepcopy(slot["color"])
         if "element" in slot:
             clean["element"] = copy.deepcopy(slot["element"])
         if "path" in slot:
@@ -777,11 +735,6 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             clean["sound"] = copy.deepcopy(slot["sound"])
         errors.extend(_sound_slot_errors(slot, path))
         errors.extend(_material_slot_errors(slot, path))
-        for renderer in ("soundCue", "lightCue"):
-            required = _RENDERER_REQUIREMENTS[renderer]
-            if clean["rendererKind"] == renderer and any(clean[field] != value for field, value in required.items()):
-                fields = " and ".join(f"{field}={value}" for field, value in required.items())
-                errors.append({"path": path, "message": f"{renderer} requires {fields}"})
         normalized_slots.append(clean)
     errors.extend(vfx_png_dependencies(data, raw, require_used=True)["errors"])
     return {
@@ -789,13 +742,6 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
         "errors": errors,
         "normalized": {
             "schema": VFX_DIRECTOR_SCHEMA,
-            "effectMagnitude": float(magnitude),
-            "visualBudgetClass": budget_class,
-            "motif": {
-                **motif_text,
-                "rhythm": float(motif_rhythm),
-                "chaos": float(motif_chaos),
-            },
             "slots": normalized_slots,
             **({"assets": copy.deepcopy(raw["assets"])} if "assets" in raw else {}),
         },
@@ -806,7 +752,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
     """Shared persisted-recipe shape gate; image delivery separately owns readiness.
 
     Reuse Director's additive branch definitions, never strip/coerce authored
-    controls or hydrate an image here. Inert legacy PNG selectors fail explicitly;
+    controls or hydrate an image here. Invalid PNG selectors fail explicitly;
     collection IDs/pairs are checked before lookup across both renderer domains.
     """
     if not isinstance(data, Mapping) or not isinstance(data.get("vfxManifest"), Mapping):
@@ -824,21 +770,38 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
     if len(slots) > slots_schema["maxItems"]:
         errors.append({"path": "$.vfxManifest.slots", "message": f"at most {slots_schema['maxItems']} slots"})
     slot_schema = slots_schema["items"]
-    for field in ("spritePrompt", "spriteNegativePrompt"):
+    # Captions/canvas are projected into the exact entity visual image owner,
+    # never retained or synthesized as runtime slot controls.
+    for field in ("spritePrompt", "spriteNegativePrompt", "spriteCanvasSize"):
         slot_schema["properties"].pop(field)
-        slot_schema["required"].remove(field)
+        for clause in slot_schema["allOf"]:
+            consequent = clause.get("then", {})
+            if "required" in consequent:
+                consequent["required"] = [name for name in consequent["required"] if name != field]
+            consequent.get("properties", {}).pop(field, None)
     slot_schema["properties"].update({
-        **{field: {"type": "string"} for field in ("eventGroup", "stage", "source", "bakedClipId", "bakedClipHash", "effectName")},
-        "slotSeed": {"type": "integer"}, "phaseOffset": {"type": "number", "minimum": -1.0, "maximum": 1.0},
-        "bakedCommandCount": {"type": "integer", "minimum": 0},
-        "bakedCommands": {"type": "array", "maxItems": 0},
+        "slotSeed": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+        "phaseOffset": {"type": "number", "minimum": -1.0, "maximum": 1.0},
     })
-    if "assets" in manifest:
-        asset_list_schema = {"type": "array", "maxItems": 4, "items": runtime_asset_schema()}
-        for error in strict_schema_errors(manifest["assets"], asset_list_schema, path="$.vfxManifest.assets"):
-            errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
+    manifest_schema = {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            "schema": {"const": VFX_MANIFEST_SCHEMA},
+            "recipeId": {"type": "string"},
+            "budget": {"type": "object", "additionalProperties": False,
+                       "properties": {field: {"type": "integer", "minimum": 0, "maximum": maximum}
+                                      for field, maximum in (("maxParticlesPerTick", 256), ("maxParticlesTotal", 12000), ("maxDrawCalls", 512))},
+                       "required": ["maxParticlesPerTick", "maxParticlesTotal", "maxDrawCalls"]},
+            "slots": {"type": "array", "maxItems": slots_schema["maxItems"], "items": slot_schema},
+            "assets": {"type": "array", "maxItems": 4, "items": runtime_asset_schema()},
+        },
+        "required": ["schema", "recipeId", "budget", "slots"],
+    }
+    for error in strict_schema_errors(manifest, manifest_schema, path="$.vfxManifest"):
+        errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
     allowed = {(row["entityId"], row["event"]) for row in _allowed_pairs(data)}
     seen: set[str] = set()
+    impact_entities: set[str] = set()
     for index, slot in enumerate(slots):
         path = f"$.vfxManifest.slots[{index}]"
         if not isinstance(slot, Mapping):
@@ -860,15 +823,12 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         renderer = slot.get("rendererKind")
         if not isinstance(renderer, str) or renderer not in _RENDERERS:
             errors.append({"path": path + ".rendererKind", "message": "unsupported renderer"})
-        if renderer in (*MATERIAL_RENDERERS, "screenShakeCue", "libraryParticle", "soundCue"):
-            for error in strict_schema_errors(slot, slot_schema, path=path):
-                errors.append({"path": error["path"], "message": f"schema {error['kind']}: expected {error.get('expected')!r}"})
-            errors.extend(_material_slot_errors(slot, path))
-            errors.extend(_sound_slot_errors(slot, path))
-        else:
-            for field in ("element", "path", "screenShake", "particle", "soundId", "sound"):
-                if field in slot:
-                    errors.append({"path": path + "." + field, "message": "foreign payload forbidden"})
+        if renderer == "impactSprite" and isinstance(entity_id, str):
+            if entity_id in impact_entities:
+                errors.append({"path": path + ".entityId", "message": "runtime wire supports at most one impactSprite asset per entity"})
+            impact_entities.add(entity_id)
+        errors.extend(_material_slot_errors(slot, path))
+        errors.extend(_sound_slot_errors(slot, path))
     for error in vfx_png_dependencies(data, manifest)["errors"]:
         errors.append({**error, "path": error["path"].replace("$.", "$.vfxManifest.", 1)})
     return {"ok": not errors, "errors": errors}
@@ -877,15 +837,6 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
 def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, parent_b: Mapping[str, Any] | None) -> dict[str, Any]:
     realization_raw = data.get("realization")
     realization: Mapping[str, Any] = realization_raw if isinstance(realization_raw, Mapping) else {}
-    self_evaluation_raw = realization.get("selfEvaluation")
-    self_evaluation: Mapping[str, Any] = self_evaluation_raw if isinstance(self_evaluation_raw, Mapping) else {}
-    program_vs_report_raw = self_evaluation.get("programVsReport")
-    program_vs_report: Mapping[str, Any] = program_vs_report_raw if isinstance(program_vs_report_raw, Mapping) else {}
-    behavior_checks = [
-        copy.deepcopy(dict(row))
-        for row in program_vs_report.get("behaviorChecks") or []
-        if isinstance(row, Mapping)
-    ]
 
     def parent_packet(parent: Mapping[str, Any] | None) -> dict[str, Any]:
         source: Mapping[str, Any] = parent if isinstance(parent, Mapping) else {}
@@ -913,7 +864,6 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "id": str(data.get("id") or ""), "name": str(data.get("name") or ""),
             "description": str(realization.get("description") or ""),
             "playerExperience": str(realization.get("playerExperience") or ""),
-            "behaviorChecks": behavior_checks,
         },
         "parents": [parent_packet(parent_a), parent_packet(parent_b)],
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
@@ -928,12 +878,12 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             _READABILITY_RULE,
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
-            "Legacy forms: choose from runtimeVocabulary.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
+            "Procedural forms: choose from runtimeVocabulary.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
             "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
-            "projectileAfterimage, spriteStampTrail, and actorAfterimage consume textureRole through the exact bound entity; use item for the item PNG, entity for the bound entity PNG, or its exact visualRole when they match. impactSprite instead consumes its dedicated impact texture.",
-            "Legacy Sprite renderers require a non-none textureRole. Legacy primitive and particle renderers do not consume a gameplay PNG.",
-            "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; textureRole=none is neutral, not a request to suppress the selected image. Respect their own timing, opacity profiles, neutral companions and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip geometry owns placement and requires neutral anchor=self; anchorHistory keeps its authored anchor.",
-            "Only rendererKind=impactSprite authors spritePrompt/spriteNegativePrompt; spritePrompt describes one dedicated impact sprite. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot returns both sprite prompt strings empty.",
+            "spriteStampTrail consumes textureRole through the exact bound entity; use item for the item PNG or entity for the bound entity PNG. impactSprite instead consumes its dedicated impact texture.",
+            "Sprite renderers require a non-none textureRole. Every other renderer forbids common textureRole; primitive and Dust renderers do not consume a gameplay PNG.",
+            "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; omit common scale/density/spread/particleSystemId/textureRole. Respect their own timing, opacity profiles and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip geometry owns placement and requires neutral anchor=self; anchorHistory keeps its authored anchor.",
+            "Only rendererKind=impactSprite authors required spritePrompt/spriteNegativePrompt/spriteCanvasSize; spritePrompt describes one dedicated impact sprite and spriteCanvasSize explicitly chooses its PNG canvas, independent of hitbox. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot omits all three image request fields.",
             _impact_sprite_background_rule(),
             "Slots may be empty when presentation should be restrained.",
             "assets is optional: request at most four isolated texture ingredients consistent with acceptedVisualKit, declare exact safe IDs once and reuse explicitly through element.texture or path.texture. No filesystem paths/URLs or execution metadata. Never request unused art. cutout fits soft-alpha subjects; strip preserves authored frame/UV through resize without crop/recenter/rotation. Either layout can serve either new renderer; no asset-name or weapon classifier.",
@@ -955,11 +905,9 @@ def vfx_schema_instruction_paths(*, repair: bool) -> dict[str, tuple[str | int, 
     """
     slot = ("properties", "slotsUpsert" if repair else "slots", "items")
     fields = (
-        "id", "rendererKind", "backend", "textureRole", "particleRole", "anchor",
-        "channel", "lane", "emissionMode", "blend", "layer", "particleSystemId",
-        "scale", "density", "duration", "alpha", "spread", "jitter", "fadeIn",
-        "fadeOut", "budgetWeight", "signatureWeight", "visualCost", "startTick",
-        "repeatEvery", "spritePrompt", "spriteNegativePrompt", "soundId",
+        "id", "rendererKind", "textureRole", "anchor", "blend", "layer", "particleSystemId",
+        "scale", "density", "duration", "alpha", "spread", "startTick", "repeatEvery",
+        "spritePrompt", "spriteNegativePrompt", "spriteCanvasSize", "soundId", "color",
     )
     paths: dict[str, tuple[str | int, ...]] = {"slot_" + field: slot + ("properties", field) for field in fields}
     paths.update({field: slot + ("properties", field)
@@ -967,8 +915,6 @@ def vfx_schema_instruction_paths(*, repair: bool) -> dict[str, tuple[str | int, 
     paths.update({"rendererRule_" + renderer: slot + ("allOf", index)
                   for index, renderer in enumerate(_RENDERER_REQUIREMENTS)})
     paths["asset"] = ("properties", "assetsUpsert" if repair else "assets", "items")
-    for field in ("effectMagnitude", "visualBudgetClass", "motif"):
-        paths[field] = ("properties", field, "anyOf", 0) if repair else ("properties", field)
     return paths
 
 
@@ -979,8 +925,6 @@ def _vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
 def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str, Any]:
     source = raw if isinstance(raw, Mapping) else {}
     slots = _rows(source, "slots")
-    mutable_globals: set[str] = set()
-    global_paths: dict[str, set[str]] = {}
     mutable_slot_ids: set[str] = set()
     slot_paths: dict[str, set[str]] = {}
     slot_deletions: dict[str, set[str]] = {}
@@ -999,10 +943,6 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
     allow_create_slots = not isinstance(raw, Mapping)
     whole_response = not isinstance(raw, Mapping)
 
-    def grant_global(field: str, relative: str) -> None:
-        mutable_globals.add(field)
-        global_paths.setdefault(field, set()).add(relative.strip("."))
-
     def grant_slot(slot_id: str, relative: str) -> None:
         if slot_id:
             mutable_slot_ids.add(slot_id)
@@ -1014,11 +954,6 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
         exact_delete = message.startswith("schema additional_property:") or message == "schema enum: expected []"
         if path == "$":
             whole_response = True
-        for field in ("effectMagnitude", "visualBudgetClass", "motif"):
-            prefix = f"$.{field}"
-            relative = json_path_relative(path, prefix)
-            if relative is not None:
-                grant_global(field, relative)
         match = re.match(r"^\$\.slots\[(\d+)\]", path)
         relative = json_path_relative(path, match.group(0)) if match else None
         if match and relative is not None:
@@ -1036,9 +971,6 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
                         # frozen while allowing the model to retarget the slot.
                         grant_slot(slot_id, "entityId")
                         grant_slot(slot_id, "event")
-                    elif "requires channel=" in message and "lane=cue" in message:
-                        grant_slot(slot_id, "channel")
-                        grant_slot(slot_id, "lane")
                     else:
                         grant_slot(slot_id, "")
                 else:
@@ -1078,8 +1010,6 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
             elif len(assets) > 4:
                 delete_asset_indices.update(range(4, len(assets)))
     if whole_response:
-        for field in ("effectMagnitude", "visualBudgetClass", "motif"):
-            grant_global(field, "")
         allow_create_slots = True
         allow_create_assets = True
         for index, row in enumerate(assets):
@@ -1095,7 +1025,7 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
                 delete_indices.add(index)
     return {
         "schema": "infini.vfx-repair-scope.v3",
-        "mutableGlobals": sorted(mutable_globals),
+        "mutableGlobals": [],
         "mutableSlotIds": sorted(mutable_slot_ids),
         "deletableSlotIds": sorted(slot_id for slot_id in mutable_slot_ids if "" in slot_paths[slot_id]),
         "deletableSlotIndices": sorted(delete_indices),
@@ -1105,7 +1035,7 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
         "deletableAssetIndices": sorted(delete_asset_indices),
         "allowCreateAssets": allow_create_assets,
         "fieldPermissions": {
-            "globals": {field: sorted(paths) for field, paths in sorted(global_paths.items())},
+            "globals": {},
             "slots": [{"slotId": slot_id, "paths": sorted(paths), **({"deletePaths": sorted(slot_deletions[slot_id])} if slot_id in slot_deletions else {})} for slot_id, paths in sorted(slot_paths.items())],
             "assets": [{"assetId": asset_id, "paths": sorted(paths), **({"deletePaths": sorted(asset_deletions[asset_id])} if asset_id in asset_deletions else {})} for asset_id, paths in sorted(asset_paths.items())],
         },
@@ -1115,7 +1045,6 @@ def _build_vfx_repair_scope(raw: Any, errors: list[dict[str, Any]]) -> dict[str,
 
 def _vfx_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
     source = raw if isinstance(raw, Mapping) else {}
-    mutable_globals = set(str(value) for value in scope.get("mutableGlobals") or [])
     mutable_slot_ids = set(str(value) for value in scope.get("mutableSlotIds") or [])
     slots = _rows(source, "slots")
     mutable_asset_ids = set(scope.get("mutableAssetIds") or [])
@@ -1123,12 +1052,12 @@ def _vfx_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "malformedRawText": raw.raw_text[:12000] if isinstance(raw, MalformedVfxDirectorOutput) else "",
         "broken": {
-            "globals": {field: copy.deepcopy(source.get(field)) for field in mutable_globals},
+            "globals": {},
             "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") in mutable_slot_ids],
             "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] in mutable_asset_ids],
         },
         "validReadOnly": {
-            "globals": {field: copy.deepcopy(source.get(field)) for field in ("effectMagnitude", "visualBudgetClass", "motif") if field not in mutable_globals},
+            "globals": {},
             "slots": [copy.deepcopy(row) for row in slots if isinstance(row, Mapping) and str(row.get("id") or "") not in mutable_slot_ids],
             "assets": [copy.deepcopy(row) for row in assets if isinstance(row, Mapping) and isinstance(row.get("id"), str) and row["id"] not in mutable_asset_ids],
         },
@@ -1180,9 +1109,6 @@ def _filter_vfx_repair_patch(
         })
     filtered: dict[str, Any] = {
         "schema": VFX_REPAIR_PATCH_SCHEMA,
-        "effectMagnitude": None,
-        "visualBudgetClass": None,
-        "motif": None,
         "slotsUpsert": [],
         "slotIdsDelete": [],
         "slotIndicesDelete": [],
@@ -1195,14 +1121,11 @@ def _filter_vfx_repair_patch(
         return filtered, {"schema": "infini.vfx-repair-filter-report.v1", "ok": False, "errors": schema_errors, "acceptedPaths": [], "ignoredChanges": []}
 
     source = previous if isinstance(previous, Mapping) else {}
-    mutable_globals = set(str(value) for value in scope.get("mutableGlobals") or [])
     mutable_slot_ids = set(str(value) for value in scope.get("mutableSlotIds") or [])
     deletable_slot_ids = set(str(value) for value in scope.get("deletableSlotIds") or [])
     deletable_indices = set(int(value) for value in scope.get("deletableSlotIndices") or [])
     raw_permission_root = scope.get("fieldPermissions")
     permission_root = raw_permission_root if isinstance(raw_permission_root, Mapping) else {}
-    raw_global_permissions = permission_root.get("globals")
-    global_permissions = raw_global_permissions if isinstance(raw_global_permissions, Mapping) else {}
     slot_permissions = {
         str(row.get("slotId") or ""): tuple(str(value) for value in row.get("paths") or [])
         for row in permission_root.get("slots") or [] if isinstance(row, Mapping)
@@ -1210,26 +1133,6 @@ def _filter_vfx_repair_patch(
     slot_delete_permissions = {str(row.get("slotId") or ""): tuple(row.get("deletePaths") or []) for row in permission_root.get("slots") or [] if isinstance(row, Mapping)}
     ignored: list[dict[str, Any]] = []
     accepted: list[str] = []
-
-    for field in ("effectMagnitude", "visualBudgetClass", "motif"):
-        candidate = patch_mapping.get(field)
-        if candidate is None:
-            continue
-        path = f"$.{field}"
-        original = source.get(field)
-        if field not in mutable_globals:
-            ignored.append(_vfx_filter_ignored(path, candidate, original, "valid_global_frozen"))
-            continue
-        if isinstance(original, Mapping) and isinstance(candidate, Mapping):
-            merged, row_ignored, row_accepted = merge_frozen_subtree(
-                original, candidate, mutable_paths=global_permissions.get(field) or (), audit_path=path, allow_additions=False,
-            )
-            filtered[field] = merged
-            ignored.extend(row_ignored)
-            accepted.extend(row_accepted)
-        else:
-            filtered[field] = copy.deepcopy(candidate)
-            accepted.append(path)
 
     slots = _rows(source, "slots")
     for index, slot_id in enumerate(patch_mapping.get("slotIdsDelete") or []):
@@ -1344,9 +1247,6 @@ def _apply_vfx_repair_patch(
     source = previous if isinstance(previous, Mapping) else {}
     out = copy.deepcopy(dict(source))
     out["schema"] = VFX_DIRECTOR_SCHEMA
-    for field in ("effectMagnitude", "visualBudgetClass", "motif"):
-        if filtered.get(field) is not None:
-            out[field] = copy.deepcopy(filtered[field])
     if any(filtered.get(key) for key in ("slotsUpsert", "slotIdsDelete", "slotIndicesDelete")):
         slots = _rows(out, "slots")
         doomed_indices = set(filtered["slotIndicesDelete"])
@@ -1459,9 +1359,6 @@ def _vfx_repair_schema_from_packet(packet: Mapping[str, Any]) -> dict[str, Any]:
         "additionalProperties": False,
         "properties": {
             "schema": {"const": VFX_REPAIR_PATCH_SCHEMA},
-            "effectMagnitude": {"anyOf": [copy.deepcopy(full["properties"]["effectMagnitude"]), {"type": "null"}]},
-            "visualBudgetClass": {"anyOf": [copy.deepcopy(full["properties"]["visualBudgetClass"]), {"type": "null"}]},
-            "motif": {"anyOf": [copy.deepcopy(full["properties"]["motif"]), {"type": "null"}]},
             "slotsUpsert": {"type": "array", "items": copy.deepcopy(full["properties"]["slots"]["items"]), "maxItems": full["properties"]["slots"]["maxItems"]},
             "slotIdsDelete": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 64}, "maxItems": full["properties"]["slots"]["maxItems"]},
             "slotIndicesDelete": {"type": "array", "items": {"type": "integer", "minimum": 0, "maximum": max(0, full["properties"]["slots"]["maxItems"] * 2)}, "maxItems": max(1, full["properties"]["slots"]["maxItems"] * 2)},
@@ -1514,8 +1411,6 @@ def audit_vfx_sound_projection(authored: Mapping[str, Any], manifest: Mapping[st
 
 
 def _compile_manifest(data: Mapping[str, Any], authored: Mapping[str, Any], recipe_key_value: str) -> dict[str, Any]:
-    magnitude = float(authored["effectMagnitude"])
-    budget_class = str(authored["visualBudgetClass"])
     slots: list[dict[str, Any]] = []
     for source in authored["slots"]:
         slot = copy.deepcopy(dict(source))
@@ -1523,43 +1418,19 @@ def _compile_manifest(data: Mapping[str, Any], authored: Mapping[str, Any], reci
         # VfxSlotSpec is a fail-closed runtime DTO and must not carry them.
         slot.pop("spritePrompt", None)
         slot.pop("spriteNegativePrompt", None)
-        slot.update({
-            "eventGroup": "auto", "stage": "loop",
-            "source": "llm_vfx_director",
-            "slotSeed": _seed(recipe_key_value, slot.get("id")),
-            "bakedClipId": "", "bakedClipHash": "", "bakedCommandCount": 0,
-            "bakedCommands": [], "effectName": "",
-        })
+        slot.pop("spriteCanvasSize", None)
+        slot["slotSeed"] = _seed(recipe_key_value, slot.get("id"))
         slots.append(slot)
     return {
         "schema": VFX_MANIFEST_SCHEMA,
         "recipeId": str(recipe_key_value or data.get("id") or ""),
-        "effectName": "runtime_entity_events",
-        "inspirationNames": [],
-        "playbackMode": "Realtime",
-        "seed": _seed(recipe_key_value, data.get("id"), "vfx"),
-        "confidence": 1.0,
-        "effectMagnitude": magnitude,
-        "visualBudgetClass": budget_class,
-        "motif": copy.deepcopy(authored["motif"]),
         "budget": {
-            "effectMagnitude": magnitude, "visualBudgetClass": budget_class,
-            "emergencyCap": True,
             "maxParticlesPerTick": max(16, min(256, 32 + len(slots) * 24)),
             "maxParticlesTotal": max(256, min(12000, 1000 + len(slots) * 1200)),
             "maxDrawCalls": max(32, min(512, 64 + len(slots) * 36)),
-            "spawnRateMultiplier": 1.0,
-            "enableSoftGlow": True, "enablePointSparks": True,
-            "enablePersistentSmoke": budget_class in {"large", "signature"},
         },
         "slots": slots,
         **({"assets": [{**copy.deepcopy(row), "spritePath": "", "spriteUrl": "", "spriteStatus": "pending", "spriteTechnicalScore": 0.0} for row in authored["assets"]]} if "assets" in authored else {}),
-        "overlayPolicy": "LocalOnly",
-        "debug": {
-            "pattern": "runtime_entity_events", "roles": [str(row.get("visualRole") or "") for row in runtime_visual_roles(data)],
-            "selectedScore": 1.0, "selectedReasons": ["exact_entity_event_binding"],
-            "topCandidates": [], "wordProbe": [],
-        },
     }
 
 
@@ -1583,6 +1454,7 @@ def _hydrate_vfx_asset_prompts(data: dict[str, Any], authored: Mapping[str, Any]
         visual.update({
             "impactPrompt": str(source.get("spritePrompt") or "")[:1400],
             "impactNegativePrompt": str(source.get("spriteNegativePrompt") or "")[:700],
+            "impactCanvasSize": source["spriteCanvasSize"],
             "impactSpritePath": "",
             "impactSpriteUrl": "",
             "impactSpriteStatus": "pending",
@@ -1591,24 +1463,17 @@ def _hydrate_vfx_asset_prompts(data: dict[str, Any], authored: Mapping[str, Any]
 
 
 def _development_manifest(data: Mapping[str, Any], recipe_key_value: str) -> dict[str, Any]:
-    return _compile_manifest(data, {
-        "effectMagnitude": 0.0,
-        "visualBudgetClass": "tiny",
-        "motif": {"element": "neutral", "shapeLanguage": "none", "motionLanguage": "none", "paletteRole": "primary", "rhythm": 1.0, "chaos": 0.0},
-        "slots": [],
-    }, recipe_key_value)
+    return _compile_manifest(data, {"slots": []}, recipe_key_value)
 
 
-def attach_hybrid_vfx_manifest(
+def attach_vfx_manifest(
     data: dict[str, Any],
     recipe_key_value: str,
-    reroll_salt: Any = "",
     parent_a: dict[str, Any] | None = None,
     parent_b: dict[str, Any] | None = None,
     llm_director: Callable[..., Any] | None = None,
 ) -> dict[str, Any]:
     """Run one VFX Director call and at most one conditional VFX Repair."""
-    del reroll_salt
     if llm_director is None:
         data["vfxManifest"] = _development_manifest(data, recipe_key_value)
         data.setdefault("debug", {})["vfxDirectorStatus"] = "development_inert_manifest"
@@ -1649,12 +1514,6 @@ def attach_hybrid_vfx_manifest(
     return data
 
 
-# The former recipe/macro selector is intentionally absent from production.  A
-# compact surface is retained only for diagnostics and tests.
-def compact_vfx_recipe_card(recipe: Mapping[str, Any]) -> dict[str, Any]:
-    return {"id": str(recipe.get("id") or ""), "status": "retired_recipe_macro"}
-
-
 def vfx_director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
     """Public generated schema owned by the VFX Director contract module."""
 
@@ -1668,8 +1527,8 @@ def vfx_repair_schema(data: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = [
-    "VFX_DIRECTOR_SCHEMA", "VFX_REPAIR_PATCH_SCHEMA", "VFX_MANIFEST_SCHEMA", "MalformedVfxDirectorOutput", "attach_hybrid_vfx_manifest",
+    "VFX_DIRECTOR_SCHEMA", "VFX_REPAIR_PATCH_SCHEMA", "VFX_MANIFEST_SCHEMA", "MalformedVfxDirectorOutput",    "attach_vfx_manifest",
     "VFX_PROMPT_STATIC_KEYS", "VFX_REPAIR_PROMPT_STATIC_KEYS",
-    "compact_vfx_recipe_card", "validate_vfx_director_output", "vfx_director_schema", "vfx_director_surface",
+    "validate_vfx_director_output", "vfx_director_schema", "vfx_director_surface",
     "vfx_repair_schema", "validate_vfx_manifest_wire", "vfx_png_dependencies",
 ]

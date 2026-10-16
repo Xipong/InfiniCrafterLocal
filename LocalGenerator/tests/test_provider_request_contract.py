@@ -182,7 +182,7 @@ def test_shape_rejection_reaches_actual_author_failure_with_operator_diagnosis(w
     monkeypatch.setattr(author, "trace_event", lambda *args, **kw: events.append(args))
     monkeypatch.setattr(llm, "log_event", lambda level, message, data=None: logs.append((message, data)))
     with pytest.raises(PlannerUnavailable) as caught:
-        author.try_llm_plan({}, {}, {}, {}, "shape-owner")
+        author.try_llm_plan({}, {}, "shape-owner")
     cause = caught.value.__cause__
     assert isinstance(cause, urllib.error.HTTPError)
     diagnosis = cause._infini_shape_diagnosis

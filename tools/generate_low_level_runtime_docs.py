@@ -19,7 +19,6 @@ from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     RUNTIME_WIRE_SCHEMA,
-    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.technical_lowering import (  # noqa: E402
     GLOBAL_TECHNICAL_LOWERINGS,
@@ -108,28 +107,24 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "> Generated: [`tools/generate_low_level_runtime_docs.py`](../../../tools/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).",
         "> Sources: [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
         "[capability_library_audit.py](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). "
-        "[Lowery](LOWERY_RU.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — историческое Author ↔ C# сопоставление, единицы и исключения.",
+        "[Lowery](LOWERY_RU.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — текущее Author ↔ C# сопоставление, единицы и исключения.",
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
-        f"Inventory: **{len(visible_capabilities())} public capabilities**, "
-        f"**{len(CAPABILITY_REGISTRY) - len(visible_capabilities())} internal retained entries**, "
+        f"Inventory: **{len(CAPABILITY_REGISTRY)} public capabilities**, "
         f"**{len(ENTITY_KIND_REGISTRY)} entity kinds**, "
         f"**{len(INPUT_KIND_REGISTRY)} inputs**, **{len(BINDING_ACTION_REGISTRY)} binding actions**, "
         f"**{len(EVENT_KIND_REGISTRY)} events**. Machine audit: **{audit['score']}/{audit['scoreMax']}**, "
         f"errors={audit['errorCount']}, warnings={audit['warningCount']}.",
         "",
-        "**Навигация:** [классификация](#classification) · [entities](#entities) · [inputs/actions](#bindings) · "
+        "**Навигация:** [каталог](#classification) · [entities](#entities) · [inputs/actions](#bindings) · "
         "[events](#events) · [capabilities](#capabilities) · [полнота](#coverage) · [обновление](#refresh).",
         "",
         '<a id="classification"></a>',
         "",
-        "## Классификация",
+        "## Текущий каталог",
         "",
-        "- **expose** — Gameplay Author видит capability и сам выбирает её.",
-        "- **internal** — техническая реализация или сохранённое описание старого wire; отсутствует в новом Author, provider schema и Repair alternatives.",
-        "- **split** — механика извлечена из старого high-level macro и доступна отдельно.",
-        "- **delete** — мёртвое/дублирующее поведение удалено.",
+        "Все записи registry — публичные исполняемые capabilities. Каталог описывает current params, refs, units, consumers и safety bounds, не audit-only статусы/решения или историю экспозиции. Technical opcode/DTO projection не является скрытой gameplay capability.",
         "",
         '<a id="entities"></a>',
         "",
@@ -201,8 +196,8 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "`omissionAllowedOnlyWhen` задаёт точные ветви, где пропуск не выбирает механику. "
         "Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](../PROJECTILE_AUTHOR_API_RU.md).",
         "",
-        "| capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | prompt | status | external reference | решение |",
-        "|---|---|---|---|---|---|---|---|---|---:|---|---|---|",
+        "| capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | external reference |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for cap in CAPABILITY_REGISTRY.values():
         safety = f"{cap.multiplicity}; {cap.performance_budget}; slot={cap.component_slot}"
@@ -219,18 +214,15 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
                 f"`{esc(cap.compiler_owner)}`",
                 f"`{esc(cap.network_authority)}`",
                 esc(safety),
-                "да" if cap.prompt_visible else "нет",
-                esc(cap.implementation_status),
                 esc(EXTERNAL_REFERENCES.get(cap.category, "InfiniCrafterLocal source")),
-                esc(cap.decision),
             ]) + " |"
         )
     lines += [
         "",
-        "## Что стало internal/delete",
+        "## Техническая граница",
         "",
-        "Старые whole-weapon macros, family route tables, `AttackSpec`, `runtimeFamily`, hidden repair API и cache migration удалены. "
-        "Внутренними остались только: numeric opcode dispatch, DTO field projection, entity-kind → visual-role и технические tModLoader adapters. "
+        "Whole-weapon macros, family route tables, `AttackSpec`, `runtimeFamily`, hidden repair API и cache migration не входят в current API. "
+        "Technical owners исполняют numeric opcode dispatch, DTO field projection, entity-kind → visual-role и точные tModLoader adapters.",
         "Они не выбирают movement, attachment, delivery, input, lifecycle или topology.",
         "",
         '<a id="coverage"></a>',
@@ -325,7 +317,7 @@ def audit_markdown(audit: dict[str, Any]) -> str:
         "- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. "
         "Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет "
         "[`tools/check_planner_prompt_usability.py`](../../../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.",
-        f"- Публичный каталог покрывает реализованные {len(visible_capabilities())} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
+        f"- Публичный каталог покрывает реализованные {len(CAPABILITY_REGISTRY)} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
         "",
         '<a id="assessment"></a>',
         "",

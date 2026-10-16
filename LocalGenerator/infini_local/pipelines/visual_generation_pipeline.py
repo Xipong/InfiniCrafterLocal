@@ -15,9 +15,8 @@ from typing import Any, Mapping
 from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.core.vfx_material_contract import COLOR_TOKENS
 from infini_local.core.visual_contract_schema import (
-    front_hand_sprite_errors, front_hand_sprite_requirement, grip_schema,
+    SPRITE_CANVAS_SIZES, front_hand_sprite_errors, front_hand_sprite_requirement, grip_schema,
     sprite_presentation_properties,
 )
 from infini_local.core.llm_config import USE_LLM
@@ -100,23 +99,14 @@ def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
     return accounting
 
 
-def attach_visual(
-    data: dict[str, Any],
-    a: dict[str, Any],
-    b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
-) -> dict[str, Any]:
-    del a, b, ca, cb
+def attach_visual(data: dict[str, Any]) -> dict[str, Any]:
     visual = data.setdefault("visual", {})
-    visual.setdefault("style", "terraria_item_sprite")
     visual.setdefault("preferredCanvasSize", 32)
     visual.setdefault("inventoryScale", 1.0)
     visual.setdefault("worldScale", 1.0)
     visual.setdefault("drawOffsetX", 0)
     visual.setdefault("drawOffsetY", 0)
     visual.setdefault("palette", [])
-    visual.setdefault("requiredAnchors", [])
     visual.setdefault("spriteStatus", "")
     visual.setdefault("spritePath", "")
     visual.setdefault("spriteUrl", "")
@@ -135,15 +125,10 @@ def _visual_item_schema() -> dict[str, Any]:
             "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
             "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
             "palette": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 256}, "minItems": 1, "maxItems": 8},
-            "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION},
+            "preferredCanvasSize": {"type": "integer", "enum": list(SPRITE_CANVAS_SIZES), "description": _ITEM_CANVAS_DESCRIPTION},
             **sprite_presentation_properties(),
             "inventoryScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _INVENTORY_SCALE_DESCRIPTION},
             "worldScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _WORLD_SCALE_DESCRIPTION},
-            "effectColor": {
-                "type": "string",
-                "enum": [token for token in COLOR_TOKENS if token != "effect"],
-                "description": "Optional exact runtime rendering color token shared by item, projectile and detached VFX. Independent of the rich descriptive palette used for sprite art; no hex or prose parsing. Omission preserves historical rendering behavior.",
-            },
             "grip": grip_schema(),
         },
         "required": ["prompt", "negativePrompt", "silhouette", "visualIdentity", "palette", "preferredCanvasSize", "renderSizePx", "forwardAngleDegrees", "inventoryScale", "worldScale"],
@@ -191,7 +176,7 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
         "prompt": {"type": "string", "minLength": 1, "maxLength": 1400},
         "silhouette": {"type": "string", "minLength": 1, "maxLength": 700},
         "visualIdentity": {"type": "string", "minLength": 1, "maxLength": 700},
-        "preferredCanvasSize": {"type": "integer", "enum": [24, 32, 48, 64, 96, 128], "description": _ITEM_CANVAS_DESCRIPTION.replace("item PNG", "independent entity PNG")},
+        "preferredCanvasSize": {"type": "integer", "enum": list(SPRITE_CANVAS_SIZES), "description": _ITEM_CANVAS_DESCRIPTION.replace("item PNG", "independent entity PNG")},
         **sprite_presentation_properties(),
         "grip": grip_schema(),
     })
@@ -227,7 +212,7 @@ def _visual_entity_schema(entity_ids: list[str], item_body_id: str | None = None
 def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None) -> dict[str, Any]:
     # itemPatch is partial: Repair returns only the visual fields it is fixing.
     # Omitted fields stay frozen - the deterministic merge completes the patch from
-    # the previous kit before applying, mirroring the gameplay parentSynthesis rule.
+    # the previous kit before applying; valid design remains frozen.
     full_item = _visual_item_schema()
     partial_item = {
         "type": "object",
@@ -241,10 +226,9 @@ def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: boo
         "entitiesUpsert": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id), "maxItems": len(entity_ids)},
         "entityIdsDelete": {"type": "array", "items": {"type": "string", "enum": entity_ids}, "maxItems": len(entity_ids)},
         "entityIndicesDelete": {"type": "array", "description": "Zero-based array index values into the previous entities array to delete; structural positions, not time or size.", "items": {"type": "integer", "minimum": 0, "maximum": max(0, len(entity_ids) * 2)}, "maxItems": max(1, len(entity_ids) * 2)},
-        "animationPlan": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 1200}, {"type": "null"}]},
         "note": {"type": "string", "minLength": 1, "maxLength": 500},
     }
-    required = ["schema", "itemPatch", "entitiesUpsert", "entityIdsDelete", "entityIndicesDelete", "animationPlan", "note"]
+    required = ["schema", "itemPatch", "entitiesUpsert", "entityIdsDelete", "entityIndicesDelete", "note"]
     if equipment_overlay_required:
         properties["equipOverlayPatch"] = {"anyOf": [_visual_equip_overlay_schema(), {"type": "null"}]}
         required.insert(2, "equipOverlayPatch")
@@ -261,9 +245,9 @@ def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = F
         "schema": {"const": VISUAL_KIT_SCHEMA},
         "item": _visual_item_schema(),
         "entities": {"type": "array", "items": _visual_entity_schema(entity_ids, item_body_id), "minItems": len(entity_ids), "maxItems": len(entity_ids)},
-        "animationPlan": {"type": "string", "minLength": 1, "maxLength": 1200},
+        "animationPlan": {"type": "string", "maxLength": 1200, "description": "Optional advisory presentation intent for later generators; never executable or a Repair requirement."},
     }
-    required = ["schema", "item", "entities", "animationPlan"]
+    required = ["schema", "item", "entities"]
     if equipment_overlay_required:
         properties["equipOverlay"] = _visual_equip_overlay_schema()
         required.insert(2, "equipOverlay")
@@ -360,7 +344,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
                 "held": "q_item * player.GetAdjustedItemScale(held) (G already included once)",
                 "heldRegistryOnly": "q_item * baseScale * clamp(G, .25, 4)",
                 "body": "q_selected * P when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present, with P=D*E*curveScale(active age) from that explicit visual owner; otherwise q_selected * clamp(P, .1, 8). No new curve or mirror is inferred.",
-                "liveBodyCopy": "q_selected * clamp(P, .1, 8) * slot.Scale; absent R retains historical max(.05, P*slot.Scale)",
+                "liveBodyCopy": "q_selected * clamp(P, .1, 8) * slot.Scale",
                 "detachedBodyCopy": "q_selected * existing dimensionless pose/slot multiplier; capture/network pose remains dimensionless",
                 "visibleAlphaExtent": "alpha-bbox pixels * q_selected * independent draw multipliers",
                 "equalHeldBody": "Shared root guarantees equal base frame size, not final size: with neutral caller modifiers equality requires G == clamp(D*E, .1, 8), or G == D*E*curveScale(active age) for an accepted explicit mirror or visualScaleCurve. An independent hitbox curve does not multiply visual scale. Never change accepted gameplay to force equality.",
@@ -369,9 +353,9 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
             "handContactGeometry": "For explicit move_front_hand, native none-to-full stretch moves the hand only 6px (lengths 4..10px), not a long thrust. The sprite grip stays on H; hitboxOffsetPx does not extend the visible body. Compare the signed distance from grip to the authored contact region, projected along the final PNG forward axis using the effective multiplier from formulas.body: R/C * clamp(P, .1, 8), or its explicit curve/mirror exception, with the immutable hitbox center offset and rectangle. Choose art framing, grip and size coherently in that fixed geometry; never move only the picture to pretend to extend collision reach. A mismatch needing different motion/collision is not repairable by Visual. Native parent texture size is read-only calibration, not automatic reach inheritance or a mandatory size floor. In Repair preserve valid art and mechanics outside exact permissions.",
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
-            "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon draw a single PNG rather than the full collision path. texturedPath is an independent VFX renderer for compatible accepted path sources. Describe intended composition in animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",
+            "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon draw a single PNG rather than the full collision path. texturedPath is an independent VFX renderer for compatible accepted path sources. Optionally describe intended composition in advisory animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",
             "sourceCalibration": "Use available parent raw.spriteReference loaded texture/currentFrame or generatedParent.visual.renderSizePx as read-only size calibration, not a required copy. Consider chosen renderSizePx together with canonical bake fill/padding and intended visible alpha extent; canvas resolution alone does not set body size. Missing reference or alpha bounds are unknown: never substitute hitbox/collider dimensions, fallback textures or an inferred parent size. Accepted useTime/useAnimation, spawn, lifetimeTicks and collision constrain animation description only; do not change gameplay or frozen Repair fields.",
-            "legacy": "Already delivered metadata absence preserves exact historical rendering; newly authored v2 projects must explicitly choose required fields. No defaults, clamps, migration or rebake.",
+            "requiredMetadata": "Explicitly choose required presentation fields. No defaults, clamps, inferred axis or rebake.",
         },
         # This selected role roster is a runtime fact, not instruction authority.
         # All other presentation members above are invariant application rules.
@@ -455,6 +439,8 @@ def _validate_kit(
                          if json_path_relative(str(error.get("path") or ""), row_path) is None]
         schema_errors.extend(strict_schema_errors(source_row, target_schema, path=row_path))
     for schema_error in schema_errors:
+        if json_path_relative(str(schema_error.get("path") or ""), "$.animationPlan") is not None:
+            continue  # Advisory intent never spends Visual Repair.
         errors.append({
             "path": str(schema_error.get("path") or "$"),
             "message": f"schema {schema_error.get('kind')}: expected {schema_error.get('expected')!r}",
@@ -546,7 +532,6 @@ def _build_visual_repair_scope(
     missing_ids: set[str] = set()
     item_mutable = False
     overlay_mutable = False
-    animation_mutable = False
     item_paths: set[str] = set()
     overlay_paths: set[str] = set()
     entity_paths: dict[str, set[str]] = {}
@@ -570,8 +555,6 @@ def _build_visual_repair_scope(
         if equipment_overlay_required and relative_overlay_path is not None:
             overlay_mutable = True
             overlay_paths.add(relative_overlay_path)
-        if json_path_relative(path, "$.animationPlan") is not None:
-            animation_mutable = True
         match = __import__("re").match(r"^\$\.entities\[(\d+)\]", path)
         relative = json_path_relative(path, match.group(0)) if match else None
         if match and relative is not None:
@@ -622,7 +605,6 @@ def _build_visual_repair_scope(
     if whole_response:
         item_mutable = True
         overlay_mutable = equipment_overlay_required
-        animation_mutable = True
         item_paths.add("")
         if equipment_overlay_required:
             overlay_paths.add("")
@@ -640,7 +622,6 @@ def _build_visual_repair_scope(
         "itemMutable": item_mutable,
         "equipmentOverlayRequired": equipment_overlay_required,
         "equipOverlayMutable": overlay_mutable,
-        "animationPlanMutable": animation_mutable,
         "mutableEntityIds": sorted(mutable_ids),
         "deletableEntityIds": [],
         "deletableEntityIndices": sorted(delete_indices),
@@ -667,13 +648,12 @@ def _visual_repair_context(raw: Any, scope: Mapping[str, Any]) -> dict[str, Any]
             "item": copy.deepcopy(source.get("item")) if scope.get("itemMutable") else None,
             "equipOverlay": copy.deepcopy(source.get("equipOverlay")) if scope.get("equipOverlayMutable") else None,
             "entities": [copy.deepcopy(row) for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "") in mutable_ids],
-            "animationPlan": copy.deepcopy(source.get("animationPlan")) if scope.get("animationPlanMutable") else None,
         },
         "validReadOnly": {
             "item": copy.deepcopy(source.get("item")) if not scope.get("itemMutable") else None,
             "equipOverlay": copy.deepcopy(source.get("equipOverlay")) if scope.get("equipmentOverlayRequired") and not scope.get("equipOverlayMutable") else None,
             "entities": [copy.deepcopy(row) for row in rows if isinstance(row, Mapping) and str(row.get("entityId") or "") not in mutable_ids],
-            "animationPlan": copy.deepcopy(source.get("animationPlan")) if not scope.get("animationPlanMutable") else None,
+            **({"animationPlan": source["animationPlan"]} if isinstance(source.get("animationPlan"), str) else {}),
         },
     }
 
@@ -748,6 +728,9 @@ def _filter_visual_repair_patch(
     entity_ids: list[str],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     equipment_overlay_required = bool(scope.get("equipmentOverlayRequired"))
+    # Advisory prose is not a Repair edit target or a structural requirement.
+    # Ignore any echoed advisory value before checking executable patch shape.
+    patch = {key: value for key, value in patch.items() if key != "animationPlan"}
     schema_errors = strict_schema_errors(patch, _visual_repair_schema(entity_ids, equipment_overlay_required))
     filtered = {
         "schema": VISUAL_REPAIR_PATCH_SCHEMA,
@@ -755,7 +738,6 @@ def _filter_visual_repair_patch(
         "entitiesUpsert": [],
         "entityIdsDelete": [],
         "entityIndicesDelete": [],
-        "animationPlan": None,
         "note": str(patch.get("note") or "deterministically filtered Visual Repair"),
     }
     if equipment_overlay_required:
@@ -841,13 +823,6 @@ def _filter_visual_repair_patch(
                 audit_path="$.equipOverlayPatch",
                 accepted=accepted,
             )
-
-    if patch.get("animationPlan") is not None:
-        if scope.get("animationPlanMutable"):
-            filtered["animationPlan"] = str(patch["animationPlan"])
-            accepted.append("$.animationPlan")
-        else:
-            ignored.append(_visual_filter_ignored("$.animationPlan", patch.get("animationPlan"), source.get("animationPlan"), "valid_animation_plan_frozen"))
 
     for index, entity_id in enumerate(patch.get("entityIdsDelete") or []):
         path = f"$.entityIdsDelete[{index}]"
@@ -943,8 +918,6 @@ def _apply_visual_repair_patch(
         out["item"] = copy.deepcopy(filtered["itemPatch"])
     if filtered.get("equipOverlayPatch") is not None:
         out["equipOverlay"] = copy.deepcopy(filtered["equipOverlayPatch"])
-    if filtered.get("animationPlan") is not None:
-        out["animationPlan"] = str(filtered["animationPlan"])
     rows = list(out.get("entities") or []) if isinstance(out.get("entities"), list) else []
     rows = [row for index, row in enumerate(rows) if index not in set(filtered.get("entityIndicesDelete") or [])]
     doomed = set(str(value) for value in filtered.get("entityIdsDelete") or [])
@@ -972,8 +945,6 @@ def _request_visual_kit(
     data: dict[str, Any],
     a: dict[str, Any],
     b: dict[str, Any],
-    ca: dict[str, Any],
-    cb: dict[str, Any],
     *,
     repair_errors: list[dict[str, Any]] | None = None,
     previous: Any = None,
@@ -984,7 +955,6 @@ def _request_visual_kit(
     item_body_id = next((row["id"] for row in runtime_rows if row["kind"] == "item_body"), "")
     equipment_overlay = equipment_overlay_requirement(data)
     equipment_overlay_required = bool(equipment_overlay["required"])
-    _ = (ca, cb)
     repair = repair_errors is not None
     schema = (
         _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
@@ -1068,9 +1038,8 @@ def _request_visual_kit(
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "appearance only; runtime program is immutable",
-                "When VFX color is relevant, choose item.effectColor explicitly from its finite rendering tokens; this is independent of the descriptive art palette. Never parse or translate palette prose in code, and never add it through unrelated Repair.",
                 "For a newly designed held item choose item.grip explicitly at its actual handle/contact point on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. Both normalized coordinates are required together. Describe that same contact point in item.prompt; do not infer coordinates from an entityId or request image analysis.",
-                "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission deliberately retains historical presentation; never fill optional metadata during Repair unless its exact path is permitted.",
+                "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission selects the existing orbit presentation; never fill optional metadata during Repair unless its exact path is permitted.",
                 "literal furniture, tools and materials may remain literal",
                 "movement/controller names describe motion, not a weapon taxonomy",
                 "baked_sprite requires a real generated PNG; no placeholder",
@@ -1116,8 +1085,10 @@ def _request_visual_kit(
     item_key = "itemPatch" if repair else "item"
     item_path = ("properties", item_key, "anyOf", 0) if repair else ("properties", item_key)
     definition_paths: dict[str, tuple[str | int, ...] | tuple[tuple[str | int, ...], ...]] = {
-        item_key: item_path, "animationPlan": ("properties", "animationPlan"),
+        item_key: item_path,
     }
+    if not repair:
+        definition_paths["animationPlan"] = ("properties", "animationPlan")
     # Explicit canonical entity leaves; ownership/ID enums and roster bounds stay
     # inline USER constraints. Both local oneOf and provider anyOf are supported.
     entity_path = ("properties", "entitiesUpsert" if repair else "entities", "items")
@@ -1166,16 +1137,16 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
     item = dict(kit.get("item") or {})
     visual = out.setdefault("visual", {})
     visual.update({
-        "imagePrompt": str(item.get("prompt") or "")[:1400],
-        "negativePrompt": str(item.get("negativePrompt") or "")[:700],
-        "silhouette": str(item.get("silhouette") or "")[:700],
-        "visualIdentity": str(item.get("visualIdentity") or "")[:700],
-        "palette": list(item.get("palette") or []),
-        "preferredCanvasSize": int(item.get("preferredCanvasSize") or 32),
-        "inventoryScale": float(item.get("inventoryScale") or 1.0),
-        "worldScale": float(item.get("worldScale") or 1.0),
+        "imagePrompt": item["prompt"],
+        "negativePrompt": item["negativePrompt"],
+        "silhouette": item["silhouette"],
+        "visualIdentity": item["visualIdentity"],
+        "palette": copy.deepcopy(item["palette"]),
+        "preferredCanvasSize": item["preferredCanvasSize"],
+        "inventoryScale": item["inventoryScale"],
+        "worldScale": item["worldScale"],
     })
-    for field in ("grip", "effectColor", "renderSizePx", "forwardAngleDegrees"):
+    for field in ("grip", "renderSizePx", "forwardAngleDegrees"):
         if field in item:
             visual[field] = copy.deepcopy(item[field])
         else:
@@ -1226,11 +1197,10 @@ def _apply_kit(data: dict[str, Any], kit: Mapping[str, Any]) -> dict[str, Any]:
             "spriteTechnicalScore": 0.0,
         })
     out["visualKit"] = copy.deepcopy(dict(kit))
-    out["visualKit"]["animationPlan"] = str(kit.get("animationPlan") or "")[:1200]
     return out
 
 
-def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any], ca: dict[str, Any], cb: dict[str, Any]) -> dict[str, Any]:
+def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
     runtime = data.get("runtimeProgram") if isinstance(data.get("runtimeProgram"), dict) else {}
     entities = [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
     entity_ids = [str(row.get("id") or "") for row in entities]
@@ -1279,7 +1249,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
 
     accounting = _stage_accounting(data)
     accounting["visualDirectorCalls"] += 1
-    raw = _request_visual_kit(data, a, b, ca, cb)
+    raw = _request_visual_kit(data, a, b)
     kit, errors = _validate_kit(
         raw,
         entity_ids,
@@ -1296,7 +1266,7 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             item_body_id,
             equipment_overlay_required=equipment_overlay_required,
         )
-        patch = _request_visual_kit(data, a, b, ca, cb, repair_errors=errors, previous=raw, repair_scope=repair_scope)
+        patch = _request_visual_kit(data, a, b, repair_errors=errors, previous=raw, repair_scope=repair_scope)
         if not isinstance(patch, Mapping):
             raise PlannerUnavailable("Visual Repair response must be a JSON object")
         repaired, repair_audit = _apply_visual_repair_patch(raw, patch, repair_scope, entity_ids, return_audit=True)
@@ -1320,8 +1290,12 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             )
             if recovered_kit is None:
                 raise PlannerUnavailable("Visual format Repair cannot prove recoverable visual fields")
-            if recovered_kit != kit:
+            recovered_design = {key: value for key, value in recovered_kit.items() if key != "animationPlan"}
+            repaired_design = {key: value for key, value in kit.items() if key != "animationPlan"}
+            if recovered_design != repaired_design:
                 raise PlannerUnavailable("Visual format Repair changed recoverable visual fields")
+            if "animationPlan" in recovered_kit:
+                kit["animationPlan"] = copy.deepcopy(recovered_kit["animationPlan"])
         raw = repaired
         data.setdefault("debug", {})["visualRepairRawPatch"] = copy.deepcopy(patch)
         data["debug"]["visualRepairPatch"] = copy.deepcopy(repair_audit.get("filteredPatch") or {})
@@ -1332,10 +1306,6 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
     out["debug"]["visualDirectorEntityIds"] = entity_ids
     out["debug"]["visualDirectorRaw"] = copy.deepcopy(raw)
     return out
-
-
-def build_image_prompt(data: dict[str, Any], visual: dict[str, Any]) -> str:
-    return str(visual.get("imagePrompt") or "")[:1400]
 
 
 def visual_response_schema(entity_ids: list[str], equipment_overlay_required: bool | None = None, *, item_body_id: str | None = None) -> dict[str, Any]:
@@ -1363,7 +1333,6 @@ __all__ = [
     "VISUAL_REPAIR_PATCH_SCHEMA",
     "apply_visual_director",
     "attach_visual",
-    "build_image_prompt",
     "visual_repair_schema",
     "visual_response_schema",
 ]

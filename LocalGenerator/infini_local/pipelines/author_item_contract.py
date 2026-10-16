@@ -26,12 +26,12 @@ RUNTIME_ROW_SHAPE_RULE = (
     "Call examples use one explicit id/fn/target/params envelope. "
     "target is an exact existing compatible entity id, including the declared item_body id, not a literal item alias; "
     "zero-argument calls use params={}. "
-    "Exact existing omissions remain valid in the same grammar: only item-body-only target and zero-argument params. "
+    "Only item-body-only target and zero-argument params may be omitted as exact declared wire equivalences. "
     "During Repair preserve accepted values and absences rather than reformatting existing calls. "
     "For new bindings use id/input/action:{kind,targetId}/stackCost/contactDamage. "
     "Fixed binding literals may be explicit or omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
     "item-body-only action targetId=the exact unique declared item_body id; hold/equipped stackCost=0 and contactDamage=false; "
-    "place_item stackCost=1 and contactDamage=false. Projectile action targets remain explicit. Historical sparse forms remain valid. "
+    "place_item stackCost=1 and contactDamage=false. Projectile action targets remain explicit. "
     "Every present literal must be exact and correctly typed; never choose a different action from these equivalences. "
     "Active non-placement kind, stackCost and contactDamage remain explicit independent decisions. "
     "placementCallId is required for place_item and forbidden for other actions; effectGroupId is optional only for apply_item_effects. "
@@ -112,7 +112,8 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
     return {
         # This order is model-facing: non-binding intent, executable mechanics,
         # then the same Author's account and self-evaluation of the result.
-        "root": ["name", "category", "concept", "runtimeProgram", "realization"],
+        "root": ["name", "category", "runtimeProgram"],
+        "optionalAdvisory": ["concept", "realization"],
         "name": "non-empty string",
         "category": "combat|tool|equipment|placeable|consumable|material|hybrid|generic",
         "concept": {
@@ -177,40 +178,16 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         },
         "realization": {
             "description": (
-                "final interpretation of the emitted runtimeProgram, not an observed execution; "
+                "optional advisory interpretation of the emitted runtimeProgram, not an observed execution; "
                 f"string minLength={report_properties['description']['minLength']}, "
                 f"maxLength={report_properties['description']['maxLength']} Unicode code points"
             ),
             "playerExperience": (
-                "what the final executable program lets the player experience; "
+                "optional advisory player-experience notes; "
                 f"string minLength={report_properties['playerExperience']['minLength']}, "
                 f"maxLength={report_properties['playerExperience']['maxLength']} Unicode code points"
             ),
-            "selfEvaluation": {
-                "planVsProgram": {
-                    "verdict": "aligned|changed|uncertain",
-                    "summary": "diagnostic comparison of concept with the emitted program; formatting errors are recorded but do not reject executable gameplay",
-                    "actionChecks": [{
-                        "plannedIntent": "one exact plannedPlayerActions intent, or 'no corresponding initial action' for an added lane",
-                        "implementedBehavior": "what runtimeProgram actually implements for it",
-                        "runtimeRefs": ["existing entity, binding, or call id"],
-                        "result": "aligned|changed|dropped|added|uncertain",
-                        "intentionality": "intentional|accidental|uncertain",
-                        "reason": "why this action is aligned, changed, dropped, added, or uncertain",
-                    }],
-                },
-                "programVsReport": {
-                    "verdict": "aligned|mismatch|uncertain",
-                    "summary": "diagnostic comparison of the emitted program with description/playerExperience",
-                    "behaviorChecks": [{
-                        "runtimeRefs": ["existing entity, binding, or call id"],
-                        "programBehavior": "one literal executable behavior lane",
-                        "reportedBehavior": "what description/playerExperience says about that lane",
-                        "result": "aligned|mismatch|omitted|uncertain",
-                        "reason": "why this lane is aligned, mismatched, omitted, or uncertain",
-                    }],
-                },
-            },
+            "selfEvaluation": "optional advisory notes; no required checklist, verdict, runtime references or acceptance claim",
         },
     }
 
@@ -499,10 +476,10 @@ def author_item_provider_response_schema() -> dict[str, Any]:
 
 
 def author_item_repair_response_schema(
-    *, capability_names: Iterable[str] | None = None, require_realization: bool = False,
+    *, capability_names: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     return copy.deepcopy(_repair_schema(
-        capability_names=capability_names, require_realization=require_realization))
+        capability_names=capability_names))
 
 
 def author_item_repair_prompt_shape_card(*, capability_names: Iterable[str] | None = None) -> dict[str, Any]:

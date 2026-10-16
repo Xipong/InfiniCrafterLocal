@@ -129,21 +129,21 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
     before = copy.deepcopy((parent, source))
     with pytest.raises(CaptureComplete):
         if stage == 'gameplay_author':
-            author.try_llm_plan(parent, parent, {}, {}, 'r_capture')
+            author.try_llm_plan(parent, parent, 'r_capture')
         elif stage == 'gameplay_format_repair':
-            _, context, _ = author.build_initial_author_request(parent, parent, {}, {}, 'r_capture', model_name='offline-model')
+            _, context, _ = author.build_initial_author_request(parent, parent, 'r_capture', model_name='offline-model')
             author._repair_malformed_author_json(malformed_raw_text=json.dumps(source)[:-1] + ',}',
                 parse_error=ValueError('fixture syntax'), original_recipe_context=context, model_name='offline-model')
         elif stage == 'gameplay_repair':
             broken = copy.deepcopy(source)
             next(row for row in broken['runtimeProgram']['calls'] if row['fn'] == 'configure_item_stats')['params']['damage'] = -1
-            author.repair_author_item_after_failure(broken, parent, parent, {}, {}, 'r_capture', failure_report=author.validate_runtime_program(broken))
+            author.repair_author_item_after_failure(broken, parent, parent, 'r_capture', failure_report=author.validate_runtime_program(broken))
         else:
             data = compile_runtime_program(source)
             data_before = copy.deepcopy(data)
             kwargs = {'repair_errors': [{'path': '$.item.silhouette', 'message': 'required'}],
                 'previous': {'item': {'prompt': 'frozen'}}, 'repair_scope': {'itemMutable': True, 'fieldPermissions': {'itemPaths': ['silhouette']}}} if stage == 'visual_repair' else {}
-            visual._request_visual_kit(data, parent, parent, {}, {}, **kwargs)
+            visual._request_visual_kit(data, parent, parent, **kwargs)
     paths = list((tmp_path / 'stage_requests').glob('*.json'))
     assert len(paths) == 1, 'production stage must persist the exact request at its provider seam'
     artifact = json.loads(paths[0].read_bytes())
@@ -217,9 +217,9 @@ def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields
     monkeypatch.setattr(author, 'llm_chat_json', respond)
     if changed_value:
         with pytest.raises(PlannerUnavailable, match='changed recoverable authored fields'):
-            author.try_llm_plan({}, {}, {}, {}, 'r_actual_owner')
+            author.try_llm_plan({}, {}, 'r_actual_owner')
     else:
-        result = author.try_llm_plan({}, {}, {}, {}, 'r_actual_owner')
+        result = author.try_llm_plan({}, {}, 'r_actual_owner')
         assert {key: result[key] for key in frozen} == frozen
         assert result['debug']['gameplayFormatRepairRawOutput'] == repaired_text[:12000]
     artifacts = [json.loads(path.read_bytes()) for path in (tmp_path / 'stage_requests').glob('*.json')]
@@ -237,7 +237,7 @@ def test_author_request_owns_optional_alternate_cost_and_source_motion_advisorie
     from infini_local.pipelines import llm_authoring_pipeline as author
     from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
     parent = {'name': 'opaque parent', 'useTime': 21, 'useAnimation': 25, 'shootSpeed': 6.1}
-    request, user, _ = author.build_initial_author_request(parent, parent, {}, {}, 'r_advisory', model_name='offline-model')
+    request, user, _ = author.build_initial_author_request(parent, parent, 'r_advisory', model_name='offline-model')
     packet = request_dossier(request)
     assert user == dossier_text(request)
     header = packet['priorityHeader']
@@ -278,7 +278,7 @@ def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(mon
     for repair in (False, True):
         kwargs = {'repair_errors': [], 'previous': {'item': {}}, 'repair_scope': {}} if repair else {}
         with pytest.raises(CaptureComplete):
-            visual._request_visual_kit(data, parent, parent, {}, {}, **kwargs)
+            visual._request_visual_kit(data, parent, parent, **kwargs)
     paths = list((tmp_path / 'stage_requests').glob('*.json'))
     assert len(paths) == 2
     for path in paths:

@@ -805,7 +805,7 @@ def _capability_receipt_owner_error(
             or sum(isinstance(c, Mapping) and c.get("id") == receipt.get("callId") for c in calls) != 1):
             return "capability receipt lacks a unique originating source call"
         cap = CAPABILITY_REGISTRY.get(receipt["fn"])
-        if cap is not None and cap.prompt_visible and cap.decision == "expose" and cap.target_kinds == ("item_body",):
+        if cap is not None and cap.target_kinds == ("item_body",):
             entities = _final_value(authored_document, "runtimeProgram.entities")
             bodies = [e for e in entities if isinstance(e, Mapping) and e.get("kind") == "item_body"] if isinstance(entities, list) else []
             identity = bodies[0].get("id") if len(bodies) == 1 else None
@@ -865,13 +865,6 @@ def audit_compiler_receipts(
     source_calls = program.get("calls") if isinstance(program, Mapping) else None
     source_calls = source_calls if isinstance(source_calls, list) else []
     violations: list[dict[str, Any]] = []
-    for source_call in source_calls:
-        if not isinstance(source_call, Mapping):
-            continue
-        cap = CAPABILITY_REGISTRY.get(str(source_call.get("fn") or ""))
-        if cap is not None and (not cap.prompt_visible or cap.decision != "expose"):
-            violations.append({"fn": cap.name, "callId": str(source_call.get("id") or ""),
-                               "reason": "retained wire capability is not a current Author source"})
     receipt_rows: list[Mapping[str, Any]] = []
     for receipt_index, receipt in enumerate(receipts):
         row_path = f"$.runtimeContract.finalWireReceipts[{receipt_index}]"

@@ -21,6 +21,7 @@
     <Compile Include="EngineRuntimeChecks.Vfx.cs" />
     <Compile Include="EngineRuntimeChecks.Client.cs" />
     <Compile Include="EngineRuntimeChecks.PlayedSilver.cs" />
+    <Compile Include="EngineRuntimeChecks.LocalRgb.cs" />
     <Compile Include="EngineRuntimeChecks.PlayedUmbrella.cs" />
     <Compile Include="EngineRuntimeChecks.CraftCancellation.cs" />
     <Compile Include="EngineRuntimeChecks.CraftQol.cs" />

@@ -39,7 +39,6 @@ from infini_local.core.runtime_authoring.capability_registry import (
     compatible_entity_reference_ids,
     referenced_entity_requirement_satisfied,
     event_dependency_alternatives,
-    visible_capabilities,
 )
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_contact_suppressed
 from infini_local.core.schema_validation import strict_schema_errors
@@ -348,7 +347,7 @@ def _candidate_capability_viable(
     """
 
     cap = CAPABILITY_REGISTRY.get(name)
-    if cap is None or not cap.prompt_visible or cap.decision != "expose":
+    if cap is None:
         return False
     target_ids = tuple(str(value) for value in target_ids if str(value))
     target_kinds = {
@@ -715,7 +714,7 @@ def runtime_repair_scope_schema() -> dict[str, Any]:
                                             "type": "object",
                                             "additionalProperties": False,
                                             "properties": {
-                                                "fn": {"type": "string", "enum": [cap.name for cap in visible_capabilities()]},
+                                                "fn": {"type": "string", "enum": [cap.name for cap in CAPABILITY_REGISTRY.values()]},
                                                 "targetId": _strict_scope_string_schema(),
                                                 "exactParams": {
                                                     "type": "array",
@@ -2738,13 +2737,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
         name for name in create_call_fns
         if name in CAPABILITY_REGISTRY and name not in event_supporting_capabilities
     )
-    public_capabilities = {cap.name for cap in visible_capabilities()}
-    direct_blocker_capabilities.intersection_update(public_capabilities)
-    existing_broken_capabilities.intersection_update(public_capabilities)
+    registered_capabilities = set(CAPABILITY_REGISTRY)
+    direct_blocker_capabilities.intersection_update(registered_capabilities)
+    existing_broken_capabilities.intersection_update(registered_capabilities)
     supporting_capabilities = (
         _capability_dependency_closure(direct_blocker_capabilities) - direct_blocker_capabilities
     ) | event_supporting_capabilities
-    supporting_capabilities.intersection_update(public_capabilities)
+    supporting_capabilities.intersection_update(registered_capabilities)
     if create_call_fns:
         create_call_fns.update(supporting_capabilities)
     capability_subset = direct_blocker_capabilities | supporting_capabilities | existing_broken_capabilities
@@ -2919,8 +2918,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             "allowed": bool((create_call_targets or create_call_target_kinds) and create_call_fns),
             "allowedTargetIds": sorted(create_call_targets),
             "allowedTargetKinds": sorted(create_call_target_kinds),
-            "allowedFns": sorted(name for name in create_call_fns if name in CAPABILITY_REGISTRY
-                                 and CAPABILITY_REGISTRY[name].prompt_visible and CAPABILITY_REGISTRY[name].decision == "expose"),
+            "allowedFns": sorted(create_call_fns.intersection(CAPABILITY_REGISTRY)),
             "requiredReferenceEntityIds": sorted(required_reference_entities),
         },
     }
@@ -3097,10 +3095,10 @@ def runtime_repair_schema_capabilities(scope: Mapping[str, Any]) -> list[str]:
 
     capabilitySubset describes blocker cards, not every possible replacement
     when fn/the complete call is mutable. Those scopes retain the registered
-    public union; a parameter-only scope can use its exact blocker/support and
-    create-policy names. Grammar visibility never grants a write permission.
+    capability union; a parameter-only scope can use its exact blocker/support and
+    create-policy names. Grammar membership never grants a write permission.
     """
-    public = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.prompt_visible}
+    registered = set(CAPABILITY_REGISTRY)
     identity = _mapping(scope.get("identityChanges"))
     permissions = _mapping(scope.get("fieldPermissions"))
     fn_mutable = bool(identity.get("callFnIds")) or any(
@@ -3109,7 +3107,7 @@ def runtime_repair_schema_capabilities(scope: Mapping[str, Any]) -> list[str]:
         for path in _values(row.get("paths"))
     )
     if fn_mutable:
-        return sorted(public)
+        return sorted(registered)
     names = set(_values(scope.get("capabilitySubset")))
     blockers = _mapping(scope.get("blockerPlan"))
     for key in ("directCapabilityNames", "supportingCapabilityNames", "existingBrokenCapabilityNames"):
@@ -3117,8 +3115,8 @@ def runtime_repair_schema_capabilities(scope: Mapping[str, Any]) -> list[str]:
     create = _mapping(_mapping(scope.get("create")).get("calls"))
     if create.get("allowed"):
         names.update(_values(create.get("allowedFns")))
-    if names - public:
-        raise ValueError(f"Repair scope references non-public capabilities: {sorted(names - public)}")
+    if names - registered:
+        raise ValueError(f"Repair scope references unregistered capabilities: {sorted(names - registered)}")
     return sorted(names)
 
 

@@ -95,6 +95,12 @@ internal static partial class EngineRuntimeChecks
                 string definition = JsonSerializer.Serialize(data);
                 int index = count(); Color light = Color.White;
                 Equal(false, generated.PreDraw(ref light), label + "public PreDraw suppresses vanilla proxy");
+                if (!c.Modern) {
+                    Equal(index, count(), label + "missing selected PNG metadata refuses draw instead of using historical native-frame scale");
+                    Equal(rotation, projectile.rotation, label + "refused draw preserves native rotation");
+                    Equal(scale, projectile.scale, label + "refused draw preserves physics scale");
+                    continue;
+                }
                 Equal(index + 1, count(), label + "one selected authored texture quad");
                 float degrees = !c.Modern ? 0 : c.Reuse ? -30 : 45;
                 Vector2 actual = BodyForwardFromCpuQueue(batch, index, degrees, label);

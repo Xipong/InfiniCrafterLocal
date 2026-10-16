@@ -42,11 +42,6 @@ from infini_local.core.llm_config import (
     USE_LLM,
 )
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_API_VERSION
-from infini_local.pipelines.pipeline_runtime_constants import (
-    LLM_RUNTIME_AUTHORING,
-    LLM_RUNTIME_PLAN_REQUIRED,
-    LLM_RUNTIME_STRICT_VALIDATION,
-)
 from infini_local.core.vfx_manifest_config import (
     VFX_EMERGENCY_MAX_DRAW_CALLS,
     VFX_EMERGENCY_MAX_PARTICLES_PER_TICK,
@@ -72,7 +67,6 @@ from infini_local.pipelines.sprite_postprocess import (
     alpha_stats,
 )
 from infini_local.pipelines.visual_delivery_gate import VisualDeliveryBlocked
-from infini_local.pipelines.visual_generation_pipeline import build_image_prompt
 from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt
 from infini_local.pipelines.visual_sprite_generation import generate_visual_asset, maybe_generate_sprite
 from infini_local.services import (
@@ -184,8 +178,6 @@ def trace_snapshot() -> dict[str, Any]:
         recipe_identity_version=RECIPE_IDENTITY_VERSION,
         world_recipes_dir=WORLD_RECIPES_DIR,
         use_llm=USE_LLM,
-        llm_runtime_authoring=LLM_RUNTIME_AUTHORING,
-        llm_runtime_plan_required=LLM_RUNTIME_PLAN_REQUIRED,
         image_backend=visual_config.IMAGE_BACKEND,
         visual_asset_mode=visual_config.VISUAL_ASSET_MODE,
         visual_director_llm=visual_config.VISUAL_DIRECTOR_LLM,
@@ -226,7 +218,6 @@ def trace_snapshot_html() -> str:
 # =============================================================================
 
 
-# Item signal/knowledge functions live in pipelines/item_power_knowledge.py.
 
 # -----------------------------------------------------------------------------
 # Planner / resolver
@@ -320,9 +311,6 @@ def _health_payload() -> dict[str, Any]:
         "useLLM": USE_LLM,
         "llmProvider": active_llm_provider(),
         "llmAuth": auth,
-        "llmRuntimeAuthoring": LLM_RUNTIME_AUTHORING,
-        "llmRuntimePlanRequired": LLM_RUNTIME_PLAN_REQUIRED,
-        "llmRuntimeStrictValidation": LLM_RUNTIME_STRICT_VALIDATION,
         "runtimeApiVersion": RUNTIME_PROGRAM_API_VERSION,
         "contractVersions": visual_config.contract_versions_payload(),
         "tmodloaderGreyZoneNotes": TMODLOADER_GREY_ZONE_NOTES,
@@ -408,7 +396,6 @@ def _utility_routes() -> ServerUtilityRoutes:
         read_json_file=read_json_file,
         last_combine_failure_payload=generation_debug.last_combine_failure_payload,
         cleanup_for_shutdown=cleanup_sdcpp_server_process,
-        build_image_prompt=build_image_prompt,
         maybe_generate_sprite=maybe_generate_sprite,
         normalize_asset_prompt=normalize_asset_prompt,
         generate_visual_asset=generate_visual_asset,
@@ -444,7 +431,6 @@ Handler = build_handler(
     world_scope_missing=WorldScopeMissing,
     visual_delivery_blocked=VisualDeliveryBlocked,
     planner_unavailable=PlannerUnavailable,
-    last_combine_failure_summary=generation_debug.last_combine_failure_summary,
     clear_combine_failure=generation_debug.clear_combine_failure,
     combine_failure_http_response=_combine_failure_http_response,
     combine_failure_payload=_combine_failure_payload,

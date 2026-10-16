@@ -11,9 +11,9 @@ namespace InfiniCrafterLocal.Common.Models;
 
 // Technical execution of explicitly authored final-frame units, not gameplay
 // normalization. No alpha/PCA/name inference and no physics or pose mutation.
-internal readonly record struct SpritePresentationSelection(string Path, int? RenderSizePx, float? ForwardAngleDegrees, ItemGripSpec? Grip = null, bool FrontHandBody = false)
+internal readonly record struct SpritePresentationSelection(string Path, int? RenderSizePx, float? ForwardAngleDegrees, ItemGripSpec? Grip = null, bool FrontHandBody = false, bool ImpactTexture = false)
 {
-    internal float FrameScale(int width, int height) => SpritePresentation.FrameScale(RenderSizePx, width, height);
+    internal float FrameScale(int width, int height) => ImpactTexture ? 1f : SpritePresentation.FrameScale(RenderSizePx, width, height);
     internal Vector2 ProjectileOrigin(RuntimeEntitySpec? entity, int width, int height, float scale, SpriteEffects effects)
     {
         if (!FrontHandBody || entity?.Movement.Code != 20) return new(width * .5f, height * .5f);
@@ -26,9 +26,9 @@ internal readonly record struct SpritePresentationSelection(string Path, int? Re
     internal float ProjectileRotation(RuntimeEntitySpec? entity, float rotation, SpriteEffects effects)
     {
         // Explicit spinning poses and whip are native, not motion-aimed sprites.
-        if (!ForwardAngleDegrees.HasValue || entity is null || entity.Movement.Code is 14 or 16 or 17 or 18)
+        if (ImpactTexture || entity is null || entity.Movement.Code is 14 or 16 or 17 or 18)
             return rotation;
-        return SpritePresentation.AlignForward(rotation - MathF.PI / 2f, ForwardAngleDegrees.Value, effects);
+        return SpritePresentation.AlignForward(rotation - MathF.PI / 2f, SpritePresentation.RequireForwardAngle(ForwardAngleDegrees), effects);
     }
 }
 
@@ -89,7 +89,7 @@ internal static class SpritePresentation
             : throw new InvalidDataException("forwardAngleDegrees must be finite in -180..180 when present");
     internal static float FrameScale(int? size, int width, int height)
     {
-        if (!size.HasValue) return 1f; // exact declared saved-wire compatibility
+        if (!size.HasValue) throw new InvalidDataException("selected main PNG requires explicit renderSizePx");
         if (width <= 0 || height <= 0) throw new InvalidDataException("main sprite frame has no extent");
         return size.Value / (float)Math.Max(width, height);
     }
@@ -118,8 +118,8 @@ internal static class SpritePresentation
         if (role == "item") return entity?.Movement.Code == 20 && entity.Visual.AssetMode == "reuse_item_icon"
             ? Entity(data, entity) : Root(data);
         if (entity is null) return new("", null, null);
-        if (role == "impact") return new(entity.Visual.ImpactSpritePath ?? "", null, null);
-        if (role != "entity" && !string.Equals(entity.VisualRole, role, StringComparison.Ordinal)) return new("", null, null);
+        if (role == "impact") return new(entity.Visual.ImpactSpritePath ?? "", null, null, ImpactTexture: true);
+        if (role != "entity") return new("", null, null);
         return Entity(data, entity);
     }
 }

@@ -551,7 +551,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         "entities": entities,
         "bindings": bindings,
     }
-    gameplay: dict[str, Any] = {"kind": str(out.get("category") or "generic")}
+    gameplay: dict[str, Any] = {"kind": out["category"]}
     accessory: dict[str, Any] = {"enabled": False}
     armor: dict[str, Any] = {"enabled": False}
     equipment_configs = {str(call.get("fn")) for call in calls
@@ -626,10 +626,6 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
     out["gameplay"] = gameplay
     out["accessory"] = accessory
     out["armor"] = armor
-    out.pop("attack", None)
-    out.pop("runtimePlan", None)
-    out.pop("runtimeCompiled", None)
-    out.pop("_authorItemRaw", None)
     return out
 
 

@@ -23,7 +23,9 @@ internal static partial class EngineRuntimeChecks
         root.Controller = new RuntimeControllerSpec { Name = "target_and_fire", Code = RuntimeControllerCode.TargetAndFire };
         root.Targeting = new RuntimeTargetingSpec { ShotEntityId = "shot", IntervalTicks = 6, RangeTiles = 10,
             SameTargetBias = 0.9f, Count = 4, SpreadRadians = 0.6, TargetPolicy = "player_assigned_first",
-            RequireLineOfSight = true, HardRange = true };
+            RequireLineOfSight = true, HardRange = true,
+            DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild,
+            DamageMultiplier = 1f };
         data.RuntimeProgram.Entities = data.RuntimeProgram.Entities.Append(new RuntimeEntitySpec {
             Id = "shot", Kind = RuntimeEntityKind.ChildProjectile, VisualRole = "child_projectile",
             Visual = new RuntimeEntityVisualSpec { Role = "child_projectile", AssetMode = "no_asset" },

@@ -43,11 +43,11 @@ def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
 
     _offline_builder(monkeypatch, "json_object", respond)
     monkeypatch.setattr(combine, "repair_author_item_after_failure", no_repair)
-    initial = author.try_llm_plan({}, {}, {}, {}, "saved-initial-projectile-lifetime")
+    initial = author.try_llm_plan({}, {}, "saved-initial-projectile-lifetime")
     assert initial is not None
     assert initial["runtimeProgram"] == saved["runtimeProgram"]
     wire = combine.compile_and_validate_authored_runtime(
-        initial, {}, {}, {}, {}, "saved-initial-projectile-lifetime",
+        initial, {}, {}, "saved-initial-projectile-lifetime",
         run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
     assert len(requests) == 1
     assert wire["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 0
@@ -99,7 +99,7 @@ def test_visual_literal_member_deletion_is_exact(domain):
     assert (scope["fieldPermissions"]["entities"] if domain == "entity" else scope["fieldPermissions"]["itemPaths"]) == ([{"entityId": "opaque_id", "paths": [relative]}] if domain == "entity" else [relative])
     patch = {
         "schema": visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": None, "equipOverlayPatch": None,
-        "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "animationPlan": None,
+        "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [],
         "note": "remove literal member", **patch_edits}
     repaired, audit = visual._apply_visual_repair_patch(raw, patch, scope, ["opaque_id"], return_audit=True)
     expected = copy.deepcopy(raw)
@@ -196,17 +196,20 @@ def test_captured_gameplay_repair_replay(section, case):
     assert {str(row.get("code") or "") for row in report.get("errors") or []} == expected_codes
     scope = build_runtime_repair_scope(initial, report["errors"])
     if historical_patch is not None:
-        assert historical_patch["realizationReplacement"] is not None
+        # Captured report ceremony is retired. Replay its exact executable
+        # correction without making the historical advisory tree a current
+        # provider requirement; fixture/archive bytes remain untouched.
+        assert historical_patch.pop("realizationReplacement") is not None
         filtered, audit = filter_repair_patch_scope(initial, historical_patch, scope)
         assert audit["ok"], audit
         repaired = apply_repair_patch(initial, filtered)
-        assert repaired["realization"] == historical_patch["realizationReplacement"]
+        assert repaired["realization"] == initial["realization"]
         assert validate_runtime_program(repaired)["ok"], validate_runtime_program(repaired)
         if case == "obsidian_pickaxe":
             assert old_axe is not None
             assert compile_runtime_program(repaired)["gameplay"]["axePower"] == old_axe
     else:
-        dossier = build_gameplay_repair_dossier(initial, {}, {}, {}, {}, failure_report=report)
+        dossier = build_gameplay_repair_dossier(initial, {}, {}, failure_report=report)
         assert dossier["repairScope"] == scope
         expected_paths = replay.get("expectedMutableBindingPaths")
         if expected_paths is not None:

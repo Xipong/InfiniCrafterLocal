@@ -16,11 +16,10 @@ internal static partial class EngineRuntimeChecks
     {
         JsonObject Profile(float a, float b, float c) => new() { ["start"] = a, ["middle"] = b, ["end"] = c, ["curve"] = "linear" };
         var data = GeneratedItemData.Placeholder();
+        data.Visual.RenderSizePx=32; data.Visual.ForwardAngleDegrees=0;
         JsonObject wire = JsonNode.Parse(data.ToJson())!.AsObject();
         var slot = new VfxSlotSpec { Id = "element", EntityId = "unavailable_item", Event = "periodic",
-            RendererKind = "spriteElement", Backend = "Sprite", TextureRole = "none", ParticleRole = "none",
-            ParticleSystemId = "none", Scale = 1, RepeatEvery = 1, Duration = 12, Alpha = 1,
-            Density = 0, Spread = 0, Jitter = 0, FadeIn = 0, FadeOut = 0, BudgetWeight = 1 };
+            RendererKind = "spriteElement", RepeatEvery = 1, Duration = 12, Alpha = 1, Blend = "alpha", Layer = "BeforeProjectiles", StartTick = 0 };
         var row = JsonSerializer.SerializeToNode(slot, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })!.AsObject();
         row["element"] = new JsonObject {
             ["texture"] = new JsonObject { ["source"] = "asset", ["assetId"] = "Shard_A" },
@@ -33,7 +32,7 @@ internal static partial class EngineRuntimeChecks
             ["widthPx"] = 8, ["heightPx"] = 20,
             ["widthProfile"] = Profile(1,2,0), ["heightProfile"] = Profile(2,1,0),
             ["opacityProfile"] = Profile(1,0.5f,0),
-            ["colorProfile"] = new JsonObject { ["start"] = "white", ["middle"] = "effect", ["end"] = "cyan", ["curve"] = "linear" }
+            ["colorProfile"] = new JsonObject { ["start"] = RgbWire(255,255,255), ["middle"] = RgbWire(255,255,255), ["end"] = RgbWire(90,235,255), ["curve"] = "linear" }
         };
         wire["vfxManifest"]!["slots"] = new JsonArray(row);
         wire["vfxManifest"]!["assets"] = new JsonArray(new JsonObject { ["id"] = "Shard_A", ["prompt"] = "one isolated soft shard",
@@ -254,7 +253,7 @@ internal static partial class EngineRuntimeChecks
             var data=ParseMaterialElement(MaterialElementWire());data.Id="network_material";InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
             var entity=Entity();entity.Id="probe";data.RuntimeProgram.Entities=new[]{entity};
             var slot=data.VfxManifest.Slots[0];slot.EntityId="probe";slot.Event="on_hit";slot.RepeatEvery=0;slot.StartTick=2;
-            var crit=new VfxSlotSpec{Id="crit",EntityId="probe",Event="on_crit",RendererKind="spriteElement",Element=slot.Element,Duration=12,Alpha=1};data.VfxManifest.Slots=new[]{slot,crit};
+            var crit=new VfxSlotSpec{Id="crit",EntityId="probe",Event="on_crit",RendererKind="spriteElement",Element=slot.Element,Duration=12,Alpha=1, Blend = "alpha", Layer = "BeforeProjectiles", RepeatEvery = 0, StartTick = 0 };data.VfxManifest.Slots=new[]{slot,crit};
             ((System.Collections.IDictionary)registry.GetType().GetField("_byId",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(registry)!).Add(data.Id,data);
             Terraria.Main.projectile=new Projectile[16];for(int i=0;i<16;i++)Terraria.Main.projectile[i]=new Projectile{whoAmI=i};
             var source=Terraria.Main.projectile[3]=new Projectile{whoAmI=3,owner=0,identity=71,active=true,Center=new Vector2(200,300),velocity=Vector2.UnitX,timeLeft=90};
