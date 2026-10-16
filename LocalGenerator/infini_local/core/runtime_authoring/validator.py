@@ -322,6 +322,12 @@ def _validate_requirement(
     calls: list[dict[str, Any]] | None = None,
 ) -> ValidationIssue | None:
     target_id = str(call.get("target") or "")
+    if requirement.when_spawned_by_inputs and not any(
+        binding.get("input") in requirement.when_spawned_by_inputs
+        and action_kind(binding) == "spawn_entity" and binding_target_id(binding) == target_id
+        for binding in bindings
+    ):
+        return None
     raw_params = call.get("params")
     params: Mapping[str, Any] = raw_params if isinstance(raw_params, Mapping) else {}
     target_calls = calls_by_target.get(item_id if requirement.target == "item_body" else target_id, [])

@@ -85,7 +85,7 @@ internal static class GeneratedUtilityBuffStatusView
     private static string Effect(GeneratedUtilityBuffValues value, GeneratedUtilityBuffField field, CultureInfo culture)
     {
         bool russian = culture.TwoLetterISOLanguageName == "ru";
-        string Number(float number) => float.IsFinite(number) ? number.ToString("R", culture) : "unavailable";
+        string Number(float number) => float.IsFinite(number) ? number.ToString("G7", culture) : "unavailable";
         string Signed(float number) => (number >= 0f ? "+" : "") + Number(number);
         return field switch
         {
@@ -94,16 +94,20 @@ internal static class GeneratedUtilityBuffStatusView
             // Existing runtime sets findTreasure, not an enforced authored radius.
             GeneratedUtilityBuffField.OreSenseRadiusTiles => russian ? (value.OreSenseRadiusTiles > 0 ? "обнаружение сокровищ включено" : "обнаружение сокровищ выключено") : "findTreasure = " + (value.OreSenseRadiusTiles > 0 ? "true" : "false"),
             GeneratedUtilityBuffField.MovementSpeed => Signed(value.MovementSpeed) + (russian ? " к коэффициенту скорости передвижения" : " moveSpeed factor"),
-            GeneratedUtilityBuffField.JumpBoost => Signed(value.JumpBoost) + (russian ? " пикс./тик к скорости прыжка" : " px/world tick (jumpSpeedBoost)"),
-            GeneratedUtilityBuffField.ManaRegen => "+" + value.ManaRegen.ToString(culture) + (russian ? " к регенерации маны" : " manaRegenBonus points"),
-            GeneratedUtilityBuffField.LifeRegen => "+" + value.LifeRegen.ToString(culture) + (russian ? " к регенерации здоровья" : " lifeRegen points"),
+            GeneratedUtilityBuffField.JumpBoost => Signed(value.JumpBoost * 60f) + (russian ? " пикс./с к скорости прыжка" : " px/s (jumpSpeedBoost)"),
+            GeneratedUtilityBuffField.ManaRegen => "+" + value.ManaRegen.ToString(culture) + (russian ? " единиц manaRegenBonus" : " manaRegenBonus points"),
+            GeneratedUtilityBuffField.LifeRegen => "+" + Number(value.LifeRegen / 2f) + (russian ? " ОЗ/с — вклад в регенерацию" : " HP/s contribution"),
             _ => "",
         };
     }
 
     private static string Duration(int ticks, CultureInfo culture)
-        => ticks.ToString(culture) + (culture.TwoLetterISOLanguageName == "ru" ? " тиков (" : " ticks (")
-            + (ticks / 60d).ToString("0.###", culture) + (culture.TwoLetterISOLanguageName == "ru" ? " с)" : " s)");
+    {
+        decimal seconds = ticks / 60m;
+        return (decimal.Round(seconds, 3) == seconds ? "" : "≈")
+            + seconds.ToString("0.###", culture)
+            + (culture.TwoLetterISOLanguageName == "ru" ? " с" : " s");
+    }
 
     // Native HUD uses slot indices, but the equipment grid compacts nonzero slots.
     internal static int GetAppendIndex(IReadOnlyList<int> buffTypes, bool inventory)

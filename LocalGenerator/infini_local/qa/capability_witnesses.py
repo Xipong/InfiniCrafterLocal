@@ -211,7 +211,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
     else:
         if not any(row["fn"] == "configure_item_use" for row in calls):
             item_use = deepcopy(_ITEM_BASE_USE)
-            if fn in {"channel_beam", "charge_then_release"}:
+            if fn in {"channel_beam", "charge_then_release", "move_flail_tether"}:
                 item_use["channel"] = True
                 item_use["customHeldSprite"] = "visible"
             calls.append(_call("item_use", "configure_item_use", "item", item_use))

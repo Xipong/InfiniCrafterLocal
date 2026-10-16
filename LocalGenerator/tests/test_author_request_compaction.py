@@ -27,7 +27,7 @@ from test_gameplay_repair_readonly_context import _CapturedBeforeTransport, _off
 def _expand_constraint_references(value, profiles):
     if isinstance(value, dict):
         return {key: copy.deepcopy(profiles[child])
-                if key == "consumerConstraint" and isinstance(child, str)
+                if key in {"consumerConstraint", "x-infini-consumerConstraint"} and isinstance(child, str)
                 else _expand_constraint_references(child, profiles)
                 for key, child in value.items()}
     if isinstance(value, list):
@@ -152,9 +152,32 @@ def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutati
                 continue
             references.append(param["consumerConstraint"])
             assert profiles[param["consumerConstraint"]] == source["consumerConstraint"]
-    assert set(references) == set(profiles)
+    assert set(references) <= set(profiles)
     assert len(profiles) < len(references)
     assert originals == {name: cap.author_prompt_card() for name, cap in CAPABILITY_REGISTRY.items()}
+    # Structured params use the same numeric guard as scalar params, not a
+    # second literal copy hidden inside their schema annotations.
+    nested_references = []
+
+    def visit(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "x-infini-consumerConstraint":
+                    assert isinstance(child, str)
+                    nested_references.append(child)
+                else:
+                    visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(catalog["capabilities"])
+    assert nested_references and set(nested_references) <= set(profiles)
+    assert set(references + nested_references) == set(profiles)
+    expanded = _expand_constraint_references(catalog["capabilities"], profiles)
+    assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
+            for card in expanded] == [cap.author_prompt_card() for cap in CAPABILITY_REGISTRY.values()
+                                      if cap.prompt_visible and cap.decision == "expose"]
     # The double rule is retained separately; it is not recast as a float32 guard.
     doubles = [value for value in profiles.values() if value["storage"] == "float64"]
     assert len(doubles) == 1 and doubles[0]["rule"] == "finite_double_no_normalization"

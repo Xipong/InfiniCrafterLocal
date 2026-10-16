@@ -14,13 +14,19 @@
 
 Для exact `Terraria/WoodenArrowFriendly` передаётся проверенная read-only reference dry initial flight: vertical acceleration начинается на 15-м native AI invocation, increment 0.1 pixels/update, downward cap 16 pixels/update. Она наблюдалась через настоящий native `Projectile.AI` отдельно на SDK и установленной tML; два точных SHA256 `AI_001` IL сертифицированы независимо, а source reference сообщает фактически совпавший hash. При другой method identity reference отсутствует, а не угадывается по aiStyle. Это ограниченный исходный факт, не новый gameplay executor, не универсальная симуляция arbitrary/modded AI и не обещание идентичного liquid/collision/global-mod behavior. Generated immediate gravity не выдаётся за точную копию native delayed AI.
 
+`move_flail_tether` возвращается при false owner.channel, после отпускания/дальности return защёлкнут. Прямой active spawn exact target требует явного configure_item_use.channel=true; passive/event copies читают уже существующий channel владельца и не получают безусловного item requirement. Validator и frozen Repair используют одну canonical condition. Code19 следует живому cursor каждый AI, не initial launch axis. `move_front_hand` none→full даёт только6px хода; hitboxOffsetPx — фиксированный центр, не длина thrust/добавочный сдвиг sprite. Сравнение native parent geometry остаётся решением Author, без автоувеличения радиуса.
+
+Native tool powers работают для use_item_body/spawn_entity, но временно обнулены для чистого apply_item_effects и place_item. Каждый следующий eligible active projection восстанавливает pick/axe/hammer из canonical definition; contactDamage/noMelee сами не отключают mining. Saved definitions не переписываются.
+
 ## PNG
 
 Image builder передаёт selected canvas, final-frame render extent и применимые authored scale/pivot/axis facts в техническом brief, отдельно от authored art. Более высокий canvas при неизменном renderSize не увеличивает размер в мире. Читаемость оценивается по display pixel budget; handle должен соответствовать authored grip, distinctive shape/count — самой композиции. Нет auto upscale/crop, догаданного grip и обязательного второго модельного judge. Техническая валидность PNG по-прежнему не удостоверяет художественную форму.
 
 ## Engineering limits и баланс
 
-Author character guard увеличен с 96 500 до 196 608 после воспроизводимого отказа source-rich packets, в том числе 120 443-character literal-tooltip case. Это локальный engineering bound, не настройка модельного token context/output. Ни capabilities, ни parent facts не удаляются ради guard; превышение остаётся явным отказом. Размер actual serialized native snapshots проверяется отдельно от source-defined и synthetic controls.
+Author character guard — ровно **220000 Unicode-символов** полного compact JSON dossier (`ensure_ascii=False`, separators без пробелов), вне SYSTEM/HTTP wrappers и response schema. Прежние 196608 блокировали generated+generated до provider. Это локальный engineering bound, не token context/output. Вложенные numeric consumer constraints используют точные packet-local ссылки на полные определения; capabilities, domains, dependencies и source-rich parents не вырезаются. Превышение остаётся явным отказом без clipping. Размер actual serialized native snapshots проверяется отдельно от source-defined и synthetic controls.
+
+Author оценивает actual ingredient power/acquisition/rarity/economy совместно, reusable benefit и полный throughput (children/chains/bounces/cadence/yield/payment frequency). Ammo damage — вклад в совместимый launcher, не самостоятельная атака; снятие launcher requirement — новая выгода. Бесплатное повторное использование допустимо, обязательного cooldown всем вещам нет. Это model-facing guidance, не новый автоматический nerf или доказанное качество свежей генерации.
 
 Host recommended damage и parent-dependent damage envelope удалены. Literal parent damage и hard registry bounds сохранены; code не переводит healing/value/rarity в рекомендуемый урон. Codex catalog protocol использует актуальный version-gated discovery; catalog listing не является live inference acceptance.
 

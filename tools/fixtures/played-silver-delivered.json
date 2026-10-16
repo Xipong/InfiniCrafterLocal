@@ -1,0 +1,497 @@
+{
+  "name": "Workbench-Backed Blade",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
+    "coreMechanic": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "parentAContribution": "workbench body",
+    "parentBContribution": "blade and nails",
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Execute the authored spawn_entity action."
+      }
+    ]
+  },
+  "realization": {
+    "description": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity. Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+    "selfEvaluation": {
+      "planVsProgram": {
+        "verdict": "aligned",
+        "summary": "Every fixture draft action is represented by the explicit runtime program.",
+        "actionChecks": [
+          {
+            "plannedIntent": "Execute the authored spawn_entity action.",
+            "implementedBehavior": "The binding executes spawn_entity.",
+            "runtimeRefs": [
+              "primary_workbench"
+            ],
+            "result": "aligned",
+            "intentionality": "intentional",
+            "reason": "The fixture draft and binding were authored from the same explicit action."
+          }
+        ]
+      },
+      "programVsReport": {
+        "verdict": "aligned",
+        "summary": "The fixture report describes the explicit entities, inputs, calls, and events.",
+        "behaviorChecks": [
+          {
+            "runtimeRefs": [
+              "primary_workbench"
+            ],
+            "programBehavior": "The binding executes spawn_entity.",
+            "reportedBehavior": "The report describes the explicitly authored entities, inputs, and events.",
+            "result": "aligned",
+            "reason": "The fixture report is the accepted description of this explicit binding lane."
+          }
+        ]
+      }
+    }
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.wire.v3",
+    "itemEntityId": "item",
+    "primaryEntityId": "item",
+    "primaryOwner": "item_body",
+    "limits": {
+      "maxEntityCount": 12,
+      "maxChildDepth": 3,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "entities": [
+      {
+        "id": "item",
+        "kind": "item_body",
+        "visualRole": "inventory_item",
+        "events": [],
+        "visual": {
+          "role": "inventory_item",
+          "assetMode": "baked_sprite",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "fixture_played_silver.png",
+          "spriteUrl": "",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.0
+        }
+      },
+      {
+        "id": "workbench_blade",
+        "kind": "owner_attached_projectile",
+        "visualRole": "held_body",
+        "events": [
+          {
+            "id": "shed_nails",
+            "action": "spawn_entity_on_event",
+            "actionCode": 1,
+            "event": "on_hit",
+            "entityId": "nail",
+            "count": 5,
+            "spreadRadians": 0.55,
+            "damageMultiplier": 0.35,
+            "delayTicks": 0,
+            "damageBasis": "authored_child",
+            "knockbackBasis": "authored_child"
+          }
+        ],
+        "visual": {
+          "role": "held_body",
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "fixture_played_silver.png",
+          "spriteUrl": "",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.0
+        },
+        "spawn": {
+          "speedPxPerTick": 0,
+          "count": 1,
+          "spreadRadians": 0.0,
+          "offsetPx": 0,
+          "aim": "cursor",
+          "overTarget": {
+            "heightTiles": 0,
+            "delayTicks": 0
+          },
+          "placement": "item_use_origin",
+          "enabled": true
+        },
+        "damage": {
+          "damageClass": "melee",
+          "damage": 42,
+          "knockback": 4.0,
+          "ownerHitCheck": true,
+          "enabled": true
+        },
+        "lifetimeTicks": 28,
+        "hitbox": {
+          "widthPx": 64,
+          "heightPx": 34,
+          "drawScale": 1.0,
+          "hitboxScale": 1.0
+        },
+        "collision": {
+          "tileCollide": false,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": -1,
+          "extraUpdates": 0,
+          "npcImmunityMode": "local",
+          "localNpcHitCooldownTicks": 10
+        },
+        "movement": {
+          "name": "move_forward_then_retract",
+          "code": 19,
+          "params": {
+            "rangeTiles": 6,
+            "durationTicks": 24
+          }
+        }
+      },
+      {
+        "id": "nail",
+        "kind": "child_projectile",
+        "visualRole": "child_projectile",
+        "events": [],
+        "visual": {
+          "role": "child_projectile",
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "fixture_played_silver.png",
+          "spriteUrl": "",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.0
+        },
+        "spawn": {
+          "speedPxPerTick": 13,
+          "count": 1,
+          "spreadRadians": 0.0,
+          "offsetPx": 0,
+          "aim": "cursor",
+          "overTarget": {
+            "heightTiles": 0,
+            "delayTicks": 0
+          },
+          "placement": "item_use_origin",
+          "enabled": true
+        },
+        "damage": {
+          "damageClass": "ranged",
+          "damage": 12,
+          "knockback": 4.0,
+          "ownerHitCheck": false,
+          "enabled": true
+        },
+        "lifetimeTicks": 120,
+        "hitbox": {
+          "widthPx": 8,
+          "heightPx": 8,
+          "drawScale": 1.0,
+          "hitboxScale": 1.0
+        },
+        "collision": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "extraUpdates": 0,
+          "npcImmunityMode": "local",
+          "localNpcHitCooldownTicks": 10
+        },
+        "movement": {
+          "name": "move_straight",
+          "code": 0,
+          "params": {}
+        }
+      }
+    ],
+    "bindings": [
+      {
+        "id": "primary_workbench",
+        "input": "primary_use",
+        "usePolicy": {
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "workbench_blade"
+          },
+          "stackCost": 0,
+          "contactDamage": true
+        },
+        "role": "secondary"
+      }
+    ],
+    "itemUse": {
+      "configured": true,
+      "useStyle": "shoot",
+      "hideUseGraphic": false,
+      "disableMeleeHitbox": false,
+      "channel": false,
+      "handPose": "one_handed",
+      "releaseTiming": "immediate",
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0
+    },
+    "itemContact": {
+      "hitboxScale": 1.0,
+      "contactForgivenessPx": 4
+    }
+  },
+  "gameplay": {
+    "kind": "hybrid",
+    "damageClass": "generic",
+    "damage": 42,
+    "knockback": 4.0,
+    "useTime": 24,
+    "useAnimation": 24,
+    "manaCost": 0,
+    "rarity": 2,
+    "value": 7500,
+    "maxStack": 1,
+    "craftYield": 1,
+    "width": 32,
+    "height": 32,
+    "itemScale": 1.0,
+    "useStyleName": "shoot",
+    "autoReuse": true,
+    "useTurn": true,
+    "holdoutOffsetX": 0,
+    "holdoutOffsetY": 0,
+    "handPose": "one_handed",
+    "releaseTiming": "immediate"
+  },
+  "accessory": {
+    "enabled": false
+  },
+  "armor": {
+    "enabled": false
+  },
+  "id": "fixture_played_silver",
+  "schemaVersion": 5,
+  "runtimeApiVersion": "infini.runtime-program.v5",
+  "sourceMode": "test_fixture",
+  "debug": {
+    "llmStageAccounting": "{\"gameplayAuthorCalls\":0,\"gameplayRepairCalls\":0,\"vfxDirectorCalls\":1,\"vfxRepairCalls\":0,\"visualDirectorCalls\":1,\"visualRepairCalls\":0}",
+    "visualDirectorStatus": "validated_and_applied",
+    "visualDirectorEntityIds": "[\"item\",\"workbench_blade\",\"nail\"]",
+    "visualDirectorRaw": "{\"animationPlan\":\"Follow exact runtime movement.\",\"entities\":[{\"assetMode\":\"baked_sprite\",\"entityId\":\"item\",\"scale\":1.0,\"visualProjectRef\":\"item\"},{\"assetMode\":\"reuse_item_icon\",\"entityId\":\"workbench_blade\",\"scale\":1.0,\"visualProjectRef\":\"item\"},{\"assetMode\":\"reuse_item_icon\",\"entityId\":\"nail\",\"scale\":1.0,\"visualProjectRef\":\"item\"}],\"item\":{\"effectColor\":\"silver\",\"forwardAngleDegrees\":45,\"inventoryScale\":1.0,\"negativePrompt\":\"placeholder\",\"palette\":[\"copper with silver highlights\"],\"preferredCanvasSize\":32,\"prompt\":\"literal Terraria item\",\"renderSizePx\":40,\"silhouette\":\"readable\",\"visualIdentity\":\"literal composition\",\"worldScale\":1.0},\"schema\":\"infini.visual-kit.runtime-entities.v2\"}",
+    "vfxDirectorStatus": "validated_and_compiled",
+    "vfxDirectorRaw": "{\"preview\":\"{\\\"effectMagnitude\\\":0.5,\\\"motif\\\":{\\\"chaos\\\":0.2,\\\"element\\\":\\\"metal\\\",\\\"motionLanguage\\\":\\\"short wake\\\",\\\"paletteRole\\\":\\\"accent\\\",\\\"rhythm\\\":1.0,\\\"shapeLanguage\\\":\\\"sparks\\\"},\\\"schema\\\":\\\"infini.vfx-director.runtime-events.v2\\\",\\\"slots\\\":[{\\\"alpha\\\":0.8,\\\"anchor\\\":\\\"self\\\",\\\"backend\\\":\\\"Sprite\\\",\\\"blend\\\":\\\"alpha\\\",\\\"budgetWeight\\\":1.0,\\\"channel\\\":\\\"impactShape\\\",\\\"density\\\":0.0,\\\"duration\\\":20,\\\"element\\\":{\\\"accelerationXPxPerTickSquared\\\":0.0,\\\"accelerationYPxPerTickSquared\\\":0.05,\\\"attachment\\\":\\\"world\\\",\\\"colorProfile\\\":{\\\"curve\\\":\\\"linear\\\",\\\"end\\\":\\\"silver\\\",\\\"middle\\\":\\\"effect\\\",\\\"start\\\":\\\"silver\\\"},\\\"count\\\":2,\\\"drag\\\":0.95,\\\"heightProfile\\\":{\\\"curve\\\":\\\"easeOut\\\",\\\"end\\\":0.0,\\\"middle\\\":1.0,\\\"start\\\":2.0},\\\"heightPx\\\":5.0,\\\"inheritVelocity\\\":0.2,\\\"offsetForwardPx\\\":8.0,\\\"offsetSidePx\\\":-3.0,\\\"opacityProfile\\\":{\\\"curve\\\":\\\"smoothStep\\\",\\\"end\\\":0.0,\\\"middle\\\":0.8,\\\"start\\\":0.0},\\\"rotationRadians\\\":0.0,\\\"rotationSpeedRadiansPerTick\\\":-0.1,\\\"speedMaxPxPerTick\\\":2.0,\\\"speedMinPxPerTick\\\":1.0,\\\"spreadRadians\\\":0.75,\\\"texture\\\":{\\\"assetId\\\":\\\"\\\",\\\"source\\\":\\\"item\\\"},\\\"widthProfile\\\":{\\\"curve\\\":\\\"easeIn\\\",\\\"end\\\":2.0,\\\"middle\\\":1.0,\\\"start\\\":0.0},\\\"widthPx\\\":12.0},\\\"emissionMode\\\":\\\"none\\\",\\\"entityId\\\":\\\"item\\\",\\\"event\\\":\\\"on_use\\\",\\\"fadeIn\\\":0.0,\\\"fadeOut\\\":0.0,\\\"id\\\":\\\"ingredient_element\\\",\\\"jitter\\\":0.0,\\\"lane\\\":\\\"primary\\\",\\\"layer\\\":\\\"BeforeProjectiles\\\",\\\"particleRole\\\":\\\"none\\\",\\\"particleSystemId\\\":\\\"none\\\",\\\"rendererKind\\\":\\\"spriteElement\\\",\\\"repeatEvery\\\":0,\\\"scale\\\":1.0,\\\"signatureWeight\\\":0.0,\\\"spread\\\":0.0,\\\"spriteNegativePrompt\\\":\\\"\\\",\\\"spritePrompt\\\":\\\"\\\",\\\"startTick\\\":0,\\\"textureRole\\\":\\\"none\\\",\\\"visualCost\\\":0.0},{\\\"alpha\\\":0.8,\\\"anchor\\\":\\\"self\\\",\\\"backend\\\":\\\"Particle\\\",\\\"blend\\\":\\\"additive\\\",\\\"budgetWeight\\\":1,\\\"channel\\\":\\\"impactParticles\\\",\\\"density\\\":0,\\\"duration\\\":20,\\\"emissionMode\\\":\\\"none\\\",\\\"entityId\\\":\\\"item\\\",\\\"event\\\":\\\"on_use\\\",\\\"fadeIn\\\":0,\\\"fadeOut\\\":0,\\\"id\\\":\\\"library_star\\\",\\\"jitter\\\":0,\\\"lane\\\":\\\"a\",\"truncated\":true}",
+    "vfxRuntimePairs": "[{\"entityId\":\"item\",\"event\":\"on_crit\"},{\"entityId\":\"item\",\"event\":\"on_hit\"},{\"entityId\":\"item\",\"event\":\"on_use\"},{\"entityId\":\"item\",\"event\":\"periodic\"},{\"entityId\":\"nail\",\"event\":\"on_crit\"},{\"entityId\":\"nail\",\"event\":\"on_expire\"},{\"entityId\":\"nail\",\"event\":\"on_hit\"},{\"entityId\":\"nail\",\"event\":\"on_kill\"},{\"entityId\":\"nail\",\"event\":\"on_spawn\"},{\"entityId\":\"nail\",\"event\":\"on_tile_collision\"},{\"entityId\":\"nail\",\"event\":\"periodic\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_crit\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_expire\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_hit\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_kill\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_spawn\"},{\"entityId\":\"workbench_blade\",\"event\":\"periodic\"}]",
+    "visualAssetPlan": "[{\"role\": \"item\", \"entityId\": \"item\", \"entityKind\": \"item_body\", \"visualRole\": \"inventory_item\", \"assetMode\": \"baked_sprite\", \"runtimeGateReason\": \"authored_runtime_entity_asset_mode\", \"assetId\": \"fixture_played_silver_item\", \"prompt\": \"literal Terraria item\", \"canvas\": 32, \"status\": \"generated\", \"path\": \"fixture_played_silver.png\", \"url\": \"\", \"technicalScore\": 0.0, \"renderSizePx\": 40, \"forwardAngleDegrees\": 45, \"presentationOwnerEntityId\": \"item\"}, {\"role\": \"entity:workbench_blade\", \"entityId\": \"workbench_blade\", \"entityKind\": \"owner_attached_projectile\", \"visualRole\": \"held_body\", \"assetMode\": \"reuse_item_icon\", \"runtimeGateReason\": \"authored_runtime_entity_asset_mode\", \"assetId\": \"fixture_played_silver_workbench_blade\", \"prompt\": \"literal Terraria item\", \"canvas\": 32, \"status\": \"generated\", \"path\": \"fixture_played_silver.png\", \"url\": \"\", \"technicalScore\": 0.0, \"renderSizePx\": 40, \"forwardAngleDegrees\": 45, \"presentationOwnerEntityId\": \"item\"}, {\"role\": \"entity:nail\", \"entityId\": \"nail\", \"entityKind\": \"child_projectile\", \"visualRole\": \"child_projectile\", \"assetMode\": \"reuse_item_icon\", \"runtimeGateReason\": \"authored_runtime_entity_asset_mode\", \"assetId\": \"fixture_played_silver_nail\", \"prompt\": \"literal Terraria item\", \"canvas\": 32, \"status\": \"generated\", \"path\": \"fixture_played_silver.png\", \"url\": \"\", \"technicalScore\": 0.0, \"renderSizePx\": 40, \"forwardAngleDegrees\": 45, \"presentationOwnerEntityId\": \"item\"}]"
+  },
+  "visual": {
+    "imagePrompt": "literal Terraria item",
+    "negativePrompt": "placeholder",
+    "palette": [
+      "copper with silver highlights"
+    ],
+    "preferredCanvasSize": 32,
+    "inventoryScale": 1.0,
+    "worldScale": 1.0,
+    "effectColor": "silver",
+    "renderSizePx": 40,
+    "forwardAngleDegrees": 45,
+    "spritePath": "fixture_played_silver.png",
+    "spriteStatus": "generated"
+  },
+  "vfxManifest": {
+    "schema": "infini.vfx.runtime-events.v15",
+    "recipeId": "silver-tracer",
+    "effectName": "runtime_entity_events",
+    "inspirationNames": [],
+    "playbackMode": "Realtime",
+    "seed": 1127087425,
+    "confidence": 1.0,
+    "effectMagnitude": 0.5,
+    "visualBudgetClass": "normal",
+    "motif": {
+      "element": "metal",
+      "shapeLanguage": "sparks",
+      "motionLanguage": "short wake",
+      "paletteRole": "accent",
+      "rhythm": 1.0,
+      "chaos": 0.2
+    },
+    "budget": {
+      "effectMagnitude": 0.5,
+      "visualBudgetClass": "normal",
+      "emergencyCap": true,
+      "maxParticlesPerTick": 80,
+      "maxParticlesTotal": 3400,
+      "maxDrawCalls": 136,
+      "spawnRateMultiplier": 1.0,
+      "enableSoftGlow": true,
+      "enablePointSparks": true,
+      "enablePersistentSmoke": false
+    },
+    "slots": [
+      {
+        "id": "ingredient_element",
+        "entityId": "item",
+        "event": "on_use",
+        "rendererKind": "spriteElement",
+        "backend": "Sprite",
+        "textureRole": "none",
+        "particleRole": "none",
+        "anchor": "self",
+        "channel": "impactShape",
+        "lane": "primary",
+        "emissionMode": "none",
+        "blend": "alpha",
+        "layer": "BeforeProjectiles",
+        "particleSystemId": "none",
+        "scale": 1.0,
+        "density": 0.0,
+        "duration": 20,
+        "alpha": 0.8,
+        "spread": 0.0,
+        "jitter": 0.0,
+        "fadeIn": 0.0,
+        "fadeOut": 0.0,
+        "budgetWeight": 1.0,
+        "signatureWeight": 0.0,
+        "visualCost": 0.0,
+        "startTick": 0,
+        "repeatEvery": 0,
+        "element": {
+          "texture": {
+            "source": "item",
+            "assetId": ""
+          },
+          "attachment": "world",
+          "count": 2,
+          "offsetForwardPx": 8.0,
+          "offsetSidePx": -3.0,
+          "speedMinPxPerTick": 1.0,
+          "speedMaxPxPerTick": 2.0,
+          "spreadRadians": 0.75,
+          "inheritVelocity": 0.2,
+          "drag": 0.95,
+          "accelerationXPxPerTickSquared": 0.0,
+          "accelerationYPxPerTickSquared": 0.05,
+          "rotationRadians": 0.0,
+          "rotationSpeedRadiansPerTick": -0.1,
+          "widthPx": 12.0,
+          "heightPx": 5.0,
+          "widthProfile": {
+            "start": 0.0,
+            "middle": 1.0,
+            "end": 2.0,
+            "curve": "easeIn"
+          },
+          "heightProfile": {
+            "start": 2.0,
+            "middle": 1.0,
+            "end": 0.0,
+            "curve": "easeOut"
+          },
+          "opacityProfile": {
+            "start": 0.0,
+            "middle": 0.8,
+            "end": 0.0,
+            "curve": "smoothStep"
+          },
+          "colorProfile": {
+            "start": "silver",
+            "middle": "effect",
+            "end": "silver",
+            "curve": "linear"
+          }
+        },
+        "eventGroup": "auto",
+        "stage": "loop",
+        "source": "llm_vfx_director",
+        "slotSeed": 1738596944,
+        "bakedClipId": "",
+        "bakedClipHash": "",
+        "bakedCommandCount": 0,
+        "bakedCommands": [],
+        "effectName": ""
+      },
+      {
+        "id": "library_star",
+        "entityId": "item",
+        "event": "on_use",
+        "rendererKind": "libraryParticle",
+        "backend": "Particle",
+        "textureRole": "none",
+        "particleRole": "none",
+        "anchor": "self",
+        "channel": "impactParticles",
+        "lane": "accent",
+        "emissionMode": "none",
+        "blend": "additive",
+        "layer": "BeforeProjectiles",
+        "particleSystemId": "none",
+        "scale": 1.0,
+        "density": 0.0,
+        "duration": 20,
+        "alpha": 0.8,
+        "spread": 0.0,
+        "jitter": 0.0,
+        "fadeIn": 0.0,
+        "fadeOut": 0.0,
+        "budgetWeight": 1.0,
+        "signatureWeight": 0.0,
+        "visualCost": 0.0,
+        "startTick": 0,
+        "repeatEvery": 0,
+        "particle": {
+          "textureId": "star",
+          "count": 3,
+          "speedMinPxPerTick": 1.0,
+          "speedMaxPxPerTick": 3.0,
+          "spreadRadians": 0.5,
+          "inheritVelocity": 0.25,
+          "drag": 0.9,
+          "accelerationXPxPerTickSquared": 0.0,
+          "accelerationYPxPerTickSquared": 0.05,
+          "widthPx": 8.0,
+          "heightPx": 2.0,
+          "rotationRadians": 0.0,
+          "rotationSpeedRadiansPerTick": 0.1,
+          "colorStart": "silver",
+          "colorEnd": "effect",
+          "endScaleMultiplier": 0.0,
+          "endOpacity": 0.0
+        },
+        "eventGroup": "auto",
+        "stage": "loop",
+        "source": "llm_vfx_director",
+        "slotSeed": 1588066476,
+        "bakedClipId": "",
+        "bakedClipHash": "",
+        "bakedCommandCount": 0,
+        "bakedCommands": [],
+        "effectName": ""
+      }
+    ],
+    "overlayPolicy": "LocalOnly",
+    "debug": {
+      "pattern": "runtime_entity_events",
+      "roles": [
+        "inventory_item",
+        "held_body",
+        "child_projectile"
+      ],
+      "selectedScore": 1.0,
+      "selectedReasons": [
+        "exact_entity_event_binding"
+      ],
+      "topCandidates": [],
+      "wordProbe": []
+    }
+  }
+}

@@ -1447,6 +1447,7 @@
                     "enum": [
                       "white",
                       "gray",
+                      "silver",
                       "brown",
                       "tan",
                       "red",
@@ -1468,6 +1469,7 @@
                     "enum": [
                       "white",
                       "gray",
+                      "silver",
                       "brown",
                       "tan",
                       "red",
@@ -1489,6 +1491,7 @@
                     "enum": [
                       "white",
                       "gray",
+                      "silver",
                       "brown",
                       "tan",
                       "red",
@@ -1898,6 +1901,7 @@
                 "enum": [
                   "white",
                   "gray",
+                  "silver",
                   "brown",
                   "tan",
                   "red",
@@ -1919,6 +1923,7 @@
                 "enum": [
                   "white",
                   "gray",
+                  "silver",
                   "brown",
                   "tan",
                   "red",
@@ -2151,6 +2156,7 @@
                     "enum": [
                       "white",
                       "gray",
+                      "silver",
                       "brown",
                       "tan",
                       "red",
@@ -2172,6 +2178,7 @@
                     "enum": [
                       "white",
                       "gray",
+                      "silver",
                       "brown",
                       "tan",
                       "red",
@@ -2193,6 +2200,7 @@
                     "enum": [
                       "white",
                       "gray",
+                      "silver",
                       "brown",
                       "tan",
                       "red",

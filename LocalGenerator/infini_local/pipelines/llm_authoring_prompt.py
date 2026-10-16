@@ -32,10 +32,10 @@ from infini_local.core.item_identity_tools import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
 
-# Engineering character guard, not a model token limit. The old 96,500 bound
-# refused real source-rich parents before the provider seam. Preserve both
-# complete source tooltips and accepted generated graphs; never clip them to fit.
-PLANNER_PROMPT_LIMIT_CHARS = 196_608
+# Engineering character guard, not a model token limit: exactly 220000 Unicode
+# characters in the complete compact JSON dossier. Preserve both source tooltips
+# and accepted generated graphs; never clip them to fit.
+PLANNER_PROMPT_LIMIT_CHARS = 220_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
@@ -186,14 +186,16 @@ def _share_consumer_constraints(cards: list[dict[str, Any]]) -> dict[str, dict[s
 
     def visit(value: Any) -> None:
         if isinstance(value, dict):
-            constraint = value.get("consumerConstraint")
-            if isinstance(constraint, dict):
+            for key in ("consumerConstraint", "x-infini-consumerConstraint"):
+                constraint = value.get(key)
+                if not isinstance(constraint, dict):
+                    continue
                 identity = json.dumps(constraint, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
                 if identity not in labels:
                     label = f"numeric{len(labels) + 1}"
                     labels[identity] = label
                     profiles[label] = constraint
-                value["consumerConstraint"] = labels[identity]
+                value[key] = labels[identity]
             for child in value.values():
                 visit(child)
         elif isinstance(value, list):
@@ -279,8 +281,8 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
     field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
     field_guide["consumerConstraintReadingRule"] = (
-        "Each param consumerConstraint names one complete rule in fieldGuide.consumerConstraints. "
-        "The referenced precision, neutral and wireProjection constraints all apply."
+        "Param consumerConstraint and nested shape x-infini-consumerConstraint name one complete rule "
+        "in fieldGuide.consumerConstraints. The referenced precision, neutral and wireProjection constraints all apply."
     )
     for card in capabilities:
         if card["fn"] in {"target_and_fire", "spawn_entity_on_event"}:

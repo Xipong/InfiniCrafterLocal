@@ -1,0 +1,1300 @@
+[
+  {
+    "accessory": {
+      "enabled": false
+    },
+    "armor": {
+      "enabled": false
+    },
+    "category": "combat",
+    "concept": {
+      "coreMechanic": "A reusable, manually aimed melee thrust combines a weighty stone impact with a delayed gel-and-stone collateral splash. Each direct hit schedules a small burst at the recorded impact position 10 ticks later, rewarding attacks into clustered enemies without guaranteeing that moving enemies remain inside it. The base thrust cadence remains 31 ticks, matching the gel spear.",
+      "literalSynthesis": "Статуя копья (Terraria/SpearStatue) becomes a portable carved-stone spear, retaining its sculptural stone identity beneath the translucent gel coating of Гелевое копье (InfiniCrafterLocal/GeneratedItem). The stone point sits inside a rounded gel sheath, with small stone chips suspended in the coating. This is an item presentation direction, not a delivered image.",
+      "parentAContribution": "Статуя копья supplies the literal carved-stone spear identity. Its newly authored mechanical contribution is a heavier direct impact and the stone-chip character of the delayed burst; these are synthesis mechanics, not claimed abilities of the original statue. Native statue placement is intentionally not inherited.",
+      "parentBContribution": "Гелевое копье supplies the translucent coating, reusable owner-attached extension/retraction action, 31-tick base tempo and small collateral splash idea. The splash is intentionally delayed rather than immediate, interpreting the gel as briefly holding and then releasing stone fragments.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Manually thrust the gel-coated stone spear toward the cursor."
+        },
+        {
+          "input": "passive_or_event",
+          "intent": "After a direct hit, release a delayed collateral splash at the recorded impact position."
+        }
+      ],
+      "playerExperience": "Click toward an enemy to deliver a bounded thrust with strong knockback. Nearby enemies can take a modest delayed collateral hit, while the directly struck enemy is excluded from that hit's splash. No mana, ammo or item consumption is required; manual use, limited reach and the delayed burst constrain this sustained free attack."
+    },
+    "contractVersions": {
+      "altForkCherrypickContract": "best_of_alt_config_signals_trace_replay_v0.4.226",
+      "appVersion": "0.5.04",
+      "architectureCoherenceContract": "single_balance_report_clamp_taxonomy_powerband_v0.4.219",
+      "architectureHomogeneityContract": "central_balance_policy_and_csharp_runtime_constants_v0.4.226",
+      "armorPropertyRoundtripContract": "armor_extended_property_slot_budget_roundtrip_v0.4.192",
+      "balanceArchitectureAuditContract": "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216",
+      "balanceSingleAuthorityContract": "code_owned_balance_envelope_no_active_guide_helper_v0.4.216",
+      "buildQolContract": "tml_build_log_qol_and_compile_surface_cleanup_v0.4.201",
+      "csharpAuthoringPreservationContract": "csharp_authoring_extension_preservation_v0.4.177",
+      "csharpContractSyncGuard": "csharp_future_field_contract_guard_v0.4.181",
+      "debugDumpContract": "compact_recipe_debug_dump_v0.4.174",
+      "envAccessContract": "centralized_env_access_no_import_star_v0.4.226",
+      "equipmentBudgetContract": "armor_accessory_total_soft_budget_v0.4.226",
+      "failureUxContract": "structured_failure_player_message_v0.4.174",
+      "fishingBaitFutureDisabledParentContext": "fishing_bait_future_disabled_parent_context_v0.4.184",
+      "futureSoundCatalogSeam": "explicit_external_sound_catalog_future_seam_v0.4.239",
+      "gameplayQolContract": "generated_use_feedback_tooltip_qol_v0.4.201",
+      "gameplayRuntimeRebuildContract": "runtime_coverage_station_ux_balance_envelope_v0.4.212",
+      "generatedArmorContract": "generated_armor_proxy_slots_v0.4.192",
+      "heldItemPoseSyncContract": "held_item_pose_accessory_compile_hotfix_v0.4.199",
+      "localCacheAndRepairContract": "local_cache_runtime_repair_contract_cleanup_v0.4.176",
+      "luminanceSoundBridgeContract": "external_luminance_looped_sound_bridge_v0.4.187",
+      "maintenanceHardeningContract": "repair_json_sync_and_low_noise_fallback_logs_v0.4.205",
+      "maintenanceQolContract": "maintainability_gameplay_qol_cleanup_v0.4.203",
+      "mpServerAuthorityEnvMigrationCiContract": "server_side_slot_spend_env_migration_ci_hardening_v0.4.218",
+      "multiplayerPresentationSyncContract": "held_pose_accessory_compile_hotfix_v0.4.199",
+      "overhaulQolContract": "infini_station_overhaul_qol_v0.4.202",
+      "parentProjectileSizePreservationContract": "llm_opt_in_parent_projectile_size_policy_v0.4.179",
+      "plannerPromptProfile": "planner_prompt_semantics_restored_v6_v0.4.243",
+      "projectileChainChildGuard": "projectile_chain_child_count_guard_v0.4.185",
+      "projectileChildRuntimeGuard": "projectile_child_runtime_static_guard_v0.4.184",
+      "promptCompressionContract": "planner_prompt_compression_preserve_prose_v0.4.193",
+      "pythonExceptionHygieneGuard": "python_exception_hygiene_baseline_guard_v0.4.183",
+      "rebuildGameplayCacheDiagnosticsContract": "generated_melee_onhit_and_cache_diagnostics_v0.4.209",
+      "recipeHealthSchema": "infini.recipe-health.v1",
+      "recipeIdentityVersion": "recipe_v4_25_no_item_family_routing",
+      "releaseHygieneGuardContract": "release_hygiene_zone_identifier_guard_v0.4.181",
+      "releaseHygieneToolTestContract": "release_hygiene_tool_regression_tests_v0.4.182",
+      "releaseVersionSyncGuard": "release_version_sync_guard_v0.4.182",
+      "repairBoundaryContract": "deterministic_error_leaf_and_blocker_dependency_closure_v0.4.240",
+      "repairPatchContract": "gameplay_visual_vfx_frozen_old_values_salvage_patch_v0.4.240",
+      "replayHarnessContract": "generation_case_replay_audit_v0.4.226",
+      "repoCleanupBroadBalanceContract": "repo_docs_cleanup_and_broad_soft_balance_uplift_v0.4.216",
+      "runtimeAffordanceSchema": "infini.runtime-affordance.v2",
+      "runtimeApiSyncGuard": "runtime_api_python_csharp_sync_guard_v0.4.183",
+      "runtimeApiVersion": "infini.runtime-program.v5",
+      "runtimeContractSchema": "infini.runtime-contract.v3",
+      "runtimeGameplayQolContract": "impact_mobility_cooldown_and_sprite_lru_qol_v0.4.204",
+      "runtimeProvenanceContract": "runtime_authored_applied_provenance_debug_v0.4.226",
+      "runtimeRepairObservabilityContract": "blocker_dossier_salvage_merge_and_ignored_scope_escape_v0.4.240",
+      "runtimeStateCleanupContract": "runtime_state_cleanup_v0.4.175",
+      "runtimeTechnicalProvenanceContract": "structural_final_wire_receipts_v0.4.241",
+      "schema": "infini.contract-stamp.v1",
+      "soundLibraryContract": "exact_terraria_sound_catalog_v8_no_prose_queries_pitch_variance_v0.4.239",
+      "vanillaPresentationPolishContract": "bounded_vanilla_presentation_polish_v0.4.199",
+      "vanillaRuntimeSpriteCacheContract": "runtime_sprite_max_side_192_hotfix_v0.4.207",
+      "vfxAudioPresentationGuard": "vfx_audio_presentation_guard_v0.4.185",
+      "visualPipelineProfile": "author_visualpack_v2",
+      "visualRoleContract": "projectile_local_forward_axis_visual_contract_v0.4.242"
+    },
+    "gameplay": {
+      "autoReuse": false,
+      "craftYield": 1,
+      "damage": 10,
+      "damageClass": "melee",
+      "handPose": "",
+      "height": 32,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "itemScale": 1,
+      "kind": "combat",
+      "knockback": 7,
+      "manaCost": 0,
+      "maxStack": 1,
+      "rarity": 0,
+      "releaseTiming": "immediate",
+      "useAnimation": 31,
+      "useStyleName": "shoot",
+      "useTime": 31,
+      "useTurn": false,
+      "value": 1300,
+      "width": 32
+    },
+    "generatedParentSummary": {
+      "description": "The program defines a reusable melee item represented during attacks by one owner-attached thrust entity. The normal item-use graphic and custom held root are hidden; the thrust is the intended visible physical representation. Its proposed appearance combines the carved stone identity of Статуя копья with the translucent spear coating of Гелевое копье; this response does not supply a rendered asset. Primary use creates one capped thrust aimed along the initial cursor axis. Over a 31-world-tick extension/retraction cycle, its collision center travels from an 18-pixel owner-center baseline to a peak additional displacement of 48 pixels, then retracts. Its 21-by-21-pixel hitbox deals 10 base melee damage with 7 knockback, requires the native owner hit check and directly hits each NPC at most once per thrust. Tile collision is disabled. Every direct hit schedules a 1.5-tile-radius area attack at the recorded event position after 10 ticks. This collateral attack excludes that event's directly hit NPC and uses half the authored projectile base damage, or 5 before defense and applicable native damage rules. It creates no child projectiles. No alternate use, statue placement, passive equipment effect or status application is authored.",
+      "identity": "generated:g_4a1c8253fd834bff",
+      "name": "Гелевое копье статуи",
+      "notableEffects": [
+        "Manual clicking performs a reusable attack without mana or ammo, using modifier-dependent base timing and the thrust as its active representation.",
+        "The collision center extends from an 18-pixel baseline to 66 pixels from owner center, then retracts during its bounded lifetime.",
+        "Each NPC can be directly struck once per thrust, with the native owner hit check retained despite disabled tile collision.",
+        "A stationary recorded-impact burst can deal 5 pre-defense base damage to eligible nearby enemies while excluding the directly hit NPC."
+      ],
+      "playerExperience": "Click to thrust toward the cursor; auto-reuse is disabled. The base use interval and animation are both 31 ticks, with native player modifiers able to change effective timing. The item is retained and costs neither mana nor ammo. A direct connection can produce a small delayed collateral burst against nearby eligible enemies. The burst stays at the recorded impact location rather than following the struck NPC, so enemy movement and native damage eligibility can prevent collateral damage. The thrust offers a weightier direct hit than its supplied gel-spear parent while keeping that parent's bounded reach and manual cadence. There is no guaranteed extra hit on the original target and no functional statue mode.",
+      "runtimeEntityIds": [
+        "stonegel_item",
+        "stonegel_thrust"
+      ],
+      "runtimePrimaryEntityId": "stonegel_thrust",
+      "schema": "infini.generated-parent-summary.v2"
+    },
+    "id": "g_4a1c8253fd834bff",
+    "itemKnowledge": {
+      "enabled": true,
+      "parents": [
+        {
+          "category": "furniture",
+          "confidence": 0.48,
+          "generatedDepth": 0,
+          "identity": "item:Terraria/SpearStatue:457",
+          "name": "Статуя копья",
+          "powerScore": 2.97,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "auto_reuse",
+            "consumable",
+            "placeable",
+            "placeable_block_or_tile",
+            "spear",
+            "stackable",
+            "statue"
+          ],
+          "tier": "trash"
+        },
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 1,
+          "identity": "generated:g_ace0419e34086755",
+          "name": "Гелевое копье",
+          "powerScore": 70.75,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "generated",
+            "hidden_use_graphic",
+            "item",
+            "long_lived_projectile",
+            "melee",
+            "mod_infinicrafterlocal",
+            "modded",
+            "no_melee",
+            "noncolliding_projectile",
+            "placeable",
+            "projectile",
+            "weapon"
+          ],
+          "tier": "pre_hardmode_late"
+        }
+      ],
+      "resultCard": {
+        "category": "generic",
+        "confidence": 0.74,
+        "generatedDepth": 1,
+        "identity": "generated:g_4a1c8253fd834bff",
+        "name": "Гелевое копье статуи",
+        "powerScore": 60.01,
+        "sourceHint": "generated result card from gameplay + parent knowledge",
+        "tags": [],
+        "tier": "pre_hardmode_late"
+      },
+      "strongestMaterialPowerScore": 2.97,
+      "strongestMaterialTier": "trash",
+      "strongestPowerScore": 70.75,
+      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
+      "strongestTier": "pre_hardmode_late",
+      "tagsFromKnowledge": [
+        "auto_reuse",
+        "consumable",
+        "generated",
+        "hidden_use_graphic",
+        "item",
+        "long_lived_projectile",
+        "melee",
+        "mod_infinicrafterlocal",
+        "modded",
+        "no_melee",
+        "noncolliding_projectile",
+        "placeable",
+        "placeable_block_or_tile",
+        "projectile",
+        "spear",
+        "stackable",
+        "statue",
+        "weapon"
+      ]
+    },
+    "llmStageAccounting": {
+      "gameplayAuthorCalls": 1,
+      "gameplayRepairCalls": 0,
+      "vfxDirectorCalls": 1,
+      "vfxRepairCalls": 0,
+      "visualDirectorCalls": 1,
+      "visualRepairCalls": 0
+    },
+    "name": "Гелевое копье статуи",
+    "parentA": "Статуя копья",
+    "parentB": "Гелевое копье",
+    "realization": {
+      "description": "The program defines a reusable melee item represented during attacks by one owner-attached thrust entity. The normal item-use graphic and custom held root are hidden; the thrust is the intended visible physical representation. Its proposed appearance combines the carved stone identity of Статуя копья with the translucent spear coating of Гелевое копье; this response does not supply a rendered asset. Primary use creates one capped thrust aimed along the initial cursor axis. Over a 31-world-tick extension/retraction cycle, its collision center travels from an 18-pixel owner-center baseline to a peak additional displacement of 48 pixels, then retracts. Its 21-by-21-pixel hitbox deals 10 base melee damage with 7 knockback, requires the native owner hit check and directly hits each NPC at most once per thrust. Tile collision is disabled. Every direct hit schedules a 1.5-tile-radius area attack at the recorded event position after 10 ticks. This collateral attack excludes that event's directly hit NPC and uses half the authored projectile base damage, or 5 before defense and applicable native damage rules. It creates no child projectiles. No alternate use, statue placement, passive equipment effect or status application is authored.",
+      "playerExperience": "Click to thrust toward the cursor; auto-reuse is disabled. The base use interval and animation are both 31 ticks, with native player modifiers able to change effective timing. The item is retained and costs neither mana nor ammo. A direct connection can produce a small delayed collateral burst against nearby eligible enemies. The burst stays at the recorded impact location rather than following the struck NPC, so enemy movement and native damage eligibility can prevent collateral damage. The thrust offers a weightier direct hit than its supplied gel-spear parent while keeping that parent's bounded reach and manual cadence. There is no guaranteed extra hit on the original target and no functional statue mode.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "actionChecks": [
+            {
+              "implementedBehavior": "Primary use retains the item and spawns one concurrency-capped, initially cursor-aimed melee thrust with a 31-tick extension/retraction cycle.",
+              "intentionality": "intentional",
+              "plannedIntent": "Manually thrust the gel-coated stone spear toward the cursor.",
+              "reason": "Manual use, explicit movement, damage and bounded lifetime implement the planned attack without relying on category or parent AI.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "stonegel_primary",
+                "stonegel_use",
+                "stonegel_spawn",
+                "stonegel_single_copy",
+                "stonegel_damage",
+                "stonegel_extension",
+                "stonegel_lifetime"
+              ]
+            },
+            {
+              "implementedBehavior": "The thrust's on_hit event schedules a radius-1.5-tile area attack after 10 ticks at half its authored base damage, excluding the direct target.",
+              "intentionality": "intentional",
+              "plannedIntent": "After a direct hit, release a delayed collateral splash at the recorded impact position.",
+              "reason": "An explicitly damaging source produces the subscribed hit event, and the event action supplies both the delay and collateral damage.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "stonegel_damage",
+                "stonegel_delayed_splash"
+              ]
+            }
+          ],
+          "summary": "The authored primary thrust and delayed on-hit collateral effect match the two planned actions. Stone weight and gel-delayed fragmentation are intentional new synthesis mechanics, not assertions about the original statue. This is a static design comparison, not an observed run.",
+          "verdict": "aligned"
+        },
+        "programVsReport": {
+          "behaviorChecks": [
+            {
+              "programBehavior": "A retained primary-use item has 31-tick base use and animation values, no mana cost, no ammo requirement, disabled auto-reuse and hidden item-use graphics.",
+              "reason": "The report distinguishes base timing from effective timing and does not introduce unsupported input or payment lanes.",
+              "reportedBehavior": "Manual clicking performs a reusable attack without mana or ammo, using modifier-dependent base timing and the thrust as its active representation.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "stonegel_primary",
+                "stonegel_stats",
+                "stonegel_use"
+              ]
+            },
+            {
+              "programBehavior": "One zero-launch-speed owner-attached body follows the explicit 31-tick triangular extension/retraction movement, with a 21-by-21 hitbox and one live-copy cap.",
+              "reason": "The reported peak is the driver's 18-pixel baseline plus the authored 3-tile displacement; art is not used to infer reach.",
+              "reportedBehavior": "The collision center extends from an 18-pixel baseline to 66 pixels from owner center, then retracts during its bounded lifetime.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "stonegel_thrust",
+                "stonegel_spawn",
+                "stonegel_single_copy",
+                "stonegel_extension",
+                "stonegel_lifetime",
+                "stonegel_hitbox"
+              ]
+            },
+            {
+              "programBehavior": "The thrust deals 10 base melee damage with 7 knockback, owner hit checking, no tile collision, infinite penetration and once-per-NPC direct-hit immunity.",
+              "reason": "The report preserves the distinction between penetration, per-target immunity and owner hit eligibility.",
+              "reportedBehavior": "Each NPC can be directly struck once per thrust, with the native owner hit check retained despite disabled tile collision.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "stonegel_damage",
+                "stonegel_collision"
+              ]
+            },
+            {
+              "programBehavior": "Each direct hit schedules a 10-tick-delayed collateral area attack at the event position, with a 1.5-tile radius and 0.5 authored-base-damage multiplier.",
+              "reason": "The report correctly describes location, exclusion, delay and damage basis without promising additional hits or spawning physical fragments.",
+              "reportedBehavior": "A stationary recorded-impact burst can deal 5 pre-defense base damage to eligible nearby enemies while excluding the directly hit NPC.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "stonegel_delayed_splash",
+                "stonegel_damage"
+              ]
+            }
+          ],
+          "summary": "The description and player experience track the explicit input, representation, movement, damage, collision and delayed event action. Neither text claims a rendered asset or an observed execution.",
+          "verdict": "aligned"
+        }
+      }
+    },
+    "recipeKey": "r_6d21dc756afff6e6ef08bd6d",
+    "recipeMeta": {
+      "assetFiles": [
+        "infini_asset_png_2d5f66f5c40ac7ebc4af2da511fba526a9bd301ca9cffd3c1df10b39dc7d8cbd.png"
+      ],
+      "worldId": "853355558",
+      "worldScoped": true
+    },
+    "runtimeApiVersion": "infini.runtime-program.v5",
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "bindings": [
+        {
+          "id": "stonegel_primary",
+          "input": "primary_use",
+          "role": "primary",
+          "usePolicy": {
+            "action": {
+              "kind": "spawn_entity",
+              "targetId": "stonegel_thrust"
+            },
+            "contactDamage": false,
+            "stackCost": 0
+          }
+        }
+      ],
+      "entities": [
+        {
+          "events": [],
+          "id": "stonegel_item",
+          "kind": "item_body",
+          "visual": {
+            "assetMode": "baked_sprite",
+            "prompt": "Generate a finished Terraria inventory-item PNG on a transparent background, crisp native-resolution pixel art on a 48x48 canvas. Depict one literal carved-stone spear coated with blue gel: a narrow, continuous weathered gray stone shaft ending in a faceted leaf-shaped stone point, with shallow chisel notches and a modest squared stone collar beneath the point. Preserve a readable single-object silhouette; no statue pedestal or humanoid statue. Pose diagonally from lower left butt to upper right point, forward axis -45 degrees. Fit the complete object within the frame with about 44 pixels of occupied longest frame dimension and clear transparent margins. The lower shaft has a small uncoated, darker stone hand-contact band centered at normalized canvas coordinates (0.30, 0.70); keep this exact region readable as the grip after final fitting and padding. Concentrate the gel around the point and upper collar, retaining the visible carved stone underneath through blue shadow clusters, cyan edging and tiny pale highlights. Suggest translucency with opaque pixel colors, not blurred alpha. Use restrained dark outlines, chipped stone facets, and compact highlights legible at Terraria scale. Deliver the actual transparent PNG, not a mockup.",
+            "role": "inventory_item",
+            "scale": 1.0,
+            "silhouette": "One slim diagonal stone shaft with a small squared collar and a broader pointed leaf-shaped stone head; localized gel thickens the head edge without obscuring its point. Bare lower shaft remains clearly graspable.",
+            "spritePath": "infini_asset_png_2d5f66f5c40ac7ebc4af2da511fba526a9bd301ca9cffd3c1df10b39dc7d8cbd.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_2d5f66f5c40ac7ebc4af2da511fba526a9bd301ca9cffd3c1df10b39dc7d8cbd.png",
+            "visualIdentity": "The carved gray stone identity of Статуя копья remains the structural object, while the blue gel coating of Гелевое копье clings primarily to its point and collar. Chisel marks contrast with glossy cyan gel accents."
+          },
+          "visualRole": "inventory_item"
+        },
+        {
+          "collision": {
+            "bounceCount": 0,
+            "extraUpdates": 0,
+            "ignoreWater": false,
+            "localNpcHitCooldownTicks": -1,
+            "npcImmunityMode": "local",
+            "pierce": -1,
+            "tileCollide": false
+          },
+          "damage": {
+            "damage": 10,
+            "damageClass": "melee",
+            "enabled": true,
+            "knockback": 7,
+            "ownerHitCheck": true
+          },
+          "events": [
+            {
+              "action": "damage_area_on_event",
+              "actionCode": 3,
+              "damageMultiplier": 0.5,
+              "delayTicks": 10,
+              "event": "on_hit",
+              "id": "stonegel_delayed_splash",
+              "radiusPx": 24
+            }
+          ],
+          "hitbox": {
+            "drawScale": 1.2,
+            "heightPx": 21,
+            "hitboxScale": 1,
+            "widthPx": 21
+          },
+          "id": "stonegel_thrust",
+          "kind": "owner_attached_projectile",
+          "lifetimeTicks": 31,
+          "movement": {
+            "code": 19,
+            "name": "move_forward_then_retract",
+            "params": {
+              "durationTicks": 31,
+              "rangeTiles": 3
+            }
+          },
+          "spawn": {
+            "aim": "cursor",
+            "count": 1,
+            "enabled": true,
+            "maxActive": 1,
+            "offsetPx": 0,
+            "overTarget": {
+              "delayTicks": 0,
+              "heightTiles": 0
+            },
+            "placement": "owner_center",
+            "speedPxPerTick": 0,
+            "spreadRadians": 0
+          },
+          "visual": {
+            "assetMode": "reuse_item_icon",
+            "prompt": "Generate a finished Terraria inventory-item PNG on a transparent background, crisp native-resolution pixel art on a 48x48 canvas. Depict one literal carved-stone spear coated with blue gel: a narrow, continuous weathered gray stone shaft ending in a faceted leaf-shaped stone point, with shallow chisel notches and a modest squared stone collar beneath the point. Preserve a readable single-object silhouette; no statue pedestal or humanoid statue. Pose diagonally from lower left butt to upper right point, forward axis -45 degrees. Fit the complete object within the frame with about 44 pixels of occupied longest frame dimension and clear transparent margins. The lower shaft has a small uncoated, darker stone hand-contact band centered at normalized canvas coordinates (0.30, 0.70); keep this exact region readable as the grip after final fitting and padding. Concentrate the gel around the point and upper collar, retaining the visible carved stone underneath through blue shadow clusters, cyan edging and tiny pale highlights. Suggest translucency with opaque pixel colors, not blurred alpha. Use restrained dark outlines, chipped stone facets, and compact highlights legible at Terraria scale. Deliver the actual transparent PNG, not a mockup.",
+            "role": "held_body",
+            "scale": 1.0,
+            "silhouette": "One slim diagonal stone shaft with a small squared collar and a broader pointed leaf-shaped stone head; localized gel thickens the head edge without obscuring its point. Bare lower shaft remains clearly graspable.",
+            "spritePath": "infini_asset_png_2d5f66f5c40ac7ebc4af2da511fba526a9bd301ca9cffd3c1df10b39dc7d8cbd.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_2d5f66f5c40ac7ebc4af2da511fba526a9bd301ca9cffd3c1df10b39dc7d8cbd.png",
+            "visualIdentity": "The carved gray stone identity of Статуя копья remains the structural object, while the blue gel coating of Гелевое копье clings primarily to its point and collar. Chisel marks contrast with glossy cyan gel accents."
+          },
+          "visualRole": "held_body"
+        }
+      ],
+      "itemEntityId": "stonegel_item",
+      "itemUse": {
+        "channel": false,
+        "configured": true,
+        "disableMeleeHitbox": true,
+        "handPose": "",
+        "hideUseGraphic": true,
+        "holdoutOffsetX": 0,
+        "holdoutOffsetY": 0,
+        "releaseTiming": "immediate",
+        "useStyle": "shoot"
+      },
+      "limits": {
+        "maxChildDepth": 3,
+        "maxEntityCount": 12,
+        "maxEventSpawnsPerActivation": 32
+      },
+      "primaryEntityId": "stonegel_thrust",
+      "primaryOwner": "projectile",
+      "schema": "infini.runtime-program.wire.v3"
+    },
+    "schemaVersion": 5,
+    "sourceMode": "generated",
+    "tags": [],
+    "vfxManifest": {
+      "budget": {
+        "effectMagnitude": 0.25,
+        "emergencyCap": true,
+        "enablePersistentSmoke": false,
+        "enablePointSparks": true,
+        "enableSoftGlow": true,
+        "maxDrawCalls": 136,
+        "maxParticlesPerTick": 80,
+        "maxParticlesTotal": 3400,
+        "spawnRateMultiplier": 1.0,
+        "visualBudgetClass": "small"
+      },
+      "confidence": 1.0,
+      "debug": {
+        "pattern": "runtime_entity_events",
+        "roles": [
+          "inventory_item",
+          "held_body"
+        ],
+        "selectedReasons": [
+          "exact_entity_event_binding"
+        ],
+        "selectedScore": 1.0,
+        "topCandidates": [],
+        "wordProbe": []
+      },
+      "effectMagnitude": 0.25,
+      "effectName": "runtime_entity_events",
+      "inspirationNames": [],
+      "motif": {
+        "chaos": 0.12,
+        "element": "Carved stone with a localized cyan gel coating, preserving Статуя копья and Гелевое копье as the literal material identities.",
+        "motionLanguage": "The accepted driver alone moves the thrust. Detached glints emit at the captured hit point after ten world ticks, spread gently, contract and fade without following the target.",
+        "paletteRole": "Use the accepted cyan effect color for gel glints; leave the gray stone structure to the existing item image.",
+        "rhythm": 1.0,
+        "shapeLanguage": "Keep the accepted rigid physical sprite unobscured. A compact cluster of cyan glints marks the delayed collateral response without suggesting stone fragments or additional projectile bodies."
+      },
+      "overlayPolicy": "LocalOnly",
+      "playbackMode": "Realtime",
+      "recipeId": "r_6d21dc756afff6e6ef08bd6d",
+      "schema": "infini.vfx.runtime-events.v15",
+      "seed": 211827306,
+      "slots": [
+        {
+          "alpha": 1.0,
+          "anchor": "self",
+          "backend": "Auto",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "alpha",
+          "budgetWeight": 1.0,
+          "channel": "sound",
+          "density": 0.0,
+          "duration": 3,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "stonegel_item",
+          "event": "on_use",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "manual_use_sound",
+          "jitter": 0.0,
+          "lane": "cue",
+          "layer": "BeforeProjectiles",
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "soundCue",
+          "repeatEvery": 0,
+          "scale": 1.0,
+          "signatureWeight": 0.0,
+          "slotSeed": 1623403670,
+          "sound": {
+            "pitch": -0.18,
+            "pitchVariance": 0.08,
+            "volume": 0.45
+          },
+          "soundId": "Item1",
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.0
+        },
+        {
+          "alpha": 0.65,
+          "anchor": "hitPoint",
+          "backend": "Particle",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "additive",
+          "budgetWeight": 1.0,
+          "channel": "impactParticles",
+          "density": 0.0,
+          "duration": 12,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "stonegel_thrust",
+          "event": "on_hit",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "delayed_gel_glints",
+          "jitter": 0.0,
+          "lane": "accent",
+          "layer": "AfterProjectiles",
+          "particle": {
+            "accelerationXPxPerTickSquared": 0,
+            "accelerationYPxPerTickSquared": 0,
+            "colorEnd": "effect",
+            "colorStart": "effect",
+            "count": 6,
+            "drag": 0.94,
+            "endOpacity": 0,
+            "endScaleMultiplier": 0.15,
+            "heightPx": 5,
+            "inheritVelocity": 0,
+            "rotationRadians": 0,
+            "rotationSpeedRadiansPerTick": 0.06,
+            "speedMaxPxPerTick": 1.8,
+            "speedMinPxPerTick": 0.7,
+            "spreadRadians": 6.283185307179586,
+            "textureId": "star",
+            "widthPx": 5
+          },
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "libraryParticle",
+          "repeatEvery": 0,
+          "scale": 1.0,
+          "signatureWeight": 0.0,
+          "slotSeed": 1403728780,
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 10,
+          "textureRole": "none",
+          "visualCost": 0.0
+        }
+      ],
+      "visualBudgetClass": "small"
+    },
+    "visual": {
+      "drawOffsetX": 0,
+      "drawOffsetY": 0,
+      "effectColor": "cyan",
+      "forwardAngleDegrees": -45,
+      "grip": {
+        "normalizedX": 0.3,
+        "normalizedY": 0.7
+      },
+      "imagePrompt": "Generate a finished Terraria inventory-item PNG on a transparent background, crisp native-resolution pixel art on a 48x48 canvas. Depict one literal carved-stone spear coated with blue gel: a narrow, continuous weathered gray stone shaft ending in a faceted leaf-shaped stone point, with shallow chisel notches and a modest squared stone collar beneath the point. Preserve a readable single-object silhouette; no statue pedestal or humanoid statue. Pose diagonally from lower left butt to upper right point, forward axis -45 degrees. Fit the complete object within the frame with about 44 pixels of occupied longest frame dimension and clear transparent margins. The lower shaft has a small uncoated, darker stone hand-contact band centered at normalized canvas coordinates (0.30, 0.70); keep this exact region readable as the grip after final fitting and padding. Concentrate the gel around the point and upper collar, retaining the visible carved stone underneath through blue shadow clusters, cyan edging and tiny pale highlights. Suggest translucency with opaque pixel colors, not blurred alpha. Use restrained dark outlines, chipped stone facets, and compact highlights legible at Terraria scale. Deliver the actual transparent PNG, not a mockup.. single centered inventory sprite, 48x48 pixel-art canvas, crisp hard pixels, transparent background, no scene, no text, no extra entities. Place the handle/hand-contact point at normalized final canvas coordinates {\"normalizedX\":0.3,\"normalizedY\":0.7}; upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips.. Read-only final-frame facts: {\"canvasSizePx\":48,\"renderSizePx\":38,\"forwardAngleDegrees\":-45,\"silhouette\":\"One slim diagonal stone shaft with a small squared collar and a broader pointed leaf-shaped stone head; localized gel thickens the head edge without obscuring its point. Bare lower shaft remains clearly graspable.\",\"visualIdentity\":\"The carved gray stone identity of Статуя копья remains the structural object, while the blue gel coating of Гелевое копье clings primarily to its point and collar. Chisel marks contrast with glossy cyan gel accents.\",\"grip\":{\"normalizedX\":0.3,\"normalizedY\":0.7},\"sharedEntityMultipliers\":[{\"entityId\":\"stonegel_thrust\",\"hitbox.drawScale\":1.2,\"visual.scale\":1.0}],\"multipliers\":{\"gameplay.itemScale\":1,\"visual.inventoryScale\":1.0,\"visual.worldScale\":1.0}}. C=canvasSizePx is the final baked frame side; R=renderSizePx is its base world-pixel max-side, not hitbox or visible shaft length. When R is declared, base pixel scale is R/C; visible alpha extent uses that scale and independent draw multipliers. Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; held item uses R/C times adjusted item scale (gameplay.itemScale included once). Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present: the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. Do not omit or merge authored parts to simplify the sprite. The visible handle/hand-contact region must contain the declared final-space grip, not the guard, blade or empty space. It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips.. Terraria (tModLoader) game asset.",
+      "inventoryScale": 1.0,
+      "negativePrompt": "Opaque background, solid color backdrop, player body, hands, humanoid statue, pedestal, scenery, text, labels, multiple objects, floating fragments, additional points, ornate oversized guard, metal replacement for stone, smooth vector art, antialiasing, blur, bloom, cast shadow outside the object, placeholder.",
+      "palette": [
+        "Charcoal blue-gray outline",
+        "Deep slate stone shadows",
+        "Weathered medium-gray stone",
+        "Pale cool-gray chipped facets",
+        "Deep blue gel shadows",
+        "Cyan-blue gel body",
+        "Icy pale-cyan gel highlights"
+      ],
+      "preferredCanvasSize": 48,
+      "renderSizePx": 38,
+      "requiredAnchors": [],
+      "semanticReviewStatus": "not_performed",
+      "spritePath": "infini_asset_png_2d5f66f5c40ac7ebc4af2da511fba526a9bd301ca9cffd3c1df10b39dc7d8cbd.png",
+      "spriteStatus": "generated",
+      "spriteTechnicalScore": 0.97,
+      "spriteUrl": "/sprite/infini_asset_png_2d5f66f5c40ac7ebc4af2da511fba526a9bd301ca9cffd3c1df10b39dc7d8cbd.png",
+      "style": "terraria_item_sprite",
+      "worldScale": 1.0
+    }
+  },
+  {
+    "accessory": {
+      "enabled": false
+    },
+    "armor": {
+      "enabled": false
+    },
+    "category": "combat",
+    "concept": {
+      "coreMechanic": "A reusable, manually activated melee thrust keeps the spear parent's 31-tick base cadence. Direct hits shed three low-damage ebonstone chips in a forward fan; gravity bends these independent chips downward, giving the thrust modest collateral coverage rather than a guaranteed second strike. The chips are a newly authored synthesis mechanic, not an asserted ability of the block parent.",
+      "literalSynthesis": "Гелевое копье статуи retains its carved-stone spear body and translucent gel coating, now gripping a jagged head made from Эбонит (Terraria/EbonstoneBlock). Dark violet ebonstone fragments are visibly suspended in the gel around the stone point.",
+      "parentAContribution": "Гелевое копье статуи supplies the literal stone-and-gel spear identity, bounded extension/retraction attack, strong direct knockback and deliberate manual tempo. Its delayed area burst is intentionally replaced by physical fragments.",
+      "parentBContribution": "Эбонит supplies the jagged dark stone head and the identity of the falling chips. The block inspires fragmentation, but this item does not place blocks, spread terrain or inherit any unconfigured native projectile behavior.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Click toward the cursor to perform one reusable stone-and-gel thrust."
+        },
+        {
+          "input": "passive_or_event",
+          "intent": "On a direct thrust hit, shed three falling ebonstone chips for modest collateral coverage."
+        }
+      ],
+      "playerExperience": "Aim and click for a controlled close-range thrust. Connecting with an enemy can scatter chips toward enemies beyond it or below the impact. The item is retained and spends no mana or ammo; limited reach, manual cadence, low chip damage and once-per-NPC collisions constrain its free repeatable offense."
+    },
+    "contractVersions": {
+      "altForkCherrypickContract": "best_of_alt_config_signals_trace_replay_v0.4.226",
+      "appVersion": "0.5.04",
+      "architectureCoherenceContract": "single_balance_report_clamp_taxonomy_powerband_v0.4.219",
+      "architectureHomogeneityContract": "central_balance_policy_and_csharp_runtime_constants_v0.4.226",
+      "armorPropertyRoundtripContract": "armor_extended_property_slot_budget_roundtrip_v0.4.192",
+      "balanceArchitectureAuditContract": "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216",
+      "balanceSingleAuthorityContract": "code_owned_balance_envelope_no_active_guide_helper_v0.4.216",
+      "buildQolContract": "tml_build_log_qol_and_compile_surface_cleanup_v0.4.201",
+      "csharpAuthoringPreservationContract": "csharp_authoring_extension_preservation_v0.4.177",
+      "csharpContractSyncGuard": "csharp_future_field_contract_guard_v0.4.181",
+      "debugDumpContract": "compact_recipe_debug_dump_v0.4.174",
+      "envAccessContract": "centralized_env_access_no_import_star_v0.4.226",
+      "equipmentBudgetContract": "armor_accessory_total_soft_budget_v0.4.226",
+      "failureUxContract": "structured_failure_player_message_v0.4.174",
+      "fishingBaitFutureDisabledParentContext": "fishing_bait_future_disabled_parent_context_v0.4.184",
+      "futureSoundCatalogSeam": "explicit_external_sound_catalog_future_seam_v0.4.239",
+      "gameplayQolContract": "generated_use_feedback_tooltip_qol_v0.4.201",
+      "gameplayRuntimeRebuildContract": "runtime_coverage_station_ux_balance_envelope_v0.4.212",
+      "generatedArmorContract": "generated_armor_proxy_slots_v0.4.192",
+      "heldItemPoseSyncContract": "held_item_pose_accessory_compile_hotfix_v0.4.199",
+      "localCacheAndRepairContract": "local_cache_runtime_repair_contract_cleanup_v0.4.176",
+      "luminanceSoundBridgeContract": "external_luminance_looped_sound_bridge_v0.4.187",
+      "maintenanceHardeningContract": "repair_json_sync_and_low_noise_fallback_logs_v0.4.205",
+      "maintenanceQolContract": "maintainability_gameplay_qol_cleanup_v0.4.203",
+      "mpServerAuthorityEnvMigrationCiContract": "server_side_slot_spend_env_migration_ci_hardening_v0.4.218",
+      "multiplayerPresentationSyncContract": "held_pose_accessory_compile_hotfix_v0.4.199",
+      "overhaulQolContract": "infini_station_overhaul_qol_v0.4.202",
+      "parentProjectileSizePreservationContract": "llm_opt_in_parent_projectile_size_policy_v0.4.179",
+      "plannerPromptProfile": "planner_prompt_semantics_restored_v6_v0.4.243",
+      "projectileChainChildGuard": "projectile_chain_child_count_guard_v0.4.185",
+      "projectileChildRuntimeGuard": "projectile_child_runtime_static_guard_v0.4.184",
+      "promptCompressionContract": "planner_prompt_compression_preserve_prose_v0.4.193",
+      "pythonExceptionHygieneGuard": "python_exception_hygiene_baseline_guard_v0.4.183",
+      "rebuildGameplayCacheDiagnosticsContract": "generated_melee_onhit_and_cache_diagnostics_v0.4.209",
+      "recipeHealthSchema": "infini.recipe-health.v1",
+      "recipeIdentityVersion": "recipe_v4_25_no_item_family_routing",
+      "releaseHygieneGuardContract": "release_hygiene_zone_identifier_guard_v0.4.181",
+      "releaseHygieneToolTestContract": "release_hygiene_tool_regression_tests_v0.4.182",
+      "releaseVersionSyncGuard": "release_version_sync_guard_v0.4.182",
+      "repairBoundaryContract": "deterministic_error_leaf_and_blocker_dependency_closure_v0.4.240",
+      "repairPatchContract": "gameplay_visual_vfx_frozen_old_values_salvage_patch_v0.4.240",
+      "replayHarnessContract": "generation_case_replay_audit_v0.4.226",
+      "repoCleanupBroadBalanceContract": "repo_docs_cleanup_and_broad_soft_balance_uplift_v0.4.216",
+      "runtimeAffordanceSchema": "infini.runtime-affordance.v2",
+      "runtimeApiSyncGuard": "runtime_api_python_csharp_sync_guard_v0.4.183",
+      "runtimeApiVersion": "infini.runtime-program.v5",
+      "runtimeContractSchema": "infini.runtime-contract.v3",
+      "runtimeGameplayQolContract": "impact_mobility_cooldown_and_sprite_lru_qol_v0.4.204",
+      "runtimeProvenanceContract": "runtime_authored_applied_provenance_debug_v0.4.226",
+      "runtimeRepairObservabilityContract": "blocker_dossier_salvage_merge_and_ignored_scope_escape_v0.4.240",
+      "runtimeStateCleanupContract": "runtime_state_cleanup_v0.4.175",
+      "runtimeTechnicalProvenanceContract": "structural_final_wire_receipts_v0.4.241",
+      "schema": "infini.contract-stamp.v1",
+      "soundLibraryContract": "exact_terraria_sound_catalog_v8_no_prose_queries_pitch_variance_v0.4.239",
+      "vanillaPresentationPolishContract": "bounded_vanilla_presentation_polish_v0.4.199",
+      "vanillaRuntimeSpriteCacheContract": "runtime_sprite_max_side_192_hotfix_v0.4.207",
+      "vfxAudioPresentationGuard": "vfx_audio_presentation_guard_v0.4.185",
+      "visualPipelineProfile": "author_visualpack_v2",
+      "visualRoleContract": "projectile_local_forward_axis_visual_contract_v0.4.242"
+    },
+    "gameplay": {
+      "autoReuse": false,
+      "craftYield": 1,
+      "damage": 10,
+      "damageClass": "melee",
+      "handPose": "",
+      "height": 32,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "itemScale": 1,
+      "kind": "combat",
+      "knockback": 7,
+      "manaCost": 0,
+      "maxStack": 1,
+      "rarity": 0,
+      "releaseTiming": "immediate",
+      "useAnimation": 31,
+      "useStyleName": "shoot",
+      "useTime": 31,
+      "useTurn": false,
+      "value": 1300,
+      "width": 32
+    },
+    "generatedParentSummary": {
+      "description": "The program defines a reusable melee spear whose active physical representation is ebongel_thrust, not the hidden item-use sprite. Its intended appearance preserves Гелевое копье статуи as carved stone under translucent gel, with a jagged Эбонит head and suspended dark chips; no rendered asset is supplied here. Primary use creates one capped owner-attached thrust along the initial cursor axis. During its 31-world-tick cycle, the collision center extends from an 18-pixel owner-center baseline to 66 pixels and retracts. Its 21-by-21-pixel rectangle deals 10 base melee damage with 7 knockback, requires the native owner hit check and can directly strike each NPC once. Tile collision is disabled for this body. Each direct hit requests three independent chips beyond the struck NPC, using a 0.8-radian fan and target-size-based clearance. Each chip starts at speed 4 pixels per update, gains 0.18 downward velocity per update, and has an 8-by-8-pixel hitbox, 3 base melee damage and 1 knockback. Chips expire after 40 world ticks or die on their first tile collision or damaging NPC contact. Their initial exclusion counter prevents immediate collision with the source NPC, but does not permanently exclude it. Descendant production uses the finite shared activation allowance of 32 successful child spawns; there is no replenishable pool. No delayed area burst, alternate use, terrain placement, corruption spreading, status or equipment effect is authored.",
+      "identity": "generated:g_232a7838dccbe91d",
+      "name": "Эбонитовое гелевое копье статуи",
+      "notableEffects": [
+        "Clicking creates the active thrust without consuming the item, mana or ammo; holding does not auto-repeat.",
+        "A 31-tick thrust moves its collision center between the 18-pixel baseline and 66-pixel peak, with a 21-pixel rectangle and 7 knockback.",
+        "Weak falling chips provide possible collateral coverage without guaranteed hits, permanent source-target exclusion or replenishable spawning."
+      ],
+      "playerExperience": "Click to thrust toward the cursor; holding the button does not auto-repeat. Base item interval and animation are both 31 ticks, subject to native player modifiers. One live thrust is allowed for this owner and generated item/entity identity. The item remains in inventory and requires neither mana nor ammo. Direct hits offer substantial knockback and can spray weak falling fragments into nearby follow-up targets. Fragment directions are physical trajectories, not target locks or guaranteed collateral hits. Solid terrain, enemy movement, defense, native hit eligibility and the finite descendant allowance can limit their value. The spear's short reach and manual timing remain central; the chips add coverage rather than replacing the thrust.",
+      "runtimeEntityIds": [
+        "ebongel_item",
+        "ebongel_thrust",
+        "ebongel_chip"
+      ],
+      "runtimePrimaryEntityId": "ebongel_thrust",
+      "schema": "infini.generated-parent-summary.v2"
+    },
+    "id": "g_232a7838dccbe91d",
+    "itemKnowledge": {
+      "enabled": true,
+      "parents": [
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 1,
+          "identity": "generated:g_4a1c8253fd834bff",
+          "name": "Гелевое копье статуи",
+          "powerScore": 79.1,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "generated",
+            "hidden_use_graphic",
+            "item",
+            "long_lived_projectile",
+            "melee",
+            "mod_infinicrafterlocal",
+            "modded",
+            "no_melee",
+            "noncolliding_projectile",
+            "placeable",
+            "projectile",
+            "weapon"
+          ],
+          "tier": "hardmode_early"
+        },
+        {
+          "category": "furniture",
+          "confidence": 0.48,
+          "generatedDepth": 0,
+          "identity": "item:Terraria/EbonstoneBlock:61",
+          "name": "Эбонит",
+          "powerScore": 2.97,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "auto_reuse",
+            "block",
+            "consumable",
+            "ebonstone",
+            "material",
+            "placeable",
+            "placeable_block_or_tile",
+            "stackable",
+            "stone"
+          ],
+          "tier": "trash"
+        }
+      ],
+      "resultCard": {
+        "category": "generic",
+        "confidence": 0.74,
+        "generatedDepth": 1,
+        "identity": "generated:g_232a7838dccbe91d",
+        "name": "Эбонитовое гелевое копье статуи",
+        "powerScore": 66.86,
+        "sourceHint": "generated result card from gameplay + parent knowledge",
+        "tags": [],
+        "tier": "hardmode_early"
+      },
+      "strongestMaterialPowerScore": 2.97,
+      "strongestMaterialTier": "trash",
+      "strongestPowerScore": 79.1,
+      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
+      "strongestTier": "hardmode_early",
+      "tagsFromKnowledge": [
+        "auto_reuse",
+        "block",
+        "consumable",
+        "ebonstone",
+        "generated",
+        "hidden_use_graphic",
+        "item",
+        "long_lived_projectile",
+        "material",
+        "melee",
+        "mod_infinicrafterlocal",
+        "modded",
+        "no_melee",
+        "noncolliding_projectile",
+        "placeable",
+        "placeable_block_or_tile",
+        "projectile",
+        "stackable",
+        "stone",
+        "weapon"
+      ]
+    },
+    "llmStageAccounting": {
+      "gameplayAuthorCalls": 1,
+      "gameplayRepairCalls": 0,
+      "vfxDirectorCalls": 1,
+      "vfxRepairCalls": 0,
+      "visualDirectorCalls": 1,
+      "visualRepairCalls": 0
+    },
+    "name": "Эбонитовое гелевое копье статуи",
+    "parentA": "Гелевое копье статуи",
+    "parentB": "Эбонит",
+    "realization": {
+      "description": "The program defines a reusable melee spear whose active physical representation is ebongel_thrust, not the hidden item-use sprite. Its intended appearance preserves Гелевое копье статуи as carved stone under translucent gel, with a jagged Эбонит head and suspended dark chips; no rendered asset is supplied here. Primary use creates one capped owner-attached thrust along the initial cursor axis. During its 31-world-tick cycle, the collision center extends from an 18-pixel owner-center baseline to 66 pixels and retracts. Its 21-by-21-pixel rectangle deals 10 base melee damage with 7 knockback, requires the native owner hit check and can directly strike each NPC once. Tile collision is disabled for this body. Each direct hit requests three independent chips beyond the struck NPC, using a 0.8-radian fan and target-size-based clearance. Each chip starts at speed 4 pixels per update, gains 0.18 downward velocity per update, and has an 8-by-8-pixel hitbox, 3 base melee damage and 1 knockback. Chips expire after 40 world ticks or die on their first tile collision or damaging NPC contact. Their initial exclusion counter prevents immediate collision with the source NPC, but does not permanently exclude it. Descendant production uses the finite shared activation allowance of 32 successful child spawns; there is no replenishable pool. No delayed area burst, alternate use, terrain placement, corruption spreading, status or equipment effect is authored.",
+      "playerExperience": "Click to thrust toward the cursor; holding the button does not auto-repeat. Base item interval and animation are both 31 ticks, subject to native player modifiers. One live thrust is allowed for this owner and generated item/entity identity. The item remains in inventory and requires neither mana nor ammo. Direct hits offer substantial knockback and can spray weak falling fragments into nearby follow-up targets. Fragment directions are physical trajectories, not target locks or guaranteed collateral hits. Solid terrain, enemy movement, defense, native hit eligibility and the finite descendant allowance can limit their value. The spear's short reach and manual timing remain central; the chips add coverage rather than replacing the thrust.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "actionChecks": [
+            {
+              "implementedBehavior": "Primary use spawns one capped thrust with a 31-tick extension/retraction cycle, no item consumption and no mana cost.",
+              "intentionality": "intentional",
+              "plannedIntent": "Click toward the cursor to perform one reusable stone-and-gel thrust.",
+              "reason": "The explicit input, manual cadence and bounded melee representation match the planned action.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "ebongel_primary",
+                "ebongel_stats",
+                "ebongel_use",
+                "ebongel_thrust_spawn",
+                "ebongel_thrust_cap",
+                "ebongel_thrust_motion"
+              ]
+            },
+            {
+              "implementedBehavior": "Actual thrust hits request three after-target chips with low authored damage, gravity and temporary source-NPC exclusion.",
+              "intentionality": "intentional",
+              "plannedIntent": "On a direct thrust hit, shed three falling ebonstone chips for modest collateral coverage.",
+              "reason": "The event requires a damaging collision, and the emitted children have explicit falling trajectories rather than an implicit explosion.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "ebongel_fragment_hit",
+                "ebongel_chip_spawn",
+                "ebongel_chip_damage",
+                "ebongel_chip_motion"
+              ]
+            }
+          ],
+          "summary": "The authored program implements the planned manual thrust and hit-triggered falling fragments. Replacing the source spear's delayed burst is intentional and already stated in the concept.",
+          "verdict": "aligned"
+        },
+        "programVsReport": {
+          "behaviorChecks": [
+            {
+              "programBehavior": "Reusable manual primary use with zero mana cost, hidden item graphic, disabled body melee hitbox and one live thrust cap.",
+              "reason": "The binding and item configuration explicitly establish these affordances; no ammo capability is present.",
+              "reportedBehavior": "Clicking creates the active thrust without consuming the item, mana or ammo; holding does not auto-repeat.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "ebongel_primary",
+                "ebongel_stats",
+                "ebongel_use",
+                "ebongel_thrust_cap"
+              ]
+            },
+            {
+              "programBehavior": "Initial-cursor-axis thrust with bounded extension/retraction, 10 base melee damage, owner hit check and once-per-NPC damage.",
+              "reason": "The reported reach follows the explicit movement formula, and damage and immunity are separately authored.",
+              "reportedBehavior": "A 31-tick thrust moves its collision center between the 18-pixel baseline and 66-pixel peak, with a 21-pixel rectangle and 7 knockback.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "ebongel_thrust_spawn",
+                "ebongel_thrust_life",
+                "ebongel_thrust_box",
+                "ebongel_thrust_collision",
+                "ebongel_thrust_damage",
+                "ebongel_thrust_motion"
+              ]
+            },
+            {
+              "programBehavior": "Direct hits emit three low-damage gravity-driven children beyond the target, subject to the default finite activation budget; children terminate on first tile or damaging NPC contact.",
+              "reason": "The event geometry, temporary exclusion countdown, explicit gravity, penetration and collision settings support the report's bounded claims.",
+              "reportedBehavior": "Weak falling chips provide possible collateral coverage without guaranteed hits, permanent source-target exclusion or replenishable spawning.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "ebongel_fragment_hit",
+                "ebongel_chip_spawn",
+                "ebongel_chip_life",
+                "ebongel_chip_box",
+                "ebongel_chip_collision",
+                "ebongel_chip_damage",
+                "ebongel_chip_motion"
+              ]
+            }
+          ],
+          "summary": "The description and player experience track the authored input, motion, damage, collision and finite fragment production. This is a static diagnostic comparison, not an observed run.",
+          "verdict": "aligned"
+        }
+      }
+    },
+    "recipeKey": "r_018b30bc4f5a6d192ba1d3d8",
+    "recipeMeta": {
+      "assetFiles": [
+        "infini_asset_png_1f1c17488fded8a3cca8d36f3318cd3217ab592c2d4e24074ed963ec926f8861.png",
+        "infini_asset_png_59a3b2e6cb255deb0428d6f3acba3aa962e83e1ad9f03a449010b231010a007b.png"
+      ],
+      "worldId": "853355558",
+      "worldScoped": true
+    },
+    "runtimeApiVersion": "infini.runtime-program.v5",
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "bindings": [
+        {
+          "id": "ebongel_primary",
+          "input": "primary_use",
+          "role": "primary",
+          "usePolicy": {
+            "action": {
+              "kind": "spawn_entity",
+              "targetId": "ebongel_thrust"
+            },
+            "contactDamage": false,
+            "stackCost": 0
+          }
+        }
+      ],
+      "entities": [
+        {
+          "events": [],
+          "id": "ebongel_item",
+          "kind": "item_body",
+          "visual": {
+            "assetMode": "baked_sprite",
+            "prompt": "Generate a finished Terraria inventory-item pixel sprite as a real transparent-background PNG, not a placeholder. Depict the literal carved stone object of Гелевое копье статуи beneath a translucent blue-cyan gel coating, now with a jagged Эбонит head and small dark stone chips suspended inside the gel. One continuous slim carved gray stone shaft ends in an angular purple-black stone point; retain visible shallow masonry grooves and pale chipped stone facets beneath the coating. Pose diagonally from lower left to upper right, with the forward tip axis at -45 degrees. On the final padded 48-by-48 canvas, the hand-contact region is the narrow exposed stone shaft centered at normalized coordinates (0.30, 0.70). Keep the shaft continuous through that contact point. Center the complete object with roughly 44 pixels of occupied span along the frame's larger dimension and at least 2 pixels of clear border. Use crisp stepped outlines, compact facet clusters and selective pale-cyan edge highlights; suggest gel translucency through visible underlying stone and internal chips while keeping occupied pixel alpha binary. No pedestal, player, scenery, text or surrounding effects.",
+            "role": "inventory_item",
+            "scale": 1.0,
+            "silhouette": "A single narrow diagonal carved-stone shaft with a small blunt lower-left end and a broader jagged upper-right ebonstone point; gel hugs the stone outline rather than forming a separate object.",
+            "spritePath": "infini_asset_png_1f1c17488fded8a3cca8d36f3318cd3217ab592c2d4e24074ed963ec926f8861.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_1f1c17488fded8a3cca8d36f3318cd3217ab592c2d4e24074ed963ec926f8861.png",
+            "visualIdentity": "The original carved stone remains visibly enclosed by blue-cyan gel. Purple-black ebonstone forms the irregular head, with matching dark inclusions suspended inside the coating; cool gray carving and bright gel edges keep both materials legible."
+          },
+          "visualRole": "inventory_item"
+        },
+        {
+          "collision": {
+            "bounceCount": 0,
+            "extraUpdates": 0,
+            "ignoreWater": false,
+            "localNpcHitCooldownTicks": -1,
+            "npcImmunityMode": "local",
+            "pierce": -1,
+            "tileCollide": false
+          },
+          "damage": {
+            "damage": 10,
+            "damageClass": "melee",
+            "enabled": true,
+            "knockback": 7,
+            "ownerHitCheck": true
+          },
+          "events": [
+            {
+              "action": "spawn_entity_on_event",
+              "actionCode": 1,
+              "count": 3,
+              "damageBasis": "authored_child",
+              "damageMultiplier": 1,
+              "delayTicks": 0,
+              "entityId": "ebongel_chip",
+              "event": "on_hit",
+              "hitTargetSpawn": {
+                "afterFanSpreadRadians": 0.8,
+                "beforeDirectionJitterRadians": 0,
+                "beforePositionJitterRadiusPx": 0,
+                "beforeProbability": 0,
+                "clearancePx": 8,
+                "hitboxMaxSideFactor": 0.5,
+                "initialIgnoreCountdownUpdates": 12
+              },
+              "id": "ebongel_fragment_hit",
+              "knockbackBasis": "authored_child",
+              "spreadRadians": 0
+            }
+          ],
+          "hitbox": {
+            "drawScale": 1.2,
+            "heightPx": 21,
+            "hitboxScale": 1,
+            "widthPx": 21
+          },
+          "id": "ebongel_thrust",
+          "kind": "owner_attached_projectile",
+          "lifetimeTicks": 31,
+          "movement": {
+            "code": 19,
+            "name": "move_forward_then_retract",
+            "params": {
+              "durationTicks": 31,
+              "rangeTiles": 3
+            }
+          },
+          "spawn": {
+            "aim": "cursor",
+            "count": 1,
+            "enabled": true,
+            "maxActive": 1,
+            "offsetPx": 0,
+            "overTarget": {
+              "delayTicks": 0,
+              "heightTiles": 0
+            },
+            "placement": "owner_center",
+            "speedPxPerTick": 0,
+            "spreadRadians": 0
+          },
+          "visual": {
+            "assetMode": "reuse_item_icon",
+            "prompt": "Generate a finished Terraria inventory-item pixel sprite as a real transparent-background PNG, not a placeholder. Depict the literal carved stone object of Гелевое копье статуи beneath a translucent blue-cyan gel coating, now with a jagged Эбонит head and small dark stone chips suspended inside the gel. One continuous slim carved gray stone shaft ends in an angular purple-black stone point; retain visible shallow masonry grooves and pale chipped stone facets beneath the coating. Pose diagonally from lower left to upper right, with the forward tip axis at -45 degrees. On the final padded 48-by-48 canvas, the hand-contact region is the narrow exposed stone shaft centered at normalized coordinates (0.30, 0.70). Keep the shaft continuous through that contact point. Center the complete object with roughly 44 pixels of occupied span along the frame's larger dimension and at least 2 pixels of clear border. Use crisp stepped outlines, compact facet clusters and selective pale-cyan edge highlights; suggest gel translucency through visible underlying stone and internal chips while keeping occupied pixel alpha binary. No pedestal, player, scenery, text or surrounding effects.",
+            "role": "held_body",
+            "scale": 1.0,
+            "silhouette": "A single narrow diagonal carved-stone shaft with a small blunt lower-left end and a broader jagged upper-right ebonstone point; gel hugs the stone outline rather than forming a separate object.",
+            "spritePath": "infini_asset_png_1f1c17488fded8a3cca8d36f3318cd3217ab592c2d4e24074ed963ec926f8861.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_1f1c17488fded8a3cca8d36f3318cd3217ab592c2d4e24074ed963ec926f8861.png",
+            "visualIdentity": "The original carved stone remains visibly enclosed by blue-cyan gel. Purple-black ebonstone forms the irregular head, with matching dark inclusions suspended inside the coating; cool gray carving and bright gel edges keep both materials legible."
+          },
+          "visualRole": "held_body"
+        },
+        {
+          "collision": {
+            "bounceCount": 0,
+            "extraUpdates": 0,
+            "ignoreWater": false,
+            "localNpcHitCooldownTicks": -1,
+            "npcImmunityMode": "local",
+            "pierce": 1,
+            "tileCollide": true
+          },
+          "damage": {
+            "damage": 3,
+            "damageClass": "melee",
+            "enabled": true,
+            "knockback": 1,
+            "ownerHitCheck": false
+          },
+          "events": [],
+          "hitbox": {
+            "drawScale": 1,
+            "heightPx": 8,
+            "hitboxScale": 1,
+            "widthPx": 8
+          },
+          "id": "ebongel_chip",
+          "kind": "child_projectile",
+          "lifetimeTicks": 40,
+          "movement": {
+            "code": 2,
+            "name": "move_gravity_arc",
+            "params": {
+              "gravityPerTick": 0.18
+            }
+          },
+          "spawn": {
+            "aim": "velocity",
+            "count": 1,
+            "enabled": true,
+            "offsetPx": 0,
+            "overTarget": {
+              "delayTicks": 0,
+              "heightTiles": 0
+            },
+            "placement": "item_use_origin",
+            "speedPxPerTick": 4,
+            "spreadRadians": 0
+          },
+          "visual": {
+            "assetMode": "baked_sprite",
+            "forwardAngleDegrees": 0,
+            "preferredCanvasSize": 24,
+            "prompt": "Generate a finished transparent-background Terraria pixel-art PNG of one detached irregular ebonstone chip from the item's jagged head. Render a compact purple-black stone fragment with three uneven angular facets, a charcoal outline, one muted violet cut face and a tiny adhering cyan gel patch on its trailing left edge. The fragment's pointed end faces directly right, local forward axis 0 degrees. Center this one fragment on a 24-by-24 transparent canvas, occupying approximately 19 pixels along the larger frame dimension with at least 2 pixels of transparent border. Use crisp binary-alpha pixels and a readable chunky silhouette. Deliver the actual PNG, never a placeholder. No other fragments, spray, impact flash, trail, scenery or text.",
+            "renderSizePx": 10,
+            "role": "child_projectile",
+            "scale": 1.0,
+            "silhouette": "One compact asymmetric stone chip, blunt on the left and pointed on the right, with an uneven lower facet and a tiny attached gel patch.",
+            "spritePath": "infini_asset_png_59a3b2e6cb255deb0428d6f3acba3aa962e83e1ad9f03a449010b231010a007b.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 1.0,
+            "spriteUrl": "/sprite/infini_asset_png_59a3b2e6cb255deb0428d6f3acba3aa962e83e1ad9f03a449010b231010a007b.png",
+            "visualIdentity": "The same violet-black ebonstone facets as the root object's head, distinguished from ordinary gravel by a small adhering blue-cyan gel remnant."
+          },
+          "visualRole": "child_projectile"
+        }
+      ],
+      "itemEntityId": "ebongel_item",
+      "itemUse": {
+        "channel": false,
+        "configured": true,
+        "disableMeleeHitbox": true,
+        "handPose": "",
+        "hideUseGraphic": true,
+        "holdoutOffsetX": 0,
+        "holdoutOffsetY": 0,
+        "releaseTiming": "immediate",
+        "useStyle": "shoot"
+      },
+      "limits": {
+        "maxChildDepth": 3,
+        "maxEntityCount": 12,
+        "maxEventSpawnsPerActivation": 32
+      },
+      "primaryEntityId": "ebongel_thrust",
+      "primaryOwner": "projectile",
+      "schema": "infini.runtime-program.wire.v3"
+    },
+    "schemaVersion": 5,
+    "sourceMode": "generated",
+    "tags": [],
+    "vfxManifest": {
+      "budget": {
+        "effectMagnitude": 0.12,
+        "emergencyCap": true,
+        "enablePersistentSmoke": false,
+        "enablePointSparks": true,
+        "enableSoftGlow": true,
+        "maxDrawCalls": 100,
+        "maxParticlesPerTick": 56,
+        "maxParticlesTotal": 2200,
+        "spawnRateMultiplier": 1.0,
+        "visualBudgetClass": "tiny"
+      },
+      "confidence": 1.0,
+      "debug": {
+        "pattern": "runtime_entity_events",
+        "roles": [
+          "inventory_item",
+          "held_body",
+          "child_projectile"
+        ],
+        "selectedReasons": [
+          "exact_entity_event_binding"
+        ],
+        "selectedScore": 1.0,
+        "topCandidates": [],
+        "wordProbe": []
+      },
+      "effectMagnitude": 0.12,
+      "effectName": "runtime_entity_events",
+      "inspirationNames": [],
+      "motif": {
+        "chaos": 0.0,
+        "element": "Carved stone beneath cyan gel, with the jagged Эбонит head preserving the identity of Гелевое копье статуи.",
+        "motionLanguage": "Preserve the accepted extension and retraction and the chips' actual gravity arcs without added visual displacement or trails.",
+        "paletteRole": "Retain the accepted cyan gel and violet-black stone in the existing entity images; add no luminous overlay.",
+        "rhythm": 1.0,
+        "shapeLanguage": "Let the accepted rigid thrust sprite and actual spawned chip sprites carry the material detail. No additional silhouettes, impact sprites, rings or decorative debris."
+      },
+      "overlayPolicy": "LocalOnly",
+      "playbackMode": "Realtime",
+      "recipeId": "r_018b30bc4f5a6d192ba1d3d8",
+      "schema": "infini.vfx.runtime-events.v15",
+      "seed": 1319329125,
+      "slots": [
+        {
+          "alpha": 1.0,
+          "anchor": "self",
+          "backend": "Auto",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "alpha",
+          "budgetWeight": 1.0,
+          "channel": "sound",
+          "density": 0.0,
+          "duration": 3,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "ebongel_item",
+          "event": "on_use",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "manual_thrust_sound",
+          "jitter": 0.0,
+          "lane": "cue",
+          "layer": "BeforeProjectiles",
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "soundCue",
+          "repeatEvery": 0,
+          "scale": 1.0,
+          "signatureWeight": 0.0,
+          "slotSeed": 535798072,
+          "sound": {
+            "pitch": -0.15,
+            "pitchVariance": 0.08,
+            "volume": 0.45
+          },
+          "soundId": "Item1",
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.0
+        }
+      ],
+      "visualBudgetClass": "tiny"
+    },
+    "visual": {
+      "drawOffsetX": 0,
+      "drawOffsetY": 0,
+      "effectColor": "cyan",
+      "forwardAngleDegrees": -45,
+      "grip": {
+        "normalizedX": 0.3,
+        "normalizedY": 0.7
+      },
+      "imagePrompt": "Generate a finished Terraria inventory-item pixel sprite as a real transparent-background PNG, not a placeholder. Depict the literal carved stone object of Гелевое копье статуи beneath a translucent blue-cyan gel coating, now with a jagged Эбонит head and small dark stone chips suspended inside the gel. One continuous slim carved gray stone shaft ends in an angular purple-black stone point; retain visible shallow masonry grooves and pale chipped stone facets beneath the coating. Pose diagonally from lower left to upper right, with the forward tip axis at -45 degrees. On the final padded 48-by-48 canvas, the hand-contact region is the narrow exposed stone shaft centered at normalized coordinates (0.30, 0.70). Keep the shaft continuous through that contact point. Center the complete object with roughly 44 pixels of occupied span along the frame's larger dimension and at least 2 pixels of clear border. Use crisp stepped outlines, compact facet clusters and selective pale-cyan edge highlights; suggest gel translucency through visible underlying stone and internal chips while keeping occupied pixel alpha binary. No pedestal, player, scenery, text or surrounding effects.. single centered inventory sprite, 48x48 pixel-art canvas, crisp hard pixels, transparent background, no scene, no text, no extra entities. Place the handle/hand-contact point at normalized final canvas coordinates {\"normalizedX\":0.3,\"normalizedY\":0.7}; upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips.. Read-only final-frame facts: {\"canvasSizePx\":48,\"renderSizePx\":38,\"forwardAngleDegrees\":-45,\"silhouette\":\"A single narrow diagonal carved-stone shaft with a small blunt lower-left end and a broader jagged upper-right ebonstone point; gel hugs the stone outline rather than forming a separate object.\",\"visualIdentity\":\"The original carved stone remains visibly enclosed by blue-cyan gel. Purple-black ebonstone forms the irregular head, with matching dark inclusions suspended inside the coating; cool gray carving and bright gel edges keep both materials legible.\",\"grip\":{\"normalizedX\":0.3,\"normalizedY\":0.7},\"sharedEntityMultipliers\":[{\"entityId\":\"ebongel_thrust\",\"hitbox.drawScale\":1.2,\"visual.scale\":1.0}],\"multipliers\":{\"gameplay.itemScale\":1,\"visual.inventoryScale\":1.0,\"visual.worldScale\":1.0}}. C=canvasSizePx is the final baked frame side; R=renderSizePx is its base world-pixel max-side, not hitbox or visible shaft length. When R is declared, base pixel scale is R/C; visible alpha extent uses that scale and independent draw multipliers. Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; held item uses R/C times adjusted item scale (gameplay.itemScale included once). Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present: the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. Do not omit or merge authored parts to simplify the sprite. The visible handle/hand-contact region must contain the declared final-space grip, not the guard, blade or empty space. It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips.. Terraria (tModLoader) game asset.",
+      "inventoryScale": 1.0,
+      "negativePrompt": "Opaque background, solid color backdrop, placeholder, illustration scene, player body, statue pedestal, extra objects, floating external chips, detached head, metal blade, wooden shaft, smooth vector edges, blur, antialiasing, soft glow, motion trail, text, watermark.",
+      "palette": [
+        "Charcoal blue-gray outline",
+        "Deep violet-black ebonstone shadows",
+        "Muted purple ebonstone facets",
+        "Weathered medium-gray carved stone",
+        "Pale cool-gray stone chips",
+        "Deep blue gel shadows",
+        "Cyan-blue gel coating",
+        "Icy pale-cyan gel highlights"
+      ],
+      "preferredCanvasSize": 48,
+      "renderSizePx": 38,
+      "requiredAnchors": [],
+      "semanticReviewStatus": "not_performed",
+      "spritePath": "infini_asset_png_1f1c17488fded8a3cca8d36f3318cd3217ab592c2d4e24074ed963ec926f8861.png",
+      "spriteStatus": "generated",
+      "spriteTechnicalScore": 0.97,
+      "spriteUrl": "/sprite/infini_asset_png_1f1c17488fded8a3cca8d36f3318cd3217ab592c2d4e24074ed963ec926f8861.png",
+      "style": "terraria_item_sprite",
+      "worldScale": 1.0
+    }
+  }
+]

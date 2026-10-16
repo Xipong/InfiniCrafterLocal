@@ -239,6 +239,8 @@ def test_real_author_packet_explains_center_travel_vs_native_front_hand_without_
     assert "move_front_hand" in packet and "hitboxOffsetPx" in packet
     assert "18px" in packet and "triangular" in packet and "not hand-attached" in packet
     assert "native front hand" in packet and "axis-aligned rectangle" in packet
+    assert "only 6px" in packet and "not thrust reach" in packet
+    assert "source use/collision geometry" in packet
     assert "no weapon preset" in packet
     assert "quarter" in packet and "three_quarters" in packet
     from prompt_packet_helpers import request_dossier

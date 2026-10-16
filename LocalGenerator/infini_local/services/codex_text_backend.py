@@ -118,6 +118,10 @@ def _request_payload(packet: dict[str, Any]) -> dict[str, Any]:
         if effort not in EFFORTS:
             raise codex_auth.CodexError("Codex text reasoning effort is not supported by the transport")
         request["reasoning"] = {"effort": effort}
+    # Native Responses reasoning.summary is supported by the local protocol/SDK;
+    # ask for its public summary, never encrypted_content or hidden reasoning.
+    # "auto" is a request, not a promise of returned text or a token-budget cap.
+    request.setdefault("reasoning", {})["summary"] = "auto"
     # Codex's upstream ResponsesApiRequest supports the routing key; unlike
     # Platform breakpoints/retention, this field is part of its subscription wire.
     cache_key = packet.get("prompt_cache_key")

@@ -52,7 +52,7 @@ Conditional dependencies обязаны присутствовать в actual r
 <a id="color-budget"></a>
 ## Цвет, alpha, particles, lifetime и budget
 
-`effectColor` — один явный rendering token Visual для item/projectile/detached VFX. Rich art palette не парсится как hex/prose color; motif не перебивает explicit effectColor. Отсутствие сохраняет legacy paths (включая historical palette-color item primitives рядом с Dust), без migration. Mass saturation/gamma/intensity change — новое художественное решение, не tML bugfix.
+`effectColor` — один явный rendering token Visual для item/projectile/detached VFX. `silver` — отдельный finite RGB(192,192,192), не alias gray(170,170,180); Visual и nested material/library domains следуют этому rendering owner. Gameplay light palette остаётся отдельной, более узкой. Rich art palette не парсится как hex/prose color; motif не перебивает explicit effectColor. Отсутствие сохраняет legacy paths (включая historical palette-color item primitives рядом с Dust), без migration. Mass saturation/gamma/intensity change — новое художественное решение, не tML bugfix.
 
 Authored additive на active/detached sprite/primitive paths масштабирует RGB/opacity и выставляет vertex alpha=0 в существующем premultiplied AlphaBlend; не перезапускает SpriteBatch для каждого slot. Alpha-mode сохраняет alpha. Straight PNG upload и hard/soft bake различны; ноль не заменяется default opacity.
 

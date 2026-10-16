@@ -29,7 +29,7 @@ internal static class GeneratedItemExhaustionStatusView
             decimal seconds = entry.RemainingTicks / 60m;
             string display = seconds.ToString("0.###", culture);
             if (decimal.Round(seconds, 3) != seconds) display = "≈" + display;
-            string time = Language.GetTextValue(Key + "Time", display, entry.RemainingTicks.ToString(culture));
+            string time = Language.GetTextValue(Key + "Time", display);
             rows.Add(new(entry.ItemId, entry.DefinitionIdentity, name, entry.RemainingTicks,
                 IconPath, Language.GetTextValue(Key + "ExhaustionStatus", name),
                 Language.GetTextValue(Key + "ExhaustionRemaining", time)));

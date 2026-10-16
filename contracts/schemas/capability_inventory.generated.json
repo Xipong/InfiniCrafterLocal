@@ -1046,7 +1046,7 @@
       "positionOwnership": "none",
       "promptVisibility": true,
       "provenance": "existing tool_capability",
-      "purpose": "Set exact pick/axe/hammer powers and mining speed. Requires explicit item-use configuration and one executable primary_use binding so Terraria can execute mining.",
+      "purpose": "Set exact pick/axe/hammer powers and mining speed. Requires explicit item-use configuration and one executable primary_use binding so Terraria can execute mining. Native powers execute on use_item_body and spawn_entity actions, including projectile-plus-tool compositions on either active input, independently of contactDamage. apply_item_effects and place_item actions temporarily isolate all three native powers for their use window; canonical powers are restored before idle inventory discovery or on the next eligible active projection. A pure alternate recall does not mine even when its mobility effect is refused.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -5041,7 +5041,9 @@
       ],
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
       "decision": "expose",
-      "dependencies": [],
+      "dependencies": [
+        "configure_item_use"
+      ],
       "emittedEvents": [],
       "events": [],
       "exclusiveGroup": "movement",
@@ -5078,9 +5080,22 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "flail movement extracted from the retired melee macro",
-      "purpose": "Tether to owner, fly out and return; only movement/owner controller.",
+      "purpose": "Tether to owner; outbound flight ends at the leash or when owner.channel becomes false, then return is latched. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return begins on the first AI. Passive/event-driven copies only observe the owner channel established by another active source; this controller does not start channeling.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "capability": "configure_item_use",
+          "equals": true,
+          "kind": "item_capability_param",
+          "message": "An active flail spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release or reaching the leash latches return. Passive/event producers only observe existing owner channel.",
+          "param": "channel",
+          "target": "item_body",
+          "whenSpawnedByInputs": [
+            "primary_use",
+            "alternate_use"
+          ]
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "status": "refactored",
       "targetKinds": [
@@ -5255,7 +5270,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "held thrust logic extracted from spear root",
-      "purpose": "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.",
+      "purpose": "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. The axis follows the live owner cursor (bounded synced aim for remote owners) every AI update, rotating both body and hitbox; not a fixed initial launch axis. configure_spawn.aim controls launch only, not this ongoing aim. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5365,7 +5380,7 @@
       "positionOwnership": "velocity_or_position_controller",
       "promptVisibility": true,
       "provenance": "explicit native front-hand pose and hand-relative rectangular collision center",
-      "purpose": "Attach this explicit body's pose and collision center to the native front hand. Initial aim keeps the spawn axis; cursor aim follows synced live owner aim. No damage, lifecycle, visibility, asset or item-use choice is inserted. Collision center = native hand + aimed axis * hitboxOffsetPx, independent of PNG metadata; the existing axis-aligned rectangle is not pixel-matched blade collision.",
+      "purpose": "Attach this explicit body's pose and collision center to the native front hand. Initial aim keeps the spawn axis; cursor aim follows synced live owner aim. No damage, lifecycle, visibility, asset or item-use choice is inserted. Collision center = native hand + aimed axis * hitboxOffsetPx, independent of PNG metadata; the existing axis-aligned rectangle is not pixel-matched blade collision. none-to-full stretch moves the hand only 6px; hitboxOffsetPx is a fixed center offset, not thrust reach or an extra sprite shift. Compare source use/collision geometry and resulting hand-to-damage coverage before deliberately choosing a short jab; sprite length alone adds no reach.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

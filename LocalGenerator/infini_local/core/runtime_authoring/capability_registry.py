@@ -122,6 +122,7 @@ class RequirementSpec:
     message: str = ""
     other_param: str = ""
     allow_absent: bool = False
+    when_spawned_by_inputs: tuple[str, ...] = ()
 
     def ordered_values(self, minimum: Any, maximum: Any) -> bool:
         """Compare typed numeric endpoints or an explicitly declared enum order."""
@@ -148,6 +149,8 @@ class RequirementSpec:
             out["otherParam"] = self.other_param
         if self.allow_absent:
             out["allowAbsent"] = True
+        if self.when_spawned_by_inputs:
+            out["whenSpawnedByInputs"] = list(self.when_spawned_by_inputs)
         return out
 
 
@@ -1467,7 +1470,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_tool",
-        "Set exact pick/axe/hammer powers and mining speed. Requires explicit item-use configuration and one executable primary_use binding so Terraria can execute mining.",
+        "Set exact pick/axe/hammer powers and mining speed. Requires explicit item-use configuration and one executable primary_use binding so Terraria can execute mining. Native powers execute on use_item_body and spawn_entity actions, including projectile-plus-tool compositions on either active input, independently of contactDamage. apply_item_effects and place_item actions temporarily isolate all three native powers for their use window; canonical powers are restored before idle inventory discovery or on the next eligible active projection. A pure alternate recall does not mine even when its mobility effect is refused.",
         "item_tool",
         ("item_body",),
         {
@@ -2058,10 +2061,14 @@ _CAPS.extend([
         "scaleGrowthPerUpdate": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5, wire_name="scalePerTick", units="engine units: scale increment per update"),
         "maxScale": _p("number", "Projectile.scale cap (not a pixel radius)", minimum=0.25, maximum=4),
     }, provenance="existing movement code 15"),
-    _movement("move_flail_tether", "Tether to owner, fly out and return; only movement/owner controller.", 16, {
+    _movement("move_flail_tether", "Tether to owner; outbound flight ends at the leash or when owner.channel becomes false, then return is latched. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return begins on the first AI. Passive/event-driven copies only observe the owner channel established by another active source; this controller does not start channeling.", 16, {
         "rangeTiles": _p("number", "Maximum tether length", minimum=2, maximum=60, units="tiles"),
         "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
-    }, targets=("owner_attached_projectile",), provenance="flail movement extracted from the retired melee macro"),
+    }, requirements=(RequirementSpec(
+        "item_capability_param", target="item_body", capability="configure_item_use", param="channel", equals=True,
+        when_spawned_by_inputs=("primary_use", "alternate_use"),
+        message="An active flail spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release or reaching the leash latches return. Passive/event producers only observe existing owner channel.",
+    ),), targets=("owner_attached_projectile",), provenance="flail movement extracted from the retired melee macro"),
     _movement("move_yoyo_hover", "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing.", 17, {
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
         "speed": _p("number", "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update", minimum=1, maximum=80, units="pixels/projectile update", wire_name="returnSpeed"),
@@ -2070,11 +2077,11 @@ _CAPS.extend([
         "rangeTiles": _p("number", "Lash reach", minimum=2, maximum=60, units="tiles"),
         "segments": _p("integer", "Collision curve segments", minimum=3, maximum=48),
     }, targets=("owner_attached_projectile",), provenance="whip movement extracted from the retired melee macro"),
-    _movement("move_forward_then_retract", "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.", 19, {
+    _movement("move_forward_then_retract", "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. The axis follows the live owner cursor (bounded synced aim for remote owners) every AI update, rotating both body and hitbox; not a fixed initial launch axis. configure_spawn.aim controls launch only, not this ongoing aim. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.", 19, {
         "rangeTiles": _p("number", "Peak triangular displacement beyond the 18px owner-center baseline; not distance from the hand", minimum=1, maximum=20, units="tiles"),
         "durationTicks": _p("integer", "Full forward/retract cycle", minimum=2, maximum=240, units="ticks"),
     }, targets=("owner_attached_projectile",), provenance="held thrust logic extracted from spear root"),
-    _movement("move_front_hand", "Attach this explicit body's pose and collision center to the native front hand. Initial aim keeps the spawn axis; cursor aim follows synced live owner aim. No damage, lifecycle, visibility, asset or item-use choice is inserted. Collision center = native hand + aimed axis * hitboxOffsetPx, independent of PNG metadata; the existing axis-aligned rectangle is not pixel-matched blade collision.", 20, {
+    _movement("move_front_hand", "Attach this explicit body's pose and collision center to the native front hand. Initial aim keeps the spawn axis; cursor aim follows synced live owner aim. No damage, lifecycle, visibility, asset or item-use choice is inserted. Collision center = native hand + aimed axis * hitboxOffsetPx, independent of PNG metadata; the existing axis-aligned rectangle is not pixel-matched blade collision. none-to-full stretch moves the hand only 6px; hitboxOffsetPx is a fixed center offset, not thrust reach or an extra sprite shift. Compare source use/collision geometry and resulting hand-to-damage coverage before deliberately choosing a short jab; sprite length alone adds no reach.", 20, {
         "aimMode": _p("string", "initial keeps the configured spawn axis; cursor explicitly follows bounded synced owner aim", enum=("initial", "cursor"), wire_presence_requires_receipt=True),
         "durationTicks": _p("integer", "One extension/retraction pose cycle in completed active world ticks: activeTicks=floor(activeAIUpdates/(extraUpdates+1)). Subupdates retain that tick's stretch. After completion hold startStretch; lifetime and item animation remain independent", minimum=2, maximum=240, units="active world ticks", wire_presence_requires_receipt=True),
         "startStretch": _p("string", "Native front-arm starting/ending stretch; none/quarter/three_quarters/full correspond to hand lengths 4/6/8/10px. Must not exceed peakStretch", enum=_NATIVE_ARM_STRETCH, wire_presence_requires_receipt=True),
