@@ -439,7 +439,7 @@ kbd {
 .settings-aside { position: sticky; top: 24px; padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
 .aside-heading { display: flex; align-items: center; gap: 8px; }
 .aside-heading h2 { display: flex; align-items: center; gap: 8px; }
-.aside-heading h2 svg { width: 16px; height: 16px; color: var(--accent); }
+.aside-heading h2 svg { width: 16px; height: 16px; color: var(--accent-ink); }
 .aside-heading kbd { margin-left: auto; font-size: 10px; }
 .settings-aside h2 { font-size: 13px; font-weight: 600; }
 .settings-aside p { margin: 13px 0 16px; color: var(--muted); font-size: 12px; line-height: 1.9; }
@@ -487,7 +487,7 @@ input::placeholder, textarea::placeholder { color: var(--subtle); opacity: 1; }
 .field-control .browse, .field-control .reveal { display: inline-flex; align-items: center; justify-content: center; width: 37px; height: 39px; min-width: 37px; padding: 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-control); background: var(--surface-raised); color: var(--muted); }
 .field-control svg { width: 16px; height: 16px; }
 .field-control output { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--surface); color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
-.field-row.is-dirty::after { content: ''; position: absolute; left: -10px; top: 29px; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+.field-row.is-dirty::after { content: ''; position: absolute; left: -10px; top: 29px; width: 4px; height: 4px; border-radius: 50%; background: var(--accent-ink); }
 .field-row.is-dirty .field-control input:not([type='checkbox']), .field-row.is-dirty select, .field-row.is-dirty textarea { border-color: #84992d; }
 .field-note { width: 100%; margin-top: 4px; font-size: 11px; line-height: 1.7; color: var(--muted); overflow-wrap: anywhere; }
 .toggle-control { display: inline-flex; align-items: center; gap: 10px; min-height: 39px; position: relative; cursor: pointer; padding: 6px 0; }
@@ -620,7 +620,7 @@ dialog::backdrop { background: #1e281d80; }
 .defaults-values { margin: 6px 0; color: var(--text); }
 .defaults-error { font-size: 12px; color: var(--danger); }
 .help-step { display: flex; gap: 17px; padding: 17px 0; border-top: 1px solid var(--line); }
-.help-step > span { padding-top: 3px; font-size: 11px; color: var(--accent); }
+.help-step > span { padding-top: 3px; font-size: 11px; color: var(--accent-ink); }
 .help-step h3 { margin-bottom: 6px; font-size: 13px; }
 .help-step p { font-size: 12px; line-height: 1.8; color: var(--muted); }
 .confirm-list { max-height: 280px; padding-top: 10px; overflow: auto; border-top: 1px solid var(--line); font: 11px/1.9 var(--mono); }
@@ -876,6 +876,6 @@ dialog::backdrop { background: #1e281d80; }
     scroll-behavior: auto !important;
   }
   .button:active:not(:disabled), .icon-button:active, .pipeline-step:hover .step-arrow { transform: none; }
-  .field-highlight { outline: 1px solid var(--accent); outline-offset: 3px; }
+  .field-highlight { outline: 1px solid var(--focus); outline-offset: 3px; }
   .loading-line::after { transform: translateX(70%); }
 }
