@@ -146,11 +146,11 @@ internal static partial class EngineRuntimeChecks
             }
             Equal(true, ReferenceEquals(PlayerDrawLayers.Wings, ((PlayerDrawLayer.AfterParent)children[0].GetDefaultPosition()).Parent), "back mounts remain behind native skin/torso");
             Equal(true, ReferenceEquals(PlayerDrawLayers.OffhandAcc, ((PlayerDrawLayer.BeforeParent)children[1].GetDefaultPosition()).Parent), "front mounts follow torso subtree before hands");
-            PlayerDrawSet Render(float shadow = 0f)
+            PlayerDrawSet Render(float shadow = 0f, bool hideEntire = false)
             {
                 var info = new PlayerDrawSet { drawPlayer = player, Position = player.position, DrawDataCache = new List<DrawData>(),
                     DustCache = new List<int>(), GoreCache = new List<int>(), bodyVect = new Vector2(20, 28), colorArmorBody = Color.White, bodyGlowMask = -1, armGlowMask = -1, armorHidesHands = true,
-                    playerEffect = (player.direction < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None) | (player.gravDir < 0 ? SpriteEffects.FlipVertically : SpriteEffects.None), shadow = shadow };
+                    playerEffect = (player.direction < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None) | (player.gravDir < 0 ? SpriteEffects.FlipVertically : SpriteEffects.None), shadow = shadow, hideEntirePlayer = hideEntire };
                 foreach (var parent in parents)
                 {
                     reset.Invoke(parent, new object[] { info }); object[] args = { info }; drawTree.Invoke(parent, args); info = (PlayerDrawSet)args[0];
@@ -184,15 +184,44 @@ internal static partial class EngineRuntimeChecks
                 for (int i = 0; i < info.DrawDataCache.Count; i++)
                     Near(untransformed[i].rotation + .4f, info.DrawDataCache[i].rotation, "native final full rotation exactly once");
             }
+            // A seated/mounted torso applies this native transform before its
+            // child layers. Rear badges must follow the same body displacement.
+            player.bodyRotation = 0f;
+            var neutral = Render();
+            // Render() sets zero offset; exercise the actual native subtree with
+            // a nonzero offset instead of only comparing local geometry.
+            var shifted = new PlayerDrawSet { drawPlayer = player, Position = player.position, DrawDataCache = new List<DrawData>(),
+                bodyVect = new Vector2(20, 28), colorArmorBody = Color.White, torsoOffset = 7f };
+            reset.Invoke(parents[0], new object[] { shifted });
+            object[] shiftedArgs = { shifted }; drawTree.Invoke(parents[0], shiftedArgs); shifted = (PlayerDrawSet)shiftedArgs[0];
+            foreach (var texture in new[] { textures[0], textures[2] })
+            {
+                Vector2 oldPosition = neutral.DrawDataCache.Single(d => ReferenceEquals(d.texture, texture)).position;
+                Vector2 newPosition = shifted.DrawDataCache.Single(d => ReferenceEquals(d.texture, texture)).position;
+                Near(oldPosition.Y + 7f, newPosition.Y, "rear accessory follows native torso offset");
+            }
             Vector2 readyOrbit = Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position;
             string chestPath = ((GeneratedItem)player.armor[4].ModItem!).Data.Visual.EquipOverlayPath;
             object chestTexture = cache.Textures[chestPath]!; cache.Textures.Remove(chestPath);
             Equal(readyOrbit, Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position, "missing front asset does not reflow rear orbit");
             cache.Textures[chestPath] = chestTexture;
+            player.armor[14] = new Item { type = ItemID.AvengerEmblem, stack = 1, accessory = true };
+            Equal(true, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[1])), "nonvisual social item cannot erase functional badge");
+            player.armor[14] = new Item();
             player.hideVisibleAccessory[4] = true;
             Equal(false, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[1])), "hidden functional front badge suppressed");
             player.armor[14] = player.armor[4];
             Equal(true, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[1])), "social front badge survives functional hide");
+            player.armor[14] = player.armor[6];
+            Equal(false, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[1])), "hidden functional badge stays hidden under a different social badge");
+            Equal(2, Render().DrawDataCache.Count(d => ReferenceEquals(d.texture, textures[3])), "functional and social accessories contribute independently");
+            Equal(true, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[3]) && d.shader == 12), "social badge uses paired native dye");
+            player.armor[14] = player.armor[4];
+            player.armor[14].shieldSlot = 1;
+            player.compositeBackArm.enabled = true;
+            Equal(false, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[1])), "native visual incompatibility refuses social badge");
+            player.compositeBackArm.enabled = false; player.armor[14].shieldSlot = -1;
+            Equal(false, Render(hideEntire: true).DrawDataCache.Any(d => textures.Contains(d.texture)), "native whole-player hiding suppresses front and rear badges");
             player.invis = true;
             Equal(false, Render().DrawDataCache.Any(d => textures.Contains(d.texture)), "invisible player has no badges"); player.invis = false;
             Equal(false, Render(shadow: .5f).DrawDataCache.Any(d => textures.Contains(d.texture)), "shadow pass has no duplicate badges");

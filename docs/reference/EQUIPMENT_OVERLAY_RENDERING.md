@@ -46,8 +46,16 @@ The explicit mount token determines this finite rendering route. No name,
 category or image analysis selects placement. The full visible accessory set
 owns orbit count/ordinal before the rear/front split, so moving a badge forward
 or waiting for another texture does not move an already visible orbit badge.
-Functional hide flags, vanity priority, slot dyes, invisibility/death/shadow
-checks, gravity/facing and the native final full-rotation transform are retained.
+Functional and social accessories contribute independently, as native accessories
+do; only the functional slot obeys its `hideVisibleAccessory[3..9]` flag. A social
+item without a generated overlay cannot erase a functional badge. Each source
+also obeys native visual-incompatibility checks and uses its paired slot dye.
+Armor retains its matching-slot vanity replacement policy.
+
+Rear badges apply native `TorsoGroup` once (their `Wings` parent has no such
+transform); front badges inherit it from `OffhandAcc`. Both follow seated/mounted
+torso displacement and obey `hideEntirePlayer`, invisibility/death/shadow,
+gravity/facing and the native final full-rotation transform.
 
 ## Verification boundary
 

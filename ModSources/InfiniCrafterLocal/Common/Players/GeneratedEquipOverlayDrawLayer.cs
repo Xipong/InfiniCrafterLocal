@@ -45,13 +45,13 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
     public override bool GetDefaultVisibility(PlayerDrawSet drawInfo)
     {
         Player player = drawInfo.drawPlayer;
-        return player is not null && player.active && !player.dead && !player.invis;
+        return player is not null && player.active && !player.dead && !player.invis && !drawInfo.hideEntirePlayer;
     }
 
     protected override void Draw(ref PlayerDrawSet drawInfo)
     {
         Player player = drawInfo.drawPlayer;
-        if (player is null || !player.active || player.dead || player.invis || drawInfo.shadow > 0f)
+        if (player is null || !player.active || player.dead || player.invis || drawInfo.hideEntirePlayer || drawInfo.shadow > 0f)
             return;
         List<OverlayEntry> entries = CollectVisibleOverlays(player);
         entries.RemoveAll(entry => !string.Equals(entry.Slot, SlotKind, StringComparison.Ordinal));
@@ -208,16 +208,17 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
             int normalIndex = accessoryIndex + 3;
             if (!player.IsItemSlotUnlockedAndUsable(normalIndex))
                 continue;
-            int vanityIndex = accessoryIndex + 13;
-            bool hasVanity = vanityIndex < player.armor.Length && player.armor[vanityIndex] is { IsAir: false };
-            // Vanilla applies hideVisibleAccessory only to functional slots;
-            // social accessories are evaluated separately and remain visible.
-            if (!hasVanity && player.hideVisibleAccessory is { Length: > 0 }
+            // Accessories are independent visual contributions, unlike armor's
+            // paired replacement. A nonvisual social item must not erase a badge
+            // from the functional slot; native compatibility still owns refusal.
+            bool hidden = player.hideVisibleAccessory is { Length: > 0 }
                 && normalIndex < player.hideVisibleAccessory.Length
-                && player.hideVisibleAccessory[normalIndex])
-                continue;
-            int sourceIndex = hasVanity ? vanityIndex : normalIndex;
-            TryAdd(player.armor, sourceIndex, entries, "accessory", accessoryIndex);
+                && player.hideVisibleAccessory[normalIndex];
+            if (!hidden && !player.ItemIsVisuallyIncompatible(player.armor[normalIndex]))
+                TryAdd(player.armor, normalIndex, entries, "accessory", accessoryIndex);
+            int vanityIndex = accessoryIndex + 13;
+            if (vanityIndex < player.armor.Length && !player.ItemIsVisuallyIncompatible(player.armor[vanityIndex]))
+                TryAdd(player.armor, vanityIndex, entries, "accessory", accessoryIndex);
         }
         return entries;
     }
@@ -287,6 +288,9 @@ public sealed class GeneratedEquipOverlayLegsDrawLayer : GeneratedEquipOverlayDr
 public sealed class GeneratedEquipOverlayAccessoryDrawLayer : GeneratedEquipOverlayDrawLayerBase
 {
     protected override string SlotKind => "accessory";
+    // Wings has no torso transform. Rear body-local badges still need the same
+    // seated/mounted displacement as Torso/OffhandAcc and their front children.
+    public override Transformation Transform => PlayerDrawLayers.TorsoGroup;
     public override Position GetDefaultPosition() => new AfterParent(PlayerDrawLayers.Wings);
 }
 

@@ -20,7 +20,7 @@
 
 ## Native cursor и held proxy
 
-- `Common/Systems/Presentation/GeneratedCursorItemPresentationSystem.cs` подключает только verified native `DrawInterface_40_InteractItemIcon`: заменяет type-wide `ContentSamples.ItemsByType` на точный выбранный `Item`, только для generated selected preview с готовым instance PNG. Disabled/foreign icon и missing image сохраняют native поведение.
+- `Common/Systems/Presentation/GeneratedCursorItemPresentationSystem.cs` подключает только verified native `DrawInterface_40_InteractItemIcon`: заменяет type-wide `ContentSamples.ItemsByType` на точный выбранный `Item`, только для generated selected preview с готовым instance PNG. При смерти preview выбранного generated item подавляется до native cache swap, включая disabled cached icon; живые disabled/missing previews и explicit foreign icons сохраняют native поведение.
 - Пропускается только дополнительный static tint tail этого cursor owner; native ItemSlot продолжает работать и выполняет PNG tint сам. Unknown IL shape/source owner отвергается до частичной emission; unload снимает hook. Guard финального tint проверяет его собственную receiver→texture последовательность после ammo Draw; более ранний `TextureAssets.Item` не разрешает чужой final `GlowMask`.
 - `GeneratedItem.ModifyItemDraw` подавляет только совпадающий готовый static held proxy. Unrelated colored/glow textures, cache entries, authored `hideUseGraphic`/release timing и custom AfterParent слой не меняются.
 - Native checks используют exact frozen game-saved `Campfire Twin Wooden Sword` DTO из текущего мира, включая identity, два экземпляра shared type, missing-PNG/foreign/disabled controls и source-shape mutant. Это CPU native consumer evidence, не GPU/world/MP acceptance.
