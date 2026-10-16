@@ -92,6 +92,7 @@ public partial class GeneratedItem
                     // lifetime is world ticks, but extraUpdates multiplies launch speed.
                     float nominalSpeed = child!.Spawn.SpeedPxPerTick * 60f * (child.Collision.ExtraUpdates + 1);
                     if (!child.IsStationary && child.Spawn.VelocityDistribution is null
+                        && (child.Spawn.Aim != "none" || action.HitTargetSpawn is not null)
                         && RuntimeTooltipFinite(nominalSpeed, 0f, float.MaxValue))
                         details += RuntimeTooltipText("SecondaryLaunchSpeed", RuntimeTooltipNumber(nominalSpeed));
                     if (child.LifetimeTicks > 0)
@@ -105,6 +106,7 @@ public partial class GeneratedItem
             // A reachable target-and-fire controller can own a later event source;
             // an unused shotEntityId in another controller is not a spawn edge.
             if (source.Controller.Code == RuntimeControllerCode.TargetAndFire && source.Targeting.IntervalTicks > 0
+                && SecondaryPeriodCanOccur(source, Math.Max(6, source.Targeting.IntervalTicks))
                 && depth < program.Limits.MaxChildDepth && program.Limits.MaxEventSpawnsPerActivation > 0)
             {
                 RuntimeEntitySpec? shot = program.TryGetEntity(source.Targeting.ShotEntityId);
@@ -117,10 +119,25 @@ public partial class GeneratedItem
     {
         if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.SpawnEntity)
             || action.Action != RuntimeOpcodeNames.EventActionName(action.ActionCode)
-            || (action.Event == RuntimeEventKind.Periodic && action.PeriodTicks < 6)) return false;
+            || (action.Event == RuntimeEventKind.Periodic
+                && (action.PeriodTicks < 6 || !SecondaryPeriodCanOccur(source, action.PeriodTicks)))) return false;
         try { RuntimeEventKind.ValidateProducer(source, action.Event, itemContact, activeUse); }
         catch (InvalidDataException) { return false; }
         return true;
+    }
+
+    private static bool SecondaryPeriodCanOccur(RuntimeEntitySpec source, int periodTicks)
+    {
+        if (!source.IsProjectileEntity) return true;
+        // These native controllers keep the actor alive independently of its
+        // authored flight lifetime. Do not invent a hard expiry for them.
+        if (source.Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease
+            || source.Controller.Code == RuntimeControllerCode.None && source.Movement.Code == 18) return true;
+        int activeTicks = source.Controller.Code == RuntimeControllerCode.None && source.Movement.Code == 19
+            ? Math.Max(2, source.Movement.Params.DurationTicks) : Math.Max(1, source.LifetimeTicks);
+        // Age/period and timeLeft use the same extraUpdates multiplier; waiting
+        // activation updates consume neither active age nor this flight window.
+        return periodTicks <= activeTicks;
     }
 
     private static bool SecondaryChildCanSpawn(RuntimeProgramSpec program, RuntimeEntitySpec source,

@@ -126,6 +126,26 @@ internal static partial class EngineRuntimeChecks
                 if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                 {
                     var child = data.RuntimeProgram.TryGetEntity(action.EntityId)!;
+                    string aim = child.Spawn.Aim;
+                    source.Events = new[] { new RuntimeEventActionSpec { Id = action.Id, Event = action.Event,
+                        Action = action.Action, ActionCode = action.ActionCode, EntityId = action.EntityId,
+                        Count = action.Count, SpreadRadians = action.SpreadRadians, DamageMultiplier = action.DamageMultiplier,
+                        DamageBasis = action.DamageBasis, KnockbackBasis = action.KnockbackBasis } };
+                    child.Spawn.Aim = "none";
+                    string still = string.Join("\n", TooltipSecondaryLines(host).Where(x => x.Name.StartsWith("InfiniSecondary")).Select(x => x.Text));
+                    Equal(false, still.Contains(locale == "en-US" ? "240 px/s" : "240 пикс./с"), "none aim cannot advertise inactive scalar launch speed");
+                    child.Spawn.Aim = aim; source.Events = new[] { action };
+                    child.Events = new[] { new RuntimeEventActionSpec { Id = "child_periodic", Event = RuntimeEventKind.Periodic,
+                        Action = "damage_area_on_event", ActionCode = RuntimeEventActionCode.DamageArea,
+                        RadiusPx = 24, DamageMultiplier = .5f, PeriodTicks = 60 } };
+                    Equal(false, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniSecondaryArea")), "40 tick child cannot advertise first period at 60");
+                    child.Events[0].PeriodTicks = 20;
+                    Equal(true, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniSecondaryArea")), "child can advertise period within actual lifetime");
+                    child.Controller.Code = RuntimeControllerCode.ChargeThenRelease;
+                    child.Events[0].PeriodTicks = 60;
+                    Equal(true, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniSecondaryArea")), "charge keep-alive does not use authored lifetime as a hard clock");
+                    child.Controller.Code = RuntimeControllerCode.None;
+                    child.Events = Array.Empty<RuntimeEventActionSpec>();
                     child.Spawn.Enabled = false;
                     Equal(false, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniSecondary")), "disabled child not advertised");
                     child.Spawn.Enabled = true;
