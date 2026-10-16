@@ -302,3 +302,40 @@ def test_mobile_keyboard_navigation_keeps_focused_fields_above_dirty_save_tray(b
     assert port.input_value() == '7799'
     assert tray.is_visible()
     assert server.commands.empty(), 'Keyboard navigation must not save the draft'
+
+
+@pytest.mark.parametrize('viewport', [
+    {'width': 1440, 'height': 1000},
+    {'width': 390, 'height': 844},
+])
+def test_original_atelier_palette_is_preserved(browser_studio, viewport):
+    """A UX/motion refresh must not silently replace the original light theme."""
+    page, server, _snapshot = browser_studio
+    page.set_viewport_size(viewport)
+    page.goto(server.url + '#operate')
+    page.locator('.station').wait_for(state='visible')
+    colors = page.evaluate('''() => {
+        const style = (selector, property) => getComputedStyle(document.querySelector(selector))[property];
+        return {
+            scheme: getComputedStyle(document.documentElement).colorScheme,
+            canvas: style('body', 'backgroundColor'),
+            ink: style('body', 'color'),
+            rail: style('.rail', 'backgroundColor'),
+            railInk: style('.rail', 'color'),
+            activeHome: style('.main-nav.active', 'backgroundColor'),
+            station: style('.station', 'backgroundColor'),
+            primary: style('.station .button-primary', 'backgroundColor'),
+            documentWidth: document.documentElement.scrollWidth,
+            viewportWidth: innerWidth,
+        };
+    }''')
+    assert colors['scheme'] == 'light'
+    assert colors['canvas'] == 'rgb(244, 243, 235)'
+    assert colors['ink'] == 'rgb(41, 44, 37)'
+    assert colors['rail'] == 'rgb(36, 38, 34)'
+    assert colors['railInk'] == 'rgb(216, 218, 207)'
+    assert colors['activeHome'] == 'rgb(214, 239, 101)'
+    assert colors['station'] == 'rgb(238, 240, 227)'
+    assert colors['primary'] == 'rgb(214, 239, 101)'
+    assert colors['documentWidth'] <= colors['viewportWidth'] + 1
+    assert server.commands.empty(), 'Reading the theme must not run actions'
