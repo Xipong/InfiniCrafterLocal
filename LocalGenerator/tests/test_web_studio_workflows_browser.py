@@ -314,6 +314,9 @@ def test_original_atelier_palette_is_preserved(browser_studio, viewport):
     page.set_viewport_size(viewport)
     page.goto(server.url + '#operate')
     page.locator('.station').wait_for(state='visible')
+    # Palette assertions observe the final state, not an in-flight route color transition.
+    expect = pytest.importorskip('playwright.sync_api').expect
+    expect(page.locator('.main-nav.active')).to_have_css('background-color', 'rgb(214, 239, 101)')
     colors = page.evaluate('''() => {
         const style = (selector, property) => getComputedStyle(document.querySelector(selector))[property];
         return {
