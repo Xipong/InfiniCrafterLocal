@@ -39,6 +39,7 @@
     <Compile Include="EngineRuntimeChecks.TransportIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.PlacedBodyNative.cs" />
     <Compile Include="EngineRuntimeChecks.HeldProxy.cs" />
+    <Compile Include="EngineRuntimeChecks.CursorDeath.cs" />
     <Compile Include="EngineRuntimeChecks.QuickUse.cs" />
     <Compile Include="EngineRuntimeChecks.QuickUtilityActivation.cs" />
     <Compile Include="EngineRuntimeChecks.Grounded.cs" />

@@ -308,6 +308,7 @@ internal static partial class EngineRuntimeChecks
             ("pb02 same ID restoration conflict refusal", Pb02RestoreRefusesSameIdContentConflicts),
             ("native quick use never selects a non-effect binding", NativeQuickUseNeverSelectsNonEffectBinding),
             ("held proxy replaced only by ready instance PNG", HeldProxyIsReplacedOnlyByReadyInstanceSprite),
+            ("cursor death retires generated preview only", CursorDeathRetiresGeneratedPreviewOnly),
             ("textured body uses declared axis and preserves native spin", TexturedBodyUsesDeclaredAxisAndPreservesNativeSpin),
             ("front_hand fresh wire admission", FrontHandFreshWireAdmission),
             ("front_hand native pose and contact", FrontHandNativePoseAndContact),

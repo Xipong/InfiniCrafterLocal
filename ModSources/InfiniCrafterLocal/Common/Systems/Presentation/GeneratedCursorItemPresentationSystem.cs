@@ -65,6 +65,20 @@ public sealed class GeneratedCursorItemPresentationSystem : ModSystem
     private static bool OmitNativeSelectedTint()
         => TryGetSelectedCursorItem(out _);
 
+    private static bool OmitDeadGeneratedPreview()
+    {
+        if (Main.dedServ || Main.myPlayer < 0 || Main.myPlayer >= Main.player.Length)
+            return false;
+        Player player = Main.player[Main.myPlayer];
+        // The native ten-tick preview cache can outlive cursorItemIconEnabled
+        // and does not expire while the mouse is stationary. Retire this selected
+        // generated preview before native temporarily swaps its type into iconID.
+        // Explicit interaction icons and other items remain native-owned.
+        return player is { dead: true, cursorItemIconID: ItemID.None }
+            && player.selectedItem >= 0 && player.selectedItem < player.inventory.Length
+            && player.inventory[player.selectedItem]?.ModItem is GeneratedItem;
+    }
+
     private static void PatchCursor(ILContext il)
     {
         var instructions = il.Body.Instructions;
@@ -104,6 +118,12 @@ public sealed class GeneratedCursorItemPresentationSystem : ModSystem
                 && i.Operand is FieldReference f && f.FullName == "Microsoft.Xna.Framework.Color Terraria.Item::color");
         if (!sampleOwner || sampleIndex >= iconIndex || !tintOwner || tint.Next is null)
             throw new NotSupportedException("Native cursor source/tint ownership changed; no presentation patch applied.");
+
+        var entry = new ILCursor(il);
+        Instruction originalEntry = instructions[0];
+        entry.EmitDelegate<Func<bool>>(OmitDeadGeneratedPreview);
+        entry.Emit(OpCodes.Brfalse, originalEntry);
+        entry.Emit(OpCodes.Ret);
 
         // Preserve the evaluated native Item argument until only this caller's
         // exact sample is on top of the stack; all ItemSlot logic stays native.
