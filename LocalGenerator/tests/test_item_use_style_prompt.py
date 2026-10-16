@@ -99,8 +99,14 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     assert final["runtimeProgram"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     assert vfx_packets[1]["repairScope"]["fieldPermissions"] == {"globals": {}, "slots": [{"slotId": "slot_0", "paths": ["alpha"]}], "assets": []}
     descriptions = [author_card["params"]["hideUseGraphic"]["meaning"], repair_card["params"]["hideUseGraphic"]["meaning"]]
-    descriptions += [p["spritePresentationReadOnly"]["heldRootVisibility"]["hideUseGraphic"] for p in visual_packets]
-    descriptions += [p["runtimeVocabularyReadOnly" if i else "runtimeVocabulary"]["heldRootVisibility"]["hideUseGraphic"] for i, p in enumerate(vfx_packets)]
+    # Initial stages retain visibility semantics. Scale/alpha-only Repairs have
+    # no permission to change these frozen choices and omit unrelated guidance.
+    descriptions.append(visual_packets[0]["spritePresentationReadOnly"]["heldRootVisibility"]["hideUseGraphic"])
+    descriptions.append(vfx_packets[0]["runtimeVocabulary"]["heldRootVisibility"]["hideUseGraphic"])
+    assert "heldRootVisibility" not in visual_packets[1]["spritePresentationReadOnly"]
+    assert "heldRootVisibility" not in vfx_packets[1]["runtimeVocabularyReadOnly"]
+    assert visual_packets[1]["acceptedPresentationMechanicsReadOnly"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
+    assert vfx_packets[1]["acceptedRuntimeProgramReadOnly"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     for description in descriptions:
         assert all(term in description for term in ("deliberate invisibility", "physical held-body replacement", "Free projectiles", "not", "customHeldSprite")), description
     for request in [author, *requests]:

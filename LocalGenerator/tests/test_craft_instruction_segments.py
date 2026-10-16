@@ -135,7 +135,13 @@ def test_visual_presentation_instructions_precede_only_user_owned_bake_facts(mon
             {"gameplay": {"itemScale": 3}, "runtimeProgram": {"bindings": [{"id": role}]}},
             [{"kind": kind, "visualRole": role}],
         )
-        assert context["spritePresentationReadOnly"] == static["spritePresentationReadOnly"]
+        if stage == "visual":
+            assert context["spritePresentationReadOnly"] == static["spritePresentationReadOnly"]
+        else:
+            assert static["spritePresentationReadOnly"] == {
+                key: context["spritePresentationReadOnly"][key] for key in static["spritePresentationReadOnly"]
+            }
+            assert "units" in static["spritePresentationReadOnly"]
         assert set(context["bakeFillByProcessingRole"]) == ({"item"} if kind == "item_body" else {"item", "runtime:" + role})
         assert context["acceptedPresentationMechanicsReadOnly"]["bindings"] == [{"id": role}]
 

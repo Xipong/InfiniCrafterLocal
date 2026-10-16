@@ -16,7 +16,7 @@ from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.pipelines import vfx_generation_pipeline as stage, llm_transport
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
-from tests.vfx_material_fixtures import _asset, _data, _legacy, _path, _sent, _sprite, _with_asset
+from tests.vfx_material_fixtures import _asset, _data, _legacy, _path, _sprite, _with_asset
 
 
 def _patch(**edits):
@@ -139,6 +139,26 @@ def test_vfx_asset_domain_stage_contract(monkeypatch, renderer, payload, domain,
         assert scope["deletableSlotIds"] == scope["deletableSlotIndices"] == scope["deletableAssetIds"] == scope["deletableAssetIndices"] == []
         assert repair["brokenFragments"]["slots"] == raw["slots"]
         assert repair["validGeneratedContext"]["assets"] == raw.get("assets", [])
+        schema = repair["outputSchema"]
+        assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}
+        slot_schema = schema["properties"]["slotsUpsert"]["items"]
+        assert slot_schema["properties"]["rendererKind"] == {"const": renderer, "type": "string"}
+        texture_schema = slot_schema["properties"][payload]["properties"]["texture"]
+        if domain == "nonempty":
+            assert texture_schema["properties"]["source"] == {"const": "asset", "type": "string"}
+        if outcome == "noop":
+            assert not strict_schema_errors(correction, schema)
+        else:
+            # The transport stub deliberately bypasses provider admission for the
+            # hostile full-shape answer. The unchanged local filter must still
+            # salvage its useful exact leaves and audit every frozen rewrite.
+            assert strict_schema_errors(correction, schema)
+            within_scope = _patch(slotsUpsert=copy.deepcopy(final["debug"]["vfxDirectorRaw"]["slots"]))
+            assert not strict_schema_errors(within_scope, schema)
+            scoped_result, scoped_audit = vfx._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
+            assert scoped_result == final["debug"]["vfxDirectorRaw"]
+            assert scoped_audit["acceptedPaths"] == final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"]
+            assert scoped_audit["ignoredChanges"] == []
     if directory := os.environ.get("INFINI_VFX_REPAIR_EVIDENCE_DIR"):
         target = Path(directory) / (case + "_result.json")
         target.write_text(json.dumps({"sourceBefore": before, "directorBefore": raw_before, "repair": correction, "manifest": final.get("vfxManifest"), "planBefore": plan_before, "planAfter": build_visual_asset_plan(final), "sourceFrozen": True, "directorFrozen": True}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -222,7 +242,21 @@ def test_vfx_exact_leaf_stage_contract(monkeypatch, case):
         if case == "asset-canvas":
             assert request["brokenFragments"]["assets"] == before["assets"]
             packet = vfx._prompt_packet(data, None, None)
-            assert request["outputSchema"]["properties"]["assetsUpsert"]["items"] == packet["outputSchema"]["properties"]["assets"]["items"]
+            canonical = packet["outputSchema"]["properties"]["assets"]["items"]
+            offered = request["outputSchema"]["properties"]["assetsUpsert"]["items"]
+            assert set(request["outputSchema"]["properties"]) == {"schema", "note", "assetsUpsert"}
+            assert offered["properties"]["canvasSize"] == canonical["properties"]["canvasSize"]
+            assert offered["properties"]["id"] == {**canonical["properties"]["id"], "const": row_id}
+            for field in ("prompt", "negativePrompt", "layout"):
+                assert offered["properties"][field] == {"const": before["assets"][0][field], "type": "string"}
+        within_scope = _patch(**{"assetsUpsert" if domain == "assets" else "slotsUpsert": copy.deepcopy(expected[domain])})
+        schema = request["outputSchema"]
+        assert not strict_schema_errors(within_scope, schema)
+        assert strict_schema_errors(patch, schema), "hostile/full-shape answer is outside the sent provider grammar"
+        scoped_result, scoped_audit = vfx._apply_vfx_repair_patch(data, raw, within_scope, scope, return_audit=True)
+        assert scoped_result == expected
+        assert scoped_audit["acceptedPaths"] == audit["acceptedPaths"]
+        assert scoped_audit["ignoredChanges"] == []
     if case == "profile-knot":
         assert type(final["vfxManifest"]["slots"][0]["element"]["widthProfile"]["middle"]) is float
         assert "assets" not in final["vfxManifest"]
@@ -241,7 +275,18 @@ def test_vfx_asset_delete_permission_preserves_first_request(duplicate):
 
 
 @pytest.mark.parametrize("field", ["slotsUpsert", "slotIdsDelete", "slotIndicesDelete", "assetsUpsert", "assetIdsDelete", "assetIndicesDelete"])
-def test_vfx_repair_optional_edit_absence_is_not_null(field):
-    schema = _sent(_data(), True)["outputSchema"]
+def test_vfx_repair_optional_edit_absence_is_not_null(monkeypatch, field):
+    data = _data()
+    accepted = _legacy(data)
+    raw = copy.deepcopy(accepted)
+    raw["slots"][0]["alpha"] = None
+    patch = _patch(slotsUpsert=accepted["slots"])
+    sent = _offline_transport(monkeypatch, "optional_" + field, [raw, patch])
+    final = vfx.attach_vfx_manifest(data, "optional_" + field, llm_director=stage.call_llm_vfx_director)
+    assert len(sent) == 2 and final["debug"]["vfxDirectorRaw"] == accepted
+    schema = request_dossier(sent[1])["outputSchema"]
+    assert set(schema["properties"]) == {"schema", "note", "slotsUpsert"}
+    assert not strict_schema_errors(patch, schema)
     assert not strict_schema_errors(_patch(), schema)
     assert strict_schema_errors(_patch(**{field: None}), schema)
+    assert bool(strict_schema_errors(_patch(**{field: []}), schema)) is (field != "slotsUpsert")

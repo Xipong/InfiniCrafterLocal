@@ -471,8 +471,10 @@ def _provider_strict_projection(schema: Any, *, omit_annotations: bool = False) 
     return out
 
 
-def author_item_provider_response_schema() -> dict[str, Any]:
-    return _provider_strict_projection(author_item_response_schema(), omit_annotations=True)
+def author_item_provider_response_schema(*, local_schema: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    return _provider_strict_projection(
+        author_item_response_schema() if local_schema is None else local_schema, omit_annotations=True,
+    )
 
 
 def author_item_repair_response_schema(

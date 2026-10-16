@@ -59,8 +59,9 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
             assert request["response_format"]["json_schema"]["strict"] is True
             assert request["response_format"]["json_schema"]["schema"] == schema
         if director == "visual":
-            parents = packet["parentFactsReadOnly" if repair else "parents"]
-            assert parents["parentA"]["packet"]["raw"]["spriteReference"] == {
+            parent_reference = (packet["parentSizeReferencesReadOnly"]["parentA"]["spriteReference"] if repair
+                                else packet["parents"]["parentA"]["packet"]["raw"]["spriteReference"])
+            assert parent_reference == {
                 "source": "TextureAssets.Item", "textureWidthPx": width, "textureHeightPx": 68,
                 "currentFrame": {"source": "draw_animation", "xPx": 0, "yPx": 34, "widthPx": width, "heightPx": 32}}
             context = packet["acceptedPresentationMechanicsReadOnly"]
@@ -83,7 +84,11 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
         packets.append(packet)
     assert sent[0]["messages"][1]["content"] == sent[1]["messages"][1]["content"]
     assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
-    assert packets[0]["responseSchema" if director == "visual" else "outputSchema"] != packets[1]["responseSchema" if director == "visual" else "outputSchema"]
+    schema_key = "responseSchema" if director == "visual" else "outputSchema"
+    if director == "visual" and repair:
+        assert packets[0][schema_key] == packets[1][schema_key], "same scalar edit domain does not depend on frozen entity roster"
+    else:
+        assert packets[0][schema_key] != packets[1][schema_key]
     assert not responses
 
 

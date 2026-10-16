@@ -1,4 +1,4 @@
-# Scoped grammar и syntax-only context Gameplay Repair
+# Scoped grammar и syntax-only context Repair
 
 ## Текущая граница
 
@@ -27,17 +27,42 @@ callsUpsert не совпали бы с глобальной schema и null scaf
 валидатора. Singleton union проверяет literal fn и не выбирает ветвь по одному
 object type. При json_object/off null остаётся authored value.
 
+## Visual/VFX Repair
+
+Request-local grammar берётся из exact `repairScope.fieldPermissions` и
+create/delete permissions, а не из имени, prose или одного особого error leaf.
+Initial Director schemas/public exports и полная post-merge admission не меняются.
+
+- Visual передаёт только разрешённые owner operations, selectors и nested leaves.
+  Sparse patch дополняется исключительно уже authored source siblings перед
+  прежним frozen-first filter; отсутствующий дизайн не придумывается. Для size-only
+  Repair остаются calibration, accepted mechanics и parent PNG/visual references,
+  но не повторный полный parent/design dossier. Art edits сохраняют art context.
+- VFX сохраняет canonical grammar editable leaves, точные frozen companions и
+  раздельные row-ID branches. Не разрешённые delete/upsert operations не
+  рекламируются. Renderer/entity/event discriminator и create/whole-response
+  scopes сохраняют полный необходимый domain; unrelated renderer/material/sound
+  grammar и vocabulary не отправляются для независимого scalar Repair.
+- Case-specific constants и IDs остаются USER. Static grammar extraction не
+  обязана существовать для каждого scoped packet: неизменная полная schema
+  ради cache hit не нужна. Provider schema остаётся inline/self-contained.
+
 ## Format Repair
 
-Из `originalRecipeContext` удаляется только копия пяти `_AUTHOR_CACHE_PREFIX_KEYS`:
-priorityHeader, runtimeProgramInvariants,
-runtimeCapabilityContract, requiredJsonShape, diagnosticReport.
+Gameplay Format Repair получает точный `malformedRawText`, parse error,
+краткий индекс корневых ключей и допустимые params только тех exact `fn`, которые
+однозначно восстанавливаются из источника. Из canonical Author schema выбираются
+эти же call variants; новый набор params или второй Author API не создаётся.
+Неизвестные/повреждённые identities сохраняют полный grammar domain и прежний
+fail-closed, а не угадываются по prose. Nullable inverse читает именно отправленную
+local schema. Первоначальный Author packet и Gameplay semantic Repair не меняются.
 
-Точный malformedRawText, parse error, собственные syntax-only rules,
-allowedCallParamsReadOnly, full output shape, recipeKey, parents, balance и все
-прочие dynamic recipe fields сохраняются. Это не allowlist, теряющая будущие
-parent facts. Equality с синтаксически восстановимым исходным Author object
-продолжает отвергать любое добавление, удаление или изменение gameplay.
+Родители, balance, повторный concept/design guide и остальные поля
+`originalRecipeContext` модели не отправляются: единственный источник дизайна —
+исходный ответ. `recipeKey` остаётся у trace owner, не теряется вместе с dossier.
+Equality с синтаксически восстановимым исходным Author object продолжает отвергать
+любое добавление, удаление или изменение gameplay; невозможность доказать источник
+остаётся отказом. Никакие values, strings или массивы source не обрезаются.
 
 Классификация — **Normalization request representation** по существующему
 контракту, без gameplay/compiler transformation. Request-local schema — его

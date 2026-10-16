@@ -57,7 +57,13 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
         assert user == before
         assert request_dossier(captured[0]) == before
         assert captured[0]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
-    assert result == json.loads(raw)
+    expected_result = json.loads(raw)
+    if stage == "visual_repair":
+        # Scoped wire omits unchanged operations. The sender supplies only
+        # technical no-op containers for the unchanged full frozen filter;
+        # logged raw bytes and the complete authored note remain untouched.
+        expected_result.update(itemPatch=None, entitiesUpsert=[], entityIdsDelete=[], entityIndicesDelete=[])
+    assert result == expected_result
     if enabled:
         artifacts = list((tmp_path / "stage_requests").glob("*.json"))
         assert len(artifacts) == 1
