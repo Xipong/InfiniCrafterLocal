@@ -36,7 +36,7 @@ Source adapter закрывает normal/basic/flame/sliced/Xmas/track и cached
 
 Эта v1 сертифицирует два проверенных native DLL profiles и bounded native footprints (до 16×16 и 256 cells). Unknown DLL/изменённая hook-chain shape, ModTile/чужие tile-visual callbacks и post-place actor/callback без отдельного ownership certificate дают явный отказ **до mutation**. Наличие пустого `TileEntity.ByPosition` до placement не считается доказательством отсутствия будущего actor. Indirect actor hooks присутствуют, но actor placements без generation/content/callback certificate не допускаются. Это не обещание покрыть arbitrary cross-mod drawing.
 
-Native byte profiles: installed `fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5`; SDK `0585f4ebb022708a5d2a52ba92c6b4a4f812154d0333b384ef64d2dbd4f5b124`. Refusal диагностируется через существующий mod logger; disabled adapter не разрешает PNG overlay поверх неподтверждённого native тела.
+Native byte profiles: installed `fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5`; SDK tModLoader 2026.7.3.0 `d530e508b2841e66d880ce279a609624b5ab66ce8093eedfa04f47c3d12d485c`. Каждый profile проходит прежний полный preflight 19 exact method shapes и повторную проверку текущей MonoMod hook chain; совпадение версии без точного SHA256 не даёт admission. Refusal диагностируется через существующий mod logger; disabled adapter не разрешает PNG overlay поверх неподтверждённого native тела.
 
 ## Проверки и границы доказательств
 
