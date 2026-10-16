@@ -333,8 +333,12 @@
     const progressLabels={save:'Сохраняем…',start:'Проверяем и запускаем…',health:'Проверяем соединение…',validate:'Проверяем пути…',trace:'Читаем журнал…',codexStatus:'Проверяем аккаунт…',codexCatalog:'Обновляем модели…',codexLogin:'Ожидаем вход…',codexPing:'Проверяем аккаунт…'};
     $$('[data-action]').forEach(button=>{
       if(button.dataset.action === pendingAction && progressLabels[pendingAction]) {
-        if(!button.dataset.idleHtml) button.dataset.idleHtml=button.innerHTML;
-        button.innerHTML=`${icon('refresh')}${progressLabels[pendingAction]}`;button.setAttribute('aria-busy','true');
+        // Keep the busy icon mounted across polls so its feedback stays smooth.
+        if(!button.dataset.idleHtml) {
+          button.dataset.idleHtml=button.innerHTML;
+          button.innerHTML=`${icon('refresh')}${progressLabels[pendingAction]}`;
+        }
+        button.setAttribute('aria-busy','true');
       } else if(button.dataset.idleHtml) {button.innerHTML=button.dataset.idleHtml;delete button.dataset.idleHtml;button.removeAttribute('aria-busy');}
     });
     const serverBusy = state.remote?.busy?.includes('server-action');
@@ -344,8 +348,6 @@
     $$('[data-ui="defaults-update"], [data-ui="defaults-refresh"]').forEach(button=>{button.disabled=!!locked;});
     if ($('#utility-dialog').dataset.kind === 'defaults') $$('[data-ui="close-dialog"]', $('#utility-dialog')).forEach(button=>{button.disabled=!!(state.pending || state.posting);});
     $$('[data-action="cancelTrace"]').forEach(button=>{button.disabled=!state.connected || state.posting || state.shutdown || !(state.remote?.busy?.includes('trace') || state.pending?.action === 'trace') || !!(state.pending && state.pending.action !== 'trace');});
-    const save = $('[data-action="save"]', $('#save-tray'));
-    if (save) save.innerHTML = `${icon((state.pending || state.submission)?.action === 'save' ? 'refresh':'save')}${(state.pending || state.submission)?.action === 'save' ? 'Сохраняем…':'Сохранить'}`;
   }
   function toast(message,error=false) {
     if(state.suppressToast) return;
@@ -363,8 +365,8 @@
     if (!error) setTimeout(() => div.remove(),9000);
   }
   function heading(page) {
-    const [,eyebrow,title,subtitle] = routes[page];
-    return `<div class="page-heading"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${page === 'operate' ? '' : `<div class="heading-note">${state.dirty.size ? 'ЧЕРНОВИК / НЕ СОХРАНЁН':'ЛОКАЛЬНАЯ КОНФИГУРАЦИЯ'}<strong>${page === 'configure' ? state.fields.length : state.fields.filter(field => field.route === page).length} параметров</strong></div>`}</div>`;
+    const [,,title,subtitle] = routes[page];
+    return `<div class="page-heading"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${page === 'operate' ? '' : `<div class="heading-note">${state.dirty.size ? 'Черновик / Не сохранён':'Локальная конфигурация'}<strong>${page === 'configure' ? state.fields.length : state.fields.filter(field => field.route === page).length} параметров</strong></div>`}</div>`;
   }
   function providerSummary() {
     const provider = value('INFINI_LLM_PROVIDER','local');
@@ -404,7 +406,8 @@
     const home = state.remote.home || {}, provider = providerSummary(), image = imageSummary(), next = nextStep();
     const busy = state.remote.busy?.includes('server-action'), running = /Сервер отвечает|Идёт генерация/.test(home.state || '');
     const title = busy ? 'Проверяем состояние…':home.state || 'Состояние не проверено';
-    const tag = busy ? 'ПРОВЕРКА':running ? 'СЕРВЕР ОТВЕЧАЕТ':/внимание|подтверждено/.test(title) ? 'НУЖНА ПРОВЕРКА':'ОЖИДАНИЕ';
+    const stationState = busy ? 'busy':running ? 'running':/внимание|подтверждено/.test(title) ? 'attention':'idle';
+    const tag = {busy:'Проверка',running:'Сервер отвечает',attention:'Нужна проверка',idle:'Ожидание'}[stationState];
     const detail = title === 'Сервер отвечает' ? 'Генератор этой копии отвечает. Можно продолжить крафт в Terraria.' : title === 'Состояние ещё не проверено' ? 'Запусти генератор или проверь соединение.' : home.detail || 'Настрой источники и проверь соединение перед созданием предметов.';
     const config = state.dirty.size ? 'Есть несохранённые изменения. Сводка показывает черновик.' : /restart|mismatch|differs/i.test(state.remote.appliedConfig || '') ? 'Конфигурация изменена — нужен безопасный перезапуск.' : /matches/i.test(state.remote.appliedConfig || '') ? 'Часть параметров совпадает с сервером на последней проверке. Ключи и дополнительные модели не проверены.' : 'Конфигурация сервера ещё не подтверждена. Проверка соединения не запускает генерацию.';
     const signature = JSON.stringify([home,provider,image,next,config,busy,running,state.dirty.size,state.remote.activity,value('INFINI_HOST'),value('INFINI_PORT')]);
@@ -413,13 +416,13 @@
     const focused = document.activeElement;
     const focusIdentity = focused?.closest('#workspace') ? ['data-action','data-ui','href'].map(name => [name,focused.getAttribute(name)]).find(([,val]) => val) : null;
     $('#workspace').innerHTML = `${heading('operate')}
-      <div class="operate-grid"><section class="station" aria-labelledby="generator-title"><div class="station-top"><span class="serial">Состояние генератора</span><span class="state-tag"><span class="status-dot"></span>${tag}</span></div><h2 id="generator-title">${esc(title)}</h2><p class="station-detail">${esc(detail)}</p><div class="endpoint">${icon('network')}<span>Сохранено: ${esc(state.remote.savedValues?.INFINI_HOST || '127.0.0.1')}:${esc(state.remote.savedValues?.INFINI_PORT || '5055')}</span></div><div class="station-buttons"><button class="button button-primary" data-action="start">${icon('play')}${running ? 'Перезапустить безопасно':'Запустить генератор'}</button><button class="button" data-action="health" aria-label="Проверить сохранённый или запущенный генератор">${icon('refresh')}Проверить</button><button class="button button-small" data-ui="stop" title="Безопасно остановить генератор">${icon('stop')}Стоп</button></div><p class="station-caption">Запуск сохраняет настройки. Проверка использует сохранённый адрес или сервер, запущенный этой студией. Новые адреса сначала сохрани.</p></section>
-      <section class="pipeline" aria-labelledby="pipeline-title"><div class="section-heading"><h2 id="pipeline-title">Выбранные источники</h2><span class="meta">${state.dirty.size ? 'ЧЕРНОВИК':'КОНФИГУРАЦИЯ'}</span></div><ol class="pipeline-list">${[
-        ['01','Идея и механика',provider.name,provider.detail,'providers'],
-        ['02','Изображение',image.name,image.detail,'images'],
-        ['03','Готовый спрайт',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Без обработки':value('INFINI_BG_COLOR') === 'transparent' ? 'Прозрачный фон':'Чистый фон',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Изображения выключены':`${value('INFINI_SPRITE_DOWNSCALE_FILTER','box').toUpperCase()} / ${value('INFINI_PIXEL_POSTERIZE') === '1' ? `${value('INFINI_MAX_COLORS')} цвета`:'свободная палитра'}`,'sprites']
-      ].map(([number,title,name,detail,route]) => `<li><a class="pipeline-step" href="#${route}"><span class="step-number">${number}</span><div><div class="step-title">${title}</div><div class="step-name">${esc(name)}</div><div class="step-desc">${esc(detail)}</div></div><span class="step-arrow">${icon('arrow')}</span></a></li>`).join('')}</ol><p class="pipeline-note">Настройки сборки — не подтверждение готовности моделей.</p></section></div>
-      <div class="operate-lower"><section><div class="activity-header"><h2>Последние события</h2><a class="text-button" href="#diagnostics">Открыть журнал ${icon('arrow')}</a></div><div class="activity-sheet">${homeActivity()}</div></section><section class="next-step"><div><span class="eyebrow">СЛЕДУЮЩИЙ ШАГ</span><h2>${esc(next.title)}</h2><p>${esc(next.description)}</p></div>${next.route === 'help' ? `<a href="#operate" data-ui="help">${next.link}${icon('arrow')}</a>` : `<a href="#${next.route}">${next.link}${icon('arrow')}</a>`}</section></div>
+      <div class="operate-grid"><section class="station" data-state="${stationState}" aria-labelledby="generator-title"><div class="station-top"><div class="station-header"><span class="station-icon">${icon('work')}</span><span class="serial">Состояние генератора</span></div><span class="state-tag"><span class="status-dot"></span>${tag}</span></div><div class="station-mark" aria-hidden="true">${icon('mark')}</div><div class="station-content"><h2 id="generator-title">${esc(title)}</h2><p class="station-detail">${esc(detail)}</p><div class="endpoint">${icon('network')}<span>Сохранено: ${esc(state.remote.savedValues?.INFINI_HOST || '127.0.0.1')}:${esc(state.remote.savedValues?.INFINI_PORT || '5055')}</span></div></div><div class="station-controls"><div class="station-buttons"><button class="button button-primary" data-action="start">${icon('play')}${running ? 'Перезапустить безопасно':'Запустить генератор'}</button><button class="button" data-action="health" aria-label="Проверить сохранённый или запущенный генератор">${icon('refresh')}Проверить</button><button class="button button-small" data-ui="stop" title="Безопасно остановить генератор">${icon('stop')}Стоп</button></div><p class="station-caption">Запуск сохраняет настройки. Проверка использует сохранённый адрес или сервер, запущенный этой студией. Новые адреса сначала сохрани.</p></div></section>
+      <section class="pipeline" aria-labelledby="pipeline-title"><div class="section-heading"><h2 id="pipeline-title">Выбранные источники</h2><span class="meta">${state.dirty.size ? 'Черновик':'Конфигурация'}</span></div><ol class="pipeline-list">${[
+        ['01','Идея и механика',provider.name,provider.detail,'providers','text'],
+        ['02','Изображение',image.name,image.detail,'images','image'],
+        ['03','Готовый спрайт',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Без обработки':value('INFINI_BG_COLOR') === 'transparent' ? 'Прозрачный фон':'Чистый фон',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Изображения выключены':`${value('INFINI_SPRITE_DOWNSCALE_FILTER','box').toUpperCase()} / ${value('INFINI_PIXEL_POSTERIZE') === '1' ? `${value('INFINI_MAX_COLORS')} цвета`:'свободная палитра'}`,'sprites','pixel']
+      ].map(([number,title,name,detail,route,glyph]) => `<li><a class="pipeline-step" href="#${route}"><span class="step-number"><span class="sr-only">Шаг ${number}</span><span class="step-icon">${icon(glyph)}</span></span><div><div class="step-title">${title}</div><div class="step-name">${esc(name)}</div><div class="step-desc">${esc(detail)}</div></div><span class="step-arrow">${icon('arrow')}</span></a></li>`).join('')}</ol><p class="pipeline-note">Настройки сборки — не подтверждение готовности моделей.</p></section></div>
+      <div class="operate-lower"><section><div class="activity-header"><h2>Последние события</h2><a class="text-button" href="#diagnostics">Открыть журнал ${icon('arrow')}</a></div><div class="activity-sheet">${homeActivity()}</div></section><section class="next-step"><div><span class="eyebrow">Следующий шаг</span><h2>${esc(next.title)}</h2><p>${esc(next.description)}</p></div>${next.route === 'help' ? `<a href="#operate" data-ui="help">${next.link}${icon('arrow')}</a>` : `<a href="#${next.route}">${next.link}${icon('arrow')}</a>`}</section></div>
       <div class="config-strip">${icon('sliders')}<p>${esc(config)}</p></div>`;
     updateActionButtons();
     if (focusIdentity) $$('[data-action],[data-ui],a', $('#workspace')).find(element => element.getAttribute(focusIdentity[0]) === focusIdentity[1])?.focus({preventScroll:true});
@@ -480,7 +483,7 @@
     return `<div class="section-fields">${primary.map(field => fieldHTML(field)).join('')}</div>${pools.map((group,index) => disclosure(`pool-${index+2}` ,`Дополнительная линия ${index+2}`,group,'Каждая линия имеет собственный источник, адрес и модель.')).join('')}${disclosure(`${state.page}-lora`,'Художественный адаптер · LoRA',advanced.filter(field => loRAKeys.has(field.key)),'Необязательный адаптер. Файлы и настройки сохраняются при отключении.')}${disclosure(`${state.page}-advanced`,'Тонкая настройка',advanced.filter(field => !poolKeys.includes(field.key) && !loRAKeys.has(field.key)),'Параметры для ручной настройки. Все текущие значения сохраняются.')}${disclosure(`${state.page}-inactive`,'Другие источники и неактивные параметры',inactive,'Не используются выбранным источником. Доступны для редактирования; переключение не стирает значения.')}`;
   }
   function aside() {
-    return `<aside class="settings-aside"><h2>Сохранение</h2><p>Изменения остаются в этой вкладке до сохранения. Для работающего генератора нужен безопасный перезапуск.</p><button class="button button-primary" data-action="save">${icon('save')}Сохранить настройки</button><button class="button" data-action="validate">${icon('check')}Проверить пути</button><a class="button" href="#operate">К рабочему столу ${icon('arrow')}</a><div class="aside-meta"><strong>Локальный файл</strong>${esc(state.remote.configPath || 'config.env')}<br><button class="text-button" data-action="openConfig">Открыть файл ${icon('arrow')}</button></div></aside>`;
+    return `<aside class="settings-aside"><div class="aside-heading"><h2>${icon('save')}Сохранение</h2><kbd>Ctrl S</kbd></div><p>Изменения остаются в этой вкладке до сохранения. Для работающего генератора нужен безопасный перезапуск.</p><button class="button button-primary" data-action="save">${icon('save')}Сохранить настройки</button><button class="button" data-action="validate">${icon('check')}Проверить пути</button><a class="button" href="#operate">К рабочему столу ${icon('arrow')}</a><div class="aside-meta"><strong>Локальный файл</strong>${esc(state.remote.configPath || 'config.env')}<br><button class="text-button" data-action="openConfig">Открыть файл ${icon('arrow')}</button></div></aside>`;
   }
   function defaultsSummary() {
     const offer=state.remote?.defaultsUpdate,count=offer?.changes?.length || 0;
@@ -494,9 +497,9 @@
     const selected = state.presetChoice ?? value('INFINI_GUI_PIPELINE_PRESET');
     const presetEntries = [...Object.keys(state.remote.presets || {}),...Object.keys(state.remote.userPresets || {}).map(name => `Мой: ${name}`)];
     const full = state.fields;
-    $('#workspace').innerHTML = `${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet"><h2>Рекомендованные настройки</h2><p id="defaults-summary">${esc(defaultsSummary())}</p><button class="button" data-ui="defaults-update">Проверить рекомендации</button></section><section class="preset-sheet"><h2>Профиль настроек</h2><p>Начни с готового сочетания моделей или сохрани собственное. Профиль меняет настройки, но не подменяет текущие ключи.</p><div class="preset-selector"><select id="preset-select" aria-label="Профиль настроек"><option value="">Выбери профиль…</option>${presetEntries.map(name => `<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(name)}</option>`).join('')}</select><button class="button" data-ui="apply-preset">Применить ${icon('arrow')}</button></div><button class="text-button" data-ui="save-preset" style="margin-top:12px">Сохранить текущие настройки как профиль ${icon('save')}</button></section><div class="section-heading"><h2>Разделы настроек</h2><span class="meta">${state.fields.length} ПАРАМЕТРОВ</span></div><div class="configure-index">${[
-      ['01','providers','Автор и механика','Источник текста, направление и вариативность.'],['02','images','Источник изображения','Локальный движок, подписка или API.'],['03','sprites','Спрайт и цвет','Прозрачность, края, холст и палитра.'],['04','models','Модели и LoRA','Файлы моделей и художественные адаптеры.'],['05','multiplayer','Соединение с игрой','Адрес генератора и совместный крафт.'],['06','diagnostics','Диагностика','Журнал, события и технические параметры.']
-    ].map(([n,route,title,description]) => `<a class="index-row" href="#${route}"><span class="index-number">${n}</span><div><h3>${title}</h3><p>${description}</p></div><span class="index-tail"><span>${counts(route)}</span>${icon('arrow')}</span></a>`).join('')}</div>${disclosure('all-settings','Все параметры одним списком',full,'Полный доступ ко всем настройкам, включая параметры других источников и служебные поля. Значения не скрываются при смене профиля.')}<p class="settings-path">${esc(state.remote.configPath)}</p></div>${aside()}</div>`;
+    $('#workspace').innerHTML = `${heading('configure')}<div class="settings-layout"><div class="settings-main"><section class="preset-sheet recommendation-sheet"><h2>Рекомендованные настройки</h2><p id="defaults-summary">${esc(defaultsSummary())}</p><button class="button" data-ui="defaults-update">Проверить рекомендации</button></section><section class="preset-sheet"><h2>Профиль настроек</h2><p>Начни с готового сочетания моделей или сохрани собственное. Профиль меняет настройки, но не подменяет текущие ключи.</p><div class="preset-selector"><select id="preset-select" aria-label="Профиль настроек"><option value="">Выбери профиль…</option>${presetEntries.map(name => `<option value="${esc(name)}" ${name === selected ? 'selected':''}>${esc(name)}</option>`).join('')}</select><button class="button" data-ui="apply-preset">Применить ${icon('arrow')}</button></div><button class="text-button" data-ui="save-preset" style="margin-top:12px">Сохранить текущие настройки как профиль ${icon('save')}</button></section><div class="section-heading"><h2>Разделы настроек</h2><span class="meta">${state.fields.length} параметров</span></div><div class="configure-index">${[
+      ['text','providers','Автор и механика','Источник текста, направление и вариативность.'],['image','images','Источник изображения','Локальный движок, подписка или API.'],['pixel','sprites','Спрайт и цвет','Прозрачность, края, холст и палитра.'],['stack','models','Модели и LoRA','Файлы моделей и художественные адаптеры.'],['network','multiplayer','Соединение с игрой','Адрес генератора и совместный крафт.'],['pulse','diagnostics','Диагностика','Журнал, события и технические параметры.']
+    ].map(([glyph,route,title,description]) => `<a class="index-row" href="#${route}"><span class="index-number">${icon(glyph)}</span><div><h3>${title}</h3><p>${description}</p></div><span class="index-tail"><span>${counts(route)}</span>${icon('arrow')}</span></a>`).join('')}</div>${disclosure('all-settings','Все параметры одним списком',full,'Полный доступ ко всем настройкам, включая параметры других источников и служебные поля. Значения не скрываются при смене профиля.')}<p class="settings-path">${esc(state.remote.configPath)}</p></div>${aside()}</div>`;
   }
   function pageExtras(page) {
     if (page === 'providers' && value('INFINI_LLM_PROVIDER') === 'openai_codex' || page === 'images' && value('INFINI_IMAGE_BACKEND') === 'openai_codex') return `<div class="notice">Codex использует вход по подписке, не API-ключ. Модель текста и модель изображения настраиваются независимо.</div><div class="page-actions"><button class="button" data-action="codexLogin">Войти в Codex ${icon('arrow')}</button><button class="button" data-action="codexStatus">Статус аккаунта</button><button class="button" data-action="codexLogout">Выйти</button>${page === 'providers' ? '<button class="button" data-action="codexCatalog">Обновить модели</button>' : '<button class="button" data-action="codexPing">Проверить аккаунт</button>'}</div><div class="account-status-panel"><p><span id="account-status">${esc(accountText(page))}</span><br>Обновление каталога не запускает крафт. У изображений нет отдельного API списка моделей.</p></div>`;
@@ -514,7 +517,7 @@
   }
   function diagnosticsMarkup() {
     const tabs = {summary:'Сводка',events:'События',prompts:'Промпты',pipeline:'Этапы',sdcpp:'sd.cpp',failure:'Ошибка'};
-    return `<details class="advanced"><summary>Аварийное управление</summary><p class="details-note">Обычный запуск защищает активный крафт. Здесь доступен принудительный перезапуск только после подтверждения.</p><div class="page-actions" style="padding:0 16px"><button class="button button-danger" data-ui="force-restart">Принудительный перезапуск…</button></div></details><section><div class="section-heading"><h2>Локальный журнал</h2></div><p class="dialog-copy">Соединение, журнал, очистка и папка кеша используют сохранённую конфигурацию или сервер, запущенный этой студией. Для новых адресов сначала сохрани настройки.</p><div class="page-actions"><button class="button" data-action="health">${icon('pulse')}Соединение</button><button class="button" data-action="trace">${icon('refresh')}Обновить журнал</button><button class="button" data-action="openCache" title="Открыть папку кеша на компьютере генератора">${icon('folder')}Открыть папку кеша</button><button class="button" data-action="cancelTrace">Отменить обновление</button><button class="button button-danger" data-ui="clear-trace">Очистить…</button></div><div class="diagnostic-status"><span class="eyebrow">ИСХОДНЫЙ СТАТУС ГЕНЕРАТОРА</span><p id="diagnostic-status"></p></div><p id="trace-status" class="trace-status" role="status"></p><div class="trace-tabs" role="tablist" aria-label="Разделы журнала">${Object.entries(tabs).map(([key,name]) => `<button id="tab-${key}" role="tab" aria-controls="trace-view" aria-selected="${key === state.traceTab}" tabindex="${key === state.traceTab ? '0':'-1'}" class="${key === state.traceTab ? 'active':''}" data-trace-tab="${key}">${name}</button>`).join('')}</div><div id="trace-view" class="trace-view" role="tabpanel" aria-labelledby="tab-${state.traceTab}" tabindex="0"></div></section>`;
+    return `<details class="advanced"><summary>Аварийное управление</summary><p class="details-note">Обычный запуск защищает активный крафт. Здесь доступен принудительный перезапуск только после подтверждения.</p><div class="page-actions" style="padding:0 16px"><button class="button button-danger" data-ui="force-restart">Принудительный перезапуск…</button></div></details><section><div class="section-heading"><h2>Локальный журнал</h2></div><p class="dialog-copy">Соединение, журнал, очистка и папка кеша используют сохранённую конфигурацию или сервер, запущенный этой студией. Для новых адресов сначала сохрани настройки.</p><div class="page-actions"><button class="button" data-action="health">${icon('pulse')}Соединение</button><button class="button" data-action="trace">${icon('refresh')}Обновить журнал</button><button class="button" data-action="openCache" title="Открыть папку кеша на компьютере генератора">${icon('folder')}Открыть папку кеша</button><button class="button" data-action="cancelTrace">Отменить обновление</button><button class="button button-danger" data-ui="clear-trace">Очистить…</button></div><div class="diagnostic-status"><span class="eyebrow">Исходный статус генератора</span><p id="diagnostic-status"></p></div><p id="trace-status" class="trace-status" role="status"></p><div class="trace-tabs" role="tablist" aria-label="Разделы журнала">${Object.entries(tabs).map(([key,name]) => `<button id="tab-${key}" role="tab" aria-controls="trace-view" aria-selected="${key === state.traceTab}" tabindex="${key === state.traceTab ? '0':'-1'}" class="${key === state.traceTab ? 'active':''}" data-trace-tab="${key}">${name}</button>`).join('')}</div><div id="trace-view" class="trace-view" role="tabpanel" aria-labelledby="tab-${state.traceTab}" tabindex="0"></div></section>`;
   }
   function updateDiagnostics() {
     if (!$('#diagnostic-status')) return;
@@ -581,6 +584,10 @@
   }
   function navigate() {
     const target = location.hash.slice(1).split('?')[0];
+    const animateRoute = state.pointerRoute === target && target !== state.page && !!state.remote;
+    state.pointerRoute = null;
+    const workspace = $('#workspace');
+    workspace.classList.remove('route-enter');
     state.page = routes[target] ? target : 'operate'; state.filter = '';
     $$('.nav-link').forEach(link => {link.classList.toggle('active',link.dataset.route === state.page); if (link.dataset.route === state.page) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');});
     $('#crumb').textContent = routes[state.page][0];document.title = `${routes[state.page][0]} — Infinicraft`;
@@ -589,6 +596,12 @@
     render();if (fromMenu) $('#workspace').focus({preventScroll:true});
     if(state.focusKey) {const key=state.focusKey;state.focusKey=null;focusFieldRow(key);} else window.scrollTo({top:0,behavior:'instant'});
     maybeLoadCatalog();
+    // The persistent workspace animates only a pointer-driven route change;
+    // snapshot updates and control renders never replay the entrance.
+    if (animateRoute && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      void workspace.offsetWidth;
+      workspace.classList.add('route-enter');
+    }
   }
   function matches(field,query) {
     const haystack = `${label(field)} ${field.key} ${field.help || ''} ${routes[field.route][0]}`.toLocaleLowerCase();
@@ -760,6 +773,9 @@
     if(target.id === 'page-search') {const start=target.selectionStart;state.filter=target.value;render();$('#page-search').focus({preventScroll:true});$('#page-search').setSelectionRange(start,start);}
   });
   document.addEventListener('click',event => {
+    const routeLink = event.target.closest('a[href^="#"]');
+    const pointerTarget = routeLink?.hash.slice(1).split('?')[0];
+    state.pointerRoute = event.detail > 0 && event.button === 0 && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && !routeLink?.dataset.ui && !routeLink?.target && routes[pointerTarget] && pointerTarget !== state.page ? pointerTarget : null;
     const navigation = event.target.closest('.rail a[href^="#"]');
     if (navigation && $('.rail').classList.contains('is-open') && navigation.hash === location.hash) {
       setMenu(false,false); $('#workspace').focus({preventScroll:true});
@@ -799,6 +815,8 @@
     }
   });
   document.addEventListener('keydown',event => {
+    state.pointerRoute = null;
+    $('#workspace').classList.remove('route-enter');
     if((event.ctrlKey || event.metaKey) && event.code === 'KeyK') {event.preventDefault();if(!$('#utility-dialog').open) showSearch();}
     if((event.ctrlKey || event.metaKey) && event.code === 'KeyS') {event.preventDefault();if(state.remote && !state.shutdown && !document.querySelector('dialog[open]')) action('save');}
     if($('#search-dialog').open && event.target.id === 'global-search' && ['ArrowDown','ArrowUp','Enter'].includes(event.key)) {
@@ -807,7 +825,7 @@
       else {state.searchIndex=Math.max(0,Math.min(state.searchMatches.length-1,state.searchIndex+(event.key === 'ArrowDown'?1:-1)));$$('.search-result').forEach((result,index)=>result.classList.toggle('selected',index === state.searchIndex));const result=$(`#search-hit-${state.searchIndex}`);if(result) {const panel=$('#search-results');if(result.offsetTop < panel.scrollTop) panel.scrollTop=result.offsetTop;else if(result.offsetTop+result.offsetHeight>panel.scrollTop+panel.clientHeight) panel.scrollTop=result.offsetTop+result.offsetHeight-panel.clientHeight;}}
     }
     if(event.target.matches('[data-trace-tab]') && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
-      event.preventDefault();const tabs=$$('[data-trace-tab]'),index=tabs.indexOf(event.target);const next=event.key === 'Home'?0:event.key === 'End'?tabs.length-1:(index+(event.key === 'ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].click();tabs[next].focus();
+      event.preventDefault();const tabs=$$('[data-trace-tab]'),index=tabs.indexOf(event.target);const next=event.key === 'Home'?0:event.key === 'End'?tabs.length-1:(index+(event.key === 'ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].click();tabs[next].focus();tabs[next].scrollIntoView({block:'nearest',inline:'nearest'});
     }
     if(event.key === 'Escape') setMenu(false);
     if(event.key === 'Tab' && $('.rail').classList.contains('is-open') && !document.querySelector('dialog[open]')) {
@@ -816,6 +834,7 @@
       else if(!event.shiftKey && document.activeElement === last) {event.preventDefault();first.focus();}
     }
   });
+  document.addEventListener('animationend',event => {if(event.target.id === 'workspace') event.target.classList.remove('route-enter');});
   $$('dialog').forEach(dialog => {
     dialog.addEventListener('cancel',event=>{if(dialog.dataset.kind === 'defaults' && (state.pending || state.posting)) event.preventDefault();});
     dialog.addEventListener('click',event => {if(event.target === dialog && !(dialog.dataset.kind === 'defaults' && (state.pending || state.posting))) {const rect=dialog.getBoundingClientRect();if(event.clientX<rect.left || event.clientX>rect.right || event.clientY<rect.top || event.clientY>rect.bottom) dialog.close();}});
