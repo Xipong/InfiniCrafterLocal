@@ -133,7 +133,9 @@ internal static partial class GeneratedPlacedBodyNativeAdapter
         using var file=File.OpenRead(path);
         string hash=Convert.ToHexString(SHA256.HashData(file)).ToLowerInvariant();
         if (hash != "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
-            && hash != "0585f4ebb022708a5d2a52ba92c6b4a4f812154d0333b384ef64d2dbd4f5b124")
+            // tModLoader 2026.7.3.0 SDK release; all 19 exact method shapes below
+            // are still preflighted, then rechecked against the live hook chain.
+            && hash != "d530e508b2841e66d880ce279a609624b5ab66ce8093eedfa04f47c3d12d485c")
             throw Guard("unsupported native assembly SHA256 "+hash);
     }
 

@@ -300,6 +300,7 @@ internal static partial class EngineRuntimeChecks
             ("small generated buffs reach real item/player hooks", SmallGeneratedBuffsReachRealHooks),
             ("placed light footprint persistence break unload", PlacedLightOwnsFootprintNotPlayerAndPersists),
             ("placed light server mirror exact definition quarantine", PlacedLightMirrorAuthenticatesServerAndExactDefinition),
+            ("placed body native profile hash shape and lifecycle", PlacedNativeProfileKeepsExactHashShapeAndLifecycle),
             ("placed body ledger selected identity save and network", PlacedBodyLedgerKeepsExplicitIdentityAcrossSaveAndNetwork),
             ("placed body cosmetic decoder cannot erase material", PlacedBodyCosmeticDecodeCannotEraseMaterial),
             ("placed body restore registry exact conflict refusal", PlacedBodyRestoreUsesExistingRegistryWithoutReplacingConflicts),
