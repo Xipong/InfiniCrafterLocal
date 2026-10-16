@@ -8,7 +8,7 @@ from typing import Any
 MATERIAL_RENDERERS = ("spriteElement", "texturedPath")
 ASSET_ID_PATTERN = r"^[A-Za-z0-9_-]{1,48}$"
 CURVES = ("linear", "easeIn", "easeOut", "smoothStep")
-COLOR_TOKENS = ("white", "gray", "brown", "tan", "red", "orange", "yellow", "gold", "green", "cyan", "blue", "purple", "pink", "black", "effect")
+COLOR_TOKENS = ("white", "gray", "silver", "brown", "tan", "red", "orange", "yellow", "gold", "green", "cyan", "blue", "purple", "pink", "black", "effect")
 NEUTRAL_FIELDS = {
     "scale": 1, "density": 0, "spread": 0, "jitter": 0, "fadeIn": 0, "fadeOut": 0,
     "signatureWeight": 0, "visualCost": 0, "budgetWeight": 1,

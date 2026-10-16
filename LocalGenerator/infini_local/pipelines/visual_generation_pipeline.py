@@ -15,6 +15,7 @@ from typing import Any, Mapping
 from infini_local.core.env_utils import env_float, env_int
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.core.vfx_material_contract import COLOR_TOKENS
 from infini_local.core.visual_contract_schema import (
     front_hand_sprite_errors, front_hand_sprite_requirement, grip_schema,
     sprite_presentation_properties,
@@ -140,7 +141,7 @@ def _visual_item_schema() -> dict[str, Any]:
             "worldScale": {"type": "number", "minimum": 0.25, "maximum": 4.0, "description": _WORLD_SCALE_DESCRIPTION},
             "effectColor": {
                 "type": "string",
-                "enum": ["white", "gray", "brown", "tan", "red", "orange", "yellow", "gold", "green", "cyan", "blue", "purple", "pink", "black"],
+                "enum": [token for token in COLOR_TOKENS if token != "effect"],
                 "description": "Optional exact runtime rendering color token shared by item, projectile and detached VFX. Independent of the rich descriptive palette used for sprite art; no hex or prose parsing. Omission preserves historical rendering behavior.",
             },
             "grip": grip_schema(),
@@ -365,6 +366,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
                 "equalHeldBody": "Shared root guarantees equal base frame size, not final size: with neutral caller modifiers equality requires G == clamp(D*E, .1, 8), or G == D*E*curveScale(active age) for an accepted explicit mirror or visualScaleCurve. An independent hitbox curve does not multiply visual scale. Never change accepted gameplay to force equality.",
             },
             "frontHand": "Only explicit move_front_hand (opcode 20) attaches to the native front hand H. Author owns collision center C = H + aimedAxis * hitboxOffsetPx, aimMode, durationTicks and stretch; never derive mechanics from PNG size/axis/grip. For sprite modes require selected R, forwardAngleDegrees and final-canvas atomic grip: reuse_item_icon selects item.grip with no duplicate entity metadata; a distinct baked_sprite owns its entity grip. no_asset/runtime_geometry require no PNG grip; geometry stays at the authored collision center. Describe the actual hand-contact region in that owner's art prompt. Repair only the diagnosed owner leaf, never accepted gameplay, mode or valid coordinates.",
+            "handContactGeometry": "For explicit move_front_hand, native none-to-full stretch moves the hand only 6px (lengths 4..10px), not a long thrust. The sprite grip stays on H; hitboxOffsetPx does not extend the visible body. Compare the signed distance from grip to the authored contact region, projected along the final PNG forward axis using the effective multiplier from formulas.body: R/C * clamp(P, .1, 8), or its explicit curve/mirror exception, with the immutable hitbox center offset and rectangle. Choose art framing, grip and size coherently in that fixed geometry; never move only the picture to pretend to extend collision reach. A mismatch needing different motion/collision is not repairable by Visual. Native parent texture size is read-only calibration, not automatic reach inheritance or a mandatory size floor. In Repair preserve valid art and mechanics outside exact permissions.",
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
             "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon draw a single PNG rather than the full collision path. texturedPath is an independent VFX renderer for compatible accepted path sources. Describe intended composition in animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",

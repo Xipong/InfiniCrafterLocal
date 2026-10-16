@@ -217,7 +217,7 @@ def test_explicit_static_authority_survives_real_preparation_and_native_dispatch
     assert body["input"] == [*json_marker, input_message("developer", STATIC[:-1] + "}"),
                             input_message("user", "{" + DYNAMIC)]
     assert body["instructions"] == source["messages"][0]["content"]
-    assert body["reasoning"] == {"effort": "low"}
+    assert body["reasoning"] == {"effort": "low", "summary": "auto"}
     if format_mode == "off":
         assert "text" not in body
     elif format_mode == "json_object":

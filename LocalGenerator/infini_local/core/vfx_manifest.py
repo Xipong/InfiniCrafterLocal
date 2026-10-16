@@ -93,6 +93,23 @@ _RENDERER_REQUIREMENTS = {
     "spriteElement": {**NEUTRAL_FIELDS, "backend": "Sprite"},
     "texturedPath": {**NEUTRAL_FIELDS, "backend": "Primitive", "repeatEvery": 0, "duration": 3},
 }
+_READABILITY_RULE = (
+    "Compose presentation readable at gameplay zoom for intended visible attacks and secondary effects; "
+    "sound-only is not a visible gameplay cue. Consider the accepted delayed area action's event anchor, "
+    "radiusPx and delayTicks, and actual child bodies' size, contrast, lifetime and movement separately. "
+    "A few tiny fading particles or dark small PNGs can be technically valid yet unreadable. "
+    "Choose count, world-pixel dimensions, opacity and lifetime together using actual renderer controls, "
+    "not effectMagnitude, visualCost or motif prose (these do not increase visible intensity). "
+    "For delayed cues spriteElement/libraryParticle use event-relative startTick; legacy impactRing ignores event startTick. "
+    "An on_hit cue starts from that hit occurrence, not automatically from a gameplay action's delayed execution; "
+    "match the accepted delay explicitly only with a renderer that consumes it. "
+    "For a physical child's visibility, prefer accents on that exact child's available spawn/periodic/hit pairs "
+    "rather than decorative debris that could be mistaken for additional damaging bodies. "
+    "Keep accents consistent with actual coverage: do not invent damage, extra gameplay projectiles or a larger damaging area. "
+    "There is no automatic VFX insertion or minimum brightness: deliberate absence/zero remains valid; "
+    "in Repair this guidance applies only inside diagnosed permissions and never opens frozen slots or mechanics."
+)
+
 _RENDERER_SEMANTICS = {
     "libraryParticle": "Real ParticleLibrary V3 instanced Star particles, not the legacy pl:* Terraria Dust selectors. Explicit particle controls choose count, motion, dimensions, spin, color and lifetime fade; world-only attachment captures event-time pose. duration is individual lifetime; event startTick is delay/repeatEvery=0, periodic repeatEvery>=1 and item startTick=0. Velocity updates once per world tick as velocity*drag+world acceleration, then position+=velocity. Common alpha multiplies linear endOpacity once; dimensions multiply linear endScaleMultiplier. Explicit alpha/additive blend and exact before/after projectile layer remain choices. Uses existing cadence/occurrence/source budgets; disabled library suppresses this lane with no Dust fallback. No damage, gameplay child, generated PNG or inferred direction.",
     "screenShakeCue": "Explicit nonperiodic local camera cue through Luminance ScreenShakeSystem.StartShakeAtPoint, attenuated from the exact event anchor to the viewer. Six controls are mandatory in screenShake; no implicit damage/weapon-triggered shake. startTick is event-relative delay in world ticks with repeatEvery=0; the captured anchor/forward survive source retirement. duration=3 is neutral, not camera lifetime. strengthPx=0 is silence. Dissipation follows native camera visits, not simulation ticks. Each handle shares the existing instance budgets. Native Luminance/user screenshake settings remain authoritative; a disabled backend suppresses this lane without substitution. No PNG, light, sound or particles are added.",
@@ -909,6 +926,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "Bind every slot to one exact runtimeSurface.runtimePairs entityId+event pair.",
             "Do not add gameplay, entities, events, hitboxes, damage, movement, child spawning, or status effects.",
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
+            _READABILITY_RULE,
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
             "Legacy forms: choose from runtimeVocabulary.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
             "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
@@ -1409,6 +1427,7 @@ def _request(
                 "bind only exact runtimeSurfaceReadOnly.runtimePairs entityId+event pairs; runtimeVocabularyReadOnly owns the read-only enum values, numeric ranges, rendererRequirements, rendererSemantics and textureDependencyTuples",
                 "presentation only; gameplay is immutable",
                 _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
+                _READABILITY_RULE,
             ],
         }
         user = {

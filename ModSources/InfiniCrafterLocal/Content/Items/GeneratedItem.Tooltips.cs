@@ -38,8 +38,22 @@ public partial class GeneratedItem
         if (!Main.dedServ && !Main.gameMenu && GeneratedItemRegistryService.IsCurrentWorldData(data)
             && Main.LocalPlayer is { active: true } player)
         {
-            IReadOnlyList<GeneratedItemExhaustionStatus> exhausted = player.GetModPlayer<InfiniCraftPlayer>()
-                .CaptureGeneratedItemExhaustion();
+            InfiniCraftPlayer owner = player.GetModPlayer<InfiniCraftPlayer>();
+            int mobilityTicks = owner.GeneratedMobilityCooldownTicks;
+            // Only disclose the shared countdown on an executable mobility input;
+            // a mining-only primary action remains unrelated and usable.
+            foreach (string input in new[] { RuntimeInputKind.PrimaryUse, RuntimeInputKind.AlternateUse })
+            {
+                RuntimeBindingSpec? binding = program.BindingForInput(input);
+                if (mobilityTicks > 0 && binding?.UsePolicy.Action.Kind == RuntimeBindingAction.ApplyItemEffects
+                    && program.TryGetEntity(binding.UsePolicy.Action.TargetId)?.Kind == RuntimeEntityKind.ItemBody
+                    && (data.EffectsForBinding(binding).MobilityMode is "recall_home" or "blink_to_cursor"))
+                {
+                    Add("MobilityCooldownRemaining", "MobilityCooldownRemaining", RuntimeTooltipTime(mobilityTicks));
+                    break;
+                }
+            }
+            IReadOnlyList<GeneratedItemExhaustionStatus> exhausted = owner.CaptureGeneratedItemExhaustion();
             if (exhausted.Count > 0)
             {
                 string definition = GeneratedItemRegistryService.DefinitionIdentity(data);
@@ -52,6 +66,7 @@ public partial class GeneratedItem
                 }
             }
         }
+        AddRuntimeEquipmentStats(data, Add);
         if (program.TryGetEffectGroup(program.HeldEffectGroupId)?.GeneratedBuff is { } held)
             AddRuntimeExhaustion(held, "Hold", RuntimeTooltipText("InputHold"), Add);
         // This is display order, not a chooser: BindingForInput is the canonical
@@ -115,6 +130,7 @@ public partial class GeneratedItem
             if (active && action.Kind == RuntimeBindingAction.ApplyItemEffects)
                 AddRuntimeUseEffects(data.EffectsForBinding(binding), suffix, label, Add);
         }
+        AddRuntimeSecondaryCombat(data, Add);
     }
 
     private static void AddRuntimeUseCondition(GameplaySpec gp, string suffix, string input, Action<string, string, object[]> add)
@@ -172,9 +188,9 @@ public partial class GeneratedItem
             if (RuntimeTooltipFinite(generated.MovementSpeed, -0.5f, 2f) && generated.MovementSpeed != 0f)
                 Effect("Movement", "Movement", RuntimeTooltipSignedPercent(generated.MovementSpeed));
             if (RuntimeTooltipFinite(generated.JumpBoost, 0f, 8f) && generated.JumpBoost > 0f)
-                Effect("Jump", "Jump", RuntimeTooltipNumber(generated.JumpBoost));
+                Effect("Jump", "Jump", RuntimeTooltipNumber(generated.JumpBoost * 60f));
             if (generated.ManaRegen is > 0 and <= 120) Effect("ManaRegen", "ManaRegen", RuntimeTooltipNumber(generated.ManaRegen));
-            if (generated.LifeRegen is > 0 and <= 120) Effect("LifeRegen", "LifeRegen", RuntimeTooltipNumber(generated.LifeRegen));
+            if (generated.LifeRegen is > 0 and <= 120) Effect("LifeRegen", "LifeRegen", RuntimeTooltipNumber(generated.LifeRegen / 2f));
             if (RuntimeTooltipFinite(generated.EmitLightStrength, 0f, 1.5f) && generated.EmitLightStrength > 0f)
                 Effect("Light", "Light", RuntimeTooltipNumber(generated.EmitLightStrength));
             // The executable effect sets findTreasure, not a radius-limited scan.
@@ -195,17 +211,17 @@ public partial class GeneratedItem
         => Language.GetTextValue(RuntimeTooltipKey + key, args);
     private static CultureInfo RuntimeTooltipCulture => Language.ActiveCulture.CultureInfo;
     private static string RuntimeTooltipNumber(int value) => value.ToString(RuntimeTooltipCulture);
-    private static string RuntimeTooltipNumber(float value) => value.ToString("G9", RuntimeTooltipCulture);
+    private static string RuntimeTooltipNumber(float value) => value.ToString("G7", RuntimeTooltipCulture);
     private static bool RuntimeTooltipFinite(float value, float min, float max) => float.IsFinite(value) && value >= min && value <= max;
     private static string RuntimeTooltipSignedPercent(float value)
-        => (value > 0f ? "+" : "") + ((double)value * 100d).ToString("G9", RuntimeTooltipCulture);
+        => (value > 0f ? "+" : "") + ((double)value * 100d).ToString("G7", RuntimeTooltipCulture);
     private static string RuntimeTooltipTime(int ticks)
     {
-        // Tick count is authoritative. Seconds are a compact readout, with an
-        // approximation mark whenever millisecond rounding would lose a fraction.
+        // Display-only seconds: authoritative/debug data keeps its exact ticks.
+        // Mark fractional rounding without exposing implementation units in UI.
         decimal seconds = ticks / 60m;
         string display = seconds.ToString("0.###", RuntimeTooltipCulture);
         if (decimal.Round(seconds, 3) != seconds) display = "≈" + display;
-        return RuntimeTooltipText("Time", display, RuntimeTooltipNumber(ticks));
+        return RuntimeTooltipText("Time", display);
     }
 }

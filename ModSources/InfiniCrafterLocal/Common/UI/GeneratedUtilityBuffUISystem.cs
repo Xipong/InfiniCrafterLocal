@@ -57,6 +57,8 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
             snapshot, Language.ActiveCulture.CultureInfo);
         IReadOnlyList<GeneratedItemExhaustionStatusRow> exhausted = GeneratedItemExhaustionStatusView.Build(
             owner.CaptureGeneratedItemExhaustion(), Language.ActiveCulture.CultureInfo);
+        GeneratedMobilityCooldownStatus? mobility = GeneratedMobilityCooldownStatusView.Build(
+            owner.GeneratedMobilityCooldownTicks, Language.ActiveCulture.CultureInfo);
         int append = GeneratedUtilityBuffStatusView.GetAppendIndex(player.buffType, Main.playerInventory);
         int inventoryOffset = Main.playerInventory ? NativeInventoryTopOffset() : 0;
         foreach (GeneratedUtilityBuffStatus status in statuses)
@@ -65,6 +67,9 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         foreach (GeneratedItemExhaustionStatusRow status in exhausted)
             DrawStatus(player, _exhaustionIcon, status.Label,
                 status.Tooltip, status.RemainingTicks, append++, inventoryOffset);
+        if (mobility is not null)
+            DrawStatus(player, TextureAssets.Buff[mobility.IconBuffType], mobility.Label,
+                mobility.Tooltip, mobility.RemainingTicks, append++, inventoryOffset);
         return true;
     }
 

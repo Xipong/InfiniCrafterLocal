@@ -7,6 +7,7 @@ import os
 import queue
 from dataclasses import dataclass, replace
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -159,6 +160,7 @@ def _write_codex_transport(item: _CodexObservation):
         with _CODEX_TRACE_COMMIT_LOCK:
             if item.epoch != _CODEX_TRACE_EPOCHS.get(_trace_target(item.trace_file), 0):
                 return
+            safe["persistedAt"] = time.time()
             trace_tools.trace_event(cache_dir=item.cache_dir, trace_prompts_enabled=True,
                 trace_max_prompt_chars=item.max_chars, trace_file=item.trace_file, prompt_trace_file=item.prompt_trace_file,
                 kind="codex_transport", stage="transport", title="Codex generation HTTP observation", payload=safe)
@@ -282,6 +284,16 @@ def _codex_trace_worker() -> None:
                 # assembly/redaction cannot be established.
                 safe_batch = [replace(row, raw=None, payload={**row.payload,
                     "artifact": {"status": "refused", "reason": "stream_redaction_failed"}}) for row in rows]
+            if rows and all(row.raw is not None for row in safe_batch):
+                first = safe_batch[0]
+                try:
+                    receipts = trace_tools.persist_transport_batch(first.cache_dir,
+                        [row.raw for row in safe_batch if row.raw is not None],
+                        secrets=tuple({secret for row in safe_batch for secret in row.secrets}))
+                except Exception:
+                    receipts = [{"status": "refused", "reason": "stream_persistence_failed"} for _ in safe_batch]
+                safe_batch = [replace(row, raw=None, payload={**row.payload, "artifact": receipt})
+                              for row, receipt in zip(safe_batch, receipts)]
             for row in safe_batch:
                 _write_codex_transport(row)
         elif item.payload.get("event") == "call_end":

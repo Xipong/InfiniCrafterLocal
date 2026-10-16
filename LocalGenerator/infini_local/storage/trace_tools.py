@@ -225,6 +225,53 @@ def persist_transport_artifact(cache_dir: Path, raw: bytes, *, secrets: tuple[st
         return {"status": "refused", "reason": type(exc).__name__}
 
 
+def persist_transport_batch(cache_dir: Path, raws: list[bytes], *, secrets: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    """One immutable artifact per safe SSE attempt; ranges preserve event bytes.
+
+    sha256/bytes bind the complete artifact; offset/length/rangeSha256 bind each
+    event payload (not reconstructed SSE framing). Legacy receipts need no range.
+    """
+    from infini_local.services.codex_auth import redact_credentials
+    from infini_local.core.env_utils import env_credential_values
+    secrets = secrets + env_credential_values()
+    clean = [redact_credentials(raw.decode("utf-8"), secrets).encode("utf-8") for raw in raws]
+    receipt = persist_transport_artifact(cache_dir, b"\n".join(clean), secrets=secrets)
+    if receipt.get("status") != "stored":
+        return [dict(receipt) for _ in raws]
+    offset = 0
+    receipts = []
+    for raw, saved in zip(raws, clean):
+        receipts.append({**receipt, "format": "infini.transport-ranges.v1", "offset": offset,
+                         "length": len(saved), "rangeSha256": hashlib.sha256(saved).hexdigest(),
+                         "sanitized": saved != raw})
+        offset += len(saved) + 1
+    return receipts
+
+
+def read_transport_artifact(cache_dir: Path, receipt: dict[str, Any]) -> bytes:
+    """Read frozen whole-event and fresh range receipts with integrity checks."""
+    if receipt.get("status") != "stored":
+        raise ValueError("artifact not stored")
+    root = Path(cache_dir).resolve()
+    target = (root / receipt["path"]).resolve()
+    if not target.is_relative_to(root):
+        raise ValueError("artifact outside cache")
+    raw = target.read_bytes()
+    if len(raw) != receipt["bytes"] or hashlib.sha256(raw).hexdigest() != receipt["sha256"]:
+        raise ValueError("artifact hash/size mismatch")
+    if "format" not in receipt:
+        return raw
+    if receipt["format"] != "infini.transport-ranges.v1":
+        raise ValueError("unknown artifact format")
+    offset, length = receipt["offset"], receipt["length"]
+    if type(offset) is not int or type(length) is not int or min(offset, length) < 0 or offset + length > len(raw):
+        raise ValueError("invalid artifact range")
+    fragment = raw[offset:offset + length]
+    if hashlib.sha256(fragment).hexdigest() != receipt["rangeSha256"]:
+        raise ValueError("range hash mismatch")
+    return fragment
+
+
 def _redact_diagnostic(value: Any) -> Any:
     """Sanitize every persisted/echoed member, preserving clean authored strings."""
     from infini_local.services.codex_auth import redact_credentials

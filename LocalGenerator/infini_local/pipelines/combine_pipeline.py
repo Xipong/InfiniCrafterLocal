@@ -135,6 +135,15 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
     pipeline_log: list[dict[str, Any]] = []
     data: dict[str, Any] | None = None
     lease = token = None
+    key = None
+
+    def failure_data(args=()):
+        if data is None:
+            # Before Author returns there is no candidate: retain both complete
+            # source inputs and the computed join, not just fn's first argument.
+            # generation_debug owns the existing full snapshot/redaction/toggle.
+            return {"itemA": payload.get("itemA"), "itemB": payload.get("itemB"), "recipeKey": key}
+        return args[0] if args and isinstance(args[0], dict) else data
 
     def step(label: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
         started = time.monotonic()
@@ -145,7 +154,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
                 return result
             except Exception as exc:
                 pipeline_log.append({"stage": label, "ok": False, "ms": int((time.monotonic() - started) * 1000), "error": repr(exc)})
-                generation_debug.record_combine_failure(label, exc, payload, args[0] if args and isinstance(args[0], dict) else data, pipeline_log)
+                generation_debug.record_combine_failure(label, exc, payload, failure_data(args), pipeline_log)
                 raise
 
     try:
@@ -225,7 +234,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         return data
     except Exception as exc:
         if not isinstance(getattr(exc, "_infini_failure_snapshot", None), dict):
-            generation_debug.record_combine_failure("unknown", exc, payload, data, pipeline_log)
+            generation_debug.record_combine_failure("unknown", exc, payload, failure_data(), pipeline_log)
         raise
     finally:
         if lease is not None and token is not None:

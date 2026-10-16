@@ -273,7 +273,7 @@ def _umbrella_grenade() -> dict[str, Any]:
 
 
 def _door_on_chain() -> dict[str, Any]:
-    b = _Builder("door_on_chain", name="Door on a Chain", mechanic="Swings a literal reinforced door from a bounded tether.", damage=48)
+    b = _Builder("door_on_chain", name="Door on a Chain", mechanic="Swings a literal reinforced door from a bounded tether.", damage=48, channel=True)
     b.projectile("chained_door", "owner_attached_projectile", speed=0, lifetime=180, damage=48, damage_class="melee", tile=True, pierce=-1, movement="move_flail_tether", movement_params={"rangeTiles": 10, "returnSpeed": 14}, width=36, height=72)
     b.bind("primary_chain", "primary_use", "spawn_entity", "chained_door")
     b.call("door_stun", "apply_status_on_event", "chained_door", {"when": "on_hit", "buffId": 31, "durationTicks": 90})

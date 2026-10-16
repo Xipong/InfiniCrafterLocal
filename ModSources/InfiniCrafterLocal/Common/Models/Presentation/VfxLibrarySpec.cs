@@ -47,7 +47,10 @@ public sealed class VfxLibraryParticleSpec
         VfxMaterialValidation.Range(EndScaleMultiplier,0,4,"particle.endScaleMultiplier");
         VfxMaterialValidation.Range(EndOpacity,0,1,"particle.endOpacity");
     }
-    private static void ValidateColor(string token)=>VfxMaterialValidation.Choice(token,"particle.color", "white","gray","brown","tan","red","orange","yellow","gold","green","cyan","blue","purple","pink","black","effect");
+    private static void ValidateColor(string token)
+    {
+        if (token != "effect") RuntimeColorPolicy.RequireRenderingToken(token);
+    }
 }
 
 public sealed class VfxScreenShakeSpec

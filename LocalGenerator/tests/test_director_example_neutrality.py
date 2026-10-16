@@ -137,9 +137,9 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
                 assert cards[cap.name][key] == value
         assert cards[cap.name]["params"].keys() == expected["params"].keys()
         for name, value in expected["params"].items():
-            actual = deepcopy(cards[cap.name]["params"][name])
-            if "consumerConstraint" in actual:
-                actual["consumerConstraint"] = catalog["fieldGuide"]["consumerConstraints"][actual["consumerConstraint"]]
+            from test_author_request_compaction import _expand_constraint_references
+            actual = _expand_constraint_references(
+                cards[cap.name]["params"][name], catalog["fieldGuide"]["consumerConstraints"])
             assert actual == value
     for field, registry, identity in (
         ("entityKinds", ENTITY_KIND_REGISTRY, "kind"),

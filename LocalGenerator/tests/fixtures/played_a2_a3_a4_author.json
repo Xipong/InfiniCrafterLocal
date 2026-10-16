@@ -1,0 +1,1813 @@
+{
+  "g_90e0879b1756a18b": {
+    "name": "Rope-Hung Door",
+    "category": "hybrid",
+    "concept": {
+      "literalSynthesis": "A literal wooden door, with its plank panels, hinges and handle intact, lashed to a thick coil of rope. The rope wraps around the door as a carrying harness and trailing tether.",
+      "coreMechanic": "Throw the rope-bound door as a reusable tethered melee weight, or install the same item as an ordinary wooden door. The throw provides short-range crowd control through damage and knockback; placement provides a usable doorway but removes the item from inventory until the placed door is broken. These combat mechanics are newly authored, not claimed parent abilities.",
+      "parentAContribution": "Деревянная дверь (Terraria/WoodenDoor) supplies the literal wooden door body, the heavy striking surface, and its source-backed wooden-door tile placement.",
+      "parentBContribution": "Веревка (Terraria/Rope) supplies the visible rope harness and inspires the explicit outbound-and-return tether movement. This does not inherit rope climbing or place rope tiles.",
+      "playerExperience": "Carry one durable object that can knock enemies back or become a functional door. Throws cost no mana or item stack, but only one physical thrown copy may be active. Installing it sacrifices access to the attack until the door is broken and the item returns.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Throw the rope-bound wooden door as a reusable tethered striking weight."
+        },
+        {
+          "input": "alternate_use",
+          "intent": "Install the same item as a functional wooden door, escrowing it until the placed door is broken."
+        }
+      ]
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v5",
+      "primaryEntityId": "tethered_door",
+      "entities": [
+        {
+          "id": "door_item",
+          "kind": "item_body"
+        },
+        {
+          "id": "tethered_door",
+          "kind": "owner_attached_projectile"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "throw_door",
+          "input": "primary_use",
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "tethered_door"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        },
+        {
+          "id": "install_door",
+          "input": "alternate_use",
+          "action": {
+            "kind": "place_item",
+            "targetId": "door_item",
+            "placementCallId": "wooden_door_placement"
+          },
+          "stackCost": 1,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "door_item_stats",
+          "fn": "configure_item_stats",
+          "target": "door_item",
+          "params": {
+            "damageClass": "melee",
+            "damage": 14,
+            "knockback": 5,
+            "useTimeTicks": 10,
+            "useAnimationTicks": 10,
+            "manaCost": 0,
+            "rarity": 0,
+            "valueCopper": 210,
+            "maxStack": 1,
+            "craftYield": 1,
+            "widthPx": 24,
+            "heightPx": 40,
+            "scale": 1
+          }
+        },
+        {
+          "id": "door_use_configuration",
+          "fn": "configure_item_use",
+          "target": "door_item",
+          "params": {
+            "useStyle": "shoot",
+            "autoReuse": false,
+            "useTurn": true,
+            "hideUseGraphic": true,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "customHeldSprite": "hidden"
+          }
+        },
+        {
+          "id": "wooden_door_placement",
+          "fn": "configure_tile_placement",
+          "target": "door_item",
+          "params": {
+            "tileId": 10,
+            "placeStyle": 0
+          }
+        },
+        {
+          "id": "door_launch",
+          "fn": "configure_spawn",
+          "target": "tethered_door",
+          "params": {
+            "velocity": {
+              "constantSpeedPxPerUpdate": 10
+            },
+            "count": 1,
+            "spreadRadians": 0,
+            "offsetPx": 20,
+            "aim": "cursor",
+            "position": {
+              "at": "owner_center"
+            }
+          }
+        },
+        {
+          "id": "single_physical_door",
+          "fn": "set_projectile_concurrency",
+          "target": "tethered_door",
+          "params": {
+            "maxActive": 1
+          }
+        },
+        {
+          "id": "door_flight_lifetime",
+          "fn": "set_projectile_lifetime",
+          "target": "tethered_door",
+          "params": {
+            "lifetimeTicks": 180
+          }
+        },
+        {
+          "id": "door_striking_box",
+          "fn": "set_projectile_hitbox",
+          "target": "tethered_door",
+          "params": {
+            "widthPx": 24,
+            "heightPx": 40,
+            "drawScale": 1,
+            "hitboxScale": 1
+          }
+        },
+        {
+          "id": "door_collision_rules",
+          "fn": "set_projectile_collision",
+          "target": "tethered_door",
+          "params": {
+            "tileCollide": true,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": -1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "door_impact_damage",
+          "fn": "set_projectile_damage",
+          "target": "tethered_door",
+          "params": {
+            "damageClass": "melee",
+            "damage": 14,
+            "knockback": 5,
+            "ownerHitCheck": true
+          }
+        },
+        {
+          "id": "rope_tether_motion",
+          "fn": "move_flail_tether",
+          "target": "tethered_door",
+          "params": {
+            "rangeTiles": 10,
+            "returnSpeed": 12
+          }
+        }
+      ]
+    },
+    "realization": {
+      "description": "The program defines one reusable item with a rope-tethered wooden-door projectile as its primary active representation. Primary use launches that body toward the cursor at an authored initial speed of 10 pixels per update. Its explicit tether movement has a maximum length of 10 tiles and a return speed of 12 pixels per update. The projectile has a 24-by-40-pixel collision box, 14 base melee damage, 5 knockback, infinite NPC penetration and once-per-NPC immunity for each physical throw. Owner hit checking is enabled. Tile contact starts the tether controller's return rather than producing a bounce or explosion. Lifetime is bounded to 180 ticks, and a same-owner, same-item, same-entity concurrency cap permits only one live thrown door. The item itself has no contact-damage lane and its ordinary use sprite is hidden. Alternate use executes native wooden-door placement using tile 10 and style 0. Accepted placement escrows the same generated item; breaking its placed tile returns it. No custom placed-sprite override is authored, so the placed form uses native door presentation. Item cadence retains the wooden door's source base use interval of 10 ticks; animation is intentionally shortened from 15 to 10 ticks. No rope climbing, rope placement, resource restoration or event-triggered secondary effects are implemented.",
+      "playerExperience": "Aim and use the item to send the door out as a tethered weight. It can strike multiple enemies, but each physical throw can damage a particular NPC only once. A wall sends it back, and the explicit one-copy cap prevents a second simultaneous thrown door. The attack consumes neither the item nor mana. Alternate use installs a functional wooden door under native placement rules. While installed, the generated item is unavailable in inventory; break the door to recover it. Its inventory stack limit is one. This is an authored interpretation of the program, not a report of a tested run.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "verdict": "aligned",
+          "summary": "Both planned actions have explicit executable bindings. The literal door-and-rope synthesis supports the chosen tethered attack and native door placement without claiming either parent originally had combat abilities.",
+          "actionChecks": [
+            {
+              "plannedIntent": "Throw the rope-bound wooden door as a reusable tethered striking weight.",
+              "implementedBehavior": "Primary use spawns one damaging owner-attached door with explicit tether movement, bounded lifetime and a one-live-copy cap; no stack is consumed.",
+              "runtimeRefs": [
+                "throw_door",
+                "tethered_door",
+                "door_launch",
+                "rope_tether_motion",
+                "door_impact_damage",
+                "single_physical_door"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "The attack and return behavior are explicitly authored rather than inferred from the rope identity."
+            },
+            {
+              "plannedIntent": "Install the same item as a functional wooden door, escrowing it until the placed door is broken.",
+              "implementedBehavior": "Alternate use references native wooden-door placement on the unique item body, with placement stack spending and escrow semantics.",
+              "runtimeRefs": [
+                "install_door",
+                "wooden_door_placement",
+                "door_item_stats"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "Tile 10 and style 0 are supplied parent facts, and maxStack is one for the reusable-use and placement hybrid."
+            }
+          ]
+        },
+        "programVsReport": {
+          "verdict": "aligned",
+          "summary": "The report describes the two input lanes, explicit projectile behavior and native placement transaction. No observed execution or unauthored secondary effect is claimed.",
+          "behaviorChecks": [
+            {
+              "runtimeRefs": [
+                "throw_door",
+                "door_item_stats",
+                "door_use_configuration"
+              ],
+              "programBehavior": "Primary use retains the stack, costs zero base mana, disables item-body contact and hides the item-use sprite with base timing of 10 ticks for both interval and animation.",
+              "reportedBehavior": "The attack is reusable, has no mana cost or body-contact lane, hides the ordinary use sprite and deliberately uses 10-tick base timing.",
+              "result": "aligned",
+              "reason": "The report distinguishes authored base timing from measured effective attack cadence."
+            },
+            {
+              "runtimeRefs": [
+                "door_launch",
+                "single_physical_door",
+                "door_flight_lifetime",
+                "rope_tether_motion"
+              ],
+              "programBehavior": "One cursor-aimed body launches at speed 10, follows a 10-tile tether with return speed 12, has a 180-tick lifetime and is limited to one live copy.",
+              "reportedBehavior": "A single bounded tethered door travels outward and returns, without permitting simultaneous copies.",
+              "result": "aligned",
+              "reason": "Movement, lifetime and concurrency are separately specified and accurately summarized."
+            },
+            {
+              "runtimeRefs": [
+                "door_striking_box",
+                "door_collision_rules",
+                "door_impact_damage"
+              ],
+              "programBehavior": "The door uses a 24-by-40 rectangle, melee damage 14, knockback 5, owner hit checking, infinite penetration and once-per-NPC immunity; tether tile contact initiates return.",
+              "reportedBehavior": "Each throw can strike multiple enemies once each, with wall-triggered return and no explosion.",
+              "result": "aligned",
+              "reason": "The report matches the collision and immunity rules and does not invent event actions."
+            },
+            {
+              "runtimeRefs": [
+                "install_door",
+                "wooden_door_placement",
+                "door_item_stats"
+              ],
+              "programBehavior": "Alternate use places native tile 10 with style 0, escrows the single-stack generated item on accepted placement and returns it when broken.",
+              "reportedBehavior": "Installation creates a functional native wooden door and makes the item unavailable until the door is broken.",
+              "result": "aligned",
+              "reason": "The report preserves placement escrow and native presentation rather than promising a custom rope-bearing placed tile."
+            }
+          ]
+        }
+      }
+    }
+  },
+  "g_fb3aca59f2dc1ac3": {
+    "name": "Recall-Cork Copper Pickaxe",
+    "category": "hybrid",
+    "concept": {
+      "literalSynthesis": "A copper pickaxe with a Recall Potion flask seated in its handle: the copper head remains recognizable, while the stoppered potion bottle forms a conspicuous reservoir beneath it. The literal parents are Terraria/RecallPotion (Зелье возврата) and Terraria/CopperPickaxe (Медная кирка).",
+      "coreMechanic": "A reusable 35-power mining tool with an alternate-use home recall. Mining retains the copper pickaxe's base 15-tick use interval and 22-tick animation. Recall is deliberately converted from a consumed potion into free reusable travel utility, limited by a 1800-tick shared player mobility cooldown after successful recall. The shared item timing also applies to alternate use rather than retaining the potion's separate 30-tick timing.",
+      "parentAContribution": "The Recall Potion contributes its literal stoppered flask identity and the purposeful home-return action supported by its supplied tooltip. Reusability and the mobility cooldown are new design choices, not claims about the original potion.",
+      "parentBContribution": "The Copper Pickaxe contributes the copper head, tool silhouette, 35 pick power, 4 melee damage, 2 knockback, and base 15/22-tick mining tempo. Its durable tool identity motivates retaining the combined item after either action.",
+      "playerExperience": "Mine with familiar low-power pickaxe functionality, then return home without carrying expendable recall potions. The benefit is intentionally reliable recurring utility, not a temporary buff: recall spends no item or mana, but its shared 30-second mobility lockout prevents rapid repeated teleports and can interfere with other mobility actions using that cooldown.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Swing the reusable copper pickaxe to mine blocks and make ordinary item-body contact attacks."
+        },
+        {
+          "input": "alternate_use",
+          "intent": "Recall home without consuming the tool, then accept a shared 1800-tick mobility cooldown."
+        }
+      ]
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v5",
+      "primaryEntityId": "recall_pick_body",
+      "entities": [
+        {
+          "id": "recall_pick_body",
+          "kind": "item_body"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "mine_with_recall_pick",
+          "input": "primary_use",
+          "action": {
+            "kind": "use_item_body",
+            "targetId": "recall_pick_body"
+          },
+          "stackCost": 0,
+          "contactDamage": true
+        },
+        {
+          "id": "recall_with_pick",
+          "input": "alternate_use",
+          "action": {
+            "kind": "apply_item_effects",
+            "targetId": "recall_pick_body"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "recall_pick_stats",
+          "fn": "configure_item_stats",
+          "target": "recall_pick_body",
+          "params": {
+            "damageClass": "melee",
+            "damage": 4,
+            "knockback": 2,
+            "useTimeTicks": 15,
+            "useAnimationTicks": 22,
+            "manaCost": 0,
+            "rarity": 1,
+            "valueCopper": 1500,
+            "maxStack": 1,
+            "craftYield": 1,
+            "widthPx": 32,
+            "heightPx": 32,
+            "scale": 1
+          }
+        },
+        {
+          "id": "recall_pick_use",
+          "fn": "configure_item_use",
+          "target": "recall_pick_body",
+          "params": {
+            "useStyle": "swing",
+            "autoReuse": true,
+            "useTurn": true,
+            "hideUseGraphic": false,
+            "disableMeleeHitbox": false,
+            "channel": false
+          }
+        },
+        {
+          "id": "recall_pick_mining",
+          "fn": "configure_tool",
+          "target": "recall_pick_body",
+          "params": {
+            "pickPower": 35,
+            "axePowerTooltipPercent": 0,
+            "hammerPower": 0,
+            "miningSpeedMultiplier": 1
+          }
+        },
+        {
+          "id": "recall_pick_home",
+          "fn": "recall_home_on_use",
+          "target": "recall_pick_body",
+          "params": {
+            "cooldownTicks": 1800
+          }
+        }
+      ]
+    },
+    "realization": {
+      "description": "The generated item is a copper pickaxe incorporating a stoppered Recall Potion flask into its handle. Its executable representation is the item body, with no spawned projectile or hidden controller. Primary use enables native mining at 35 pick power and item-body melee contact using 4 base damage and 2 knockback. The item has a base 15-tick use interval and 22-tick swing animation, automatic reuse, and a visible use graphic. Alternate use applies home recall through the item-effect binding. Successful recall starts a 1800-tick shared player mobility cooldown. Both inputs retain the item and have zero authored mana cost. There is no axe power, hammer power, mining-speed bonus, healing, placement, or additional event effect. The potion's original consumability and 30-tick drinking presentation are intentionally replaced by a durable tool and its shared swing timing.",
+      "playerExperience": "Use the primary input for ordinary copper-strength mining and close contact attacks. Use the alternate input to return home while keeping the pickaxe. Recall is free reusable travel utility rather than a consumable resource; after success, its shared mobility cooldown lasts 30 seconds at 60 ticks per second. Other actions sharing that cooldown may affect its availability. Normal attacks and mining have no separately authored recall lockout. Both use lanes share the tool's visible swing presentation and base timing; no separate drinking animation is implemented. Player modifiers can change effective native use timing.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "verdict": "aligned",
+          "summary": "The program implements both planned actions using one durable item body. The source potion's consumption and drinking tempo are intentionally not inherited, as already specified in the concept. This is an authored-program comparison, not an observed run.",
+          "actionChecks": [
+            {
+              "plannedIntent": "Swing the reusable copper pickaxe to mine blocks and make ordinary item-body contact attacks.",
+              "implementedBehavior": "Primary use acts on the item body with contact damage enabled, an enabled melee hitbox, and explicit 35 pick power.",
+              "runtimeRefs": [
+                "mine_with_recall_pick",
+                "recall_pick_stats",
+                "recall_pick_use",
+                "recall_pick_mining"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "Mining powers, melee stats, and source tool tempo are explicitly authored; stackCost is zero."
+            },
+            {
+              "plannedIntent": "Recall home without consuming the tool, then accept a shared 1800-tick mobility cooldown.",
+              "implementedBehavior": "Alternate use invokes the ungrouped home-recall item effect with cooldownTicks 1800 and stackCost zero.",
+              "runtimeRefs": [
+                "recall_with_pick",
+                "recall_pick_home",
+                "recall_pick_stats"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "The explicit effect binding supplies reusable recall without mana or stack consumption; its cooldown is shared player mobility state."
+            }
+          ]
+        },
+        "programVsReport": {
+          "verdict": "aligned",
+          "summary": "The descriptions match the two input lanes and the item-only topology. No projectile behavior or unconfigured potion effect is claimed.",
+          "behaviorChecks": [
+            {
+              "runtimeRefs": [
+                "recall_pick_body",
+                "mine_with_recall_pick",
+                "recall_pick_mining",
+                "recall_pick_stats"
+              ],
+              "programBehavior": "Primary item-body use enables contact damage and native mining with 35 pick power, zero axe and hammer powers, and a neutral mining-speed multiplier.",
+              "reportedBehavior": "Copper-strength mining and ordinary melee contact, with no additional tool powers or mining-speed bonus.",
+              "result": "aligned",
+              "reason": "The reported powers and damage match the explicit calls, and the body contact lane is enabled."
+            },
+            {
+              "runtimeRefs": [
+                "recall_with_pick",
+                "recall_pick_home",
+                "recall_pick_stats"
+              ],
+              "programBehavior": "Alternate item-effect use recalls home and starts a shared 1800-tick mobility cooldown; the item is retained and has zero mana cost.",
+              "reportedBehavior": "Free reusable home travel followed by a shared 30-second mobility lockout.",
+              "result": "aligned",
+              "reason": "The report identifies the recurring utility honestly and does not describe the cooldown as an item charge or consumable payment."
+            },
+            {
+              "runtimeRefs": [
+                "recall_pick_use",
+                "recall_pick_stats",
+                "recall_pick_body"
+              ],
+              "programBehavior": "One visible item body uses an auto-reusing swing style with base 15-tick use time and 22-tick animation; no projectile entities or event calls exist.",
+              "reportedBehavior": "Both lanes share the tool's swing presentation and base timing, without a separate drinking animation or spawned effects.",
+              "result": "aligned",
+              "reason": "The shared presentation and timing are explicitly disclosed, and effective native timing is not presented as a measured result."
+            }
+          ]
+        }
+      }
+    }
+  },
+  "g_ff99137a71f70e8f": {
+    "name": "Double-Lashed Grenade Spear",
+    "category": "combat",
+    "concept": {
+      "literalSynthesis": "A Terraria Grenade is bound just behind the point of the Double-Lashed Ropebound Spear, with the spear's additional rope coil and thick shaft lashings wrapped around the grenade body. The recognizable grenade remains a physical part of the spearhead rather than becoming an unrelated magical ornament.",
+      "coreMechanic": "A reusable, deliberate thrust tugs struck enemies toward the owner and releases a small impact blast around each hit, damaging nearby enemies other than that hit's direct target. The slower 45-tick base cadence borrows the grenade's source tempo. Free sustained use is intentional: modest melee damage and a reduced splash multiplier replace the consumable grenade's much larger damage, with no tile destruction or resource-generation effects.",
+      "parentAContribution": "Граната (Terraria/Grenade) contributes the lashed grenade body, a compact non-tile-destroying blast concept, and the 45-tick base use cadence. Triggering a reduced blast on spear contact is a newly authored combination, not a claim about the parent's observed trigger behavior.",
+      "parentBContribution": "Double-Lashed Ropebound Spear contributes its rope coil, reinforced lashings, reusable aimed extension-and-retraction thrust, and resistance-scaled tug toward the owner. Its physical thrust remains the primary representation.",
+      "playerExperience": "Aim and click to jab a cluster: the direct victim takes spear damage and a tug, while nearby enemies can receive reduced splash damage. The item is retained and needs neither mana nor ammunition. Deliberately slower attacks and the danger of pulling enemies closer offset the free repeatable crowd utility.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Aim and click for a reusable rope-tugging thrust that splashes nearby enemies on contact."
+        }
+      ]
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v5",
+      "primaryEntityId": "grenade_spear_thrust",
+      "entities": [
+        {
+          "id": "grenade_spear_item",
+          "kind": "item_body"
+        },
+        {
+          "id": "grenade_spear_thrust",
+          "kind": "owner_attached_projectile"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "activate_grenade_spear",
+          "input": "primary_use",
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "grenade_spear_thrust"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "grenade_spear_stats",
+          "fn": "configure_item_stats",
+          "target": "grenade_spear_item",
+          "params": {
+            "damageClass": "melee",
+            "damage": 18,
+            "knockback": 2,
+            "useTimeTicks": 45,
+            "useAnimationTicks": 45,
+            "manaCost": 0,
+            "rarity": 0,
+            "valueCopper": 1095,
+            "maxStack": 1,
+            "craftYield": 1,
+            "widthPx": 32,
+            "heightPx": 32,
+            "scale": 1
+          }
+        },
+        {
+          "id": "grenade_spear_use",
+          "fn": "configure_item_use",
+          "target": "grenade_spear_item",
+          "params": {
+            "useStyle": "shoot",
+            "autoReuse": false,
+            "useTurn": false,
+            "hideUseGraphic": true,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "handPose": "",
+            "customHeldSprite": "hidden"
+          }
+        },
+        {
+          "id": "grenade_spear_spawn",
+          "fn": "configure_spawn",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "velocity": {
+              "constantSpeedPxPerUpdate": 0
+            },
+            "count": 1,
+            "spreadRadians": 0,
+            "offsetPx": 0,
+            "aim": "cursor",
+            "position": {
+              "at": "owner_center"
+            }
+          }
+        },
+        {
+          "id": "grenade_spear_single_copy",
+          "fn": "set_projectile_concurrency",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "maxActive": 1
+          }
+        },
+        {
+          "id": "grenade_spear_damage",
+          "fn": "set_projectile_damage",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "damageClass": "melee",
+            "damage": 18,
+            "knockback": 2,
+            "ownerHitCheck": true
+          }
+        },
+        {
+          "id": "grenade_spear_lifetime",
+          "fn": "set_projectile_lifetime",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "lifetimeTicks": 45
+          }
+        },
+        {
+          "id": "grenade_spear_hitbox",
+          "fn": "set_projectile_hitbox",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "widthPx": 21,
+            "heightPx": 21,
+            "drawScale": 1.2,
+            "hitboxScale": 1
+          }
+        },
+        {
+          "id": "grenade_spear_collision",
+          "fn": "set_projectile_collision",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "tileCollide": false,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": -1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "grenade_spear_extension",
+          "fn": "move_forward_then_retract",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "rangeTiles": 4,
+            "durationTicks": 45
+          }
+        },
+        {
+          "id": "grenade_spear_rope_tug",
+          "fn": "pull_on_event",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "when": "on_hit",
+            "mode": "target_to_owner",
+            "strength": 3,
+            "radiusTiles": 4,
+            "delayTicks": 0
+          }
+        },
+        {
+          "id": "grenade_spear_impact_blast",
+          "fn": "damage_area_on_event",
+          "target": "grenade_spear_thrust",
+          "params": {
+            "when": "on_hit",
+            "radiusTiles": 2,
+            "damageMultiplier": 0.75,
+            "delayTicks": 0
+          }
+        }
+      ]
+    },
+    "realization": {
+      "description": "The program defines a reusable melee item whose primary physical representation is one owner-attached thrust body, intended to depict a Grenade lashed behind the point of the Double-Lashed Ropebound Spear. Ordinary item-use graphics and the custom held root are hidden; this response specifies gameplay and appearance intent, not a delivered rendered sprite. Base use time, animation and thrust lifetime are all 45 ticks. The body extends and retracts along its initial cursor-aimed axis, from an owner-center baseline of 18 pixels through up to 64 additional pixels of triangular displacement. This is not native hand attachment. Its 21-by-21-pixel rectangle deals 18 base melee damage with 2 knockback and requires the owner's hit check. It ignores tile collision, has unlimited NPC penetration, and can directly hit each eligible NPC once per thrust. Each direct hit applies a strength-3 resistance-scaled tug toward the owner and immediately dispatches a 2-tile-radius damage area using 0.75 times the thrust's authored base damage, rounded before native defense. That blast excludes the event's direct victim, not every previously struck enemy. Multiple direct contacts can therefore dispatch multiple blasts, subject to native damage eligibility. The pull uses a 4-tile fallback search if its direct target becomes inactive. A same-owner/item/entity cap allows only one live thrust. There are no child projectiles, expiry blasts, tile destruction, alternate controls, mana costs or ammunition requirements.",
+      "playerExperience": "Aim and click for a deliberate jab with a grenade-bound spearhead. A lone enemy receives the direct spear hit and tug, not an extra blast from its own hit event. Against groups, nearby enemies may receive splash damage, and separate contacts can produce further blasts. Pull strength depends on resistance and does not guarantee displacement or restraint; bringing enemies closer can expose you to contact damage. The item is never consumed, and repeated manual use is intentionally free. It does not auto-repeat while held. The 45-tick timings are authored bases rather than measured final attack rates after player modifiers.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "verdict": "aligned",
+          "summary": "The sole planned click-operated thrust is implemented with the intended reusable economy, rope tug and reduced contact splash. No additional input lanes were introduced. This is a static design comparison, not a run report.",
+          "actionChecks": [
+            {
+              "plannedIntent": "Aim and click for a reusable rope-tugging thrust that splashes nearby enemies on contact.",
+              "implementedBehavior": "Primary use retains the item and spawns one capped owner-attached thrust. Direct NPC hits invoke the tug and reduced area damage.",
+              "runtimeRefs": [
+                "activate_grenade_spear",
+                "grenade_spear_thrust",
+                "grenade_spear_single_copy",
+                "grenade_spear_extension",
+                "grenade_spear_rope_tug",
+                "grenade_spear_impact_blast"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "The executable contact events supply both complementary effects without consumable costs or an unplanned alternate mode."
+            }
+          ]
+        },
+        "programVsReport": {
+          "verdict": "aligned",
+          "summary": "The interpretation describes the authored input, geometry, damage, event effects and resource economy without claiming an observed execution or rendered asset.",
+          "behaviorChecks": [
+            {
+              "runtimeRefs": [
+                "activate_grenade_spear",
+                "grenade_spear_stats",
+                "grenade_spear_use"
+              ],
+              "programBehavior": "Manual primary-use spawning with stackCost 0, zero mana, no ammo configuration, 45-tick base timing and hidden item-use graphics.",
+              "reportedBehavior": "A retained, free, manually clicked weapon with hidden ordinary/custom held graphics and 45-tick base timing.",
+              "result": "aligned",
+              "reason": "The binding and item calls explicitly establish these affordances and costs."
+            },
+            {
+              "runtimeRefs": [
+                "grenade_spear_spawn",
+                "grenade_spear_single_copy",
+                "grenade_spear_extension",
+                "grenade_spear_lifetime",
+                "grenade_spear_hitbox",
+                "grenade_spear_damage",
+                "grenade_spear_collision"
+              ],
+              "programBehavior": "One capped 45-tick owner-centered extension/retraction body with 18 melee damage, owner hit check, a 21-by-21 rectangle, no tile collision and once-per-NPC contact immunity.",
+              "reportedBehavior": "A single initially aimed thrust, explicitly not hand-attached, with the same geometry, lifetime and direct-hit restrictions.",
+              "result": "aligned",
+              "reason": "The report distinguishes movement reach from rectangle size and does not infer native grenade AI."
+            },
+            {
+              "runtimeRefs": [
+                "grenade_spear_rope_tug"
+              ],
+              "programBehavior": "Each direct hit dispatches a strength-3 target-to-owner pull with a 4-tile inactive-target fallback.",
+              "reportedBehavior": "Resistance-scaled tug, no guaranteed restraint, and an explicitly described fallback.",
+              "result": "aligned",
+              "reason": "The interpretation preserves the impulse semantics and does not promise a fixed travel distance."
+            },
+            {
+              "runtimeRefs": [
+                "grenade_spear_impact_blast"
+              ],
+              "programBehavior": "Each direct hit immediately dispatches a 2-tile area attack at 0.75 times authored base damage, excluding that event's direct target.",
+              "reportedBehavior": "Reduced contact splash can occur on multiple direct contacts, excludes only the corresponding direct victim and remains subject to native eligibility.",
+              "result": "aligned",
+              "reason": "The report neither guarantees extra hits nor invents an expiry explosion, tile damage or global once-per-thrust splash restriction."
+            }
+          ]
+        }
+      }
+    }
+  },
+  "g_4a1c8253fd834bff": {
+    "name": "Гелевое копье статуи",
+    "category": "combat",
+    "concept": {
+      "literalSynthesis": "Статуя копья (Terraria/SpearStatue) becomes a portable carved-stone spear, retaining its sculptural stone identity beneath the translucent gel coating of Гелевое копье (InfiniCrafterLocal/GeneratedItem). The stone point sits inside a rounded gel sheath, with small stone chips suspended in the coating. This is an item presentation direction, not a delivered image.",
+      "coreMechanic": "A reusable, manually aimed melee thrust combines a weighty stone impact with a delayed gel-and-stone collateral splash. Each direct hit schedules a small burst at the recorded impact position 10 ticks later, rewarding attacks into clustered enemies without guaranteeing that moving enemies remain inside it. The base thrust cadence remains 31 ticks, matching the gel spear.",
+      "parentAContribution": "Статуя копья supplies the literal carved-stone spear identity. Its newly authored mechanical contribution is a heavier direct impact and the stone-chip character of the delayed burst; these are synthesis mechanics, not claimed abilities of the original statue. Native statue placement is intentionally not inherited.",
+      "parentBContribution": "Гелевое копье supplies the translucent coating, reusable owner-attached extension/retraction action, 31-tick base tempo and small collateral splash idea. The splash is intentionally delayed rather than immediate, interpreting the gel as briefly holding and then releasing stone fragments.",
+      "playerExperience": "Click toward an enemy to deliver a bounded thrust with strong knockback. Nearby enemies can take a modest delayed collateral hit, while the directly struck enemy is excluded from that hit's splash. No mana, ammo or item consumption is required; manual use, limited reach and the delayed burst constrain this sustained free attack.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Manually thrust the gel-coated stone spear toward the cursor."
+        },
+        {
+          "input": "passive_or_event",
+          "intent": "After a direct hit, release a delayed collateral splash at the recorded impact position."
+        }
+      ]
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v5",
+      "primaryEntityId": "stonegel_thrust",
+      "entities": [
+        {
+          "id": "stonegel_item",
+          "kind": "item_body"
+        },
+        {
+          "id": "stonegel_thrust",
+          "kind": "owner_attached_projectile"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "stonegel_primary",
+          "input": "primary_use",
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "stonegel_thrust"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "stonegel_stats",
+          "fn": "configure_item_stats",
+          "target": "stonegel_item",
+          "params": {
+            "damageClass": "melee",
+            "damage": 10,
+            "knockback": 7,
+            "useTimeTicks": 31,
+            "useAnimationTicks": 31,
+            "manaCost": 0,
+            "rarity": 0,
+            "valueCopper": 1300,
+            "maxStack": 1,
+            "craftYield": 1,
+            "widthPx": 32,
+            "heightPx": 32,
+            "scale": 1
+          }
+        },
+        {
+          "id": "stonegel_use",
+          "fn": "configure_item_use",
+          "target": "stonegel_item",
+          "params": {
+            "useStyle": "shoot",
+            "autoReuse": false,
+            "useTurn": false,
+            "hideUseGraphic": true,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "handPose": "",
+            "customHeldSprite": "hidden"
+          }
+        },
+        {
+          "id": "stonegel_spawn",
+          "fn": "configure_spawn",
+          "target": "stonegel_thrust",
+          "params": {
+            "velocity": {
+              "constantSpeedPxPerUpdate": 0
+            },
+            "count": 1,
+            "spreadRadians": 0,
+            "offsetPx": 0,
+            "aim": "cursor",
+            "position": {
+              "at": "owner_center"
+            }
+          }
+        },
+        {
+          "id": "stonegel_single_copy",
+          "fn": "set_projectile_concurrency",
+          "target": "stonegel_thrust",
+          "params": {
+            "maxActive": 1
+          }
+        },
+        {
+          "id": "stonegel_damage",
+          "fn": "set_projectile_damage",
+          "target": "stonegel_thrust",
+          "params": {
+            "damageClass": "melee",
+            "damage": 10,
+            "knockback": 7,
+            "ownerHitCheck": true
+          }
+        },
+        {
+          "id": "stonegel_lifetime",
+          "fn": "set_projectile_lifetime",
+          "target": "stonegel_thrust",
+          "params": {
+            "lifetimeTicks": 31
+          }
+        },
+        {
+          "id": "stonegel_hitbox",
+          "fn": "set_projectile_hitbox",
+          "target": "stonegel_thrust",
+          "params": {
+            "widthPx": 21,
+            "heightPx": 21,
+            "drawScale": 1.2,
+            "hitboxScale": 1
+          }
+        },
+        {
+          "id": "stonegel_collision",
+          "fn": "set_projectile_collision",
+          "target": "stonegel_thrust",
+          "params": {
+            "tileCollide": false,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": -1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "stonegel_extension",
+          "fn": "move_forward_then_retract",
+          "target": "stonegel_thrust",
+          "params": {
+            "rangeTiles": 3,
+            "durationTicks": 31
+          }
+        },
+        {
+          "id": "stonegel_delayed_splash",
+          "fn": "damage_area_on_event",
+          "target": "stonegel_thrust",
+          "params": {
+            "when": "on_hit",
+            "radiusTiles": 1.5,
+            "damageMultiplier": 0.5,
+            "delayTicks": 10
+          }
+        }
+      ]
+    },
+    "realization": {
+      "description": "The program defines a reusable melee item represented during attacks by one owner-attached thrust entity. The normal item-use graphic and custom held root are hidden; the thrust is the intended visible physical representation. Its proposed appearance combines the carved stone identity of Статуя копья with the translucent spear coating of Гелевое копье; this response does not supply a rendered asset. Primary use creates one capped thrust aimed along the initial cursor axis. Over a 31-world-tick extension/retraction cycle, its collision center travels from an 18-pixel owner-center baseline to a peak additional displacement of 48 pixels, then retracts. Its 21-by-21-pixel hitbox deals 10 base melee damage with 7 knockback, requires the native owner hit check and directly hits each NPC at most once per thrust. Tile collision is disabled. Every direct hit schedules a 1.5-tile-radius area attack at the recorded event position after 10 ticks. This collateral attack excludes that event's directly hit NPC and uses half the authored projectile base damage, or 5 before defense and applicable native damage rules. It creates no child projectiles. No alternate use, statue placement, passive equipment effect or status application is authored.",
+      "playerExperience": "Click to thrust toward the cursor; auto-reuse is disabled. The base use interval and animation are both 31 ticks, with native player modifiers able to change effective timing. The item is retained and costs neither mana nor ammo. A direct connection can produce a small delayed collateral burst against nearby eligible enemies. The burst stays at the recorded impact location rather than following the struck NPC, so enemy movement and native damage eligibility can prevent collateral damage. The thrust offers a weightier direct hit than its supplied gel-spear parent while keeping that parent's bounded reach and manual cadence. There is no guaranteed extra hit on the original target and no functional statue mode.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "verdict": "aligned",
+          "summary": "The authored primary thrust and delayed on-hit collateral effect match the two planned actions. Stone weight and gel-delayed fragmentation are intentional new synthesis mechanics, not assertions about the original statue. This is a static design comparison, not an observed run.",
+          "actionChecks": [
+            {
+              "plannedIntent": "Manually thrust the gel-coated stone spear toward the cursor.",
+              "implementedBehavior": "Primary use retains the item and spawns one concurrency-capped, initially cursor-aimed melee thrust with a 31-tick extension/retraction cycle.",
+              "runtimeRefs": [
+                "stonegel_primary",
+                "stonegel_use",
+                "stonegel_spawn",
+                "stonegel_single_copy",
+                "stonegel_damage",
+                "stonegel_extension",
+                "stonegel_lifetime"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "Manual use, explicit movement, damage and bounded lifetime implement the planned attack without relying on category or parent AI."
+            },
+            {
+              "plannedIntent": "After a direct hit, release a delayed collateral splash at the recorded impact position.",
+              "implementedBehavior": "The thrust's on_hit event schedules a radius-1.5-tile area attack after 10 ticks at half its authored base damage, excluding the direct target.",
+              "runtimeRefs": [
+                "stonegel_damage",
+                "stonegel_delayed_splash"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "An explicitly damaging source produces the subscribed hit event, and the event action supplies both the delay and collateral damage."
+            }
+          ]
+        },
+        "programVsReport": {
+          "verdict": "aligned",
+          "summary": "The description and player experience track the explicit input, representation, movement, damage, collision and delayed event action. Neither text claims a rendered asset or an observed execution.",
+          "behaviorChecks": [
+            {
+              "runtimeRefs": [
+                "stonegel_primary",
+                "stonegel_stats",
+                "stonegel_use"
+              ],
+              "programBehavior": "A retained primary-use item has 31-tick base use and animation values, no mana cost, no ammo requirement, disabled auto-reuse and hidden item-use graphics.",
+              "reportedBehavior": "Manual clicking performs a reusable attack without mana or ammo, using modifier-dependent base timing and the thrust as its active representation.",
+              "result": "aligned",
+              "reason": "The report distinguishes base timing from effective timing and does not introduce unsupported input or payment lanes."
+            },
+            {
+              "runtimeRefs": [
+                "stonegel_thrust",
+                "stonegel_spawn",
+                "stonegel_single_copy",
+                "stonegel_extension",
+                "stonegel_lifetime",
+                "stonegel_hitbox"
+              ],
+              "programBehavior": "One zero-launch-speed owner-attached body follows the explicit 31-tick triangular extension/retraction movement, with a 21-by-21 hitbox and one live-copy cap.",
+              "reportedBehavior": "The collision center extends from an 18-pixel baseline to 66 pixels from owner center, then retracts during its bounded lifetime.",
+              "result": "aligned",
+              "reason": "The reported peak is the driver's 18-pixel baseline plus the authored 3-tile displacement; art is not used to infer reach."
+            },
+            {
+              "runtimeRefs": [
+                "stonegel_damage",
+                "stonegel_collision"
+              ],
+              "programBehavior": "The thrust deals 10 base melee damage with 7 knockback, owner hit checking, no tile collision, infinite penetration and once-per-NPC direct-hit immunity.",
+              "reportedBehavior": "Each NPC can be directly struck once per thrust, with the native owner hit check retained despite disabled tile collision.",
+              "result": "aligned",
+              "reason": "The report preserves the distinction between penetration, per-target immunity and owner hit eligibility."
+            },
+            {
+              "runtimeRefs": [
+                "stonegel_delayed_splash",
+                "stonegel_damage"
+              ],
+              "programBehavior": "Each direct hit schedules a 10-tick-delayed collateral area attack at the event position, with a 1.5-tile radius and 0.5 authored-base-damage multiplier.",
+              "reportedBehavior": "A stationary recorded-impact burst can deal 5 pre-defense base damage to eligible nearby enemies while excluding the directly hit NPC.",
+              "result": "aligned",
+              "reason": "The report correctly describes location, exclusion, delay and damage basis without promising additional hits or spawning physical fragments."
+            }
+          ]
+        }
+      }
+    }
+  },
+  "g_12631b5c3af95102": {
+    "name": "Double-Lashed Ropebound Spear",
+    "category": "combat",
+    "concept": {
+      "literalSynthesis": "Ropebound Spear retains its pointed spear body and rope wrapping, while Terraria's Веревка (Rope) becomes a second, thicker binding wound around the shaft and gathered into a visible coil beneath the grip. It remains a physical rope-wrapped spear, not a magical rope beam.",
+      "coreMechanic": "A reusable aimed thrust extends farther than Ropebound Spear's original jab and tugs struck enemies toward the wielder. Preserve the source spear's 31-tick base cadence and 8 base melee damage, but reduce knockback so the rope's positioning impulse has less opposing push. Each thrust can damage each eligible NPC once. The extra rope supports reach and enemy positioning rather than adding climbing or placement.",
+      "parentAContribution": "Ropebound Spear contributes the literal spear, its existing rope binding, the outward-and-back attack, 8 base melee damage and deliberate 31-tick timing. Its hit-triggered tug remains the central combat utility.",
+      "parentBContribution": "Веревка, the Terraria Rope item, contributes a substantial additional coil and doubled shaft lashing. In this newly authored combination, that extra rope motivates a longer thrust and a stronger hit-triggered tug; these are synthesis mechanics, not claims about vanilla Rope's combat abilities.",
+      "playerExperience": "Click to catch an enemy at the edge of a longer jab and draw susceptible targets closer. The spear is reusable with no mana or ammunition cost, but does not automatically repeat. Pull remains resistance-scaled velocity, not a restraint or guaranteed displacement; closing enemies toward yourself is useful but risky.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Click toward an enemy for a longer outward-and-back spear thrust that tugs struck enemies toward you."
+        }
+      ]
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v5",
+      "primaryEntityId": "double_lashed_thrust",
+      "entities": [
+        {
+          "id": "double_lashed_item",
+          "kind": "item_body"
+        },
+        {
+          "id": "double_lashed_thrust",
+          "kind": "owner_attached_projectile"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "activate_double_lashed",
+          "input": "primary_use",
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "double_lashed_thrust"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "double_lashed_stats",
+          "fn": "configure_item_stats",
+          "target": "double_lashed_item",
+          "params": {
+            "damageClass": "melee",
+            "damage": 8,
+            "knockback": 2,
+            "useTimeTicks": 31,
+            "useAnimationTicks": 31,
+            "manaCost": 0,
+            "rarity": 0,
+            "valueCopper": 1020,
+            "maxStack": 1,
+            "craftYield": 1,
+            "widthPx": 32,
+            "heightPx": 32,
+            "scale": 1
+          }
+        },
+        {
+          "id": "double_lashed_use",
+          "fn": "configure_item_use",
+          "target": "double_lashed_item",
+          "params": {
+            "useStyle": "shoot",
+            "autoReuse": false,
+            "useTurn": false,
+            "hideUseGraphic": true,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "holdoutOffsetX": 0,
+            "holdoutOffsetY": 0,
+            "handPose": "",
+            "customHeldSprite": "hidden"
+          }
+        },
+        {
+          "id": "double_lashed_spawn",
+          "fn": "configure_spawn",
+          "target": "double_lashed_thrust",
+          "params": {
+            "velocity": {
+              "constantSpeedPxPerUpdate": 0
+            },
+            "count": 1,
+            "spreadRadians": 0,
+            "offsetPx": 0,
+            "aim": "cursor",
+            "position": {
+              "at": "owner_center"
+            }
+          }
+        },
+        {
+          "id": "double_lashed_single_copy",
+          "fn": "set_projectile_concurrency",
+          "target": "double_lashed_thrust",
+          "params": {
+            "maxActive": 1
+          }
+        },
+        {
+          "id": "double_lashed_damage",
+          "fn": "set_projectile_damage",
+          "target": "double_lashed_thrust",
+          "params": {
+            "damageClass": "melee",
+            "damage": 8,
+            "knockback": 2,
+            "ownerHitCheck": true
+          }
+        },
+        {
+          "id": "double_lashed_lifetime",
+          "fn": "set_projectile_lifetime",
+          "target": "double_lashed_thrust",
+          "params": {
+            "lifetimeTicks": 31
+          }
+        },
+        {
+          "id": "double_lashed_hitbox",
+          "fn": "set_projectile_hitbox",
+          "target": "double_lashed_thrust",
+          "params": {
+            "widthPx": 21,
+            "heightPx": 21,
+            "drawScale": 1.2,
+            "hitboxScale": 1
+          }
+        },
+        {
+          "id": "double_lashed_collision",
+          "fn": "set_projectile_collision",
+          "target": "double_lashed_thrust",
+          "params": {
+            "tileCollide": false,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": -1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "double_lashed_extension",
+          "fn": "move_forward_then_retract",
+          "target": "double_lashed_thrust",
+          "params": {
+            "rangeTiles": 4,
+            "durationTicks": 31
+          }
+        },
+        {
+          "id": "double_lashed_tug",
+          "fn": "pull_on_event",
+          "target": "double_lashed_thrust",
+          "params": {
+            "when": "on_hit",
+            "mode": "target_to_owner",
+            "strength": 3,
+            "radiusTiles": 4,
+            "delayTicks": 0
+          }
+        }
+      ]
+    },
+    "realization": {
+      "description": "The program defines a reusable melee item with one click-operated owner-attached thrust body as its primary physical representation. The ordinary item-use sprite and custom held root are hidden. Its intended appearance is Ropebound Spear with an additional coil of Terraria Rope and thicker shaft lashings; this JSON does not deliver a rendered asset. Base use time and animation are both 31 ticks, and the thrust lasts 31 ticks. The body extends and retracts along its initial aimed axis using an owner-center baseline of 18 pixels plus up to 64 pixels of triangular displacement. This is not native hand attachment. Its 21-by-21-pixel damage rectangle deals 8 base melee damage with 2 knockback, requires the owner's hit check and ignores tile collision. Infinite penetration permits contact with multiple eligible NPCs, while once-per-NPC immunity prevents repeated damage to the same NPC during that thrust. Each damaging hit immediately applies a strength-3 resistance-scaled velocity impulse toward the owner. If the direct target has become inactive, the pull action uses its authored 4-tile fallback search radius. A same-owner/item/entity concurrency cap permits only one live thrust. There are no child spawns, climbing effects, placement transactions or alternate controls.",
+      "playerExperience": "Aim and click for a deliberate longer jab. Eligible enemies struck by the spear take damage and receive a tug toward you, helping bring susceptible targets into close combat. The lower knockback is deliberate, reducing opposition to that tug without increasing base damage. Pull is neither a guaranteed travel distance nor immobilization, and resistant enemies may barely move. Bringing enemies closer can also expose you to contact damage. Each physical thrust can hit different enemies but cannot repeatedly hit one NPC. The item is retained on use, costs no mana or ammunition and does not automatically repeat while the button is held. The 31-tick timing is an authored base, not a measured final attack rate after player modifiers.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "verdict": "aligned",
+          "summary": "The single planned combat action is explicitly implemented. The additional rope motivates authored reach and pull changes without implying inherited vanilla Rope combat behavior.",
+          "actionChecks": [
+            {
+              "plannedIntent": "Click toward an enemy for a longer outward-and-back spear thrust that tugs struck enemies toward you.",
+              "implementedBehavior": "Primary use spawns one reusable, concurrency-limited thrust with a 4-tile extension parameter, 31-tick cycle, once-per-NPC damage and immediate on-hit pull toward the owner.",
+              "runtimeRefs": [
+                "activate_double_lashed",
+                "double_lashed_spawn",
+                "double_lashed_single_copy",
+                "double_lashed_extension",
+                "double_lashed_collision",
+                "double_lashed_tug"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "The program preserves the source spear's base tempo and damage while explicitly increasing extension from 3 to 4 tiles and pull strength from 2.5 to 3."
+            }
+          ]
+        },
+        "programVsReport": {
+          "verdict": "aligned",
+          "summary": "The report describes the authored input, representation, motion, damage and pull without claiming an observed run or delivered artwork.",
+          "behaviorChecks": [
+            {
+              "runtimeRefs": [
+                "activate_double_lashed",
+                "double_lashed_stats",
+                "double_lashed_use"
+              ],
+              "programBehavior": "Reusable primary-use spawn with no item consumption, zero mana cost, no ammo requirement, no automatic repetition and hidden item-use graphics.",
+              "reportedBehavior": "Click-operated reusable combat with no mana or ammunition cost and hidden ordinary/custom held graphics.",
+              "result": "aligned",
+              "reason": "The binding and use configuration explicitly establish these controls and costs; no additional inputs are claimed."
+            },
+            {
+              "runtimeRefs": [
+                "double_lashed_thrust",
+                "double_lashed_spawn",
+                "double_lashed_single_copy",
+                "double_lashed_lifetime",
+                "double_lashed_extension"
+              ],
+              "programBehavior": "One live owner-attached thrust extends and retracts over 31 ticks, with an 18-pixel baseline and up to 64 pixels of displacement along its aimed axis.",
+              "reportedBehavior": "A bounded owner-centered longer jab, not native hand attachment.",
+              "result": "aligned",
+              "reason": "The report distinguishes extension displacement from the baseline and does not infer hand attachment or a tether controller."
+            },
+            {
+              "runtimeRefs": [
+                "double_lashed_damage",
+                "double_lashed_hitbox",
+                "double_lashed_collision"
+              ],
+              "programBehavior": "A 21-by-21 damage box deals 8 base melee damage with 2 knockback, owner hit checking, no tile collision and once-per-NPC immunity.",
+              "reportedBehavior": "Each thrust can strike multiple eligible enemies once each with the stated geometry and damage.",
+              "result": "aligned",
+              "reason": "Infinite penetration and once-per-NPC immunity support distinct-target contacts without promising successful hits through walls."
+            },
+            {
+              "runtimeRefs": [
+                "double_lashed_tug"
+              ],
+              "programBehavior": "Each on-hit event applies a strength-3 target-to-owner impulse, with a 4-tile fallback search when the direct target is inactive.",
+              "reportedBehavior": "A resistance-scaled tug rather than restraint or guaranteed displacement, including the inactive-target fallback.",
+              "result": "aligned",
+              "reason": "The report preserves both the event condition and fallback semantics and does not claim climbing, guaranteed capture or continuous pulling."
+            }
+          ]
+        }
+      }
+    }
+  },
+  "g_ace0419e34086755": {
+    "name": "Гелевое копье",
+    "category": "combat",
+    "concept": {
+      "literalSynthesis": "Terraria/Gel (Гель) forms a translucent blue coating and swollen droplet around the point of Terraria/Spear (Копье), preserving the spear's long shaft and recognizable metal tip.",
+      "coreMechanic": "A reusable melee thrust keeps the Spear's 31-tick base cadence and 8 base damage. Each actual NPC hit splashes gel into a small surrounding area, dealing half-base damage to nearby enemies other than the directly struck target. This is deliberately modest, freely repeatable crowd utility rather than a temporary buff or an implied burning effect.",
+      "parentAContribution": "Гель contributes its literal gelatinous material identity to the coated tip and the newly authored small splash mechanic. Its supplied flammability tooltip does not become an unauthored fire debuff.",
+      "parentBContribution": "Копье contributes the shaft-and-point silhouette, melee damage identity, 8 base damage, 6.5 knockback and 31-tick base use timing. An explicit extend-and-retract driver supplies the generated thrust instead of inheriting native projectile AI.",
+      "playerExperience": "Aim deliberate thrusts into clustered enemies to gain modest collateral damage. The weapon remains reusable without mana or ammo costs; its limited splash radius, short reach and manual reuse keep that sustained utility restrained.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Thrust the gel-coated spear toward the cursor, splashing nearby enemies when its point hits an NPC."
+        }
+      ]
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v5",
+      "primaryEntityId": "gel_spear_thrust",
+      "entities": [
+        {
+          "id": "gel_spear_item",
+          "kind": "item_body"
+        },
+        {
+          "id": "gel_spear_thrust",
+          "kind": "owner_attached_projectile"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "use_gel_spear",
+          "input": "primary_use",
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "gel_spear_thrust"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "gel_spear_stats",
+          "fn": "configure_item_stats",
+          "target": "gel_spear_item",
+          "params": {
+            "damageClass": "melee",
+            "damage": 8,
+            "knockback": 6.5,
+            "useTimeTicks": 31,
+            "useAnimationTicks": 31,
+            "manaCost": 0,
+            "rarity": 0,
+            "valueCopper": 1000,
+            "maxStack": 1,
+            "craftYield": 1,
+            "widthPx": 32,
+            "heightPx": 32,
+            "scale": 1
+          }
+        },
+        {
+          "id": "gel_spear_use",
+          "fn": "configure_item_use",
+          "target": "gel_spear_item",
+          "params": {
+            "useStyle": "shoot",
+            "autoReuse": false,
+            "useTurn": false,
+            "hideUseGraphic": true,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "customHeldSprite": "hidden"
+          }
+        },
+        {
+          "id": "thrust_spawn",
+          "fn": "configure_spawn",
+          "target": "gel_spear_thrust",
+          "params": {
+            "velocity": {
+              "constantSpeedPxPerUpdate": 0
+            },
+            "count": 1,
+            "spreadRadians": 0,
+            "offsetPx": 0,
+            "aim": "cursor",
+            "position": {
+              "at": "owner_center"
+            }
+          }
+        },
+        {
+          "id": "thrust_single_copy",
+          "fn": "set_projectile_concurrency",
+          "target": "gel_spear_thrust",
+          "params": {
+            "maxActive": 1
+          }
+        },
+        {
+          "id": "thrust_lifetime",
+          "fn": "set_projectile_lifetime",
+          "target": "gel_spear_thrust",
+          "params": {
+            "lifetimeTicks": 31
+          }
+        },
+        {
+          "id": "thrust_hitbox",
+          "fn": "set_projectile_hitbox",
+          "target": "gel_spear_thrust",
+          "params": {
+            "widthPx": 21,
+            "heightPx": 21,
+            "drawScale": 1.2,
+            "hitboxScale": 1
+          }
+        },
+        {
+          "id": "thrust_collision",
+          "fn": "set_projectile_collision",
+          "target": "gel_spear_thrust",
+          "params": {
+            "tileCollide": false,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": -1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "thrust_damage",
+          "fn": "set_projectile_damage",
+          "target": "gel_spear_thrust",
+          "params": {
+            "damageClass": "melee",
+            "damage": 8,
+            "knockback": 6.5,
+            "ownerHitCheck": true
+          }
+        },
+        {
+          "id": "thrust_extension",
+          "fn": "move_forward_then_retract",
+          "target": "gel_spear_thrust",
+          "params": {
+            "rangeTiles": 3,
+            "durationTicks": 31
+          }
+        },
+        {
+          "id": "gel_contact_splash",
+          "fn": "damage_area_on_event",
+          "target": "gel_spear_thrust",
+          "params": {
+            "when": "on_hit",
+            "radiusTiles": 1.5,
+            "damageMultiplier": 0.5,
+            "delayTicks": 0
+          }
+        }
+      ]
+    },
+    "realization": {
+      "description": "The program defines a reusable melee item whose visible active representation is the owner-attached thrust entity, not the hidden item-use graphic. Its intended presentation is the original Spear silhouette with a translucent Gel coating concentrated around the point; this JSON does not deliver a rendered sprite. Primary use creates one capped physical thrust with a 31-world-tick lifetime and extension/retraction cycle. The collision center travels along the initial cursor-aimed axis from an 18-pixel owner-center baseline to a peak additional displacement of 48 pixels, then retracts. Its 21-by-21 rectangular hitbox deals 8 base melee damage with 6.5 knockback, requires the native owner hit check and can directly hit each NPC once per thrust. Each successful direct hit invokes a 1.5-tile-radius damage splash at the event position, excluding that hit's direct target. Splash damage uses half the authored base damage: 4 before native defense and other applicable damage rules. There is no burning status, child projectile, placement or secondary input.",
+      "playerExperience": "Click to aim and thrust into an enemy group. A direct connection can damage nearby enemies with a small gel splash, rewarding clustered targets without adding a resource-management mode. Base use interval and animation are both 31 ticks; native player modifiers may change effective timing. Auto-reuse is disabled. The generated item is retained on use and requires neither mana nor ammo. Tile collision is disabled for the thrust, while its owner hit check remains enabled. Collateral hits depend on native target eligibility; splash does not guarantee another hit on any particular enemy.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "verdict": "aligned",
+          "summary": "The single planned action is implemented with explicit thrust motion and a hit-triggered collateral splash. Visual coating is presentation intent, not a delivered asset or extra gameplay effect.",
+          "actionChecks": [
+            {
+              "plannedIntent": "Thrust the gel-coated spear toward the cursor, splashing nearby enemies when its point hits an NPC.",
+              "implementedBehavior": "Primary use spawns a single cursor-aimed owner-attached extend/retract body. Actual NPC hits trigger a small half-base-damage area action excluding the direct target.",
+              "runtimeRefs": [
+                "use_gel_spear",
+                "thrust_spawn",
+                "thrust_extension",
+                "thrust_damage",
+                "gel_contact_splash"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "The explicit movement and on_hit subscription implement the intended attack without inferring native Spear AI or Gel fire effects."
+            }
+          ]
+        },
+        "programVsReport": {
+          "verdict": "aligned",
+          "summary": "The report describes the authored input, bounded body motion, direct damage and collateral event without claiming an observed run.",
+          "behaviorChecks": [
+            {
+              "runtimeRefs": [
+                "gel_spear_stats",
+                "gel_spear_use",
+                "use_gel_spear"
+              ],
+              "programBehavior": "Manual primary use retains the item, has zero mana cost, no ammo configuration and 31-tick base interval and animation.",
+              "reportedBehavior": "A reusable manual thrust with no mana or ammo cost and explicitly base, modifier-dependent timing.",
+              "result": "aligned",
+              "reason": "Costs, timing and auto-reuse claims match the binding and item calls."
+            },
+            {
+              "runtimeRefs": [
+                "gel_spear_thrust",
+                "thrust_spawn",
+                "thrust_single_copy",
+                "thrust_lifetime",
+                "thrust_extension",
+                "thrust_hitbox",
+                "thrust_collision",
+                "thrust_damage"
+              ],
+              "programBehavior": "One capped attached body extends and retracts over 31 ticks, using a 21-by-21 hitbox, infinite penetration, once-per-NPC direct immunity and ownerHitCheck.",
+              "reportedBehavior": "A bounded initially aimed thrust with a 66-pixel peak center offset, 8 base melee damage, disabled tile collision and one direct hit per NPC.",
+              "result": "aligned",
+              "reason": "The peak is the driver's 18-pixel baseline plus the authored 3-tile displacement; collision and damage are separately explicit."
+            },
+            {
+              "runtimeRefs": [
+                "gel_contact_splash",
+                "thrust_damage"
+              ],
+              "programBehavior": "Each on_hit dispatch deals area damage within 1.5 tiles using 0.5 times authored base damage and excludes its direct target.",
+              "reportedBehavior": "A small collateral splash with 4 pre-defense base damage, without a guaranteed additional hit or burning status.",
+              "result": "aligned",
+              "reason": "The report preserves the action's direct-target exclusion and native eligibility limitations without inventing status effects or visual execution."
+            }
+          ]
+        }
+      }
+    }
+  },
+  "g_232a7838dccbe91d": {
+    "name": "Эбонитовое гелевое копье статуи",
+    "category": "combat",
+    "concept": {
+      "literalSynthesis": "Гелевое копье статуи retains its carved-stone spear body and translucent gel coating, now gripping a jagged head made from Эбонит (Terraria/EbonstoneBlock). Dark violet ebonstone fragments are visibly suspended in the gel around the stone point.",
+      "coreMechanic": "A reusable, manually activated melee thrust keeps the spear parent's 31-tick base cadence. Direct hits shed three low-damage ebonstone chips in a forward fan; gravity bends these independent chips downward, giving the thrust modest collateral coverage rather than a guaranteed second strike. The chips are a newly authored synthesis mechanic, not an asserted ability of the block parent.",
+      "parentAContribution": "Гелевое копье статуи supplies the literal stone-and-gel spear identity, bounded extension/retraction attack, strong direct knockback and deliberate manual tempo. Its delayed area burst is intentionally replaced by physical fragments.",
+      "parentBContribution": "Эбонит supplies the jagged dark stone head and the identity of the falling chips. The block inspires fragmentation, but this item does not place blocks, spread terrain or inherit any unconfigured native projectile behavior.",
+      "playerExperience": "Aim and click for a controlled close-range thrust. Connecting with an enemy can scatter chips toward enemies beyond it or below the impact. The item is retained and spends no mana or ammo; limited reach, manual cadence, low chip damage and once-per-NPC collisions constrain its free repeatable offense.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Click toward the cursor to perform one reusable stone-and-gel thrust."
+        },
+        {
+          "input": "passive_or_event",
+          "intent": "On a direct thrust hit, shed three falling ebonstone chips for modest collateral coverage."
+        }
+      ]
+    },
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "schema": "infini.runtime-program.authoring.v5",
+      "primaryEntityId": "ebongel_thrust",
+      "entities": [
+        {
+          "id": "ebongel_item",
+          "kind": "item_body"
+        },
+        {
+          "id": "ebongel_thrust",
+          "kind": "owner_attached_projectile"
+        },
+        {
+          "id": "ebongel_chip",
+          "kind": "child_projectile"
+        }
+      ],
+      "bindings": [
+        {
+          "id": "ebongel_primary",
+          "input": "primary_use",
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "ebongel_thrust"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        }
+      ],
+      "calls": [
+        {
+          "id": "ebongel_stats",
+          "fn": "configure_item_stats",
+          "target": "ebongel_item",
+          "params": {
+            "damageClass": "melee",
+            "damage": 10,
+            "knockback": 7,
+            "useTimeTicks": 31,
+            "useAnimationTicks": 31,
+            "manaCost": 0,
+            "rarity": 0,
+            "valueCopper": 1300,
+            "maxStack": 1,
+            "craftYield": 1,
+            "widthPx": 32,
+            "heightPx": 32,
+            "scale": 1
+          }
+        },
+        {
+          "id": "ebongel_use",
+          "fn": "configure_item_use",
+          "target": "ebongel_item",
+          "params": {
+            "useStyle": "shoot",
+            "autoReuse": false,
+            "useTurn": false,
+            "hideUseGraphic": true,
+            "disableMeleeHitbox": true,
+            "channel": false,
+            "handPose": "",
+            "customHeldSprite": "hidden"
+          }
+        },
+        {
+          "id": "ebongel_thrust_spawn",
+          "fn": "configure_spawn",
+          "target": "ebongel_thrust",
+          "params": {
+            "velocity": {
+              "constantSpeedPxPerUpdate": 0
+            },
+            "count": 1,
+            "spreadRadians": 0,
+            "offsetPx": 0,
+            "aim": "cursor",
+            "position": {
+              "at": "owner_center"
+            }
+          }
+        },
+        {
+          "id": "ebongel_thrust_cap",
+          "fn": "set_projectile_concurrency",
+          "target": "ebongel_thrust",
+          "params": {
+            "maxActive": 1
+          }
+        },
+        {
+          "id": "ebongel_thrust_life",
+          "fn": "set_projectile_lifetime",
+          "target": "ebongel_thrust",
+          "params": {
+            "lifetimeTicks": 31
+          }
+        },
+        {
+          "id": "ebongel_thrust_box",
+          "fn": "set_projectile_hitbox",
+          "target": "ebongel_thrust",
+          "params": {
+            "widthPx": 21,
+            "heightPx": 21,
+            "drawScale": 1.2,
+            "hitboxScale": 1
+          }
+        },
+        {
+          "id": "ebongel_thrust_collision",
+          "fn": "set_projectile_collision",
+          "target": "ebongel_thrust",
+          "params": {
+            "tileCollide": false,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": -1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "ebongel_thrust_damage",
+          "fn": "set_projectile_damage",
+          "target": "ebongel_thrust",
+          "params": {
+            "damageClass": "melee",
+            "damage": 10,
+            "knockback": 7,
+            "ownerHitCheck": true
+          }
+        },
+        {
+          "id": "ebongel_thrust_motion",
+          "fn": "move_forward_then_retract",
+          "target": "ebongel_thrust",
+          "params": {
+            "rangeTiles": 3,
+            "durationTicks": 31
+          }
+        },
+        {
+          "id": "ebongel_fragment_hit",
+          "fn": "spawn_entity_from_hit_target",
+          "target": "ebongel_thrust",
+          "params": {
+            "when": "on_hit",
+            "entity": "ebongel_chip",
+            "count": 3,
+            "geometry": {
+              "beforeProbability": 0,
+              "hitboxMaxSideFactor": 0.5,
+              "clearancePx": 8,
+              "beforePositionJitterRadiusPx": 0,
+              "beforeDirectionJitterRadians": 0,
+              "afterFanSpreadRadians": 0.8,
+              "initialIgnoreCountdownUpdates": 12
+            },
+            "damageBasis": "authored_child",
+            "knockbackBasis": "authored_child",
+            "damageMultiplier": 1,
+            "delayTicks": 0
+          }
+        },
+        {
+          "id": "ebongel_chip_spawn",
+          "fn": "configure_spawn",
+          "target": "ebongel_chip",
+          "params": {
+            "velocity": {
+              "constantSpeedPxPerUpdate": 4
+            },
+            "count": 1,
+            "spreadRadians": 0,
+            "offsetPx": 0,
+            "aim": "velocity",
+            "position": {
+              "at": "activation_origin"
+            }
+          }
+        },
+        {
+          "id": "ebongel_chip_life",
+          "fn": "set_projectile_lifetime",
+          "target": "ebongel_chip",
+          "params": {
+            "lifetimeTicks": 40
+          }
+        },
+        {
+          "id": "ebongel_chip_box",
+          "fn": "set_projectile_hitbox",
+          "target": "ebongel_chip",
+          "params": {
+            "widthPx": 8,
+            "heightPx": 8,
+            "drawScale": 1,
+            "hitboxScale": 1
+          }
+        },
+        {
+          "id": "ebongel_chip_collision",
+          "fn": "set_projectile_collision",
+          "target": "ebongel_chip",
+          "params": {
+            "tileCollide": true,
+            "ignoreWater": false,
+            "bounceCount": 0,
+            "pierce": 1,
+            "updatesPerTick": 1,
+            "immunity": "once_per_npc"
+          }
+        },
+        {
+          "id": "ebongel_chip_damage",
+          "fn": "set_projectile_damage",
+          "target": "ebongel_chip",
+          "params": {
+            "damageClass": "melee",
+            "damage": 3,
+            "knockback": 1,
+            "ownerHitCheck": false
+          }
+        },
+        {
+          "id": "ebongel_chip_motion",
+          "fn": "move_gravity_arc",
+          "target": "ebongel_chip",
+          "params": {
+            "accelY": 0.18
+          }
+        }
+      ]
+    },
+    "realization": {
+      "description": "The program defines a reusable melee spear whose active physical representation is ebongel_thrust, not the hidden item-use sprite. Its intended appearance preserves Гелевое копье статуи as carved stone under translucent gel, with a jagged Эбонит head and suspended dark chips; no rendered asset is supplied here. Primary use creates one capped owner-attached thrust along the initial cursor axis. During its 31-world-tick cycle, the collision center extends from an 18-pixel owner-center baseline to 66 pixels and retracts. Its 21-by-21-pixel rectangle deals 10 base melee damage with 7 knockback, requires the native owner hit check and can directly strike each NPC once. Tile collision is disabled for this body. Each direct hit requests three independent chips beyond the struck NPC, using a 0.8-radian fan and target-size-based clearance. Each chip starts at speed 4 pixels per update, gains 0.18 downward velocity per update, and has an 8-by-8-pixel hitbox, 3 base melee damage and 1 knockback. Chips expire after 40 world ticks or die on their first tile collision or damaging NPC contact. Their initial exclusion counter prevents immediate collision with the source NPC, but does not permanently exclude it. Descendant production uses the finite shared activation allowance of 32 successful child spawns; there is no replenishable pool. No delayed area burst, alternate use, terrain placement, corruption spreading, status or equipment effect is authored.",
+      "playerExperience": "Click to thrust toward the cursor; holding the button does not auto-repeat. Base item interval and animation are both 31 ticks, subject to native player modifiers. One live thrust is allowed for this owner and generated item/entity identity. The item remains in inventory and requires neither mana nor ammo. Direct hits offer substantial knockback and can spray weak falling fragments into nearby follow-up targets. Fragment directions are physical trajectories, not target locks or guaranteed collateral hits. Solid terrain, enemy movement, defense, native hit eligibility and the finite descendant allowance can limit their value. The spear's short reach and manual timing remain central; the chips add coverage rather than replacing the thrust.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "verdict": "aligned",
+          "summary": "The authored program implements the planned manual thrust and hit-triggered falling fragments. Replacing the source spear's delayed burst is intentional and already stated in the concept.",
+          "actionChecks": [
+            {
+              "plannedIntent": "Click toward the cursor to perform one reusable stone-and-gel thrust.",
+              "implementedBehavior": "Primary use spawns one capped thrust with a 31-tick extension/retraction cycle, no item consumption and no mana cost.",
+              "runtimeRefs": [
+                "ebongel_primary",
+                "ebongel_stats",
+                "ebongel_use",
+                "ebongel_thrust_spawn",
+                "ebongel_thrust_cap",
+                "ebongel_thrust_motion"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "The explicit input, manual cadence and bounded melee representation match the planned action."
+            },
+            {
+              "plannedIntent": "On a direct thrust hit, shed three falling ebonstone chips for modest collateral coverage.",
+              "implementedBehavior": "Actual thrust hits request three after-target chips with low authored damage, gravity and temporary source-NPC exclusion.",
+              "runtimeRefs": [
+                "ebongel_fragment_hit",
+                "ebongel_chip_spawn",
+                "ebongel_chip_damage",
+                "ebongel_chip_motion"
+              ],
+              "result": "aligned",
+              "intentionality": "intentional",
+              "reason": "The event requires a damaging collision, and the emitted children have explicit falling trajectories rather than an implicit explosion."
+            }
+          ]
+        },
+        "programVsReport": {
+          "verdict": "aligned",
+          "summary": "The description and player experience track the authored input, motion, damage, collision and finite fragment production. This is a static diagnostic comparison, not an observed run.",
+          "behaviorChecks": [
+            {
+              "runtimeRefs": [
+                "ebongel_primary",
+                "ebongel_stats",
+                "ebongel_use",
+                "ebongel_thrust_cap"
+              ],
+              "programBehavior": "Reusable manual primary use with zero mana cost, hidden item graphic, disabled body melee hitbox and one live thrust cap.",
+              "reportedBehavior": "Clicking creates the active thrust without consuming the item, mana or ammo; holding does not auto-repeat.",
+              "result": "aligned",
+              "reason": "The binding and item configuration explicitly establish these affordances; no ammo capability is present."
+            },
+            {
+              "runtimeRefs": [
+                "ebongel_thrust_spawn",
+                "ebongel_thrust_life",
+                "ebongel_thrust_box",
+                "ebongel_thrust_collision",
+                "ebongel_thrust_damage",
+                "ebongel_thrust_motion"
+              ],
+              "programBehavior": "Initial-cursor-axis thrust with bounded extension/retraction, 10 base melee damage, owner hit check and once-per-NPC damage.",
+              "reportedBehavior": "A 31-tick thrust moves its collision center between the 18-pixel baseline and 66-pixel peak, with a 21-pixel rectangle and 7 knockback.",
+              "result": "aligned",
+              "reason": "The reported reach follows the explicit movement formula, and damage and immunity are separately authored."
+            },
+            {
+              "runtimeRefs": [
+                "ebongel_fragment_hit",
+                "ebongel_chip_spawn",
+                "ebongel_chip_life",
+                "ebongel_chip_box",
+                "ebongel_chip_collision",
+                "ebongel_chip_damage",
+                "ebongel_chip_motion"
+              ],
+              "programBehavior": "Direct hits emit three low-damage gravity-driven children beyond the target, subject to the default finite activation budget; children terminate on first tile or damaging NPC contact.",
+              "reportedBehavior": "Weak falling chips provide possible collateral coverage without guaranteed hits, permanent source-target exclusion or replenishable spawning.",
+              "result": "aligned",
+              "reason": "The event geometry, temporary exclusion countdown, explicit gravity, penetration and collision settings support the report's bounded claims."
+            }
+          ]
+        }
+      }
+    }
+  }
+}

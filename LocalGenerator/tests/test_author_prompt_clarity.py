@@ -248,6 +248,59 @@ def test_conditional_neutral_guidance_preserves_optional_contract(monkeypatch):
 
 
 @pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
+def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(monkeypatch, mode):
+    from copy import deepcopy
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    source = {'name': 'Unnamed source', 'damage': 50, 'useTime': 10, 'ammo': 71,
+              'consumable': True, 'value': 500,
+              'ammoRaw': {'mode': 'this_item_is_ammo', 'ammoId': 71}}
+    before = deepcopy(source)
+    _, user, _ = author.build_initial_author_request(source, {}, {}, {}, 'ammo-economy', model_name='offline')
+    payload = json.loads(user)
+    rule = payload['requiredJsonShape']['concept']['coreMechanic']
+    for meaning in ('ammunition damage is a contribution', 'not proof of a standalone weapon',
+                    'launcher', 'ammunition useTime', 'autonomous attack'):
+        assert meaning in rule
+    assert payload['parents']['A']['packet'] == raw_parent_card_for_llm(source)
+    assert payload['balanceCorridor']['parentDamage'] == [50, 0]
+    assert payload['balanceCorridor']['parentUseTimeTicks'] == [10, None]
+    assert source == before
+
+
+@pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
+def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(monkeypatch, mode):
+    from copy import deepcopy
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+
+    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    parents = ({'name': 'Source A', 'damage': 0, 'value': 100, 'rare': 0, 'consumable': True},
+               {'name': 'Source B', 'damage': 0, 'value': 1, 'rare': 0, 'consumable': True})
+    before = deepcopy(parents)
+    request, user, _ = author.build_initial_author_request(*parents, {}, {}, 'ingredient-balance', model_name='offline')
+    packet = json.loads(user)
+    rule = packet['requiredJsonShape']['concept']['coreMechanic']
+    for meaning in ('actual ingredient power', 'rarity', 'acquisition facts', 'resource economy',
+                    'cheap abundant inputs', 'reusable benefit', 'consumable into repeatable utility',
+                    'total combat throughput', 'child attacks', 'chains', 'bounces', 'target count',
+                    'hit cadence', 'craftYield', 'stackCost', 'actual payment frequency'):
+        assert meaning in rule
+    assert 'Free reuse can be appropriate' in rule
+    assert 'no universal cooldown' in rule
+    # Guidance is invariant: source fields are read, never used to select a
+    # mechanics preset, invent a tier or rewrite the parents or authored params.
+    renamed = tuple({**parent, 'name': 'Unrelated identity'} for parent in parents)
+    other, _, _ = author.build_initial_author_request(*renamed, {}, {}, 'renamed', model_name='offline')
+    assert request['messages'][:2] == other['messages'][:2]
+    assert packet['parents'] == {label: {'packet': raw_parent_card_for_llm(parent)}
+                                 for label, parent in zip(('A', 'B'), parents)}
+    assert parents == before
+    for forbidden in ('mirror', 'Calamity', 'diamond', 'silver coin', '38 ranged', '3 minutes', '5 minutes'):
+        assert forbidden not in rule
+
+
+@pytest.mark.parametrize('mode', ['off', 'json_object', 'json_schema'])
 def test_future_author_accounts_for_refreshable_utility_economy_without_item_router(monkeypatch, mode):
     from copy import deepcopy
 

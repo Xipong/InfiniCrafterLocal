@@ -211,7 +211,7 @@ def test_clear_discards_private_batch_and_separates_reused_identity(recording):
     assert trace.flush_codex_transport(5)
     rows = [json.loads(line)["payload"] for line in trace.TRACE_FILE.read_text().splitlines()]
     assert len(rows) == 2
-    assert (recording / rows[0]["artifact"]["path"]).read_bytes() == clean
+    assert trace_tools.read_transport_artifact(recording, rows[0]["artifact"]) == clean
     assert len(list((recording / "transport_artifacts").glob("*.txt"))) == 1
 
 

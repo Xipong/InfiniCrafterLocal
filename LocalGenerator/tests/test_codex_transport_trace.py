@@ -7,7 +7,7 @@ import json
 import pytest
 
 from infini_local.services import codex_auth as auth, codex_text_backend as text
-from infini_local.storage import trace_runtime as trace
+from infini_local.storage import trace_runtime as trace, trace_tools
 
 
 def install_opener(monkeypatch, opened):
@@ -248,7 +248,7 @@ def test_malformed_provider_event_type_is_recorded_before_original_parser_reject
         auth.post_sse(text.RESPONSES_URL, {"stream": True}, timeout=3)
     arrival = next(row for row in rows(recording) if row["event"] == "sse_event")
     assert arrival["sseEventCount"] == 1
-    assert (recording / arrival["artifact"]["path"]).read_bytes() == raw
+    assert trace_tools.read_transport_artifact(recording, arrival["artifact"]) == raw
 
 
 @pytest.mark.parametrize("transport", ["text", "image"])
@@ -338,7 +338,7 @@ def test_eof_records_unframed_tail_and_zero_delta_count_without_parsing_it(recor
     assert end["firstTextDeltaMs"] is None and end["lastTextDeltaMs"] is None
     tail = next(row for row in observations if row["event"] == "sse_unframed_tail")
     assert tail["accepted"] is False
-    assert b"response.completed" in (recording / tail["artifact"]["path"]).read_bytes()
+    assert b"response.completed" in trace_tools.read_transport_artifact(recording, tail["artifact"])
     assert not any(row.get("terminalEventType") for row in observations)
 
 
@@ -387,10 +387,10 @@ def test_error_reader_exception_partial_is_preserved_without_claiming_entity_bod
     observed = rows(recording)
     error_body = next(row for row in observed if row["event"] == "http_error_body")
     assert error_body["bodyComplete"] is False
-    assert (recording / error_body["artifact"]["path"]).read_bytes() == body[:65537]
+    assert trace_tools.read_transport_artifact(recording, error_body["artifact"]) == body[:65537]
     exception_bytes = next(row for row in observed if row["event"] == "reader_exception_partial")
     assert exception_bytes["byteScope"] == "reader_exception_partial_unclassified"
-    assert (recording / exception_bytes["artifact"]["path"]).read_bytes() == partial
+    assert trace_tools.read_transport_artifact(recording, exception_bytes["artifact"]) == partial
 
 
 @pytest.mark.parametrize("status,expected_posts", [(429, 1), (503, 2)])
@@ -433,7 +433,7 @@ def test_slow_oversized_error_drain_does_not_delay_terminal_or_retry(recording, 
     observed = rows(recording)
     error_body = next(row for row in observed if row["event"] == "http_error_body")
     assert error_body["bodyComplete"] is False and error_body["bodyReadErrorType"] == "OSError"
-    saved = (recording / error_body["artifact"]["path"]).read_bytes()
+    saved = trace_tools.read_transport_artifact(recording, error_body["artifact"])
     assert saved == body[:65537]
     assert all(handle.closed for handle in handles)
 
@@ -458,7 +458,7 @@ def test_oversized_error_artifact_is_complete_without_changing_legacy_error_proj
     assert len(bodies) == expected_posts
     for row in bodies:
         assert row["bodyComplete"] is True
-        saved = (recording / row["artifact"]["path"]).read_bytes()
+        saved = trace_tools.read_transport_artifact(recording, row["artifact"])
         assert b"x" * 70000 in saved and b"fixture-refresh-secret" not in saved
     assert all(handle.closed for handle in handles)
 
@@ -483,7 +483,7 @@ def test_http_failure_persists_sanitized_full_body_and_actual_retry_identity(rec
     bodies = [row for row in observations if row["event"] == "http_error_body"]
     assert len(bodies) == expected_posts
     for row in bodies:
-        saved = (recording / row["artifact"]["path"]).read_bytes()
+        saved = trace_tools.read_transport_artifact(recording, row["artifact"])
         assert b"fixture-" not in saved and b"x" * 50000 in saved
         assert row["httpStatus"] == status
 
@@ -516,7 +516,7 @@ def test_failed_stream_observations_never_invent_completion(recording, monkeypat
     if scenario == "late":
         late = next(row for row in observations if row["event"] == "sse_late_read")
         assert late["arrivalMs"] >= 3000 and late["accepted"] is False
-        assert b"response.completed" in (recording / late["artifact"]["path"]).read_bytes()
+        assert b"response.completed" in trace_tools.read_transport_artifact(recording, late["artifact"])
     elif scenario == "incomplete":
         assert end["terminalEventType"] == "response.incomplete"
     elif scenario == "malformed":
@@ -540,10 +540,10 @@ def test_image_http_body_redacts_session_echoes_without_changing_png(recording, 
     assert target.read_bytes() == buffer.getvalue()
     observations = rows(recording)
     body_row = next(row for row in observations if row["event"] == "http_body")
-    saved = (recording / body_row["artifact"]["path"]).read_bytes()
+    saved = trace_tools.read_transport_artifact(recording, body_row["artifact"])
     assert b"fixture-refresh-secret" not in saved
     request = next(row for row in observations if row["event"] == "request")
-    assert (recording / request["artifact"]["path"]).read_bytes() == seen[0]
+    assert trace_tools.read_transport_artifact(recording, request["artifact"]) == seen[0]
     assert json.loads(seen[0])["prompt"] == "authored Ж prompt\n\nAvoid: avoid text"
 
 
@@ -641,8 +641,8 @@ def test_sse_records_authentic_terminal_before_parser_reconstructs_output(record
     assert [row["eventType"] for row in arrivals] == [event["type"] for event in events]
     assert [row["sseEventCount"] for row in arrivals] == [1, 2, 3]
     terminal = arrivals[-1]
-    assert json.loads((recording / terminal["artifact"]["path"]).read_bytes()) == events[-1]
-    assert "output" not in json.loads((recording / terminal["artifact"]["path"]).read_bytes())["response"]
+    assert json.loads(trace_tools.read_transport_artifact(recording, terminal["artifact"])) == events[-1]
+    assert "output" not in json.loads(trace_tools.read_transport_artifact(recording, terminal["artifact"]))["response"]
     end = next(row for row in observations if row["event"] == "attempt_end")
     assert end["sseEventCount"] == 3 and end["textDeltaCount"] == 2
     assert 0 <= end["firstTextDeltaMs"] <= end["lastTextDeltaMs"] <= end["elapsedMs"]
@@ -660,7 +660,7 @@ def test_effective_wire_and_actual_post_are_traced_without_headers(recording, mo
     assert result["choices"][0]["message"]["content"] == "{}"
     observations = rows(recording)
     request = next(row for row in observations if row["event"] == "request")
-    assert (recording / request["artifact"]["path"]).read_bytes() == seen[0]
+    assert trace_tools.read_transport_artifact(recording, request["artifact"]) == seen[0]
     assert json.loads(seen[0])["instructions"] == packet["messages"][0]["content"]
     assert "max_output_tokens" not in json.loads(seen[0])
     start = next(row for row in observations if row["event"] == "post_start")

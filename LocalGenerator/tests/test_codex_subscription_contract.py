@@ -446,7 +446,7 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
         assert result["choices"][0]["message"]["content"] == '{"ok":true}'
         url, body, options = calls[0]
         assert url == CODEX + "/responses" and body["model"] == (override or "test-model")
-        assert body["reasoning"] == {"effort": "low"}
+        assert body["reasoning"] == {"effort": "low", "summary": "auto"}
         assert body["instructions"] == request["messages"][0]["content"]
         assert body["input"] == [
             {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]},
@@ -487,7 +487,7 @@ def test_subscription_request_preserves_packet_and_only_supported_wire_options(m
     assert body["instructions"] == "Literal system contract"
     assert body["input"] == [{"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]}] + [{"type": "message", "role": item["role"], "content": [{
         "type": "output_text" if item["role"] == "assistant" else "input_text", "text": item["content"]}]} for item in request["messages"][1:]]
-    assert body["reasoning"] == {"effort": "low"} and body["text"]["format"] == {"type": "json_object"}
+    assert body["reasoning"] == {"effort": "low", "summary": "auto"} and body["text"]["format"] == {"type": "json_object"}
     assert body["stream"] is True and body["store"] is False and body["tools"] == []
     assert "max_output_tokens" not in body and "temperature" not in body
     assert options["headers"]["Authorization"] == "Bearer " + credentials.access_token

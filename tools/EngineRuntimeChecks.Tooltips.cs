@@ -145,8 +145,8 @@ internal static partial class EngineRuntimeChecks
                             Check(Line("InfiniHealLifePrimary").Contains("40") && Line("InfiniHealManaPrimary").Contains("12"), "healing values");
                             Check(Line("InfiniBuffPrimary0").Contains(locale == "en-US" ? "Ironskin" : "Железная кожа") && Line("InfiniBuffPrimary0").Contains(locale == "en-US" ? "1.5" : "1,5"), "known buff duration/culture");
                             Check(Line("InfiniMiningPrimary").Contains(locale == "en-US" ? "1.25" : "1,25"), "mining multiplier");
-                            Check(Line("InfiniMovementPrimary").Contains("+25%") && Line("InfiniJumpPrimary").Contains("2"), "movement/jump magnitudes");
-                            Check(Line("InfiniLifeRegenPrimary").Contains("2") && Line("InfiniManaRegenPrimary").Contains("4") &&
+                            Check(Line("InfiniMovementPrimary").Contains("+25%") && Line("InfiniJumpPrimary").Contains(locale == "en-US" ? "120 px/s" : "120 пикс./с"), "movement magnitude and jump display-only pixels per second");
+                            Check(Line("InfiniLifeRegenPrimary").Contains(locale == "en-US" ? "1 HP/s" : "1 ОЗ/с") && Line("InfiniManaRegenPrimary").Contains("4") &&
                                 Line("InfiniLightPrimary").Contains(locale == "en-US" ? "0.5" : "0,5"), "regen/light magnitudes");
                             Check(Line("InfiniMobilityPrimary").Contains("12") && Line("InfiniMobilityPrimary").Contains("2"), "blink range/cooldown");
                             Check(Line("InfiniOreSensePrimary").Length > 0 && !Line("InfiniOreSensePrimary").Contains("60"), "invented ore-sense radius");

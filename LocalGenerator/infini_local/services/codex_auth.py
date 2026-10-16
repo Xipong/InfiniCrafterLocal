@@ -376,6 +376,11 @@ def generation_credentials(credentials: Credentials, trace=None):
 def _observe_generation(row: dict, event: str, *, raw: bytes | None = None, body_reader=None, **fields) -> bool:
     join, observer = _GENERATION_OBSERVATIONS.get()
     observation = {**join, **{key: value for key, value in row.items() if key != "startedMonotonic"}, "event": event, **fields}
+    # Only boundary events declare an outcome. HTTP 200/SSE completion observations
+    # are still in flight until the physical attempt and logical call return.
+    observation["observedAt"] = time.time()
+    if event not in {"attempt_end", "call_end"}:
+        observation.update(terminal=False, outcome="in_progress")
     try:
         if observer is not None:
             observer(observation)
@@ -568,6 +573,24 @@ def _observe_sse(raw: bytes) -> None:
             if row.get("firstTextDeltaMs") is None:
                 row["firstTextDeltaMs"] = elapsed
             row["lastTextDeltaMs"] = elapsed
+        if isinstance(event, dict) and isinstance(kind, str) and kind.startswith("response.reasoning_summary_"):
+            row["reasoningSummaryEventCount"] = row.get("reasoningSummaryEventCount", 0) + 1
+            if kind == "response.reasoning_summary_text.delta" and isinstance(event.get("delta"), str):
+                row["reasoningSummaryDeltaChars"] += len(event["delta"])
+            part = event.get("part")
+            if (any(isinstance(event.get(key), str) and event[key] for key in ("text", "delta"))
+                    or isinstance(part, dict) and isinstance(part.get("text"), str) and part["text"]):
+                row["reasoningSummaryReturned"] = True
+        # Some providers return only a completed reasoning item's public summary.
+        if isinstance(event, dict):
+            item = event.get("item")
+            response = event.get("response")
+            outputs = response.get("output", []) if isinstance(response, dict) else []
+            for output in ([item] if isinstance(item, dict) else []) + (outputs if isinstance(outputs, list) else []):
+                if isinstance(output, dict) and output.get("type") == "reasoning":
+                    summary = output.get("summary")
+                    if isinstance(summary, list) and any(isinstance(part, dict) and isinstance(part.get("text"), str) and part["text"] for part in summary):
+                        row["reasoningSummaryReturned"] = True
         if isinstance(kind, str) and kind in {"response.completed", "response.failed", "response.incomplete", "error"}:
             row["terminalEventType"] = kind
         _observe_generation(row, "sse_event", raw=raw, eventType=kind, arrivalMs=elapsed)
@@ -579,7 +602,8 @@ def _read_sse_response(response, *, deadline: float, limit: int) -> dict:
     """Each transport attempt owns its partial stream; never combine attempts."""
     row = _GENERATION_ATTEMPT.get()
     if row is not None:
-        row.update(sseEventCount=0, textDeltaCount=0, firstTextDeltaMs=None, lastTextDeltaMs=None)
+        row.update(sseEventCount=0, textDeltaCount=0, firstTextDeltaMs=None, lastTextDeltaMs=None,
+                   reasoningSummaryEventCount=0, reasoningSummaryDeltaChars=0, reasoningSummaryReturned=False)
     total = 0
     data_lines: list[bytes] = []
     completed_items: list[dict] = []

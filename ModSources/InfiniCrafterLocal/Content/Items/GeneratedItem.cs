@@ -33,6 +33,7 @@ public partial class GeneratedItem : ModItem
     private static int _warningCount;
     private int _lastHydrationTick = -9999;
     private int _lastBlockedNoticeTick = -9999;
+    private bool _nativeToolPowersSuppressed;
     private RuntimeSpawnBudget _itemEventBudget = new(0);
     // Only pure apply_item_effects mobility needs an outcome-gated stack debit.
     // Native direct use calls UseItem before ConsumeItem in the same world tick.
@@ -74,6 +75,7 @@ public partial class GeneratedItem : ModItem
         _periodicItemEvents = default;
         if(Data?.Id!=data?.Id){_itemPresentationToken=0;_itemPresentationGeneration=new object();_hasMaterialTransportIdentity=false;}
         Data = data ?? GeneratedItemData.Placeholder();
+        _nativeToolPowersSuppressed = false;
         try { ApplyDataWithNativePrefix(); }
         catch (Exception ex)
         {
@@ -103,6 +105,7 @@ public partial class GeneratedItem : ModItem
     public override void SetDefaults()
     {
         ResetPureMobilityUseOutcome();
+        _nativeToolPowersSuppressed = false;
         ResetNativePrefixLifecycle();
         Data ??= GeneratedItemData.Placeholder();
         try { ApplyDataWithNativePrefix(); }
@@ -231,6 +234,17 @@ public partial class GeneratedItem : ModItem
         int nativePrefix = BeginNativePrefixProjection();
         RuntimeBindingActionSpec action = binding.UsePolicy.Action;
         bool placing = action.Kind == RuntimeBindingAction.PlaceItem;
+        // configure_tool owns canonical powers; only native body/tool or explicit
+        // projectile+tool actions execute them. Pure effects (including refused
+        // recall) and placement must not also enter Player's independent mining
+        // path. noMelee/contactDamage do not gate that path. Restore every eligible
+        // projection: NativePrefixBase does not snapshot pick/axe/hammer.
+        bool nativeToolAction = action.Kind == RuntimeBindingAction.UseItemBody
+            || action.Kind == RuntimeBindingAction.SpawnEntity;
+        Item.pick = nativeToolAction ? Math.Max(0, Data.Gameplay.PickPower) : 0;
+        Item.axe = nativeToolAction ? Math.Max(0, Data.Gameplay.AxePower) : 0;
+        Item.hammer = nativeToolAction ? Math.Max(0, Data.Gameplay.HammerPower) : 0;
+        _nativeToolPowersSuppressed = !nativeToolAction;
         RuntimePlacementSpec? placement = action.Placement;
         Item.createTile = placing ? placement!.TileId : -1;
         Item.createWall = placing ? placement!.WallId : -1;
@@ -516,9 +530,36 @@ public partial class GeneratedItem : ModItem
         _heldEffectRefresh = (player, Item, Data, group, tick, snapshot ? tick : previous.SnapshotTick);
     }
 
+    private void RestoreIdleNativeToolPowers()
+    {
+        if (!_nativeToolPowersSuppressed) return;
+        // Only the native power projection is temporary. Reapplying the full
+        // definition/prefix here would disturb the selected use and other mods'
+        // instance fields; NativePrefixBase itself does not own tool powers.
+        Item.pick = Math.Max(0, Data.Gameplay.PickPower);
+        Item.axe = Math.Max(0, Data.Gameplay.AxePower);
+        Item.hammer = Math.Max(0, Data.Gameplay.HammerPower);
+        _nativeToolPowersSuppressed = false;
+    }
+
+    public override void UpdateInventory(Player player)
+    {
+        // UpdateEquips visits inventory before ItemCheck. ItemCheck then decrements
+        // itemAnimation BEFORE SmartSelectLookup and HoldItem. At 1 -> 0 there is
+        // no remaining mining window, but SmartSelect already needs the real pick.
+        // A switched-away item also cannot be the current native mining input.
+        if (!ReferenceEquals(player.HeldItem, Item) || player.itemAnimation <= 1)
+            RestoreIdleNativeToolPowers();
+    }
+
     public override void HoldItem(Player player)
     {
         EnsureRuntimeHydration(player);
+        // This hook is inside ItemCheck, after CanUseItem/StartActualUse but BEFORE
+        // OwnerOnlyCode (mining) and the generic UseItem tail. Never restore during
+        // a live animation, including a cooldown-refused effect or its final tick.
+        if (player.itemAnimation <= 0)
+            RestoreIdleNativeToolPowers();
         RefreshHeldEffectGroup(player);
         GameplaySpec gp = Data.Gameplay;
         if (gp.HoldLightStrength > 0f && Main.netMode != NetmodeID.Server)

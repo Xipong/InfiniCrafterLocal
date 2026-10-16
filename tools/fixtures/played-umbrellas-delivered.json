@@ -1,0 +1,1939 @@
+[
+  {
+    "accessory": {
+      "enabled": false
+    },
+    "armor": {
+      "enabled": false
+    },
+    "category": "combat",
+    "concept": {
+      "coreMechanic": "A reusable, mana-paid hand jab releases a small magic spark from each enemy it directly contacts. The jab supplies reliable close-range impact while the sparks can continue toward the cursor into enemies behind the first contact. A 24-tick base use interval deliberately sits between the parents' 22- and 26-tick tempos.",
+      "literalSynthesis": "The Double-Canopy Copper Swordbrella retains its nested copper-ribbed and fabric umbrellas, with Жезл искр (Terraria/WandofSparking) incorporated as the central shaft. The wand tip protrudes through both canopy crowns as a small ember-bright point.",
+      "parentAContribution": "Double-Canopy Copper Swordbrella contributes the literal nested umbrella body, copper ribs, short fixed-axis front-hand jab, and once-per-enemy contact topology. Its surrounding area impact is replaced rather than inherited.",
+      "parentBContribution": "Жезл искр contributes its wand shaft and spark-shooting identity, inspiring newly authored contact-triggered magic sparks and a base mana cost of 2. The spark trajectory here is deliberately authored as a short downward-curving shot, not claimed as an observed source trajectory.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Jab along the initial cursor axis and release a forward spark from each direct enemy contact."
+        }
+      ],
+      "playerExperience": "Aim and click to jab, then steer the cursor toward a follow-through target before contact. Each contacted enemy can release one spark. The item is retained, needs no ammunition, and pays native mana at animation start; misses still cost mana. There is no shield, slow fall, or free ranged shot on a miss."
+    },
+    "contractVersions": {
+      "altForkCherrypickContract": "best_of_alt_config_signals_trace_replay_v0.4.226",
+      "appVersion": "0.5.04",
+      "architectureCoherenceContract": "single_balance_report_clamp_taxonomy_powerband_v0.4.219",
+      "architectureHomogeneityContract": "central_balance_policy_and_csharp_runtime_constants_v0.4.226",
+      "armorPropertyRoundtripContract": "armor_extended_property_slot_budget_roundtrip_v0.4.192",
+      "balanceArchitectureAuditContract": "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216",
+      "balanceSingleAuthorityContract": "code_owned_balance_envelope_no_active_guide_helper_v0.4.216",
+      "buildQolContract": "tml_build_log_qol_and_compile_surface_cleanup_v0.4.201",
+      "csharpAuthoringPreservationContract": "csharp_authoring_extension_preservation_v0.4.177",
+      "csharpContractSyncGuard": "csharp_future_field_contract_guard_v0.4.181",
+      "debugDumpContract": "compact_recipe_debug_dump_v0.4.174",
+      "envAccessContract": "centralized_env_access_no_import_star_v0.4.226",
+      "equipmentBudgetContract": "armor_accessory_total_soft_budget_v0.4.226",
+      "failureUxContract": "structured_failure_player_message_v0.4.174",
+      "fishingBaitFutureDisabledParentContext": "fishing_bait_future_disabled_parent_context_v0.4.184",
+      "futureSoundCatalogSeam": "explicit_external_sound_catalog_future_seam_v0.4.239",
+      "gameplayQolContract": "generated_use_feedback_tooltip_qol_v0.4.201",
+      "gameplayRuntimeRebuildContract": "runtime_coverage_station_ux_balance_envelope_v0.4.212",
+      "generatedArmorContract": "generated_armor_proxy_slots_v0.4.192",
+      "heldItemPoseSyncContract": "held_item_pose_accessory_compile_hotfix_v0.4.199",
+      "localCacheAndRepairContract": "local_cache_runtime_repair_contract_cleanup_v0.4.176",
+      "luminanceSoundBridgeContract": "external_luminance_looped_sound_bridge_v0.4.187",
+      "maintenanceHardeningContract": "repair_json_sync_and_low_noise_fallback_logs_v0.4.205",
+      "maintenanceQolContract": "maintainability_gameplay_qol_cleanup_v0.4.203",
+      "mpServerAuthorityEnvMigrationCiContract": "server_side_slot_spend_env_migration_ci_hardening_v0.4.218",
+      "multiplayerPresentationSyncContract": "held_pose_accessory_compile_hotfix_v0.4.199",
+      "overhaulQolContract": "infini_station_overhaul_qol_v0.4.202",
+      "parentProjectileSizePreservationContract": "llm_opt_in_parent_projectile_size_policy_v0.4.179",
+      "plannerPromptProfile": "planner_prompt_semantics_restored_v6_v0.4.243",
+      "projectileChainChildGuard": "projectile_chain_child_count_guard_v0.4.185",
+      "projectileChildRuntimeGuard": "projectile_child_runtime_static_guard_v0.4.184",
+      "promptCompressionContract": "planner_prompt_compression_preserve_prose_v0.4.193",
+      "pythonExceptionHygieneGuard": "python_exception_hygiene_baseline_guard_v0.4.183",
+      "rebuildGameplayCacheDiagnosticsContract": "generated_melee_onhit_and_cache_diagnostics_v0.4.209",
+      "recipeHealthSchema": "infini.recipe-health.v1",
+      "recipeIdentityVersion": "recipe_v4_25_no_item_family_routing",
+      "releaseHygieneGuardContract": "release_hygiene_zone_identifier_guard_v0.4.181",
+      "releaseHygieneToolTestContract": "release_hygiene_tool_regression_tests_v0.4.182",
+      "releaseVersionSyncGuard": "release_version_sync_guard_v0.4.182",
+      "repairBoundaryContract": "deterministic_error_leaf_and_blocker_dependency_closure_v0.4.240",
+      "repairPatchContract": "gameplay_visual_vfx_frozen_old_values_salvage_patch_v0.4.240",
+      "replayHarnessContract": "generation_case_replay_audit_v0.4.226",
+      "repoCleanupBroadBalanceContract": "repo_docs_cleanup_and_broad_soft_balance_uplift_v0.4.216",
+      "runtimeAffordanceSchema": "infini.runtime-affordance.v2",
+      "runtimeApiSyncGuard": "runtime_api_python_csharp_sync_guard_v0.4.183",
+      "runtimeApiVersion": "infini.runtime-program.v5",
+      "runtimeContractSchema": "infini.runtime-contract.v3",
+      "runtimeGameplayQolContract": "impact_mobility_cooldown_and_sprite_lru_qol_v0.4.204",
+      "runtimeProvenanceContract": "runtime_authored_applied_provenance_debug_v0.4.226",
+      "runtimeRepairObservabilityContract": "blocker_dossier_salvage_merge_and_ignored_scope_escape_v0.4.240",
+      "runtimeStateCleanupContract": "runtime_state_cleanup_v0.4.175",
+      "runtimeTechnicalProvenanceContract": "structural_final_wire_receipts_v0.4.241",
+      "schema": "infini.contract-stamp.v1",
+      "soundLibraryContract": "exact_terraria_sound_catalog_v8_no_prose_queries_pitch_variance_v0.4.239",
+      "vanillaPresentationPolishContract": "bounded_vanilla_presentation_polish_v0.4.199",
+      "vanillaRuntimeSpriteCacheContract": "runtime_sprite_max_side_192_hotfix_v0.4.207",
+      "vfxAudioPresentationGuard": "vfx_audio_presentation_guard_v0.4.185",
+      "visualPipelineProfile": "author_visualpack_v2",
+      "visualRoleContract": "projectile_local_forward_axis_visual_contract_v0.4.242"
+    },
+    "gameplay": {
+      "autoReuse": false,
+      "craftYield": 1,
+      "damage": 10,
+      "damageClass": "melee",
+      "handPose": "",
+      "height": 40,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "itemScale": 1,
+      "kind": "combat",
+      "knockback": 5,
+      "manaCost": 2,
+      "maxStack": 1,
+      "rarity": 1,
+      "releaseTiming": "immediate",
+      "useAnimation": 24,
+      "useStyleName": "rapier",
+      "useTime": 24,
+      "useTurn": true,
+      "value": 10000,
+      "width": 32
+    },
+    "generatedParentSummary": {
+      "description": "The program defines a retained item whose hidden use graphic is replaced by the primary owner-attached swordbrella jab. The intended presentation preserves both nested canopies and incorporates the Wand of Sparking as their shaft; no image asset is delivered by this gameplay object. Primary use has a 24-tick base interval and animation, no automatic reuse, and base mana cost 2. The jab has a 13-tick initial-axis native front-hand cycle and a 30-by-30 collision rectangle centered 24 pixels beyond the hand. It deals 10 base melee damage with 5 knockback, owner hit checking, unlimited penetration and once-per-NPC immunity. Each actual direct hit requests one independent spark at the jab's event origin, aimed toward the cursor at that spawn. Sparks start at speed 7, gain 0.08 downward velocity per update, deal 8 base magic damage with zero knockback, and emit orange light. Each lasts at most 45 ticks, collides with tiles without bouncing, and has penetration 2 with shared owner immunity. The acyclic jab-to-spark graph retains the default finite allowance of 32 successful descendant spawns per activation; there is no replenishing pool. No area impact, status, alternate use or passive defensive effect is authored.",
+      "identity": "generated:g_9e339be4540919d3",
+      "name": "Double-Canopy Spark Swordbrella",
+      "notableEffects": [
+        "Click-driven retained weapon with native animation-start mana payment and a projectile replacing the hidden body.",
+        "Short fixed-axis jab that can contact several distinct enemies without sprite-derived reach.",
+        "Contact produces cursor-aimed follow-through sparks, bounded by 32 successful descendant spawns rather than guaranteed output.",
+        "Short-lived curving spark with 8 base magic damage, no guaranteed follow-up hit and no status effect."
+      ],
+      "playerExperience": "Click near an enemy for a short jab that does not track later cursor movement. Direct contact can launch a small curving spark toward the cursor, allowing deliberate follow-through into a group. A spark is not guaranteed to hit either the original enemy or a second enemy: shared immunity, terrain and ordinary NPC eligibility still apply. Multiple distinct enemies contacted by the jab can each request a spark, subject to runtime budgets. Misses produce no spark. The item is never consumed and uses no ammunition. Native mana payment is attempted at animation start, including misses; the stated timing and mana values are authored bases rather than measured totals after player modifiers.",
+      "runtimeEntityIds": [
+        "sparkbrella_item",
+        "sparkbrella_jab",
+        "sparkbrella_ember"
+      ],
+      "runtimePrimaryEntityId": "sparkbrella_jab",
+      "schema": "infini.generated-parent-summary.v2"
+    },
+    "id": "g_9e339be4540919d3",
+    "itemKnowledge": {
+      "enabled": true,
+      "parents": [
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 1,
+          "identity": "generated:g_60d18fd7593d52d8",
+          "name": "Double-Canopy Copper Swordbrella",
+          "powerScore": 95.74,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "canopy",
+            "copper",
+            "double",
+            "generated",
+            "hidden_use_graphic",
+            "item",
+            "long_lived_projectile",
+            "melee",
+            "mod_infinicrafterlocal",
+            "modded",
+            "no_melee",
+            "noncolliding_projectile",
+            "placeable",
+            "projectile",
+            "sword",
+            "swordbrella",
+            "weapon"
+          ],
+          "tier": "hardmode_early"
+        },
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 0,
+          "identity": "item:Terraria/WandofSparking:3069",
+          "name": "Жезл искр",
+          "powerScore": 100.54,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "long_lived_projectile",
+            "magic",
+            "material",
+            "no_melee",
+            "piercing",
+            "piercing_projectile",
+            "projectile",
+            "sparking",
+            "vanilla_ai_style",
+            "wand",
+            "wandof",
+            "weapon"
+          ],
+          "tier": "hardmode_early"
+        }
+      ],
+      "resultCard": {
+        "category": "generic",
+        "confidence": 0.74,
+        "generatedDepth": 1,
+        "identity": "generated:g_9e339be4540919d3",
+        "name": "Double-Canopy Spark Swordbrella",
+        "powerScore": 84.44,
+        "sourceHint": "generated result card from gameplay + parent knowledge",
+        "tags": [],
+        "tier": "hardmode_early"
+      },
+      "strongestMaterialPowerScore": 0,
+      "strongestMaterialTier": "",
+      "strongestPowerScore": 100.54,
+      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
+      "strongestTier": "hardmode_early",
+      "tagsFromKnowledge": [
+        "canopy",
+        "copper",
+        "double",
+        "generated",
+        "hidden_use_graphic",
+        "item",
+        "long_lived_projectile",
+        "magic",
+        "material",
+        "melee",
+        "mod_infinicrafterlocal",
+        "modded",
+        "no_melee",
+        "noncolliding_projectile",
+        "piercing",
+        "piercing_projectile",
+        "placeable",
+        "projectile",
+        "sparking",
+        "sword",
+        "swordbrella",
+        "vanilla_ai_style",
+        "wand",
+        "wandof",
+        "weapon"
+      ]
+    },
+    "llmStageAccounting": {
+      "gameplayAuthorCalls": 1,
+      "gameplayRepairCalls": 0,
+      "vfxDirectorCalls": 1,
+      "vfxRepairCalls": 0,
+      "visualDirectorCalls": 1,
+      "visualRepairCalls": 0
+    },
+    "name": "Double-Canopy Spark Swordbrella",
+    "parentA": "Double-Canopy Copper Swordbrella",
+    "parentB": "Жезл искр",
+    "realization": {
+      "description": "The program defines a retained item whose hidden use graphic is replaced by the primary owner-attached swordbrella jab. The intended presentation preserves both nested canopies and incorporates the Wand of Sparking as their shaft; no image asset is delivered by this gameplay object. Primary use has a 24-tick base interval and animation, no automatic reuse, and base mana cost 2. The jab has a 13-tick initial-axis native front-hand cycle and a 30-by-30 collision rectangle centered 24 pixels beyond the hand. It deals 10 base melee damage with 5 knockback, owner hit checking, unlimited penetration and once-per-NPC immunity. Each actual direct hit requests one independent spark at the jab's event origin, aimed toward the cursor at that spawn. Sparks start at speed 7, gain 0.08 downward velocity per update, deal 8 base magic damage with zero knockback, and emit orange light. Each lasts at most 45 ticks, collides with tiles without bouncing, and has penetration 2 with shared owner immunity. The acyclic jab-to-spark graph retains the default finite allowance of 32 successful descendant spawns per activation; there is no replenishing pool. No area impact, status, alternate use or passive defensive effect is authored.",
+      "playerExperience": "Click near an enemy for a short jab that does not track later cursor movement. Direct contact can launch a small curving spark toward the cursor, allowing deliberate follow-through into a group. A spark is not guaranteed to hit either the original enemy or a second enemy: shared immunity, terrain and ordinary NPC eligibility still apply. Multiple distinct enemies contacted by the jab can each request a spark, subject to runtime budgets. Misses produce no spark. The item is never consumed and uses no ammunition. Native mana payment is attempted at animation start, including misses; the stated timing and mana values are authored bases rather than measured totals after player modifiers.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "actionChecks": [
+            {
+              "implementedBehavior": "Primary use spawns one capped initial-axis hand jab; each on_hit requests one cursor-aimed spark from the event origin, within the shared finite descendant allowance.",
+              "intentionality": "intentional",
+              "plannedIntent": "Jab along the initial cursor axis and release a forward spark from each direct enemy contact.",
+              "reason": "The initial jab direction and the spark's separately sampled cursor direction supply the intended close-contact follow-through without an additional input.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "sparkbrella_primary",
+                "sparkbrella_jab_cap",
+                "sparkbrella_hand_motion",
+                "sparkbrella_contact_spark",
+                "sparkbrella_ember_spawn"
+              ]
+            }
+          ],
+          "summary": "The single planned attack lane is implemented with an explicit hand jab and contact-produced magic children. The tempo compromise and replacement of the parent's area impact are deliberate.",
+          "verdict": "aligned"
+        },
+        "programVsReport": {
+          "behaviorChecks": [
+            {
+              "programBehavior": "Retained primary-use attack with 24-tick base timing, base mana cost 2, no autoReuse, and hidden item-use graphics.",
+              "reason": "The input, costs, timing and visibility are explicit; no additional resource debit is claimed.",
+              "reportedBehavior": "Click-driven retained weapon with native animation-start mana payment and a projectile replacing the hidden body.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "sparkbrella_primary",
+                "sparkbrella_stats",
+                "sparkbrella_use"
+              ]
+            },
+            {
+              "programBehavior": "One live hand-driven jab with fixed initial aim, a 13-tick lifetime, explicit offset rectangle, melee damage and once-per-NPC immunity.",
+              "reason": "The primary selection, movement, cap, geometry and contact rules directly support that description.",
+              "reportedBehavior": "Short fixed-axis jab that can contact several distinct enemies without sprite-derived reach.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "sparkbrella_jab",
+                "sparkbrella_jab_spawn",
+                "sparkbrella_jab_cap",
+                "sparkbrella_jab_lifetime",
+                "sparkbrella_jab_box",
+                "sparkbrella_jab_collision",
+                "sparkbrella_jab_damage",
+                "sparkbrella_hand_motion"
+              ]
+            },
+            {
+              "programBehavior": "Actual jab hits request one authored-child spark each; no hit means no child. Default finite activation budget remains.",
+              "reason": "Only on_hit is subscribed, and no concurrency pool or other child producer is present.",
+              "reportedBehavior": "Contact produces cursor-aimed follow-through sparks, bounded by 32 successful descendant spawns rather than guaranteed output.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "sparkbrella_contact_spark",
+                "sparkbrella_ember_spawn"
+              ]
+            },
+            {
+              "programBehavior": "Small magic child curves downward, emits orange light, expires after 45 ticks or earlier termination, and uses tile collision, penetration 2 and owner-shared immunity.",
+              "reason": "All reported spark properties have explicit calls, and the report correctly avoids promising a re-hit or inherited native spark AI.",
+              "reportedBehavior": "Short-lived curving spark with 8 base magic damage, no guaranteed follow-up hit and no status effect.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "sparkbrella_ember_lifetime",
+                "sparkbrella_ember_box",
+                "sparkbrella_ember_collision",
+                "sparkbrella_ember_damage",
+                "sparkbrella_ember_arc",
+                "sparkbrella_ember_light"
+              ]
+            }
+          ],
+          "summary": "The report describes authored behavior and admission limits, not a tested run or guaranteed damage sequence.",
+          "verdict": "aligned"
+        }
+      }
+    },
+    "recipeKey": "r_37b4930348fc75c6fe3462f0",
+    "recipeMeta": {
+      "assetFiles": [
+        "infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
+        "infini_asset_png_45050c59d156687f9eb8b860563bd8da6d72831c1ef87f7098bc346afdd2f090.png"
+      ],
+      "worldId": "853355558",
+      "worldScoped": true
+    },
+    "runtimeApiVersion": "infini.runtime-program.v5",
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "bindings": [
+        {
+          "id": "sparkbrella_primary",
+          "input": "primary_use",
+          "role": "primary",
+          "usePolicy": {
+            "action": {
+              "kind": "spawn_entity",
+              "targetId": "sparkbrella_jab"
+            },
+            "contactDamage": false,
+            "stackCost": 0
+          }
+        }
+      ],
+      "entities": [
+        {
+          "events": [],
+          "id": "sparkbrella_item",
+          "kind": "item_body",
+          "visual": {
+            "assetMode": "baked_sprite",
+            "prompt": "Generate a real transparent-background PNG item sprite for Terraria: Double-Canopy Spark Swordbrella, crisp low-resolution pixel art with binary alpha, dark umber outlines and restrained stepped highlights. Show the literal double umbrella horizontally, handle left and crown point facing right along +X, forward angle 0 degrees. Preserve two visibly separate nested canopies on one shared shaft: a large golden-yellow fabric umbrella dome outside, with a smaller copper-ribbed umbrella canopy visibly nested beneath its lower edge. Expose reddish copper ribs, ochre inner fabric and rust-shadowed underside so both canopy layers read clearly. The Wand of Sparking itself forms the continuous walnut-brown shaft, running from the left handhold through both canopy hubs to a small warm ember-colored crown accent; do not add a separate wand beside the umbrella. Use a 64-by-64 final canvas with roughly 58 pixels of horizontal artwork span and clear transparent padding. Place the actual graspable exposed wooden handhold at normalized canvas position (0.1875, 0.5), with the shaft crossing that exact contact point. Keep the broad canopy concentrated to the right of the handhold. Isolated game asset only, no player, scenery or detached sparks.",
+            "role": "inventory_item",
+            "scale": 1.0,
+            "silhouette": "Horizontal double umbrella with a narrow exposed wooden handhold on the left, one continuous shaft and two nested convex canopy profiles widening toward the right-side crown. The inner copper-ribbed layer remains visibly distinct under the larger fabric canopy.",
+            "spritePath": "infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
+            "visualIdentity": "Golden fabric over a rust-shadowed copper-ribbed inner umbrella; the literal Wand of Sparking serves as their common wooden shaft. Small orange crown highlights connect the nested umbrella construction to its contact-produced sparks without obscuring either canopy."
+          },
+          "visualRole": "inventory_item"
+        },
+        {
+          "collision": {
+            "bounceCount": 0,
+            "extraUpdates": 0,
+            "ignoreWater": true,
+            "localNpcHitCooldownTicks": -1,
+            "npcImmunityMode": "local",
+            "pierce": -1,
+            "tileCollide": false
+          },
+          "damage": {
+            "damage": 10,
+            "damageClass": "melee",
+            "enabled": true,
+            "knockback": 5,
+            "ownerHitCheck": true
+          },
+          "events": [
+            {
+              "action": "spawn_entity_on_event",
+              "actionCode": 1,
+              "count": 1,
+              "damageBasis": "authored_child",
+              "damageMultiplier": 1,
+              "delayTicks": 0,
+              "entityId": "sparkbrella_ember",
+              "event": "on_hit",
+              "id": "sparkbrella_contact_spark",
+              "knockbackBasis": "authored_child",
+              "spreadRadians": 0
+            }
+          ],
+          "hitbox": {
+            "drawScale": 1,
+            "heightPx": 30,
+            "hitboxScale": 1,
+            "widthPx": 30
+          },
+          "id": "sparkbrella_jab",
+          "kind": "owner_attached_projectile",
+          "lifetimeTicks": 13,
+          "movement": {
+            "code": 20,
+            "name": "move_front_hand",
+            "params": {
+              "aimMode": "initial",
+              "durationTicks": 13,
+              "hitboxOffsetPx": 24,
+              "peakStretch": "full",
+              "startStretch": "none"
+            }
+          },
+          "spawn": {
+            "aim": "cursor",
+            "count": 1,
+            "enabled": true,
+            "maxActive": 1,
+            "offsetPx": 0,
+            "overTarget": {
+              "delayTicks": 0,
+              "heightTiles": 0
+            },
+            "placement": "owner_center",
+            "speedPxPerTick": 0,
+            "spreadRadians": 0
+          },
+          "visual": {
+            "assetMode": "reuse_item_icon",
+            "prompt": "Generate a real transparent-background PNG item sprite for Terraria: Double-Canopy Spark Swordbrella, crisp low-resolution pixel art with binary alpha, dark umber outlines and restrained stepped highlights. Show the literal double umbrella horizontally, handle left and crown point facing right along +X, forward angle 0 degrees. Preserve two visibly separate nested canopies on one shared shaft: a large golden-yellow fabric umbrella dome outside, with a smaller copper-ribbed umbrella canopy visibly nested beneath its lower edge. Expose reddish copper ribs, ochre inner fabric and rust-shadowed underside so both canopy layers read clearly. The Wand of Sparking itself forms the continuous walnut-brown shaft, running from the left handhold through both canopy hubs to a small warm ember-colored crown accent; do not add a separate wand beside the umbrella. Use a 64-by-64 final canvas with roughly 58 pixels of horizontal artwork span and clear transparent padding. Place the actual graspable exposed wooden handhold at normalized canvas position (0.1875, 0.5), with the shaft crossing that exact contact point. Keep the broad canopy concentrated to the right of the handhold. Isolated game asset only, no player, scenery or detached sparks.",
+            "role": "held_body",
+            "scale": 1.0,
+            "silhouette": "Horizontal double umbrella with a narrow exposed wooden handhold on the left, one continuous shaft and two nested convex canopy profiles widening toward the right-side crown. The inner copper-ribbed layer remains visibly distinct under the larger fabric canopy.",
+            "spritePath": "infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
+            "visualIdentity": "Golden fabric over a rust-shadowed copper-ribbed inner umbrella; the literal Wand of Sparking serves as their common wooden shaft. Small orange crown highlights connect the nested umbrella construction to its contact-produced sparks without obscuring either canopy."
+          },
+          "visualRole": "held_body"
+        },
+        {
+          "collision": {
+            "bounceCount": 0,
+            "extraUpdates": 0,
+            "ignoreWater": false,
+            "localNpcHitCooldownTicks": -1,
+            "npcImmunityMode": "owner",
+            "pierce": 2,
+            "tileCollide": true
+          },
+          "damage": {
+            "damage": 8,
+            "damageClass": "magic",
+            "enabled": true,
+            "knockback": 0,
+            "ownerHitCheck": false
+          },
+          "events": [],
+          "hitbox": {
+            "drawScale": 1,
+            "heightPx": 10,
+            "hitboxScale": 1,
+            "widthPx": 10
+          },
+          "id": "sparkbrella_ember",
+          "kind": "child_projectile",
+          "lifetimeTicks": 45,
+          "light": {
+            "color": "orange",
+            "strength": 0.35
+          },
+          "movement": {
+            "code": 2,
+            "name": "move_gravity_arc",
+            "params": {
+              "gravityPerTick": 0.08
+            }
+          },
+          "spawn": {
+            "aim": "cursor",
+            "count": 1,
+            "enabled": true,
+            "offsetPx": 0,
+            "overTarget": {
+              "delayTicks": 0,
+              "heightTiles": 0
+            },
+            "placement": "item_use_origin",
+            "speedPxPerTick": 7,
+            "spreadRadians": 0
+          },
+          "visual": {
+            "assetMode": "baked_sprite",
+            "forwardAngleDegrees": 0,
+            "preferredCanvasSize": 24,
+            "prompt": "Generate a real transparent-background PNG for the Terraria runtime child spark. Crisp binary-alpha pixel art on a 24-by-24 canvas, with an approximately 19-pixel horizontal artwork span centered in the frame. A single compact orange ember with a pale-yellow hot center, orange middle and dark red-orange edge; a short jagged taper is attached on its left side. The brighter rounded leading end points right along +X, forward angle 0 degrees. Use only a few chunky pixel clusters so the spark remains legible at its small world size. This is the traveling spark body, not an impact burst. No detached particles, external glow haze, scenery or opaque background.",
+            "renderSizePx": 10,
+            "role": "child_projectile",
+            "scale": 1.0,
+            "silhouette": "One small asymmetrical ember, rounded and bright on the right, tapering to a short jagged left tail.",
+            "spritePath": "infini_asset_png_45050c59d156687f9eb8b860563bd8da6d72831c1ef87f7098bc346afdd2f090.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 1.0,
+            "spriteUrl": "/sprite/infini_asset_png_45050c59d156687f9eb8b860563bd8da6d72831c1ef87f7098bc346afdd2f090.png",
+            "visualIdentity": "A simple orange and pale-yellow traveling spark echoing the warm accent on the shared wand shaft; no miniature umbrella or additional physical object."
+          },
+          "visualRole": "child_projectile"
+        }
+      ],
+      "itemEntityId": "sparkbrella_item",
+      "itemUse": {
+        "channel": false,
+        "configured": true,
+        "disableMeleeHitbox": true,
+        "handPose": "",
+        "hideUseGraphic": true,
+        "holdoutOffsetX": 0,
+        "holdoutOffsetY": 0,
+        "releaseTiming": "immediate",
+        "useStyle": "rapier"
+      },
+      "limits": {
+        "maxChildDepth": 3,
+        "maxEntityCount": 12,
+        "maxEventSpawnsPerActivation": 32
+      },
+      "primaryEntityId": "sparkbrella_jab",
+      "primaryOwner": "projectile",
+      "schema": "infini.runtime-program.wire.v3"
+    },
+    "schemaVersion": 5,
+    "sourceMode": "generated",
+    "tags": [],
+    "vfxManifest": {
+      "budget": {
+        "effectMagnitude": 0.12,
+        "emergencyCap": true,
+        "enablePersistentSmoke": false,
+        "enablePointSparks": true,
+        "enableSoftGlow": true,
+        "maxDrawCalls": 100,
+        "maxParticlesPerTick": 56,
+        "maxParticlesTotal": 2200,
+        "spawnRateMultiplier": 1.0,
+        "visualBudgetClass": "tiny"
+      },
+      "confidence": 1.0,
+      "debug": {
+        "pattern": "runtime_entity_events",
+        "roles": [
+          "inventory_item",
+          "held_body",
+          "child_projectile"
+        ],
+        "selectedReasons": [
+          "exact_entity_event_binding"
+        ],
+        "selectedScore": 1.0,
+        "topCandidates": [],
+        "wordProbe": []
+      },
+      "effectMagnitude": 0.12,
+      "effectName": "runtime_entity_events",
+      "inspirationNames": [],
+      "motif": {
+        "chaos": 0.0,
+        "element": "Literal nested golden-fabric and copper-ribbed canopies sharing the Wand of Sparking shaft.",
+        "motionLanguage": "Leave the accepted initial-axis front-hand jab and independently launched downward-curving spark visually unobscured. Add only a quiet use-time audio cue.",
+        "paletteRole": "Retain the accepted golden fabric, copper ribs, walnut shaft and orange spark color without supplementary glow or lighting.",
+        "rhythm": 1.0,
+        "shapeLanguage": "Preserve the rigid double-canopy body and compact orange traveling spark. No area rings, explosions, duplicate bodies or additional particle emissions."
+      },
+      "overlayPolicy": "LocalOnly",
+      "playbackMode": "Realtime",
+      "recipeId": "r_37b4930348fc75c6fe3462f0",
+      "schema": "infini.vfx.runtime-events.v15",
+      "seed": 368535799,
+      "slots": [
+        {
+          "alpha": 1.0,
+          "anchor": "self",
+          "backend": "Auto",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "alpha",
+          "budgetWeight": 1.0,
+          "channel": "sound",
+          "density": 0.0,
+          "duration": 3,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "sparkbrella_item",
+          "event": "on_use",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "quiet_jab_use",
+          "jitter": 0.0,
+          "lane": "cue",
+          "layer": "BeforeProjectiles",
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "soundCue",
+          "repeatEvery": 0,
+          "scale": 1.0,
+          "signatureWeight": 0.0,
+          "slotSeed": 1738303756,
+          "sound": {
+            "pitch": 0.15,
+            "pitchVariance": 0.08,
+            "volume": 0.45
+          },
+          "soundId": "Item1",
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.0
+        }
+      ],
+      "visualBudgetClass": "tiny"
+    },
+    "visual": {
+      "drawOffsetX": 0,
+      "drawOffsetY": 0,
+      "effectColor": "orange",
+      "forwardAngleDegrees": 0,
+      "grip": {
+        "normalizedX": 0.1875,
+        "normalizedY": 0.5
+      },
+      "imagePrompt": "Generate a real transparent-background PNG item sprite for Terraria: Double-Canopy Spark Swordbrella, crisp low-resolution pixel art with binary alpha, dark umber outlines and restrained stepped highlights. Show the literal double umbrella horizontally, handle left and crown point facing right along +X, forward angle 0 degrees. Preserve two visibly separate nested canopies on one shared shaft: a large golden-yellow fabric umbrella dome outside, with a smaller copper-ribbed umbrella canopy visibly nested beneath its lower edge. Expose reddish copper ribs, ochre inner fabric and rust-shadowed underside so both canopy layers read clearly. The Wand of Sparking itself forms the continuous walnut-brown shaft, running from the left handhold through both canopy hubs to a small warm ember-colored crown accent; do not add a separate wand beside the umbrella. Use a 64-by-64 final canvas with roughly 58 pixels of horizontal artwork span and clear transparent padding. Place the actual graspable exposed wooden handhold at normalized canvas position (0.1875, 0.5), with the shaft crossing that exact contact point. Keep the broad canopy concentrated to the right of the handhold. Isolated game asset only, no player, scenery or detached sparks.. single centered inventory sprite, 64x64 pixel-art canvas, crisp hard pixels, transparent background, no scene, no text, no extra entities. Place the handle/hand-contact point at normalized final canvas coordinates {\"normalizedX\":0.1875,\"normalizedY\":0.5}; upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips.. Read-only final-frame facts: {\"canvasSizePx\":64,\"renderSizePx\":54,\"forwardAngleDegrees\":0,\"silhouette\":\"Horizontal double umbrella with a narrow exposed wooden handhold on the left, one continuous shaft and two nested convex canopy profiles widening toward the right-side crown. The inner copper-ribbed layer remains visibly distinct under the larger fabric canopy.\",\"visualIdentity\":\"Golden fabric over a rust-shadowed copper-ribbed inner umbrella; the literal Wand of Sparking serves as their common wooden shaft. Small orange crown highlights connect the nested umbrella construction to its contact-produced sparks without obscuring either canopy.\",\"grip\":{\"normalizedX\":0.1875,\"normalizedY\":0.5},\"sharedEntityMultipliers\":[{\"entityId\":\"sparkbrella_jab\",\"hitbox.drawScale\":1,\"visual.scale\":1.0,\"movementReadOnly\":{\"name\":\"move_front_hand\",\"code\":20,\"params\":{\"aimMode\":\"initial\",\"durationTicks\":13,\"startStretch\":\"none\",\"peakStretch\":\"full\",\"hitboxOffsetPx\":24}}}],\"multipliers\":{\"gameplay.itemScale\":1,\"visual.inventoryScale\":1.0,\"visual.worldScale\":1.0}}. C=canvasSizePx is the final baked frame side; R=renderSizePx is its base world-pixel max-side, not hitbox or visible shaft length. When R is declared, base pixel scale is R/C; visible alpha extent uses that scale and independent draw multipliers. Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; held item uses R/C times adjusted item scale (gameplay.itemScale included once). Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present: the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. Do not omit or merge authored parts to simplify the sprite. The visible handle/hand-contact region must contain the declared final-space grip, not the guard, blade or empty space. It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips.. Terraria (tModLoader) game asset.",
+      "inventoryScale": 1.0,
+      "negativePrompt": "Opaque background, checkerboard background, illustration scene, player body, hands, text, lettering, logo, photorealism, smooth vector edges, antialiased haze, bloom cloud, detached wand, missing inner canopy, merged single canopy, additional umbrellas, separate blade, shield, floating spark particles, placeholder.",
+      "palette": [
+        "Dark umber outline",
+        "Walnut-brown wand shaft",
+        "Golden-yellow outer fabric",
+        "Muted ochre inner fabric",
+        "Deep rust underside shadows",
+        "Burnished reddish copper ribs",
+        "Peach-copper highlights",
+        "Orange ember accents"
+      ],
+      "preferredCanvasSize": 64,
+      "renderSizePx": 54,
+      "requiredAnchors": [],
+      "semanticReviewStatus": "not_performed",
+      "spritePath": "infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
+      "spriteStatus": "generated",
+      "spriteTechnicalScore": 0.97,
+      "spriteUrl": "/sprite/infini_asset_png_cf3abd746dc5c2bb8ad288f04bdd7b45b46a05f6bf18192ff584b65e2ebf4afa.png",
+      "style": "terraria_item_sprite",
+      "worldScale": 1.0
+    }
+  },
+  {
+    "accessory": {
+      "enabled": false
+    },
+    "armor": {
+      "enabled": false
+    },
+    "category": "combat",
+    "concept": {
+      "coreMechanic": "A reusable, cursor-aimed close-range thrust. The copper point delivers the direct hit, while a small canopy impact damages nearby enemies other than the directly struck target. A 13-tick thrust cycle uses the shortsword's source tempo, followed by recovery within the umbrella's 22-tick base use interval. This design does not implement the umbrella's slow-fall effect.",
+      "literalSynthesis": "Terraria/Umbrella (Зонт) with the blade of Terraria/CopperShortsword (Медный короткий меч) projecting from its central shaft, copper sword-blades reinforcing the canopy ribs, and the umbrella's hooked handle retained as the grip.",
+      "parentAContribution": "The literal umbrella supplies the canopy, ribs, hooked grip, 10 base damage and 22-tick base cadence. Its canopy inspires the newly authored small crowd-impact effect; that effect is not claimed as an observed parent ability.",
+      "parentBContribution": "The literal CopperShortsword supplies the projecting copper blade and the close, aimed stabbing identity. Its 13-tick source timing informs the explicit hand-extension cycle rather than the full reuse interval.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Thrust the copper-tipped umbrella toward the cursor at close range."
+        },
+        {
+          "input": "passive_or_event",
+          "intent": "On a direct hit, spread a weaker canopy impact to nearby enemies without directly striking the same target again."
+        }
+      ],
+      "playerExperience": "Aim and click to stab a nearby enemy, preferably when several enemies are packed together. The item is reusable and costs no mana or ammunition, balanced by short reach, deliberate recovery and reduced secondary damage."
+    },
+    "contractVersions": {
+      "altForkCherrypickContract": "best_of_alt_config_signals_trace_replay_v0.4.226",
+      "appVersion": "0.5.04",
+      "architectureCoherenceContract": "single_balance_report_clamp_taxonomy_powerband_v0.4.219",
+      "architectureHomogeneityContract": "central_balance_policy_and_csharp_runtime_constants_v0.4.226",
+      "armorPropertyRoundtripContract": "armor_extended_property_slot_budget_roundtrip_v0.4.192",
+      "balanceArchitectureAuditContract": "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216",
+      "balanceSingleAuthorityContract": "code_owned_balance_envelope_no_active_guide_helper_v0.4.216",
+      "buildQolContract": "tml_build_log_qol_and_compile_surface_cleanup_v0.4.201",
+      "csharpAuthoringPreservationContract": "csharp_authoring_extension_preservation_v0.4.177",
+      "csharpContractSyncGuard": "csharp_future_field_contract_guard_v0.4.181",
+      "debugDumpContract": "compact_recipe_debug_dump_v0.4.174",
+      "envAccessContract": "centralized_env_access_no_import_star_v0.4.226",
+      "equipmentBudgetContract": "armor_accessory_total_soft_budget_v0.4.226",
+      "failureUxContract": "structured_failure_player_message_v0.4.174",
+      "fishingBaitFutureDisabledParentContext": "fishing_bait_future_disabled_parent_context_v0.4.184",
+      "futureSoundCatalogSeam": "explicit_external_sound_catalog_future_seam_v0.4.239",
+      "gameplayQolContract": "generated_use_feedback_tooltip_qol_v0.4.201",
+      "gameplayRuntimeRebuildContract": "runtime_coverage_station_ux_balance_envelope_v0.4.212",
+      "generatedArmorContract": "generated_armor_proxy_slots_v0.4.192",
+      "heldItemPoseSyncContract": "held_item_pose_accessory_compile_hotfix_v0.4.199",
+      "localCacheAndRepairContract": "local_cache_runtime_repair_contract_cleanup_v0.4.176",
+      "luminanceSoundBridgeContract": "external_luminance_looped_sound_bridge_v0.4.187",
+      "maintenanceHardeningContract": "repair_json_sync_and_low_noise_fallback_logs_v0.4.205",
+      "maintenanceQolContract": "maintainability_gameplay_qol_cleanup_v0.4.203",
+      "mpServerAuthorityEnvMigrationCiContract": "server_side_slot_spend_env_migration_ci_hardening_v0.4.218",
+      "multiplayerPresentationSyncContract": "held_pose_accessory_compile_hotfix_v0.4.199",
+      "overhaulQolContract": "infini_station_overhaul_qol_v0.4.202",
+      "parentProjectileSizePreservationContract": "llm_opt_in_parent_projectile_size_policy_v0.4.179",
+      "plannerPromptProfile": "planner_prompt_semantics_restored_v6_v0.4.243",
+      "projectileChainChildGuard": "projectile_chain_child_count_guard_v0.4.185",
+      "projectileChildRuntimeGuard": "projectile_child_runtime_static_guard_v0.4.184",
+      "promptCompressionContract": "planner_prompt_compression_preserve_prose_v0.4.193",
+      "pythonExceptionHygieneGuard": "python_exception_hygiene_baseline_guard_v0.4.183",
+      "rebuildGameplayCacheDiagnosticsContract": "generated_melee_onhit_and_cache_diagnostics_v0.4.209",
+      "recipeHealthSchema": "infini.recipe-health.v1",
+      "recipeIdentityVersion": "recipe_v4_25_no_item_family_routing",
+      "releaseHygieneGuardContract": "release_hygiene_zone_identifier_guard_v0.4.181",
+      "releaseHygieneToolTestContract": "release_hygiene_tool_regression_tests_v0.4.182",
+      "releaseVersionSyncGuard": "release_version_sync_guard_v0.4.182",
+      "repairBoundaryContract": "deterministic_error_leaf_and_blocker_dependency_closure_v0.4.240",
+      "repairPatchContract": "gameplay_visual_vfx_frozen_old_values_salvage_patch_v0.4.240",
+      "replayHarnessContract": "generation_case_replay_audit_v0.4.226",
+      "repoCleanupBroadBalanceContract": "repo_docs_cleanup_and_broad_soft_balance_uplift_v0.4.216",
+      "runtimeAffordanceSchema": "infini.runtime-affordance.v2",
+      "runtimeApiSyncGuard": "runtime_api_python_csharp_sync_guard_v0.4.183",
+      "runtimeApiVersion": "infini.runtime-program.v5",
+      "runtimeContractSchema": "infini.runtime-contract.v3",
+      "runtimeGameplayQolContract": "impact_mobility_cooldown_and_sprite_lru_qol_v0.4.204",
+      "runtimeProvenanceContract": "runtime_authored_applied_provenance_debug_v0.4.226",
+      "runtimeRepairObservabilityContract": "blocker_dossier_salvage_merge_and_ignored_scope_escape_v0.4.240",
+      "runtimeStateCleanupContract": "runtime_state_cleanup_v0.4.175",
+      "runtimeTechnicalProvenanceContract": "structural_final_wire_receipts_v0.4.241",
+      "schema": "infini.contract-stamp.v1",
+      "soundLibraryContract": "exact_terraria_sound_catalog_v8_no_prose_queries_pitch_variance_v0.4.239",
+      "vanillaPresentationPolishContract": "bounded_vanilla_presentation_polish_v0.4.199",
+      "vanillaRuntimeSpriteCacheContract": "runtime_sprite_max_side_192_hotfix_v0.4.207",
+      "vfxAudioPresentationGuard": "vfx_audio_presentation_guard_v0.4.185",
+      "visualPipelineProfile": "author_visualpack_v2",
+      "visualRoleContract": "projectile_local_forward_axis_visual_contract_v0.4.242"
+    },
+    "gameplay": {
+      "autoReuse": false,
+      "craftYield": 1,
+      "damage": 10,
+      "damageClass": "melee",
+      "handPose": "",
+      "height": 32,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "itemScale": 1,
+      "kind": "combat",
+      "knockback": 4,
+      "manaCost": 0,
+      "maxStack": 1,
+      "rarity": 1,
+      "releaseTiming": "immediate",
+      "useAnimation": 22,
+      "useStyleName": "rapier",
+      "useTime": 22,
+      "useTurn": true,
+      "value": 10000,
+      "width": 32
+    },
+    "generatedParentSummary": {
+      "description": "The program defines one reusable item and one primary owner-attached thrust body. Primary use spawns one body, capped at one live copy for this owner and generated item. The vanilla item-use graphic and item contact hitbox are disabled; the projectile is the physical held representation. Its native front-hand pose extends and retracts on the initial cursor axis over a 13-tick cycle, with its 30-by-30-pixel collision rectangle centered 24 pixels beyond the hand. The body lasts 13 ticks, while base item use and animation both last 22 ticks. Direct projectile contact has 10 base melee damage, 4 knockback, owner hit checking, unlimited penetration and once-per-NPC immunity for that physical thrust. Each direct hit invokes a 1.5-tile-radius damage action at the event position, excluding that event's directly hit NPC. Its multiplier is 0.4 of the authored projectile base damage, or 4 before target defense and applicable native damage rules. It creates no child entities. The literal visual concept is a copper-pointed umbrella with copper blade ribs; no slow fall, guarding, flight or alternate-use mechanic is authored.",
+      "identity": "generated:g_a68f03dee9621149",
+      "name": "Copper-Ribbed Swordbrella",
+      "notableEffects": [
+        "A click-driven reusable jab without mana, ammunition or stack expenditure, using authored base timing.",
+        "The projectile replaces the hidden item-use graphic and performs a short fixed-axis hand thrust.",
+        "Direct hits deliver 10 base damage and trigger weaker nearby impacts, excluding only the current direct target."
+      ],
+      "playerExperience": "Click toward a nearby enemy to make a short copper-umbrella jab. Aim is fixed at activation rather than continuously tracking the cursor. Closely grouped enemies can receive weaker canopy-impact damage when a direct hit occurs. The same nearby enemy may be eligible for separate impact events from hits on other enemies; this is not a once-per-thrust area-damage cap. The item remains in inventory and has no mana, ammunition or stack cost. It does not automatically repeat while the button is held. The stated timings are authored base values, not measured timings after player modifiers.",
+      "runtimeEntityIds": [
+        "swordbrella_item",
+        "swordbrella_thrust"
+      ],
+      "runtimePrimaryEntityId": "swordbrella_thrust",
+      "schema": "infini.generated-parent-summary.v2"
+    },
+    "id": "g_a68f03dee9621149",
+    "itemKnowledge": {
+      "enabled": true,
+      "parents": [
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 0,
+          "identity": "item:Terraria/Umbrella:946",
+          "name": "Зонт",
+          "powerScore": 40.92,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "melee",
+            "umbrella",
+            "weapon"
+          ],
+          "tier": "pre_boss"
+        },
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 0,
+          "identity": "item:Terraria/CopperShortsword:3507",
+          "name": "Медный короткий меч",
+          "powerScore": 42.81,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "copper",
+            "fast_projectile",
+            "hidden_use_graphic",
+            "material",
+            "melee",
+            "melee_projection",
+            "no_melee",
+            "noncolliding_projectile",
+            "piercing",
+            "piercing_projectile",
+            "projectile",
+            "shortsword",
+            "sword",
+            "vanilla_ai_style",
+            "weapon"
+          ],
+          "tier": "pre_boss"
+        }
+      ],
+      "resultCard": {
+        "category": "generic",
+        "confidence": 0.74,
+        "generatedDepth": 1,
+        "identity": "generated:g_a68f03dee9621149",
+        "name": "Copper-Ribbed Swordbrella",
+        "powerScore": 50.85,
+        "sourceHint": "generated result card from gameplay + parent knowledge",
+        "tags": [],
+        "tier": "pre_boss"
+      },
+      "strongestMaterialPowerScore": 0,
+      "strongestMaterialTier": "",
+      "strongestPowerScore": 42.81,
+      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
+      "strongestTier": "pre_boss",
+      "tagsFromKnowledge": [
+        "copper",
+        "fast_projectile",
+        "hidden_use_graphic",
+        "material",
+        "melee",
+        "melee_projection",
+        "no_melee",
+        "noncolliding_projectile",
+        "piercing",
+        "piercing_projectile",
+        "projectile",
+        "shortsword",
+        "sword",
+        "umbrella",
+        "vanilla_ai_style",
+        "weapon"
+      ]
+    },
+    "llmStageAccounting": {
+      "gameplayAuthorCalls": 1,
+      "gameplayRepairCalls": 0,
+      "vfxDirectorCalls": 1,
+      "vfxRepairCalls": 0,
+      "visualDirectorCalls": 1,
+      "visualRepairCalls": 0
+    },
+    "name": "Copper-Ribbed Swordbrella",
+    "parentA": "Зонт",
+    "parentB": "Медный короткий меч",
+    "realization": {
+      "description": "The program defines one reusable item and one primary owner-attached thrust body. Primary use spawns one body, capped at one live copy for this owner and generated item. The vanilla item-use graphic and item contact hitbox are disabled; the projectile is the physical held representation. Its native front-hand pose extends and retracts on the initial cursor axis over a 13-tick cycle, with its 30-by-30-pixel collision rectangle centered 24 pixels beyond the hand. The body lasts 13 ticks, while base item use and animation both last 22 ticks. Direct projectile contact has 10 base melee damage, 4 knockback, owner hit checking, unlimited penetration and once-per-NPC immunity for that physical thrust. Each direct hit invokes a 1.5-tile-radius damage action at the event position, excluding that event's directly hit NPC. Its multiplier is 0.4 of the authored projectile base damage, or 4 before target defense and applicable native damage rules. It creates no child entities. The literal visual concept is a copper-pointed umbrella with copper blade ribs; no slow fall, guarding, flight or alternate-use mechanic is authored.",
+      "playerExperience": "Click toward a nearby enemy to make a short copper-umbrella jab. Aim is fixed at activation rather than continuously tracking the cursor. Closely grouped enemies can receive weaker canopy-impact damage when a direct hit occurs. The same nearby enemy may be eligible for separate impact events from hits on other enemies; this is not a once-per-thrust area-damage cap. The item remains in inventory and has no mana, ammunition or stack cost. It does not automatically repeat while the button is held. The stated timings are authored base values, not measured timings after player modifiers.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "actionChecks": [
+            {
+              "implementedBehavior": "Primary use creates a single hand-driven, damaging thrust with initial cursor aim, a 13-tick lifetime and a 22-tick base item cadence.",
+              "intentionality": "intentional",
+              "plannedIntent": "Thrust the copper-tipped umbrella toward the cursor at close range.",
+              "reason": "The explicit hand driver and spawn configuration supply the aimed close-range action; no movement is inferred from the item identity.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "activate_swordbrella",
+                "swordbrella_stats",
+                "swordbrella_use",
+                "thrust_spawn",
+                "thrust_single_copy",
+                "thrust_hand_motion",
+                "thrust_lifetime",
+                "thrust_hitbox",
+                "thrust_damage"
+              ]
+            },
+            {
+              "implementedBehavior": "Each projectile on_hit invokes a 1.5-tile area action at 0.4 base damage, excluding that event's direct target.",
+              "intentionality": "intentional",
+              "plannedIntent": "On a direct hit, spread a weaker canopy impact to nearby enemies without directly striking the same target again.",
+              "reason": "The exclusion is per hit event, as planned; neither the concept nor the report promises exclusion from other enemies' impact events.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "thrust_damage",
+                "thrust_collision",
+                "canopy_impact"
+              ]
+            }
+          ],
+          "summary": "The authored program implements the planned close-range thrust and weaker crowd impact. The umbrella's source slow-fall behavior is deliberately not part of the concept or executable program.",
+          "verdict": "aligned"
+        },
+        "programVsReport": {
+          "behaviorChecks": [
+            {
+              "programBehavior": "Reusable primary-use spawn with zero stack and mana cost, no automatic reuse, and 22-tick base use and animation timing.",
+              "reason": "The binding retains the item, the stats set zero mana, and no ammunition requirement is configured.",
+              "reportedBehavior": "A click-driven reusable jab without mana, ammunition or stack expenditure, using authored base timing.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "activate_swordbrella",
+                "swordbrella_stats",
+                "swordbrella_use"
+              ]
+            },
+            {
+              "programBehavior": "One primary hand-attached body with initial aim, zero launch velocity, explicit hand motion, a 30-pixel square hitbox and 13-tick lifetime.",
+              "reason": "All position, representation and lifetime choices are explicitly authored rather than supplied by a weapon preset.",
+              "reportedBehavior": "The projectile replaces the hidden item-use graphic and performs a short fixed-axis hand thrust.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "thrust_spawn",
+                "thrust_single_copy",
+                "thrust_hand_motion",
+                "thrust_lifetime",
+                "thrust_hitbox",
+                "swordbrella_use"
+              ]
+            },
+            {
+              "programBehavior": "Direct melee damage with once-per-NPC projectile immunity produces an immediate area-damage action on every successful direct hit.",
+              "reason": "The report distinguishes direct-contact immunity from separate area actions and does not guarantee successful secondary hits.",
+              "reportedBehavior": "Direct hits deliver 10 base damage and trigger weaker nearby impacts, excluding only the current direct target.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "thrust_damage",
+                "thrust_collision",
+                "canopy_impact"
+              ]
+            }
+          ],
+          "summary": "The report describes the configured input, held representation, motion, damage and event action without claiming an observed run or unsupported umbrella utility.",
+          "verdict": "aligned"
+        }
+      }
+    },
+    "recipeKey": "r_59477a82bb68df39d164ce59",
+    "recipeMeta": {
+      "assetFiles": [
+        "infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png"
+      ],
+      "worldId": "853355558",
+      "worldScoped": true
+    },
+    "runtimeApiVersion": "infini.runtime-program.v5",
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "bindings": [
+        {
+          "id": "activate_swordbrella",
+          "input": "primary_use",
+          "role": "primary",
+          "usePolicy": {
+            "action": {
+              "kind": "spawn_entity",
+              "targetId": "swordbrella_thrust"
+            },
+            "contactDamage": false,
+            "stackCost": 0
+          }
+        }
+      ],
+      "entities": [
+        {
+          "events": [],
+          "id": "swordbrella_item",
+          "kind": "item_body",
+          "visual": {
+            "assetMode": "baked_sprite",
+            "prompt": "Generate a finished Terraria inventory and held-item PNG sprite on a transparent background, with crisp binary-alpha pixel art. Depict one literal copper-pointed umbrella with copper blade ribs, viewed side-on and aimed horizontally right: forward axis 0 degrees. A dark walnut shaft runs from a small hooked handle at left into a compact, visibly spread umbrella canopy at right. Muted ochre fabric panels remain clearly visible between five angular copper ribs; the ribs follow the canopy surface and converge at its pointed copper ferrule, never becoming separate floating objects. The right-facing canopy has a scalloped trailing edge and a rounded triangular profile. Use warm copper highlights, reddish-brown metal shadows and a dark umber outline. On the final 64-by-64 canvas, keep the complete silhouette approximately within x=3..60 and y=13..51. The actual hand-contact region is the straight wrapped handle segment centered at normalized canvas coordinates (0.1875, 0.5), immediately ahead of the small downward hook. Preserve that contact position through final fit and padding. Keep the shaft horizontal through this point. Deliver a real finished transparent PNG, not a mockup or placeholder; no player, text, scenery, motion marks or detached effects.",
+            "role": "inventory_item",
+            "scale": 1.0,
+            "silhouette": "One horizontal umbrella: small hooked handle at left, narrow straight shaft, and compact spread scalloped canopy at right, ending in a single right-facing copper point. Copper ribs remain structurally attached to the fabric canopy.",
+            "spritePath": "infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
+            "visualIdentity": "A practical ochre umbrella reinforced by bright copper blade ribs and a copper ferrule. Walnut handle, dark outlined fabric folds and sparse peach-colored metal glints preserve readability at Terraria scale."
+          },
+          "visualRole": "inventory_item"
+        },
+        {
+          "collision": {
+            "bounceCount": 0,
+            "extraUpdates": 0,
+            "ignoreWater": true,
+            "localNpcHitCooldownTicks": -1,
+            "npcImmunityMode": "local",
+            "pierce": -1,
+            "tileCollide": false
+          },
+          "damage": {
+            "damage": 10,
+            "damageClass": "melee",
+            "enabled": true,
+            "knockback": 4,
+            "ownerHitCheck": true
+          },
+          "events": [
+            {
+              "action": "damage_area_on_event",
+              "actionCode": 3,
+              "damageMultiplier": 0.4,
+              "delayTicks": 0,
+              "event": "on_hit",
+              "id": "canopy_impact",
+              "radiusPx": 24
+            }
+          ],
+          "hitbox": {
+            "drawScale": 1,
+            "heightPx": 30,
+            "hitboxScale": 1,
+            "widthPx": 30
+          },
+          "id": "swordbrella_thrust",
+          "kind": "owner_attached_projectile",
+          "lifetimeTicks": 13,
+          "movement": {
+            "code": 20,
+            "name": "move_front_hand",
+            "params": {
+              "aimMode": "initial",
+              "durationTicks": 13,
+              "hitboxOffsetPx": 24,
+              "peakStretch": "full",
+              "startStretch": "none"
+            }
+          },
+          "spawn": {
+            "aim": "cursor",
+            "count": 1,
+            "enabled": true,
+            "maxActive": 1,
+            "offsetPx": 0,
+            "overTarget": {
+              "delayTicks": 0,
+              "heightTiles": 0
+            },
+            "placement": "owner_center",
+            "speedPxPerTick": 0,
+            "spreadRadians": 0
+          },
+          "visual": {
+            "assetMode": "reuse_item_icon",
+            "prompt": "Generate a finished Terraria inventory and held-item PNG sprite on a transparent background, with crisp binary-alpha pixel art. Depict one literal copper-pointed umbrella with copper blade ribs, viewed side-on and aimed horizontally right: forward axis 0 degrees. A dark walnut shaft runs from a small hooked handle at left into a compact, visibly spread umbrella canopy at right. Muted ochre fabric panels remain clearly visible between five angular copper ribs; the ribs follow the canopy surface and converge at its pointed copper ferrule, never becoming separate floating objects. The right-facing canopy has a scalloped trailing edge and a rounded triangular profile. Use warm copper highlights, reddish-brown metal shadows and a dark umber outline. On the final 64-by-64 canvas, keep the complete silhouette approximately within x=3..60 and y=13..51. The actual hand-contact region is the straight wrapped handle segment centered at normalized canvas coordinates (0.1875, 0.5), immediately ahead of the small downward hook. Preserve that contact position through final fit and padding. Keep the shaft horizontal through this point. Deliver a real finished transparent PNG, not a mockup or placeholder; no player, text, scenery, motion marks or detached effects.",
+            "role": "held_body",
+            "scale": 1.0,
+            "silhouette": "One horizontal umbrella: small hooked handle at left, narrow straight shaft, and compact spread scalloped canopy at right, ending in a single right-facing copper point. Copper ribs remain structurally attached to the fabric canopy.",
+            "spritePath": "infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
+            "visualIdentity": "A practical ochre umbrella reinforced by bright copper blade ribs and a copper ferrule. Walnut handle, dark outlined fabric folds and sparse peach-colored metal glints preserve readability at Terraria scale."
+          },
+          "visualRole": "held_body"
+        }
+      ],
+      "itemEntityId": "swordbrella_item",
+      "itemUse": {
+        "channel": false,
+        "configured": true,
+        "disableMeleeHitbox": true,
+        "handPose": "",
+        "hideUseGraphic": true,
+        "holdoutOffsetX": 0,
+        "holdoutOffsetY": 0,
+        "releaseTiming": "immediate",
+        "useStyle": "rapier"
+      },
+      "limits": {
+        "maxChildDepth": 3,
+        "maxEntityCount": 12,
+        "maxEventSpawnsPerActivation": 32
+      },
+      "primaryEntityId": "swordbrella_thrust",
+      "primaryOwner": "projectile",
+      "schema": "infini.runtime-program.wire.v3"
+    },
+    "schemaVersion": 5,
+    "sourceMode": "generated",
+    "tags": [],
+    "vfxManifest": {
+      "budget": {
+        "effectMagnitude": 0.25,
+        "emergencyCap": true,
+        "enablePersistentSmoke": false,
+        "enablePointSparks": true,
+        "enableSoftGlow": true,
+        "maxDrawCalls": 172,
+        "maxParticlesPerTick": 104,
+        "maxParticlesTotal": 4600,
+        "spawnRateMultiplier": 1.0,
+        "visualBudgetClass": "small"
+      },
+      "confidence": 1.0,
+      "debug": {
+        "pattern": "runtime_entity_events",
+        "roles": [
+          "inventory_item",
+          "held_body"
+        ],
+        "selectedReasons": [
+          "exact_entity_event_binding"
+        ],
+        "selectedScore": 1.0,
+        "topCandidates": [],
+        "wordProbe": []
+      },
+      "effectMagnitude": 0.25,
+      "effectName": "runtime_entity_events",
+      "inspirationNames": [],
+      "motif": {
+        "chaos": 0.1,
+        "element": "Copper contact glints on the literal copper-ribbed umbrella.",
+        "motionLanguage": "No added body motion or persistent trail. Brief detached contact accents fade at the captured hit point.",
+        "paletteRole": "Accepted orange effect color supports the copper highlights without recoloring the physical umbrella.",
+        "rhythm": 1.0,
+        "shapeLanguage": "A thin orange contact ring and a few tiny metallic glints; leave the ochre canopy and attached copper ribs unobscured."
+      },
+      "overlayPolicy": "LocalOnly",
+      "playbackMode": "Realtime",
+      "recipeId": "r_59477a82bb68df39d164ce59",
+      "schema": "infini.vfx.runtime-events.v15",
+      "seed": 1461722243,
+      "slots": [
+        {
+          "alpha": 1.0,
+          "anchor": "self",
+          "backend": "Auto",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "alpha",
+          "budgetWeight": 1.0,
+          "channel": "sound",
+          "density": 0.0,
+          "duration": 3,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "swordbrella_item",
+          "event": "on_use",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "use_swish",
+          "jitter": 0.0,
+          "lane": "cue",
+          "layer": "BeforeProjectiles",
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "soundCue",
+          "repeatEvery": 0,
+          "scale": 1.0,
+          "signatureWeight": 0.0,
+          "slotSeed": 71111543,
+          "sound": {
+            "pitch": 0.15,
+            "pitchVariance": 0.08,
+            "volume": 0.45
+          },
+          "soundId": "Item1",
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.0
+        },
+        {
+          "alpha": 0.36,
+          "anchor": "hitPoint",
+          "backend": "Primitive",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "additive",
+          "budgetWeight": 1.0,
+          "channel": "impactShape",
+          "density": 0.0,
+          "duration": 8,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "swordbrella_thrust",
+          "event": "on_hit",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "canopy_contact_ring",
+          "jitter": 0.0,
+          "lane": "support",
+          "layer": "AfterProjectiles",
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "impactRing",
+          "repeatEvery": 0,
+          "scale": 0.75,
+          "signatureWeight": 0.15,
+          "slotSeed": 524543554,
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.15
+        },
+        {
+          "alpha": 0.65,
+          "anchor": "hitPoint",
+          "backend": "Particle",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "additive",
+          "budgetWeight": 1.0,
+          "channel": "impactParticles",
+          "density": 0.0,
+          "duration": 9,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "swordbrella_thrust",
+          "event": "on_hit",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "copper_contact_glints",
+          "jitter": 0.0,
+          "lane": "accent",
+          "layer": "AfterProjectiles",
+          "particle": {
+            "accelerationXPxPerTickSquared": 0,
+            "accelerationYPxPerTickSquared": 0.04,
+            "colorEnd": "effect",
+            "colorStart": "gold",
+            "count": 4,
+            "drag": 0.9,
+            "endOpacity": 0,
+            "endScaleMultiplier": 0,
+            "heightPx": 4,
+            "inheritVelocity": 0,
+            "rotationRadians": 0,
+            "rotationSpeedRadiansPerTick": 0.08,
+            "speedMaxPxPerTick": 1.7,
+            "speedMinPxPerTick": 0.6,
+            "spreadRadians": 6.283185307179586,
+            "textureId": "star",
+            "widthPx": 4
+          },
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "libraryParticle",
+          "repeatEvery": 0,
+          "scale": 1.0,
+          "signatureWeight": 0.0,
+          "slotSeed": 1814550861,
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.0
+        }
+      ],
+      "visualBudgetClass": "small"
+    },
+    "visual": {
+      "drawOffsetX": 0,
+      "drawOffsetY": 0,
+      "effectColor": "orange",
+      "forwardAngleDegrees": 0,
+      "grip": {
+        "normalizedX": 0.1875,
+        "normalizedY": 0.5
+      },
+      "imagePrompt": "Generate a finished Terraria inventory and held-item PNG sprite on a transparent background, with crisp binary-alpha pixel art. Depict one literal copper-pointed umbrella with copper blade ribs, viewed side-on and aimed horizontally right: forward axis 0 degrees. A dark walnut shaft runs from a small hooked handle at left into a compact, visibly spread umbrella canopy at right. Muted ochre fabric panels remain clearly visible between five angular copper ribs; the ribs follow the canopy surface and converge at its pointed copper ferrule, never becoming separate floating objects. The right-facing canopy has a scalloped trailing edge and a rounded triangular profile. Use warm copper highlights, reddish-brown metal shadows and a dark umber outline. On the final 64-by-64 canvas, keep the complete silhouette approximately within x=3..60 and y=13..51. The actual hand-contact region is the straight wrapped handle segment centered at normalized canvas coordinates (0.1875, 0.5), immediately ahead of the small downward hook. Preserve that contact position through final fit and padding. Keep the shaft horizontal through this point. Deliver a real finished transparent PNG, not a mockup or placeholder; no player, text, scenery, motion marks or detached effects.. single centered inventory sprite, 64x64 pixel-art canvas, crisp hard pixels, transparent background, no scene, no text, no extra entities. Place the handle/hand-contact point at normalized final canvas coordinates {\"normalizedX\":0.1875,\"normalizedY\":0.5}; upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips.. Read-only final-frame facts: {\"canvasSizePx\":64,\"renderSizePx\":54,\"forwardAngleDegrees\":0,\"silhouette\":\"One horizontal umbrella: small hooked handle at left, narrow straight shaft, and compact spread scalloped canopy at right, ending in a single right-facing copper point. Copper ribs remain structurally attached to the fabric canopy.\",\"visualIdentity\":\"A practical ochre umbrella reinforced by bright copper blade ribs and a copper ferrule. Walnut handle, dark outlined fabric folds and sparse peach-colored metal glints preserve readability at Terraria scale.\",\"grip\":{\"normalizedX\":0.1875,\"normalizedY\":0.5},\"sharedEntityMultipliers\":[{\"entityId\":\"swordbrella_thrust\",\"hitbox.drawScale\":1,\"visual.scale\":1.0,\"movementReadOnly\":{\"name\":\"move_front_hand\",\"code\":20,\"params\":{\"aimMode\":\"initial\",\"durationTicks\":13,\"startStretch\":\"none\",\"peakStretch\":\"full\",\"hitboxOffsetPx\":24}}}],\"multipliers\":{\"gameplay.itemScale\":1,\"visual.inventoryScale\":1.0,\"visual.worldScale\":1.0}}. C=canvasSizePx is the final baked frame side; R=renderSizePx is its base world-pixel max-side, not hitbox or visible shaft length. When R is declared, base pixel scale is R/C; visible alpha extent uses that scale and independent draw multipliers. Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; held item uses R/C times adjusted item scale (gameplay.itemScale included once). Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present: the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. Do not omit or merge authored parts to simplify the sprite. The visible handle/hand-contact region must contain the declared final-space grip, not the guard, blade or empty space. It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips.. Terraria (tModLoader) game asset.",
+      "inventoryScale": 1.0,
+      "negativePrompt": "Opaque background, checkerboard baked into image, player body, hand, standalone illustration, photorealism, smooth vector gradients, antialiased edges, text, watermark, floating ribs, extra umbrella, separate blade beside umbrella, detached canopy, oversized glow, particles, impact burst, motion trail.",
+      "palette": [
+        "Dark umber outline",
+        "Walnut-brown handle and shaft",
+        "Muted ochre canopy fabric",
+        "Deep rust panel shadows",
+        "Burnished reddish copper ribs",
+        "Peach-copper edge highlights"
+      ],
+      "preferredCanvasSize": 64,
+      "renderSizePx": 54,
+      "requiredAnchors": [],
+      "semanticReviewStatus": "not_performed",
+      "spritePath": "infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
+      "spriteStatus": "generated",
+      "spriteTechnicalScore": 0.97,
+      "spriteUrl": "/sprite/infini_asset_png_8e93ebec2b55c1f9d8ae7674811b23272cd03d6643feb3edda400a9b8995a39d.png",
+      "style": "terraria_item_sprite",
+      "worldScale": 1.0
+    }
+  },
+  {
+    "accessory": {
+      "enabled": false
+    },
+    "armor": {
+      "enabled": false
+    },
+    "category": "combat",
+    "concept": {
+      "coreMechanic": "A reusable, fixed-aim umbrella jab deals modest melee damage and splashes weaker damage onto nearby enemies on direct contact. Preserve both parents' 22-tick base use cadence. The wider double canopy expands the impact radius to 2 tiles while retaining 10 base direct damage; this is a newly authored synthesis, not a claim about the vanilla umbrella's abilities.",
+      "literalSynthesis": "The Copper-Ribbed Swordbrella is nested inside the Terraria umbrella, Зонт: two stacked umbrella canopies share one shaft and hooked handle, with copper blade ribs projecting beneath the outer fabric and a copper sword point extending from the crown. Both literal umbrella identities remain visible rather than becoming an unrelated weapon.",
+      "parentAContribution": "Copper-Ribbed Swordbrella supplies the copper blade ribs, pointed umbrella silhouette, native front-hand jab and contact-triggered canopy impact structure.",
+      "parentBContribution": "Зонт supplies the second fabric canopy and ordinary umbrella shaft-and-handle identity. Its 5 knockback informs the direct jab, while its broader sheltering silhouette inspires the newly authored wider impact. Its supplied slow-fall tooltip is not implemented because the catalog has no slow-fall capability.",
+      "plannedPlayerActions": [
+        {
+          "input": "primary_use",
+          "intent": "Click toward a nearby enemy to jab with the double canopy and damage tightly grouped neighbors on contact."
+        }
+      ],
+      "playerExperience": "Click toward nearby enemies to make a short, deliberate jab that rewards contacting clustered foes. There is no mana, ammunition or item consumption, but no automatic repeat, defensive guard or falling protection either. The free recurring attack is deliberately modest rather than a temporary utility buff."
+    },
+    "contractVersions": {
+      "altForkCherrypickContract": "best_of_alt_config_signals_trace_replay_v0.4.226",
+      "appVersion": "0.5.04",
+      "architectureCoherenceContract": "single_balance_report_clamp_taxonomy_powerband_v0.4.219",
+      "architectureHomogeneityContract": "central_balance_policy_and_csharp_runtime_constants_v0.4.226",
+      "armorPropertyRoundtripContract": "armor_extended_property_slot_budget_roundtrip_v0.4.192",
+      "balanceArchitectureAuditContract": "prompt_free_parent_soft_caps_code_owned_balance_audit_v0.4.216",
+      "balanceSingleAuthorityContract": "code_owned_balance_envelope_no_active_guide_helper_v0.4.216",
+      "buildQolContract": "tml_build_log_qol_and_compile_surface_cleanup_v0.4.201",
+      "csharpAuthoringPreservationContract": "csharp_authoring_extension_preservation_v0.4.177",
+      "csharpContractSyncGuard": "csharp_future_field_contract_guard_v0.4.181",
+      "debugDumpContract": "compact_recipe_debug_dump_v0.4.174",
+      "envAccessContract": "centralized_env_access_no_import_star_v0.4.226",
+      "equipmentBudgetContract": "armor_accessory_total_soft_budget_v0.4.226",
+      "failureUxContract": "structured_failure_player_message_v0.4.174",
+      "fishingBaitFutureDisabledParentContext": "fishing_bait_future_disabled_parent_context_v0.4.184",
+      "futureSoundCatalogSeam": "explicit_external_sound_catalog_future_seam_v0.4.239",
+      "gameplayQolContract": "generated_use_feedback_tooltip_qol_v0.4.201",
+      "gameplayRuntimeRebuildContract": "runtime_coverage_station_ux_balance_envelope_v0.4.212",
+      "generatedArmorContract": "generated_armor_proxy_slots_v0.4.192",
+      "heldItemPoseSyncContract": "held_item_pose_accessory_compile_hotfix_v0.4.199",
+      "localCacheAndRepairContract": "local_cache_runtime_repair_contract_cleanup_v0.4.176",
+      "luminanceSoundBridgeContract": "external_luminance_looped_sound_bridge_v0.4.187",
+      "maintenanceHardeningContract": "repair_json_sync_and_low_noise_fallback_logs_v0.4.205",
+      "maintenanceQolContract": "maintainability_gameplay_qol_cleanup_v0.4.203",
+      "mpServerAuthorityEnvMigrationCiContract": "server_side_slot_spend_env_migration_ci_hardening_v0.4.218",
+      "multiplayerPresentationSyncContract": "held_pose_accessory_compile_hotfix_v0.4.199",
+      "overhaulQolContract": "infini_station_overhaul_qol_v0.4.202",
+      "parentProjectileSizePreservationContract": "llm_opt_in_parent_projectile_size_policy_v0.4.179",
+      "plannerPromptProfile": "planner_prompt_semantics_restored_v6_v0.4.243",
+      "projectileChainChildGuard": "projectile_chain_child_count_guard_v0.4.185",
+      "projectileChildRuntimeGuard": "projectile_child_runtime_static_guard_v0.4.184",
+      "promptCompressionContract": "planner_prompt_compression_preserve_prose_v0.4.193",
+      "pythonExceptionHygieneGuard": "python_exception_hygiene_baseline_guard_v0.4.183",
+      "rebuildGameplayCacheDiagnosticsContract": "generated_melee_onhit_and_cache_diagnostics_v0.4.209",
+      "recipeHealthSchema": "infini.recipe-health.v1",
+      "recipeIdentityVersion": "recipe_v4_25_no_item_family_routing",
+      "releaseHygieneGuardContract": "release_hygiene_zone_identifier_guard_v0.4.181",
+      "releaseHygieneToolTestContract": "release_hygiene_tool_regression_tests_v0.4.182",
+      "releaseVersionSyncGuard": "release_version_sync_guard_v0.4.182",
+      "repairBoundaryContract": "deterministic_error_leaf_and_blocker_dependency_closure_v0.4.240",
+      "repairPatchContract": "gameplay_visual_vfx_frozen_old_values_salvage_patch_v0.4.240",
+      "replayHarnessContract": "generation_case_replay_audit_v0.4.226",
+      "repoCleanupBroadBalanceContract": "repo_docs_cleanup_and_broad_soft_balance_uplift_v0.4.216",
+      "runtimeAffordanceSchema": "infini.runtime-affordance.v2",
+      "runtimeApiSyncGuard": "runtime_api_python_csharp_sync_guard_v0.4.183",
+      "runtimeApiVersion": "infini.runtime-program.v5",
+      "runtimeContractSchema": "infini.runtime-contract.v3",
+      "runtimeGameplayQolContract": "impact_mobility_cooldown_and_sprite_lru_qol_v0.4.204",
+      "runtimeProvenanceContract": "runtime_authored_applied_provenance_debug_v0.4.226",
+      "runtimeRepairObservabilityContract": "blocker_dossier_salvage_merge_and_ignored_scope_escape_v0.4.240",
+      "runtimeStateCleanupContract": "runtime_state_cleanup_v0.4.175",
+      "runtimeTechnicalProvenanceContract": "structural_final_wire_receipts_v0.4.241",
+      "schema": "infini.contract-stamp.v1",
+      "soundLibraryContract": "exact_terraria_sound_catalog_v8_no_prose_queries_pitch_variance_v0.4.239",
+      "vanillaPresentationPolishContract": "bounded_vanilla_presentation_polish_v0.4.199",
+      "vanillaRuntimeSpriteCacheContract": "runtime_sprite_max_side_192_hotfix_v0.4.207",
+      "vfxAudioPresentationGuard": "vfx_audio_presentation_guard_v0.4.185",
+      "visualPipelineProfile": "author_visualpack_v2",
+      "visualRoleContract": "projectile_local_forward_axis_visual_contract_v0.4.242"
+    },
+    "gameplay": {
+      "autoReuse": false,
+      "craftYield": 1,
+      "damage": 10,
+      "damageClass": "melee",
+      "handPose": "",
+      "height": 40,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "itemScale": 1,
+      "kind": "combat",
+      "knockback": 5,
+      "manaCost": 0,
+      "maxStack": 1,
+      "rarity": 1,
+      "releaseTiming": "immediate",
+      "useAnimation": 22,
+      "useStyleName": "rapier",
+      "useTime": 22,
+      "useTurn": true,
+      "value": 10000,
+      "width": 32
+    },
+    "generatedParentSummary": {
+      "description": "The program defines a reusable melee item and one primary owner-attached jab body. The intended generated-item presentation is a literal double umbrella: the Copper-Ribbed Swordbrella's copper ribs and crown point nested beneath the fabric canopy of Зонт. No image asset is supplied by this gameplay object. The item-use graphic and custom held root are hidden during use, leaving the primary projectile as the intended physical held representation. Primary use requests one jab, with an explicit same-owner/item/entity live cap of one. Its 13-tick native front-hand cycle extends and retracts along the initial cursor axis. The 30-by-30-pixel collision rectangle is centered 24 pixels beyond the native hand, independently of sprite geometry. Contact deals 10 base melee damage with 5 knockback and owner hit checking. Unlimited penetration and once-per-NPC immunity allow the same physical jab to contact multiple different enemies. Each direct hit triggers a 2-tile-radius area action at the event position, excluding only that event's direct target, with 0.4 times the authored projectile base damage: 4 before defense and applicable native rules. No children are spawned. Base item use and animation are both 22 ticks, with no automatic reuse or channeling. No slow fall, guarding, passive utility or alternate use is authored.",
+      "identity": "generated:g_60d18fd7593d52d8",
+      "name": "Double-Canopy Copper Swordbrella",
+      "notableEffects": [
+        "A retained, click-driven weapon with no mana or ammunition requirement and 22-tick authored base cadence.",
+        "A short fixed-axis hand jab replaces the hidden item-use representation; sprite geometry does not determine contact reach.",
+        "The jab can contact multiple different enemies, with owner hit checking and the stated direct damage and knockback.",
+        "Each contact can deal weaker surrounding impacts with a base of 4 before defense; separate hit events may affect the same neighboring NPC."
+      ],
+      "playerExperience": "Click toward a nearby enemy for a short fixed-axis jab. Turning the cursor after activation does not redirect that jab. Contacting grouped enemies can produce weaker surrounding impacts; a neighboring enemy is not guaranteed to take damage, and separate direct-hit events can make the same nearby NPC eligible for multiple area actions. The weapon is retained and requires neither mana nor ammunition. Its attack cadence and animation values are authored bases, not measured effective timings after player modifiers. The extra canopy improves the inherited impact radius without adding ranged shots or defensive movement abilities.",
+      "runtimeEntityIds": [
+        "double_canopy_item",
+        "double_canopy_jab"
+      ],
+      "runtimePrimaryEntityId": "double_canopy_jab",
+      "schema": "infini.generated-parent-summary.v2"
+    },
+    "id": "g_60d18fd7593d52d8",
+    "itemKnowledge": {
+      "enabled": true,
+      "parents": [
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 1,
+          "identity": "generated:g_a68f03dee9621149",
+          "name": "Copper-Ribbed Swordbrella",
+          "powerScore": 95.74,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "copper",
+            "generated",
+            "hidden_use_graphic",
+            "item",
+            "long_lived_projectile",
+            "melee",
+            "mod_infinicrafterlocal",
+            "modded",
+            "no_melee",
+            "noncolliding_projectile",
+            "placeable",
+            "projectile",
+            "ribbed",
+            "sword",
+            "swordbrella",
+            "weapon"
+          ],
+          "tier": "hardmode_early"
+        },
+        {
+          "category": "weapon",
+          "confidence": 0.66,
+          "generatedDepth": 0,
+          "identity": "item:Terraria/Umbrella:946",
+          "name": "Зонт",
+          "powerScore": 40.92,
+          "sourceHint": "live rarity metadata + Terraria mechanics",
+          "tags": [
+            "melee",
+            "umbrella",
+            "weapon"
+          ],
+          "tier": "pre_boss"
+        }
+      ],
+      "resultCard": {
+        "category": "generic",
+        "confidence": 0.74,
+        "generatedDepth": 1,
+        "identity": "generated:g_60d18fd7593d52d8",
+        "name": "Double-Canopy Copper Swordbrella",
+        "powerScore": 80.51,
+        "sourceHint": "generated result card from gameplay + parent knowledge",
+        "tags": [],
+        "tier": "hardmode_early"
+      },
+      "strongestMaterialPowerScore": 0,
+      "strongestMaterialTier": "",
+      "strongestPowerScore": 95.74,
+      "strongestSourceHint": "live rarity metadata + Terraria mechanics",
+      "strongestTier": "hardmode_early",
+      "tagsFromKnowledge": [
+        "copper",
+        "generated",
+        "hidden_use_graphic",
+        "item",
+        "long_lived_projectile",
+        "melee",
+        "mod_infinicrafterlocal",
+        "modded",
+        "no_melee",
+        "noncolliding_projectile",
+        "placeable",
+        "projectile",
+        "ribbed",
+        "sword",
+        "swordbrella",
+        "umbrella",
+        "weapon"
+      ]
+    },
+    "llmStageAccounting": {
+      "gameplayAuthorCalls": 1,
+      "gameplayRepairCalls": 0,
+      "vfxDirectorCalls": 1,
+      "vfxRepairCalls": 0,
+      "visualDirectorCalls": 1,
+      "visualRepairCalls": 0
+    },
+    "name": "Double-Canopy Copper Swordbrella",
+    "parentA": "Copper-Ribbed Swordbrella",
+    "parentB": "Зонт",
+    "realization": {
+      "description": "The program defines a reusable melee item and one primary owner-attached jab body. The intended generated-item presentation is a literal double umbrella: the Copper-Ribbed Swordbrella's copper ribs and crown point nested beneath the fabric canopy of Зонт. No image asset is supplied by this gameplay object. The item-use graphic and custom held root are hidden during use, leaving the primary projectile as the intended physical held representation. Primary use requests one jab, with an explicit same-owner/item/entity live cap of one. Its 13-tick native front-hand cycle extends and retracts along the initial cursor axis. The 30-by-30-pixel collision rectangle is centered 24 pixels beyond the native hand, independently of sprite geometry. Contact deals 10 base melee damage with 5 knockback and owner hit checking. Unlimited penetration and once-per-NPC immunity allow the same physical jab to contact multiple different enemies. Each direct hit triggers a 2-tile-radius area action at the event position, excluding only that event's direct target, with 0.4 times the authored projectile base damage: 4 before defense and applicable native rules. No children are spawned. Base item use and animation are both 22 ticks, with no automatic reuse or channeling. No slow fall, guarding, passive utility or alternate use is authored.",
+      "playerExperience": "Click toward a nearby enemy for a short fixed-axis jab. Turning the cursor after activation does not redirect that jab. Contacting grouped enemies can produce weaker surrounding impacts; a neighboring enemy is not guaranteed to take damage, and separate direct-hit events can make the same nearby NPC eligible for multiple area actions. The weapon is retained and requires neither mana nor ammunition. Its attack cadence and animation values are authored bases, not measured effective timings after player modifiers. The extra canopy improves the inherited impact radius without adding ranged shots or defensive movement abilities.",
+      "selfEvaluation": {
+        "planVsProgram": {
+          "actionChecks": [
+            {
+              "implementedBehavior": "Primary use spawns a single capped, fixed-initial-aim hand jab; direct projectile hits invoke a weaker area action around the contact event.",
+              "intentionality": "intentional",
+              "plannedIntent": "Click toward a nearby enemy to jab with the double canopy and damage tightly grouped neighbors on contact.",
+              "reason": "The authored root, position driver, damage and hit subscription implement the planned close-range cluster attack without extra input lanes.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "activate_double_canopy",
+                "double_canopy_spawn",
+                "double_canopy_live_cap",
+                "double_canopy_hand_motion",
+                "double_canopy_damage",
+                "double_canopy_impact"
+              ]
+            }
+          ],
+          "summary": "The single planned attack is implemented explicitly. Both umbrella identities inform the presentation and attack composition, while unsupported slow fall is deliberately excluded. This is a design comparison, not a runtime observation.",
+          "verdict": "aligned"
+        },
+        "programVsReport": {
+          "behaviorChecks": [
+            {
+              "programBehavior": "Reusable primary-use spawn with stackCost 0, zero mana, 22-tick base use and animation, no automatic reuse, no channel and disabled item contact.",
+              "reason": "There is one active binding, no ammo capability and no recurring resource effect; projectile contact is separate from the disabled item-body hitbox.",
+              "reportedBehavior": "A retained, click-driven weapon with no mana or ammunition requirement and 22-tick authored base cadence.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "activate_double_canopy",
+                "double_canopy_stats",
+                "double_canopy_use"
+              ]
+            },
+            {
+              "programBehavior": "One primary held-body projectile with zero launch speed, a live cap of one, a 13-tick lifetime and initial-axis native hand motion using a 30-by-30 rectangle offset 24 pixels beyond the hand.",
+              "reason": "The explicit primary selector, spawn configuration and hand driver agree with the reported lifecycle and positioning.",
+              "reportedBehavior": "A short fixed-axis hand jab replaces the hidden item-use representation; sprite geometry does not determine contact reach.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "double_canopy_jab",
+                "double_canopy_spawn",
+                "double_canopy_live_cap",
+                "double_canopy_duration",
+                "double_canopy_contact_box",
+                "double_canopy_hand_motion",
+                "double_canopy_use"
+              ]
+            },
+            {
+              "programBehavior": "10 base melee contact damage, 5 knockback, owner hit checking, no tile collision, unlimited penetration and once-per-NPC immunity.",
+              "reason": "The report does not promise repeated direct hits against the same NPC or unrestricted hits through walls.",
+              "reportedBehavior": "The jab can contact multiple different enemies, with owner hit checking and the stated direct damage and knockback.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "double_canopy_damage",
+                "double_canopy_collision"
+              ]
+            },
+            {
+              "programBehavior": "Every direct hit invokes immediate area damage within 2 tiles at 0.4 of authored base damage, excluding that event's direct NPC.",
+              "reason": "The report preserves per-event exclusion and does not invent a once-per-jab area cap, guaranteed secondary hits or child projectiles.",
+              "reportedBehavior": "Each contact can deal weaker surrounding impacts with a base of 4 before defense; separate hit events may affect the same neighboring NPC.",
+              "result": "aligned",
+              "runtimeRefs": [
+                "double_canopy_impact",
+                "double_canopy_damage"
+              ]
+            }
+          ],
+          "summary": "The report matches the explicit input, held-body lifecycle, collision and hit-triggered damage. Presentation is identified as an intention rather than a delivered asset or observed run.",
+          "verdict": "aligned"
+        }
+      }
+    },
+    "recipeKey": "r_1a429b93c78699bc28cd2b48",
+    "recipeMeta": {
+      "assetFiles": [
+        "infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png"
+      ],
+      "worldId": "853355558",
+      "worldScoped": true
+    },
+    "runtimeApiVersion": "infini.runtime-program.v5",
+    "runtimeProgram": {
+      "apiVersion": "infini.runtime-program.v5",
+      "bindings": [
+        {
+          "id": "activate_double_canopy",
+          "input": "primary_use",
+          "role": "primary",
+          "usePolicy": {
+            "action": {
+              "kind": "spawn_entity",
+              "targetId": "double_canopy_jab"
+            },
+            "contactDamage": false,
+            "stackCost": 0
+          }
+        }
+      ],
+      "entities": [
+        {
+          "events": [],
+          "id": "double_canopy_item",
+          "kind": "item_body",
+          "visual": {
+            "assetMode": "baked_sprite",
+            "prompt": "Generate a finished Terraria inventory-item PNG of a literal double-canopy umbrella, on a transparent background with binary alpha. Crisp pixel art, dark umber outline, compact stepped shading, no antialiasing. Side profile oriented horizontally: the walnut handle is at left, the shaft runs right, and the copper crown point faces directly right, local forward axis 0 degrees. Preserve two visibly nested umbrella layers on one shared shaft: a broad golden-yellow fabric outer canopy from Зонт arches over a smaller ochre copper-ribbed canopy, whose reddish copper ribs and pointed crown remain visible beneath the outer fabric. The open canopies face right; their scalloped rear edges face left. Keep a narrow shadow gap between their rims so both layers read clearly, without separating them into independent objects. Expose copper ribs along the smaller underside and a short copper crown point beyond the outer dome. On the final 64-by-64 canvas, span approximately x=3 through x=60, with the canopy centered around y=32. The actual hand-contact point is the straight walnut handle segment at x=12, y=32, normalized (0.1875, 0.5); leave this segment unobstructed. Add a small downward-curved handle end behind it. Deliver the real transparent PNG, not a placeholder, illustration sheet, or mockup.",
+            "role": "inventory_item",
+            "scale": 1.0,
+            "silhouette": "One left-hand walnut grip and horizontal shaft supporting two nested, right-facing open umbrella canopies; broad scalloped fabric outer dome, smaller exposed copper-ribbed inner dome, and a short rightmost copper crown point.",
+            "spritePath": "infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
+            "visualIdentity": "A literal double umbrella: the Copper-Ribbed Swordbrella's smaller ochre canopy, reddish copper ribs and crown point remain nested beneath Зонт's larger golden fabric canopy. Dark rim separation makes the two physical canopy layers legible at Terraria scale."
+          },
+          "visualRole": "inventory_item"
+        },
+        {
+          "collision": {
+            "bounceCount": 0,
+            "extraUpdates": 0,
+            "ignoreWater": true,
+            "localNpcHitCooldownTicks": -1,
+            "npcImmunityMode": "local",
+            "pierce": -1,
+            "tileCollide": false
+          },
+          "damage": {
+            "damage": 10,
+            "damageClass": "melee",
+            "enabled": true,
+            "knockback": 5,
+            "ownerHitCheck": true
+          },
+          "events": [
+            {
+              "action": "damage_area_on_event",
+              "actionCode": 3,
+              "damageMultiplier": 0.4,
+              "delayTicks": 0,
+              "event": "on_hit",
+              "id": "double_canopy_impact",
+              "radiusPx": 32
+            }
+          ],
+          "hitbox": {
+            "drawScale": 1,
+            "heightPx": 30,
+            "hitboxScale": 1,
+            "widthPx": 30
+          },
+          "id": "double_canopy_jab",
+          "kind": "owner_attached_projectile",
+          "lifetimeTicks": 13,
+          "movement": {
+            "code": 20,
+            "name": "move_front_hand",
+            "params": {
+              "aimMode": "initial",
+              "durationTicks": 13,
+              "hitboxOffsetPx": 24,
+              "peakStretch": "full",
+              "startStretch": "none"
+            }
+          },
+          "spawn": {
+            "aim": "cursor",
+            "count": 1,
+            "enabled": true,
+            "maxActive": 1,
+            "offsetPx": 0,
+            "overTarget": {
+              "delayTicks": 0,
+              "heightTiles": 0
+            },
+            "placement": "owner_center",
+            "speedPxPerTick": 0,
+            "spreadRadians": 0
+          },
+          "visual": {
+            "assetMode": "reuse_item_icon",
+            "prompt": "Generate a finished Terraria inventory-item PNG of a literal double-canopy umbrella, on a transparent background with binary alpha. Crisp pixel art, dark umber outline, compact stepped shading, no antialiasing. Side profile oriented horizontally: the walnut handle is at left, the shaft runs right, and the copper crown point faces directly right, local forward axis 0 degrees. Preserve two visibly nested umbrella layers on one shared shaft: a broad golden-yellow fabric outer canopy from Зонт arches over a smaller ochre copper-ribbed canopy, whose reddish copper ribs and pointed crown remain visible beneath the outer fabric. The open canopies face right; their scalloped rear edges face left. Keep a narrow shadow gap between their rims so both layers read clearly, without separating them into independent objects. Expose copper ribs along the smaller underside and a short copper crown point beyond the outer dome. On the final 64-by-64 canvas, span approximately x=3 through x=60, with the canopy centered around y=32. The actual hand-contact point is the straight walnut handle segment at x=12, y=32, normalized (0.1875, 0.5); leave this segment unobstructed. Add a small downward-curved handle end behind it. Deliver the real transparent PNG, not a placeholder, illustration sheet, or mockup.",
+            "role": "held_body",
+            "scale": 1.0,
+            "silhouette": "One left-hand walnut grip and horizontal shaft supporting two nested, right-facing open umbrella canopies; broad scalloped fabric outer dome, smaller exposed copper-ribbed inner dome, and a short rightmost copper crown point.",
+            "spritePath": "infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
+            "spriteStatus": "generated",
+            "spriteTechnicalScore": 0.97,
+            "spriteUrl": "/sprite/infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
+            "visualIdentity": "A literal double umbrella: the Copper-Ribbed Swordbrella's smaller ochre canopy, reddish copper ribs and crown point remain nested beneath Зонт's larger golden fabric canopy. Dark rim separation makes the two physical canopy layers legible at Terraria scale."
+          },
+          "visualRole": "held_body"
+        }
+      ],
+      "itemEntityId": "double_canopy_item",
+      "itemUse": {
+        "channel": false,
+        "configured": true,
+        "disableMeleeHitbox": true,
+        "handPose": "",
+        "hideUseGraphic": true,
+        "holdoutOffsetX": 0,
+        "holdoutOffsetY": 0,
+        "releaseTiming": "immediate",
+        "useStyle": "rapier"
+      },
+      "limits": {
+        "maxChildDepth": 3,
+        "maxEntityCount": 12,
+        "maxEventSpawnsPerActivation": 32
+      },
+      "primaryEntityId": "double_canopy_jab",
+      "primaryOwner": "projectile",
+      "schema": "infini.runtime-program.wire.v3"
+    },
+    "schemaVersion": 5,
+    "sourceMode": "generated",
+    "tags": [],
+    "vfxManifest": {
+      "budget": {
+        "effectMagnitude": 0.22,
+        "emergencyCap": true,
+        "enablePersistentSmoke": false,
+        "enablePointSparks": true,
+        "enableSoftGlow": true,
+        "maxDrawCalls": 136,
+        "maxParticlesPerTick": 80,
+        "maxParticlesTotal": 3400,
+        "spawnRateMultiplier": 1.0,
+        "visualBudgetClass": "small"
+      },
+      "confidence": 1.0,
+      "debug": {
+        "pattern": "runtime_entity_events",
+        "roles": [
+          "inventory_item",
+          "held_body"
+        ],
+        "selectedReasons": [
+          "exact_entity_event_binding"
+        ],
+        "selectedScore": 1.0,
+        "topCandidates": [],
+        "wordProbe": []
+      },
+      "effectMagnitude": 0.22,
+      "effectName": "runtime_entity_events",
+      "inspirationNames": [],
+      "motif": {
+        "chaos": 0.0,
+        "element": "Copper contact accents beneath nested golden fabric canopies.",
+        "motionLanguage": "The accepted rigid front-hand jab supplies all body motion. A brief detached ring expands at each direct-hit point; no idle trails or expiry flourish.",
+        "paletteRole": "Use the accepted orange effect color for the contact accent, leaving the copper ribs and golden fabric readable.",
+        "rhythm": 1.0,
+        "shapeLanguage": "Keep the literal double umbrella unobscured; use only a small, thin contact ring without additional umbrella silhouettes."
+      },
+      "overlayPolicy": "LocalOnly",
+      "playbackMode": "Realtime",
+      "recipeId": "r_1a429b93c78699bc28cd2b48",
+      "schema": "infini.vfx.runtime-events.v15",
+      "seed": 1063122019,
+      "slots": [
+        {
+          "alpha": 1.0,
+          "anchor": "self",
+          "backend": "Auto",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "alpha",
+          "budgetWeight": 1.0,
+          "channel": "sound",
+          "density": 0.0,
+          "duration": 3,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "double_canopy_item",
+          "event": "on_use",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "jab_use_sound",
+          "jitter": 0.0,
+          "lane": "cue",
+          "layer": "BeforeProjectiles",
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "soundCue",
+          "repeatEvery": 0,
+          "scale": 1.0,
+          "signatureWeight": 0.0,
+          "slotSeed": 1150851355,
+          "sound": {
+            "pitch": 0.12,
+            "pitchVariance": 0.08,
+            "volume": 0.45
+          },
+          "soundId": "Item1",
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.0
+        },
+        {
+          "alpha": 0.48,
+          "anchor": "hitPoint",
+          "backend": "Primitive",
+          "bakedClipHash": "",
+          "bakedClipId": "",
+          "bakedCommandCount": 0,
+          "bakedCommands": [],
+          "blend": "additive",
+          "budgetWeight": 1.0,
+          "channel": "impactShape",
+          "density": 0.0,
+          "duration": 8,
+          "effectName": "",
+          "emissionMode": "none",
+          "entityId": "double_canopy_jab",
+          "event": "on_hit",
+          "eventGroup": "auto",
+          "fadeIn": 0.0,
+          "fadeOut": 0.0,
+          "id": "copper_contact_ring",
+          "jitter": 0.0,
+          "lane": "accent",
+          "layer": "AfterProjectiles",
+          "particleRole": "none",
+          "particleSystemId": "none",
+          "rendererKind": "impactRing",
+          "repeatEvery": 0,
+          "scale": 0.7,
+          "signatureWeight": 0.0,
+          "slotSeed": 86298594,
+          "source": "llm_vfx_director",
+          "spread": 0.0,
+          "stage": "loop",
+          "startTick": 0,
+          "textureRole": "none",
+          "visualCost": 0.15
+        }
+      ],
+      "visualBudgetClass": "small"
+    },
+    "visual": {
+      "drawOffsetX": 0,
+      "drawOffsetY": 0,
+      "effectColor": "orange",
+      "forwardAngleDegrees": 0,
+      "grip": {
+        "normalizedX": 0.1875,
+        "normalizedY": 0.5
+      },
+      "imagePrompt": "Generate a finished Terraria inventory-item PNG of a literal double-canopy umbrella, on a transparent background with binary alpha. Crisp pixel art, dark umber outline, compact stepped shading, no antialiasing. Side profile oriented horizontally: the walnut handle is at left, the shaft runs right, and the copper crown point faces directly right, local forward axis 0 degrees. Preserve two visibly nested umbrella layers on one shared shaft: a broad golden-yellow fabric outer canopy from Зонт arches over a smaller ochre copper-ribbed canopy, whose reddish copper ribs and pointed crown remain visible beneath the outer fabric. The open canopies face right; their scalloped rear edges face left. Keep a narrow shadow gap between their rims so both layers read clearly, without separating them into independent objects. Expose copper ribs along the smaller underside and a short copper crown point beyond the outer dome. On the final 64-by-64 canvas, span approximately x=3 through x=60, with the canopy centered around y=32. The actual hand-contact point is the straight walnut handle segment at x=12, y=32, normalized (0.1875, 0.5); leave this segment unobstructed. Add a small downward-curved handle end behind it. Deliver the real transparent PNG, not a placeholder, illustration sheet, or mockup.. single centered inventory sprite, 64x64 pixel-art canvas, crisp hard pixels, transparent background, no scene, no text, no extra entities. Place the handle/hand-contact point at normalized final canvas coordinates {\"normalizedX\":0.1875,\"normalizedY\":0.5}; upper-left=(0,0), lower-right=(1,1), after framing/padding and before facing flips.. Read-only final-frame facts: {\"canvasSizePx\":64,\"renderSizePx\":54,\"forwardAngleDegrees\":0,\"silhouette\":\"One left-hand walnut grip and horizontal shaft supporting two nested, right-facing open umbrella canopies; broad scalloped fabric outer dome, smaller exposed copper-ribbed inner dome, and a short rightmost copper crown point.\",\"visualIdentity\":\"A literal double umbrella: the Copper-Ribbed Swordbrella's smaller ochre canopy, reddish copper ribs and crown point remain nested beneath Зонт's larger golden fabric canopy. Dark rim separation makes the two physical canopy layers legible at Terraria scale.\",\"grip\":{\"normalizedX\":0.1875,\"normalizedY\":0.5},\"sharedEntityMultipliers\":[{\"entityId\":\"double_canopy_jab\",\"hitbox.drawScale\":1,\"visual.scale\":1.0,\"movementReadOnly\":{\"name\":\"move_front_hand\",\"code\":20,\"params\":{\"aimMode\":\"initial\",\"durationTicks\":13,\"startStretch\":\"none\",\"peakStretch\":\"full\",\"hitboxOffsetPx\":24}}}],\"multipliers\":{\"gameplay.itemScale\":1,\"visual.inventoryScale\":1.0,\"visual.worldScale\":1.0}}. C=canvasSizePx is the final baked frame side; R=renderSizePx is its base world-pixel max-side, not hitbox or visible shaft length. When R is declared, base pixel scale is R/C; visible alpha extent uses that scale and independent draw multipliers. Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; held item uses R/C times adjusted item scale (gameplay.itemScale included once). Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present: the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. Do not omit or merge authored parts to simplify the sprite. The visible handle/hand-contact region must contain the declared final-space grip, not the guard, blade or empty space. It is a normalized final-canvas point after framing/padding, not a RAW-image coordinate; keep that contact region there before facing flips.. Terraria (tModLoader) game asset.",
+      "inventoryScale": 1.0,
+      "negativePrompt": "Opaque background, player, hand, character, scenery, text, lettering, watermark, multiple views, separate floating umbrellas, merged single canopy, extra shafts, extra handles, detached ribs, blade replacing the umbrella, photorealism, smooth vector curves, blurred pixels, antialiased edges, glow haze, motion trails, impact graphics.",
+      "palette": [
+        "Dark umber outline",
+        "Walnut-brown handle and shaft",
+        "Golden-yellow outer fabric",
+        "Muted ochre inner fabric",
+        "Deep rust underside shadows",
+        "Burnished reddish copper ribs",
+        "Peach-copper highlights"
+      ],
+      "preferredCanvasSize": 64,
+      "renderSizePx": 54,
+      "requiredAnchors": [],
+      "semanticReviewStatus": "not_performed",
+      "spritePath": "infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
+      "spriteStatus": "generated",
+      "spriteTechnicalScore": 0.97,
+      "spriteUrl": "/sprite/infini_asset_png_dd2db76b29eba01e2551bcc3779af4aae5c240350e001c13c9325ba1202423a8.png",
+      "style": "terraria_item_sprite",
+      "worldScale": 1.0
+    }
+  }
+]

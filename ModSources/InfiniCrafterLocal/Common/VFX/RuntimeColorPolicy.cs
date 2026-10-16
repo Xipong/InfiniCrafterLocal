@@ -24,7 +24,7 @@ public static class RuntimeColorPolicy
     private static string NormalizeForRendering(string? value)
     {
         string token = (value ?? "").Trim().ToLowerInvariant();
-        return token is "white" or "gray" or "brown" or "tan" or "red" or "orange" or
+        return token is "white" or "gray" or "silver" or "brown" or "tan" or "red" or "orange" or
             "yellow" or "gold" or "green" or "cyan" or "blue" or "purple" or "pink" or "black"
             ? token
             : "";
@@ -45,6 +45,7 @@ public static class RuntimeColorPolicy
         {
             "white" => new Color(235, 235, 235),
             "gray" => new Color(170, 170, 180),
+            "silver" => new Color(192, 192, 192),
             "brown" => new Color(150, 100, 65),
             "tan" => new Color(225, 190, 120),
             "red" => new Color(255, 85, 85),
