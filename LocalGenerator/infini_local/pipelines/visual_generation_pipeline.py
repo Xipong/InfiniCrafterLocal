@@ -240,6 +240,111 @@ def _visual_repair_schema(entity_ids: list[str], equipment_overlay_required: boo
     }
 
 
+def _scoped_visual_patch_node(schema: Mapping[str, Any], paths: list[str]) -> dict[str, Any]:
+    """Project only exact permitted descendants; canonical admission stays full."""
+    if "" in paths:
+        return copy.deepcopy(dict(schema))
+    properties = {}
+    for field, child in (schema.get("properties") or {}).items():
+        relative = [value for path in paths
+                    if (value := json_path_relative(path, json_path_child("", field))) is not None]
+        if relative:
+            properties[field] = _scoped_visual_patch_node(child, relative)
+    if "properties" not in schema:
+        return copy.deepcopy(dict(schema))
+    return {"type": "object", "additionalProperties": False, "properties": properties, "required": list(properties)}
+
+
+def _scoped_visual_repair_schema(
+    entity_ids: list[str], equipment_overlay_required: bool, item_body_id: str,
+    scope: Mapping[str, Any], previous: Any,
+) -> dict[str, Any]:
+    full = _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
+    permissions = scope.get("fieldPermissions") or {}
+    properties = {key: copy.deepcopy(full["properties"][key]) for key in ("schema", "note")}
+    for key, paths_key, owner in (("itemPatch", "itemPaths", _visual_item_schema()),
+                                  ("equipOverlayPatch", "equipOverlayPaths", _visual_equip_overlay_schema())):
+        paths = permissions.get(paths_key) or []
+        if paths and key in full["properties"]:
+            properties[key] = {"anyOf": [_scoped_visual_patch_node(owner, paths), {"type": "null"}]}
+    source = previous if isinstance(previous, Mapping) else {}
+    rows = {}
+    raw_rows = source.get("entities")
+    source_rows = raw_rows if isinstance(raw_rows, list) else []
+    for row in source_rows:
+        if isinstance(row, Mapping) and isinstance(row.get("entityId"), str):
+            rows.setdefault(row["entityId"], row)
+    entity_schema = _visual_entity_schema(entity_ids, item_body_id)
+    branches = entity_schema.get("oneOf") or [entity_schema]
+    variants = []
+    for permission in permissions.get("entities") or []:
+        entity_id, paths = permission["entityId"], permission["paths"]
+        old = rows.get(entity_id, {})
+        for branch in branches:
+            props = branch["properties"]
+            if entity_id not in props["entityId"]["enum"]:
+                continue
+            if any(field not in paths and "" not in paths and field in old and old[field] != props[field].get("const")
+                   for field in ("assetMode", "visualProjectRef")):
+                continue
+            partial = _scoped_visual_patch_node(branch, paths)
+            partial["properties"]["entityId"] = {"const": entity_id}
+            partial["required"] = list(dict.fromkeys([*partial.get("required", []), "entityId"]))
+            if partial not in variants:
+                variants.append(partial)
+    if variants:
+        properties["entitiesUpsert"] = {"type": "array", "items": variants[0] if len(variants) == 1 else {"anyOf": variants}, "maxItems": len(permissions.get("entities") or [])}
+    for key, scope_key in (("entityIdsDelete", "deletableEntityIds"), ("entityIndicesDelete", "deletableEntityIndices")):
+        allowed = scope.get(scope_key) or []
+        if allowed:
+            properties[key] = copy.deepcopy(full["properties"][key])
+            properties[key]["items"] = {"type": "integer" if key == "entityIndicesDelete" else "string", "enum": list(allowed)}
+    return {"type": "object", "additionalProperties": False, "properties": properties, "required": list(properties)}
+
+
+def _expand_scoped_visual_repair_patch(patch: Any, previous: Any, scope: Mapping[str, Any], entity_ids: list[str]) -> Any:
+    """Lossless transport completion before the unchanged frozen-first filter."""
+    if not isinstance(patch, dict):
+        return patch
+    out = copy.deepcopy(patch)
+    source = previous if isinstance(previous, Mapping) else {}
+    canonical = _visual_repair_schema(entity_ids, bool(scope.get("equipmentOverlayRequired")))
+    for key in canonical["required"]:
+        if key not in out and key not in ("schema", "note"):
+            out[key] = [] if canonical["properties"][key].get("type") == "array" else None
+    # Complete only existing authored fields, never invent absent design choices.
+    def complete(old: Any, new: Any) -> Any:
+        if not isinstance(old, Mapping) or not isinstance(new, Mapping):
+            return copy.deepcopy(new)
+        return {**copy.deepcopy(dict(old)), **{key: complete(old.get(key), value) for key, value in new.items()}}
+    if isinstance(out.get("itemPatch"), dict):
+        original_item = source.get("item")
+        out["itemPatch"] = complete(original_item, out["itemPatch"])
+        if isinstance(original_item, Mapping):
+            out["itemPatch"] = _drop_schema_forbidden_mutable_fields(
+                original_item, out["itemPatch"],
+                mutable_paths=tuple((scope.get("fieldPermissions") or {}).get("itemPaths") or []),
+                schema=_visual_item_schema(), audit_path="", accepted=[])
+    if isinstance(out.get("equipOverlayPatch"), dict):
+        out["equipOverlayPatch"] = complete(source.get("equipOverlay"), out["equipOverlayPatch"])
+    by_id = {}
+    raw_rows = source.get("entities")
+    source_rows = raw_rows if isinstance(raw_rows, list) else []
+    for row in source_rows:
+        if isinstance(row, Mapping) and isinstance(row.get("entityId"), str):
+            by_id.setdefault(row["entityId"], row)
+    for index, row in enumerate(out.get("entitiesUpsert") or []):
+        if isinstance(row, Mapping):
+            merged = complete(by_id.get(row.get("entityId")), row)
+            # Invalid extra source keys are removed by the existing exact-scope
+            # structural-deletion filter, not advertised as output grammar.
+            permitted = next((entry["paths"] for entry in (scope.get("fieldPermissions") or {}).get("entities") or [] if entry["entityId"] == row.get("entityId")), [])
+            merged = _drop_schema_forbidden_mutable_fields(by_id.get(row.get("entityId"), {}), merged,
+                mutable_paths=tuple(permitted), schema=_visual_entity_schema(entity_ids), audit_path="", accepted=[])
+            out["entitiesUpsert"][index] = merged
+    return out
+
+
 def _response_schema(entity_ids: list[str], equipment_overlay_required: bool = False, item_body_id: str | None = None) -> dict[str, Any]:
     properties: dict[str, Any] = {
         "schema": {"const": VISUAL_KIT_SCHEMA},
@@ -956,8 +1061,11 @@ def _request_visual_kit(
     equipment_overlay = equipment_overlay_requirement(data)
     equipment_overlay_required = bool(equipment_overlay["required"])
     repair = repair_errors is not None
+    scoped_repair = (repair and isinstance(repair_scope, Mapping) and "fieldPermissions" in repair_scope
+                     and not any(error.get("path") == "$" for error in repair_errors or []))
     schema = (
-        _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
+        _scoped_visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id, repair_scope or {}, previous)
+        if scoped_repair else _visual_repair_schema(entity_ids, equipment_overlay_required, item_body_id)
         if repair
         else _response_schema(entity_ids, equipment_overlay_required, item_body_id)
     )
@@ -1054,8 +1162,66 @@ def _request_visual_kit(
             "responseSchema": sent_schema,
         }
     response_schema = payload.pop("responseSchema")
-    payload.update(_presentation_packet_context(data, runtime_rows))
-    payload["rules"].append("Explicitly choose required renderSizePx and forwardAngleDegrees for item and those plus preferredCanvasSize for each distinct baked project; item_body/reuse inherit root and must not duplicate them. Canvas is resolution, not world size; do not use gameplay hitbox dimensions as a bake canvas chooser.")
+    presentation = _presentation_packet_context(data, runtime_rows)
+    if scoped_repair:
+        permissions = (repair_scope or {})["fieldPermissions"]
+        paths = [*(permissions.get("itemPaths") or []), *(permissions.get("equipOverlayPaths") or []),
+                 *(path for row in permissions.get("entities") or [] for path in row.get("paths") or [])]
+        roots = {path.split(".", 1)[0].split("[", 1)[0] for path in paths}
+        design = bool(roots & {"", "prompt", "silhouette", "visualIdentity", "palette", "assetMode", "visualProjectRef"})
+        sizing = bool(roots & {"", "renderSizePx", "preferredCanvasSize", "inventoryScale", "worldScale", "scale", "grip", "forwardAngleDegrees", "assetMode", "visualProjectRef"})
+        if not design:
+            parents = payload.pop("parentFactsReadOnly")
+            references = {}
+            for key, parent in parents.items():
+                card = parent["packet"]
+                raw_parent = card.get("raw") or {}
+                generated = raw_parent.get("generatedParent") or {}
+                references[key] = {
+                    **({"spriteReference": copy.deepcopy(raw_parent["spriteReference"])} if "spriteReference" in raw_parent else {}),
+                    **({"visual": copy.deepcopy(generated["visual"])} if "visual" in generated else {}),
+                    "entities": [{"id": row["id"], **({"visual": copy.deepcopy(row["visual"])} if "visual" in row else {})}
+                                 for row in (generated.get("runtimeProgram") or {}).get("entities") or []],
+                }
+            payload["parentSizeReferencesReadOnly"] = references
+        guidance = presentation["spritePresentationReadOnly"]
+        selected = {"requiredMetadata"}
+        if design:
+            selected.update({"ownership", "geometryCoverage", "axis"})
+        if sizing:
+            selected.update({"units", "formulas", "ownership", "sourceCalibration"})
+        if roots & {"", "forwardAngleDegrees", "grip"}:
+            selected.add("axis")
+        mechanics = presentation["acceptedPresentationMechanicsReadOnly"]
+        if sizing and any(isinstance(((row.get("usePolicy") or {}).get("action") or {}).get("placement"), Mapping)
+                          and "placedBody" in row["usePolicy"]["action"]["placement"]
+                          for row in mechanics.get("bindings") or []):
+            selected.add("placedBody")
+        if roots & {"", "preferredCanvasSize", "renderSizePx", "grip", "assetMode", "visualProjectRef"}:
+            selected.add("fill")
+        if roots & {"", "grip", "renderSizePx", "forwardAngleDegrees", "assetMode", "visualProjectRef"} and any("spriteDependenciesReadOnly" in row for row in runtime_rows):
+            selected.update({"frontHand", "handContactGeometry", "axis"})
+        presentation["spritePresentationReadOnly"] = {key: value for key, value in guidance.items() if key in selected}
+        if not sizing:
+            presentation.pop("bakeFillByProcessingRole")
+            presentation.pop("acceptedPresentationMechanicsReadOnly")
+        else:
+            roles = {"item"} if not permissions.get("entities") else set(presentation["bakeFillByProcessingRole"])
+            presentation["bakeFillByProcessingRole"] = {key: value for key, value in presentation["bakeFillByProcessingRole"].items() if key in roles}
+        if not roots & {"", "assetMode", "visualProjectRef"}:
+            payload["assetModeCatalog"] = {}
+        payload["rules"] = [
+            "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
+            "already-valid fields and independent rows are frozen; extra rewrites are ignored; runtime gameplay is immutable",
+        ] + ([visual_background_transport_rule()] if design else [])
+        system = (
+            "You are the conditional Visual Repair. Return only the exact permitted patch leaves and selectors "
+            "in responseSchema. Omitted fields are unchanged. Accepted design, independent rows and gameplay "
+            "are immutable; extra rewrites are ignored by frozen-first merge. Return JSON only."
+        ) if not isinstance(previous, MalformedVisualDirectorOutput) else system
+    payload.update(presentation)
+    if not scoped_repair:
+        payload["rules"].append("Explicitly choose required renderSizePx and forwardAngleDegrees for item and those plus preferredCanvasSize for each distinct baked project; item_body/reuse inherit root and must not duplicate them. Canvas is resolution, not world size; do not use gameplay hitbox dimensions as a bake canvas chooser.")
     payload["responseSchema"] = response_schema
     # Ordering only: keep every field/value in the same complete JSON object.
     # Entity-specific responseSchema (including its exact ID enums) remains after
@@ -1092,11 +1258,13 @@ def _request_visual_kit(
     # Explicit canonical entity leaves; ownership/ID enums and roster bounds stay
     # inline USER constraints. Both local oneOf and provider anyOf are supported.
     entity_path = ("properties", "entitiesUpsert" if repair else "entities", "items")
-    entity_schema = sent_schema["properties"][entity_path[1]]["items"]
+    entity_schema = sent_schema["properties"].get(entity_path[1], {}).get("items", {"properties": {}})
     union = "anyOf" if "anyOf" in entity_schema else "oneOf"
     branches = entity_schema.get(union, [entity_schema])
     branch_paths = [entity_path + (union, index) for index in range(len(branches))] if union in entity_schema else [entity_path]
-    definition_paths["entityScale"] = tuple(path + ("properties", "scale") for path in branch_paths)
+    scale_paths = tuple(path + ("properties", "scale") for path, branch in zip(branch_paths, branches) if "scale" in branch.get("properties", {}))
+    if scale_paths:
+        definition_paths["entityScale"] = scale_paths
     for field in ("prompt", "silhouette", "visualIdentity"):
         paths = tuple(
             path + ("properties", field) for path, branch in zip(branch_paths, branches)
@@ -1104,7 +1272,8 @@ def _request_visual_kit(
         )
         if paths:
             definition_paths["entity_" + field] = paths
-    request = with_schema_instruction_definitions(request, "responseSchema", definition_paths)
+    if not scoped_repair:
+        request = with_schema_instruction_definitions(request, "responseSchema", definition_paths)
     stage_name = "visual_repair" if repair else "visual_director"
     trace_event("prompt", "LLM:" + stage_name, "Visual stage request", {"recipeKey": data.get("recipeKey"), "recipeId": data.get("id")}, prompt=request["messages"])
     trace_stage_request(stage_name, data.get("recipeKey"), request, recipe_id=data.get("id"))
@@ -1125,7 +1294,8 @@ def _request_visual_kit(
                         parsed[key], schema["properties"][key]["anyOf"][0],
                         response_format={"type": "json_schema", "json_schema": {"schema": provider_props[key]["anyOf"][0]}},
                     )
-        return project_provider_nullable_optionals_to_local(parsed, schema, response_format=effective_format)
+        parsed = project_provider_nullable_optionals_to_local(parsed, schema, response_format=effective_format)
+        return _expand_scoped_visual_repair_patch(parsed, previous, repair_scope or {}, entity_ids) if scoped_repair else parsed
     except (ValueError, TypeError) as exc:
         if repair:
             raise PlannerUnavailable(f"Visual Repair returned malformed JSON: {type(exc).__name__}: {exc}") from exc

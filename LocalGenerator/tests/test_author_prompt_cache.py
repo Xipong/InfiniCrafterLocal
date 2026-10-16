@@ -150,7 +150,8 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
     assert prefix == other_prefix
     assert full != other_full
     if syntax_only:
-        assert set(static) == {"schema", "task", "rules", "allowedCallParamsReadOnly", "requiredJsonShape"}
+        assert set(static) == {"schema", "task", "rules", "requiredJsonShape"}
+        assert "allowedCallParamsReadOnly" in full, "source-dependent function grammar stays dynamic"
     else:
         assert set(static) == {"schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth"}
         # Conditional cards remain scoped, never replaced by the entire Author catalog for a cache hit.

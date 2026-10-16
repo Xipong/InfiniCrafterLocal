@@ -18,7 +18,7 @@ from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
-from infini_local.core.repair_merge import json_path_relative, json_values_equal, merge_frozen_subtree
+from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
 from infini_local.core.schema_validation import strict_schema_errors
@@ -896,7 +896,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
     }
 
 
-def vfx_schema_instruction_paths(*, repair: bool) -> dict[str, tuple[str | int, ...]]:
+def vfx_schema_instruction_paths(*, repair: bool, schema: Mapping[str, Any] | None = None) -> dict[str, tuple[str | int, ...]]:
     """Owner-declared invariant grammar; runtime compatibility clauses stay USER.
 
     Only the initial rendererRequirements clauses have fixed positions: the
@@ -915,6 +915,22 @@ def vfx_schema_instruction_paths(*, repair: bool) -> dict[str, tuple[str | int, 
     paths.update({"rendererRule_" + renderer: slot + ("allOf", index)
                   for index, renderer in enumerate(_RENDERER_REQUIREMENTS)})
     paths["asset"] = ("properties", "assetsUpsert" if repair else "assets", "items")
+    if schema is not None:
+        present = {}
+        for name, path in paths.items():
+            node: Any = schema
+            try:
+                for key in path:
+                    node = node[key]
+            except (KeyError, IndexError, TypeError):
+                continue
+            # Scoped nodes contain request-specific frozen values/IDs. They
+            # must never be promoted into the invariant developer vocabulary.
+            if repair and ("const" in node or name.startswith("rendererRule_")
+                           or "properties" in node):
+                continue
+            present[name] = path
+        return present
     return paths
 
 
@@ -1318,7 +1334,7 @@ def _request(
             "brokenFragments": context["broken"],
             "malformedRawText": context["malformedRawText"],
             "validGeneratedContext": context["validReadOnly"],
-            "outputSchema": _vfx_repair_schema_from_packet(packet),
+            "outputSchema": _vfx_scoped_repair_schema(packet, previous, repair_scope or {}),
             "rules": [
                 "fill only fields listed in repairScope.fieldPermissions; optional unreported fields stay absent",
                 "already-valid fields and independent slots are frozen; extra rewrites are ignored",
@@ -1330,6 +1346,15 @@ def _request(
                 _READABILITY_RULE,
             ],
         }
+        user["runtimeVocabularyReadOnly"] = _vfx_scoped_repair_vocabulary(
+            user["runtimeVocabularyReadOnly"], previous, repair_scope or {},
+        )
+        if user["runtimeVocabularyReadOnly"] != packet.get("runtimeVocabulary"):
+            user["rules"] = user["rules"][:4] + [
+                "outputSchema owns the exact editable numeric/domain limits and companion relations. Read-only source facts never open additional field permissions.",
+                "presentation only; gameplay is immutable",
+                _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
+            ]
         user = {
             **{key: user[key] for key in VFX_REPAIR_PROMPT_STATIC_KEYS},
             **{key: value for key, value in user.items() if key not in VFX_REPAIR_PROMPT_STATIC_KEYS},
@@ -1347,6 +1372,145 @@ def _request(
         _director_system(repair=False), user, int(VFX_LLM_DIRECTOR_MAX_TOKENS),
         float(VFX_LLM_DIRECTOR_TEMPERATURE), int(VFX_LLM_DIRECTOR_TIMEOUT), messages=messages,
     )
+
+
+def _vfx_scoped_repair_vocabulary(vocabulary: Mapping[str, Any], previous: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
+    permissions = scope.get("fieldPermissions") or {}
+    rows = permissions.get("slots") or []
+    paths = [path for row in rows for path in row.get("paths") or []]
+    roots = {path.split(".", 1)[0] for path in paths}
+    if (not isinstance(previous, Mapping) or not rows or "" in roots or "rendererKind" in roots
+            or scope.get("allowCreateSlots") or scope.get("allowCreateAssets")
+            or permissions.get("assets") or "$" in (scope.get("errorPaths") or [])):
+        return copy.deepcopy(dict(vocabulary))
+    selected_ids = {row.get("slotId") for row in rows}
+    renderers = {row.get("rendererKind") for row in _rows(previous, "slots")
+                 if isinstance(row, Mapping) and row.get("id") in selected_ids and isinstance(row.get("rendererKind"), str)}
+    selected = {key: copy.deepcopy(value) for key, value in vocabulary.items() if key in roots}
+    selected["numericRanges"] = {key: copy.deepcopy(value) for key, value in vocabulary.get("numericRanges", {}).items() if key in roots}
+    selected["rendererSemantics"] = {key: copy.deepcopy(value) for key, value in vocabulary.get("rendererSemantics", {}).items() if key in renderers}
+    # These nested owners contain selectors and semantic relations not expressed
+    # by their root name alone. Keep their canonical read-only dependency facts.
+    if roots & {"textureRole", "element", "path", "entityId", "event"}:
+        selected["textureDependencyTuples"] = copy.deepcopy(vocabulary.get("textureDependencyTuples") or {})
+    if "color" in roots:
+        selected["colorPolicy"] = copy.deepcopy(vocabulary.get("colorPolicy"))
+    return selected
+
+
+def _vfx_frozen_literal_schema(value: Any) -> dict[str, Any]:
+    """Type exact source literals without changing the public VFX contract."""
+    literal = {"const": copy.deepcopy(value)}
+    if isinstance(value, Mapping):
+        return {"type": "object", **literal, "additionalProperties": False,
+                "properties": {name: _vfx_frozen_literal_schema(child) for name, child in value.items()},
+                "required": list(value)}
+    if isinstance(value, list):
+        alternatives = [_vfx_frozen_literal_schema(child) for child in value]
+        return {"type": "array", **literal, "minItems": len(value), "maxItems": len(value),
+                "items": ({"anyOf": alternatives} if alternatives else {"type": "null"})}
+    kind = ("null" if value is None else "boolean" if isinstance(value, bool)
+            else "integer" if isinstance(value, int) else "number" if isinstance(value, float) else "string")
+    return {"type": kind, **literal}
+
+
+def _vfx_repair_row_schema(schema: Mapping[str, Any], old: Mapping[str, Any], paths: list[str], delete_paths: list[str]) -> dict[str, Any]:
+    """Retain canonical editable leaves; frozen companions are exact source facts."""
+    if "" in paths or {path.split(".", 1)[0] for path in paths} & {"rendererKind", "entityId", "event"}:
+        # Discriminator/binding edits can select another real renderer/event
+        # relation. Leave that row's canonical dependency domain intact; the
+        # unchanged frozen merge remains the authority on companion edits.
+        return copy.deepcopy(dict(schema))
+    out = copy.deepcopy(dict(schema))
+    properties = schema.get("properties") or {}
+    selected: dict[str, Any] = {}
+    for name, child in properties.items():
+        child_path = json_path_child("", name)
+        if child_path in delete_paths:
+            continue
+        relative = [relative for path in paths
+                    if (relative := json_path_relative(path, child_path)) is not None]
+        if "" in relative:
+            selected[name] = copy.deepcopy(child)
+        elif relative and isinstance(child.get("properties"), Mapping):
+            value = old.get(name)
+            selected[name] = _vfx_repair_row_schema(child, value if isinstance(value, Mapping) else {}, relative,
+                                                  [relative for path in delete_paths
+                                                   if (relative := json_path_relative(path, child_path)) is not None])
+        elif relative:
+            # Indexed/non-object descendants keep the canonical container;
+            # the existing frozen filter still owns exact indexed permissions.
+            selected[name] = copy.deepcopy(child)
+        elif name in old:
+            selected[name] = _vfx_frozen_literal_schema(old[name])
+    out["properties"] = selected
+    out["required"] = [name for name in selected if name in old or name in schema.get("required", [])]
+    editable = {path.split(".", 1)[0] for path in paths}
+    clauses = []
+    for clause in schema.get("allOf") or []:
+        condition = clause.get("if") or {}
+        then = clause.get("then") or {}
+        # A mutable discriminator keeps its complete canonical relation, even
+        # to frozen companions. Otherwise only clauses touching editable roots
+        # can constrain this repair, and false frozen branches are irrelevant.
+        changing_condition = bool(editable & set(condition.get("properties") or {}))
+        touching_result = bool(editable & (set(then.get("properties") or {}) | set(then.get("required") or [])))
+        if changing_condition or (touching_result and not strict_schema_errors(old, condition)):
+            clauses.append(copy.deepcopy(clause))
+    if clauses:
+        out["allOf"] = clauses
+    else:
+        out.pop("allOf", None)
+    return out
+
+
+def _vfx_scoped_repair_schema(packet: Mapping[str, Any], previous: Any, scope: Mapping[str, Any]) -> dict[str, Any]:
+    """Request-only grammar; authoritative public admission stays unchanged."""
+    full = _vfx_repair_schema_from_packet(packet)
+    if (not scope or not isinstance(previous, Mapping) or "$" in (scope.get("errorPaths") or [])
+            or not any(scope.get(key) for key in ("mutableSlotIds", "mutableAssetIds", "allowCreateSlots", "allowCreateAssets",
+                                                "deletableSlotIds", "deletableSlotIndices", "deletableAssetIds", "deletableAssetIndices"))
+            and not any((scope.get("fieldPermissions") or {}).get(key) for key in ("slots", "assets"))):
+        return full
+    out = copy.deepcopy(full)
+    properties = out.get("properties")
+    if not isinstance(properties, dict):
+        return out
+    permissions = scope.get("fieldPermissions") or {}
+    for rows_key, upsert, permission_key, create in (
+        ("slots", "slotsUpsert", "slotId", "allowCreateSlots"),
+        ("assets", "assetsUpsert", "assetId", "allowCreateAssets"),
+    ):
+        if scope.get(create):
+            continue  # New rows retain the complete real capability domain.
+        canonical = properties[upsert]["items"]
+        # Match each existing filter's ID ownership: assets reserve the first
+        # occurrence; duplicate rows can only be removed by original index.
+        source_rows = _rows(previous, rows_key)
+        if rows_key == "assets":
+            source_rows = reversed(source_rows)
+        old_rows = {row.get("id"): row for row in source_rows if isinstance(row, Mapping) and isinstance(row.get("id"), str)}
+        branches = []
+        for permission in permissions.get(rows_key) or []:
+            row_id = permission.get(permission_key)
+            if row_id not in old_rows:
+                continue
+            branch = _vfx_repair_row_schema(canonical, old_rows[row_id], permission.get("paths") or [], permission.get("deletePaths") or [])
+            branch["properties"]["id"] = {**copy.deepcopy(canonical["properties"]["id"]), "const": row_id}
+            branches.append(branch)
+        if branches:
+            properties[upsert]["items"] = branches[0] if len(branches) == 1 else {"anyOf": branches}
+            properties[upsert]["maxItems"] = min(properties[upsert]["maxItems"], len(branches))
+        else:
+            properties.pop(upsert)
+    for field, permission in (("slotIdsDelete", "deletableSlotIds"), ("slotIndicesDelete", "deletableSlotIndices"),
+                              ("assetIdsDelete", "deletableAssetIds"), ("assetIndicesDelete", "deletableAssetIndices")):
+        allowed = scope.get(permission) or []
+        if allowed:
+            properties[field]["items"]["enum"] = copy.deepcopy(allowed)
+        else:
+            properties.pop(field)
+    return out
 
 
 def _vfx_repair_schema_from_packet(packet: Mapping[str, Any]) -> dict[str, Any]:

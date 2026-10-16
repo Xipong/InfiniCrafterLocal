@@ -38,7 +38,10 @@ case-specific `user` dossier. `schemaDefinitions.$defs` в DEVELOPER содер�
   clauses, material/sound payloads и asset schemas. Exact
   entity/event enums и все последующие runtime-dependent compatibility clauses
   остаются inline USER constraints; поля Repair scope/permissions не переносятся.
-- Нет recursive common-field heuristic, смены provider grammar, demotion ролей или
+- Scoped Repair включает только разрешённые операции/листья и нужные зависимости;
+  full inline provider schema относится к этому exact patch domain, не к initial
+  design. Frozen case constants остаются USER, не общим cache vocabulary.
+- Нет recursive common-field cache heuristic, demotion ролей или
   изменений Author. Static packet/affinity стабильность проверяется offline через
   настоящий native serializer на трёх разных runtime rosters; это не новый live
   cache hit или измерение ускорения.

@@ -33,7 +33,7 @@ from infini_local.pipelines.author_item_contract import (
     RUNTIME_ROW_SHAPE_RULE,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
-    author_item_prompt_shape_card,
+    author_item_response_schema,
     author_item_repair_prompt_shape_card,
     author_item_repair_response_schema,
     provider_nullable_transport_rule,
@@ -66,7 +66,7 @@ _AUTHOR_CACHE_PREFIX_KEYS = (
     "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport",
 )
 _REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth")
-_FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "allowedCallParamsReadOnly", "requiredJsonShape")
+_FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "requiredJsonShape")
 
 
 _AUTHOR_SYSTEM = (
@@ -167,11 +167,21 @@ def _repair_malformed_author_json(
     """Spend the one Gameplay Repair call on syntax-only Author recovery."""
 
     original_context = json.loads(original_recipe_context)
-    # Keep exact recipe facts, not a second copy of the full Author instructions.
-    # The syntax rules, allowed params and full output shape remain below; the
-    # equality check after decoding still forbids adding or changing gameplay.
-    original_context = {key: value for key, value in original_context.items()
-                        if key not in _AUTHOR_CACHE_PREFIX_KEYS}
+    recovered = recover_object_with_syntax_only_repairs(malformed_raw_text)
+    # Syntax recovery has one design source, not another Author request. Only
+    # unambiguous registered function identities may narrow its output grammar.
+    # Unknown/damaged identities keep the complete grammar and final refusal.
+    runtime = recovered.get("runtimeProgram") if isinstance(recovered, Mapping) else None
+    calls = runtime.get("calls") if isinstance(runtime, Mapping) else None
+    known_calls = isinstance(calls, list) and bool(calls) and all(
+        isinstance(row, Mapping) and isinstance(row.get("fn"), str) and row["fn"] in CAPABILITY_REGISTRY
+        for row in calls
+    )
+    functions = sorted({row["fn"] for row in calls}) if known_calls and isinstance(calls, list) else sorted(CAPABILITY_REGISTRY)
+    local_schema = author_item_response_schema()
+    call_schema = local_schema["properties"]["runtimeProgram"]["properties"]["calls"]
+    variants = [row for row in call_schema["items"]["oneOf"] if row["properties"]["fn"]["const"] in functions]
+    call_schema["items"] = {"oneOf": variants} if len(variants) > 1 else variants[0]
     repair_context = {
         "schema": "infini.gameplay-author-format-repair.v1",
         "task": "Repair JSON syntax only and return the same complete Gameplay Author object.",
@@ -179,16 +189,19 @@ def _repair_malformed_author_json(
             "Preserve every recoverable authored value, id, capability, parameter, binding transaction, concept, and realization from malformedRawText.",
             "Do not redesign, add, drop, replace, normalize, or reinterpret gameplay. This call repairs only JSON syntax/container damage.",
             "Call params must use allowedCallParamsReadOnly for their exact fn; do not invent undeclared params even if they sound plausible.",
-            "Use originalRecipeContext only to disambiguate damaged syntax; never introduce a choice absent from malformedRawText.",
+            "malformedRawText is the sole design source; never introduce a choice absent from it. Keep every source key and array row, including optional advisory text.",
             "Return exactly one strict full Author JSON object with no markdown or prose.",
         ],
         "allowedCallParamsReadOnly": {
-            name: sorted(cap.params) for name, cap in CAPABILITY_REGISTRY.items()
+            name: sorted(CAPABILITY_REGISTRY[name].params) for name in functions
         },
-        "requiredJsonShape": author_item_prompt_shape_card(),
+        "requiredJsonShape": {
+            "root": list(local_schema["required"]),
+            "runtimeProgram": list(local_schema["properties"]["runtimeProgram"]["required"]),
+            "sourcePreservation": "Return the complete source object, not this key index. Copy source values and optional keys; fix syntax only.",
+        },
         "parseError": f"{type(parse_error).__name__}: {parse_error}",
         "malformedRawText": malformed_raw_text,
-        "originalRecipeContext": original_context,
     }
     user_content = json.dumps(repair_context, ensure_ascii=False, separators=(",", ":"))
     system = (
@@ -207,7 +220,7 @@ def _repair_malformed_author_json(
         "temperature": _gameplay_repair_temperature(),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_author_format_repair",
-            schema=author_item_provider_response_schema,
+            schema=lambda: author_item_provider_response_schema(local_schema=local_schema),
             strict=True,
             auto_preference="json_schema",
         ),
@@ -223,7 +236,7 @@ def _repair_malformed_author_json(
     try:
         # The Author caller owns the join; standalone syntax replays may lack it.
         # Let the recorder explicitly refuse a missing join without blocking Repair.
-        trace_key = recipe_key if recipe_key is not None else repair_context["originalRecipeContext"].get("recipeKey")
+        trace_key = recipe_key if recipe_key is not None else original_context.get("recipeKey")
         trace_stage_request("gameplay_format_repair", trace_key, request)
         raw = llm_chat_json(with_llm_stage(request, "author_repair"), timeout=env_int("INFINI_LLM_TIMEOUT", int(GENERATION_DEFAULTS["INFINI_LLM_TIMEOUT"])))
         content = str(raw["choices"][0]["message"]["content"])
@@ -235,11 +248,13 @@ def _repair_malformed_author_json(
         parsed = parse_first_valid_llm_json(content)
         if not isinstance(parsed, Mapping):
             raise PlannerUnavailable("Gameplay Author format Repair returned non-object JSON")
-        recovered = recover_object_with_syntax_only_repairs(malformed_raw_text)
         if recovered is None:
             raise PlannerUnavailable("Gameplay format Repair cannot prove recoverable authored fields")
         original = _prepare_parsed_author_item(recovered, response_format=source_response_format)
-        repaired = _prepare_parsed_author_item(parsed, response_format=effective_response_format(request, raw))
+        projected = project_provider_nullable_optionals_to_local(
+            parsed, local_schema, response_format=effective_response_format(request, raw),
+        )
+        repaired = _prepare_parsed_author_item(projected)
         if original != repaired:
             raise PlannerUnavailable("Gameplay format Repair changed recoverable authored fields")
         return repaired, content

@@ -161,14 +161,14 @@ def test_create_policy_and_event_support_are_included_without_granting_permissio
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("rewrite", [False, True])
-def test_format_repair_keeps_exact_dynamic_facts_and_rejects_gameplay_rewriting(monkeypatch, mode, rewrite):
+def test_format_repair_keeps_exact_source_and_rejects_gameplay_rewriting(monkeypatch, mode, rewrite):
     item = build_runtime_fixture("workbench_blade")
     item["concept"]["literalSynthesis"] = "  Exact source 雪\r\n without trimming  "
     raw = json.dumps(item, ensure_ascii=False)[:-1] + ",}"
     original = {key: {"staticMarker": key} for key in author._AUTHOR_CACHE_PREFIX_KEYS}
     original.update(recipeKey="format-only", parents={"A": {"raw": {"value": 0.14700000000000002}}},
                     balanceCorridor={"exact": None}, futureRecipeFact={"mustSurvive": False})
-    expected_context = {key: value for key, value in original.items() if key not in author._AUTHOR_CACHE_PREFIX_KEYS}
+
     response = copy.deepcopy(item)
     if rewrite:
         _call(response, "configure_item_stats")["params"]["damage"] += 1
@@ -190,7 +190,7 @@ def test_format_repair_keeps_exact_dynamic_facts_and_rejects_gameplay_rewriting(
         assert repaired == item
     assert len(requests) == 1
     packet = request_dossier(requests[0])
-    assert packet["originalRecipeContext"] == expected_context
+    assert "originalRecipeContext" not in packet
     assert packet["malformedRawText"] == raw
-    assert packet["requiredJsonShape"] == contract.author_item_prompt_shape_card()
-    assert set(packet["allowedCallParamsReadOnly"]) == {name for name, cap in CAPABILITY_REGISTRY.items() }
+    assert packet["requiredJsonShape"]["root"] == contract.author_item_response_schema()["required"]
+    assert set(packet["allowedCallParamsReadOnly"]) == {row["fn"] for row in item["runtimeProgram"]["calls"]}
