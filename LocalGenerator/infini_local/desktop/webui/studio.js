@@ -825,7 +825,7 @@
       else {state.searchIndex=Math.max(0,Math.min(state.searchMatches.length-1,state.searchIndex+(event.key === 'ArrowDown'?1:-1)));$$('.search-result').forEach((result,index)=>result.classList.toggle('selected',index === state.searchIndex));const result=$(`#search-hit-${state.searchIndex}`);if(result) {const panel=$('#search-results');if(result.offsetTop < panel.scrollTop) panel.scrollTop=result.offsetTop;else if(result.offsetTop+result.offsetHeight>panel.scrollTop+panel.clientHeight) panel.scrollTop=result.offsetTop+result.offsetHeight-panel.clientHeight;}}
     }
     if(event.target.matches('[data-trace-tab]') && ['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) {
-      event.preventDefault();const tabs=$$('[data-trace-tab]'),index=tabs.indexOf(event.target);const next=event.key === 'Home'?0:event.key === 'End'?tabs.length-1:(index+(event.key === 'ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].click();tabs[next].focus();
+      event.preventDefault();const tabs=$$('[data-trace-tab]'),index=tabs.indexOf(event.target);const next=event.key === 'Home'?0:event.key === 'End'?tabs.length-1:(index+(event.key === 'ArrowRight'?1:-1)+tabs.length)%tabs.length;tabs[next].click();tabs[next].focus();tabs[next].scrollIntoView({block:'nearest',inline:'nearest'});
     }
     if(event.key === 'Escape') setMenu(false);
     if(event.key === 'Tab' && $('.rail').classList.contains('is-open') && !document.querySelector('dialog[open]')) {
