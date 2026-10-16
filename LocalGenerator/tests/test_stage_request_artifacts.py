@@ -162,13 +162,19 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
                 assert (field in row) == (field in accepted), 'accepted downstream mechanics must not disappear or gain defaults'
                 if field in accepted:
                     assert row[field] == accepted[field]
-        mechanics = packet['acceptedPresentationMechanicsReadOnly']['gameplay']
-        for field in ('useTime', 'useAnimation', 'reuseDelay'):
-            assert (field in mechanics) == (field in data['gameplay'])
-            if field in data['gameplay']:
-                assert mechanics[field] == data['gameplay'][field]
-        calibration = packet['spritePresentationReadOnly']['sourceCalibration']
-        assert all(token in calibration for token in ('spriteReference', 'currentFrame', 'bake fill', 'unknown', 'hitbox', 'not a required copy'))
+        if stage == 'visual_director':
+            mechanics = packet['acceptedPresentationMechanicsReadOnly']['gameplay']
+            for field in ('useTime', 'useAnimation', 'reuseDelay'):
+                assert (field in mechanics) == (field in data['gameplay'])
+                if field in data['gameplay']:
+                    assert mechanics[field] == data['gameplay'][field]
+            calibration = packet['spritePresentationReadOnly']['sourceCalibration']
+            assert all(token in calibration for token in ('spriteReference', 'currentFrame', 'bake fill', 'unknown', 'hitbox', 'not a required copy'))
+        else:
+            assert packet['repairScope']['fieldPermissions']['itemPaths'] == ['silhouette']
+            assert 'acceptedPresentationMechanicsReadOnly' not in packet
+            assert packet['brokenFragments']['item'] == {'prompt': 'frozen'}
+            assert 'geometryCoverage' in packet['spritePresentationReadOnly']
 
 
 @pytest.mark.parametrize('context_join', [None, 'not_the_owner'], ids=['missing-dossier-join', 'stale-dossier-join'])
@@ -229,7 +235,8 @@ def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields
     assert captured['messages'] == requests[1]['messages']
     dossier = request_dossier(captured, declaration=requests[1])
     assert dossier['malformedRawText'] == malformed
-    assert dossier['originalRecipeContext'].get('recipeKey') == context_join
+    assert 'originalRecipeContext' not in dossier
+    assert captured['recipeKey'] == 'r_actual_owner', 'trace join remains at its owner, not in model design context'
     assert [request['_infini_stage'] for request in requests] == ['planner', 'author_repair']
 
 

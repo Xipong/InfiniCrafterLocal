@@ -83,8 +83,7 @@ def test_format_repair_with_coherence_advice_preserves_existing_placement(monkey
         original_recipe_context=recipe_context, model_name="offline-test",
     )
     context = request_dossier(requests[0])
-    intent = context["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
-    assert "Repair" not in intent
+    assert "concept" not in context["requiredJsonShape"], "syntax repair is not a second design request"
     assert any("Do not redesign, add, drop" in rule for rule in context["rules"])
     assert context["malformedRawText"] == content[:-1] + ",}"
     assert prepared == before and item == before and raw == content

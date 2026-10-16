@@ -155,9 +155,20 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
     assert result["visualKit"] == chosen
     director, repair = [request_dossier(request) for request in requests]
     expected = raw_parent_card_for_llm(parent, include_visual_reference=True)
-    assert director["parents"] == repair["parentFactsReadOnly"] == {
+    assert director["parents"] == {
         "parentA": {"packet": expected}, "parentB": {"packet": expected},
     }
+    assert "parentFactsReadOnly" not in repair
+    generated = expected["raw"]["generatedParent"]
+    reference = {
+        **({"spriteReference": expected["raw"]["spriteReference"]} if "spriteReference" in expected["raw"] else {}),
+        **({"visual": generated["visual"]} if "visual" in generated else {}),
+        "entities": [{"id": row["id"], **({"visual": row["visual"]} if "visual" in row else {})}
+                     for row in generated["runtimeProgram"]["entities"]],
+    }
+    assert repair["parentSizeReferencesReadOnly"] == {"parentA": reference, "parentB": reference}
+    assert repair["acceptedPresentationMechanicsReadOnly"]["gameplay"] == visual._presentation_packet_context(
+        child, visual._runtime_card(child))["acceptedPresentationMechanicsReadOnly"]["gameplay"]
     assert repair["repairScope"]["fieldPermissions"]["itemPaths"] == ["inventoryScale"]
     assert parent == before[0]
     assert {key: value for key, value in child.items() if key != "debug"} == before[1]

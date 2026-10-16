@@ -90,7 +90,7 @@ def test_actual_outgoing_packets_preserve_roles_schema_and_frozen_authority(capt
         assert full["repairScope"]["fieldPermissions"]
     elif stage == "format_repair":
         assert full["malformedRawText"] == evidence["malformedRawText"]
-        assert full["originalRecipeContext"]["parents"]
+        assert "originalRecipeContext" not in full, "syntax-only repair has one exact design source"
 
     for route in ROUTES:
         observed = capture.wire(packet, route)
@@ -154,12 +154,14 @@ def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(
     scope = full["repairScope"]
     inputs, broken = evidence["inputs"], evidence["broken"]
     provider_schema = schema_from_wire(capture.wire(packet, "responses")["packet"])
+    assert isinstance(provider_schema, dict)
     if stage == "visual_repair":
         patch = {"schema": capture.visual.VISUAL_REPAIR_PATCH_SCHEMA, "itemPatch": {"renderSizePx": 40, "inventoryScale": 2.0},
                  "entitiesUpsert": [], "entityIdsDelete": [], "entityIndicesDelete": [], "note": "one leaf"}
         ids = [row["id"] for row in inputs["data"]["runtimeProgram"]["entities"]]
-        local_schema = capture.visual._visual_repair_schema(ids, False, inputs["data"]["runtimeProgram"]["itemEntityId"])
-        assert Draft202012Validator(provider_schema).is_valid(_encode_nullable_fixture(patch, local_schema))
+        valid = {"schema": patch["schema"], "itemPatch": {"renderSizePx": 40}, "note": "one leaf"}
+        assert Draft202012Validator(provider_schema).is_valid(valid)
+        assert not Draft202012Validator(provider_schema).is_valid(patch)
         fixed, audit = capture.visual._apply_visual_repair_patch(broken, patch, scope, ids, return_audit=True)
         assert fixed == inputs["visualKit"]
         assert audit["ignoredChanges"]
@@ -167,7 +169,9 @@ def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(
         slot = copy.deepcopy(inputs["vfxOutput"]["slots"][0])
         slot["duration"] = 100
         patch = {"schema": capture.vfx.VFX_REPAIR_PATCH_SCHEMA, "slotsUpsert": [slot], "note": "one leaf"}
-        assert Draft202012Validator(provider_schema).is_valid(patch)
+        valid = {"schema": patch["schema"], "slotsUpsert": inputs["vfxOutput"]["slots"], "note": "one leaf"}
+        assert Draft202012Validator(provider_schema).is_valid(valid)
+        assert not Draft202012Validator(provider_schema).is_valid(patch)
         fixed, audit = capture.vfx._apply_vfx_repair_patch(inputs["visualData"], broken, patch, scope, return_audit=True)
         assert fixed == inputs["vfxOutput"]
         assert audit["ignoredChanges"]
@@ -193,7 +197,7 @@ def dict_nodes(value):
             yield from dict_nodes(child)
 
 
-@pytest.mark.parametrize("stage", [stage for stage in STAGES if stage != "vfx_repair"])
+@pytest.mark.parametrize("stage", [stage for stage in STAGES if stage not in {"vfx_repair", "format_repair"}])
 def test_changed_parent_context_is_dynamic_and_retains_generated_facts(capture, stage):
     first, _ = capture.builder(stage, COHORT[0], "json_object")
     # Compare the same runtime/overlay grammar with changed parent facts; an
@@ -204,11 +208,20 @@ def test_changed_parent_context_is_dynamic_and_retains_generated_facts(capture, 
     assert first["messages"][:2] == second["messages"][:2]
     assert first["messages"][2] != second["messages"][2]
     full = dossier(second)
-    if stage == "format_repair":
-        full = full["originalRecipeContext"]
-    parents = full.get("parents", full.get("parentFactsReadOnly"))
-    assert parents and "held_and_deployed" in json.dumps(parents)
-    assert "equipment_tool_combat" in json.dumps(parents)
+
+    parents = full.get("parents", full.get("parentFactsReadOnly", full.get("parentSizeReferencesReadOnly")))
+    assert parents
+    if stage != "visual_repair":
+        assert "held_and_deployed" in json.dumps(parents)
+        assert "equipment_tool_combat" in json.dumps(parents)
+    else:
+        assert parents != dossier(first)["parentSizeReferencesReadOnly"]
+        for key, parent in (("parentA", a), ("parentB", b)):
+            source = capture.visual.raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]["generatedParent"]
+            assert parents[key]["entities"] == [
+                {"id": row["id"], **({"visual": row["visual"]} if "visual" in row else {})}
+                for row in source["runtimeProgram"]["entities"]
+            ]
 
 
 @pytest.mark.parametrize("stage", ["visual", "visual_repair", "vfx", "vfx_repair"])
@@ -221,16 +234,28 @@ def test_current_grammar_removes_only_obsolete_controls_not_artist_prose(capture
             assert "effectColor" not in node.get("properties", {})
             assert "effectColor" not in node.get("required", [])
         # Prompt/silhouette/identity and descriptive palette remain design tools.
-        assert any("palette" in node.get("properties", {}) for node in dict_nodes(schema))
+        if stage == "visual":
+            assert any("palette" in node.get("properties", {}) for node in dict_nodes(schema))
+        else:
+            assert set(schema["properties"]["itemPatch"]["anyOf"][0]["properties"]) == {"renderSizePx"}
+            assert full["brokenFragments"]["item"]["prompt"] == evidence["broken"]["item"]["prompt"]
     else:
         props = schema["properties"]
         assert not props.keys() & RETIRED_GLOBAL_FIELDS
         slot = props["slotsUpsert" if stage.endswith("repair") else "slots"]["items"]
         assert not slot["properties"].keys() & RETIRED_SLOT_FIELDS
         rgb = slot["properties"]["color"]
-        assert set(rgb["properties"]) == {"r", "g", "b"}
-        for channel in rgb["properties"].values():
-            assert channel["type"] == "integer" and channel["minimum"] == 0 and channel["maximum"] == 255
+        if stage == "vfx":
+            assert set(rgb["properties"]) == {"r", "g", "b"}
+            for channel in rgb["properties"].values():
+                assert channel["type"] == "integer" and channel["minimum"] == 0 and channel["maximum"] == 255
+        else:
+            assert rgb["const"] == evidence["broken"]["slots"][0]["color"]
+            assert rgb["type"] == "object" and rgb["additionalProperties"] is False
+            assert set(rgb["required"]) == {"r", "g", "b"}
+            for channel, value in rgb["const"].items():
+                assert rgb["properties"][channel] == {"const": value, "type": "integer"}
+            assert slot["properties"]["alpha"]["maximum"] == 1.0
         # Frozen context must not carry the retired global model as current data.
         for key in ("brokenFragments", "validGeneratedContext", "item", "itemReadOnly"):
             assert not (full.get(key) or {}).keys() & RETIRED_GLOBAL_FIELDS
