@@ -148,7 +148,7 @@ internal static partial class EngineRuntimeChecks
             ("forge QoL readiness reports escrow not missing materials", ForgeQolReadinessReportsEscrowNotMissingMaterials),
             ("played mechanics alternate recall native mining isolation and restoration", PlayedAlternateEffectsIsolateAndRestoreNativeMining),
             ("played mechanics combined native tool actions retain all powers", PlayedNativeCombinedToolActionsRemainUsable),
-            ("played mechanics native flail channel and code19 live aim consumers", PlayedFlailChannelAndCode19LiveAimMatchConsumers),
+            ("played mechanics native flail yoyo channel and code19 live aim consumers", PlayedFlailChannelAndCode19LiveAimMatchConsumers),
             ("generated native prefix survives active use", GeneratedItemNativePrefixSurvivesActiveUse),
             ("generated native prefix placement and ammo independence", GeneratedItemNativePrefixPlacementAndAmmoStayIndependent),
             ("retirement item old payload refused and current prefix hydration retained", GeneratedItemNativePrefixCompactHydration),

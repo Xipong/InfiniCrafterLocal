@@ -65,7 +65,7 @@
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
-      "capabilitySubsetCount": 18,
+      "capabilitySubsetCount": 17,
       "directCapabilities": [
         "move_accelerate",
         "move_blackhole_pull",
@@ -83,10 +83,9 @@
         "move_spiral",
         "move_straight",
         "move_vortex_orb",
-        "move_whip_lash",
-        "move_yoyo_hover"
+        "move_whip_lash"
       ],
-      "dossierChars": 51907,
+      "dossierChars": 51263,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -154,7 +153,7 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 167102,
+  "fullAuthorPayloadChars": 167959,
   "fullCapabilityCatalogCount": 70,
   "ok": true,
   "policyCoverage": {
