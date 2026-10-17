@@ -369,6 +369,7 @@
   }
   function heading(page) {
     const [,,title,subtitle] = routes[page];
+    if (page === 'operate') return `<div class="page-heading operate-heading"><div><span class="eyebrow">Локальная мастерская <span class="eyebrow-divider">/</span> Terraria</span><h1>Генератор <em>невозможного.</em></h1></div><div class="heading-formula"><span class="formula-index">01 — 03</span><p>Идея. Образ. Характер.</p><span>Три слоя одного нового предмета.</span></div></div>`;
     return `<div class="page-heading"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${page === 'operate' ? '' : `<div class="heading-note"><span data-draft-status>${draftStatusText()}</span><strong>${page === 'configure' ? state.fields.length : state.fields.filter(field => field.route === page).length} параметров</strong></div>`}</div>`;
   }
   function providerSummary() {
@@ -404,6 +405,21 @@
     }
     return `<div class="activity-empty">${icon('pulse')}<div><h3>Пока без подтверждённых запросов</h3><p>Проверь соединение, чтобы получить состояние генератора. Здесь отображается последний ответ сервера.</p></div></div>`;
   }
+  function craftStage() {
+    return `<section class="craft-stage" aria-label="Интерактивная схема крафта" data-exploded="false">
+      <div class="stage-topline"><span class="stage-label"><span class="tiny-cross" aria-hidden="true"></span>Схема крафта</span><button id="motion-toggle" class="motion-control" type="button" data-motion-toggle aria-pressed="false">${icon('pause')}<span data-motion-label>Пауза движения</span></button></div>
+      <div class="craft-drawing" aria-hidden="true"><span class="drawing-axis axis-x"></span><span class="drawing-axis axis-y"></span><span class="drawing-orbit orbit-outer"></span><span class="drawing-orbit orbit-inner"></span><span class="drawing-coordinate coordinate-a">X / 01</span><span class="drawing-coordinate coordinate-b">Y / 03</span></div>
+      <div class="craft-perspective" aria-hidden="true"><div class="craft-object"><div class="craft-spindle"></div>
+        <div class="craft-plane plane-mechanics"><span class="plane-edge"></span><span class="plane-index">01 / IDEA</span><div class="seed-grid">${[0,1,2,3,4,5,6,7,8].map(i=>`<i class="seed-cell seed-${i}"></i>`).join('')}</div><span class="plane-corner"></span></div>
+        <div class="craft-plane plane-image"><span class="plane-edge"></span><span class="plane-index">02 / FORM</span><div class="form-mark">${icon('mark')}</div><span class="plane-corner"></span></div>
+        <div class="craft-plane plane-sprite"><span class="plane-edge"></span><span class="plane-index">03 / PIXEL</span><div class="pixel-mark">${[0,1,2,3,4,5,6,7,8].map(i=>`<i class="pixel-cell pixel-${i}"></i>`).join('')}</div><span class="plane-corner"></span></div>
+      </div></div>
+      <a class="craft-callout callout-mechanics" href="#providers" data-craft-part="mechanics"><span class="callout-number">01</span><span>Идея<small>Механика предмета</small></span>${icon('arrow')}</a>
+      <a class="craft-callout callout-image" href="#images" data-craft-part="image"><span class="callout-number">02</span><span>Образ<small>Визуальный характер</small></span>${icon('arrow')}</a>
+      <a class="craft-callout callout-sprite" href="#sprites" data-craft-part="sprite"><span class="callout-number">03</span><span>Пиксель<small>Силуэт для Terraria</small></span>${icon('arrow')}</a>
+      <div class="stage-bottomline"><span>От замысла — к предмету<span class="stage-arrow" aria-hidden="true">↗</span></span><button id="craft-explode" class="craft-toggle" type="button" data-craft-toggle aria-pressed="false">${icon('expand')}<span data-craft-label>Разобрать</span></button></div>
+    </section>`;
+  }
   function renderOperate() {
     if (!state.remote || state.page !== 'operate') return;
     const home = state.remote.home || {}, provider = providerSummary(), image = imageSummary(), next = nextStep();
@@ -417,18 +433,28 @@
     if (state.operateSignature === signature && $('.station')) {updateActionButtons();return;}
     state.operateSignature = signature;
     const focused = document.activeElement;
-    const focusIdentity = focused?.closest('#workspace') ? ['data-action','data-ui','href'].map(name => [name,focused.getAttribute(name)]).find(([,val]) => val) : null;
-    $('#workspace').innerHTML = `${heading('operate')}
-      <div class="operate-grid"><section class="station" data-state="${stationState}" aria-labelledby="generator-title"><div class="station-top"><div class="station-header"><span class="station-icon">${icon('work')}</span><span class="serial">Состояние генератора</span></div><span class="state-tag"><span class="status-dot"></span>${tag}</span></div><div class="station-mark" aria-hidden="true">${icon('mark')}</div><div class="station-content"><h2 id="generator-title">${esc(title)}</h2><p class="station-detail">${esc(detail)}</p><div class="endpoint">${icon('network')}<span>Сохранено: ${esc(state.remote.savedValues?.INFINI_HOST || '127.0.0.1')}:${esc(state.remote.savedValues?.INFINI_PORT || '5055')}</span></div></div><div class="station-controls"><div class="station-buttons"><button class="button button-primary" data-action="start">${icon('play')}${running ? 'Перезапустить безопасно':'Запустить генератор'}</button><button class="button" data-action="health" aria-label="Проверить сохранённый или запущенный генератор">${icon('refresh')}Проверить</button><button class="button button-small" data-ui="stop" title="Безопасно остановить генератор">${icon('stop')}Стоп</button></div><p class="station-caption">Запуск сохраняет настройки. Проверка использует сохранённый адрес или сервер, запущенный этой студией. Новые адреса сначала сохрани.</p></div></section>
-      <section class="pipeline" aria-labelledby="pipeline-title"><div class="section-heading"><h2 id="pipeline-title">Выбранные источники</h2><span class="meta">${state.dirty.size ? 'Черновик':'Конфигурация'}</span></div><ol class="pipeline-list">${[
-        ['01','Идея и механика',provider.name,provider.detail,'providers','text'],
-        ['02','Изображение',image.name,image.detail,'images','image'],
-        ['03','Готовый спрайт',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Без обработки':value('INFINI_BG_COLOR') === 'transparent' ? 'Прозрачный фон':'Чистый фон',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Изображения выключены':`${value('INFINI_SPRITE_DOWNSCALE_FILTER','box').toUpperCase()} / ${value('INFINI_PIXEL_POSTERIZE') === '1' ? `${value('INFINI_MAX_COLORS')} цвета`:'свободная палитра'}`,'sprites','pixel']
-      ].map(([number,title,name,detail,route,glyph]) => `<li><a class="pipeline-step" href="#${route}"><span class="step-number"><span class="sr-only">Шаг ${number}</span><span class="step-icon">${icon(glyph)}</span></span><div><div class="step-title">${title}</div><div class="step-name">${esc(name)}</div><div class="step-desc">${esc(detail)}</div></div><span class="step-arrow">${icon('arrow')}</span></a></li>`).join('')}</ol><p class="pipeline-note">Настройки сборки — не подтверждение готовности моделей.</p></section></div>
-      <div class="operate-lower"><section><div class="activity-header"><h2>Последние события</h2><a class="text-button" href="#diagnostics">Открыть журнал ${icon('arrow')}</a></div><div class="activity-sheet">${homeActivity()}</div></section><section class="next-step"><div><span class="eyebrow">Следующий шаг</span><h2>${esc(next.title)}</h2><p>${esc(next.description)}</p></div>${next.route === 'help' ? `<a href="#operate" data-ui="help">${next.link}${icon('arrow')}</a>` : `<a href="#${next.route}">${next.link}${icon('arrow')}</a>`}</section></div>
+    const focusIdentity = focused?.closest('#workspace') ? ['id','data-action','data-ui','href'].map(name => [name,focused.getAttribute(name)]).find(([,val]) => val) : null;
+    const stage = $('.craft-stage');
+    const content = document.createElement('template');
+    content.innerHTML = `${heading('operate')}
+      <div class="operate-grid">${craftStage()}<section class="station" data-state="${stationState}" aria-labelledby="generator-title">
+        <div class="station-top"><div class="station-header"><span class="serial">Пульт генератора</span></div><span class="state-tag"><span class="status-dot"></span>${tag}</span></div>
+        <div class="station-content"><span class="station-emblem" aria-hidden="true">${icon('mark')}</span><h2 id="generator-title">${esc(title)}</h2><p class="station-detail">${esc(detail)}</p><div class="endpoint">${icon('network')}<span>${esc(state.remote.savedValues?.INFINI_HOST || '127.0.0.1')}:${esc(state.remote.savedValues?.INFINI_PORT || '5055')}</span><small>сохранённый адрес</small></div></div>
+        <div class="station-controls"><div class="station-buttons"><button class="button button-primary" data-action="start">${icon('play')}${running ? 'Перезапустить безопасно':'Запустить генератор'}<span class="start-arrow" aria-hidden="true">↗</span></button><button class="button" data-action="health" aria-label="Проверить сохранённый или запущенный генератор">${icon('refresh')}Проверить</button><button class="button button-small" data-ui="stop" title="Безопасно остановить генератор">${icon('stop')}Стоп</button></div><p class="station-caption">Запуск сохранит настройки.<br>Предметы создаются в Terraria.</p></div>
+      </section>
+      <section class="pipeline" aria-labelledby="pipeline-title"><div class="section-heading"><h2 id="pipeline-title">Материалы крафта<span class="section-rule"></span></h2><span class="meta">Выбранные источники <span class="meta-divider">/</span> ${state.dirty.size ? 'Черновик':'Конфигурация'}</span></div><ol class="pipeline-list">${[
+        ['01','Идея и механика',provider.name,provider.detail,'providers','text','mechanics'],
+        ['02','Изображение',image.name,image.detail,'images','image','image'],
+        ['03','Готовый спрайт',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Без обработки':value('INFINI_BG_COLOR') === 'transparent' ? 'Прозрачный фон':'Чистый фон',value('INFINI_IMAGE_BACKEND') === 'off' ? 'Изображения выключены':`${value('INFINI_SPRITE_DOWNSCALE_FILTER','box').toUpperCase()} / ${value('INFINI_PIXEL_POSTERIZE') === '1' ? `${value('INFINI_MAX_COLORS')} цвета`:'свободная палитра'}`,'sprites','pixel','sprite']
+      ].map(([number,title,name,detail,route,glyph,part]) => `<li><a class="pipeline-step" href="#${route}" data-craft-part="${part}"><span class="step-number"><span class="step-index" aria-hidden="true">${number}</span><span class="sr-only">Шаг ${number}</span><span class="step-icon">${icon(glyph)}</span></span><div><div class="step-title">${title}</div><div class="step-name">${esc(name)}</div><div class="step-desc">${esc(detail)}</div></div><span class="step-arrow">${icon('arrow')}</span></a></li>`).join('')}</ol><p class="pipeline-note">Выбранная конфигурация. Готовность моделей проверяется отдельно.</p></section></div>
+      <div class="operate-lower"><section><div class="activity-header"><h2>Последние события</h2><a class="text-button" href="#diagnostics">Открыть журнал ${icon('arrow')}</a></div><div class="activity-sheet">${homeActivity()}</div></section><section class="next-step"><div><span class="eyebrow">Дальше <span aria-hidden="true">↗</span></span><h2>${esc(next.title)}</h2><p>${esc(next.description)}</p></div>${next.route === 'help' ? `<a href="#operate" data-ui="help">${next.link}${icon('arrow')}</a>` : `<a href="#${next.route}">${next.link}${icon('arrow')}</a>`}</section></div>
       <div class="config-strip">${icon('sliders')}<p>${esc(config)}</p></div>`;
+    // Keep the interactive sculpture as a stable island across status snapshots.
+    if (stage) content.content.querySelector('.craft-stage').replaceWith(stage);
+    $('#workspace').replaceChildren(content.content);
     updateActionButtons();
-    if (focusIdentity) $$('[data-action],[data-ui],a', $('#workspace')).find(element => element.getAttribute(focusIdentity[0]) === focusIdentity[1])?.focus({preventScroll:true});
+    document.dispatchEvent(new Event('studio:render'));
+    if (focusIdentity) $$('[data-action],[data-ui],a,[data-craft-toggle],[data-motion-toggle]', $('#workspace')).find(element => element.getAttribute(focusIdentity[0]) === focusIdentity[1])?.focus({preventScroll:true});
   }
   function browseType(field) {
     if (field.key === 'INFINI_SDCPP_LORA_FILE') return 'lora';
@@ -592,6 +618,7 @@
     const workspace = $('#workspace');
     workspace.classList.remove('route-enter');
     state.page = routes[target] ? target : 'operate'; state.filter = '';
+    document.body.dataset.page = state.page;
     $$('.nav-link').forEach(link => {link.classList.toggle('active',link.dataset.route === state.page); if (link.dataset.route === state.page) link.setAttribute('aria-current','page'); else link.removeAttribute('aria-current');});
     $('#crumb').textContent = routes[state.page][0];document.title = `${routes[state.page][0]} — Infinicraft`;
     const fromMenu = $('.rail').classList.contains('is-open');
@@ -604,6 +631,7 @@
     if (animateRoute && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       void workspace.offsetWidth;
       workspace.classList.add('route-enter');
+      document.dispatchEvent(new Event('studio:route'));
     }
   }
   function matches(field,query) {

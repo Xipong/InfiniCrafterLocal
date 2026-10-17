@@ -17,42 +17,45 @@ server. All user-facing launchers open the same browser interface.
 
 ## Presentation
 
-The present Atelier palette (ivory, charcoal-olive, lime) is not a compatibility
-contract. Studio is a generator control panel: status comes from the controller,
-while source choices may reflect an unsaved browser draft. Do not invent model
-readiness, generated items, progress, metrics, or ETA.
+Kinetic Atelier is a light paper, olive, and lime workspace. The operating screen
+pairs a spatial craft diagram with a separate generator control panel. The diagram
+explains the three configuration surfaces (mechanics, image, and sprite); it is
+not a generated item or a progress display. Controller state remains authoritative.
+Source summaries can reflect the current unsaved browser draft.
 
-`studio.css` owns color, type, spacing, radius, and motion tokens. A redesign may
-change them and the corresponding presentation assertions.
-Manrope and the SVG symbols are served locally. There is no frontend build step,
-CDN, animation dependency, or additional persisted UI state.
+`studio.css` owns type, spacing, color, layout, and motion tokens. `studio-motion.js`
+owns presentation interactions; `studio.js` owns routes, drafts, commands, and
+receipts. Manrope, Cormorant, and the SVG symbols are served locally. There is no
+frontend build step, CDN, animation dependency, or additional persisted UI state.
 
 | Surface | Behavior |
 | --- | --- |
-| Primary action / active navigation | Visually distinct, accessible hierarchy; exact colors belong to the current design, not the contract |
-| Generator state | Explicit `data-state` derived from the existing home state |
-| Settings | Shared labeled controls; advanced and inactive values remain accessible |
-| Narrow viewport | Drawer at 720px; stacked fields; independently scrollable trace tabs |
-| Pointer route change | One 160ms opacity / 4px transition on the persistent workspace |
-| Dialog, save tray, toast | Short CSS entry transitions, with immediate dismissal |
-| Pending action | Busy feedback retains its element across snapshot polling |
+| Craft diagram | Fine-pointer parallax, layered assembly/explosion, and source-specific hover/focus emphasis |
+| Diagram links | The three layers and source summaries open the existing settings routes |
+| Generator state | Explicit `data-state` derived from the existing home snapshot |
+| Navigation | The selected rail marker travels on pointer navigation; keyboard changes are immediate |
+| Pointer route change | A short horizontal reveal of the persistent workspace, triggered only by navigation |
+| Settings | Existing labeled controls, advanced fields, drafts, and save receipts |
+| Narrow viewport | Drawer at 720px, stacked sources, and a compact craft diagram |
+| Pending action | Existing busy feedback and receipts remain authoritative |
 | Input, keyboard navigation, search, polling | No page entrance animation |
-| Reduced motion | Immediate changes; static loading and search-location feedback |
+| Motion pause | An in-memory control pauses decoration and makes state changes immediate |
+| Reduced motion | System preference wins, including live changes; layered states remain operable without animation |
 
-Route motion is triggered by an actual pointer navigation and cleared on keyboard
-input, completion, or the next navigation. Do not attach entrance animations to
-the settings renderer: polling and draft-dependent controls can rebuild it while
-a person is typing. Keep the mobile drawer's CSS breakpoint aligned with
-`setMenu()` and the resize handler, including focus trapping and inert content.
-Document scroll padding reserves room for the fixed save tray before the first
-edit reveals it, keeping native focus scrolling above the tray.
+The craft stage is retained across home snapshot renders, and pointer interpolation
+stops when settled, offscreen, hidden, or paused. Keyboard focus has priority over
+an idle hovered source. The object is decorative and hidden from the accessibility
+tree; its controls are ordinary buttons and route links.
 
-Design guidance was reviewed from
-[Anthropic frontend-design](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md),
-[Impeccable's product UI guidance](https://github.com/pbakaus/impeccable/blob/main/skill/reference/operate.md),
-and [Emil Kowalski's animation guidance](https://github.com/emilkowalski/skills/blob/main/skills/animate/SKILL.md).
-These are references, not vendored skills or runtime dependencies. Existing font
-licenses remain in `assets/`.
+Do not attach route entrance animations to the settings renderer: polling and
+draft-dependent controls can rebuild it while a person is typing. Keep the mobile
+drawer's CSS breakpoint aligned with `setMenu()` and the resize handler, including
+focus trapping and inert content. Document scroll padding reserves space for the
+fixed save tray before the first edit reveals it.
+
+The palette is a presentation decision, not a compatibility contract. Visual
+iterations should be reviewed in the browser before updating assertions that
+encode the accepted appearance. Existing font licenses remain in `assets/`.
 
 ## Verification
 
@@ -64,8 +67,8 @@ For controller/browser integration, provide Playwright and Chromium. `INFINI_TES
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py LocalGenerator/tests/test_web_studio_workflows_browser.py
 
-The workflow tests include exact Atelier colors; update those assertions if the
-design changes. Their behavioral coverage includes keyboard search and focus,
+The workflow tests still include the previous exact Atelier colors. Update those
+presentation assertions after the new visual direction is approved. Their behavioral coverage includes keyboard search and focus,
 route motion, dirty-state navigation and diagnostic tabs. Review the changed UI
 in the browser, then run affected tests. Fixtures do not prove provider readiness
 or visual quality.
