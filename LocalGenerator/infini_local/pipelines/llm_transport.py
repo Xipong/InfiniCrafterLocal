@@ -1765,6 +1765,8 @@ def _usage_fields(result: dict[str, Any]) -> dict[str, Any]:
 
     cached = counter("cached_tokens")
     output_details = usage.get("output_tokens_details")
+    if not isinstance(output_details, dict):
+        output_details = usage.get("completion_tokens_details")
     reasoning = output_details.get("reasoning_tokens") if isinstance(output_details, dict) else None
     attribution = usage.get("attribution")
     request_fields = attribution.get("request_fields") if isinstance(attribution, dict) else None
@@ -1774,9 +1776,13 @@ def _usage_fields(result: dict[str, Any]) -> dict[str, Any]:
         value = instructions.get(name) if isinstance(instructions, dict) else None
         return value if type(value) is int and value >= 0 else None
 
+    def total_counter(primary: str, alternate: str) -> int | None:
+        value = usage.get(primary) if primary in usage else usage.get(alternate)
+        return value if type(value) is int and value >= 0 else None
+
     return {
-        "inputTokens": int(usage.get("input_tokens") or usage.get("prompt_tokens") or 0),
-        "outputTokens": int(usage.get("output_tokens") or usage.get("completion_tokens") or 0),
+        "inputTokens": total_counter("input_tokens", "prompt_tokens"),
+        "outputTokens": total_counter("output_tokens", "completion_tokens"),
         "cachedInputTokens": cached,
         "cacheWriteTokens": counter("cache_write_tokens"),
         "cacheHit": (cached > 0) if cached is not None else None,

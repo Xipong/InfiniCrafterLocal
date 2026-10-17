@@ -271,6 +271,81 @@ def test_usage_distinguishes_missing_zero_and_real_cache_hit(usage, cached, hit,
     assert result["cacheWriteTokens"] == write
 
 
+@pytest.mark.parametrize("details,expected", [
+    pytest.param({"completion_tokens_details": {"reasoning_tokens": 66}}, 66, id="chat-reasoning"),
+    pytest.param({"completion_tokens_details": {"reasoning_tokens": 0}}, 0, id="chat-explicit-zero"),
+    pytest.param({"output_tokens_details": {"reasoning_tokens": 100}}, 100, id="responses-reasoning"),
+    pytest.param({}, None, id="missing-is-unknown"),
+    pytest.param({"completion_tokens_details": {"reasoning_tokens": True}}, None, id="bool-not-counter"),
+    pytest.param({"output_tokens_details": {"reasoning_tokens": 0},
+                  "completion_tokens_details": {"reasoning_tokens": 66}}, 0, id="responses-zero-wins"),
+    pytest.param({"output_tokens_details": {"reasoning_tokens": -1},
+                  "completion_tokens_details": {"reasoning_tokens": 66}}, None, id="invalid-primary-not-replaced"),
+])
+def test_usage_reasoning_reads_chat_and_responses_without_rewriting_usage(details, expected):
+    response = {"usage": {"prompt_tokens": 120, "completion_tokens": 6,
+                          "prompt_tokens_details": {"cached_tokens": 0}, **details}}
+    before = copy.deepcopy(response)
+    diagnostic = llm._usage_fields(response)
+    assert diagnostic["reasoningTokens"] == expected
+    assert diagnostic["cachedInputTokens"] == 0 and diagnostic["cacheHit"] is False
+    assert response == before
+
+
+@pytest.mark.parametrize("usage,input_tokens,output_tokens", [
+    pytest.param({}, None, None, id="absent-not-free"),
+    pytest.param(None, None, None, id="null-usage"),
+    pytest.param([], None, None, id="nonobject-usage"),
+    pytest.param({"input_tokens": 0, "prompt_tokens": 12, "output_tokens": 0,
+                  "completion_tokens": 6}, 0, 0, id="explicit-zero-preserved"),
+    pytest.param({"prompt_tokens": 12, "completion_tokens": 6}, 12, 6, id="chat-totals"),
+    pytest.param({"input_tokens": 20, "output_tokens": 7}, 20, 7, id="responses-totals"),
+    pytest.param({"input_tokens": True, "output_tokens": "6"}, None, None, id="malformed-not-coerced"),
+    pytest.param({"prompt_tokens": -1, "completion_tokens": 1.5}, None, None, id="invalid-domain"),
+    pytest.param({"input_tokens": None, "prompt_tokens": 12, "output_tokens": {},
+                  "completion_tokens": 6}, None, None, id="invalid-primary-not-replaced"),
+])
+def test_usage_totals_preserve_zero_missing_and_invalid(usage, input_tokens, output_tokens):
+    response = {"usage": usage}
+    before = copy.deepcopy(response)
+    diagnostic = llm._usage_fields(response)
+    assert diagnostic["inputTokens"] == input_tokens
+    assert diagnostic["outputTokens"] == output_tokens
+    assert response == before
+
+
+@pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
+def test_successful_provider_reply_keeps_raw_usage_and_publishes_actual_counters(wire, api_mode):
+    usage = {"prompt_tokens": 120, "completion_tokens": 6,
+             "prompt_tokens_details": {"cached_tokens": 0},
+             "completion_tokens_details": {"reasoning_tokens": 3}}
+    reply = ({"choices": [{"message": {"content": "{}"}}]} if api_mode == "chat_completions"
+             else {"id": "usage-fixture", "status": "completed", "output_text": "{}"})
+    wire.replies.append({**reply, "usage": usage})
+    context = {"provider": "openai_compat", "base_url": "https://inference-api.nousresearch.com/v1",
+               "model": "openai/gpt-6.1-sol", "api_mode": api_mode, "api_key": "synthetic-usage-key"}
+    source = with_prompt_cache_prefix(cache_packet(), message_index=1, prefix_chars=15)
+    before = copy.deepcopy(source)
+    result = llm._llm_json_single_context(source, 1, context)
+    assert len(wire.calls) == 1
+    url, body, _headers = wire.calls[0]
+    assert url.endswith("/chat/completions" if api_mode == "chat_completions" else "/responses")
+    # Existing provider hint policy stays intact; this change only reads the reply.
+    if api_mode == "chat_completions":
+        assert body["prompt_cache_key"].startswith("infini-")
+    else:
+        assert "prompt_cache_key" not in body
+    assert "prompt_cache_options" not in body
+    assert result["usage"] == usage
+    assert result["_debug"]["reasoningTokens"] == 3
+    assert result["_debug"]["inputTokens"] == 120
+    assert result["_debug"]["outputTokens"] == 6
+    assert result["_debug"]["cachedInputTokens"] == 0
+    assert result["_debug"]["cacheHit"] is False
+    assert result["_debug"]["cacheWriteTokens"] is None
+    assert source == before
+
+
 @pytest.mark.parametrize("operation,text,expected", [
     pytest.param("parse", '```json\n{"name":"First"}\n``` trailing {"name":"Second"}', {"name": "First"}, id="fenced-first-object"),
     pytest.param("candidates", '{"a":1}{"b":2}', ['{"a":1}', '{"b":2}'], id="duplicate-objects"),

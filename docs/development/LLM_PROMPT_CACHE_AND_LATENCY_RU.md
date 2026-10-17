@@ -54,6 +54,8 @@ parity; frozen merge проверяется существующими Repair co
 
 `LLM usage`/debug: `cachedInputTokens` = сообщённый `cached_tokens`, иначе null; `cacheHit` = positive → true, explicit zero → false, missing → null; `cacheWriteTokens` = сообщённый `cache_write_tokens`, иначе null. Key/marker/readiness ≠ hit. Codex допускает nonnegative integer counters без metadata/credentials. Explicit write может быть платным. [Trace paths](../user/OPERATIONS_RU.md#запустить-перед-игрой).
 
+`inputTokens`/`outputTokens` читают соответственно Responses `input_tokens`/`output_tokens` либо Chat `prompt_tokens`/`completion_tokens`, если основной ключ отсутствует. Явный ноль сохраняется; отсутствующий, null, boolean, отрицательный и нецелочисленный счётчик даёт null, не фиктивный нулевой расход и не coercion. `reasoningTokens` читает `output_tokens_details.reasoning_tokens` либо Chat `completion_tokens_details.reasoning_tokens`, когда Responses details не объект. Исходный provider `usage`, запросы и cache-routing не меняются; это наблюдаемость ответа, не новое измерение billing/cache hit.
+
 ## Локальная производительность
 
 `json_object`/off не строят discarded provider schema eagerly; `json_schema` factory/local strict checks сохранены. Model/reasoning/budgets/stages не урезаются. Remote prefill/decode/Repairs/quota доминируют; миллисекунды Python не делают craft мгновенным.
