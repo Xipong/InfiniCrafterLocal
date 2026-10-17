@@ -54,6 +54,67 @@ def finish_catalog(server, snapshot, command, *, ok=True):
     server.publish(snapshot)
 
 
+@pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
+def test_draft_status_tracks_edits_save_receipt_and_lan_without_losing_focus(browser_studio, viewport):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    page.set_viewport_size(viewport)
+    page.goto(server.url + '#multiplayer')
+    status = page.locator('[data-draft-status]')
+    count = page.locator('[data-dirty-count]')
+    tray = page.locator('#save-tray')
+    port = page.locator('#field-INFINI_TERRARIA_PORT')
+    expect(status).to_have_text('Локальная конфигурация')
+    expect(count).to_have_text('Изменений нет')
+    expect(tray).to_be_hidden()
+    original_port = port.element_handle()
+    original_status = status.element_handle()
+
+    port.fill('7799')
+    expect(status).to_have_text('Черновик / Не сохранён')
+    expect(count).to_have_text('1 несохранённых изменений')
+    expect(tray).to_be_visible()
+    expect(port).to_be_focused()
+    port.fill('7777')
+    expect(status).to_have_text('Локальная конфигурация')
+    expect(tray).to_be_hidden()
+    port.fill('7799')
+    page.keyboard.press('Control+s')
+    command = server.commands.get(timeout=3)
+    assert command['action'] == 'save'
+    assert command['values']['INFINI_TERRARIA_PORT'] == '7799'
+    assert command['extra'] == {'lanEnabled': False, 'savedRevision': 'disk-a'}
+    expect(status).to_have_text('Черновик / Не сохранён')
+    snapshot['values'] = dict(snapshot['values'], INFINI_TERRARIA_PORT='7799')
+    snapshot['savedValues'] = dict(snapshot['values'])
+    snapshot['savedRevision'] = 'disk-saved'
+    snapshot['actionResults'] = [{'id': command['id'], 'action': 'save', 'ok': True,
+                                  'status': 'succeeded', 'savedValues': snapshot['savedValues'],
+                                  'savedRevision': 'disk-saved', 'savedLanEnabled': False}]
+    server.publish(snapshot)
+    expect(status).to_have_text('Локальная конфигурация')
+    expect(count).to_have_text('Изменений нет')
+    expect(tray).to_be_hidden()
+    expect(port).to_be_focused()
+    assert original_port.evaluate('(element) => element === document.querySelector("#field-INFINI_TERRARIA_PORT")')
+    assert original_status.evaluate('(element) => element === document.querySelector("[data-draft-status]")')
+
+    # LAN is independently dirty even when no configuration field was edited.
+    lan = page.locator('#lan-enabled')
+    lan.press('Space')
+    expect(lan).to_be_checked()
+    expect(status).to_have_text('Черновик / Не сохранён')
+    expect(count).to_have_text('1 несохранённых изменений')
+    expect(tray).to_be_visible()
+    expect(port).to_have_value('7799')
+    expect(lan).to_be_focused()
+    page.locator('.network-mode .toggle-track').click()
+    expect(lan).not_to_be_checked()
+    expect(status).to_have_text('Локальная конфигурация')
+    expect(tray).to_be_hidden()
+    assert server.commands.empty(), 'Edits, reversion and LAN changes must not submit actions'
+
+
 def test_model_refresh_restores_focus_without_stealing_newer_focus(browser_studio):
     page, server, snapshot = browser_studio
     page.goto(server.url + '#providers')
@@ -308,24 +369,50 @@ def test_mobile_keyboard_navigation_keeps_focused_fields_above_dirty_save_tray(b
     {'width': 1440, 'height': 1000},
     {'width': 390, 'height': 844},
 ])
-def test_original_atelier_palette_is_preserved(browser_studio, viewport):
-    """A UX/motion refresh must not silently replace the original light theme."""
+def test_light_theme_and_accent_follow_current_navigation(browser_studio, viewport):
+    """The light workspace uses shared tokens and a travelling route highlight."""
     page, server, _snapshot = browser_studio
     page.set_viewport_size(viewport)
     page.goto(server.url + '#operate')
     page.locator('.station').wait_for(state='visible')
-    # Palette assertions observe the final state, not an in-flight route color transition.
+    if viewport['width'] <= 720:
+        page.locator('.mobile-menu').click()
+
     expect = pytest.importorskip('playwright.sync_api').expect
-    expect(page.locator('.main-nav.active')).to_have_css('background-color', 'rgb(214, 239, 101)')
+    active = page.locator('.main-nav.active')
+    expect(active).to_have_attribute('aria-current', 'page')
+    marker = page.locator('.nav-active-marker')
+    expect(marker).to_be_visible()
+
+    def expect_route_highlight():
+        # The active link is intentionally transparent: the separate accent
+        # marker supplies its background, including after keyboard navigation.
+        page.wait_for_function('''() => {
+            const marker = document.querySelector('.nav-active-marker').getBoundingClientRect();
+            const active = document.querySelector('.nav-link.active').getBoundingClientRect();
+            return ['top', 'left', 'width', 'height'].every(key => Math.abs(marker[key] - active[key]) <= 1);
+        }''')
+
+    expect_route_highlight()
     colors = page.evaluate('''() => {
         const style = (selector, property) => getComputedStyle(document.querySelector(selector))[property];
+        const token = name => {
+            const probe = document.createElement('span');
+            probe.style.color = `var(${name})`;
+            document.body.append(probe);
+            const color = getComputedStyle(probe).color;
+            probe.remove();
+            return color;
+        };
         return {
             scheme: getComputedStyle(document.documentElement).colorScheme,
-            canvas: style('body', 'backgroundColor'),
-            ink: style('body', 'color'),
-            rail: style('.rail', 'backgroundColor'),
+            canvas: style('body', 'backgroundColor'), canvasToken: token('--canvas'),
+            ink: style('body', 'color'), inkToken: token('--text'),
+            rail: style('.rail', 'backgroundColor'), railToken: token('--rail'),
             railInk: style('.rail', 'color'),
             activeHome: style('.main-nav.active', 'backgroundColor'),
+            activeInk: style('.main-nav.active', 'color'), accentInk: token('--on-accent'),
+            marker: style('.nav-active-marker', 'backgroundColor'), accent: token('--accent'),
             station: style('.station', 'backgroundColor'),
             primary: style('.station .button-primary', 'backgroundColor'),
             documentWidth: document.documentElement.scrollWidth,
@@ -333,12 +420,19 @@ def test_original_atelier_palette_is_preserved(browser_studio, viewport):
         };
     }''')
     assert colors['scheme'] == 'light'
-    assert colors['canvas'] == 'rgb(244, 243, 235)'
-    assert colors['ink'] == 'rgb(41, 44, 37)'
-    assert colors['rail'] == 'rgb(36, 38, 34)'
-    assert colors['railInk'] == 'rgb(216, 218, 207)'
-    assert colors['activeHome'] == 'rgb(214, 239, 101)'
-    assert colors['station'] == 'rgb(238, 240, 227)'
-    assert colors['primary'] == 'rgb(214, 239, 101)'
+    assert colors['canvas'] == colors['canvasToken']
+    assert colors['ink'] == colors['railInk'] == colors['inkToken']
+    assert colors['rail'] == colors['railToken']
+    assert colors['activeHome'] == 'rgba(0, 0, 0, 0)'
+    assert colors['activeInk'] == colors['accentInk']
+    assert colors['marker'] == colors['primary'] == colors['accent']
+    assert colors['station'] not in {colors['canvas'], 'rgba(0, 0, 0, 0)'}
     assert colors['documentWidth'] <= colors['viewportWidth'] + 1
-    assert server.commands.empty(), 'Reading the theme must not run actions'
+
+    page.locator('[data-route="providers"]').press('Enter')
+    expect(page.locator('[data-route="providers"]')).to_have_attribute('aria-current', 'page')
+    expect(active).to_have_count(0)
+    if viewport['width'] <= 720:
+        page.locator('.mobile-menu').click()
+    expect_route_highlight()
+    assert server.commands.empty(), 'Reading the theme and navigating must not run actions'

@@ -279,7 +279,7 @@ public sealed class GeneratedItemRegistryService : IDisposable
     private static void SendSingleHydrationRequest(string id, bool forceAssetRetry)
     {
         if (forceAssetRetry)
-            InfiniCrafterLocalMod.AssetSync?.ResetRetryState();
+            InfiniCrafterLocalMod.AssetSync?.ResetRetryState(id);
         var packet = InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(PacketRequestGeneratedItemById);
         packet.Write(id.Length <= 96 ? id : id[..96]);
@@ -369,15 +369,31 @@ public sealed class GeneratedItemRegistryService : IDisposable
 
     private void WriteKnownDefinitionHashes(BinaryWriter writer)
     {
-        GeneratedItemData[] known = Snapshot().Take(MaxKnownDefinitionHashes).ToArray();
-        writer.Write(DefinitionHashListVersion);
-        writer.Write((ushort)known.Length);
-        foreach (GeneratedItemData data in known)
+        // Count limits alone do not fit the tML ushort ModPacket envelope:
+        // 512 valid 64-character IDs + their hashes exceed the packet budget.
+        // Preserve v1 framing and complete entries; the server sends definitions
+        // whose hashes were omitted, without dropping any stored item.
+        const int maxHashListBytes = 60 * 1024;
+        const int headerBytes = sizeof(byte) + sizeof(ushort);
+        using var entries = new MemoryStream();
+        using var entryWriter = new BinaryWriter(entries, Encoding.UTF8, leaveOpen: true);
+        ushort count = 0;
+        foreach (GeneratedItemData data in Snapshot().Take(MaxKnownDefinitionHashes))
         {
+            long start = entries.Position;
             string id = data.Id ?? "";
-            writer.Write(id.Length <= 96 ? id : id[..96]);
-            writer.Write(ComputeDefinitionHash(data));
+            entryWriter.Write(id.Length <= 96 ? id : id[..96]);
+            entryWriter.Write(ComputeDefinitionHash(data));
+            if (entries.Length + headerBytes > maxHashListBytes)
+            {
+                entries.SetLength(start);
+                break;
+            }
+            count++;
         }
+        writer.Write(DefinitionHashListVersion);
+        writer.Write(count);
+        writer.Write(entries.GetBuffer(), 0, checked((int)entries.Length));
     }
 
     private static Dictionary<string, string>? ReadKnownDefinitionHashes(BinaryReader reader)

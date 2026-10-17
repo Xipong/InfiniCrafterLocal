@@ -182,6 +182,12 @@ public sealed class GeneratedAssetSyncService : IDisposable
     {
         lock (_lock)
         {
+            // These queues refer to the previous world's definitions and peers.
+            // Keep verified files on disk, but never carry packet work into a new world.
+            _outbound.Clear();
+            _incoming.Clear();
+            _pendingPacketAssets.Clear();
+            _serverAssetRequestTicks.Clear();
             _remoteDescriptorsByItem.Clear();
             _serverDescriptorsByItem.Clear();
             _certifiedDescriptorsByFile.Clear();
@@ -314,21 +320,32 @@ public sealed class GeneratedAssetSyncService : IDisposable
                     QueueDownloads(httpBaseUrl, missing, forceRetry: forceRetry, itemId: itemId);
                 return;
             }
-            SendAssetRequest(itemId, missing);
             int now = (int)Main.GameUpdateCount;
+            bool startRequest;
             lock (_lock)
             {
+                if (_disposed) return;
+                PendingPacketAsset? active = _pendingPacketAssets.Values.FirstOrDefault(
+                    x => string.Equals(x.ItemId, itemId, StringComparison.Ordinal));
+                startRequest = active is null;
                 foreach (string file in missing)
                 {
                     string key = AssetKey(itemId, file);
+                    // Repeated draw/hydration requests must not restart the retry clock.
+                    // A newly discovered sibling joins the same item-level retry batch.
+                    if (_pendingPacketAssets.ContainsKey(key)) continue;
                     _pendingPacketAssets[key] = new PendingPacketAsset
                     {
                         ItemId = itemId,
                         FileName = file,
-                        RequestedTick = now,
+                        RequestedTick = active?.RequestedTick ?? now,
                     };
                 }
+                if (!startRequest) _duplicateSuppressedCount++;
             }
+            // Reserve pending state before Send: synchronous completion cannot recreate it.
+            // forceRetry bypasses a cached file, not an already in-flight packet request.
+            if (startRequest) SendAssetRequest(itemId, missing);
             return;
         }
 
@@ -393,6 +410,10 @@ public sealed class GeneratedAssetSyncService : IDisposable
                         descriptor.CertifiedLocal ??= old.CertifiedLocal;
             }
             _remoteDescriptorsByItem[itemId] = map;
+            foreach (string key in _pendingPacketAssets.Where(x =>
+                string.Equals(x.Value.ItemId, itemId, StringComparison.Ordinal)
+                && !map.ContainsKey(x.Value.FileName)).Select(x => x.Key).ToArray())
+                _pendingPacketAssets.Remove(key);
             foreach (string file in affectedFiles) RebindCertifiedLocalAsset(file);
         }
     }
@@ -483,6 +504,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
             return;
         lock (_lock)
         {
+            if (_disposed) return;
             if (!_outbound.TryGetValue(toClient, out ClientOutboundQueue? queue))
             {
                 queue = new ClientOutboundQueue();
@@ -555,6 +577,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         List<(int client, QueuedPacket packet)> sends = new();
         lock (_lock)
         {
+            if (_disposed) return;
             foreach ((int client, ClientOutboundQueue queue) in _outbound.ToArray())
             {
                 if (client < 0 || client >= Main.maxPlayers || !Main.player[client].active)
@@ -589,22 +612,37 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private void UpdateClientFallbacks()
     {
         int now = (int)Main.GameUpdateCount;
-        var retry = new List<PendingPacketAsset>();
+        var retry = new List<(string ItemId, string[] Files)>();
         lock (_lock)
         {
+            if (_disposed) return;
+            var missing = new List<PendingPacketAsset>();
             foreach ((string key, PendingPacketAsset pending) in _pendingPacketAssets.ToArray())
             {
-                string local = Path.Combine(CacheRoot, pending.FileName);
-                GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(pending.ItemId, pending.FileName);
-                if (IsValidCachedAsset(local, descriptor))
+                // A successful atomic commit removes pending files immediately.
+                // Avoid decoding/hashing still-in-flight PNGs on every game tick:
+                // inspect disk only when a retry deadline is reached. Keep all
+                // sibling names in the item-level batch when one becomes due.
+                if (now - pending.RequestedTick >= PacketFallbackDelayTicks)
                 {
-                    _pendingPacketAssets.Remove(key);
-                    continue;
+                    string local = Path.Combine(CacheRoot, pending.FileName);
+                    GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(pending.ItemId, pending.FileName);
+                    if (IsValidCachedAsset(local, descriptor))
+                    {
+                        _pendingPacketAssets.Remove(key);
+                        continue;
+                    }
                 }
-                if (now - pending.RequestedTick < PacketFallbackDelayTicks)
-                    continue;
-                pending.RequestedTick = now;
-                retry.Add(pending);
+                missing.Add(pending);
+            }
+            // The server cooldown is per (client, item), not per PNG. One request
+            // must carry all outstanding siblings, including newly discovered files.
+            foreach (var group in missing.GroupBy(x => x.ItemId, StringComparer.Ordinal))
+            {
+                if (group.All(x => now - x.RequestedTick < PacketFallbackDelayTicks)) continue;
+                foreach (PendingPacketAsset pending in group) pending.RequestedTick = now;
+                retry.Add((group.Key, group.Select(x => x.FileName).ToArray()));
+                _retryCount++;
             }
             foreach (string stale in _incoming.Where(x => now - x.Value.LastTick > IncomingTransferStaleTicks).Select(x => x.Key).ToArray())
                 _incoming.Remove(stale);
@@ -612,8 +650,8 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 _incoming.Remove(_incoming.OrderBy(x => x.Value.LastTick).First().Key);
         }
 
-        foreach (PendingPacketAsset pending in retry)
-            SendAssetRequest(pending.ItemId, new[] { pending.FileName });
+        foreach (var request in retry)
+            SendAssetRequest(request.ItemId, request.Files);
     }
 
     public void HandleAssetRequestPacket(BinaryReader reader, int whoAmI)
@@ -684,6 +722,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
         int now = (int)Main.GameUpdateCount;
         lock (_lock)
         {
+            if (_disposed) return false;
             foreach (string stale in _serverAssetRequestTicks
                 .Where(x => now - x.Value > ServerAssetRequestStateStaleTicks)
                 .Select(x => x.Key)
@@ -741,6 +780,11 @@ public sealed class GeneratedAssetSyncService : IDisposable
             || chunkLength <= 0
             || chunkLength > ChunkPayloadBytes)
             return;
+        // Accept exactly the framing emitted by EnqueueAssetBundle, before allocating
+        // state or treating a malformed/truncated/duplicate frame as forward progress.
+        if (chunkCount != (totalLength + ChunkPayloadBytes - 1) / ChunkPayloadBytes
+            || chunkLength != Math.Min(ChunkPayloadBytes, totalLength - chunkIndex * ChunkPayloadBytes))
+            return;
         if (InfiniCrafterLocalMod.GeneratedItems is null
             || !InfiniCrafterLocalMod.GeneratedItems.TryGet(itemId, out GeneratedItemData data)
             || IsHttpAssetTransport(data))
@@ -756,9 +800,8 @@ public sealed class GeneratedAssetSyncService : IDisposable
         byte[]? complete = null;
         lock (_lock)
         {
+            if (_disposed) return;
             int now = (int)Main.GameUpdateCount;
-            foreach (PendingPacketAsset pending in _pendingPacketAssets.Values.Where(x => string.Equals(x.ItemId, itemId, StringComparison.Ordinal)))
-                pending.RequestedTick = now;
             if (!_incoming.TryGetValue(key, out IncomingAssetTransfer? transfer)
                 || transfer.TotalLength != totalLength
                 || transfer.Chunks.Length != chunkCount)
@@ -773,11 +816,14 @@ public sealed class GeneratedAssetSyncService : IDisposable
                 };
                 _incoming[key] = transfer;
             }
-            transfer.LastTick = now;
             if (transfer.Chunks[chunkIndex] is null)
             {
+                transfer.LastTick = now;
                 transfer.Chunks[chunkIndex] = chunk;
                 transfer.ReceivedCount++;
+                foreach (PendingPacketAsset pending in _pendingPacketAssets.Values.Where(
+                    x => string.Equals(x.ItemId, itemId, StringComparison.Ordinal)))
+                    pending.RequestedTick = now;
             }
             if (transfer.ReceivedCount == transfer.Chunks.Length)
             {
@@ -921,6 +967,7 @@ public sealed class GeneratedAssetSyncService : IDisposable
     private void SendAssetRequest(string itemId, IEnumerable<string> files)
     {
         if (Main.netMode != NetmodeID.MultiplayerClient) return;
+        lock (_lock) { if (_disposed) return; }
         string[] safe = files.Select(SanitizeFileName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Take(MaxAssetFiles).ToArray();
         if (safe.Length == 0) return;
         ModPacket packet = InfiniCrafterLocalMod.Instance.GetPacket();
@@ -932,14 +979,32 @@ public sealed class GeneratedAssetSyncService : IDisposable
         packet.Send();
     }
 
-    public void ResetRetryState()
+    public void ResetRetryState(string? itemId = null)
     {
         lock (_lock)
         {
-            _knownMissing.Clear();
-            _pendingPacketAssets.Clear();
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                _knownMissing.Clear();
+                _pendingPacketAssets.Clear();
+            }
+            else
+            {
+                // Per-item forced hydration must not erase other items' native
+                // pending rosters or HTTP missing-state. Global reset commands
+                // retain their original all-items behavior.
+                string marker = "|" + itemId + "|";
+                foreach (string key in _knownMissing.Keys.Where(
+                    key => key.Contains(marker, StringComparison.Ordinal)).ToArray())
+                    _knownMissing.Remove(key);
+                foreach (string key in _pendingPacketAssets.Where(
+                    x => string.Equals(x.Value.ItemId, itemId, StringComparison.Ordinal))
+                    .Select(x => x.Key).ToArray())
+                    _pendingPacketAssets.Remove(key);
+            }
         }
-        LocalHttpQuietFailure.ClearAll();
+        if (string.IsNullOrWhiteSpace(itemId))
+            LocalHttpQuietFailure.ClearAll();
     }
 
     public GeneratedAssetSyncDebugSnapshot GetDebugSnapshot()
