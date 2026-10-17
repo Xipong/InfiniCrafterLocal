@@ -56,9 +56,9 @@ Owners: authored shape — `program_schema.py`; mechanical/event facts — `capa
 - arbitrary VM, generated C#, reflection dispatch;
 - placeholder PNG вместо обязательного asset.
 
-## Обязательный vertical slice для новой runtime capability
+## Обязательный vertical slice
 
-`registry -> provider schema/prompt -> validator -> compiler receipts -> strict wire -> C# DTO -> C# executor -> tests -> docs`.
+Для новой runtime capability: `registry -> provider schema/prompt -> validator -> compiler receipts -> strict wire -> C# DTO -> C# executor -> tests -> docs`.
 
 Рабочие команды из корня:
 
