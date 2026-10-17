@@ -74,11 +74,14 @@
     });
   }
   function value(key, fallback='') { return state.draft[key] ?? fallback; }
+  function draftStatusText() { return state.dirty.size || state.lan !== state.baselineLan ? 'Черновик / Не сохранён' : 'Локальная конфигурация'; }
   function recomputeDirty() {
     state.dirty = new Set(Object.keys(state.draft).filter(key => state.draft[key] !== (state.baseline[key] ?? '')));
     $('#save-tray').hidden = !state.dirty.size && state.lan === state.baselineLan;
     const total = state.dirty.size + Number(state.lan !== state.baselineLan);
     $('#dirty-label').textContent = `${total} ${total === 1 ? 'изменение' : total < 5 ? 'изменения' : 'изменений'} в настройках`;
+    const headingStatus=$('[data-draft-status]');
+    if(headingStatus) headingStatus.textContent=draftStatusText();
     const conflict=$('#draft-conflict');
     if(conflict) conflict.hidden=!(state.remote?.savedRevision && state.savedRevision && state.remote.savedRevision !== state.savedRevision && total);
     updateActionButtons();
@@ -366,7 +369,7 @@
   }
   function heading(page) {
     const [,,title,subtitle] = routes[page];
-    return `<div class="page-heading"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${page === 'operate' ? '' : `<div class="heading-note">${state.dirty.size ? 'Черновик / Не сохранён':'Локальная конфигурация'}<strong>${page === 'configure' ? state.fields.length : state.fields.filter(field => field.route === page).length} параметров</strong></div>`}</div>`;
+    return `<div class="page-heading"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>${page === 'operate' ? '' : `<div class="heading-note"><span data-draft-status>${draftStatusText()}</span><strong>${page === 'configure' ? state.fields.length : state.fields.filter(field => field.route === page).length} параметров</strong></div>`}</div>`;
   }
   function providerSummary() {
     const provider = value('INFINI_LLM_PROVIDER','local');
@@ -480,7 +483,7 @@
     const advanced = active.filter(field => !primary.includes(field));
     const pools = [2,3,4].map(number => advanced.filter(field => field.key.startsWith(`INFINI_LLM_POOL_${number}_`)));
     const poolKeys = pools.flat().map(field => field.key);
-    return `<div class="section-fields">${primary.map(field => fieldHTML(field)).join('')}</div>${pools.map((group,index) => disclosure(`pool-${index+2}` ,`Дополнительная линия ${index+2}`,group,'Каждая линия имеет собственный источник, адрес и модель.')).join('')}${disclosure(`${state.page}-lora`,'Художественный адаптер · LoRA',advanced.filter(field => loRAKeys.has(field.key)),'Необязательный адаптер. Файлы и настройки сохраняются при отключении.')}${disclosure(`${state.page}-advanced`,'Тонкая настройка',advanced.filter(field => !poolKeys.includes(field.key) && !loRAKeys.has(field.key)),'Параметры для ручной настройки. Все текущие значения сохраняются.')}${disclosure(`${state.page}-inactive`,'Другие источники и неактивные параметры',inactive,'Не используются выбранным источником. Доступны для редактирования; переключение не стирает значения.')}`;
+    return `<div class="section-fields">${primary.map(field => fieldHTML(field)).join('')}</div>${pools.map((group,index) => disclosure(`pool-${index+2}` ,`Дополнительная линия ${index+2}`,group,'Каждая линия имеет собственный источник, адрес и модель.')).join('')}${disclosure(`${state.page}-lora`,'Художественный адаптер · LoRA',advanced.filter(field => loRAKeys.has(field.key)),'Необязательный адаптер. Отключение сбрасывает файл, папку и теги в настройках; сам файл на диске остаётся.')}${disclosure(`${state.page}-advanced`,'Тонкая настройка',advanced.filter(field => !poolKeys.includes(field.key) && !loRAKeys.has(field.key)),'Параметры для ручной настройки. Все текущие значения сохраняются.')}${disclosure(`${state.page}-inactive`,'Другие источники и неактивные параметры',inactive,'Не используются выбранным источником. Доступны для редактирования; переключение не стирает значения.')}`;
   }
   function aside() {
     return `<aside class="settings-aside"><div class="aside-heading"><h2>${icon('save')}Сохранение</h2><kbd>Ctrl S</kbd></div><p>Изменения остаются в этой вкладке до сохранения. Для работающего генератора нужен безопасный перезапуск.</p><button class="button button-primary" data-action="save">${icon('save')}Сохранить настройки</button><button class="button" data-action="validate">${icon('check')}Проверить пути</button><a class="button" href="#operate">К рабочему столу ${icon('arrow')}</a><div class="aside-meta"><strong>Локальный файл</strong>${esc(state.remote.configPath || 'config.env')}<br><button class="text-button" data-action="openConfig">Открыть файл ${icon('arrow')}</button></div></aside>`;

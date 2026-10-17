@@ -12,13 +12,48 @@ assert(!source.includes('window.confirm('),'discard must use the in-page dialog'
 source=source.replace('  navigate();poll();',`
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
 const {state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocument}=studio;
 const key='INFINI_PROMPT_STYLE';
 const snapshot=(values={},extra={})=>({values,defaults:{},savedValues:values,fields:[],presets:{},userPresets:{},lanEnabled:false,savedLanEnabled:false,...extra});
+// Heading status follows typing, reversion, confirmed Save, and LAN-only drafts
+// without rebuilding the page or disturbing the current input and field count.
+state.page='providers';
+acceptSnapshot(snapshot({[key]:'saved'},{savedRevision:'heading-before'}));
+const headingStatus=document.querySelector('[data-draft-status]');
+headingStatus.textContent='Локальная конфигурация';
+const headingCount=studio.heading('providers').match(/<strong>([^<]+)<\/strong>/)[1];
+const input={dataset:{field:key},type:'text',tagName:'INPUT',value:'edited',
+  matches:selector=>selector === '[data-field]',closest:()=>node()};
+document.activeElement=input;
+const beforeHeadingEdit=global.renderCount;
+events.input({target:input});
+assert.equal(headingStatus.textContent,'Черновик / Не сохранён','typing marks the existing heading dirty');
+assert.equal(document.querySelector('#save-tray').hidden,false);
+input.value='saved';events.input({target:input});
+assert.equal(headingStatus.textContent,'Локальная конфигурация','reverting the field clears the existing heading');
+input.value='edited';events.input({target:input});
+state.pending={id:'heading-save',action:'save',sent:{[key]:'edited'},clock:state.editClock,lan:false};
+acceptSnapshot(snapshot({[key]:'edited'},{savedRevision:'heading-after',actionResults:[{
+  id:'heading-save',status:'succeeded',ok:true,savedValues:{[key]:'edited'},savedRevision:'heading-after',savedLanEnabled:false
+}]}));
+assert.equal(headingStatus.textContent,'Локальная конфигурация','confirmed Save clears the existing heading');
+assert.equal(document.querySelector('#save-tray').hidden,true);
+assert.equal(global.renderCount,beforeHeadingEdit,'status updates do not rebuild the current page');
+assert.equal(document.activeElement,input,'typing and Save preserve input focus');
+assert.equal(studio.heading('providers').match(/<strong>([^<]+)<\/strong>/)[1],headingCount);
+state.lan=true;recomputeDirty();
+assert.equal(state.dirty.size,0);
+assert.equal(headingStatus.textContent,'Черновик / Не сохранён','LAN alone makes the existing heading dirty');
+assert(studio.heading('multiplayer').includes('Черновик / Не сохранён'),'rendered headings also include LAN-only drafts');
+state.lan=false;recomputeDirty();
+assert.equal(headingStatus.textContent,'Локальная конфигурация');
+assert(studio.heading('configure').includes('Локальная конфигурация'));
+assert(!studio.heading('operate').includes('heading-note'));
+document.activeElement=null;state.remote=null;state.draft={};state.dirty.clear();state.edits={};
 acceptSnapshot(snapshot({[key]:'saved'}));
 state.pending={id:'own-command',action:'save',sent:{[key]:'mine'},clock:1};
 state.editClock=2;state.edits[key]=2;state.draft[key]='newer edit';recomputeDirty();
@@ -52,6 +87,9 @@ assert(!document.querySelector('#utility-body').innerHTML.includes('<script>'));
 state.draft.INFINI_VISUAL_STRICT_AI_AUTHORSHIP='1';
 state.draft.INFINI_SDCPP_LORA_FILE='C:\\models\\adapter.safetensors';
 assert.equal(studio.derivedField('INFINI_SDCPP_LORA_DIR').value,'C:\\models');
+const loraHelp=fieldGroups([{key:'INFINI_SDCPP_LORA_FILE'}]);
+assert(loraHelp.includes('Отключение сбрасывает файл, папку и теги в настройках; сам файл на диске остаётся.'),
+  'LoRA help distinguishes clearing configured paths and tags from deleting the file');
 const forced=studio.fieldHTML({key:'INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK',options:['0','1']});
 assert(forced.includes('<output '));assert(!forced.includes('data-field='));
 // A terminal result with its own notification produces one visible result.
