@@ -17,23 +17,26 @@ server. All user-facing launchers open the same browser interface.
 
 ## Presentation
 
-The refreshed Studio keeps the original Atelier theme from `main`: an ivory
-workspace, charcoal-olive rail, and lime primary actions. The generator control
-panel is still the visual anchor; the adjacent source chain shows the current
-configuration. Generator status still comes from the controller snapshot, while
-source choices may reflect the unsaved browser draft. The interface does not
+The current Studio uses an Atelier palette: an ivory workspace, charcoal-olive
+rail, and lime primary actions. This is a description of the present design,
+**not a palette or layout compatibility contract**. A redesign may change
+colors, navigation, copy, DOM and component geometry together with their
+presentation assertions. Judge it in the browser at desktop and narrow widths;
+do not protect a screenshot's incidental CSS values at the expense of the
+new design. Generator status still comes from the controller snapshot, while
+source choices may reflect the unsaved browser draft. The interface must not
 infer model readiness or invent generated items, progress, metrics, or ETA.
 
 `studio.css` owns the shared color, type, spacing, radius, and motion tokens.
-The original palette lives in its root tokens. The dark rail, save tray, and
-toasts explicitly retain light-on-dark text; lime is reserved for primary
-surfaces, while links on ivory use a contrast-safe dark olive.
+If the palette changes, keep contrast and state meaning legible across the rail,
+save tray, dialogs, toasts, links and controls; do not keep a color solely because
+a test expects it.
 Manrope and the SVG symbols are served locally. There is no frontend build step,
 CDN, animation dependency, or additional persisted UI state.
 
 | Surface | Behavior |
 | --- | --- |
-| Primary action / active navigation | Original lime on charcoal/paper; neutral secondary controls and legible olive links |
+| Primary action / active navigation | Visually distinct, accessible hierarchy; exact colors belong to the current design, not the contract |
 | Generator state | Explicit `data-state` derived from the existing home state |
 | Settings | Shared labeled controls; advanced and inactive values remain accessible |
 | Narrow viewport | Drawer at 720px; stacked fields; independently scrollable trace tabs |
@@ -68,12 +71,14 @@ For controller/browser integration, provide Playwright and Chromium. `INFINI_TES
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py LocalGenerator/tests/test_web_studio_workflows_browser.py
 
-The workflow tests include Atelier palette checks at desktop/mobile widths,
-pointer-only route motion, keyboard search and field
-focus across snapshots, reduced motion, and narrow-screen diagnostic tabs with
-long trace content. They also exercise native Tab navigation above the dirty
-save tray. Review the real frontend at desktop and 390px widths after changing
-shared styles; test fixtures are not evidence of provider readiness.
+The workflow tests currently include Atelier palette checks at desktop/mobile widths;
+update or replace those exact-color assertions when the design changes. They also cover
+pointer-only route motion, keyboard search, field focus across snapshots, reduced motion,
+narrow-screen diagnostic tabs with long trace content, and native Tab navigation above
+the dirty save tray. For a visual task, first implement a complete pass, review real
+desktop/mobile screenshots, fix obvious visual defects, then run affected
+regressions. Test fixtures are not evidence of provider readiness or aesthetic
+quality; avoid repeating unchanged backend checks as a visual gate.
 
 These tests do not establish real provider authentication, paid generation,
 Terraria gameplay, or Windows-specific filesystem behavior.

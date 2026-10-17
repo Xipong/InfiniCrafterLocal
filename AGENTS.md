@@ -4,7 +4,15 @@
 
 ## Быстрый вход по задаче
 
-Не начинай с обхода всего дерева: [симптом → entrypoint → проверка](docs/development/CODE_MAP_RU.md#fast-start). Scoped инструкции: [Python](LocalGenerator/infini_local/AGENTS.md) и [C#](ModSources/InfiniCrafterLocal/AGENTS.md). Они направляют к владельцу; правила runtime ниже остаются обязательными.
+Не начинай с обхода всего дерева: [симптом → entrypoint → проверка](docs/development/CODE_MAP_RU.md#fast-start). Scoped инструкции: [Python](LocalGenerator/infini_local/AGENTS.md) и [C#](ModSources/InfiniCrafterLocal/AGENTS.md). Они направляют к владельцу; правила runtime ниже применяются к затронутым генерационным/игровым контрактам, а не автоматически к каждому файлу Python, CSS или JS.
+
+## Область задачи и порядок работы
+
+`LocalGenerator/infini_local/desktop/webui/` — браузерная оболочка и панель управления **генератора**, не интерфейс самого мода в Terraria и не `runtimeProgram`. Не распространяй на её визуальный редизайн обязанности по gameplay vertical slice, чтению всего runtime-каталога, C# build или игровому smoke. Если UI-правка действительно меняет сохранение настроек, auth, process lifecycle, доступность конфигурации либо wire для игры — проверь соответствующий затронутый инвариант и его владельца.
+
+Для визуальной задачи: один короткий вход в текущую разметку, стили и критические интеграционные хуки → полноценная первая версия → открыть реальный Studio с изолированным конфигом → скриншоты desktop/mobile → исправить композицию, иерархию, типографику, отступы и motion → только затем адресные регрессии. Не превращай предварительную инвентаризацию тестов и многократное чтение неизменённых файлов в условие первого визуального результата. `--plan` без изменённых файлов ничего не проверяет.
+
+Тесты защищают **поведенческие инварианты**, а не навсегда закрепляют сегодняшнюю палитру, CSS-классы, тексты, DOM-структуру или пиксели. Новое решение вправе менять такие детали: синхронно обнови привязанные к ним проверки, сохрани проверку смысла или замени хрупкий хардкод на поведенческое утверждение. Не переписывай тест ради фиктивного GREEN: реальные границы auth/секретов, сохранения черновика, команд/receipt, клавиатуры и отзывчивости остаются обязательными. Визуальный PASS требует просмотра результата, а не только зелёных тестов.
 
 ## Приоритеты проекта
 
@@ -59,16 +67,16 @@ Owners: authored shape — `program_schema.py`; mechanical/event facts — `capa
 - arbitrary VM, generated C#, reflection dispatch;
 - placeholder PNG вместо обязательного asset.
 
-## Обязательный vertical slice
+## Обязательный vertical slice для новой runtime capability
 
 `registry -> provider schema/prompt -> validator -> compiler receipts -> strict wire -> C# DTO -> C# executor -> tests -> docs`.
 
 Рабочие команды из корня:
 
 ```bash
-# До правок: точный вход вместо обхода дерева; --path тоже поддерживается.
+# Для затронутого runtime: точный вход вместо обхода дерева; --path тоже поддерживается.
 python tools/agentctl.py context --task "описание задачи" --area runtime
-# Во время правок: owner-area проверки. --base включает уже закоммиченный diff ветки.
+# После правок: owner-area проверки. --base включает уже закоммиченный diff ветки.
 python tools/agentctl.py verify --changed --base origin/main --plan
 python tools/agentctl.py verify --changed --base origin/main
 # После изменения runtime contracts: существующие generators, затем offline handbook.
@@ -79,4 +87,4 @@ python tools/validate_release.py
 
 Для stacked PR укажи его реальную base branch вместо `origin/main`. Неизвестные пути требуют полной проверки; пустая выборка не считается PASS. Iteration не объявляет `releaseReady`. Команды, группы CI и refresh — один `.agent/manifest.json`; bounded owner-area выбор — `.agent/impact_rules.json`. Подробнее: [TESTING](docs/development/TESTING_RU.md).
 
-Если доступны .NET 8, stable tModLoader и `ParticleLibrary.dll`/`Luminance.dll`, также выполнить C# build и игровые smoke. Отсутствие среды записывается как `notRun`, а не как успех.
+Для затронутого C# при доступной среде выполнить соответствующий build; игровой smoke — только при отдельном разрешении на запуск игры. Отсутствие среды записывается как `notRun`, а не как успех. Изменение только браузерной Studio не требует C# build или запуска Terraria.

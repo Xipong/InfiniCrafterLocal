@@ -2,6 +2,8 @@
 
 Новый regression сначала относится к **наблюдаемому инварианту**, а не к номеру релиза. Вариант существующего контракта добавляется в named table/corpus, не в отдельный bug-specific файл. Владельцы production-кода — в [карте задач](OWNERS_RU.md); правила изменения runtime — в [AGENTS.md](../../AGENTS.md).
 
+Особенно для браузерной Studio отличай интерфейсный факт от инварианта: точный RGB, CSS-класс, русская подпись или расположение блока могут быть тестовым снимком прежнего дизайна. При согласованном редизайне обновляй такой тест вместе с реализацией либо проверяй вместо него семантику (состояние, доступность, контраст, навигацию). Не ослабляй при этом security, конфигурационные receipts, сохранение черновика и управление процессом. Studio — оболочка генератора, а не игровой tModLoader runtime: для чистого изменения представления не нужен игровой vertical slice.
+
 ## Где проверять
 
 Пути семейств ниже относительны [LocalGenerator/tests](../../LocalGenerator/tests).
@@ -31,6 +33,7 @@
 
 - Проверяй вход → результат через настоящего владельца: compiler/validator/Repair, serialized provider request, asset bytes или native C# entry point. Обычный и невалидный пример важнее десятков одинаковых комбинаций.
 - Не фиксируй private method names, порядок строк, количество guards или точные куски реализации. При внутреннем refactor поведение должно остаться GREEN без восстановления старых wrappers.
+- Для визуальной Studio сначала смотри на полноценную реализацию в браузере (desktop/mobile), затем запускай затронутые browser-тесты. Не перечисляй все backend-поля/селекторы и не повторяй неизменённые проверки перед первым экраном. Падение на старом цвете или буквальном тексте — повод оценить, обязателен ли инвариант, а не автоматически вернуть старый дизайн.
 - Source tests нужны лишь для настоящих source-language policies (warning suppression, запрещённые gameplay routers, authored-field ownership) и регистрации runner. `test_source_audit_gates.py` проверяет lint API на маленьких synthetic inputs; scanner не доказывает runtime correctness.
 - Frozen Repair, authority/security, literal wire identity и material claims остаются поведенческими контрактами. Native suite проверяет крафт, отмену, возврат/capacity, world persistence, asset lifecycle и representative invalid inputs через actual consumers. Exhaustive DTO/shape products, частные UI/storage observers и creative pixel/curve микропроверки сознательно убраны; чтение `.cs` в Python не заменяет runtime behavior.
 - Удаляй низкоценные повторные проверки, не прячь их за skip/xfail, общим циклом или переименованным helper. Не обещай сохранение всех прежних assertions: узкое честное покрытие лучше дублирующего scanner framework.
