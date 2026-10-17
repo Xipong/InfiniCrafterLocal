@@ -17,20 +17,13 @@ server. All user-facing launchers open the same browser interface.
 
 ## Presentation
 
-The current Studio uses an Atelier palette: an ivory workspace, charcoal-olive
-rail, and lime primary actions. This is a description of the present design,
-**not a palette or layout compatibility contract**. A redesign may change
-colors, navigation, copy, DOM and component geometry together with their
-presentation assertions. Judge it in the browser at desktop and narrow widths;
-do not protect a screenshot's incidental CSS values at the expense of the
-new design. Generator status still comes from the controller snapshot, while
-source choices may reflect the unsaved browser draft. The interface must not
-infer model readiness or invent generated items, progress, metrics, or ETA.
+The present Atelier palette (ivory, charcoal-olive, lime) is not a compatibility
+contract. Studio is a generator control panel: status comes from the controller,
+while source choices may reflect an unsaved browser draft. Do not invent model
+readiness, generated items, progress, metrics, or ETA.
 
-`studio.css` owns the shared color, type, spacing, radius, and motion tokens.
-If the palette changes, keep contrast and state meaning legible across the rail,
-save tray, dialogs, toasts, links and controls; do not keep a color solely because
-a test expects it.
+`studio.css` owns color, type, spacing, radius, and motion tokens. A redesign may
+change them and the corresponding presentation assertions.
 Manrope and the SVG symbols are served locally. There is no frontend build step,
 CDN, animation dependency, or additional persisted UI state.
 
@@ -71,14 +64,11 @@ For controller/browser integration, provide Playwright and Chromium. `INFINI_TES
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py LocalGenerator/tests/test_web_studio_workflows_browser.py
 
-The workflow tests currently include Atelier palette checks at desktop/mobile widths;
-update or replace those exact-color assertions when the design changes. They also cover
-pointer-only route motion, keyboard search, field focus across snapshots, reduced motion,
-narrow-screen diagnostic tabs with long trace content, and native Tab navigation above
-the dirty save tray. For a visual task, first implement a complete pass, review real
-desktop/mobile screenshots, fix obvious visual defects, then run affected
-regressions. Test fixtures are not evidence of provider readiness or aesthetic
-quality; avoid repeating unchanged backend checks as a visual gate.
+The workflow tests include exact Atelier colors; update those assertions if the
+design changes. Their behavioral coverage includes keyboard search and focus,
+route motion, dirty-state navigation and diagnostic tabs. Review the changed UI
+in the browser, then run affected tests. Fixtures do not prove provider readiness
+or visual quality.
 
 These tests do not establish real provider authentication, paid generation,
 Terraria gameplay, or Windows-specific filesystem behavior.
