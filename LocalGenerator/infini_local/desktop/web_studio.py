@@ -27,7 +27,8 @@ ACTIONS = frozenset({
     'forceRestart', 'cancelTrace', 'codexLogout', 'acceptDefaults', 'declineDefaults',
 })
 STATIC_FILES = {'/studio.css': ('studio.css', 'text/css; charset=utf-8'),
-                '/studio.js': ('studio.js', 'text/javascript; charset=utf-8')}
+                '/studio.js': ('studio.js', 'text/javascript; charset=utf-8'),
+                '/studio-motion.js': ('studio-motion.js', 'text/javascript; charset=utf-8')}
 
 
 class StudioServer:

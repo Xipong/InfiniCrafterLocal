@@ -17,46 +17,57 @@ server. All user-facing launchers open the same browser interface.
 
 ## Presentation
 
-The present Atelier palette (ivory, charcoal-olive, lime) is not a compatibility
-contract. Studio is a generator control panel: status comes from the controller,
-while source choices may reflect an unsaved browser draft. Do not invent model
-readiness, generated items, progress, metrics, or ETA.
+The light paper, olive, and lime interface has eight content-focused routes:
 
-`studio.css` owns color, type, spacing, radius, and motion tokens. A redesign may
-change them and the corresponding presentation assertions.
-Manrope and the SVG symbols are served locally. There is no frontend build step,
-CDN, animation dependency, or additional persisted UI state.
-
-| Surface | Behavior |
+| Route | Contents |
 | --- | --- |
-| Primary action / active navigation | Visually distinct, accessible hierarchy; exact colors belong to the current design, not the contract |
-| Generator state | Explicit `data-state` derived from the existing home state |
-| Settings | Shared labeled controls; advanced and inactive values remain accessible |
-| Narrow viewport | Drawer at 720px; stacked fields; independently scrollable trace tabs |
-| Pointer route change | One 160ms opacity / 4px transition on the persistent workspace |
-| Dialog, save tray, toast | Short CSS entry transitions, with immediate dismissal |
-| Pending action | Busy feedback retains its element across snapshot polling |
-| Input, keyboard navigation, search, polling | No page entrance animation |
-| Reduced motion | Immediate changes; static loading and search-location feedback |
+| `operate` | Generator state and controls; selected text model, image backend, and sprite processing |
+| `configure` | Profiles, current configuration summaries, recommendations, and the complete field list |
+| `providers` | Text provider, model, account, and request settings |
+| `images` | Selected image backend and its generation settings |
+| `sprites` | Transparency, resizing, and palette settings |
+| `models` | sd.cpp program, local weights, and LoRA |
+| `multiplayer` | Generator address, Terraria connection, and sprite delivery |
+| `diagnostics` | Last health snapshot, trace source, logs, and saved failure details |
 
-Route motion is triggered by an actual pointer navigation and cleared on keyboard
-input, completion, or the next navigation. Do not attach entrance animations to
-the settings renderer: polling and draft-dependent controls can rebuild it while
-a person is typing. Keep the mobile drawer's CSS breakpoint aligned with
-`setMenu()` and the resize handler, including focus trapping and inert content.
-Document scroll padding reserves room for the fixed save tray before the first
-edit reveals it, keeping native focus scrolling above the tray.
+Settings pages combine live summaries of the current per-tab draft with relevant
+field groups. Disabled and externally managed settings retain their meaning.
+Controller snapshots and command receipts remain authoritative; selecting a model
+does not establish provider readiness. Existing field keys, IDs, `data-action`,
+`data-ui`, diagnostic tabs, and keyboard/focus contracts are retained.
 
-Design guidance was reviewed from
-[Anthropic frontend-design](https://github.com/anthropics/skills/blob/main/skills/frontend-design/SKILL.md),
-[Impeccable's product UI guidance](https://github.com/pbakaus/impeccable/blob/main/skill/reference/operate.md),
-and [Emil Kowalski's animation guidance](https://github.com/emilkowalski/skills/blob/main/skills/animate/SKILL.md).
-These are references, not vendored skills or runtime dependencies. Existing font
-licenses remain in `assets/`.
+`studio.css` owns type, spacing, color, layout, and motion tokens. `studio-motion.js`
+owns presentation interactions; `studio.js` owns routes, drafts, commands, and
+receipts. Manrope, Cormorant, and the SVG symbols are served locally. There is no
+frontend build step, CDN, animation dependency, or additional persisted UI state.
+
+`[data-flow-card]` links use a local fine-pointer highlight driven by normalized
+`--pointer-x` / `--pointer-y` and `data-pointer-active`. Interpolation stops when
+settled; leaving, keyboard input, offscreen cards, and hidden tabs clear it. There
+are no idle animation loops. The navigation marker travels on pointer activation;
+keyboard selection is immediate. Route reveals run only on pointer navigation,
+not typing, draft-summary updates, or polling. `prefers-reduced-motion` applies
+immediately, including live preference changes.
+
+Diagnostics use guarded JSON inspectors only for sd.cpp and saved failures. HTTP
+reachability requires an explicit probe; managed-process state and `autostart`
+are separate readouts. Known empty failure snapshots show no saved error.
+Full JSON remains in a disclosure, whose open state survives unchanged polling;
+unsupported content falls back to raw text. Trace source/status stays visible
+outside the inspector. No progress percentage is inferred from logs.
+
+Keep the mobile drawer's 720px breakpoint aligned with `setMenu()` and the resize
+handler, including focus trapping and inert content. Existing font licenses remain
+in `assets/`.
 
 ## Verification
 
-Regression entry points:
+The current visual iteration is **under review, not approved**. Mass regression
+suites have not been run for this iteration. Palette and appearance assertions
+must follow the reviewed design while retaining behavioral and DOM-contract
+coverage; update those assertions after visual approval.
+
+Regression entry points, to run after browser review:
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio_interactions.py LocalGenerator/tests/test_web_studio_state.py
 
@@ -64,11 +75,7 @@ For controller/browser integration, provide Playwright and Chromium. `INFINI_TES
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py LocalGenerator/tests/test_web_studio_workflows_browser.py
 
-The workflow tests include exact Atelier colors; update those assertions if the
-design changes. Their behavioral coverage includes keyboard search and focus,
-route motion, dirty-state navigation and diagnostic tabs. Review the changed UI
-in the browser, then run affected tests. Fixtures do not prove provider readiness
-or visual quality.
-
-These tests do not establish real provider authentication, paid generation,
-Terraria gameplay, or Windows-specific filesystem behavior.
+Behavioral coverage includes keyboard search and focus, route motion, dirty-state
+navigation, and diagnostic tabs. Fixtures do not establish visual quality, real
+provider authentication, paid generation, Terraria gameplay, or Windows-specific
+filesystem behavior.
