@@ -9,6 +9,6 @@
 - Чтение уже принятого wire для presentation: `core/runtime_authoring/wire_views.py`. Не вызывай compiler для чтения сохранённой вещи.
 - Runtime факты/shape/lowering: импортируй прямо defining module. `runtime_authoring/__init__.py` не реэкспортирует API и не запускает другие owners. Общий JSON helper не должен требовать импорта другой LLM-стадии.
 - Image attempts/delivery: `pipelines/visual_sprite_generation.py` / `visual_delivery_gate.py`; world recipe persistence: `storage/world_storage.py`.
-- Browser Studio: `desktop/webui/{index.html,studio.css,studio.js}` — presentation и взаимодействия; `desktop/web_studio.py` — HTTP/session bridge; `desktop/settings_controller.py` и `desktop/studio_operations.py` — состояние и жизненный цикл генератора. Визуальный редизайн начинай с браузерного экрана и скриншота, не с анализа игровых wire-контрактов. Если изменён только вид, не требуй проверки всех полей/провайдеров до первой версии; перед завершением проверь затронутые взаимодействия.
+- Browser Studio: `desktop/webui/{index.html,studio.css,studio.js}` — представление; `desktop/web_studio.py` — HTTP bridge; `desktop/settings_controller.py` и `desktop/studio_operations.py` — состояние и запуск генератора.
 
 [Карта задач и проверок](../../docs/development/CODE_MAP_RU.md#fast-start) · [границы модулей](../../docs/development/MODULES_RU.md) · [tests](../../docs/development/TESTING_RU.md).

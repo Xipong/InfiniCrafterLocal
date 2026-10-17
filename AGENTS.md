@@ -6,13 +6,9 @@
 
 Не начинай с обхода всего дерева: [симптом → entrypoint → проверка](docs/development/CODE_MAP_RU.md#fast-start). Scoped инструкции: [Python](LocalGenerator/infini_local/AGENTS.md) и [C#](ModSources/InfiniCrafterLocal/AGENTS.md). Они направляют к владельцу; правила runtime ниже применяются к затронутым генерационным/игровым контрактам, а не автоматически к каждому файлу Python, CSS или JS.
 
-## Область задачи и порядок работы
+## Масштаб проверки
 
-`LocalGenerator/infini_local/desktop/webui/` — браузерная оболочка и панель управления **генератора**, не интерфейс самого мода в Terraria и не `runtimeProgram`. Не распространяй на её визуальный редизайн обязанности по gameplay vertical slice, чтению всего runtime-каталога, C# build или игровому smoke. Если UI-правка действительно меняет сохранение настроек, auth, process lifecycle, доступность конфигурации либо wire для игры — проверь соответствующий затронутый инвариант и его владельца.
-
-Для визуальной задачи: один короткий вход в текущую разметку, стили и критические интеграционные хуки → полноценная первая версия → открыть реальный Studio с изолированным конфигом → скриншоты desktop/mobile → исправить композицию, иерархию, типографику, отступы и motion → только затем адресные регрессии. Не превращай предварительную инвентаризацию тестов и многократное чтение неизменённых файлов в условие первого визуального результата. `--plan` без изменённых файлов ничего не проверяет.
-
-Тесты защищают **поведенческие инварианты**, а не навсегда закрепляют сегодняшнюю палитру, CSS-классы, тексты, DOM-структуру или пиксели. Новое решение вправе менять такие детали: синхронно обнови привязанные к ним проверки, сохрани проверку смысла или замени хрупкий хардкод на поведенческое утверждение. Не переписывай тест ради фиктивного GREEN: реальные границы auth/секретов, сохранения черновика, команд/receipt, клавиатуры и отзывчивости остаются обязательными. Визуальный PASS требует просмотра результата, а не только зелёных тестов.
+Применяй правила и проверки только к затронутому владельцу и обещанному результату, а не как общий чеклист перед началом работы. Сделай рабочую версию, затем проверь реальные инварианты; не повторяй чтение и проверки неизменённого без новой причины. Тестовый хардкод оформления или реализации можно менять вместе с новым решением, сохраняя проверку существенного поведения. Пустой `verify --plan` — не подтверждение результата.
 
 ## Приоритеты проекта
 
@@ -45,16 +41,9 @@ Gameplay Author непосредственно составляет bounded `run
 
 ## Перед изменением runtime
 
-Прочитай:
+Найди затронутый owner через [CODE_MAP_RU.md](docs/development/CODE_MAP_RU.md#fast-start) и читай только соответствующие контракт, consumer и документы. Для **новой capability** используй [инструкцию по добавлению](docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) и полный vertical slice ниже; локальная правка не требует предварительного чтения всего runtime-каталога.
 
-1. `docs/reference/generated/LOWERY_RU.md` — generated canonical boundary и owner routing;
-2. `docs/development/ARCHITECTURE_RU.md` и `docs/development/CODE_MAP_RU.md`;
-3. `docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md` и generated `docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md`;
-4. `docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md`;
-5. generated `docs/reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md`;
-6. `docs/reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md`.
-
-Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts/repetition threshold — `technical_lowering.py`; model-facing prose — `author_item_contract.py`. Нельзя создавать facade/shadow contract или вручную добавлять capability только в prompt/schema/compiler/C#: требуется полный vertical slice.
+Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts — `technical_lowering.py`; model-facing prose — `author_item_contract.py`. Для новой capability нельзя создавать facade/shadow contract или вручную добавлять её лишь в один слой.
 
 ## Запрещено
 
@@ -85,6 +74,6 @@ python tools/validate_release.py --refresh runtime
 python tools/validate_release.py
 ```
 
-Для stacked PR укажи его реальную base branch вместо `origin/main`. Неизвестные пути требуют полной проверки; пустая выборка не считается PASS. Iteration не объявляет `releaseReady`. Команды, группы CI и refresh — один `.agent/manifest.json`; bounded owner-area выбор — `.agent/impact_rules.json`. Подробнее: [TESTING](docs/development/TESTING_RU.md).
+Для stacked PR укажи его реальную base branch вместо `origin/main`. Неизвестный production-путь после правки требует более широкой проверки; пустая выборка не считается PASS. Iteration не объявляет `releaseReady`. Команды, группы CI и refresh — один `.agent/manifest.json`; owner-area выбор — `.agent/impact_rules.json`. Подробнее: [TESTING](docs/development/TESTING_RU.md).
 
 Для затронутого C# при доступной среде выполнить соответствующий build; игровой smoke — только при отдельном разрешении на запуск игры. Отсутствие среды записывается как `notRun`, а не как успех. Изменение только браузерной Studio не требует C# build или запуска Terraria.
