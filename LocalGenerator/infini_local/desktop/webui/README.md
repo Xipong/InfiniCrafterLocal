@@ -17,49 +17,57 @@ server. All user-facing launchers open the same browser interface.
 
 ## Presentation
 
-Kinetic Atelier is a light paper, olive, and lime workspace. The operating screen
-pairs a spatial craft diagram with a separate generator control panel. The diagram
-explains the three configuration surfaces (mechanics, image, and sprite); it is
-not a generated item or a progress display. Controller state remains authoritative.
-Source summaries can reflect the current unsaved browser draft.
+The light paper, olive, and lime interface has eight content-focused routes:
+
+| Route | Contents |
+| --- | --- |
+| `operate` | Generator state and controls; selected text model, image backend, and sprite processing |
+| `configure` | Profiles, current configuration summaries, recommendations, and the complete field list |
+| `providers` | Text provider, model, account, and request settings |
+| `images` | Selected image backend and its generation settings |
+| `sprites` | Transparency, resizing, and palette settings |
+| `models` | sd.cpp program, local weights, and LoRA |
+| `multiplayer` | Generator address, Terraria connection, and sprite delivery |
+| `diagnostics` | Last health snapshot, trace source, logs, and saved failure details |
+
+Settings pages combine live summaries of the current per-tab draft with relevant
+field groups. Disabled and externally managed settings retain their meaning.
+Controller snapshots and command receipts remain authoritative; selecting a model
+does not establish provider readiness. Existing field keys, IDs, `data-action`,
+`data-ui`, diagnostic tabs, and keyboard/focus contracts are retained.
 
 `studio.css` owns type, spacing, color, layout, and motion tokens. `studio-motion.js`
 owns presentation interactions; `studio.js` owns routes, drafts, commands, and
 receipts. Manrope, Cormorant, and the SVG symbols are served locally. There is no
 frontend build step, CDN, animation dependency, or additional persisted UI state.
 
-| Surface | Behavior |
-| --- | --- |
-| Craft diagram | Fine-pointer parallax, layered assembly/explosion, and source-specific hover/focus emphasis |
-| Diagram links | The three layers and source summaries open the existing settings routes |
-| Generator state | Explicit `data-state` derived from the existing home snapshot |
-| Navigation | The selected rail marker travels on pointer navigation; keyboard changes are immediate |
-| Pointer route change | A short horizontal reveal of the persistent workspace, triggered only by navigation |
-| Settings | Existing labeled controls, advanced fields, drafts, and save receipts |
-| Narrow viewport | Drawer at 720px, stacked sources, and a compact craft diagram |
-| Pending action | Existing busy feedback and receipts remain authoritative |
-| Input, keyboard navigation, search, polling | No page entrance animation |
-| Motion pause | An in-memory control pauses decoration and makes state changes immediate |
-| Reduced motion | System preference wins, including live changes; layered states remain operable without animation |
+`[data-flow-card]` links use a local fine-pointer highlight driven by normalized
+`--pointer-x` / `--pointer-y` and `data-pointer-active`. Interpolation stops when
+settled; leaving, keyboard input, offscreen cards, and hidden tabs clear it. There
+are no idle animation loops. The navigation marker travels on pointer activation;
+keyboard selection is immediate. Route reveals run only on pointer navigation,
+not typing, draft-summary updates, or polling. `prefers-reduced-motion` applies
+immediately, including live preference changes.
 
-The craft stage is retained across home snapshot renders, and pointer interpolation
-stops when settled, offscreen, hidden, or paused. Keyboard focus has priority over
-an idle hovered source. The object is decorative and hidden from the accessibility
-tree; its controls are ordinary buttons and route links.
+Diagnostics use guarded JSON inspectors only for sd.cpp and saved failures. HTTP
+reachability requires an explicit probe; managed-process state and `autostart`
+are separate readouts. Known empty failure snapshots show no saved error.
+Full JSON remains in a disclosure, whose open state survives unchanged polling;
+unsupported content falls back to raw text. Trace source/status stays visible
+outside the inspector. No progress percentage is inferred from logs.
 
-Do not attach route entrance animations to the settings renderer: polling and
-draft-dependent controls can rebuild it while a person is typing. Keep the mobile
-drawer's CSS breakpoint aligned with `setMenu()` and the resize handler, including
-focus trapping and inert content. Document scroll padding reserves space for the
-fixed save tray before the first edit reveals it.
-
-The palette is a presentation decision, not a compatibility contract. Visual
-iterations should be reviewed in the browser before updating assertions that
-encode the accepted appearance. Existing font licenses remain in `assets/`.
+Keep the mobile drawer's 720px breakpoint aligned with `setMenu()` and the resize
+handler, including focus trapping and inert content. Existing font licenses remain
+in `assets/`.
 
 ## Verification
 
-Regression entry points:
+The current visual iteration is **under review, not approved**. Mass regression
+suites have not been run for this iteration. Palette and appearance assertions
+must follow the reviewed design while retaining behavioral and DOM-contract
+coverage; update those assertions after visual approval.
+
+Regression entry points, to run after browser review:
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio_interactions.py LocalGenerator/tests/test_web_studio_state.py
 
@@ -67,11 +75,7 @@ For controller/browser integration, provide Playwright and Chromium. `INFINI_TES
 
     PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py LocalGenerator/tests/test_web_studio_workflows_browser.py
 
-The workflow tests still include the previous exact Atelier colors. Update those
-presentation assertions after the new visual direction is approved. Their behavioral coverage includes keyboard search and focus,
-route motion, dirty-state navigation and diagnostic tabs. Review the changed UI
-in the browser, then run affected tests. Fixtures do not prove provider readiness
-or visual quality.
-
-These tests do not establish real provider authentication, paid generation,
-Terraria gameplay, or Windows-specific filesystem behavior.
+Behavioral coverage includes keyboard search and focus, route motion, dirty-state
+navigation, and diagnostic tabs. Fixtures do not establish visual quality, real
+provider authentication, paid generation, Terraria gameplay, or Windows-specific
+filesystem behavior.
