@@ -160,7 +160,9 @@ def test_real_studio_defaults_consent_dismissal_and_delayed_accept(tmp_path, mon
                     page.on('request', lambda request: decisions.append(request.post_data_json) if request.method == 'POST' else None)
                     page.goto(server.url + '#configure')
                     page.wait_for_selector('#defaults-summary', timeout=8000)
-                    assert 'параметр' in page.locator('#defaults-summary').inner_text()
+                    summary = page.locator('#defaults-summary').inner_text()
+                    assert f"Доступно {len(expected_offer['changes'])} рекомендац" in summary
+                    assert expected_offer['version'] in summary
                     assert not page.locator('#utility-dialog').is_visible(), 'Recommendations must not interrupt initial load'
                     assert config.read_bytes() == original
                     page.locator('[data-ui="defaults-update"]').click()

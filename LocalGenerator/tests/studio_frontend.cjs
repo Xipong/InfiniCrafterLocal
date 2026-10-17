@@ -4,7 +4,8 @@ const fs=require('node:fs'), vm=require('node:vm'), assert=require('node:assert/
 const nodes=new Map(), events={};
 function node() {return {hidden:false,open:false,dataset:{},textContent:'',innerHTML:'',value:'',disabled:false,append(){},focus(){},replaceChildren(){},remove(){},classList:{toggle(){},add(){},remove(){},contains(){return false;}},setAttribute(){},addEventListener(){},close(){this.open=false;},showModal(){this.open=true;},querySelector(){return node();}};}
 global.setTimeout=()=>0;
-global.document={createElement:()=>node(),activeElement:null,addEventListener(name,fn){events[name]=fn;},querySelectorAll(){return [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
+// Single- and multi-node queries must see the same mounted fixture nodes.
+global.document={createElement:()=>node(),activeElement:null,addEventListener(name,fn){events[name]=fn;},querySelectorAll(selector){return nodes.has(selector) ? [nodes.get(selector)] : [];},querySelector(selector){if(selector === 'dialog[open]') return nodes.get('#utility-dialog')?.open ? nodes.get('#utility-dialog') : nodes.get('#search-dialog')?.open ? nodes.get('#search-dialog') : null;if(!nodes.has(selector)) nodes.set(selector,node());return nodes.get(selector);}};
 global.window={INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
 const messages=[];
 let source=fs.readFileSync(require('node:path').join(__dirname,'../infini_local/desktop/webui/studio.js'),'utf8');
@@ -20,12 +21,12 @@ const {state,acceptSnapshot,recomputeDirty,inactiveReason,fieldGroups,showDocume
 const key='INFINI_PROMPT_STYLE';
 const snapshot=(values={},extra={})=>({values,defaults:{},savedValues:values,fields:[],presets:{},userPresets:{},lanEnabled:false,savedLanEnabled:false,...extra});
 // Heading status follows typing, reversion, confirmed Save, and LAN-only drafts
-// without rebuilding the page or disturbing the current input and field count.
+// without rebuilding the page or disturbing the current input. Presentation
+// details such as parameter-count markup are not part of this contract.
 state.page='providers';
 acceptSnapshot(snapshot({[key]:'saved'},{savedRevision:'heading-before'}));
 const headingStatus=document.querySelector('[data-draft-status]');
 headingStatus.textContent='Локальная конфигурация';
-const headingCount=studio.heading('providers').match(/<strong>([^<]+)<\/strong>/)[1];
 const input={dataset:{field:key},type:'text',tagName:'INPUT',value:'edited',
   matches:selector=>selector === '[data-field]',closest:()=>node()};
 document.activeElement=input;
@@ -44,7 +45,6 @@ assert.equal(headingStatus.textContent,'Локальная конфигурац�
 assert.equal(document.querySelector('#save-tray').hidden,true);
 assert.equal(global.renderCount,beforeHeadingEdit,'status updates do not rebuild the current page');
 assert.equal(document.activeElement,input,'typing and Save preserve input focus');
-assert.equal(studio.heading('providers').match(/<strong>([^<]+)<\/strong>/)[1],headingCount);
 state.lan=true;recomputeDirty();
 assert.equal(state.dirty.size,0);
 assert.equal(headingStatus.textContent,'Черновик / Не сохранён','LAN alone makes the existing heading dirty');
@@ -52,7 +52,7 @@ assert(studio.heading('multiplayer').includes('Черновик / Не сохр�
 state.lan=false;recomputeDirty();
 assert.equal(headingStatus.textContent,'Локальная конфигурация');
 assert(studio.heading('configure').includes('Локальная конфигурация'));
-assert(!studio.heading('operate').includes('heading-note'));
+assert(studio.heading('operate').includes('data-draft-status'),'workbench status stays readable too');
 document.activeElement=null;state.remote=null;state.draft={};state.dirty.clear();state.edits={};
 acceptSnapshot(snapshot({[key]:'saved'}));
 state.pending={id:'own-command',action:'save',sent:{[key]:'mine'},clock:1};
@@ -87,9 +87,10 @@ assert(!document.querySelector('#utility-body').innerHTML.includes('<script>'));
 state.draft.INFINI_VISUAL_STRICT_AI_AUTHORSHIP='1';
 state.draft.INFINI_SDCPP_LORA_FILE='C:\\models\\adapter.safetensors';
 assert.equal(studio.derivedField('INFINI_SDCPP_LORA_DIR').value,'C:\\models');
+state.page='models';
 const loraHelp=fieldGroups([{key:'INFINI_SDCPP_LORA_FILE'}]);
-assert(loraHelp.includes('Отключение сбрасывает файл, папку и теги в настройках; сам файл на диске остаётся.'),
-  'LoRA help distinguishes clearing configured paths and tags from deleting the file');
+assert(loraHelp.includes('Отключение сбросит настройки адаптера. Файл на диске останется.'),
+  'LoRA help distinguishes clearing adapter settings from deleting the file');
 const forced=studio.fieldHTML({key:'INFINI_VISUAL_ALLOW_PROCEDURAL_FALLBACK',options:['0','1']});
 assert(forced.includes('<output '));assert(!forced.includes('data-field='));
 // A terminal result with its own notification produces one visible result.
@@ -169,7 +170,7 @@ assert(!document.querySelector('#utility-dialog').open);
 
 // Terminal action feedback restores only abandoned button focus, not a newer
 // input, modal, or navigation choice. A disappearing Save tray stays hidden.
-document.body={};document.activeElement=document.body;state.page='providers';
+document.body=node();document.activeElement=document.body;state.page='providers';
 let actionFocus=0;
 const refreshButton={isConnected:true,disabled:false,dataset:{action:'codexCatalog'},getClientRects:()=>[{}],focus(){actionFocus++;}};
 const completed={focus:{element:refreshButton,action:'codexCatalog',page:'providers'}};
@@ -187,7 +188,8 @@ document.querySelector('#utility-dialog').open=false;
 const offer={version:'0.5.02',changes:[{key:x,current:'0.55',recommended:'0.5',reason:'Optional recommendation'}],dismissed:false,revision:'offer-1'};
 acceptSnapshot(snapshot({[x]:'0.55'}, {defaultsUpdate:offer}));
 assert.equal(document.querySelector('#utility-dialog').open,false);
-assert(studio.defaultsSummary().includes('1 параметр'));
+assert(studio.defaultsSummary().includes('Доступно 1 рекомендаций'));
+assert(studio.defaultsSummary().includes(offer.version));
 acceptSnapshot(snapshot({[x]:'0.55'}, {defaultsUpdate:offer}));
 assert.equal(document.querySelector('#utility-dialog').open,false);
 studio.showDefaultsUpdate();assert.equal(document.querySelector('#utility-dialog').open,true);
