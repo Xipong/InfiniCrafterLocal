@@ -126,6 +126,99 @@ def test_a2_channel_dependency_does_not_accept_truthy_or_null_values(invalid):
     assert not validate_runtime_program(doc)['ok']
 
 
+
+def yoyo_witness():
+    doc = deepcopy(CAPTURES[DOOR])
+    program = doc['runtimeProgram']
+    program['bindings'] = [program['bindings'][0]]
+    program['calls'] = [row for row in program['calls'] if row['fn'] != 'configure_tile_placement']
+    movement = call(doc, 'move_flail_tether')
+    movement['fn'] = 'move_yoyo_hover'
+    movement['params'] = {'rangeTiles': 10, 'speed': 14}
+    return doc
+
+
+@pytest.mark.parametrize('lane', ['primary_use', 'alternate_use'])
+@pytest.mark.parametrize('channel', [False, True])
+def test_active_yoyo_requires_explicit_native_channel(lane, channel):
+    doc = yoyo_witness()
+    doc['runtimeProgram']['bindings'][0]['input'] = lane
+    call(doc, 'configure_item_use')['params']['channel'] = channel
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert report['ok'] is channel
+    assert doc == before
+    if not channel:
+        assert [row['code'] for row in report['errors']] == ['missing_item_capability_param']
+        assert report['errors'][0]['allowed'] == ['configure_item_use.channel=true']
+        with pytest.raises(ValueError):
+            compile_runtime_program(doc)
+    else:
+        wire = compile_runtime_program(doc)
+        assert validate_runtime_wire(wire)['ok']
+        assert audit_compiler_receipts(wire['runtimeContract']['finalWireReceipts'],
+                                       authored_document=doc, final_document=wire)['ok']
+
+
+def test_yoyo_repair_thaws_only_explicit_channel_dependency():
+    doc = yoyo_witness()
+    before = deepcopy(doc)
+    use = call(doc, 'configure_item_use')
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)['errors'])
+    assert scope['fieldPermissions']['calls'] == [{'id': use['id'], 'paths': ['params.channel']}]
+    hostile = deepcopy(use)
+    hostile['params'].update(channel=True, autoReuse=not use['params']['autoReuse'])
+    patch, audit = filter_repair_patch_scope(doc, {'callsUpsert': [hostile], 'note': 'native channel'}, scope)
+    repaired = apply_repair_patch(doc, patch)
+    expected = deepcopy(doc)
+    call(expected, 'configure_item_use')['params']['channel'] = True
+    assert audit['ok'] and audit['ignoredChanges']
+    assert repaired == expected and doc == before
+    wire = compile_runtime_program(repaired)
+    assert validate_runtime_wire(wire)['ok']
+    assert audit_compiler_receipts(wire['runtimeContract']['finalWireReceipts'],
+                                   authored_document=repaired, final_document=wire)['ok']
+
+
+@pytest.mark.parametrize('producer', ['hold', 'event'])
+def test_passive_and_event_yoyo_keep_existing_owner_channel_semantics(producer):
+    doc = yoyo_witness()
+    program = doc['runtimeProgram']
+    if producer == 'hold':
+        program['bindings'][0]['input'] = 'hold'
+    else:
+        body = next(row['id'] for row in program['entities'] if row['kind'] == 'item_body')
+        target = call(doc, 'move_yoyo_hover')['target']
+        program['primaryEntityId'] = body
+        program['bindings'] = [{'id': 'body', 'input': 'primary_use',
+                               'action': {'kind': 'use_item_body', 'targetId': body},
+                               'stackCost': 0, 'contactDamage': False}]
+        program['calls'].append({'id': 'event_yoyo', 'fn': 'spawn_entity_on_event', 'target': body,
+            'params': {'when': 'on_use', 'entity': target, 'count': 1, 'spreadRadians': 0,
+                       'damageMultiplier': 1, 'delayTicks': 0, 'damageBasis': 'authored_child',
+                       'knockbackBasis': 'authored_child'}})
+    assert call(doc, 'configure_item_use')['params']['channel'] is False
+    assert validate_runtime_program(doc)['ok']
+    assert validate_runtime_wire(compile_runtime_program(doc))['ok']
+
+
+@pytest.mark.parametrize('lane,expected', [('primary_use', False), ('alternate_use', False), ('hold', True)])
+def test_missing_movement_repair_filters_yoyo_by_exact_active_producer(lane, expected):
+    doc = yoyo_witness()
+    movement = call(doc, 'move_yoyo_hover')
+    doc['runtimeProgram']['bindings'][0]['input'] = lane
+    doc['runtimeProgram']['calls'].remove(movement)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)['errors'])
+    requirements = next(row for row in scope['repairRequirements'] if row['code'] == 'missing_movement_component')
+    assert ('move_yoyo_hover' in requirements['requiredOneOfCapabilities']) is expected
+    if expected:
+        patch, audit = filter_repair_patch_scope(doc, {'callsUpsert': [movement], 'note': 'owner-driven movement'}, scope)
+        repaired = apply_repair_patch(doc, patch)
+        assert audit['ok'] and validate_runtime_program(repaired)['ok']
+        assert call(repaired, 'configure_item_use')['params']['channel'] is False
+        assert validate_runtime_wire(compile_runtime_program(repaired))['ok']
+
+
 def test_a3_frozen_pick_primary_mining_and_alternate_recall_remain_authored():
     doc = deepcopy(CAPTURES[PICK])
     wire = compile_runtime_program(doc)

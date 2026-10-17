@@ -31,7 +31,7 @@ internal static partial class EngineRuntimeChecks
                 entity.Movement.Code = 18;
                 entity.Movement.Params.RangeTiles = 10f;
                 entity.Movement.Params.Segments = 12;
-                var projectile = new Projectile { owner = 0, damage = 100, width = 12, height = 12 };
+                var projectile = new Projectile { owner = 0, active = true, damage = 100, width = 12, height = 12 };
                 var generated = Attach(projectile);
                 generated.Configure(new GeneratedItemData(), entity, 0, 8, Vector2.UnitX);
                 var points = (List<Vector2>)typeof(GeneratedProjectile)
@@ -62,6 +62,10 @@ internal static partial class EngineRuntimeChecks
                 second.Movement.Params.Segments = 12;
                 generated.Configure(new GeneratedItemData(), second, 0, 8, Vector2.UnitX, preserveSyncedState: true);
                 Check(1.5f, 144f); // Rehydrated per-instance geometry, not a shared proxy range.
+                Equal(true, projectile.active, "positive live animation sustains the whip");
+                owner.itemAnimation = 0;
+                generated.AI();
+                Equal(false, projectile.active, "expired live animation terminates the whip");
             }
             finally { Terraria.Main.player[0] = oldOwner; }
         });

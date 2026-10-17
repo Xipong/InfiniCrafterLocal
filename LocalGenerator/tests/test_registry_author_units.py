@@ -412,6 +412,11 @@ def _scalar_name_current_source(case):
     params = _scalar_name_call(source)["params"]
     assert case["canonicalParameter"] not in params
     params[case["canonicalParameter"]] = params.pop(case["oldParameter"])
+    if case["fn"] == "move_yoyo_hover":
+        # Current active yoyo authoring explicitly supplies native channel.
+        # The archived capture and its scalar receipt remain byte-for-byte intact.
+        next(row for row in source["runtimeProgram"]["calls"]
+             if row["fn"] == "configure_item_use")["params"]["channel"] = True
     return source
 
 
@@ -421,7 +426,7 @@ def _scalar_name_restored_wire(case):
                    if row.get("callId") == "witness_call" and row.get("authoredPath", "").endswith(".params." + case["canonicalParameter"]))
     expected = {**case["receipt"], "authoredPath": case["receipt"]["authoredPath"].removesuffix(case["oldParameter"]) + case["canonicalParameter"]}
     assert receipt == expected
-    receipt.update(deepcopy(case["receipt"]))  # Restore only this historical receipt; all other bytes remain pinned.
+    receipt.update(deepcopy(case["receipt"]))  # Restore this historical scalar receipt on the current valid source.
     return wire, receipt
 
 

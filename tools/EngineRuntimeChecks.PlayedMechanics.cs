@@ -261,6 +261,31 @@ internal static partial class EngineRuntimeChecks
         flail.Invoke(generated, new object[] { p });
         Equal(true, (bool)returning.GetValue(generated)!, "new channel cannot undo latched return");
 
+        // The yoyo's cursor phase has the same native channel prerequisite.
+        // A false item flag must never be mistaken for a held use in Author.
+        var yoyo = typeof(InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile).GetMethod("Yoyo", flags)!;
+        body.Center = owner.MountedCenter + Vector2.UnitX * 80;
+        body.ai[0] = 160; body.ai[1] = 0;
+        returning.SetValue(generated, false);
+        nativeItem.channel = false; owner.channel = false; owner.StartChanneling(nativeItem);
+        Equal(false, owner.channel, "native nonchannel item cannot start yoyo cursor phase");
+        body.velocity = Vector2.Zero;
+        yoyo.Invoke(generated, new object[] { p });
+        Equal(true, (bool)returning.GetValue(generated)!, "nonchannel yoyo returns on its first movement update");
+        Equal(true, body.velocity.X < 0, "nonchannel yoyo moves toward owner instead of cursor");
+        returning.SetValue(generated, false);
+        nativeItem.channel = true; owner.StartChanneling(nativeItem);
+        body.velocity = Vector2.Zero;
+        yoyo.Invoke(generated, new object[] { p });
+        Equal(false, (bool)returning.GetValue(generated)!, "explicit channel supports yoyo cursor phase");
+        Equal(true, body.velocity.X > 0, "channelled yoyo moves toward selected cursor");
+        owner.channel = false;
+        yoyo.Invoke(generated, new object[] { p });
+        Equal(true, (bool)returning.GetValue(generated)!, "yoyo release latches return");
+        owner.channel = true;
+        yoyo.Invoke(generated, new object[] { p });
+        Equal(true, (bool)returning.GetValue(generated)!, "new channel cannot undo yoyo return");
+
         var retract = typeof(InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile).GetMethod("ForwardRetract", flags)!;
         typeof(InfiniCrafterLocal.Content.Projectiles.GeneratedProjectile).GetField("_age", flags)!.SetValue(generated, 10);
         body.ai[0] = 1; body.ai[1] = 0;
