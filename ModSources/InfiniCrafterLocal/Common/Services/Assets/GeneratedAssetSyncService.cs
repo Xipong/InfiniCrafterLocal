@@ -619,12 +619,19 @@ public sealed class GeneratedAssetSyncService : IDisposable
             var missing = new List<PendingPacketAsset>();
             foreach ((string key, PendingPacketAsset pending) in _pendingPacketAssets.ToArray())
             {
-                string local = Path.Combine(CacheRoot, pending.FileName);
-                GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(pending.ItemId, pending.FileName);
-                if (IsValidCachedAsset(local, descriptor))
+                // A successful atomic commit removes pending files immediately.
+                // Avoid decoding/hashing still-in-flight PNGs on every game tick:
+                // inspect disk only when a retry deadline is reached. Keep all
+                // sibling names in the item-level batch when one becomes due.
+                if (now - pending.RequestedTick >= PacketFallbackDelayTicks)
                 {
-                    _pendingPacketAssets.Remove(key);
-                    continue;
+                    string local = Path.Combine(CacheRoot, pending.FileName);
+                    GeneratedAssetWireDescriptor? descriptor = TryGetRemoteDescriptor(pending.ItemId, pending.FileName);
+                    if (IsValidCachedAsset(local, descriptor))
+                    {
+                        _pendingPacketAssets.Remove(key);
+                        continue;
+                    }
                 }
                 missing.Add(pending);
             }
@@ -972,14 +979,32 @@ public sealed class GeneratedAssetSyncService : IDisposable
         packet.Send();
     }
 
-    public void ResetRetryState()
+    public void ResetRetryState(string? itemId = null)
     {
         lock (_lock)
         {
-            _knownMissing.Clear();
-            _pendingPacketAssets.Clear();
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                _knownMissing.Clear();
+                _pendingPacketAssets.Clear();
+            }
+            else
+            {
+                // Per-item forced hydration must not erase other items' native
+                // pending rosters or HTTP missing-state. Global reset commands
+                // retain their original all-items behavior.
+                string marker = "|" + itemId + "|";
+                foreach (string key in _knownMissing.Keys.Where(
+                    key => key.Contains(marker, StringComparison.Ordinal)).ToArray())
+                    _knownMissing.Remove(key);
+                foreach (string key in _pendingPacketAssets.Where(
+                    x => string.Equals(x.Value.ItemId, itemId, StringComparison.Ordinal))
+                    .Select(x => x.Key).ToArray())
+                    _pendingPacketAssets.Remove(key);
+            }
         }
-        LocalHttpQuietFailure.ClearAll();
+        if (string.IsNullOrWhiteSpace(itemId))
+            LocalHttpQuietFailure.ClearAll();
     }
 
     public GeneratedAssetSyncDebugSnapshot GetDebugSnapshot()

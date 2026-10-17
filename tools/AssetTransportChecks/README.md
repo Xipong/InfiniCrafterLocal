@@ -21,6 +21,7 @@ validator, descriptor/SHA checks, and atomic file writer execute. Tests cover:
 - A lost initial request and all 32 missing files retried in one item-level request.
 - Newly discovered sibling files and replaced manifests.
 - World-reset/disposal retirement without deleting verified disk cache files.
+- Per-item retry-state reset that preserves other items' in-flight native requests.
 - Corrupt, impossible, repeated and reordered chunks; successful recovery.
 - Descriptor mismatch and explicit HTTP mode refusing native payloads.
 - Independent per-client pacing with the retained 16-chunk/sec budget and start credit.

@@ -17,6 +17,7 @@ internal static class Program
     {
         (string Name, Action Run)[] checks = {
             ("RGBA PNG roundtrip is byte-exact", Roundtrip),
+            ("single-item reset preserves other native retry rosters", ScopedRetryReset),
             ("repeated ensures coalesce without postponing retries", RepeatedEnsures),
             ("retry batches all PNGs behind the item cooldown", RetryBatch),
             ("new sibling joins the outstanding item request", NewSibling),
@@ -164,6 +165,28 @@ internal static class Program
         return Enumerable.Range(0, count).Select(_ => reader.ReadString()).ToArray();
     }
 
+    private static void ScopedRetryReset()
+    {
+        using var f = new Fixture();
+        var second = new GeneratedItemData { Id = "other_item" };
+        second.Visual.SpritePath = f.Data.Visual.SpritePath;
+        second.VfxManifest.Assets = f.Data.VfxManifest.Assets;
+        f.ServerMode();
+        f.Client.RegisterRemoteAssetDescriptors(second.Id, f.Server.BuildServerAssetDescriptors(f.Data));
+        f.Ensure();
+        f.Ensure(data: second);
+        Require(f.Requests.Count == 2, "control: both items have pending PNGs");
+        byte[] otherRequest = f.Requests.Last();
+        f.Client.ResetRetryState(f.Data.Id);
+        f.Requests.Clear();
+        f.RetryAt(120);
+        Require(f.Requests.Count == 1, "one item reset cancelled an unrelated pending roster");
+        Require(f.Requests.Peek().SequenceEqual(otherRequest), "unrelated item lost original PNG request identity");
+        f.Client.ResetRetryState();
+        f.Requests.Clear();
+        f.RetryAt(240);
+        Require(f.Requests.Count == 0, "global reset did not clear all pending PNGs");
+    }
     private static void Roundtrip()
     {
         using var f = new Fixture(2, 512); f.Ensure(); f.DeliverAll(); f.AssertExactFiles();
