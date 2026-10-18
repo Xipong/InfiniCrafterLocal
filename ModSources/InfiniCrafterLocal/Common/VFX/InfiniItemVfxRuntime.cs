@@ -106,22 +106,21 @@ public static partial class InfiniItemVfxRuntime
         packet.Write(point.X); packet.Write(point.Y); packet.Send();
     }
 
-    public static void OnPeriodic(Player player, GeneratedItemData? data, string entityId, Item? sourceItem=null)
+    public static void OnPeriodic(Player player, GeneratedItemData? data, string entityId, Item? sourceItem=null, bool allowLightCue=true)
     {
         if (Main.dedServ || player is null || !player.active || data is null) return;
         string sourceKey=$"item:{player.whoAmI}:{data.Id}:{entityId}";
         InfiniDetachedVfxSystem.RegisterPeriodicElements(data,entityId,sourceKey,VfxSourceBinding.Capture(player,sourceItem,data),item:true);
-        EmitLocal(player, data, entityId, RuntimeEventKind.Periodic, cadence: true);
+        EmitLocal(player, data, entityId, RuntimeEventKind.Periodic, cadence: true, allowLightCue: allowLightCue);
     }
 
     public static void OnVisibleEquipment(Player player, GeneratedItemData? data, Item? sourceItem=null)
     {
         if (data is null) return;
-        OnPeriodic(player, data, data.RuntimeProgram.ItemEntityId,sourceItem);
-        float strength = data.Armor?.Enabled == true ? data.Armor.LightStrength : data.Accessory?.Enabled == true ? data.Accessory.LightStrength : 0f;
-        string colorName = data.Armor?.Enabled == true ? data.Armor.LightColorName : data.Accessory?.LightColorName ?? "white";
-        if (!Main.dedServ && strength > 0f)
-            Lighting.AddLight(player.Center, RuntimeColorPolicy.Resolve(colorName, Color.White).ToVector3() * Math.Clamp(strength, 0f, 1.5f));
+        // The visible-equipment scan includes vanity armor/accessories. It may
+        // draw authored cosmetic VFX, but never illuminate the world. Functional
+        // UpdateAccessory/UpdateEquip already own equipment light and lightCue.
+        OnPeriodic(player, data, data.RuntimeProgram.ItemEntityId,sourceItem,allowLightCue:false);
     }
 
     public static void HandleUseEventPacket(BinaryReader reader, int whoAmI)
@@ -173,7 +172,7 @@ public static partial class InfiniItemVfxRuntime
         return false;
     }
 
-    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null)
+    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null, bool allowLightCue=true)
     {
         if (Main.dedServ) return;
         // One synchronous event call owns its total across matching slots. Periodic
@@ -195,10 +194,13 @@ public static partial class InfiniItemVfxRuntime
             Vector2 center = slot.Anchor == "hitPoint" ? eventPosition!.Value
                 : slot.Anchor is "tip" or "tipHistory" ? player.itemLocation : player.Center;
             if (!Finite(center)) continue;
+            InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
+            // Cosmetic/vanity passes must not emit light or consume the
+            // periodic slot mark before a legitimate functional equipment hook.
+            if (cadence && !allowLightCue && kind == InfiniVfxRendererKind.LightCue) continue;
             // Mark only after cadence and anchor eligibility: an invalid held pose
             // must not suppress a later valid equipment path in this same tick.
             if (cadence && !TryMarkPeriodicSlot(player, data, entityId, slot)) continue;
-            InfiniVfxRendererKind kind = VfxRendererRegistry.Resolve(slot);
             if (kind == InfiniVfxRendererKind.SoundCue)
             {
                 SoundStyle sound = slot.ResolveSoundStyle();

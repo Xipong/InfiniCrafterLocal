@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Terraria.GameContent;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Services;
@@ -15,6 +16,7 @@ public partial class GeneratedItem
 {
     private const string RuntimeTooltipKey = "Mods.InfiniCrafterLocal.RuntimeTooltip.";
     private const int MaxRuntimeTooltipFacts = 64;
+    private const int MaxRuntimeTooltipWidth = 720;
 
     /// <summary>
     /// Read-only inventory feedback from the same exact bindings consumed by the
@@ -30,7 +32,14 @@ public partial class GeneratedItem
         void Add(string name, string key, params object[] args)
         {
             if (added >= MaxRuntimeTooltipFacts) return;
-            tooltips.Add(new TooltipLine(Mod, "Infini" + name, RuntimeTooltipText(key, args)));
+            string text = RuntimeTooltipText(key, args);
+            IReadOnlyList<string> rows = Main.dedServ || FontAssets.MouseText?.IsLoaded != true
+                ? new[] { text }
+                : WrapRuntimeTooltipLines(text, RuntimeTooltipWidthLimit(Main.screenWidth, Main.UIScale),
+                    value => FontAssets.MouseText.Value.MeasureString(value).X);
+            for (int i = 0; i < rows.Count; i++)
+                tooltips.Add(new TooltipLine(Mod, "Infini" + name
+                    + (i == 0 ? "" : "Wrap" + i.ToString(CultureInfo.InvariantCulture)), rows[i]));
             added++;
         }
         // Exact live player table + existing registry definition identity. Never
@@ -131,6 +140,69 @@ public partial class GeneratedItem
                 AddRuntimeUseEffects(data.EffectsForBinding(binding), suffix, label, Add);
         }
         AddRuntimeSecondaryCombat(data, Add);
+    }
+
+    // Terraria lays out TooltipLine rows independently. Split overwide localized
+    // facts into real rows BEFORE native tooltip box measurement; no custom
+    // drawer/tooltip facade and no mutation of authored gameplay or source text.
+    internal static int RuntimeTooltipWidthLimit(int screenWidth, float uiScale)
+    {
+        float scale = float.IsFinite(uiScale) && uiScale > 0f ? uiScale : 1f;
+        return Math.Clamp((int)(screenWidth / scale) - 96, 128, MaxRuntimeTooltipWidth);
+    }
+
+    // Inject a width measurer for headless regression checks. In the game this
+    // is the same loaded MouseText font Terraria uses for item tooltips.
+    // Unicode text elements keep surrogate pairs/combining marks together
+    // when a single unusually long word needs a hard break.
+    internal static IReadOnlyList<string> WrapRuntimeTooltipLines(string text, float maxWidth,
+        Func<string, float> measure)
+    {
+        if (string.IsNullOrEmpty(text) || !float.IsFinite(maxWidth) || maxWidth <= 0f)
+            return new[] { text };
+        var result = new List<string>();
+        foreach (string paragraph in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            string remaining = paragraph;
+            while (remaining.Length > 0 && measure(remaining) > maxWidth)
+            {
+                var boundaries = new List<int>();
+                var elements = StringInfo.GetTextElementEnumerator(remaining);
+                while (elements.MoveNext())
+                    boundaries.Add(elements.ElementIndex + elements.GetTextElement().Length);
+                if (boundaries.Count == 0) break;
+                int lo = 0, hi = boundaries.Count - 1, fitted = -1;
+                while (lo <= hi)
+                {
+                    int middle = lo + (hi - lo) / 2;
+                    if (measure(remaining[..boundaries[middle]]) <= maxWidth)
+                    {
+                        fitted = middle;
+                        lo = middle + 1;
+                    }
+                    else hi = middle - 1;
+                }
+                int end = boundaries[Math.Max(0, fitted)];
+                int space = -1;
+                for (int i = end - 1; i > 0; i--)
+                    if (char.IsWhiteSpace(remaining[i])) { space = i; break; }
+                if (space > 0)
+                {
+                    string prefix = remaining[..space].TrimEnd();
+                    if (prefix.Length > 0)
+                    {
+                        result.Add(prefix);
+                        remaining = remaining[(space + 1)..].TrimStart();
+                        continue;
+                    }
+                }
+                result.Add(remaining[..end]);
+                remaining = remaining[end..].TrimStart();
+            }
+            if (remaining.Length != 0 || paragraph.Length == 0)
+                result.Add(remaining);
+        }
+        return result;
     }
 
     private static void AddRuntimeUseCondition(GameplaySpec gp, string suffix, string input, Action<string, string, object[]> add)

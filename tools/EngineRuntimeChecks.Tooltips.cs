@@ -19,6 +19,34 @@ internal static partial class EngineRuntimeChecks
         public override string Name => "InfiniCrafterLocal";
     }
 
+
+    private static void GeneratedTooltipWidthWrapPreservesFullLocalizedFacts()
+    {
+        const string russian = "При попадании снаряда: создать до 3 настоящих снарядов через 0,15 с; " +
+            "начальная скорость 240 пикс./с, время жизни до 0,667 с; попадания и урон в секунду не гарантированы.";
+        const float limit = 240f;
+        var lines = GeneratedItem.WrapRuntimeTooltipLines(russian, limit, value => value.Length * 8f);
+        Equal(true, lines.Count > 2, "long real localized tooltip wraps into multiple native rows");
+        Equal(true, lines.All(value => value.Length * 8f <= limit), "each wrapped row fits exact available width");
+        Equal(russian, string.Join(" ", lines), "wrapping keeps all numeric and localized prose in order");
+        Equal(1, GeneratedItem.WrapRuntimeTooltipLines("Короткий факт", limit, value => value.Length * 8f).Count,
+            "short fact keeps its native single TooltipLine identity");
+        Equal(720, GeneratedItem.RuntimeTooltipWidthLimit(2048, 1f), "wide monitor still caps huge tooltip widths");
+        Equal(304, GeneratedItem.RuntimeTooltipWidthLimit(800, 2f), "UI scale reduces available logical width");
+        Equal(224, GeneratedItem.RuntimeTooltipWidthLimit(480, 1.5f), "narrow viewport uses available screen width");
+
+        // One long unspaced token must wrap without dropping data or slicing
+        // Unicode grapheme clusters in half.
+        string token = string.Concat(Enumerable.Repeat("меч👩‍🚀", 24));
+        var chunks = GeneratedItem.WrapRuntimeTooltipLines(token, 48f, value => value.Length * 8f);
+        Equal(token, string.Concat(chunks), "unspaced Unicode token kept byte-semantically intact");
+        Equal(true, chunks.Count > 1 && chunks.All(x => x.Length * 8f <= 48f),
+            "Unicode grapheme-boundary wrapping does not overflow narrow row");
+        string[] explicitBreaks = { "first", "second" };
+        var preserved = GeneratedItem.WrapRuntimeTooltipLines("first\nsecond", 240f, value => value.Length * 8f);
+        Equal(true, explicitBreaks.SequenceEqual(preserved), "author-provided newline keeps separate native rows");
+    }
+
     // Real ModifyTooltips/TooltipLine/Language consumers. Typed CPU fixtures, not a
     // game loop, content registration, player-dependent mana calculation or GPU UI.
     // Use candidate locales with BOTH old and new linked source for paired RED/GREEN.

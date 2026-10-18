@@ -13,6 +13,65 @@ using Terraria.ModLoader;
 internal static partial class EngineRuntimeChecks
 {
 
+
+    private static void VisibleVanityCannotEmitWorldLight()
+    {
+        WithLighting((config, lights) => WithPlayer((player, _) =>
+        {
+            var system = new InfiniDetachedVfxSystem();
+            var previousPlayer = Main.player[0];
+            int previousMode = Main.netMode, previousLocal = Main.myPlayer;
+            bool previousServer = Main.dedServ;
+            uint previousTick = Main.GameUpdateCount;
+            try
+            {
+                Main.netMode = NetmodeID.SinglePlayer; Main.myPlayer = 0;
+                Main.dedServ = false; config.PresentationLightMultiplier = 1f;
+                Main.player[0] = player; player.whoAmI = 0; player.active = true; player.dead = false;
+                player.Center = new Vector2(160f, 160f); player.itemLocation = player.Center;
+                for (int i = 0; i < player.armor.Length; i++) player.armor[i] = new Item();
+                InfiniItemVfxRuntime.ClearUseEventCaches(); system.OnWorldUnload(); MaterialClock(510);
+                var data = GeneratedItemData.Placeholder();
+                data.Accessory.Enabled = true; data.Accessory.LightStrength = .8f; data.Accessory.LightColorName = "cyan";
+                string entity = data.RuntimeProgram.ItemEntityId;
+                data.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec {
+                    Id = "equip", Input = RuntimeInputKind.Equipped,
+                    UsePolicy = new() { Action = new() { Kind = RuntimeBindingAction.EquipPassive, TargetId = entity } }
+                } };
+                data.VfxManifest.Slots = new[] {
+                    new VfxSlotSpec { Id = "vanity_ring", EntityId = entity, Event = RuntimeEventKind.Periodic,
+                        Anchor = "self", RendererKind = "impactRing", Color = Rgb(255,255,255),
+                        ParticleSystemId = "none", Density = 0, RepeatEvery = 1, Duration = 10,
+                        Blend = "alpha", Layer = "BeforeProjectiles", Scale = 1, Spread = 0, Alpha = .6f, StartTick = 0 },
+                    new VfxSlotSpec { Id = "vanity_light", EntityId = entity, Event = RuntimeEventKind.Periodic,
+                        Anchor = "self", RendererKind = "lightCue", Color = Rgb(255,255,255),
+                        RepeatEvery = 1, Scale = 1 }
+                };
+                var item = new Item { type = ItemID.Wood, stack = 1, accessory = true };
+                var generated = AttachItem(new GeneratedItem(), item, data);
+                var queue = (System.Collections.IList)typeof(InfiniDetachedVfxSystem)
+                    .GetField("Emissions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+
+                player.armor[13] = item;
+                InfiniCrafterLocal.Common.Players.GeneratedEquipOverlayDrawLayerBase.EmitVisibleEquipmentVfx(player);
+                Equal(0, lights.Count, "vanity accessory emits neither authored equipment illumination nor lightCue");
+                Equal(1, queue.Count, "vanity cosmetic ring remains visible");
+                player.armor[13] = new Item(); player.armor[3] = item;
+                generated.UpdateAccessory(player, false);
+                Equal(2, lights.Count, "functional accessory still emits equipment illumination and lightCue");
+                InfiniCrafterLocal.Common.Players.GeneratedEquipOverlayDrawLayerBase.EmitVisibleEquipmentVfx(player);
+                Equal(2, lights.Count, "functional overlay cannot duplicate illumination");
+                Equal(1, queue.Count, "functional and visible paths deduplicate the cosmetic slot");
+            }
+            finally
+            {
+                system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches();
+                Main.player[0] = previousPlayer; Main.netMode = previousMode; Main.myPlayer = previousLocal;
+                Main.dedServ = previousServer; MaterialClock(previousTick);
+            }
+        }));
+    }
+
     // Real held/equip hooks and visible-equipment entry point; CPU queues only.
     private static void ItemPeriodicPresentationHasOneWorldTickOwner()
     {
