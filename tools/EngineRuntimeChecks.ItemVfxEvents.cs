@@ -62,6 +62,24 @@ internal static partial class EngineRuntimeChecks
                 InfiniCrafterLocal.Common.Players.GeneratedEquipOverlayDrawLayerBase.EmitVisibleEquipmentVfx(player);
                 Equal(2, lights.Count, "functional overlay cannot duplicate illumination");
                 Equal(1, queue.Count, "functional and visible paths deduplicate the cosmetic slot");
+
+                // Vanity armor uses a different native slot-selection path from
+                // accessories, but remains presentation-only for both light owners.
+                lights.Clear(); system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches();
+                MaterialClock(511);
+                data.Accessory.Enabled = false; data.Armor.Enabled = true;
+                data.Armor.Slot = "head"; data.Armor.LightStrength = .8f; data.Armor.LightColorName = "cyan";
+                player.armor[3] = new Item();
+                item.accessory = false; item.headSlot = 1;
+                player.armor[10] = item;
+                InfiniCrafterLocal.Common.Players.GeneratedEquipOverlayDrawLayerBase.EmitVisibleEquipmentVfx(player);
+                Equal(0, lights.Count, "vanity armor never illuminates or consumes lightCue");
+                Equal(1, queue.Count, "vanity armor retains nonlight cosmetic ring");
+                player.armor[10] = new Item(); player.armor[0] = item;
+                generated.UpdateEquip(player);
+                Equal(2, lights.Count, "functional armor keeps equipment light plus periodic lightCue");
+                InfiniCrafterLocal.Common.Players.GeneratedEquipOverlayDrawLayerBase.EmitVisibleEquipmentVfx(player);
+                Equal(2, lights.Count, "functional armor overlay does not duplicate world light");
             }
             finally
             {
