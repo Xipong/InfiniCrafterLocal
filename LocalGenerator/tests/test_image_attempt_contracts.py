@@ -544,3 +544,24 @@ def test_failed_postprocess_retry_delivers_final_canvas_and_exact_png(offline, m
     receipts = json.loads(data['debug']['itemSpriteValidation'])
     assert 'final_canvas_mismatch' in receipts[0]['validation']['reasons']
     assert receipts[1]['validation']['ok']
+
+
+def test_procedural_fallback_does_not_publish_unprocessed_raw_png(offline, monkeypatch):
+    """Even explicitly enabled fallback must produce the contracted baked canvas."""
+    root, _ = offline
+    monkeypatch.setattr(generation, '_generate_backend_variants', lambda *args, **kwargs: [])
+    monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
+    monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
+
+    def raw_procedural(*args, sprite_dir, **kwargs):
+        path = sprite_dir / 'raw-fallback.png'
+        with Image.open(io.BytesIO(png((100, 70, 190)))) as source:
+            source.resize((512, 512), Image.Resampling.NEAREST).save(path, format='PNG')
+        return str(path)
+
+    monkeypatch.setattr(generation.visual_asset_pipeline, 'generate_procedural_asset', raw_procedural)
+    monkeypatch.setattr(generation, 'postprocess_sprite', lambda path, *args, **kwargs: path)
+    data = _data([])
+    path, url, score, status = invoke('item', 'bad_fallback_canvas', data)
+    assert status == 'failed' and not path and not url
+    assert not list(root.glob('infini_asset_png_*.png')), 'invalid fallback leaked into public PNG roster'
