@@ -474,3 +474,73 @@ def test_local_io_is_terminal_and_owned(offline, monkeypatch, kind, fault, phase
         assert not list(root.glob("*.part"))
         if fault == "final_save":
             assert not list(root.glob("infini_*_png_*.png"))
+
+
+@pytest.mark.parametrize('kind', ['item', 'entity', 'impact', 'equip_overlay'])
+@pytest.mark.parametrize('raw_canvas', [512, 1024])
+def test_failed_postprocess_raw_path_cannot_publish_wrong_canvas(offline, monkeypatch, kind, raw_canvas):
+    """A recoverable legacy postprocess failure must not export raw provider pixels."""
+    root, _ = offline
+    with Image.open(io.BytesIO(png((210, 100, 20)))) as source:
+        large = source.resize((raw_canvas, raw_canvas), Image.Resampling.NEAREST)
+    data_bytes = io.BytesIO()
+    large.save(data_bytes, format='PNG')
+    requests = []
+
+    def return_source(request, **kwargs):
+        requests.append(request)
+        return Response(data_bytes.getvalue())
+
+    def break_master(*args, **kwargs):
+        raise ValueError('synthetic non-I/O master normalization failure')
+
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', return_source)
+    monkeypatch.setattr(post, 'prepare_sprite_master', break_master)
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    data = _data([])
+    path, url, score, status = invoke(kind, f'raw_guard_{kind}_{raw_canvas}', data)
+
+    assert (path, url, status) == ('', '', 'failed')
+    assert len(requests) == 2, 'wrong-size source must trigger bounded retry, not a late delivery rejection'
+    assert not list(root.glob('infini_asset_png_*.png')), 'raw PNG reached the public asset serving root'
+    debug_role = 'item' if kind == 'item' else 'runtime:projectile' if kind == 'entity' else kind
+    receipts = json.loads(data['debug'][debug_role + 'SpriteValidation'])
+    assert len(receipts) == 2
+    assert all('final_canvas_mismatch' in attempt['validation']['reasons'] for attempt in receipts)
+    assert all(Path(attempt['raw']).exists() for attempt in receipts), 'retain originals privately for diagnostics'
+
+
+def test_failed_postprocess_retry_delivers_final_canvas_and_exact_png(offline, monkeypatch):
+    """One transient postprocess error recovers without delivering raw 1024px art."""
+    root, _ = offline
+    with Image.open(io.BytesIO(png((210, 100, 20)))) as source:
+        raw_image = source.resize((1024, 1024), Image.Resampling.NEAREST)
+    stream = io.BytesIO()
+    raw_image.save(stream, format='PNG')
+    raw_bytes = stream.getvalue()
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', lambda *args, **kwargs: Response(raw_bytes))
+    real_master = post.prepare_sprite_master
+    attempts = []
+
+    def transient_master(*args, **kwargs):
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise ValueError('temporary master conversion failure')
+        return real_master(*args, **kwargs)
+
+    monkeypatch.setattr(post, 'prepare_sprite_master', transient_master)
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    data = _data([])
+    path, url, score, status = invoke('item', 'recovered_bake', data)
+    assert len(attempts) == 2
+    assert status == 'generated' and path and url
+    assert Path(path).is_file() and sync.is_complete_png_file(path)
+    with Image.open(path) as final:
+        assert final.size == (data['visual'].get('preferredCanvasSize', 32),) * 2
+    public_bytes = Path(path).read_bytes()
+    assert public_bytes != raw_bytes
+    assert serve(root, path)['raw'] == public_bytes
+    assert sync.runtime_asset_files(data) == [Path(path).name]
+    receipts = json.loads(data['debug']['itemSpriteValidation'])
+    assert 'final_canvas_mismatch' in receipts[0]['validation']['reasons']
+    assert receipts[1]['validation']['ok']

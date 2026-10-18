@@ -984,8 +984,14 @@
   }
   async function refreshDefaultsUpdate() {
     if (state.pending || state.posting) return;
-    try {const remote=await api('/api/state');if(acceptSnapshot(remote)) showDefaultsUpdate();}
-    catch(error) {defaultsError(error.message);}
+    const preview=state.defaultsPreview;
+    if (!preview) return;
+    const request=preview.refreshRequest=(preview.refreshRequest || 0)+1;
+    // A dismissed/replaced preview or newer refresh owns the dialog now. Do
+    // not apply an obsolete snapshot or reopen the old consent surface.
+    const current=()=>state.defaultsPreview === preview && preview.refreshRequest === request && $('#utility-dialog').open && $('#utility-dialog').dataset.kind === 'defaults' && !state.pending && !state.posting;
+    try {const remote=await api('/api/state');if(current() && acceptSnapshot(remote)) showDefaultsUpdate();}
+    catch(error) {if(current()) defaultsError(error.message);}
   }
   function confirm(title,description,actionName,extra={},labelText='Подтвердить') {
     utility(title,`<p class="dialog-copy">${esc(description)}</p><div class="dialog-actions"><button class="button" data-ui="close-dialog">Отмена</button><button class="button ${actionName === 'stop' || actionName === 'clearTrace' ? 'button-danger':'button-primary'}" id="confirm-submit" data-submit-action>${esc(labelText)}</button></div>`);

@@ -88,17 +88,20 @@ OPEN_INFINICRAFT.bat server
 - `setup` создаёт/обновляет `LocalGenerator/.venv` и повторно устанавливает runtime-зависимости, не заменяя личный конфиг.
 - `server` запускает LocalGenerator в видимой консоли без Studio. Предварительно убедись, что порт свободен; остановка — Ctrl+C.
 
-После подготовки окружения доступны прямые команды:
+После подготовки окружения доступны прямые команды. Сначала перейди из корня распакованной папки в `LocalGenerator`, затем выполни нужную команду:
 
 ```console
-LocalGenerator\.venv\Scripts\python.exe LocalGenerator\settings_gui.py
-LocalGenerator\.venv\Scripts\python.exe LocalGenerator\server.py
+cd LocalGenerator
+.\.venv\Scripts\python.exe settings_gui.py
+.\.venv\Scripts\python.exe server.py
 ```
 
-Первая открывает ту же браузерную Studio. Отдельного настольного интерфейса больше нет; Tcl/Tk, скрытые окна и графическая сессия для Python не нужны. Для запуска без автоматического открытия браузера добавь `--no-browser`:
+Для прямого запуска важна текущая папка: относительные пути из `config.env` считаются от неё. Запуск `server.py` из корня архива может создать другой cache/папку рецептов. BAT сам выбирает `LocalGenerator` рабочей папкой; при прямом запуске сделай это вручную.
+
+`settings_gui.py` открывает ту же браузерную Studio. Отдельного настольного интерфейса больше нет; Tcl/Tk, скрытые окна и графическая сессия для Python не нужны. Для запуска без автоматического открытия браузера добавь `--no-browser`:
 
 ```console
-LocalGenerator\.venv\Scripts\python.exe LocalGenerator\settings_gui.py --no-browser
+.\.venv\Scripts\python.exe settings_gui.py --no-browser
 ```
 
 Studio напечатает локальный адрес с ключом сессии; открой его целиком в браузере на этом компьютере. Не публикуй адрес и не открывай порт наружу: Studio слушает только `127.0.0.1`. Этот режим не запускает генератор автоматически и не меняет его отдельную кнопку **«Стоп»**.

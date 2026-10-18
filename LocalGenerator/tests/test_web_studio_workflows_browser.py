@@ -436,3 +436,43 @@ def test_light_theme_and_accent_follow_current_navigation(browser_studio, viewpo
         page.locator('.mobile-menu').click()
     expect_route_highlight()
     assert server.commands.empty(), 'Reading the theme and navigating must not run actions'
+
+
+@pytest.mark.parametrize('dismissal', ['later', 'escape', 'replace', 'reopen'])
+def test_defaults_refresh_does_not_reopen_or_replace_dismissed_dialog(browser_studio, dismissal):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    snapshot['defaultsUpdate'] = {'version': 'fixture', 'revision': 'offer-a', 'changes': [
+        {'key': 'INFINI_LLM_MAX_TOKENS', 'current': '9000', 'recommended': '18000', 'reason': 'fixture'}]}
+    server.publish(snapshot)
+    page.goto(server.url + '#configure')
+    page.locator('[data-ui="defaults-update"]').click()
+    held = []
+    page.route('**/api/state', lambda route: held.append(route))
+    with page.expect_request('**/api/state'):
+        page.locator('#defaults-refresh').click()
+    page.wait_for_timeout(50)
+    assert held, 'Refresh request must be in flight before dismissal'
+    if dismissal == 'later':
+        page.locator('#utility-dialog [data-ui="close-dialog"]').click()
+    else:
+        page.keyboard.press('Escape')
+    if dismissal == 'replace':
+        page.locator('[data-ui="notifications"]').click()
+    elif dismissal == 'reopen':
+        page.locator('[data-ui="defaults-update"]').click()
+        page.locator('#defaults-refresh').focus()
+    dialog = page.locator('#utility-dialog')
+    before = page.locator('#utility-body').inner_html()
+    for route in held:
+        route.fulfill(json=snapshot)
+    page.unroute('**/api/state')
+    page.wait_for_timeout(150)
+    if dismissal in ('later', 'escape'):
+        expect(dialog).not_to_be_visible()
+    else:
+        expect(dialog).to_be_visible()
+        assert page.locator('#utility-body').inner_html() == before
+        if dismissal == 'reopen':
+            expect(page.locator('#defaults-refresh')).to_be_focused()
+    assert server.commands.empty(), 'Refreshing or dismissing must never apply recommendations'
