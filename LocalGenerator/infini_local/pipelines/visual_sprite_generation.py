@@ -396,9 +396,14 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
     # This accepted nonce/digest is ALSO a workflow input. Never replace it with a
     # stable VFX plan ID or apply it to legacy roles just to isolate filenames.
     nonce = uuid.uuid4().hex if required_vfx else ""
-    validation_kwargs: dict[str, Any] = dict(topology=request.topology, part_count_min=request.part_count_min, part_count_max=request.part_count_max)
-    if required_vfx:
-        validation_kwargs["expected_canvas"] = request.canvas
+    # Postprocess owns the compact PNG (including minimal technical recovery).
+    # Keep this final-canvas gate at the publication boundary as defense in
+    # depth: no raw-path, procedural, or other unexpected producer may
+    # deliver an asset with a different size than Visual selected.
+    validation_kwargs: dict[str, Any] = dict(
+        topology=request.topology, part_count_min=request.part_count_min,
+        part_count_max=request.part_count_max, expected_canvas=request.canvas,
+    )
     process_kwargs: dict[str, Any] = dict(topology=request.topology, part_count_min=request.part_count_min, part_count_max=request.part_count_max)
     last_path = ""
     terminal = False
@@ -524,6 +529,12 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             fallback = visual_asset_pipeline.generate_procedural_asset(data, request.audit_role, variant=0,
                 canvas_size=request.canvas, sprite_dir=output_dir, image_cls=Image, image_draw_cls=ImageDraw)
             final = postprocess_sprite(fallback, request.logical_asset_id, request.canvas, request.audit_role, output_dir=output_dir, **process_kwargs)
+            # The explicitly enabled procedural fallback uses the same PNG
+            # publication boundary. Never let its legacy raw-path error return
+            # bypass the required final canvas / alpha and PNG validation.
+            fallback_validation = validate_processed_sprite(final, request.processing_role, **validation_kwargs)
+            if sprite_validation_fatal(fallback_validation):
+                raise ValueError("procedural fallback did not produce a valid final sprite canvas")
             phase = "publication"
             published = _publish_image_png(request.publication_identity, final)
             result = replace(result, public_path=published, raw_path=str(Path(fallback).resolve()), status="fallback_after_failed_generation", technical_score=0.0, failure_phase="")

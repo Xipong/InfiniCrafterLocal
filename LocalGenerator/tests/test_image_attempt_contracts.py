@@ -376,7 +376,10 @@ def test_impact_publication_entity_identity_does_not_change_legacy_processing_to
 
     monkeypatch.setattr(generation, 'validate_processed_sprite', capture)
     out = generation.maybe_generate_visual_assets(data)
-    assert seen == [{'topology': '', 'part_count_min': 0, 'part_count_max': 0}], 'storage identity changed previously unauthored impact processing inputs'
+    assert [{key: value for key, value in row.items() if key != 'expected_canvas'} for row in seen] == [
+        {'topology': '', 'part_count_min': 0, 'part_count_max': 0}
+    ], 'storage identity must not change authored impact topology'
+    assert [row.get('expected_canvas') for row in seen] == [32], 'final PNG size is a technical delivery check'
     producer = next(row for row in out['runtimeProgram']['entities'] if row['id'] == 'orb')['visual']
     raw = Path(producer['impactSpritePath']).read_bytes()
     logical = next(row['assetId'] for row in build_visual_asset_plan(out) if row['role'] == 'impact:orb')
@@ -474,3 +477,167 @@ def test_local_io_is_terminal_and_owned(offline, monkeypatch, kind, fault, phase
         assert not list(root.glob("*.part"))
         if fault == "final_save":
             assert not list(root.glob("infini_*_png_*.png"))
+
+
+@pytest.mark.parametrize('kind,raw_size', [
+    ('item', (80, 112)),
+    ('entity', (128, 80)),
+    ('impact', (96, 144)),
+    ('equip_overlay', (120, 120)),
+])
+def test_processing_fault_still_delivers_compact_alpha_png(offline, monkeypatch, kind, raw_size):
+    """A valid generated image survives a broken master step without extra model calls."""
+    root, _ = offline
+    with Image.open(io.BytesIO(png((210, 100, 20)))) as source:
+        expanded = source.resize(raw_size, Image.Resampling.NEAREST)
+    stream = io.BytesIO()
+    expanded.save(stream, format='PNG')
+    raw_bytes = stream.getvalue()
+    requests = []
+
+    def provide(request, **kwargs):
+        requests.append(request)
+        return Response(raw_bytes)
+
+    monkeypatch.setattr(backend, 'urlopen_no_redirect', provide)
+    monkeypatch.setattr(post, 'prepare_sprite_master',
+                        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('master broken')))
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    data = _data([])
+    path, url, _score, status = invoke(kind, 'technical_bake_' + kind, data)
+
+    assert status in {'generated', 'generated_warn_invalid'} and path and url
+    assert len(requests) == 1, 'an already usable picture should not need another LLM/image request'
+    with Image.open(path) as delivered:
+        assert delivered.size == (32, 32)
+        assert delivered.getchannel('A').getextrema()[0] == 0
+    assert sync.is_complete_png_file(path)
+    assert Path(path).read_bytes() != raw_bytes
+    assert serve(root, path)['raw'] == Path(path).read_bytes(), 'friends receive the same final PNG'
+    key = 'item' if kind == 'item' else 'runtime:projectile' if kind == 'entity' else kind
+    receipt = json.loads(data['debug'][key + 'SpriteValidation'])
+    assert len(receipt) == 1 and 'final_canvas_mismatch' not in receipt[0]['validation']['reasons']
+    assert Path(receipt[0]['raw']).exists(), 'raw input remains a private diagnostic'
+
+
+@pytest.mark.parametrize('target', [16, 48, 64, 96, 128])
+def test_technical_downscale_respects_any_authored_final_canvas(offline, monkeypatch, target):
+    """No special 512/1024 size branches: the exact selected canvas wins."""
+    root, _ = offline
+    source = root / 'transparent-source.png'
+    image = Image.new('RGBA', (87, 135), (0, 0, 0, 0))
+    ImageDraw.Draw(image).ellipse((5, 5, 81, 129), fill=(220, 115, 40, 255))
+    image.save(source, format='PNG')
+    monkeypatch.setattr(post, 'prepare_sprite_master',
+                        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('master broken')))
+    out = post.postprocess_sprite(str(source), 'final_' + str(target), target_size=target,
+                                  role='item', output_dir=root)
+    with Image.open(out) as delivered:
+        assert delivered.size == (target, target)
+        assert delivered.getchannel('A').getextrema()[0] == 0
+    assert sync.is_complete_png_file(out)
+
+
+def test_postprocess_without_alpha_cannot_smuggle_opaque_raw_background(offline, monkeypatch):
+    """If no transparent stage exists, retry/failed is safer than a poster-card PNG."""
+    root, requests = offline
+    monkeypatch.setattr(post, 'apply_background_removal',
+                        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('keyer unavailable')))
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    data = _data([])
+    path, url, _score, status = invoke('item', 'opaque_background', data)
+    assert (path, url, status) == ('', '', 'failed')
+    assert len(requests) == 2, 'both bounded attempts remain available'
+    assert not list(root.glob('infini_asset_png_*.png'))
+
+
+def test_transient_unrecoverable_keying_retries_then_delivers_compact_png(offline, monkeypatch):
+    """Real processing recovers on the next attempt when minimal bake cannot."""
+    root, requests = offline
+    original = generation.postprocess_sprite
+    calls = []
+
+    def processing_only_flaky(*args, **kwargs):
+        # Selection also calls apply_background_removal; inject the failure
+        # ONLY into the first real postprocess call, not candidate scoring.
+        calls.append(True)
+        if len(calls) == 1:
+            with monkeypatch.context() as patch:
+                patch.setattr(post, 'apply_background_removal',
+                              lambda *_a, **_k: (_ for _ in ()).throw(ValueError('temporary keyer failure')))
+                return original(*args, **kwargs)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(generation, 'postprocess_sprite', processing_only_flaky)
+    monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
+    data = _data([])
+    path, url, _score, status = invoke('item', 'recovered_after_retry', data)
+    assert len(requests) == len(calls) == 2
+    assert status == 'generated' and path and url
+    with Image.open(path) as delivered:
+        assert delivered.size == (32, 32)
+    assert sync.is_complete_png_file(path)
+    assert serve(root, path)['raw'] == Path(path).read_bytes()
+    receipt = json.loads(data['debug']['itemSpriteValidation'])
+    assert len(receipt) == 2 and receipt[0]['phase'] == 'processing'
+    assert receipt[1]['validation']['ok']
+
+
+def test_failing_final_palette_step_still_delivers_from_finished_master(offline, monkeypatch):
+    """When master succeeded, reuse it rather than downgrading to the raw source."""
+    root, requests = offline
+    monkeypatch.setattr(post, 'bake_sprite_from_master',
+                        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('bake failed')))
+    data = _data([])
+    path, url, _score, status = invoke('item', 'master_recovery', data)
+    assert status in {'generated', 'generated_warn_invalid'} and path and url
+    assert len(requests) == 1
+    with Image.open(path) as delivered:
+        assert delivered.size == (32, 32)
+    assert serve(root, path)['raw'] == Path(path).read_bytes()
+
+
+def test_procedural_fallback_does_not_publish_unprocessed_raw_png(offline, monkeypatch):
+    """Even explicitly enabled fallback must produce the contracted baked canvas."""
+    root, _ = offline
+    monkeypatch.setattr(generation, '_generate_backend_variants', lambda *args, **kwargs: [])
+    monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
+    monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
+
+    def raw_procedural(*args, sprite_dir, **kwargs):
+        path = sprite_dir / 'raw-fallback.png'
+        with Image.open(io.BytesIO(png((100, 70, 190)))) as source:
+            source.resize((144, 144), Image.Resampling.NEAREST).save(path, format='PNG')
+        return str(path)
+
+    monkeypatch.setattr(generation.visual_asset_pipeline, 'generate_procedural_asset', raw_procedural)
+    monkeypatch.setattr(generation, 'postprocess_sprite', lambda path, *args, **kwargs: path)
+    data = _data([])
+    path, url, score, status = invoke('item', 'bad_fallback_canvas', data)
+    assert status == 'failed' and not path and not url
+    assert not list(root.glob('infini_asset_png_*.png')), 'invalid fallback leaked into public PNG roster'
+
+
+def test_procedural_recovery_also_delivers_compact_png(offline, monkeypatch):
+    """Explicit procedural policy still produces a baked final PNG after stage failure."""
+    root, _ = offline
+    monkeypatch.setattr(generation, '_generate_backend_variants', lambda *args, **kwargs: [])
+    monkeypatch.setattr(generation, 'VISUAL_STRICT_AI_AUTHORSHIP', False)
+    monkeypatch.setattr(generation, 'VISUAL_ALLOW_PROCEDURAL_FALLBACK', True)
+
+    def own_procedural(*args, sprite_dir, **kwargs):
+        path = sprite_dir / 'candidate.png'
+        with Image.open(io.BytesIO(png((100, 70, 190)))) as source:
+            source.resize((104, 144), Image.Resampling.NEAREST).save(path, format='PNG')
+        return str(path)
+
+    monkeypatch.setattr(generation.visual_asset_pipeline, 'generate_procedural_asset', own_procedural)
+    monkeypatch.setattr(post, 'prepare_sprite_master',
+                        lambda *args, **kwargs: (_ for _ in ()).throw(ValueError('master broken')))
+    data = _data([])
+    path, url, _score, status = invoke('item', 'fallback_compact', data)
+    assert status == 'fallback_after_failed_generation' and path and url
+    with Image.open(path) as delivered:
+        assert delivered.size == (32, 32)
+    assert sync.is_complete_png_file(path)
+    assert serve(root, path)['raw'] == Path(path).read_bytes()

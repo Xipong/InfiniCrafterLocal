@@ -118,7 +118,9 @@ def decide_defaults(path: Path, revision: str, *, accept: bool) -> dict[str, str
         output = ''.join(lines).encode('utf-8')
         if original.startswith(b'\xef\xbb\xbf'):
             output = b'\xef\xbb\xbf' + output
-        _atomic_write(path, output, expected=original)
+        # Match the full config writer without changing decision-sidecar writes.
+        destination = path.resolve(strict=True) if path.is_symlink() else path
+        _atomic_write(destination, output, expected=original)
     elif path.exists() and defaults_offer(path)['revision'] != revision:
         raise ValueError('config.env изменился после предпросмотра. Открой список изменений заново.')
     if not accept:

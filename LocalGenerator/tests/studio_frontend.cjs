@@ -13,7 +13,7 @@ assert(!source.includes('window.confirm('),'discard must use the in-page dialog'
 source=source.replace('  navigate();poll();',`
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
-  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus};
+  globalThis.studio={state,acceptSnapshot,recomputeDirty,heading,inactiveReason,fieldGroups,showDocument,showSaveConflict,focusField,navigate,fieldHTML,derivedField,defaultsSummary,showDefaultsUpdate,refreshDefaultsUpdate,action,makeFields,accountText,maybeLoadCatalog,restoreActionFocus};
 `);
 global.messages=messages;global.renderCount=0;
 vm.runInThisContext(source);
@@ -330,4 +330,39 @@ async function testCatalogAutoload() {
   state.remote.account.authenticated=true;await studio.maybeLoadCatalog();assert.equal(calls,3,'a new authenticated session can retry once');
   assert.equal(state.draft.INFINI_CODEX_LLM_MODEL,'keep-manual');
 }
-testRepeatedSubmission().then(testCatalogAutoload).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
+async function testInterruptedDefaultsRefresh() {
+  for(const interruption of ['close','replace','reopen','submit','repeat','none','error']) {
+    state.remote=null;state.draft={};state.dirty.clear();state.pending=null;state.posting=false;state.submission=null;
+    const original=snapshot({}, {savedRevision:'original',defaultsUpdate:{revision:'offer-a',changes:[]}});
+    acceptSnapshot(original);studio.showDefaultsUpdate();
+    const pending=[];
+    global.fetch=()=>new Promise(resolve=>pending.push(resolve));
+    const first=studio.refreshDefaultsUpdate();
+    const dialog=document.querySelector('#utility-dialog');
+    if(['close','replace','reopen','error'].includes(interruption)) dialog.close();
+    if(interruption === 'replace') showDocument({title:'Newer document',content:'Keep this'});
+    if(interruption === 'reopen') studio.showDefaultsUpdate();
+    if(interruption === 'submit') state.posting=true;
+    let second;
+    if(interruption === 'repeat') second=studio.refreshDefaultsUpdate();
+    const preview=state.defaultsPreview, title=document.querySelector('#utility-title').textContent;
+    pending[0]({ok:interruption !== 'error',json:async()=>snapshot({}, {savedRevision:'stale',defaultsUpdate:{revision:'offer-stale',changes:[]}})});
+    await first;
+    if(interruption === 'none') {
+      assert.equal(state.remote.savedRevision,'stale','active refresh is still applied');
+      assert.notEqual(state.defaultsPreview,preview);
+    } else {
+      assert.equal(state.remote.savedRevision,'original',`${interruption}: obsolete refresh cannot roll back the current snapshot`);
+      assert.equal(state.defaultsPreview,preview,`${interruption}: obsolete refresh cannot replace the current preview`);
+      assert.equal(document.querySelector('#utility-title').textContent,title);
+      if(['close','error'].includes(interruption)) assert.equal(dialog.open,false,'dismissed dialog stays closed');
+    }
+    if(second) {
+      pending[1]({ok:true,json:async()=>snapshot({}, {savedRevision:'latest',defaultsUpdate:{revision:'offer-latest',changes:[]}})});
+      await second;
+      assert.equal(state.remote.savedRevision,'latest','latest repeated refresh wins');
+    }
+    state.posting=false;
+  }
+}
+testRepeatedSubmission().then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});

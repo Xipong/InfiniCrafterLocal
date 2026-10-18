@@ -48,14 +48,19 @@ internal static partial class EngineRuntimeChecks
             string unknownProfile = System.IO.Path.Combine(Terraria.Program.SavePath, "unknown-native-profile.dll");
             System.IO.File.WriteAllBytes(unknownProfile, new byte[] { 1, 2, 3 });
             int opened = 0;
-            using (var hashProbe = new MonoMod.RuntimeDetour.ILHook(adapter.GetMethod("ValidateNativeProfile", PersistenceStatic)!, il => {
-                var sites = il.Body.Instructions.Where(ins => ins.Operand is Mono.Cecil.MethodReference method
-                    && method.DeclaringType.FullName == "System.IO.File" && method.Name == "OpenRead").ToArray();
-                Equal(1, sites.Length, "one actual native-profile file-open boundary");
-                var cursor = new MonoMod.Cil.ILCursor(il); cursor.Goto(sites[0]);
-                cursor.EmitDelegate((Func<string,string>)(_ => { opened++; return unknownProfile; }));
-            }))
+            // Observe the file boundary itself: patching the private hash method
+            // does not reliably intercept its optimized execution path.
+            string nativePath = typeof(Terraria.GameContent.Drawing.TileDrawing).Assembly.Location;
+            using (var hashProbe = new MonoMod.RuntimeDetour.Hook(
+                typeof(System.IO.File).GetMethod("OpenRead", new[] { typeof(string) })!,
+                (Func<Func<string, System.IO.FileStream>, string, System.IO.FileStream>)((original, path) => {
+                    if (path == nativePath) { opened++; return original(unknownProfile); }
+                    return original(path);
+                })))
             {
+                using (var unrelated = System.IO.File.OpenRead(unknownProfile))
+                    Equal(1, unrelated.ReadByte(), "unrelated file opens keep their original bytes");
+                Equal(0, opened, "observer redirects only the exact native assembly path");
                 object?[] install = { (Func<int,int,bool>)((_,_) => false), null, null };
                 Equal(false, (bool)PlacedNativeCall("TryInstall", install)!, "unknown native bytes cannot install");
                 Equal(true, ((string)install[2]!).Contains("unsupported native assembly SHA256"), "hash refusal precedes hooks");

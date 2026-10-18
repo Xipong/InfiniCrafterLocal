@@ -221,3 +221,111 @@ def test_equivalent_recommendations_keep_original_spelling_and_bytes(tmp_path):
     config.write_bytes(original)
     assert defaults_offer(config)['changes'] == []
     assert config.read_bytes() == original
+
+
+def test_accept_preserves_config_symlink_and_updates_target(tmp_path):
+    import os
+    import pytest
+    owner = importlib.import_module('infini_local.desktop.settings_defaults')
+    target_dir = tmp_path / 'shared'
+    target_dir.mkdir()
+    target = target_dir / 'actual.env'
+    original = b'# retained\nINFINI_LLM_MAX_TOKENS=9000\nINFINI_EXTENSION=keep\n'
+    target.write_bytes(original)
+    if os.name != 'nt':
+        target.chmod(0o640)
+    config = tmp_path / 'config.env'
+    try:
+        config.symlink_to('shared/actual.env')
+    except OSError:
+        pytest.skip('Test environment cannot create symlinks')
+    offer = owner.defaults_offer(config)
+    owner.decide_defaults(config, offer['revision'], accept=True)
+    assert config.is_symlink()
+    assert config.readlink() == type(config)('shared/actual.env')
+    assert target.read_bytes() == original.replace(b'9000', b'18000')
+    assert owner.defaults_offer(config)['changes'] == []
+    if os.name != 'nt':
+        assert target.stat().st_mode & 0o777 == 0o640
+
+
+def test_linked_config_failed_publish_keeps_target_and_can_retry(tmp_path, monkeypatch):
+    import pytest
+    owner = importlib.import_module('infini_local.desktop.settings_defaults')
+    target_dir = tmp_path / 'shared'
+    target_dir.mkdir()
+    target = target_dir / 'actual.env'
+    original = b'INFINI_LLM_MAX_TOKENS=9000\n# retained\n'
+    target.write_bytes(original)
+    config = tmp_path / 'config.env'
+    try:
+        config.symlink_to(target)
+    except OSError:
+        pytest.skip('Test environment cannot create symlinks')
+    offer = owner.defaults_offer(config)
+
+    def locked_file(source, destination):
+        assert type(config)(source).parent == target.parent
+        assert destination == target
+        raise PermissionError('locked config')
+
+    with monkeypatch.context() as patch:
+        patch.setattr(owner.os, 'replace', locked_file)
+        with pytest.raises(PermissionError, match='locked config'):
+            owner.decide_defaults(config, offer['revision'], accept=True)
+    assert config.is_symlink()
+    assert target.read_bytes() == original
+    assert owner.defaults_offer(config)['changes'] == offer['changes']
+    assert not list(tmp_path.rglob('*.tmp'))
+    assert not config.with_name('config.env.defaults.json').exists()
+    owner.decide_defaults(config, offer['revision'], accept=True)
+    assert config.is_symlink()
+    assert target.read_bytes() == original.replace(b'9000', b'18000')
+
+
+def test_linked_config_changed_during_write_is_not_overwritten(tmp_path, monkeypatch):
+    import pytest
+    owner = importlib.import_module('infini_local.desktop.settings_defaults')
+    target = tmp_path / 'actual.env'
+    target.write_bytes(b'INFINI_LLM_MAX_TOKENS=9000\n')
+    config = tmp_path / 'config.env'
+    try:
+        config.symlink_to(target)
+    except OSError:
+        pytest.skip('Test environment cannot create symlinks')
+    offer = owner.defaults_offer(config)
+    updated = b'INFINI_LLM_MAX_TOKENS=30000\n# external edit\n'
+    real_fsync = owner.os.fsync
+
+    def change_while_flushing(descriptor):
+        real_fsync(descriptor)
+        target.write_bytes(updated)
+
+    monkeypatch.setattr(owner.os, 'fsync', change_while_flushing)
+    with pytest.raises(ValueError, match='изменился'):
+        owner.decide_defaults(config, offer['revision'], accept=True)
+    assert config.is_symlink()
+    assert target.read_bytes() == updated
+    assert not list(tmp_path.glob('*.tmp'))
+
+
+def test_decline_replaces_sidecar_symlink_without_modifying_its_target(tmp_path):
+    import pytest
+    owner = importlib.import_module('infini_local.desktop.settings_defaults')
+    config = tmp_path / 'config.env'
+    original = b'INFINI_LLM_MAX_TOKENS=9000\n'
+    config.write_bytes(original)
+    unrelated = tmp_path / 'unrelated.json'
+    unrelated_bytes = b'{"unrelated": "keep"}\n'
+    unrelated.write_bytes(unrelated_bytes)
+    sidecar = config.with_name('config.env.defaults.json')
+    try:
+        sidecar.symlink_to(unrelated)
+    except OSError:
+        pytest.skip('Test environment cannot create symlinks')
+    offer = owner.defaults_offer(config)
+    owner.decide_defaults(config, offer['revision'], accept=False)
+    assert unrelated.read_bytes() == unrelated_bytes
+    assert not sidecar.is_symlink()
+    assert config.read_bytes() == original
+    assert owner.defaults_offer(config)['dismissed']
