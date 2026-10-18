@@ -741,10 +741,12 @@ public sealed class GeneratedItemRegistryService : IDisposable
                     // Local cache files for every world share this directory. Do a
                     // schema-exact world-id prefilter before strict deserialization so
                     // stale records from unrelated worlds cannot flood diagnostics.
-                    // Current-world records still pass through the strict boundary.
+                    // Current-world records pass the stable persisted boundary:
+                    // exact inert metadata/lossless presentation projection, then
+                    // the unchanged strict executable DTO. Never rewrite on read.
                     if (!CacheJsonTargetsCurrentWorld(json))
                         continue;
-                    var data = GeneratedItemData.FromJson(json);
+                    var data = GeneratedItemData.FromLocalCacheJson(json);
                     if (data is not null && !string.IsNullOrWhiteSpace(data.Id) && IsCurrentWorldData(data) && !_byId.ContainsKey(data.Id))
                         _byId[data.Id] = data;
                 }

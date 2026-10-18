@@ -10,12 +10,15 @@ namespace InfiniCrafterLocal.Common.VFX;
 public sealed partial class InfiniDetachedVfxSystem
 {
     private sealed record PathDesign(string TexturePath,string Layer,string Blend,float Alpha,string Source,string Anchor,int HistoryTicks,
-        float MinDistance,float MaxSegment,float Width,string Domain,string Uv,float Repeat,float Scroll,
+        float MinDistance,float MaxSegment,float Width,string Domain,string Uv,float Repeat,float Scroll,string GeometryKind,
         VfxNumberRamp WidthRamp,VfxNumberRamp OpacityRamp,VfxColorRamp ColorRamp,int MaxDraw,int StartTick);
     private static PathDesign CopyPath(VfxTexturedPathSpec p,float alpha,string blend,string path="",string layer="BeforeProjectiles",string anchor="self",int maxDraw=512,int startTick=0)
         =>new(path,layer,blend,alpha,p.Source,anchor,p.HistoryTicks,p.MinDistancePx,p.MaxSegmentLengthPx,p.WidthPx,p.ProfileDomain,
-            p.UvMode,p.RepeatLengthPx,p.ScrollPxPerTick,VfxNumberRamp.Copy(p.WidthProfile),VfxNumberRamp.Copy(p.OpacityProfile),
+            p.UvMode,p.RepeatLengthPx,p.ScrollPxPerTick,PathGeometryKind(p),VfxNumberRamp.Copy(p.WidthProfile),VfxNumberRamp.Copy(p.OpacityProfile),
             VfxColorRamp.Copy(p.ColorProfile),maxDraw,startTick);
+    private static string PathGeometryKind(VfxTexturedPathSpec p) => p.Source=="ownerLink"
+        ? p.OwnerAnchor switch { "mountedCenter" => "ownerLink", "frontHand" => "ownerLinkFrontHand", _ => throw new InvalidOperationException("ownerLink requires explicit ownerAnchor") }
+        : p.Source;
     private readonly record struct PathSample(Vector2 Position,ulong Tick);
     private sealed class MaterialPath {
         internal required VfxSourceBinding Binding;
@@ -25,6 +28,7 @@ public sealed partial class InfiniDetachedVfxSystem
         internal Vector2[] Geometry=Array.Empty<Vector2>();
         internal ulong FirstTick,SampleTick;
         internal int InitialAge;
+        internal bool Retired;
     }
     private static readonly List<MaterialPath> MaterialPaths=new();
     internal static void RegisterMaterialPaths(GeneratedItemData data,string entityId,string sourceKey,VfxSourceBinding? binding)
@@ -32,6 +36,7 @@ public sealed partial class InfiniDetachedVfxSystem
         if(Main.dedServ||binding is null||!binding.IsLive)return;
         foreach(var slot in data.VfxManifest.Slots) {
             if(slot.EntityId!=entityId||slot.Path is not {} path)continue;
+            if(path.Source=="ownerLink"&&!binding.TryGeometry(PathGeometryKind(path),out _))continue;
             if(MaterialPaths.Any(p=>ReferenceEquals(p.Binding.Generation,binding.Generation)&&p.SlotId==slot.Id))continue;
             if(OwnedRecordCount>=MaxEmissions)return;
             string texture=ResolveMaterialTexture(data,entityId,path.Texture);if(string.IsNullOrEmpty(texture))continue;
@@ -51,14 +56,17 @@ public sealed partial class InfiniDetachedVfxSystem
                 p.History.Add(new(frame.Position,now));
             }else {
                 p.Geometry=Array.Empty<Vector2>();
-                if(p.Binding.IsLive&&now-p.FirstTick+(ulong)Math.Max(0,p.InitialAge)>=(ulong)p.Design.StartTick&&p.Binding.TryGeometry(p.Design.Source,out var points))p.Geometry=points;
+                if(p.Binding.IsLive&&now-p.FirstTick+(ulong)Math.Max(0,p.InitialAge)>=(ulong)p.Design.StartTick&&p.Binding.TryGeometry(p.Design.GeometryKind,out var points))p.Geometry=points;
+                // Current owner geometry cannot coast on a frozen endpoint or
+                // resurrect without a new producer after owner retirement.
+                else if(p.Design.Source=="ownerLink"&&(!p.Binding.IsLive||!p.Binding.TryGeometry(p.Design.GeometryKind,out _)))p.Retired=true;
             }
         }
-        MaterialPaths.RemoveAll(p=>!p.Binding.IsLive&&(p.Design.Source!="anchorHistory"||p.History.Count==0));
+        MaterialPaths.RemoveAll(p=>p.Retired||!p.Binding.IsLive&&(p.Design.Source!="anchorHistory"||p.History.Count==0));
     }
     private static VertexPositionColorTexture[] BuildMaterialPathMesh(Vector2[] input,float[] ages,PathDesign d,ulong worldTick,Func<bool> spend)
     {
-        int cap=d.Source=="anchorHistory"?32:65;
+        int cap=d.Source=="ownerLink"?2:d.Source=="anchorHistory"?32:65;
         if(input.Length<2||input.Length>cap||input.Any(p=>!float.IsFinite(p.X)||!float.IsFinite(p.Y)))return Array.Empty<VertexPositionColorTexture>();
         var points=new List<Vector2>(input);var domains=new List<float>();
         var distances=new List<float>{0};float total=0;

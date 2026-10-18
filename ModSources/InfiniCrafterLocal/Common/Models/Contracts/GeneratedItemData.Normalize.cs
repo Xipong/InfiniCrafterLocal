@@ -312,8 +312,10 @@ public sealed partial class GeneratedItemData
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires its selected producer's ready PNG");
             }
             if (selected == "impact") {
-                if (entity.Visual.ImpactCanvasSize is null)
-                    throw new InvalidDataException("selected impact PNG requires explicit impactCanvasSize");
+                // Canvas choice belongs to fresh image generation/delivery. The
+                // native impact renderer uses the selected texture's real frame,
+                // so old executable definitions need no invented canvas value.
+                // Present metadata is still validated by its strict DTO setter.
                 if (!(VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Any(s => s.EntityId == entity.Id && s.RendererKind == "impactSprite"))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires exact same-entity impactSprite producer");
                 if ((texture is not null || SourceMode is not ("developer_fixture" or "test_fixture"))

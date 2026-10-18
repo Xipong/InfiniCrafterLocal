@@ -13,9 +13,10 @@ namespace InfiniCrafterLocal.Common.Models;
 
 /// <summary>
 /// Serialization profiles for generated-item v5. Full/cache JSON preserves
-/// authoring diagnostics; multiplayer transports only the accepted typed runtime
-/// and final asset identities; player saves contain a compact world-scoped id.
-/// No old schema or runtime contract is imported.
+/// authoring diagnostics; its explicit persisted read boundary projects only
+/// known inert v5 metadata and lossless historical presentation. Multiplayer
+/// transports the accepted current typed runtime/final asset identities; player
+/// saves contain a compact world-scoped id. Fresh/network JSON remains strict.
 /// </summary>
 public sealed partial class GeneratedItemData
 {

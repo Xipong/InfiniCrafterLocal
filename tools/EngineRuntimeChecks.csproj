@@ -83,6 +83,8 @@
     <Compile Include="EngineRuntimeChecks.Exhaustion.cs" />
     <Compile Include="EngineRuntimeChecks.LegacyRetirement.cs" />
     <Compile Include="EngineRuntimeChecks.NativeDtoRetirement.cs" />
+    <Compile Include="EngineRuntimeChecks.PersistedDefinitions.cs" />
+    <Compile Include="EngineRuntimeChecks.OwnerLink.cs" />
     <Compile Include="EngineRuntimeChecks.ForgePresentation.cs" />
     <Compile Include="EngineRuntimeChecks.GeneratedItemPrefix.cs" />
     <Compile Include="EngineRuntimeChecks.PlayedMechanics.cs" />

@@ -141,7 +141,7 @@ _RENDERER_SEMANTICS = {
     "lightCue": "World lighting from local color/scale at the resolved anchor, not a drawn sprite; no alpha/blend/layer/duration/spread/particleSystemId/textureRole. Nonperiodic events omit startTick/repeatEvery/density. Item periodic requires only repeatEvery; projectile periodic requires startTick/repeatEvery and density only when repeatEvery=0. Existing world-clock cadence is unchanged; no particle budget is spent.",
     "soundCue": "Explicit finite Terraria.ID.SoundID sample at the resolved anchor: soundCue requires an explicit soundId from the general palette in both Director output and persisted wire. Item1 is valid only as an explicit selection. Only soundCue may carry soundId or sound; present null, unknown names, aliases and free paths are invalid. Nonperiodic sound omits all scheduling/draw/Dust fields. Item periodic adds repeatEvery (0 means 10 world ticks). Projectile periodic adds startTick and repeatEvery; only repeatEvery=0 requires density for automatic cadence, otherwise omit density. Every soundCue also requires sound={volume,pitch,pitchVariance}: exact final playback controls, independent of common alpha and phaseOffset. Volume zero is deliberate silence. Pitch is absolute relative to the unpitched sample, not added to native SoundID pitch or Main.musicPitch. Variance is the full random pitch width, not a statistical variance; pitch +/- pitchVariance/2 must remain within [-1,1]. Preserve native asset/variants/weights and instance/pause policies. Missing soundId or sound is invalid and never selects a sample or derives playback controls from alpha/phaseOffset. No sound-library/name classifier. Generated items have native Item.UseSound=null: without a soundCue slot there is no generated use sound; useStyle, parent names and damage class do not supply a fallback. Audio is a separate presentation choice, never selected or muted by visual metadata. A soundCue-only slots array is valid without trails, particles, glow or a PNG; bind audio to an exact available runtime pair when intended. Empty slots remains a valid deliberately silent choice; no item is required to have sound. Repair must preserve valid silence and valid sound choices outside its explicit field permissions.",
     "spriteElement": "Owned textured elements, captured immutable dimensions/curves/color/texture identity at emission. World attachment freezes event pose; source attachment uses exact live source generation. Simulation/lifetime use world ticks, never Draw or extraUpdates. duration is individual lifetime; event startTick is delay with repeatEvery=0; periodic repeatEvery>=1, projectile startTick gates age, item startTick=0. Source retirement ends source attachment; delayed world emissions retain event pose. No gameplay or inferred image/PCA axis.",
-    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history or exact accepted collision beam/whip geometry. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. Path coverage is independent of PNG-body presentation; source=whip/beam uses that exact accepted geometry. runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; history/source owns path lifetime. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
+    "texturedPath": "Projectile-only live periodic/on_spawn connected textured path: actual sampled anchor history, exact accepted collision beam/whip geometry, or explicit source=ownerLink. ownerLink is a cosmetic straight two-point connector from explicit path.ownerAnchor to projectile.Center, available independently of movement/controller. ownerAnchor is required exactly as mountedCenter (native owner.MountedCenter, not a hand) or frontHand (native composite hand only while compositeFrontArm.enabled). A disabled/unavailable front hand refuses and retires the connector without stale-pose coasting or a center fallback. Every other path source forbids ownerAnchor. It adds no collision or damage and retires with invalid owner/source. A full inventory PNG, hidden root body or head-only projectile does not draw a connecting chain/rope: when intended, author that connector separately with ownerLink and explicit texture/width/UV controls. Physical coverage is a model choice: baked_sprite/reuse_item_icon draw a single PNG at the entity center (whip terminal point), not the full collision curve/beam. Path coverage is independent of PNG-body presentation; source=whip/beam uses that exact accepted geometry. runtime_geometry already draws its implemented collision geometry. Selection is not automatic and slots may remain empty for deliberately restrained/invisible presentation. startTick gates live sampling; history/source owns path lifetime. History retains at most 32 sections and ages to silence after retirement; geometry ends with source and preserves every collision corner (at most 66 sections including interpolated middle-profile knot). width is authored decorative width, never silently geometry width. Charge each segment against shared caps; skip true gaps, never fabricate/smooth trajectories. repeat UV uses cumulative distance plus world-clock scroll; stretch has no scroll. Read-only gameplay geometry, no generated shader/code.",
 }
 
 
@@ -247,6 +247,7 @@ def _textured_path_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
                 sources.append("beam")  # Colliding gives ChannelBeam precedence over movement.
         elif isinstance(movement, Mapping) and movement.get("name") == "move_whip_lash" and type(movement.get("code")) is int and movement["code"] == 18:
             sources.append("whip")
+        sources.append("ownerLink")  # Generic explicit connector; no movement/preset selection.
         rows.append({"entityId": entity["id"], "sources": sources})
     return rows
 
@@ -329,22 +330,33 @@ def _sound_schema() -> dict[str, Any]:
     }
 
 
-def _sound_slot_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any]]:
+def _native_float32(value: Any) -> float:
+    return struct.unpack("!f", struct.pack("!f", value))[0]
+
+
+def _sound_slot_errors(slot: Mapping[str, Any], path: str, *, persisted_wire: bool = False) -> list[dict[str, Any]]:
     payload = slot.get("sound")
     if slot.get("rendererKind") != "soundCue" or not isinstance(payload, Mapping):
         return []
     properties = _sound_schema()["properties"]
+    if persisted_wire:
+        properties = {field: {**schema, "x-nativeFloat32Bounds": True} for field, schema in properties.items()}
     errors = []
     for field, schema in properties.items():
         value = payload.get(field)
-        if not strict_schema_errors(value, schema) and value != 0 and struct.unpack("!f", struct.pack("!f", value))[0] == 0:
+        if not strict_schema_errors(value, schema) and value != 0 and _native_float32(value) == 0:
             errors.append({"path": path + ".sound." + field,
                            "message": "A nonzero authored sound control must remain nonzero in native float32 playback; choose an explicit representable value or deliberate zero."})
     pitch, variance = payload.get("pitch"), payload.get("pitchVariance")
     if (not strict_schema_errors(pitch, properties["pitch"])
-            and not strict_schema_errors(variance, properties["pitchVariance"])
-            and abs(pitch) + variance / 2 > 1.0):
-        errors.append({"path": path + ".sound.pitchVariance", "message": "pitchVariance must be <= 2*(1-abs(pitch)); preserve valid central pitch"})
+            and not strict_schema_errors(variance, properties["pitchVariance"])):
+        interval_end = abs(pitch) + variance / 2
+        if persisted_wire:
+            # Match VfxSoundSpec's Single operands, division and addition, not a
+            # double sum of saved decimals. Fresh Director/Repair stays exact.
+            interval_end = _native_float32(abs(_native_float32(pitch)) + _native_float32(_native_float32(variance) / 2))
+        if interval_end > 1.0:
+            errors.append({"path": path + ".sound.pitchVariance", "message": "pitchVariance must be <= 2*(1-abs(pitch)); preserve valid central pitch"})
     return errors
 
 
@@ -784,6 +796,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
         "phaseOffset": {"type": "number", "minimum": -1.0, "maximum": 1.0},
     })
     manifest_schema = {
+        "x-nativeFloat32Bounds": True,
         "type": "object", "additionalProperties": False,
         "properties": {
             "schema": {"const": VFX_MANIFEST_SCHEMA},
@@ -828,7 +841,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
                 errors.append({"path": path + ".entityId", "message": "runtime wire supports at most one impactSprite asset per entity"})
             impact_entities.add(entity_id)
         errors.extend(_material_slot_errors(slot, path))
-        errors.extend(_sound_slot_errors(slot, path))
+        errors.extend(_sound_slot_errors(slot, path, persisted_wire=True))
     for error in vfx_png_dependencies(data, manifest)["errors"]:
         errors.append({**error, "path": error["path"].replace("$.", "$.vfxManifest.", 1)})
     return {"ok": not errors, "errors": errors}
@@ -882,7 +895,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
             "spriteStampTrail consumes textureRole through the exact bound entity; use item for the item PNG or entity for the bound entity PNG. impactSprite instead consumes its dedicated impact texture.",
             "Sprite renderers require a non-none textureRole. Every other renderer forbids common textureRole; primitive and Dust renderers do not consume a gameplay PNG.",
-            "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; omit common scale/density/spread/particleSystemId/textureRole. Respect their own timing, opacity profiles and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip geometry owns placement and requires neutral anchor=self; anchorHistory keeps its authored anchor.",
+            "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; omit common scale/density/spread/particleSystemId/textureRole. Respect their own timing, opacity profiles and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip/ownerLink current geometry owns placement and requires neutral anchor=self, historyTicks=0, minDistancePx=0 and profileDomain=length; anchorHistory keeps its authored anchor. ownerLink is an explicit optional cosmetic connector to projectile.Center, not automatic from movement, item names or categories. Require path.ownerAnchor=mountedCenter or frontHand only on ownerLink; omit it on all other sources. mountedCenter reads native owner.MountedCenter, not a hand. frontHand requires a currently enabled compositeFrontArm; when unavailable the connector is refused/retired, never guessed from body frames or changed to center.",
             "Only rendererKind=impactSprite authors required spritePrompt/spriteNegativePrompt/spriteCanvasSize; spritePrompt describes one dedicated impact sprite and spriteCanvasSize explicitly chooses its PNG canvas, independent of hitbox. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot omits all three image request fields.",
             _impact_sprite_background_rule(),
             "Slots may be empty when presentation should be restrained.",

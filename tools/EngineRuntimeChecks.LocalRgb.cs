@@ -161,7 +161,10 @@ internal static partial class EngineRuntimeChecks
             Equal(true, GeneratedItemData.FromJson(invalidImpact.ToJsonString()) is null, "invalid impact canvas refused: " + literal);
         }
         visual.Remove("impactCanvasSize");
-        Equal(true, GeneratedItemData.FromJson(invalidImpact.ToJsonString()) is null, "selected impact cannot invent canvas");
+        var historicalImpact = GeneratedItemData.FromJson(invalidImpact.ToJsonString())
+            ?? throw new InvalidOperationException("native impact execution must not require generation-only canvas metadata");
+        Equal(true, historicalImpact.RuntimeProgram.Entities[0].Visual.ImpactCanvasSize is null, "missing impact canvas is preserved, never invented");
+        Equal(1f, SpritePresentation.Resolve(historicalImpact, historicalImpact.RuntimeProgram.ItemEntityId, "impact").FrameScale(64,64), "impact frame still uses actual selected texture dimensions");
     }
 
     private static void VfxLocalRgbAdmissionAndSerialization()

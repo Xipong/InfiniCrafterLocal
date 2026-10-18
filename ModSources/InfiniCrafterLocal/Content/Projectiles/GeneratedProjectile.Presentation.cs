@@ -10,6 +10,10 @@ public sealed partial class GeneratedProjectile
 {
     private object _presentationGeneration=new();
     private bool _presentationRetired;
+    // A live connector must not attach to a replacement Player in the same
+    // owner slot. Existing projectile generation/identity fences stay upstream.
+    private object? _ownerLinkGeneration;
+    private Player? _ownerLinkOwner;
     internal object PresentationGeneration=>_presentationGeneration;
     internal int PresentationWorldAge=>_vfxState.Tick;
     internal bool PresentationSourceLive=>_configured&&!_presentationRetired&&_activationDelayTicks<=0&&_data is not null&&_entity is not null;
@@ -23,7 +27,21 @@ public sealed partial class GeneratedProjectile
     internal bool TryCapturePresentationGeometry(string kind,out Vector2[] points)
     {
         points=Array.Empty<Vector2>();if(!PresentationSourceLive)return false;
-        if(kind=="beam"&&_entity!.Controller.Code==RuntimeControllerCode.ChannelBeam) {
+        if(kind is "ownerLink" or "ownerLinkFrontHand") {
+            if(Projectile.owner<0||Projectile.owner>=Main.player.Length||Main.player[Projectile.owner] is not {active:true,dead:false} owner)return false;
+            if(!ReferenceEquals(_ownerLinkGeneration,_presentationGeneration)) {
+                _ownerLinkGeneration=_presentationGeneration;_ownerLinkOwner=owner;
+            }
+            if(!ReferenceEquals(_ownerLinkOwner,owner))return false;
+            // Internal geometry variants preserve the public ownerLink source.
+            // Disabled composite pose fields are not used by the native renderer.
+            Vector2 anchor;
+            if(kind=="ownerLinkFrontHand") {
+                if(!owner.compositeFrontArm.enabled)return false;
+                anchor=owner.RotatedRelativePoint(owner.GetFrontHandPosition(owner.compositeFrontArm.stretch,owner.compositeFrontArm.rotation),addGfxOffY:false);
+            } else anchor=owner.MountedCenter;
+            points=new[]{anchor,Projectile.Center};
+        } else if(kind=="beam"&&_entity!.Controller.Code==RuntimeControllerCode.ChannelBeam) {
             if(Projectile.owner<0||Projectile.owner>=Main.player.Length||Main.player[Projectile.owner] is not {active:true})return false;
             GetChannelBeamGeometry(out var a,out var b,out _);points=new[]{a,b};
         } else if(kind=="whip"&&_entity!.Controller.Code!=RuntimeControllerCode.ChannelBeam&&_entity.Movement.Code==18&&_whipPoints.Count>1) points=_whipPoints.ToArray();

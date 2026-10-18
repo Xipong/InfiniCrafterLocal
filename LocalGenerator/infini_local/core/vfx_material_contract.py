@@ -82,7 +82,7 @@ def material_slot_clauses(item_ids: list[str], simple_renderers: list[str], even
         _when({**sprite, "event": {"const": "periodic"}, "entityId": {"enum": item_ids}}, {"properties": {"startTick": {"const": 0}}}),
         _when({**sprite, "event": {"enum": ["on_expire", "on_kill"]}}, {"properties": {"element": {"properties": {"attachment": {"const": "world"}}}}}),
         *[_when({**path, "entityId": {"const": row["entityId"]}}, {"properties": {"path": {"properties": {"source": {"enum": row["sources"]}}}}}) for row in path_sources],
-        _when({**path, "path": {"properties": {"source": {"enum": ["beam", "whip"]}}, "required": ["source"]}}, {"properties": {"anchor": {"const": "self"}}}),
+        _when({**path, "path": {"properties": {"source": {"enum": ["beam", "whip", "ownerLink"]}}, "required": ["source"]}}, {"properties": {"anchor": {"const": "self"}}}),
     ]
 
 
@@ -168,20 +168,26 @@ def screen_shake_schema() -> dict[str, Any]:
 def path_schema() -> dict[str, Any]:
     schema = _object({
         "texture": texture_schema(),
-        "source": {"type": "string", "enum": ["anchorHistory", "beam", "whip"], "description": "Actual timestamped anchor history or exact accepted beam/whip collision geometry, read-only. Never approximate trajectory/range from item name or sprite. Preserve all collision corners."},
+        "source": {"type": "string", "enum": ["anchorHistory", "beam", "whip", "ownerLink"], "description": "anchorHistory reads timestamped anchors; beam/whip read exact accepted collision geometry. ownerLink explicitly draws a cosmetic straight two-point connector from the explicit ownerAnchor to projectile.Center; no collision/damage or inferred grip. Never approximate trajectory/range from item name or sprite. Preserve all collision corners."},
         "historyTicks": _number(0, 32, "World ticks retained: 2..32 for history, 0 for current geometry.", integer=True),
         "minDistancePx": _number(0, 16, "Pixels between accepted history samples; 0 for current geometry."),
         "maxSegmentLengthPx": _number(1, 4096, "Pixels: skip true gaps, never bridge/smooth into invented paths."),
         "widthPx": _number(0, 96, "Authored decorative pixels, not collision geometry width; zero stays zero."),
         "widthProfile": _profile(4), "opacityProfile": _profile(1), "colorProfile": _profile(),
-        "profileDomain": {"type": "string", "enum": ["age", "length"], "description": "age uses each retained history sample age/historyTicks; length uses normalized cumulative geometric length. History can select either; current beam/whip geometry requires length."},
+        "profileDomain": {"type": "string", "enum": ["age", "length"], "description": "age uses each retained history sample age/historyTicks; length uses normalized cumulative geometric length. History can select either; current beam/whip/ownerLink geometry requires length."},
         "uvMode": {"type": "string", "enum": ["stretch", "repeat"]},
         "repeatLengthPx": _number(1, 512, "Pixels per texture repeat along cumulative geometric distance. stretch requires 1."),
         "scrollPxPerTick": _number(-32, 32, "UV pixels per world-clock tick; stretch requires 0."),
     })
+    schema["properties"]["ownerAnchor"] = {
+        "type": "string", "enum": ["mountedCenter", "frontHand"],
+        "description": "Required only for source=ownerLink; forbidden for every other source. mountedCenter reads exact owner.MountedCenter, not a hand. frontHand reads native current composite front hand only while compositeFrontArm.enabled; unavailable/disabled pose refuses and retires the connector, never falls back to center or stale pose. No guessed skin-frame/PNG grip or offsets."
+    }
     schema["allOf"] = [
+        _when({"source": {"const": "ownerLink"}}, {"required": ["ownerAnchor"]}),
+        _when({"source": {"enum": ["anchorHistory", "beam", "whip"]}}, {"properties": {"ownerAnchor": {"enum": []}}}),
         _when({"source": {"const": "anchorHistory"}}, {"properties": {"historyTicks": {"minimum": 2}}}),
-        _when({"source": {"enum": ["beam", "whip"]}}, {"properties": {"historyTicks": {"const": 0}, "minDistancePx": {"const": 0}, "profileDomain": {"const": "length"}}}),
+        _when({"source": {"enum": ["beam", "whip", "ownerLink"]}}, {"properties": {"historyTicks": {"const": 0}, "minDistancePx": {"const": 0}, "profileDomain": {"const": "length"}}}),
         _when({"uvMode": {"const": "stretch"}}, {"properties": {"repeatLengthPx": {"const": 1}, "scrollPxPerTick": {"const": 0}}}),
     ]
     return schema

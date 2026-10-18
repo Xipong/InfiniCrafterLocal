@@ -454,7 +454,7 @@ def test_defaults_refresh_does_not_reopen_or_replace_dismissed_dialog(browser_st
     page.wait_for_timeout(50)
     assert held, 'Refresh request must be in flight before dismissal'
     if dismissal == 'later':
-        page.locator('#utility-dialog [data-ui="close-dialog"]').click()
+        page.locator('#utility-dialog').get_by_role('button', name='Позже', exact=True).click()
     else:
         page.keyboard.press('Escape')
     if dismissal == 'replace':
