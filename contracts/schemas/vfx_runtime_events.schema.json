@@ -912,7 +912,8 @@
                   "properties": {
                     "source": {
                       "enum": [
-                        "anchorHistory"
+                        "anchorHistory",
+                        "ownerLink"
                       ]
                     }
                   }
@@ -941,7 +942,8 @@
                   "properties": {
                     "source": {
                       "enum": [
-                        "anchorHistory"
+                        "anchorHistory",
+                        "ownerLink"
                       ]
                     }
                   }
@@ -957,7 +959,8 @@
                     "source": {
                       "enum": [
                         "beam",
-                        "whip"
+                        "whip",
+                        "ownerLink"
                       ]
                     }
                   },
@@ -2444,6 +2447,46 @@
                 "if": {
                   "properties": {
                     "source": {
+                      "const": "ownerLink"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "ownerAnchor"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "anchorHistory",
+                        "beam",
+                        "whip"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "ownerAnchor": {
+                      "enum": []
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "source": {
                       "const": "anchorHistory"
                     }
                   },
@@ -2465,7 +2508,8 @@
                     "source": {
                       "enum": [
                         "beam",
-                        "whip"
+                        "whip",
+                        "ownerLink"
                       ]
                     }
                   },
@@ -2672,8 +2716,16 @@
                 ],
                 "type": "object"
               },
+              "ownerAnchor": {
+                "description": "Required only for source=ownerLink; forbidden for every other source. mountedCenter reads exact owner.MountedCenter, not a hand. frontHand reads native current composite front hand only while compositeFrontArm.enabled; unavailable/disabled pose refuses and retires the connector, never falls back to center or stale pose. No guessed skin-frame/PNG grip or offsets.",
+                "enum": [
+                  "mountedCenter",
+                  "frontHand"
+                ],
+                "type": "string"
+              },
               "profileDomain": {
-                "description": "age uses each retained history sample age/historyTicks; length uses normalized cumulative geometric length. History can select either; current beam/whip geometry requires length.",
+                "description": "age uses each retained history sample age/historyTicks; length uses normalized cumulative geometric length. History can select either; current beam/whip/ownerLink geometry requires length.",
                 "enum": [
                   "age",
                   "length"
@@ -2693,11 +2745,12 @@
                 "type": "number"
               },
               "source": {
-                "description": "Actual timestamped anchor history or exact accepted beam/whip collision geometry, read-only. Never approximate trajectory/range from item name or sprite. Preserve all collision corners.",
+                "description": "anchorHistory reads timestamped anchors; beam/whip read exact accepted collision geometry. ownerLink explicitly draws a cosmetic straight two-point connector from the explicit ownerAnchor to projectile.Center; no collision/damage or inferred grip. Never approximate trajectory/range from item name or sprite. Preserve all collision corners.",
                 "enum": [
                   "anchorHistory",
                   "beam",
-                  "whip"
+                  "whip",
+                  "ownerLink"
                 ],
                 "type": "string"
               },

@@ -9,6 +9,7 @@ without a capability-registry/program-schema import cycle.
 
 import math
 import re
+import struct
 from typing import Any, Mapping
 
 from infini_local.core.repair_merge import json_path_child
@@ -19,6 +20,19 @@ def _is_finite_number(value: int | float) -> bool:
     try:
         return math.isfinite(value)
     except OverflowError:
+        return False
+
+
+def _same_finite_single(value: int | float, endpoint: int | float) -> bool:
+    """Match CLR Single endpoints, including its shortest JSON decimal spelling.
+
+    This is not an epsilon or value coercion: a distinct next Single remains
+    outside the range, and the input remains unchanged.
+    """
+    try:
+        return (math.isfinite(value) and math.isfinite(endpoint)
+                and struct.pack("<f", value) == struct.pack("<f", endpoint))
+    except (OverflowError, struct.error):
         return False
 
 
@@ -290,10 +304,16 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
         finite = _is_finite_number(value)
         if not finite:
             add("finite", path, "finite number", value)
+        # Only an explicitly selected persisted-wire schema may compare range
+        # endpoints in native Single precision. Fresh Author/Repair schemas stay
+        # exact; integer/const/enum/step constraints are never relaxed.
+        native_single = root_schema.get("x-nativeFloat32Bounds") is True and expected_type == "number"
         if schema.get("minimum") is not None and value < schema["minimum"]:
-            add("minimum", path, schema["minimum"], value)
+            if not native_single or not _same_finite_single(value, schema["minimum"]):
+                add("minimum", path, schema["minimum"], value)
         if schema.get("maximum") is not None and value > schema["maximum"]:
-            add("maximum", path, schema["maximum"], value)
+            if not native_single or not _same_finite_single(value, schema["maximum"]):
+                add("maximum", path, schema["maximum"], value)
         step = schema.get("multipleOf")
         if isinstance(step, (int, float)) and step > 0 and finite:
             # The only authored fractional step is an exact binary half; check

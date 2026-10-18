@@ -239,9 +239,9 @@ def test_beam_collision_precedence_does_not_advertise_dormant_whip() -> None:
     data = _data("channel_beam")
     entity = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
     entity["movement"] = {"name": "move_whip_lash", "code": 18, "params": {"rangeTiles": 4, "segments": 10}}
-    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "beam"]}]
+    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "beam", "ownerLink"]}]
     entity["controller"]["name"] = "not_accepted_beam"
-    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory"]}]
+    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "ownerLink"]}]
 
 
 MATERIAL_BOUNDARIES = json.loads((Path(__file__).parent / "fixtures/vfx_image_material_boundaries.json").read_text())

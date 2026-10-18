@@ -1,6 +1,6 @@
 # VFX material elements — текущий контракт
 
-Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures.
+Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures. Явный `ownerLink` и persisted-v5 readback ниже описывают рабочее дерево; наличие их в установленной/опубликованной сборке проверяется отдельно, номер проекта остаётся `0.5.04`.
 
 <a id="owners"></a>
 ## Владельцы и handoff
@@ -92,7 +92,7 @@ Texture selector обоих payload — `{source, assetId}`: `source=item|entity
 
 Width/height/opacity/color profiles — объекты `{start,middle,end,curve}` для нормализованных позиций 0, 0.5 и 1. `curve` = `linear`, `easeIn`, `easeOut`, `smoothStep`, применяется отдельно к каждому интервалу. Это фиксированная математика, не выражения/код модели.
 
-Размеры/ширина имеют knots 0..4, opacity 0..1. Явный ноль сохраняется. Color knots — explicit local RGB objects `{r,g,b}`, каждый канал integer 0..255; `{r:255,g:255,b:255}` сохраняет RGB исходного изображения. Named tokens и global references не принимаются. RGB-профиль не заменяет opacity и не должен умножать прозрачность дважды. Все параметры снимаются в immutable state, изменения исходного DTO не переписывают уже испущенный эффект.
+Размеры/ширина имеют knots 0..4, opacity 0..1. Явный ноль сохраняется. Color knots — explicit local RGB objects `{r,g,b}`, каждый канал integer 0..255; `{r:255,g:255,b:255}` сохраняет RGB исходного изображения. Свежие/сетевые payloads не принимают named tokens и global references. Точное преобразование поддерживаемых сохранённых VFX v15 tokens в локальные RGB принадлежит только [persisted reader](../development/ENGINE_RUNTIME_BOUNDARIES_RU.md#saved-v5), не новому Director/Repair. RGB-профиль не заменяет opacity и не должен умножать прозрачность дважды. Все параметры снимаются в immutable state, изменения исходного DTO не переписывают уже испущенный эффект.
 
 Именованные поля позволяют Repair менять одну ошибочную точку без общего indexed-array merge и без размораживания соседних корректных параметров.
 
@@ -111,16 +111,25 @@ Validator-diagnosed foreign/additional fields допускают точное у
 
 Совместимость следует реальному приоритету collision consumer: активный ChannelBeam выбирает beam до whip movement. Нельзя объявить обе геометрии доступными только по присутствию двух компонентов. Для beam/whip `anchor=self` нейтрален — supplier владеет размещением centerline; иной anchor не переносит её в выдуманную позицию. Временно отсутствующая geometry ничего не рисует.
 
+`source=ownerLink` — отдельный явный выбор VFX Director/Repair: прямая текстурная связь из двух текущих точек **явный `path.ownerAnchor` владельца → `Projectile.Center`**. Она доступна любой принятой projectile entity независимо от movement/controller, а не только flail. `ownerAnchor` обязателен ровно как `mountedCenter|frontHand`: `mountedCenter` читает точный native `owner.MountedCenter`, это не рука; `frontHand` читает текущую native composite pose с её world-space conversion **только при `compositeFrontArm.enabled=true`**. При disabled pose renderer не использует её rotation/stretch: obsolete значения не доказывают положение руки. Поэтому `frontHand` при недоступной pose отказывается от регистрации/retire без coasting, frozen endpoint или fallback на центр; body/skin-frame inference, приблизительные offsets и PNG grip не добавлены. В accepted surface source и anchor не выбираются по имени, ингредиентам, категории или DamageClass.
+
+Связь косметическая: не меняет collision, reach, damage, ownership или движение. Head-only projectile PNG, скрытый root body и полная inventory-картинка сами по себе не рисуют соединение в мире. Модель выбирает `rendererKind=texturedPath`, `path.source=ownerLink`, явный `path.ownerAnchor`, texture selector/asset, width/profiles, RGB/opacity, layer, UV stretch/repeat и scroll через существующие controls. Missing PNG не превращается в Dust/stock mask. Отсутствие слота означает отсутствие связи: ни существующие вещи, ни будущие flail crafts не получают её автоматически; новая возможность доступна модели при будущей генерации без whole-weapon preset или дополнительного обязательного judge.
+
+Только `ownerLink` требует `ownerAnchor`; у `anchorHistory|beam|whip` поле запрещено, включая `null`, и не сериализуется. Пропуск, `null`, неверный регистр/alias не выбирают anchor автоматически. Это новая ещё не опубликованная ветка, не изменение shipped saved definitions. Для `ownerLink` обязательны projectile `periodic|on_spawn`, `anchor=self`, `historyTicks=0`, `minDistancePx=0`, `profileDomain=length`. `startTick`, `maxSegmentLengthPx`, zero width/opacity/budget и существующие UV constraints сохраняют смысл. Это текущая двухточечная geometry, не история и не beam/whip collision supplier. Live Player и projectile generation/instance fences сохраняются: смерть/неактивность/замена владельца, retirement/переиспользование projectile не оставляют frozen endpoint и не перепривязывают связь к новому игроку в том же slot. Возобновление требует настоящего нового producer; Draw не оживляет запись.
+
+Owners: [`GeneratedProjectile.TryCapturePresentationGeometry`](../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Presentation.cs) поставляет endpoints; [`InfiniDetachedVfxSystem.Paths`](../../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Paths.cs) владеет live registration/update/mesh/retirement. Старые `anchorHistory`, `beam`, `whip` сохраняют свою geometry/lifetime semantics; появление `ownerLink` их не подменяет.
+
 `profileDomain=age` применяется только к истории; `length` использует нормализованную накопленную длину. `uvMode=stretch` натягивает текстуру; `repeat` использует явную `repeatLengthPx` и `scrollPxPerTick`. Геометрия источник/история не сглаживается в выдуманную траекторию. Пропуски/скачки больше явно заданного `maxSegmentLengthPx` не соединяются.
 
-Live paths доступны projectile `periodic`/`on_spawn`, не item_body и не terminal event. История после retirement затухает по retention; текущая beam/whip geometry заканчивается вместе с источником. `startTick` управляет началом sampling. `repeatEvery` и `duration` у path отсутствуют: нет repeated detached emission или отдельного lifespan control.
+Live paths доступны projectile `periodic`/`on_spawn`, не item_body и не terminal event. История после retirement затухает по retention; текущая beam/whip geometry заканчивается вместе с источником, а ownerLink — также при потере живого владельца. `startTick` управляет началом sampling. `repeatEvery` и `duration` у path отсутствуют: нет repeated detached emission или отдельного lifespan control.
 
 | Поля | Единицы / обязательные сочетания |
 |---|---|
-| `historyTicks`, `minDistancePx` | history: integer 2..32 world ticks и 0..16 px; beam/whip: оба 0 |
+| `ownerAnchor` | только ownerLink: обязательный `mountedCenter\|frontHand`; остальные sources запрещают поле |
+| `historyTicks`, `minDistancePx` | history: integer 2..32 world ticks и 0..16 px; beam/whip/ownerLink: оба 0 |
 | `maxSegmentLengthPx` | 1..4096 px; разрыв пропускается, не мостится |
 | `widthPx` | 0..96 decorative px; 0 сохраняется, collision width не меняется |
-| `profileDomain` | history: `age\|length`; beam/whip: только `length` и `anchor=self` |
+| `profileDomain` | history: `age\|length`; beam/whip/ownerLink: только `length` и `anchor=self` |
 | `uvMode` | `stretch\|repeat`; stretch требует `repeatLengthPx=1`, `scrollPxPerTick=0` |
 | `repeatLengthPx`, `scrollPxPerTick` | 1..512 px/repeat; −32..32 UV px/world tick |
 
@@ -155,6 +164,6 @@ Technical transport: projectile event v5, material item event v5, compact materi
 
 Offline native fixtures должны явно называться hand-authored test inputs. Структурно разные stamp/particles/delayed scatter/history/beam/whip сцены, отсутствующие слои, реальные разные texture bytes и negative controls доказывают доступные способы исполнения, но не качество LLM/image-model.
 
-Проверять source replacement/retirement, immutable event snapshots, exact beam/whip centerline, repeated Draw/frozen clock, alpha/additive на тёмном/светлом, zero budgets/missing texture, общий расход caps, unload и восстановление batch/device state. Не выдавать headless/native за Terraria game-loop или сетевой матч.
+Проверять source replacement/retirement, immutable event snapshots, exact beam/whip centerline, ownerLink mountedCenter и enabled frontHand endpoints/disabled и obsolete composite pose/owner death/replacement/reused projectile generation и отсутствие implicit flail slot, repeated Draw/frozen clock, alpha/additive на тёмном/светлом, zero budgets/missing texture, общий расход caps, unload и восстановление batch/device state. Не выдавать headless/native за Terraria game-loop или сетевой матч.
 
 Текущие Python owners: `test_vfx_packet_contracts.py`, `test_vfx_material_admission_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_vfx_dependency_delivery_contracts.py`, `test_vfx_ingredient_generation_contracts.py`; реальные C# seams — зарегистрированные checks `tools/EngineRuntimeChecks.csproj`. Команды/изоляция — [test owners](../development/TESTING_RU.md). Тестовый PASS не переносится на socket delivery, game-loop, GPU или новую художественную/model/image приёмку. История .243–.246 — [audit provenance](../archive/VISUAL_AUDIT_HISTORY_RU.md#rollback), не актуальный список открытых дефектов.

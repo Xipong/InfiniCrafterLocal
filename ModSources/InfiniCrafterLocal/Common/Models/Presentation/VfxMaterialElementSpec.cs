@@ -132,6 +132,15 @@ public sealed class VfxTexturedPathSpec
 {
     [JsonRequired] public VfxTextureSpec Texture { get; set; } = null!;
     [JsonRequired] public string Source { get; set; } = "";
+    private string? _ownerAnchor;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OwnerAnchor {
+        get => _ownerAnchor;
+        set {
+            VfxMaterialValidation.Choice(value, "owner anchor", "mountedCenter", "frontHand");
+            _ownerAnchor = value;
+        }
+    }
     [JsonRequired] public int HistoryTicks { get; set; }
     [JsonRequired] public float MinDistancePx { get; set; }
     [JsonRequired] public float MaxSegmentLengthPx { get; set; }
@@ -147,7 +156,9 @@ public sealed class VfxTexturedPathSpec
     {
         if (Texture is null || WidthProfile is null || OpacityProfile is null || ColorProfile is null) throw new InvalidDataException("texturedPath requires texture and profiles");
         Texture.Validate(); WidthProfile.Validate(4); OpacityProfile.Validate(1); ColorProfile.Validate();
-        VfxMaterialValidation.Choice(Source, "path source", "anchorHistory", "beam", "whip");
+        VfxMaterialValidation.Choice(Source, "path source", "anchorHistory", "beam", "whip", "ownerLink");
+        if (Source == "ownerLink") VfxMaterialValidation.Choice(OwnerAnchor, "owner anchor", "mountedCenter", "frontHand");
+        else if (OwnerAnchor is not null) throw new InvalidDataException("ownerAnchor requires ownerLink");
         VfxMaterialValidation.Choice(ProfileDomain, "profile domain", "age", "length"); VfxMaterialValidation.Choice(UvMode, "UV mode", "stretch", "repeat");
         VfxMaterialValidation.Range(MinDistancePx, 0, 16, "minimum sample distance"); VfxMaterialValidation.Range(MaxSegmentLengthPx, 1, 4096, "maximum segment length");
         VfxMaterialValidation.Range(WidthPx, 0, 96, "path width"); VfxMaterialValidation.Range(RepeatLengthPx, 1, 512, "repeat length"); VfxMaterialValidation.Range(ScrollPxPerTick, -32, 32, "UV scroll");
