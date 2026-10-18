@@ -396,12 +396,10 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
     # This accepted nonce/digest is ALSO a workflow input. Never replace it with a
     # stable VFX plan ID or apply it to legacy roles just to isolate filenames.
     nonce = uuid.uuid4().hex if required_vfx else ""
-    # Every delivered role must use the selected final canvas. Legacy
-    # postprocess can return the raw source path after a non-I/O failure: a
-    # complete 512px PNG would otherwise be published as a 32/48px sprite,
-    # while a larger raw image gets rejected much later by AssetSync.
-    # Make wrong-canvas output fatal here, before publication, so the normal
-    # bounded image-attempt retry can recover without admitting raw bytes.
+    # Postprocess owns the compact PNG (including minimal technical recovery).
+    # Keep this final-canvas gate at the publication boundary as defense in
+    # depth: no raw-path, procedural, or other unexpected producer may
+    # deliver an asset with a different size than Visual selected.
     validation_kwargs: dict[str, Any] = dict(
         topology=request.topology, part_count_min=request.part_count_min,
         part_count_max=request.part_count_max, expected_canvas=request.canvas,

@@ -829,6 +829,26 @@ def build_retry_prompt_from_validation(prompt: str, validation: dict[str, Any] |
         extra += ", fix these technical issues: " + notes
     return (str(prompt or "") + ", " + extra)[:2800] + guidance
 
+
+def _minimal_delivery_bake(source: Any, final_size: int) -> Any:
+    """Emergency technical resize of already decoded artwork, never a new design.
+
+    Only a source with real transparency is eligible. Retain the full authored
+    frame and aspect ratio (projectile direction and authored offsets included),
+    pad transparently, and use the normal premultiplied-alpha final filter.
+    The caller still validates the actual PNG before making it public.
+    """
+    source = source.convert("RGBA")
+    if source.width <= 0 or source.height <= 0 or source.getchannel("A").getextrema()[0] >= 255:
+        raise ValueError("minimal bake needs decoded artwork with existing transparency")
+    scale = min(final_size / source.width, final_size / source.height)
+    width = max(1, min(final_size, round(source.width * scale)))
+    height = max(1, min(final_size, round(source.height * scale)))
+    pixels = resize_rgba_premultiplied(source, (width, height), sprite_resample_filter("final"))
+    baked = Image.new("RGBA", (final_size, final_size), (0, 0, 0, 0))
+    baked.alpha_composite(pixels, ((final_size - width) // 2, (final_size - height) // 2))
+    return scrub_transparent_rgb(baked)
+
 def postprocess_sprite(
     path: str,
     sprite_id: str,
@@ -842,13 +862,14 @@ def postprocess_sprite(
 ) -> str:
     """Process an authored image through the selected technical role contract.
 
-    Legacy roles retain their raw-path failure policy. Required VFX ingredients
-    raise instead: the raw image cannot satisfy a failed final PNG/canvas contract.
+    Recoverable legacy processing errors use a minimal alpha-safe final bake;
+    never return raw provider paths. Required VFX ingredients remain strict.
     """
     if Image is None:
         raise RuntimeError("Pillow is required for sprite postprocess/validation")
     target_size = final_sprite_canvas(target_size)
     decoded = False
+    raw = bg_removed = master = None
     try:
         raw = load_image_input(path, Image)
         decoded = True
@@ -913,7 +934,42 @@ def postprocess_sprite(
         log_event("warn", "postprocess failed", {"path": path, "error": repr(e), "trace": traceback.format_exc()})
         if role in {"vfx_cutout", "vfx_strip"}:
             raise RuntimeError("required VFX ingredient postprocess failed") from e
-        return path
+
+        # For ordinary item/entity/overlay/impact PNGs, rescue the latest usable
+        # pixel stage rather than publishing the full-size provider source or
+        # paying for a new image model attempt after one technical failure.
+        # A failed keyer cannot silently publish an opaque raw background.
+        stage = "master" if master is not None else "alpha" if bg_removed is not None else "raw"
+        candidate = master if master is not None else bg_removed if bg_removed is not None else raw
+        try:
+            if candidate is None or not decoded:
+                raise ValueError("no decoded sprite available to recover")
+            recovered = _minimal_delivery_bake(candidate, target_size)
+            out = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}.png"
+            save_image_output(recovered, out)
+            validation = validate_processed_sprite(
+                str(out), role, expected_canvas=target_size,
+                topology=topology, part_count_min=part_count_min,
+                part_count_max=part_count_max,
+            )
+            if sprite_validation_fatal(validation):
+                raise ValueError(f"minimal bake does not meet sprite contract: {validation.get('reasons')}")
+            log_event("warn", "sprite recovered by minimal final downscale", {
+                "spriteId": sprite_id, "sourceStage": stage,
+                "targetSize": target_size, "out": str(out), "originalError": repr(e),
+                "validation": validation,
+            })
+            return str(out)
+        except ImageOutputIOError:
+            raise
+        except OSError as io_error:
+            raise ImageOutputIOError("minimal sprite bake filesystem operation failed") from io_error
+        except Exception as recovery_error:
+            log_event("warn", "minimal sprite downscale unavailable", {
+                "spriteId": sprite_id, "sourceStage": stage,
+                "originalError": repr(e), "recoveryError": repr(recovery_error),
+            })
+            raise RuntimeError("sprite postprocess could not produce a usable final PNG") from recovery_error
 
 __all__ = [
     "pick_best_sprite",
