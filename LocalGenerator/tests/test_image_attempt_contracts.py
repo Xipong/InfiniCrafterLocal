@@ -376,7 +376,10 @@ def test_impact_publication_entity_identity_does_not_change_legacy_processing_to
 
     monkeypatch.setattr(generation, 'validate_processed_sprite', capture)
     out = generation.maybe_generate_visual_assets(data)
-    assert seen == [{'topology': '', 'part_count_min': 0, 'part_count_max': 0}], 'storage identity changed previously unauthored impact processing inputs'
+    assert [{key: value for key, value in row.items() if key != 'expected_canvas'} for row in seen] == [
+        {'topology': '', 'part_count_min': 0, 'part_count_max': 0}
+    ], 'storage identity must not change authored impact topology'
+    assert [row.get('expected_canvas') for row in seen] == [32], 'final PNG size is a technical delivery check'
     producer = next(row for row in out['runtimeProgram']['entities'] if row['id'] == 'orb')['visual']
     raw = Path(producer['impactSpritePath']).read_bytes()
     logical = next(row['assetId'] for row in build_visual_asset_plan(out) if row['role'] == 'impact:orb')
@@ -551,16 +554,21 @@ def test_postprocess_without_alpha_cannot_smuggle_opaque_raw_background(offline,
 def test_transient_unrecoverable_keying_retries_then_delivers_compact_png(offline, monkeypatch):
     """Real processing recovers on the next attempt when minimal bake cannot."""
     root, requests = offline
-    original = post.apply_background_removal
+    original = generation.postprocess_sprite
     calls = []
 
-    def flaky(*args, **kwargs):
+    def processing_only_flaky(*args, **kwargs):
+        # Selection also calls apply_background_removal; inject the failure
+        # ONLY into the first real postprocess call, not candidate scoring.
         calls.append(True)
         if len(calls) == 1:
-            raise ValueError('temporary keyer failure')
+            with monkeypatch.context() as patch:
+                patch.setattr(post, 'apply_background_removal',
+                              lambda *_a, **_k: (_ for _ in ()).throw(ValueError('temporary keyer failure')))
+                return original(*args, **kwargs)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(post, 'apply_background_removal', flaky)
+    monkeypatch.setattr(generation, 'postprocess_sprite', processing_only_flaky)
     monkeypatch.setattr(generation, 'SPRITE_RETRIES', 1)
     data = _data([])
     path, url, _score, status = invoke('item', 'recovered_after_retry', data)
