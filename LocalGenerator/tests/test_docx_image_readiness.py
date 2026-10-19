@@ -42,6 +42,28 @@ def _retained_delivery():
     return outgoing, raw
 
 
+def test_qa_execution_control_authenticates_fixture_without_admitting_pending(offline_backend):
+    from infini_local.qa.live_no_image_fixture import (
+        hydrate_no_image_fixture_assets, synthetic_no_image_execution_control,
+        write_no_image_fixture_png,
+    )
+    fixture = write_no_image_fixture_png(delivery.SPRITE_DIR / "qa-ready-control.png")
+    data = _data([])
+    hydrate_no_image_fixture_assets(data, fixture)
+    assert not delivery.visual_delivery_report(data, check_backend_config=False)["ok"]
+    original = copy.deepcopy(data)
+    control = synthetic_no_image_execution_control(data, fixture)
+    assert delivery.visual_delivery_report(control, check_backend_config=False)["ok"]
+    assert data == original
+    assert control["debug"]["noImageExecutionControl"]["synthetic"] is True
+    assert control["debug"]["noImageExecutionControl"]["realImageGeneration"] is False
+    pending = copy.deepcopy(data)
+    pending["visual"]["spriteStatus"] = "pending"
+    refused = synthetic_no_image_execution_control(pending, fixture)
+    assert refused["visual"]["spriteStatus"] == "pending"
+    assert not delivery.visual_delivery_report(refused, check_backend_config=False)["ok"]
+
+
 def test_retained_native_fixture_is_real_final_offline_projection(offline_backend):
     import json
     outgoing, raw = _retained_delivery()

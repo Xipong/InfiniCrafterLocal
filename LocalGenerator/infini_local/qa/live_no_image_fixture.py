@@ -220,6 +220,15 @@ def synthetic_no_image_execution_control(
     # execution-status seam can be bridged, never other readiness failures.
     baseline = gate.visual_delivery_report(data, check_backend_config=False)
     for row in baseline["problems"]:
+        if row["code"] in {
+            "required_item_sprite_missing", "required_entity_sprite_missing",
+            "required_equipment_overlay_missing", "required_impact_sprite_missing",
+        } and row.get("status") == "qa_no_image_fixture":
+            # Fresh delivery correctly refuses QA labels as production readiness.
+            # This private observer may bridge only that exact label; the selected
+            # serving path, PNG bytes/hash and each projector owner are still
+            # authenticated below. Pending/unknown/non-QA remain refusals.
+            continue
         if row["code"] == "required_vfx_texture_not_ready":
             continue
         if row["code"] == "required_vfx_sprite_missing_or_invalid" and row.get("status") == "qa_no_image_fixture":
