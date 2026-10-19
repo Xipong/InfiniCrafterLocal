@@ -243,13 +243,13 @@ public sealed partial class GeneratedItemData
         bool inertReference = SourceMode is "player_save_ref" or "corrupt_reference";
         if (!inertReference && SourceMode is not ("developer_fixture" or "test_fixture")
             && (string.IsNullOrWhiteSpace(Visual.SpritePath)
-                || Visual.SpriteStatus is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation")))
+                || !RuntimeEntityVisualSpec.HasCompletedPngProducer(Visual.SpriteStatus)))
             throw new InvalidDataException("Required generated item PNG is unavailable; placeholders are not accepted");
         if (Accessory.Enabled && Armor.Enabled)
             throw new InvalidDataException("A runtime item cannot enable both accessory and armor capabilities");
         if (!inertReference && (Accessory.Enabled || Armor.Enabled)
             && (string.IsNullOrWhiteSpace(Visual.EquipOverlayPath)
-                || Visual.EquipOverlayStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+                || !RuntimeEntityVisualSpec.HasCompletedPngProducer(Visual.EquipOverlayStatus)))
             throw new InvalidDataException("Required equipment overlay PNG is unavailable");
     }
 
@@ -315,7 +315,7 @@ public sealed partial class GeneratedItemData
                 string png = itemProducer ? Visual.SpritePath : entity.Visual.SpritePath;
                 string status = itemProducer ? Visual.SpriteStatus : entity.Visual.SpriteStatus;
                 if (string.IsNullOrWhiteSpace(png) || !png.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                    || status is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation"))
+                    || !RuntimeEntityVisualSpec.HasCompletedPngProducer(status))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires its selected producer's ready PNG");
             }
             if (selected == "impact") {
@@ -328,7 +328,7 @@ public sealed partial class GeneratedItemData
                 if ((texture is not null || SourceMode is not ("developer_fixture" or "test_fixture"))
                     && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
                         || !entity.Visual.ImpactSpritePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                        || entity.Visual.ImpactSpriteStatus is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation")))
+                        || !RuntimeEntityVisualSpec.HasCompletedPngProducer(entity.Visual.ImpactSpriteStatus)))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires an authored impact PNG for '{entity.Id}'");
             }
         }

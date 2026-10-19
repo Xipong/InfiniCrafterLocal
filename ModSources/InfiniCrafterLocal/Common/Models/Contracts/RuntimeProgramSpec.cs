@@ -921,6 +921,11 @@ public sealed class RuntimeEntityVisualSpec
     public string ImpactSpriteStatus { get; set; } = "";
     public float ImpactSpriteTechnicalScore { get; set; } = 0f;
 
+    // A retained PNG is not proof that its selected producer completed. Keep
+    // root/body/overlay/impact consumers on the same declared completion domain.
+    internal static bool HasCompletedPngProducer(string? status)
+        => status is "generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation";
+
     public void Normalize()
     {
         Grip?.Validate();
@@ -940,7 +945,7 @@ public sealed class RuntimeEntityVisualSpec
         ImpactSpriteUrl = RuntimeText.Safe(ImpactSpriteUrl, 500);
         ImpactSpriteStatus = RuntimeText.Safe(ImpactSpriteStatus, 48).ToLowerInvariant();
         ImpactSpriteTechnicalScore = Math.Clamp(ImpactSpriteTechnicalScore, 0f, 1f);
-        if (AssetMode == "baked_sprite" && (string.IsNullOrWhiteSpace(SpritePath) || SpriteStatus is "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+        if (AssetMode == "baked_sprite" && (string.IsNullOrWhiteSpace(SpritePath) || !HasCompletedPngProducer(SpriteStatus)))
             throw new InvalidDataException("required baked runtime sprite is unavailable");
         if (AssetMode is not ("baked_sprite" or "reuse_item_icon" or "runtime_geometry" or "no_asset"))
             throw new InvalidDataException($"unknown entity assetMode '{AssetMode}'");
