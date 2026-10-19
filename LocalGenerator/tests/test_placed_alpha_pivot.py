@@ -131,6 +131,8 @@ def test_outgoing_author_cards_disclose_body_or_light_callback_free_footprint(wi
         assert "either" in summary and "post-place" in summary
         assert "container" in summary and "actor lifecycle" in summary
         assert "unsupported" in summary
+        assert "tile 21/style 17" in summary and "waterchest" in summary
+        assert "sp/mp" in summary and "native contents" in summary
     wire = compile_runtime_program(accepted)
     assert {"placedBody", "placedLight"} <= placement(wire).keys()
     # No content-specific router/removal and no widening of plain placement.
