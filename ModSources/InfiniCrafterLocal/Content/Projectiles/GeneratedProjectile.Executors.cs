@@ -247,9 +247,10 @@ public sealed partial class GeneratedProjectile
             damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), Owner()),
             out int? damageOverride, out float? knockbackOverride))
             return true;
-        int granted = budget.Reserve(_entity.Targeting.Count ?? 1);
-        int spawned = granted > 0 ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
-            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: (_entity.Targeting.Count ?? 1),
+        int requested = _entity.Targeting.Count ?? 1;
+        int granted = budget.Reserve(requested);
+        int spawned = granted == requested ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
+            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: requested,
             spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
             damageMultiplier: damageMultiplier, activationBudget: budget,
             rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride) : 0;

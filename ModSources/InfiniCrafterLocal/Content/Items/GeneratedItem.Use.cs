@@ -159,9 +159,10 @@ public partial class GeneratedItem
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)
         {
             RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
-            if (entity?.Spawn.MaxActive is not null && !GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI,
-                Math.Min(RootBindingSpawnCapacity(entity), InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
-                    - GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI))))
+            if (entity is null || GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI)
+                    > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner - RootBindingSpawnCapacity(entity)
+                || !GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI,
+                    RootBindingSpawnCapacity(entity)))
                 return false;
             if (entity?.IsOwnerAttached == true)
             {

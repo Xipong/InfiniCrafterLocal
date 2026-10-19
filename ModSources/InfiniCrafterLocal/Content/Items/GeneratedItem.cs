@@ -208,10 +208,28 @@ public partial class GeneratedItem : ModItem
             ? canonical : Data;
     }
 
-    public override bool CanStack(Item source)
-        => source.ModItem is GeneratedItem other
-            && string.Equals(Data.Id, other.Data.Id, StringComparison.Ordinal)
-            && string.Equals(Data.RecipeKey, other.Data.RecipeKey, StringComparison.Ordinal);
+    internal static bool SameGeneratedStack(GeneratedItem destination, Item source)
+    {
+        if (source.ModItem is not GeneratedItem other
+            || destination.Data is null || other.Data is null
+            || string.IsNullOrWhiteSpace(destination.Data.Id) || destination.Data.Id == "placeholder"
+            || !string.Equals(destination.Data.Id, other.Data.Id, StringComparison.Ordinal)
+            || !string.Equals(destination.Data.RecipeKey, other.Data.RecipeKey, StringComparison.Ordinal)
+            || GeneratedItemData.IsPlayerSaveReferenceOnly(destination.Data)
+            || GeneratedItemData.IsPlayerSaveReferenceOnly(other.Data))
+            return false;
+        // A reused ID must not turn different executable definitions into one
+        // physical stack. This expensive check runs only after the cheap IDs match.
+        try {
+            return string.Equals(GeneratedItemRegistryService.DefinitionIdentity(destination.Data),
+                GeneratedItemRegistryService.DefinitionIdentity(other.Data), StringComparison.Ordinal);
+        }
+        catch { return false; }
+    }
+
+    public override bool CanStack(Item source) => SameGeneratedStack(this, source);
+
+    public override bool CanStackInWorld(Item source) => SameGeneratedStack(this, source);
 
     // Technical native-proxy suppression only. Leave Item.noUseGraphic and the
     // authored visibility/hint untouched; the AfterParent child owns the PNG.

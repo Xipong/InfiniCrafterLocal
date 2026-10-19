@@ -287,8 +287,11 @@ public sealed partial class InfiniCraftPlayer
         {
             if (Main.mouseItem is null || Main.mouseItem.IsAir)
                 Main.mouseItem = restored;
-            else
-                Main.mouseItem.stack++;
+            else if (!ItemLoader.TryStackItems(Main.mouseItem, restored, out int moved) || moved != 1)
+            {
+                RefundOne(restored); // failed merge retains the remaining exact claim
+                return;
+            }
             if (Player.inventory.Length > 58)
                 Player.inventory[58] = Main.mouseItem.Clone();
             return;
@@ -307,28 +310,11 @@ public sealed partial class InfiniCraftPlayer
             return false;
         if (Main.mouseItem.stack <= 0 || Main.mouseItem.stack >= Main.mouseItem.maxStack)
             return false;
-        if (Main.mouseItem.ModItem is not null || restored.ModItem is not null)
-        {
-            // Generated/modded units only merge when stable generated ids match.
-            if (!StationEscrowGeneratedIdsMatch(Main.mouseItem, restored))
-                return false;
-        }
-        return true;
-    }
-
-    private static bool StationEscrowGeneratedIdsMatch(Item a, Item b)
-    {
-        string idA = "";
-        string idB = "";
-        try
-        {
-            if (a?.ModItem is GeneratedItem ga)
-                idA = ga.Data?.Id ?? "";
-            if (b?.ModItem is GeneratedItem gb)
-                idB = gb.Data?.Id ?? "";
-        }
-        catch { }
-        return string.Equals(idA ?? "", idB ?? "", StringComparison.Ordinal);
+        // Two unrelated modded items both used to produce empty generated ids,
+        // so an unrelated cursor item could absorb a rejected escrow unit.
+        // Let the installed Item/GlobalItem stacking hooks prove exact compatibility.
+        return Main.mouseItem.IsTheSameAs(restored)
+            && ItemLoader.CanStack(Main.mouseItem, restored);
     }
 
     private void ClearPendingStationEscrowOperation()

@@ -117,6 +117,13 @@ internal static partial class EngineRuntimeChecks
             var generated = Attach(projectile);
             typeof(Projectile).GetProperty("ModProjectile")!.SetValue(projectile, generated);
         }
+        // One remaining global slot must not silently clip a four-shot weapon
+        // to one projectile, even with no explicit per-entity maxActive.
+        Terraria.Main.projectile[InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner - 1].active = false;
+        Equal(0, GeneratedProjectile.SpawnRuntimeEntity(data, "root", owner, source,
+            Vector2.Zero, Vector2.UnitX, 0,
+            GeneratedItem.RootBindingSpawnCapacity(data.RuntimeProgram.TryGetEntity("root")!)), "owner limit refuses entire volley with one free slot");
+        Terraria.Main.projectile[InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner - 1].active = true;
         Equal(0, GeneratedProjectile.SpawnRuntimeEntity(data, "root", owner, source,
             Vector2.Zero, Vector2.UnitX, 0,
             GeneratedItem.RootBindingSpawnCapacity(data.RuntimeProgram.TryGetEntity("root")!)), "owner projectile cap remains active");

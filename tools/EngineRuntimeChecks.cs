@@ -374,6 +374,8 @@ internal static partial class EngineRuntimeChecks
             ("native chest authored body light VFX actor liveness", NativeChestPreservesAuthoredBodyLightVfxAndActorLiveness),
             ("native chest bounded cached maintenance", NativeChestMaintenanceBoundsNativeActorsAndDefinitionReads),
             ("native chest single family style zero only", NativeChestCanonicalStylesAndRefusals),
+            ("generated exact stack and native quick-stack identity", GeneratedQuickStackMatchesExactDefinitionNotProxyType),
+            ("generated periodic stable action phase", GeneratedPeriodicActionPhaseIsStable),
             ("native chest admission", NativeChestAdmission),
             ("native chest bare tiles are not storage", NativeChestBareTilesCannotCommit),
             ("placed body ledger selected identity save and network", PlacedBodyLedgerKeepsExplicitIdentityAcrossSaveAndNetwork),

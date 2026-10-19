@@ -350,17 +350,12 @@ public sealed partial class GeneratedProjectile : ModProjectile
 
             int availableOwnerSlots = InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
                 - CountActiveGeneratedProjectiles(owner.whoAmI);
-            if (availableOwnerSlots <= 0)
-                return 0;
-            int count = Math.Clamp(
-                requestedCount ?? entity.Spawn.Count,
-                1,
-                Math.Min(
-                    availableOwnerSlots,
-                    Math.Min(InfiniRuntimeLimits.MaxRuntimeSpawnCount, remainingSpawnBudget)));
-            // Concurrency is explicit entity admission, independent of movement/type.
-            // Refuse the effective whole batch; never clip an authored multi-shot batch.
-            if (!CanAdmitEntityBatch(data, entity, owner.whoAmI, count))
+            int count = requestedCount ?? entity.Spawn.Count;
+            // No partial volleys: the native owner cap, requested batch, and event
+            // budget must all admit the same exact count before sampling or spawn.
+            if (count <= 0 || count > availableOwnerSlots || count > remainingSpawnBudget
+                || count > InfiniRuntimeLimits.MaxRuntimeSpawnCount
+                || !CanAdmitEntityBatch(data, entity, owner.whoAmI, count))
                 return 0;
             if (!entity.Spawn.AcceptsEmissionSpread(spreadOverride ?? entity.Spawn.SpreadRadians))
                 return 0;

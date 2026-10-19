@@ -11,6 +11,22 @@ namespace InfiniCrafterLocal.Content.Items;
 // Item event cadence, shared spawn budgets and delayed action dispatch.
 public partial class GeneratedItem
 {
+    // Stable across process/host restarts, unlike string.GetHashCode(). Keep
+    // independent action phases without making all equipment proc at once.
+    internal static uint PeriodicActionOffset(string id)
+    {
+        uint hash = 2166136261u;
+        unchecked
+        {
+            foreach (char c in id ?? string.Empty)
+            {
+                hash = (hash ^ (byte)c) * 16777619u;
+                hash = (hash ^ (byte)(c >> 8)) * 16777619u;
+            }
+        }
+        return hash;
+    }
+
     private void RunPeriodicItemEvents(Player player, RuntimeEntitySpec entity)
     {
         // Native held/equipment hooks can visit the same instance in one tick.
@@ -26,7 +42,7 @@ public partial class GeneratedItem
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(RuntimeEventKind.Periodic))
         {
             int period = Math.Max(6, action.PeriodTicks);
-            if ((Main.GameUpdateCount + (ulong)action.Id.GetHashCode()) % (ulong)period != 0) continue;
+            if ((Main.GameUpdateCount + PeriodicActionOffset(action.Id)) % (ulong)period != 0) continue;
             QueueOrExecuteItemAction(
                 player,
                 entity,

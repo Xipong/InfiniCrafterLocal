@@ -74,10 +74,9 @@ public partial class GeneratedItem
             && entity.IsProjectileEntity && entity.Spawn.Enabled
             && Data.RuntimeProgram.Limits.MaxChildDepth >= 0
             && GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI)
-                < InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
+                <= InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner - RootBindingSpawnCapacity(entity)
             && GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI,
-                Math.Min(RootBindingSpawnCapacity(entity), InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
-                    - GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI)));
+                RootBindingSpawnCapacity(entity));
 
     private RootCombatTriple RootCombatBase(RuntimeEntitySpec entity)
         => PrefixAppliedRootCombatBase(new RootCombatTriple(entity.Damage.Enabled ? entity.Damage.Damage : 0,
