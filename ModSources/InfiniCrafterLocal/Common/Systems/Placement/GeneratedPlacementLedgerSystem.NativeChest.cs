@@ -341,16 +341,14 @@ public sealed partial class GeneratedPlacementLedgerSystem
         }
     }
 
-    // The engine's native container metadata owns storage. This is the same
-    // configure_tile_placement path for every style, with no storage capability
-    // or item-specific bridge. Unsupported callback shapes still refuse below.
+    // Only tile 21/style 0 is generated. Recognize both vanilla chest tile
+    // families to refuse unsupported placements and their native packets.
     private static bool IsNativeChestTile(int tileType)
         => tileType is >=0 and <=ushort.MaxValue
             && tileType<TileID.Sets.BasicChest.Length && TileID.Sets.BasicChest[tileType];
 
     private static bool IsNativeChestStyle(int tileType,int style)
-        => style>=0 && NativeChestPlaceAction(tileType)>=0 && IsNativeChestTile(tileType)
-            && style<(tileType==TileID.Containers ? Chest.chestItemSpawn.Length : Chest.chestItemSpawn2.Length);
+        => style==0 && NativeChestPlaceAction(tileType)>=0 && IsNativeChestTile(tileType);
 
     private static bool IsNativeChestPlacement(RuntimePlacementSpec? placement)
         => placement is { WallId: < 0 } && IsNativeChestStyle(placement.TileId,placement.PlaceStyle);

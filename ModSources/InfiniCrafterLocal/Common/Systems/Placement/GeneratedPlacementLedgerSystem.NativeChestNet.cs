@@ -19,7 +19,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     // Only these native message-34 families are certified here. A modded chest
     // needs its own actual callback/protocol evidence, never a default action100.
     private static int NativeChestPlaceAction(int tileType)
-        => tileType==TileID.Containers ? 0 : tileType==TileID.Containers2 ? 4 : -1;
+        => tileType==TileID.Containers ? 0 : -1;
     [ThreadStatic] private static MessageBuffer? _nativeChestPacketBuffer;
     [ThreadStatic] private static long _nativeChestPacketEnd;
     private static long NativeChestPacketRemaining(BinaryReader reader)
@@ -130,10 +130,11 @@ public sealed partial class GeneratedPlacementLedgerSystem
             && self.readBuffer[start]==MessageID.ChestUpdates && self.readBuffer[start+1] is 0 or 4
             && self.whoAmI>=0 && self.whoAmI<Main.maxPlayers
             && Main.player[self.whoAmI]?.HeldItem.ModItem is GeneratedItem held
-            && held.Data.RuntimeProgram.Bindings.Any(binding=>IsNativeChestPlacement(binding.UsePolicy.Action.Placement)))
+            && held.Data.RuntimeProgram.Bindings.Any(binding=>binding.UsePolicy.Action.Placement is { } placement
+                && IsNativeChestTile(placement.TileId)))
         {
-            // Generated traffic must use the authenticated envelope above. Raw
-            // message-34 replays cannot bypass intent/debit or mint vanilla refunds.
+            // Even refused second-family styles must not turn raw vanilla
+            // message-34 requests into a refund for a generated item.
             // Unrelated vanilla chest requests still execute the untouched branch.
             messageType=MessageID.ChestUpdates;return;
         }

@@ -43,7 +43,7 @@ internal static partial class EngineRuntimeChecks
    factories.Clear();foreach(var row in factoryRows)factories.Add(row);
   }
  }
- private static void NativeChestNativeSaveLoadAndOpen(){NativeChestSaveLoadScenario(TileID.Containers,0);NativeChestSaveLoadScenario(TileID.Containers2,16);}
+ private static void NativeChestNativeSaveLoadAndOpen()=>NativeChestSaveLoadScenario(TileID.Containers,0);
  private static void NativeChestSaveLoadScenario(int tileType,int style){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
   using var peers=new ReviewPeers();peers.Mode(NetmodeID.SinglePlayer,0);Terraria.Main.player[0]=player;Terraria.Main.dedServ=true;
   for(int i=0;i<3;i++)Terraria.Main.chest[i]=new Chest{x=10+i*3,y=10};
@@ -81,9 +81,8 @@ internal static partial class EngineRuntimeChecks
   ledger.PostUpdateWorld();Equal(0,PlacedLedgerGroups(ledger).Count,"rebound actor removal releases only original material claim");
  }));}
  private static void NativeChestExactReturnUsesOnlyExistingPendingOwner()=>NativeChestExactReturnScenario(false);
- private static void NativeChestPostLoadBreakBeforeMaintenance(){foreach(var tuple in new[]{(TileID.Containers,0),(TileID.Containers,51),(TileID.Containers2,0),(TileID.Containers2,16)})NativeChestExactReturnScenario(true,tuple.Item1,tuple.Item2);}
- private static void NativeChestUnlockLoadMineKeepsOriginalMaterial()=>NativeChestExactReturnScenario(true,TileID.Containers,2,true);
- private static void NativeChestExactReturnScenario(bool reload,int tileType=TileID.Containers,int style=17,bool unlock=false){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
+ private static void NativeChestPostLoadBreakBeforeMaintenance()=>NativeChestExactReturnScenario(true,TileID.Containers,0);
+ private static void NativeChestExactReturnScenario(bool reload,int tileType=TileID.Containers,int style=0){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
   using var pool=new NativeItemPoolState();var random=Terraria.Main.rand;Terraria.Main.rand=new Terraria.Utilities.UnifiedRandom(17);bool gen=WorldGen.gen;WorldGen.gen=false;
   var dropField=typeof(ItemLoader).Assembly.GetType("Terraria.ModLoader.TileLoader",true)!.GetField("HookCanDrop",PersistenceStatic)!;object? oldDrop=dropField.GetValue(null);dropField.SetValue(null,new Func<int,int,int,bool>[] {new GeneratedPlacementLedgerTile().CanDrop});
   try{
@@ -94,12 +93,6 @@ internal static partial class EngineRuntimeChecks
    Equal(true,item.Prefix(PrefixID.Legendary),"native placed material prefix accepted");string exact=data.ToNetworkJson();player.altFunctionUse=2;
    Equal(true,source.CanUseItem(player),"actual alternate native chest placement consumer");NativeChestPlayerPlace(player);Equal(true,ItemLoader.ConsumeItem(item,player),"one native SP material debit receipt");
    item.stack--; // native caller's stack debit, after the real ConsumeItem dispatch
-   if(unlock){
-    var actor=Terraria.Main.chest[Chest.FindChest(40,39)];actor.item[0]=new Item(ItemID.Wood,7);
-    NativeChestUnlock(actor);
-    Equal(style,PlacedLedgerGroups(ledger).Single().GetCompound("nativeChest").GetInt("nativeStyle"),"native unlock cannot rewrite original authored style");
-    actor.item[0].TurnToAir();
-   }
    if(reload){
     var save=PersistenceNbtRoundtrip(PlacedLedgerSaved(ledger));
     using var memory=new MemoryStream();using(var writer=new BinaryWriter(memory,System.Text.Encoding.UTF8,true))typeof(Terraria.IO.WorldFile).GetMethod("SaveChests",PersistenceStatic)!.Invoke(null,new object[]{writer});
@@ -123,18 +116,5 @@ internal static partial class EngineRuntimeChecks
    Equal(false,GeneratedPlacementLedgerSystem.TryQueueReturn(GeneratedPlacementLayer.Tile,40,40),"duplicate break has no second material claim");ledger.PostUpdateWorld();Equal(1,Terraria.Main.item.Count(i=>i.active&&i.ModItem is GeneratedItem),"one returned generated native item, no shadow queue");
   }finally{dropField.SetValue(null,oldDrop);WorldGen.gen=gen;Terraria.Main.rand=random;}
  }));}
-
- private static void NativeChestUnlock(Chest actor){
-  var dust=Terraria.Main.dust;var random=Terraria.Main.rand;bool dedicated=Terraria.Main.dedServ;
-  try{
-   Terraria.Main.dedServ=true;Terraria.Main.rand=new Terraria.Utilities.UnifiedRandom(17);
-   Terraria.Main.dust=Enumerable.Range(0,dust.Length).Select(_=>new Dust()).ToArray();
-   int style=Terraria.ObjectData.TileObjectData.GetTileStyle(Terraria.Main.tile[actor.x,actor.y]);
-   Equal(true,Chest.Unlock(actor.x,actor.y),"real native unlock succeeds");
-   Equal(true,ReferenceEquals(actor,Terraria.Main.chest[Chest.FindChest(actor.x,actor.y)]),"native unlock preserves exact inventory actor");
-   Equal(true,style!=Terraria.ObjectData.TileObjectData.GetTileStyle(Terraria.Main.tile[actor.x,actor.y]),"native unlock changes the live tile style");
-   Equal(true,actor.item[0].stack>0,"native unlock preserves contents");
-  }finally{Terraria.Main.dust=dust;Terraria.Main.rand=random;Terraria.Main.dedServ=dedicated;}
- }
 
 }
