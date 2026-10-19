@@ -113,7 +113,7 @@ def test_current_nested_dto_audit_classifies_optional_selector_not_hidden_storag
     assert report["storageByField"]["PivotSpace"] == "string?"
 
 
-def test_outgoing_author_cards_disclose_body_or_light_callback_free_footprint(wire_transport):
+def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(wire_transport):
     from infini_local.pipelines import llm_authoring_pipeline as author
     from test_placed_light_capability import lit
     from test_dual_use_placeable_contract import _dual_use_placeable
@@ -124,18 +124,20 @@ def test_outgoing_author_cards_disclose_body_or_light_callback_free_footprint(wi
     accepted = author.try_llm_plan({"name":"A"}, {"name":"B"}, "offline-native-precondition")
     assert accepted is not None
     cards = request_dossier(requests[-1])["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    for fn in (FN, "add_placed_light"):
+    native = next(c for c in cards if c["fn"] == "configure_tile_placement")
+    assert set(native["params"]) == {"tileId", "placeStyle"}  # No chest flag or new authored decision.
+    summary = native["does"].lower()
+    assert "native containers" in summary and "terraria" in summary
+    assert "inventory" in summary and "return" in summary
+    assert "unsupported" in summary and "callback" in summary
+    for fn in (FN, "add_placed_light", "enable_placed_vfx"):
         summary = next(c for c in cards if c["fn"] == fn)["does"].lower()
-        assert "callback-free" in summary
-        assert "footprint" in summary and "certified" in summary
-        assert "either" in summary and "post-place" in summary
-        assert "container" in summary and "actor lifecycle" in summary
-        assert "unsupported" in summary
-        assert "tile 21/style 17" in summary and "waterchest" in summary
-        assert "sp/mp" in summary and "native contents" in summary
+        assert "footprint" in summary and "bounded" in summary
+        assert "configure_tile_placement" in summary
+        assert "waterchest" not in summary and "tile 21/style 17" not in summary
     wire = compile_runtime_program(accepted)
     assert {"placedBody", "placedLight"} <= placement(wire).keys()
-    # No content-specific router/removal and no widening of plain placement.
+    # Presentation opt-ins neither invent nor select a separate container mechanic.
     assert validate_runtime_program(lit())["ok"]
     assert validate_runtime_program(placed())["ok"]
     plain = compile_runtime_program(_dual_use_placeable())
