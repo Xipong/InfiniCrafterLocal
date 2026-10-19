@@ -434,7 +434,7 @@
     {
       "name": "provider_aliases_documented",
       "ok": true,
-      "detail": "documented provider aliases must match transport"
+      "detail": "documented provider aliases must match profile normalization"
     },
     {
       "name": "image_backend_aliases_documented",

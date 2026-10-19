@@ -65,6 +65,9 @@ Owners: authored shape — `program_schema.py`; mechanical/event facts — `capa
 ```bash
 # Для затронутого runtime: точный вход вместо обхода дерева; --path тоже поддерживается.
 python tools/agentctl.py context --task "описание задачи" --area runtime
+# Известный файл или область: проверка без чтения Git diff.
+python tools/agentctl.py verify --path LocalGenerator/infini_local/core/runtime_authoring/validator.py
+python tools/agentctl.py verify --area transport
 # После правок: owner-area проверки. --base включает уже закоммиченный diff ветки.
 python tools/agentctl.py verify --changed --base origin/main --plan
 python tools/agentctl.py verify --changed --base origin/main

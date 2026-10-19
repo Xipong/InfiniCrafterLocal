@@ -27,7 +27,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_item_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::CanUseItem|Content/Items/GeneratedItem.UseStyle.cs::UseStyle",
       "outputs": [
         "gameplay.useStyleName",
         "gameplay.autoReuse",
@@ -63,7 +63,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_item_contact_hitbox",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::UseItemHitbox/OnHitNPC",
       "outputs": [
         "runtimeProgram.itemContact.hitboxScale",
         "runtimeProgram.itemContact.contactForgivenessPx"
@@ -74,7 +74,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_weapon_ammo",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection/Shoot",
+      "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem|Content/Items/GeneratedItem.Use.cs::ApplyActiveUseProjection/Shoot",
       "outputs": [
         "runtimeProgram.weaponAmmo",
         "runtimeProgram.weaponAmmo.ammoCategory",
@@ -118,7 +118,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "apply_vanilla_buff_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
       "outputs": [
         "gameplay.extraBuffs[].buffCode",
         "gameplay.extraBuffs[].buffTime",
@@ -132,7 +132,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "apply_generated_buff_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
       "outputs": [
         "gameplay.generatedBuff.durationTicks",
         "gameplay.generatedBuff.exhaustionTicks",
@@ -162,7 +162,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "refresh_generated_effect_group_while_held",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::HoldItem",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::HoldItem",
       "outputs": [
         "runtimeProgram.heldEffectGroupId"
       ]
@@ -278,7 +278,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "require_use_condition",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::UseBlockedReason",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::UseBlockedReason",
       "outputs": [
         "gameplay.useConditionMode",
         "gameplay.useConditionMinLife",
@@ -290,7 +290,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "add_hold_light",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::HoldItem",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::HoldItem",
       "outputs": [
         "gameplay.holdLightStrength",
         "gameplay.holdLightColorName"
@@ -301,7 +301,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_player_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
       "outputs": [
         "gameplay.mobilityMode",
         "gameplay.mobilityRangeTiles",
@@ -319,7 +319,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "recall_home_on_use",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::ApplyItemEffects",
+      "csharpOwner": "Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
       "outputs": [
         "gameplay.mobilityMode",
         "gameplay.mobilityRangeTiles",
@@ -337,7 +337,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_accessory",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateAccessory",
+      "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateAccessory",
       "outputs": [
         "accessory.enabled",
         "accessory.defense",
@@ -378,7 +378,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "configure_armor",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateEquip",
+      "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateEquip",
       "outputs": [
         "armor.enabled",
         "armor.slot",
@@ -426,7 +426,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "add_equipment_damage_bonus",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Items/GeneratedItem.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
+      "csharpOwner": "Content/Items/GeneratedItem.Equipment.cs::UpdateAccessory/UpdateEquip/UpdateArmorSet",
       "outputs": [
         "accessory.genericDamage",
         "accessory.meleeDamage",
@@ -482,7 +482,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "set_projectile_sentry",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.cs::ApplyActiveUseProjection",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Items/GeneratedItem.Use.cs::ApplyActiveUseProjection",
       "outputs": [
         "runtimeProgram.entities[].nativeSentry"
       ]

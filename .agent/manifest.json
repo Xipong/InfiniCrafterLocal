@@ -25,7 +25,7 @@
     "gameplayStage": "LocalGenerator/infini_local/pipelines/gameplay_stage.py",
     "wirePresentationViews": "LocalGenerator/infini_local/core/runtime_authoring/wire_views.py",
     "vfxTransport": "LocalGenerator/infini_local/pipelines/vfx_generation_pipeline.py",
-    "parentNativeFacts": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs"
+    "parentNativeFacts": "ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentFacts.cs"
   },
   "checks": {
     "pytest": [
