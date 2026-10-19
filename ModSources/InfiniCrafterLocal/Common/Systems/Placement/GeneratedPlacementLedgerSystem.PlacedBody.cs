@@ -23,6 +23,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         {
             PlacementGroup group = bodies[_bodyFootprintMaintenanceCursor++ % bodies.Length];
             if (_bodyFootprintMaintenanceCursor >= bodies.Length) _bodyFootprintMaintenanceCursor = 0;
+            if (IsNativeChestGroup(group)) continue;
             // A missing material cell is an authority transition, not an asset/pose
             // failure. No cosmetic parse or texture error may destroy a healthy claim.
             GeneratedPlacementKey? missing = group.Cells.FirstOrDefault(cell =>
@@ -47,6 +48,10 @@ public sealed partial class GeneratedPlacementLedgerSystem
             }).ToList(),
         };
         WritePlacementPrefixEnvelope(row, group.NativePrefixEnvelope);
+        if (group.RawNativeChestEnvelope is not null) row["nativeChest"] = ((TagCompound)group.RawNativeChestEnvelope.Clone())["nativeChest"];
+        else if (group.NativeChest is not null) row["nativeChest"] = group.NativeChest.Clone();
+        if (group.NativeChestRemoved) row["nativeChestRemoved"] = 1;
+        if (group.NativeChestDiagnostic.Length>0) row["nativeChestDiagnostic"] = group.NativeChestDiagnostic;
         if (group.RawPlacedBodyEnvelope is not null)
             row["placedBody"] = ((TagCompound)group.RawPlacedBodyEnvelope.Clone())["placedBody"];
         else if (group.PlacedBody is not null) row["placedBody"] = group.PlacedBody.Clone();
@@ -120,7 +125,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private static List<GeneratedPlacementKey> FindExactPlacedBodyCells(PlacementAuthorization authorization)
     {
         RuntimePlacementSpec? placement = authorization.ExactPlacement;
-        if (placement?.HasPlacedFootprint != true || authorization.Layer != GeneratedPlacementLayer.Tile)
+        if (placement is null || (!placement.HasPlacedFootprint && !IsNativeWaterChest(placement)) || authorization.Layer != GeneratedPlacementLayer.Tile)
             return new();
         if (!TryResolveMaterialFootprint(authorization.TargetX, authorization.TargetY,
             authorization.ExpectedType, placement.PlaceStyle, out int x, out int y,

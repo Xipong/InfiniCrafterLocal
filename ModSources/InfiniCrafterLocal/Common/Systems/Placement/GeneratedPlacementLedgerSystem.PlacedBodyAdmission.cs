@@ -16,11 +16,13 @@ public sealed partial class GeneratedPlacementLedgerSystem
     {
         if (!GeneratedPlacedBodyNativeAdapter.TryInstall(ShouldSuppressPlacedBody,null,out string reason))
             ReportPlacedBodyAdmissionFailure(reason);
+        try { InstallNativeChestHooks(); }
+        catch (Exception e) { ReportPlacedBodyAdmissionFailure("native chest source boundary unavailable: " + e.Message); }
     }
 
     public override void Unload()
     {
-        try { GeneratedPlacedBodyNativeAdapter.Unload(); }
+        try { UnloadNativeChestHooks(); GeneratedPlacedBodyNativeAdapter.Unload(); }
         finally { ClearWorld(); PlacedBodyAdmissionDiagnostics.Clear(); }
     }
 
@@ -33,7 +35,8 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     private static bool AdmitPlacedBodyNativeBoundary(RuntimePlacementSpec placement)
     {
-        if (!placement.HasPlacedFootprint) return true;
+        if (IsNativeWaterChest(placement)) return AdmitNativeChestMetadata(placement);
+        if (placement.TileId < 0) return !placement.HasPlacedFootprint;
         if (placement.PlacedBody is not null
             && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out string reason))
         { ReportPlacedBodyAdmissionFailure(reason); return false; }
@@ -49,7 +52,8 @@ public sealed partial class GeneratedPlacementLedgerSystem
                 => candidate.Width is > 0 and <= AuthorizationRadiusTiles
                 && candidate.Height is > 0 and <= AuthorizationRadiusTiles
                 && (long)candidate.Width*candidate.Height <= MaxCellsPerGroup
-                && candidate.HookPostPlaceMyPlayer.hook is null && candidate.HookPostPlaceEveryone.hook is null;
+                && candidate.HookPostPlaceMyPlayer.hook is null && candidate.HookPostPlaceEveryone.hook is null
+                && candidate.HookPlaceOverride.hook is null && candidate.HookCheckIfCanPlace.hook is null;
             // Post-place hooks create independent TE/NPC/contents owners. This v1
             // supplies no actor certificate, so it does not pretend that a future
             // actor is absent simply because ByPosition is empty before placement.

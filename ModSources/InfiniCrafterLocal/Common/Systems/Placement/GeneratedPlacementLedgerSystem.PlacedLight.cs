@@ -17,7 +17,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         if (projection.View is not GeneratedPlacedBodyView view || view.Light is not RuntimePlacedLightSpec light
             || !Groups.TryGetValue(view.GroupId,out PlacementGroup? group)
             || !ReferenceEquals(projection.Source,group) || projection.DefinitionJson != group.DefinitionJson
-            || !GeneratedItemRegistryService.IsCurrentWorldData(view.Data)) return false;
+            || !GeneratedItemRegistryService.IsCurrentWorldData(view.Data) || !NativeChestProjectionLive(group)) return false;
         foreach (GeneratedPlacementKey cell in group.Cells)
             if (!WorldGen.InWorld(cell.X,cell.Y,1) || !Main.tile[cell.X,cell.Y].HasTile
                 || Main.tile[cell.X,cell.Y].TileType != view.TileType) return false;

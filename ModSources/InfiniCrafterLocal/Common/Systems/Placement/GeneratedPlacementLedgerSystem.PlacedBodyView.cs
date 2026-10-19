@@ -49,6 +49,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             return false;
         try
         {
+            if (!NativeChestProjectionLive(group)) return false;
             var witness = group.PlacedBody;
             if (witness.ContainsKey("lightOnly")
                 || !TryReadPlacedBodySelection(witness,out _,out _,out int tileType,out _)) return false;

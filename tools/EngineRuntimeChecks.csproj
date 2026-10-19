@@ -94,6 +94,10 @@
     <Compile Include="EngineRuntimeChecks.PlayedMechanics.cs" />
     <Compile Include="EngineRuntimeChecks.PlacementPrefix.cs" />
     <Compile Include="EngineRuntimeChecks.PlacementPool.cs" />
+    <Compile Include="EngineRuntimeChecks.NativeChest.cs" />
+    <Compile Include="EngineRuntimeChecks.NativeChestPersistence.cs" />
+    <Compile Include="EngineRuntimeChecks.NativeChestNetwork.cs" />
+    <Compile Include="EngineRuntimeChecks.NativeChestVfx.cs" />
     <Compile Include="EngineRuntimeChecks.RootCombat.cs" />
     <Compile Include="EngineRuntimeChecks.ChildCombat.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmPersistence.cs" />
