@@ -50,6 +50,17 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "collect_seeds_from_grass",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
+      "outputs": [
+        "gameplay.collectSeedsFromGrass"
+      ],
+      "wirePresencePath": "gameplay.collectSeedsFromGrass"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "configure_item_contact_hitbox",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
@@ -204,6 +215,7 @@
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.renderSizePx",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.pivotSpace",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotY",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetXPx",
@@ -231,6 +243,26 @@
         "runtimeProgram.bindings[].usePolicy.action.placement.placedLight",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedLight.strength",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedLight.color"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn",
+        "runtimeProgram.calls[].target",
+        "runtimeProgram.calls[].params.placementCallId",
+        "runtimeProgram.bindings[].action.kind",
+        "runtimeProgram.bindings[].action.targetId",
+        "runtimeProgram.bindings[].action.placementCallId"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "enable_placed_vfx",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::TryGetPlacedVfxFrame",
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx.minFrameY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx.maxFrameY"
       ],
       "technicalProjectionInputs": [
         "runtimeProgram.calls[].fn",
@@ -1322,6 +1354,7 @@
         "runtimeProgram.itemUse.releaseTiming",
         "runtimeProgram.itemUse.holdoutOffsetX",
         "runtimeProgram.itemUse.holdoutOffsetY",
+        "gameplay.collectSeedsFromGrass",
         "runtimeProgram.itemContact.hitboxScale",
         "runtimeProgram.itemContact.contactForgivenessPx",
         "gameplay.ammoCategory",

@@ -20,7 +20,7 @@ def test_noncombat_parent_timing_is_literal_not_hidden_combat_default(monkeypatc
     before = copy.deepcopy((a, b))
     corridor = packet(monkeypatch, a, b)['balanceCorridor']
     assert corridor['parentUseTimeTicks'] == [17, 10]
-    assert 'suggested' not in corridor['broadEnvelope']['useTimeTicks']
+    assert 'suggested' not in corridor['broadEnvelope']['useTimeSeconds']
     assert (a, b) == before
 
 

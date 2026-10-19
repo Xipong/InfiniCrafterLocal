@@ -1,6 +1,6 @@
 # Карта исходников
 
-[Архитектура](ARCHITECTURE_RU.md) объясняет поток, [MODULES](MODULES_RU.md) — рабочие ограничения, [OWNERS](OWNERS_RU.md) — выбор файла по задаче. Ниже реальное дерево, не список предполагаемых слоёв. `GeneratedItemData`, `GeneratedItem`, `GeneratedProjectile` и ledger остаются partial types; перемещение исходника не создаёт API.
+Единая карта выбора владельца по задаче: сначала маршруты симптомов, затем таблицы Python/C#. Owner здесь — существующий файл/тип. [Архитектура](ARCHITECTURE_RU.md) нужна для общего потока, [MODULES](MODULES_RU.md) — для ограничений затронутой подсистемы. `GeneratedItemData`, `GeneratedItem`, `GeneratedProjectile` и ledger остаются partial types; перемещение исходника не создаёт API.
 
 <a id="fast-start"></a>
 ## Быстрый вход: симптом → цепочка → проверка
@@ -25,8 +25,8 @@
 
 ### Короткий рабочий цикл агента
 
-1. Соблюдай [consumer-first workflow](ARCHITECTURE_RU.md#consumer-first); открой [OWNERS](OWNERS_RU.md) для границы задачи и строку выше для entrypoint; [MODULES](MODULES_RU.md) нужен только для затронутого owner. Перед runtime-правкой выполни prerequisites из [AGENTS](../../AGENTS.md#перед-изменением-runtime).
-2. Найди **symbol в указанном файле**, его caller и точный saved input. Расширяй поиск лишь если этот seam уходит в другой owner. Не читай целиком generated catalogs и все `artifacts/` ради одного метода.
+1. Для известного файла/метода читай сразу его исходник. Если нужен компактный пакет: `python tools/agentctl.py context --path <repo-relative-file> --line <номер>` начинает с нужного места и сообщает точные строки. По умолчанию выдача ограничена 5000 символами исходников; `--budget` меняет объём. `suggestedVerification` относится только к выбранным путям, `validationRun:false` — проверки ещё не выполнены. Запрос `--path`/`--area` не сканирует diff ветки. Для неизвестной области выбери одну строку этой карты; [MODULES](MODULES_RU.md) открывай при пересечении границы ответственности.
+2. Найди **symbol в указанном файле**, его caller и точный saved input; `rg -n 'имя' <файл-или-подсистема>` обычно достаточно. Расширяй поиск лишь если этот seam уходит в другой owner. Не читай целиком generated catalogs и все `artifacts/` ради одного метода. Правила преобразований из [AGENTS](../../AGENTS.md#перед-изменением-runtime) применяются к затронутому контракту.
 3. Найди существующее behavioral test family в [TESTING](TESTING_RU.md). Native Compile roster — `tools/EngineRuntimeChecks.csproj`; invocation/filter roster — `tools/EngineRuntimeChecks.cs`. Новый файл без обеих регистраций не исполняется.
 4. Для headless native запуска нужны actual tML/FNA и external DLL paths, private SavePath и **source-root cwd** для locale/fixture readers. Запускай точную свежесобранную DLL; успешный `dotnet build` не доказывает, что `dotnet run` выбрал её.
 5. Для historical audit не называй builder messages exact HTTP wire; пустой physical-attempt list с unobserved owner — unknown, не «0 retries». Debug/manifest previews отдельно от полного сохранённого trace.
@@ -71,9 +71,9 @@ docs/                           user / development / reference / archive
 
 | Решение | Файлы |
 |---|---|
-| Capability facts, grammar, params/units, events/producers | `core/runtime_authoring/capability_registry.py` |
+| Capability facts, grammar, params/units, events/producers | `core/runtime_authoring/capability_registry.py`; [единицы](../reference/MODEL_FACING_UNITS_RU.md), [typed projections](../reference/TYPED_AUTHOR_PARAMETER_PROJECTIONS_RU.md), [точные нейтрали](../reference/DECLARED_NEUTRAL_OMISSIONS_RU.md) |
 | Strict Author/Repair shape | `core/runtime_authoring/program_schema.py` |
-| Exact Repair mutable IDs/indices/create policy | `core/runtime_authoring/repair_scope.py`; shared merge `core/repair_merge.py` |
+| Exact Repair mutable IDs/indices/create policy | `core/runtime_authoring/repair_scope.py`; shared merge `core/repair_merge.py`; [frozen-first permissions](TARGETED_REPAIR_PROTOCOL_RU.md#frozen-first) |
 | Composition/slots/budgets/binding admission | `core/runtime_authoring/validator.py`, `core/runtime_authoring/event_producer_validation.py`, `core/runtime_authoring/binding_use_policy.py` |
 | Component/opcode projection, receipts, final wire | `core/runtime_authoring/compiler.py`, `core/runtime_authoring/technical_lowering.py`, `core/runtime_authoring/wire_validator.py` |
 | Finite Terraria/tML mappings | `core/runtime_authoring/terraria_vocabulary.py` |
@@ -94,7 +94,7 @@ docs/                           user / development / reference / archive
 | Canonical settings/persistence/lifecycle | `desktop/settings_schema.py`, `desktop/settings_env.py`, `desktop/settings_controller.py`, `desktop/studio_operations.py` |
 | Offline fixtures/witnesses/library and consumer proof | `qa/runtime_program_fixtures.py`, `qa/capability_witnesses.py`, `qa/capability_library_audit.py`, `qa/primitive_loss_audit.py` |
 
-Fresh Author принимает только `authoring.v5`: flat `action`/`stackCost`/`contactDamage`, registry-fixed branches и unique item-body identity. Nested source `usePolicy`, v4 и compact API не являются fresh admission. **Persisted wire** сохраняет `usePolicy` и отдельную provenance: retirement Author grammar не удаляет recipes. Runtime imports указывают на defining module (`...capability_registry`, `...compiler`, `...repair_scope` и т. д.). Package `runtime_authoring/__init__.py` пуст по зависимостям: import registry не импортирует compiler/Repair; Visual/VFX читают `wire_views.py` без Gameplay Author. Общий provider response-format helper находится в `core/llm_json_tools.py`, а не в чужой LLM-стадии.
+Fresh Author принимает только `authoring.v6`: блоки/секунды и world rates, flat `action`/`stackCost`/`contactDamage`, registry-fixed branches и unique item-body identity. Перевод единиц выполняется в registry/lowering; runtime API v5 и wire v3 сохраняют единицы движка. Старые authoring grammars не являются fresh admission. **Persisted wire** сохраняет `usePolicy` и отдельную provenance: retirement Author grammar не удаляет recipes. Runtime imports указывают на defining module (`...capability_registry`, `...compiler`, `...repair_scope` и т. д.). Package `runtime_authoring/__init__.py` пуст по зависимостям: import registry не импортирует compiler/Repair; Visual/VFX читают `wire_views.py` без Gameplay Author. Общий provider response-format helper находится в `core/llm_json_tools.py`, а не в чужой LLM-стадии.
 
 <a id="csharp"></a>
 ## C#
@@ -114,7 +114,9 @@ Fresh Author принимает только `authoring.v5`: flat `action`/`stac
 | Explicit native front-hand body pose | `Content/Projectiles/GeneratedProjectile.FrontHand.cs::MoveFrontHand/TryProjectFrontHandUseStyle`; selected PNG origin — `Common/Models/Presentation/SpritePresentation.cs::ProjectileOrigin` |
 | Station input/jobs/MP/readiness | `Common/Players/InfiniCraftPlayer.Station.cs`, `Common/Players/InfiniCraftPlayer.CraftState.cs`, `Common/Players/InfiniCraftPlayer.MultiDev.cs`, `Common/Players/InfiniCraftPlayer.Multiplayer.cs` |
 | Durable station escrow и world exit | `Common/Systems/Craft/GeneratedStationEscrowStateSystem.cs`, `Common/Systems/Craft/InfiniCraftWorldExitSystem.cs` |
-| Placement/material claim + native admission | `Common/Systems/Placement/GeneratedPlacementLedgerSystem.cs` и его partials; `Common/Systems/Placement/GeneratedPlacedBodyNativeAdapter.cs`, `Common/Systems/Placement/GeneratedPlacedBodyNativeAdapter.Contracts.cs` |
+| Placement/material claim + native admission | `Common/Systems/Placement/GeneratedPlacementLedgerSystem.cs` и его partials; `Common/Systems/Placement/GeneratedPlacedBodyNativeAdapter.cs`, `Common/Systems/Placement/GeneratedPlacedBodyNativeAdapter.Contracts.cs`; [presentation и native контейнеры](../reference/PRESENT_PLACED_ITEM_SPRITE_RU.md) |
+| Native сундук: placement / contents / load → mine | Те же material claims; `Common/Systems/Placement/GeneratedPlacementLedgerSystem.NativeChest.cs`, `.NativeChestNet.cs`, `.NativeChestSave.cs`; стандартные native chest callbacks и `Chest` владеют содержимым, ledger — generated return. Проверки `tools/EngineRuntimeChecks.NativeChest*.cs` |
+| Placed VFX: источник / камера / бюджет / retirement | `Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::ActivePlacedVfxSources` → `Common/VFX/InfiniDetachedVfxSystem.Materials.cs`, `.PlacedVisibility.cs`; свет отдельно. Проверки `tools/EngineRuntimeChecks.PlacedVfx.cs` |
 | Native combat / quick utility | `Common/Systems/Combat/GeneratedRootCombatSystem.cs`, `Common/Systems/Utility/GeneratedQuickUseSystem.cs`, `Common/Runtime/GeneratedQuickUtilityActivation.cs` |
 | Cursor/placed/held draw | `Common/Systems/Presentation/GeneratedCursorItemPresentationSystem.cs`, `Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs`, `Common/Players/GeneratedHeldItemDrawLayer.cs` |
 | Definitions и generator HTTP | `Common/Services/Generation/GeneratedItemRegistryService.cs`, `Common/Services/Generation/GeneratorClient.cs` |

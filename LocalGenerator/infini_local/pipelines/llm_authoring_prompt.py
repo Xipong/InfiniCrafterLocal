@@ -43,9 +43,39 @@ VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(CAPABILITY_REGISTRY))
 
 
 def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
+    """Shared Author units and source-grounded scale, not an extra design stage."""
     return {
-        "time": "60 ticks = 1 second",
-        "distance": "1 tile = 16 pixels",
+        "time": (
+            "Write world durations/intervals in decimal seconds. The engine has 60 world ticks = 1 second; "
+            "lowering resolves seconds to the nearest world tick, half-tick ties upward. "
+            "Explicit zero stays zero; a positive effect may not round to disabled zero. "
+            "Raw immunity.localCooldown and explicitly named projectile-update counters are counts, not seconds."
+        ),
+        "distance": (
+            "Write gameplay world distances in blocks. 1 Terraria block (tile) = 16 world pixels. "
+            "rangeTiles/radiusTiles already mean blocks, including blink rangeTiles: do not divide again. "
+            "Read whether each card means radius, diameter, origin offset or distance to a target center."
+        ),
+        "speed": (
+            "Write gameplay speeds in blocks/s, physical accelerations in blocks/s^2 and declared angular rates in radians/s. "
+            "The canonical lowering accounts for the affected target's updatesPerTick; do not manually rescale Author values. "
+            "Initial speed, flat bonuses, sprint floors and event impulses are distinct, not guaranteed final movement or jump height. "
+            "Ammo speed is a base native launch contribution; the eventual projectile can have its own update rate. "
+            "Dimensionless retention/lerp/multiplier controls retain their declared per-update meaning."
+        ),
+        "scope": (
+            "Use each Author card's declared units; the compiled wire and raw parent facts keep engine units. "
+            "Pixel-labelled collision and local sprite geometry remain pixels; 16 world pixels = 1 block. "
+            "Texture texels/canvas dimensions remain texture pixels; normalized UV/grip coordinates remain normalized: do not divide by 16. "
+            "Texture resolution alone is not rendered world size, collision size or reach."
+        ),
+        "vanillaScaleReference": (
+            "Vanilla scale reference, not a balance ceiling: an ordinary standing unmounted player's collision box is "
+            "20x42 world pixels (1.25x2.625 blocks). Without gear/buffs or special terrain, nominal base run speed is "
+            "11.25 blocks/s; a normal jump assigns about 18.79 blocks/s upward velocity. "
+            "The 15-update held-jump counter is not a distance. Jump height/range depend on hold, gravity and horizontal motion; "
+            "these are not a measured height/range or a limit on authored mechanics."
+        ),
         "spread": "radians; total span",
     }
 
@@ -56,6 +86,7 @@ def planner_priority_header_for_llm() -> list[str]:
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
         "Source provenance constrains factual claims about the parents, not the mechanics you may invent. Create new purposeful mechanics from catalog primitives inspired by both parent identities; neither parent needs to have performed them. Do not present invented effects as observed parent abilities. No forced twist or unrelated gimmick is required.",
         "Use source tempo when available and useful to the composition; make deviations intentional.",
+        "Choose the physical contact and controls before the attack decoration. For a body intended to maintain continuous hand contact, use move_front_hand so native hand pose, visible grip and collision agree. owner_attached_projectile, held_body, handPose, grip and reuse_item_icon do not attach an arbitrary movement to the hand. Owner-center forward/retract and tether flight are deliberately detached alternatives, not substitutes for a gripped physical strike merely because a parent used them. A valid parent program is a source observation, not an upgrade recommendation: preserve useful reach and handling deliberately rather than copying an awkward origin. Evaluate the main attack's actual collision coverage; small secondary shots or a long painted blade do not extend it. Independent shots and deliberate transformations remain legal; choose them for coherent play rather than silently replacing the core interaction.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
     ]
 
@@ -86,46 +117,77 @@ def source_wire_units_for_llm(
     """Registry reading aid, optionally limited to exact present parent paths.
 
     Final paths supply the scope; a bare legacy leaf name cannot establish its
-    units. Selector-dependent and boolean projections are deliberately excluded.
+    units. Boolean projections are excluded; alternative paths explain units, not original Author choices.
     """
     scopes: dict[tuple[str, str], dict[str, list[str]]] = {}
+
+    def leaves(spec: Any, path: str):
+        if spec.alternatives:
+            for variant in spec.alternatives:
+                yield from leaves(variant, path)
+        elif spec.kind == "object":
+            for name, child in spec.properties.items():
+                yield from leaves(child, f"{path}.{name}")
+        elif spec.kind in {"integer", "number"}:
+            yield path, spec
+
+    def has_field(container: Mapping[str, Any], field_path: str) -> bool:
+        parent, _, leaf = field_path.rpartition(".")
+        owners = _source_path_objects(container, parent) if parent else [container]
+        return any(leaf in owner for owner in owners)
+
     for capability in CAPABILITY_REGISTRY.values():
-        for name, spec in capability.params.items():
-            if not spec.wire_name or spec.kind not in {"integer", "number"}:
-                continue
-            # Match ParamSpec.to_wire's declared precedence, not a second unit
-            # table. This describes mathematical magnitude, not float inversion.
-            if spec.wire_multiplier != 1:
-                reading = f"source / {spec.wire_multiplier}"
-            elif spec.wire_divisor != 1:
-                reading = f"source * {spec.wire_divisor}"
-            else:
-                reading = "source"
-            for path in capability.final_wire_paths:
-                root, _, field = path.rpartition(".")
-                if field != spec.wire_name:
+        for name, parameter in capability.params.items():
+            for author_path, spec in leaves(parameter, name):
+                projection = spec.wire_projection_card()
+                field_path = projection["wireName"]
+                if not field_path or spec.wire_enum or spec.wire_boolean_true_value is not None:
                     continue
-                roots = [f"raw.generatedParent.{root}"]
-                # The existing raw-item roster exposes the same direct gameplay
-                # numeric slots (e.g. Item.axe), not nested buff/equipment fields.
-                if root == "gameplay" and field in LLM_ITEM_RAW_KEYS:
-                    roots.append("raw.item")
-                for source in roots:
-                    scopes.setdefault((source, capability.name), {})[field] = [name, reading, spec.units]
+                # The existing canonical projection owns both ratio terms and
+                # the target-update exponent; no capability-name unit table.
+                offset = spec.wire_offset
+                reading = (f"source - {offset}" if offset > 0 else f"source + {abs(offset)}") if offset else "source"
+                if projection["divisor"] != 1:
+                    reading += f" * {projection['divisor']}"
+                power = projection["updatesPerTickPower"]
+                if power:
+                    reading += " * updatesPerTick" + (f"^{power}" if power != 1 else "")
+                if projection["multiplier"] != 1:
+                    reading += f" / {projection['multiplier']}"
+                suffix = "." + field_path
+                for path in capability.final_wire_paths:
+                    if not path.endswith(suffix):
+                        continue
+                    root = path[:-len(suffix)]
+                    roots = [f"raw.generatedParent.{root}"]
+                    if root == "gameplay" and field_path in LLM_ITEM_RAW_KEYS:
+                        roots.append("raw.item")
+                    for source in roots:
+                        fields = scopes.setdefault((source, capability.name), {})
+                        entry = [author_path, reading, spec.units]
+                        previous = fields.get(field_path)
+                        if previous is not None:
+                            if previous[1:] != entry[1:]:
+                                raise ValueError("one wire field has incompatible unit readings in declared variants")
+                            entry[0] = " | ".join(sorted(set(previous[0].split(" | ")) | {author_path}))
+                        fields[field_path] = entry
     scope_rows = []
     for (source, fn), fields in scopes.items():
         if parent_packets is not None:
             containers = [row for packet in parent_packets for row in _source_path_objects(packet, source)]
             fields = {name: reading for name, reading in fields.items()
-                      if any(name in row for row in containers)}
+                      if any(has_field(row, name) for row in containers)}
         if fields:
             scope_rows.append({"source": source, "fn": fn, "fields": fields})
     return {
         "readingRule": (
             "Paths are relative to each parent packet; [] means each entry in that exact container. "
             "Read a source number in the listed Author param's units using sourceToAuthor; source means unchanged magnitude. "
-            "Only direct numeric wire mappings are listed: no rule is implied for unlisted fields, boolean projections "
-            "or selector-dependent mappings. Use the exact scope and fn, never the bare field name. "
+            "Dotted field keys are relative paths inside that exact source container. Only declared numeric projections are listed; "
+            "no rule is implied for unlisted fields, boolean projections or a changed selector. "
+            "For update-scaled readings, updatesPerTick is collision.extraUpdates + 1 of the same entity, never its emitter; "
+            "if that context is absent, do not assume an update count. A list of alternative Author paths is a unit aid, "
+            "not a branch reconstruction or permission to change the source. Use the exact scope and fn, never the bare field name. "
             "This is a unit explanation, not a bit-exact inverse for arbitrary floating-point values; "
             "do not rewrite source, round it or replace it with tooltip prose. Values still must satisfy the selected "
             "card's bounds/dependencies. This reading aid does not require an inherited ability for each new mechanic "
@@ -158,6 +220,7 @@ def runtime_units_for_llm() -> dict[str, Any]:
     guide = runtime_authoring_prompt_field_guide()
     return {
         "paramNotation": guide["paramNotation"],
+        "playerFacingUnits": concise_terraria_tick_guide_for_llm(),
         "sourceWireUnits": source_wire_units_for_llm(),
         "bindingTarget": guide["bindingTarget"],
         "descendantSpawnBudget": descendant_spawn_budget_for_llm(),
@@ -165,7 +228,7 @@ def runtime_units_for_llm() -> dict[str, Any]:
 
 
 def _share_consumer_constraints(cards: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    """Intern only literally equal metadata; no gameplay value is transformed.
+    """Share literal storage/projection rules, including nested numeric shapes.
 
     Labels are packet-local references, not a parallel table of numeric rules.
     A new registry rule receives a new definition rather than a guessed profile.
@@ -175,7 +238,8 @@ def _share_consumer_constraints(cards: list[dict[str, Any]]) -> dict[str, dict[s
 
     def visit(value: Any) -> None:
         if isinstance(value, dict):
-            for key in ("consumerConstraint", "x-infini-consumerConstraint"):
+            for key in ("consumerConstraint", "x-infini-consumerConstraint",
+                        "projectionConstraints", "x-infini-authorProjection"):
                 constraint = value.get(key)
                 if not isinstance(constraint, dict):
                     continue
@@ -214,7 +278,9 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     )
     field_guide["sourceValues"] = (
         "Choose meaningful params from design/source facts or omit unnecessary calls. "
-        "Never guess tile/wall/buff IDs or copy source sentinel -1 into a param whose card minimum is 0."
+        "Never guess tile/wall/buff IDs or copy source sentinel -1 into a param whose card minimum is 0. "
+        "A placeable native Item.damage=-1 is not an observed damage or firing rate of its wired tile attack; "
+        "that sentinel alone does not show weak trap power."
     )
     field_guide["projectileMotion"] = (
         "Decide the trajectory of every moving entity deliberately. move_straight has no falling arc; "
@@ -227,6 +293,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     )
     field_guide["damageClass"] = {
         "builtInTokens": list(DAMAGE_CLASS_TOKENS), "meaningByToken": dict(DAMAGE_CLASS_MEANINGS),
+        "nativeManaPayment": "Native integer truncation can make cheap spells cost zero even with a positive mana-cost coefficient. The coefficient floor 0.1 is not a minimum of 1 mana.",
         "scope": "Damage/stat inheritance and class effects only; no movement, minions, ammo consumption or mana cost. Parent damageClass=none is source-only, not a runtime token. Modded token is exact parent-backed ModName/ClassName; no other tokens.",
     }
     field_guide["itemUseStyle"] = {
@@ -261,7 +328,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         "on_crit": "Requires actual critical NPC contact; item_body needs enabled body hitbox.",
         "on_kill": "Projectile termination event, including collision death, penetration exhaustion, proximity detonation, natural expiry and ordinary return-to-owner completion or controller cancellation. Only explicitly attached actions execute; termination does not imply an explosion.",
         "on_tile_collision": "Emitted at each tile collision, including a bounce.",
-        "periodic": "Periodic event calls require when={everyTicks:n}; n is an explicit integer from 6 to 3600. item_body periodic runs while held (HoldItem), not merely equipped.",
+        "periodic": "Periodic event calls require when={everySeconds:n}; n is an explicit interval in seconds within the call's declared bounds. item_body periodic runs while held (HoldItem), not merely equipped.",
     }
     for event in events:
         if event["event"] in event_detail:
@@ -270,8 +337,10 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
     field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
     field_guide["consumerConstraintReadingRule"] = (
-        "Param consumerConstraint and nested shape x-infini-consumerConstraint name one complete rule "
-        "in fieldGuide.consumerConstraints. The referenced precision, neutral and wireProjection constraints all apply."
+        "Param consumerConstraint/projectionConstraints and nested shape x-infini-consumerConstraint/"
+        "x-infini-authorProjection each name one complete numeric rule in fieldGuide.consumerConstraints. "
+        "Every referenced storage, neutral, rounding, target-clock and contextual-bound constraint applies. "
+        "References explain parameter constraints; they are not Author values."
     )
     for card in capabilities:
         if card["fn"] in {"target_and_fire", "spawn_entity_on_event"}:
@@ -281,12 +350,14 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
             )
         elif card["fn"] == "present_placed_item_sprite":
             card["constructionMeaning"] = "Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
+        elif card["fn"] == "enable_placed_vfx":
+            card["constructionMeaning"] = "Opt-in live placed effects, certified 16x16/256 cells max, same exact executed tile placement. minFrameY/maxFrameY consume inclusive top-left native TileFrameY; use read-only parent nativeTileState when available, never guess or automatically choose bounds. Full 0..32767 selects all nonnegative frames. VFX Director later authors separate periodic/self spriteElement/libraryParticle/lightCue slots with placementBindingId; none exist yet. Physical root art and optional static present_placed_item_sprite stay independent. No container/actor lifecycle or material return changes."
         elif card["fn"] == "add_placed_light":
             card["constructionMeaning"] = "Independent explicit light; one center cell per committed native footprint, not player/held PNG or sprite heads. Certified 16x16/256 cells max; unproved post-place actors refused before mutation. Strength/color remain required; no default."
         elif card["fn"] == "charge_then_release":
-            card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeTicks scales authored release velocity/movement. customHeldSprite is presentation, not release trigger."
+            card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeSeconds scales authored release velocity/movement. customHeldSprite is presentation, not release trigger."
         elif card["fn"] == "configure_item_use":
-            card["constructionMeaning"] = "Timing is owned by configure_item_stats.useTimeTicks (cadence) and configure_item_stats.useAnimationTicks (animation duration), not params of this call. Here autoReuse repeats active use while held, and channel keeps that use active."
+            card["constructionMeaning"] = "Timing is owned by configure_item_stats.useTimeSeconds (cadence) and configure_item_stats.useAnimationSeconds (animation duration), not params of this call. Here autoReuse repeats active use while held, and channel keeps that use active."
         elif card["fn"] == "configure_item_stats":
             card["constructionMeaning"] = "Only an item with both a place_item binding and reusable spawn_entity/use_item_body use (stackCost=0) requires maxStack=1: one durable unit switches inventory/placed form. This rule does not limit stacks without placement or with only one-shot non-placement use (stackCost=1)."
     return {

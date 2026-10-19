@@ -124,12 +124,14 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     current.update(id="sound_cache_probe", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                    sourceMode="offline_contract_fixture")
     from infini_local.pipelines import visual_delivery_gate
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     current["visual"] = {"preferredCanvasSize": 32}
     for entity in current["runtimeProgram"]["entities"]:
         entity["visual"]["assetMode"] = "reuse_item_icon" if entity["kind"] != "item_body" else "baked_sprite"
-    hydrate_no_image_fixture_assets(current, write_no_image_fixture_png(tmp_path / "sound.png"))
+    fixture = write_no_image_fixture_png(tmp_path / "sound.png")
+    hydrate_no_image_fixture_assets(current, fixture)
+    current = synthetic_no_image_execution_control(current, fixture)
     world_storage.write_world_recipe_cache(tmp_path, "sound-test", "sound", "world", current)
     cached = world_storage.read_world_recipe_cache(tmp_path, "sound-test", "v5", "sound", "world")
     assert cached is not None and cached["vfxManifest"]["slots"] == current["vfxManifest"]["slots"]
@@ -209,12 +211,14 @@ def test_sound_wire_survives_delivery_projection_and_real_cache_shape_admission(
     raw = _sound(data, sound_id)
     data["vfxManifest"] = vfx._compile_manifest(data, raw, "cache-sound")
     from infini_local.pipelines import visual_delivery_gate
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     data["visual"] = {"preferredCanvasSize": 32}
     for entity in data["runtimeProgram"]["entities"]:
         entity["visual"]["assetMode"] = "reuse_item_icon" if entity["kind"] != "item_body" else "baked_sprite"
-    hydrate_no_image_fixture_assets(data, write_no_image_fixture_png(tmp_path / "sound.png"))
+    fixture = write_no_image_fixture_png(tmp_path / "sound.png")
+    hydrate_no_image_fixture_assets(data, fixture)
+    data = synthetic_no_image_execution_control(data, fixture)
     data = json.loads(json.dumps(data))
     before = copy.deepcopy(data)
     assert world_storage.is_deliverable_recipe_payload(data, check_assets=False)

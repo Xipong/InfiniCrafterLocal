@@ -853,8 +853,11 @@ public partial class GeneratedItem : ModItem
             return true;
         var nativeAsset = assets[type];
         if (nativeAsset?.IsLoaded != true
-            || !ReferenceEquals(drawData.texture, nativeAsset.Value)
-            || !GeneratedHeldItemDrawLayer.HasReadyHeldSprite(drawInfo))
+            || !ReferenceEquals(drawData.texture, nativeAsset.Value))
+            return true;
+        // Missing generated art never lends the type-wide cross. Explicit inert
+        // diagnostics retain their historical native path when no custom PNG draws.
+        if (AllowsDiagnosticProxy(PresentationData()) && !GeneratedHeldItemDrawLayer.HasReadyHeldSprite(drawInfo))
             return true;
 
         // The native veto covers its base/color/glow bundle. Keep optional draws
@@ -869,6 +872,13 @@ public partial class GeneratedItem : ModItem
 
     // Cursor source correction requires the same exact inventory asset as this hook.
     // Readiness is technical presentation only; never change authored hideUseGraphic.
+    // Cursor routing and readiness are distinct: a missing generated image must
+    // still use this instance's inventory veto, never ContentSamples' cross.
+    internal bool SuppressesNativeImageProxy => !AllowsDiagnosticProxy(PresentationData());
+
+    internal bool OwnsCursorItemPresentation()
+        => SuppressesNativeImageProxy || HasReadyInventorySprite();
+
     internal bool HasReadyInventorySprite()
     {
         GeneratedItemData data = PresentationData();
@@ -876,12 +886,17 @@ public partial class GeneratedItem : ModItem
             && global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath) is not null;
     }
 
+    // The static cross is an explicit unavailable/developer diagnostic only,
+    // never a substitute for a delivered or still-hydrating generated PNG.
+    private static bool AllowsDiagnosticProxy(GeneratedItemData data)
+        => data.SourceMode is "corrupt_reference" or "test_fixture" or "developer_fixture";
+
     public override bool PreDrawInInventory(SpriteBatch spriteBatch, Vector2 position, Rectangle frame, Color drawColor, Color itemColor, Vector2 origin, float scale)
     {
         EnsureRuntimeHydration();
         GeneratedItemData data = PresentationData();
         Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath);
-        if (texture is null) return true;
+        if (texture is null) return AllowsDiagnosticProxy(data);
         Rectangle source = texture.Bounds;
         Vector2 drawOrigin = source.Size() / 2f;
         float fit = Math.Min(1f, Math.Max(frame.Width, frame.Height) / Math.Max(1f, Math.Max(texture.Width, texture.Height)));
@@ -900,10 +915,10 @@ public partial class GeneratedItem : ModItem
         EnsureRuntimeHydration();
         GeneratedItemData data = PresentationData();
         Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath);
-        if (texture is null) return true;
+        if (texture is null) return AllowsDiagnosticProxy(data);
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() / 2f;
-        if (!data.Visual.RenderSizePx.HasValue || !data.Visual.ForwardAngleDegrees.HasValue) return true;
+        if (!data.Visual.RenderSizePx.HasValue || !data.Visual.ForwardAngleDegrees.HasValue) return AllowsDiagnosticProxy(data);
         float finalScale = scale * data.Visual.WorldScale * SpritePresentation.FrameScale(data.Visual.RenderSizePx, source.Width, source.Height);
         Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0f, origin.Y * finalScale) + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, origin, finalScale, SpriteEffects.None, 0f);

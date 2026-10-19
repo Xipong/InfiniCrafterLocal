@@ -28,7 +28,7 @@ def _fixture():
 
 def test_explicit_positive_exhaustion_tracer_preserves_source_and_exact_wire_receipt():
     doc, call = _fixture()
-    call["params"]["exhaustionTicks"] = 180
+    call["params"]['exhaustionSeconds'] = (180) / 60
     before = json.dumps(doc)
     report = validate_runtime_program(doc)
     assert report["ok"], report
@@ -39,7 +39,7 @@ def test_explicit_positive_exhaustion_tracer_preserves_source_and_exact_wire_rec
     policy = [r for r in receipts if r["finalPath"] == "gameplay.generatedBuff.exhaustionTicks"]
     index = doc["runtimeProgram"]["calls"].index(call)
     assert policy == [{"callId": call["id"], "fn": FN,
-                       "authoredPath": f"runtimeProgram.calls[{index}].params.exhaustionTicks",
+                       "authoredPath": f"runtimeProgram.calls[{index}].params.exhaustionSeconds",
                        "finalPath": "gameplay.generatedBuff.exhaustionTicks",
                        "value": 180, "status": "delivered"}]
     assert audit_compiler_receipts(receipts, authored_document=doc, final_document=final)["ok"]
@@ -53,7 +53,7 @@ OMITTED = "omitted"
 def _policy_fixture(value: Any = OMITTED, group=None):
     doc, call = _fixture()
     if value != OMITTED:
-        call["params"]["exhaustionTicks"] = value
+        call["params"]['exhaustionSeconds'] = value / 60 if type(value) in (int, float) else value
     if group is not None:
         call["params"]["effectGroupId"] = group
         doc["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = group
@@ -74,10 +74,10 @@ def test_serialized_author_presence_policy_and_registered_card(monkeypatch, mode
     request, user, _ = author.build_initial_author_request({}, {}, "policy", model_name="offline")
     request = json.loads(json.dumps(request))
     card = next(c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
-    spec = CAPABILITY_REGISTRY[FN].params["exhaustionTicks"]
+    spec = CAPABILITY_REGISTRY[FN].params["exhaustionSeconds"]
     assert not spec.required and spec.default is None and spec.neutral is None
-    param = card["params"]["exhaustionTicks"]
-    assert param["type"] == "integer" and param["min"] == 0 and param["max"] == 21600
+    param = card["params"]['exhaustionSeconds']
+    assert param["type"] == "number" and param["min"] == 0 and param["max"] == 360
     assert "default" not in param and "neutral" not in param
     assert "successful application" in card["does"] and "independently of buff duration" in card["does"]
     assert "Normal attacks" in card["does"] and "separately authored" in card["does"]
@@ -103,15 +103,15 @@ def test_serialized_author_presence_policy_and_registered_card(monkeypatch, mode
 
 
 @pytest.mark.parametrize("group", [None, "survey"])
-@pytest.mark.parametrize("value", [None, True, False, 1.5, 0.0, "180", -1, 21601])
+@pytest.mark.parametrize("value", [None, True, False, 0.1, "180", -1, 21601])
 def test_present_invalid_policy_is_rejected_by_real_parse_author_and_strict_wire(group, value):
     doc, call = _policy_fixture(value, group)
     parsed = author._prepare_parsed_author_item(json.loads(json.dumps(doc)), response_format={"type": "json_object"})
-    assert "exhaustionTicks" in next(c for c in parsed["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]
+    assert "exhaustionSeconds" in next(c for c in parsed["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]
     report = validate_runtime_program(parsed)
     assert not report["ok"], report
     scope = build_runtime_repair_scope(parsed, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.exhaustionTicks"]}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.exhaustionSeconds']}]
     with pytest.raises(ValueError):
         compile_runtime_program(parsed)
     good, _ = _policy_fixture(180, group)
@@ -146,17 +146,17 @@ def test_exhaustion_policy_alone_never_counts_as_an_executable_buff_effect(group
 def test_repair_unrelated_leaf_freezes_accepted_policy_value_or_absence(monkeypatch, mode, value):
     doc, call = _policy_fixture(value, "survey")
     expected = deepcopy(doc)
-    call["params"]["durationTicks"] = True
+    call["params"]['durationSeconds'] = True
     candidate = deepcopy(call)
-    candidate["params"]["durationTicks"] = next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]["durationTicks"]
+    candidate["params"]['durationSeconds'] = next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['durationSeconds']
     if value == 180:
-        candidate["params"].pop("exhaustionTicks")  # Repair omission is no-change.
+        candidate["params"].pop("exhaustionSeconds")  # Repair omission is no-change.
     else:
-        candidate["params"]["exhaustionTicks"] = 90  # Frozen zero/absence cannot be rewritten.
+        candidate["params"]['exhaustionSeconds'] = (90) / 60  # Frozen zero/absence cannot be rewritten.
     candidate["params"]["effectGroupId"] = "foreign"
     repaired, dossier = gameplay_repair(monkeypatch, doc, {"note": "duration only", "callsUpsert": [candidate],
         "realizationReplacement": doc["realization"]}, mode)
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.durationTicks"]}]
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.durationSeconds']}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
@@ -169,12 +169,12 @@ def test_repair_unrelated_leaf_freezes_accepted_policy_value_or_absence(monkeypa
 def test_policy_type_only_repair_changes_exact_leaf_and_freezes_duration_group_stats(monkeypatch, mode):
     doc, call = _policy_fixture(True, "survey")
     expected = deepcopy(doc)
-    next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]["exhaustionTicks"] = 1
+    next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['exhaustionSeconds'] = (1) / 60
     candidate = deepcopy(call)
-    candidate["params"].update(exhaustionTicks=1, durationTicks=1, effectGroupId="foreign", lightStrength=1.5)
+    candidate["params"].update(exhaustionSeconds=(1) / 60, durationSeconds=(1) / 60, effectGroupId="foreign", lightStrength=1.5)
     repaired, dossier = gameplay_repair(monkeypatch, doc, {"note": "typed policy leaf", "callsUpsert": [candidate],
         "realizationReplacement": doc["realization"]}, mode)
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.exhaustionTicks"]}]
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.exhaustionSeconds']}]
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
     assert _buff(compile_runtime_program(repaired), "survey")["exhaustionTicks"] == 1
@@ -184,11 +184,11 @@ def test_policy_type_only_repair_changes_exact_leaf_and_freezes_duration_group_s
 def test_invalid_policy_cannot_be_repaired_by_omission_or_defaults(monkeypatch, mode):
     doc, call = _policy_fixture(-1)
     candidate = deepcopy(call)
-    candidate["params"].pop("exhaustionTicks")
+    candidate["params"].pop("exhaustionSeconds")
     with pytest.raises(PlannerUnavailable, match="could not be deterministically filtered"):
         gameplay_repair(monkeypatch, doc, {"note": "omission is not correction", "callsUpsert": [candidate],
             "realizationReplacement": doc["realization"]}, mode)
-    assert call["params"]["exhaustionTicks"] == -1
+    assert call["params"]['exhaustionSeconds'] == -1 / 60
 
 
 def _two_groups():
@@ -271,7 +271,7 @@ def test_current_absent_policy_recompiles_without_hidden_backfill_or_private_bas
     first = compile_runtime_program(doc)
     second = compile_runtime_program(json.loads(source))
     assert first == second
-    assert "exhaustionTicks" not in call["params"]
+    assert "exhaustionSeconds" not in call["params"]
     assert "exhaustionTicks" not in _buff(first)
     assert not any(row["finalPath"].endswith(".exhaustionTicks")
                    for row in first["runtimeContract"]["finalWireReceipts"])
@@ -286,9 +286,9 @@ def test_current_absent_policy_recompiles_without_hidden_backfill_or_private_bas
 def test_default_and_named_policies_are_independently_authored_not_inferred(monkeypatch, mode, first, second):
     doc = _two_groups()
     for call, value in zip([c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN], [first, second]):
-        call["params"].pop("exhaustionTicks")
+        call["params"].pop("exhaustionSeconds")
         if value != OMITTED:
-            call["params"]["exhaustionTicks"] = value
+            call["params"]['exhaustionSeconds'] = value / 60 if type(value) in (int, float) else value
     primary = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
     primary["params"].pop("effectGroupId")
     doc["runtimeProgram"]["bindings"][0]["action"].pop("effectGroupId")
@@ -317,11 +317,11 @@ def test_provider_null_scaffolding_is_only_optional_omission_not_authored_null(m
     if mode == "json_schema":
         good, _ = _policy_fixture()
         payload = _encode_nullable_fixture(good, author_item_response_schema())
-        assert next(c for c in payload["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]["exhaustionTicks"] is None
+        assert next(c for c in payload["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['exhaustionSeconds'] is None
         Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
         restored = author._prepare_parsed_author_item(json.loads(json.dumps(payload)), response_format=request["response_format"])
         restored_call = next(c for c in restored["runtimeProgram"]["calls"] if c["id"] == call["id"])
-        assert "exhaustionTicks" not in restored_call["params"]
+        assert "exhaustionSeconds" not in restored_call["params"]
         assert validate_runtime_program(restored)["ok"]
         assert "exhaustionTicks" not in _buff(compile_runtime_program(restored))
     else:
@@ -329,7 +329,7 @@ def test_provider_null_scaffolding_is_only_optional_omission_not_authored_null(m
         assert not validate_runtime_program(restored)["ok"]
 
 
-@pytest.mark.parametrize("value", [True, False, 0.0, 1.5, "180", -1, 21601])
+@pytest.mark.parametrize("value", [True, False, "180", -1, 361])
 def test_serialized_strict_provider_rejects_bad_policy_tokens(monkeypatch, value):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines.author_item_contract import author_item_response_schema
@@ -339,11 +339,8 @@ def test_serialized_strict_provider_rejects_bad_policy_tokens(monkeypatch, value
     request, _, _ = author.build_initial_author_request({}, {}, "policy-typed", model_name="offline")
     doc, call = _policy_fixture(180)
     payload = _encode_nullable_fixture(doc, author_item_response_schema())
-    next(c for c in payload["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]["exhaustionTicks"] = value
-    # JSON Schema integer admits integral numeric 0.0; local strict admission
-    # still rejects that token after the real inverse projection, without coercion.
-    if type(value) is not float or not value.is_integer():
-        assert not Draft202012Validator(request["response_format"]["json_schema"]["schema"]).is_valid(payload)
+    next(c for c in payload["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['exhaustionSeconds'] = value
+    assert not Draft202012Validator(request["response_format"]["json_schema"]["schema"]).is_valid(payload)
     restored = author._prepare_parsed_author_item(json.loads(json.dumps(payload)), response_format=request["response_format"])
     assert not validate_runtime_program(restored)["ok"]
 
@@ -353,10 +350,10 @@ def test_explicit_held_refresh_preserves_policy_on_its_exact_generated_group(mon
     _, user, _ = author.build_initial_author_request({}, {}, "held-policy", model_name="offline")
     card = next(c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]
                 if c["fn"] == "refresh_generated_effect_group_while_held")
-    assert "attempt" in card["does"].lower() and "exhaustionTicks" in card["does"]
+    assert "attempt" in card["does"].lower() and "exhaustionSeconds" in card["does"]
     doc = build_capability_witness("refresh_generated_effect_group_while_held")
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
-    call["params"]["exhaustionTicks"] = 180
+    call["params"]['exhaustionSeconds'] = (180) / 60
     before = json.dumps(doc)
     final = compile_runtime_program(doc)
     assert _buff(final, "witness")["exhaustionTicks"] == 180
@@ -393,7 +390,7 @@ def test_coherent_inserted_zero_policy_cannot_forge_accepted_source_absence(grou
     rows = final["runtimeContract"]["finalWireReceipts"]
     source_index = doc["runtimeProgram"]["calls"].index(call)
     prefix = "gameplay" if group is None else "runtimeProgram.effectGroups[0]"
-    rows.append({"fn": FN, "callId": call["id"], "authoredPath": f"runtimeProgram.calls[{source_index}].params.exhaustionTicks",
+    rows.append({"fn": FN, "callId": call["id"], "authoredPath": f"runtimeProgram.calls[{source_index}].params.exhaustionSeconds",
                  "finalPath": prefix + ".generatedBuff.exhaustionTicks", "value": 0, "status": "delivered"})
     report = audit_compiler_receipts(rows, authored_document=doc, final_document=final)
     assert not report["ok"] and any("absent" in r["reason"] for r in report["violations"])

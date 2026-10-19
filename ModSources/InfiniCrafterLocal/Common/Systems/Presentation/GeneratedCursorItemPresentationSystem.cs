@@ -52,7 +52,7 @@ public sealed class GeneratedCursorItemPresentationSystem : ModSystem
             return false;
         Item item = player.inventory[player.selectedItem];
         if (item is null || item.IsAir || item.ModItem is not GeneratedItem generated
-            || !generated.HasReadyInventorySprite())
+            || !generated.OwnsCursorItemPresentation())
             return false;
         selected = item;
         return true;
@@ -65,18 +65,20 @@ public sealed class GeneratedCursorItemPresentationSystem : ModSystem
     private static bool OmitNativeSelectedTint()
         => TryGetSelectedCursorItem(out _);
 
-    private static bool OmitDeadGeneratedPreview()
+    private static bool OmitUnavailableGeneratedPreview(int cachedType)
     {
         if (Main.dedServ || Main.myPlayer < 0 || Main.myPlayer >= Main.player.Length)
             return false;
         Player player = Main.player[Main.myPlayer];
-        // The native ten-tick preview cache can outlive cursorItemIconEnabled
-        // and does not expire while the mouse is stationary. Retire this selected
-        // generated preview before native temporarily swaps its type into iconID.
-        // Explicit interaction icons and other items remain native-owned.
-        return player is { dead: true, cursorItemIconID: ItemID.None }
-            && player.selectedItem >= 0 && player.selectedItem < player.inventory.Length
-            && player.inventory[player.selectedItem]?.ModItem is GeneratedItem;
+        if (player is null || player.cursorItemIconID != ItemID.None
+            || player.selectedItem < 0 || player.selectedItem >= player.inventory.Length
+            || player.inventory[player.selectedItem]?.ModItem is not GeneratedItem generated)
+            return false;
+        // Keep the existing death fence. A disabled type-only generated cache
+        // has no instance identity: suppress its proxy instead of choosing art
+        // from the current selection. Foreign cached types remain native-owned.
+        return player.dead || (!player.cursorItemIconEnabled
+            && cachedType == generated.Item.type && generated.SuppressesNativeImageProxy);
     }
 
     private static void PatchCursor(ILContext il)
@@ -119,9 +121,14 @@ public sealed class GeneratedCursorItemPresentationSystem : ModSystem
         if (!sampleOwner || sampleIndex >= iconIndex || !tintOwner || tint.Next is null)
             throw new NotSupportedException("Native cursor source/tint ownership changed; no presentation patch applied.");
 
+        FieldInfo cachedType = typeof(Main).GetField("_itemIconCacheSelectedItemID", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new NotSupportedException("Native cursor cache type owner is unavailable.");
+        if (cachedType.FieldType != typeof(int))
+            throw new NotSupportedException("Native cursor cache type shape changed; no presentation patch applied.");
         var entry = new ILCursor(il);
         Instruction originalEntry = instructions[0];
-        entry.EmitDelegate<Func<bool>>(OmitDeadGeneratedPreview);
+        entry.Emit(OpCodes.Ldsfld, il.Method.Module.ImportReference(cachedType));
+        entry.EmitDelegate<Func<int, bool>>(OmitUnavailableGeneratedPreview);
         entry.Emit(OpCodes.Brfalse, originalEntry);
         entry.Emit(OpCodes.Ret);
 

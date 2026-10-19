@@ -378,7 +378,8 @@ def _candidate_capability_viable(
                 if _validate_requirement(
                     requirement, call={"target": target_id}, call_index=0, cap=cap,
                     item_id=item_id, calls_by_target=calls_by_target,
-                    entities_by_id={}, bindings=rows.get("bindings", []), primary_entity_id="",
+                    entities_by_id={str(row.get("id") or ""): row for row in rows.get("entities", [])},
+                    bindings=rows.get("bindings", []), primary_entity_id="", calls=calls,
                 ) is not None:
                     return False
         elif requirement.kind == "capability_group_present" and requirement.any_of:

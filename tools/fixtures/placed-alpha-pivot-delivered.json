@@ -1,0 +1,339 @@
+{
+  "accessory": {
+    "enabled": false
+  },
+  "armor": {
+    "enabled": false
+  },
+  "category": "hybrid",
+  "concept": {
+    "coreMechanic": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
+    "parentAContribution": "workbench body",
+    "parentBContribution": "blade and nails",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Execute the authored spawn_entity action."
+      }
+    ],
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+  },
+  "debug": {
+    "llmStageAccounting": "{\"gameplayAuthorCalls\":0,\"gameplayRepairCalls\":0,\"vfxDirectorCalls\":1,\"vfxRepairCalls\":0,\"visualDirectorCalls\":0,\"visualRepairCalls\":0}",
+    "vfxDirectorRaw": "{\"schema\":\"infini.vfx-director.runtime-events.v3\",\"slots\":[{\"alpha\":0.8,\"anchor\":\"self\",\"blend\":\"alpha\",\"color\":{\"b\":241,\"g\":93,\"r\":17},\"density\":0.4,\"duration\":20,\"entityId\":\"item\",\"event\":\"on_crit\",\"id\":\"slot_0\",\"layer\":\"BeforeProjectiles\",\"particleSystemId\":\"none\",\"rendererKind\":\"spriteStampTrail\",\"repeatEvery\":0,\"scale\":1.0,\"spread\":0.1,\"startTick\":0,\"textureRole\":\"entity\"}]}",
+    "vfxDirectorStatus": "validated_and_compiled",
+    "vfxRuntimePairs": "[{\"entityId\":\"item\",\"event\":\"on_crit\"},{\"entityId\":\"item\",\"event\":\"on_hit\"},{\"entityId\":\"item\",\"event\":\"on_use\"},{\"entityId\":\"item\",\"event\":\"periodic\"},{\"entityId\":\"nail\",\"event\":\"on_crit\"},{\"entityId\":\"nail\",\"event\":\"on_expire\"},{\"entityId\":\"nail\",\"event\":\"on_hit\"},{\"entityId\":\"nail\",\"event\":\"on_kill\"},{\"entityId\":\"nail\",\"event\":\"on_spawn\"},{\"entityId\":\"nail\",\"event\":\"on_tile_collision\"},{\"entityId\":\"nail\",\"event\":\"periodic\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_crit\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_expire\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_hit\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_kill\"},{\"entityId\":\"workbench_blade\",\"event\":\"on_spawn\"},{\"entityId\":\"workbench_blade\",\"event\":\"periodic\"}]"
+  },
+  "gameplay": {
+    "autoReuse": true,
+    "craftYield": 1,
+    "damage": 42,
+    "damageClass": "generic",
+    "handPose": "one_handed",
+    "height": 32,
+    "holdoutOffsetX": 0,
+    "holdoutOffsetY": 0,
+    "itemScale": 1.0,
+    "kind": "hybrid",
+    "knockback": 4.0,
+    "manaCost": 0,
+    "maxStack": 1,
+    "rarity": 2,
+    "releaseTiming": "immediate",
+    "useAnimation": 24,
+    "useStyleName": "shoot",
+    "useTime": 24,
+    "useTurn": true,
+    "value": 7500,
+    "width": 32
+  },
+  "id": "alpha_delivery_fixture",
+  "name": "Workbench-Backed Blade",
+  "realization": {
+    "description": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity. Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+    "selfEvaluation": "An explicit alternate placement lane was added."
+  },
+  "runtimeApiVersion": "infini.runtime-program.v5",
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "bindings": [
+      {
+        "id": "alternate_install",
+        "input": "alternate_use",
+        "role": "primary",
+        "usePolicy": {
+          "action": {
+            "kind": "place_item",
+            "placement": {
+              "placeStyle": 0,
+              "placedBody": {
+                "flipX": true,
+                "flipY": false,
+                "footprintAnchorX": 0.25,
+                "footprintAnchorY": 1,
+                "imagePivotX": 0.75,
+                "imagePivotY": 1,
+                "offsetXPx": -13,
+                "offsetYPx": 7,
+                "pivotSpace": "alpha_bounds",
+                "renderSizePx": 96,
+                "rotationDegrees": -30.5
+              },
+              "tileId": 19,
+              "wallId": -1
+            },
+            "targetId": "item"
+          },
+          "contactDamage": false,
+          "stackCost": 1
+        }
+      },
+      {
+        "id": "primary_workbench",
+        "input": "primary_use",
+        "role": "secondary",
+        "usePolicy": {
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "workbench_blade"
+          },
+          "contactDamage": true,
+          "stackCost": 0
+        }
+      }
+    ],
+    "entities": [
+      {
+        "events": [],
+        "id": "item",
+        "kind": "item_body",
+        "visual": {
+          "assetMode": "baked_sprite",
+          "prompt": "literal Terraria item",
+          "role": "inventory_item",
+          "scale": 1.0,
+          "silhouette": "readable",
+          "spritePath": "alpha.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.0,
+          "spriteUrl": "",
+          "visualIdentity": "literal composition"
+        },
+        "visualRole": "inventory_item"
+      },
+      {
+        "collision": {
+          "bounceCount": 0,
+          "extraUpdates": 0,
+          "ignoreWater": false,
+          "localNpcHitCooldownTicks": 10,
+          "npcImmunityMode": "local",
+          "pierce": -1,
+          "tileCollide": false
+        },
+        "damage": {
+          "damage": 42,
+          "damageClass": "melee",
+          "enabled": true,
+          "knockback": 4.0,
+          "ownerHitCheck": true
+        },
+        "events": [
+          {
+            "action": "spawn_entity_on_event",
+            "actionCode": 1,
+            "count": 5,
+            "damageBasis": "authored_child",
+            "damageMultiplier": 0.35,
+            "delayTicks": 0,
+            "entityId": "nail",
+            "event": "on_hit",
+            "id": "shed_nails",
+            "knockbackBasis": "authored_child",
+            "spreadRadians": 0.55
+          }
+        ],
+        "hitbox": {
+          "drawScale": 1.0,
+          "heightPx": 34,
+          "hitboxScale": 1.0,
+          "widthPx": 64
+        },
+        "id": "workbench_blade",
+        "kind": "owner_attached_projectile",
+        "lifetimeTicks": 28,
+        "movement": {
+          "code": 19,
+          "name": "move_forward_then_retract",
+          "params": {
+            "durationTicks": 24,
+            "rangeTiles": 6
+          }
+        },
+        "spawn": {
+          "aim": "cursor",
+          "count": 1,
+          "enabled": true,
+          "offsetPx": 0,
+          "overTarget": {
+            "delayTicks": 0,
+            "heightTiles": 0
+          },
+          "placement": "item_use_origin",
+          "speedPxPerTick": 0,
+          "spreadRadians": 0.0
+        },
+        "visual": {
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "role": "held_body",
+          "scale": 1.0,
+          "silhouette": "readable",
+          "spritePath": "alpha.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.0,
+          "spriteUrl": "",
+          "visualIdentity": "literal composition"
+        },
+        "visualRole": "held_body"
+      },
+      {
+        "collision": {
+          "bounceCount": 0,
+          "extraUpdates": 0,
+          "ignoreWater": false,
+          "localNpcHitCooldownTicks": 10,
+          "npcImmunityMode": "local",
+          "pierce": 1,
+          "tileCollide": true
+        },
+        "damage": {
+          "damage": 12,
+          "damageClass": "ranged",
+          "enabled": true,
+          "knockback": 4.0,
+          "ownerHitCheck": false
+        },
+        "events": [],
+        "hitbox": {
+          "drawScale": 1.0,
+          "heightPx": 8,
+          "hitboxScale": 1.0,
+          "widthPx": 8
+        },
+        "id": "nail",
+        "kind": "child_projectile",
+        "lifetimeTicks": 120,
+        "movement": {
+          "code": 0,
+          "name": "move_straight",
+          "params": {}
+        },
+        "spawn": {
+          "aim": "cursor",
+          "count": 1,
+          "enabled": true,
+          "offsetPx": 0,
+          "overTarget": {
+            "delayTicks": 0,
+            "heightTiles": 0
+          },
+          "placement": "item_use_origin",
+          "speedPxPerTick": 13,
+          "spreadRadians": 0.0
+        },
+        "visual": {
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "role": "child_projectile",
+          "scale": 1.0,
+          "silhouette": "readable",
+          "spritePath": "alpha.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.0,
+          "spriteUrl": "",
+          "visualIdentity": "literal composition"
+        },
+        "visualRole": "child_projectile"
+      }
+    ],
+    "itemContact": {
+      "contactForgivenessPx": 4,
+      "hitboxScale": 1.0
+    },
+    "itemEntityId": "item",
+    "itemUse": {
+      "channel": false,
+      "configured": true,
+      "disableMeleeHitbox": false,
+      "handPose": "one_handed",
+      "hideUseGraphic": false,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "releaseTiming": "immediate",
+      "useStyle": "shoot"
+    },
+    "limits": {
+      "maxChildDepth": 3,
+      "maxEntityCount": 12,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "primaryEntityId": "item",
+    "primaryOwner": "item_body",
+    "schema": "infini.runtime-program.wire.v3"
+  },
+  "schemaVersion": 5,
+  "sourceMode": "llm",
+  "vfxManifest": {
+    "budget": {
+      "maxDrawCalls": 100,
+      "maxParticlesPerTick": 56,
+      "maxParticlesTotal": 2200
+    },
+    "recipeId": "offline-alpha-delivery",
+    "schema": "infini.vfx.runtime-events.v16",
+    "slots": [
+      {
+        "alpha": 0.8,
+        "anchor": "self",
+        "blend": "alpha",
+        "color": {
+          "b": 241,
+          "g": 93,
+          "r": 17
+        },
+        "density": 0.4,
+        "duration": 20,
+        "entityId": "item",
+        "event": "on_crit",
+        "id": "slot_0",
+        "layer": "BeforeProjectiles",
+        "particleSystemId": "none",
+        "rendererKind": "spriteStampTrail",
+        "repeatEvery": 0,
+        "scale": 1.0,
+        "slotSeed": 308876108,
+        "spread": 0.1,
+        "startTick": 0,
+        "textureRole": "entity"
+      }
+    ]
+  },
+  "visual": {
+    "forwardAngleDegrees": 45,
+    "imagePrompt": "literal Terraria item",
+    "inventoryScale": 1.0,
+    "negativePrompt": "placeholder",
+    "palette": [
+      "brown",
+      "steel"
+    ],
+    "preferredCanvasSize": 32,
+    "renderSizePx": 40,
+    "spritePath": "alpha.png",
+    "spriteStatus": "generated",
+    "worldScale": 1.0
+  }
+}

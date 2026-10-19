@@ -426,6 +426,46 @@ def test_clean_task_context_selects_entrypoints_before_tool_metadata(monkeypatch
         agentctl.command_context(args)
 
 
+@pytest.mark.parametrize("path", [
+    "ModSources/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs",
+    "ModSources/InfiniCrafterLocal/Common/VFX/InfiniVfxRuntime.cs",
+])
+def test_requested_path_context_previews_checks_without_claiming_a_changed_diff(
+    path: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: pytest.fail("a requested source lookup must not scan the branch diff"))
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("context must not execute checks"))
+    args = SimpleNamespace(base=None, path=[path], area=None, task="renderer", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["scope"] == "paths"
+    assert report["paths"] == [path]
+    expected = agentctl.verification_plan([path])
+    expected["paths"] = expected.pop("changedFiles")
+    assert report["suggestedVerification"] == expected
+    assert report["validationRun"] is False and report["releaseReady"] is False
+    assert "native_checks" in report["suggestedVerification"]["checks"]
+    assert report["suggestedVerification"]["requiresBuild"] is True
+
+
+def test_explicit_path_context_keeps_source_ahead_of_generic_native_catalogs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    path = "ModSources/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs"
+    args = SimpleNamespace(base=None, path=[path], area=None, task="renderer", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    documents = report["documents"]
+    assert documents[0]["path"] == path
+    assert documents[0]["available"] is True
+    assert "ModSources/InfiniCrafterLocal/AGENTS.md" in {row["path"] for row in documents}
+    rules, _, _ = agentctl.impacted([path])
+    generic_context = {context for rule in rules for context in rule.get("context", [])}
+    assert not generic_context.intersection(row["path"] for row in documents)
+    assert sum(len(row.get("content", "")) for row in documents) <= args.budget
+
+
 @pytest.mark.parametrize("status,exit_code", [("passed", 0), ("notRun", 2), ("unavailable", 2), ("failed", 1)])
 def test_iteration_never_claims_release_or_missing_execution_passed(
     status: str, exit_code: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
@@ -540,6 +580,63 @@ def test_docs_reuses_one_audit_for_both_renderers(monkeypatch, tmp_path, capsys)
     capsys.readouterr()
     report["ok"] = False
     assert docs.main() == 1  # a current projection cannot conceal a failed audit
+
+
+def test_context_known_path_needs_no_filler_task_label(monkeypatch, capsys):
+    path = "ModSources/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs"
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", path, "--budget", "5000"])
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["documents"][0]["path"] == path
+    assert report["task"] == ""
+    assert report["validationRun"] is False
+
+
+def test_context_reads_requested_line_instead_of_repeating_large_file_prefix(monkeypatch, capsys):
+    path = "tools/agentctl.py"
+    lines = (agentctl.ROOT / path).read_text().splitlines()
+    start = next(index for index, line in enumerate(lines, 1) if line.startswith("def command_context("))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", path, "--line", str(start), "--budget", "1800"])
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: pytest.fail("no repository scan needed"))
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    document = report["documents"][0]
+    assert document["content"].startswith("def command_context(")
+    assert document["startLine"] == start
+    assert document["endLine"] >= start
+    assert document["totalLines"] == len(lines)
+    assert document["truncated"] is True
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 1800
+
+
+@pytest.mark.parametrize("paths", [None, ["tools/agentctl.py"]])
+def test_context_selected_native_area_keeps_native_checks_when_entrypoints_are_docs(monkeypatch, capsys, paths):
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: pytest.fail("explicit scope must not scan changes"))
+    args = SimpleNamespace(base=None, path=paths, area=["native"], task="", budget=100, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    plan = report["suggestedVerification"]
+    assert "native_checks" in plan["checks"] and "csharp_contracts" in plan["checks"]
+    assert plan["requiresBuild"] is True
+    if paths:
+        assert "LocalGenerator/tests/test_pytest_runner_selection.py" in plan["tests"]
+    assert sum(len(row.get("content", "")) for row in report["documents"]) <= 100
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--line", "10"],
+    ["--path", "tools/agentctl.py", "--line", "0"],
+    ["--path", "tools/agentctl.py", "--line", "1000000"],
+    ["--path", "tools/agentctl.py", "--path", "AGENTS.md", "--line", "10"],
+    ["--path", "missing-source.py"],
+    ["--path", "tools/agentctl.py", "--budget", "0"],
+])
+def test_context_refuses_invalid_source_location(monkeypatch, capsys, arguments):
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", *arguments])
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    assert agentctl.main() == 2
+    assert json.loads(capsys.readouterr().err)["ok"] is False
 
 
 def test_validation_translates_paths_only_for_windows_hosts(monkeypatch: pytest.MonkeyPatch) -> None:

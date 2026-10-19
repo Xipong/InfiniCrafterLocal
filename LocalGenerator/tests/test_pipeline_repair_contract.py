@@ -600,7 +600,7 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
         field, value = "tileCollide", True
     else:
         controller = next(row for row in calls if row["id"] == "workbench_blade_motion")
-        controller.update(fn="channel_beam", params={"rangeTiles": 12.0, "widthPx": 12.0, "warmupTicks": 6})
+        controller.update(fn="channel_beam", params={"rangeTiles": 12.0, "widthPx": 12.0, "warmupSeconds": 6 / 60})
         owner = next(row for row in calls if row["id"] == "item_use")
         field, value = "channel", True
     report = validate_runtime_program(current)
@@ -727,7 +727,7 @@ def test_selected_event_transaction_closes_exact_support(scenario, invalid_choic
     compile_runtime_program(result)
 
 
-def _bounded_invalid_buff_calls(fields=("durationTicks",)):
+def _bounded_invalid_buff_calls(fields=("durationSeconds",)):
     from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
     good = build_capability_witness("apply_vanilla_buff_on_use")
     program = good["runtimeProgram"]
@@ -743,7 +743,7 @@ def _bounded_invalid_buff_calls(fields=("durationTicks",)):
 
 
 @pytest.mark.parametrize("fields,failure_envelope", [
-    pytest.param(("buffId", "durationTicks"), "orchestration", id="all-canonical-leaves-reach-single-repair")
+    pytest.param(("buffId", "durationSeconds"), "orchestration", id="all-canonical-leaves-reach-single-repair")
 ])
 def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permissions(failure_envelope, fields):
     from infini_local.pipelines.gameplay_stage import _failure_report
@@ -753,7 +753,16 @@ def test_bounded_dossier_preserves_all_canonical_errors_without_broad_permission
     validation = validate_runtime_program(current)
     broken = [row for row in current["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
     assert not validation["ok"]
-    assert len(validation["errors"]) == len(broken) * (len(fields) + 1), "complete canonical shape errors must reach every bounded leaf"
+    # Unit projection may add a representability diagnostic at an already
+    # shape-invalid leaf. Require complete, exact path coverage, not the old
+    # fixed diagnostic multiplicity; the canonical lists below stay byte-exact.
+    expected_paths = {
+        path for index, row in enumerate(current["runtimeProgram"]["calls"])
+        if row["fn"] == "apply_vanilla_buff_on_use"
+        for path in [f"$.runtimeProgram.calls[{index}]",
+                     *(f"$.runtimeProgram.calls[{index}].params.{field}" for field in fields)]
+    }
+    assert {row["path"] for row in validation["errors"]} == expected_paths
     failure = {"errors": validation["errors"]} if failure_envelope == "direct" else {"validation": validation}
     if failure_envelope == "orchestration":
         failure = _failure_report(current, ValueError("bounded authored range rejection"), "gameplay_validation_or_compile")
@@ -775,7 +784,7 @@ def test_strict_author_exception_keeps_all_targets_separate_from_display(identit
     from infini_local.pipelines.gameplay_stage import _failure_report
     from infini_local.pipelines.gameplay_stage import strict_validate_authored_item
 
-    current, _ = _bounded_invalid_buff_calls(("buffId", "durationTicks"))
+    current, _ = _bounded_invalid_buff_calls(("buffId", "durationSeconds"))
     parent_a, parent_b = {"name": "Parent A"}, {"name": "Parent B"}
     if identity_tail:
         current["name"] = parent_a["name"]

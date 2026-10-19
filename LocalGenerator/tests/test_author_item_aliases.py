@@ -91,7 +91,7 @@ def test_placed_item_sprite_cannot_be_attached_to_a_wall_alias():
 @pytest.mark.parametrize("cooldown", [0, 60, 3600])
 def test_home_recall_keeps_shared_cooldown_and_only_declared_inactive_blink_fields(cooldown):
     source, call = _source("recall_home_on_use")
-    call["params"] = {"cooldownTicks": cooldown}
+    call["params"] = {'cooldownSeconds': (cooldown) / 60}
     wire = compile_runtime_program(source)
     assert {key: wire["gameplay"][key] for key in ("mobilityMode", "mobilityRangeTiles", "mobilityCooldownTicks", "mobilitySafeTileOnly")} == {
         "mobilityMode": "recall_home", "mobilityRangeTiles": 0,

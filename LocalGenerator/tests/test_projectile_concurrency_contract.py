@@ -116,7 +116,8 @@ def test_spawn_alias_keeps_historical_runtime_values_and_concurrency_absence():
     before = copy.deepcopy(document)
     compiled = compile_runtime_program(document)
     assert document == before
-    historical = copy.deepcopy(compiled["runtimeProgram"])
+    from captured_projectile_author import historical_returning_potion_program
+    historical = historical_returning_potion_program(compiled["runtimeProgram"])
     for entity in historical["entities"]:
         if "spawn" in entity:
             # Fresh `position.at` now writes these two old zero DTO defaults.
@@ -304,9 +305,9 @@ def _assert_contact_facts(card):
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("fn,leaf,bad,phrases", [
-    pytest.param("move_gravity_arc", "accelY", -3,
+    pytest.param("move_gravity_arc", "accelerationYBlocksPerSecondSquared", -16201,
                  ("adds gravity", "no horizontal friction"), id="signed-gravity"),
-    pytest.param("move_boomerang", "returnSpeed", -1,
+    pytest.param("move_boomerang", "returnSpeedBlocksPerSecond", -3.75,
                  ("wall collision", "starts return", "disables tileCollide", "does not kill"), id="return-motion"),
     pytest.param("set_projectile_collision", "pierce", -2, (), id="pierce"),
     pytest.param(CAPABILITY, "maxActive", 0, (), id="concurrency"),

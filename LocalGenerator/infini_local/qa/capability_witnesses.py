@@ -21,7 +21,7 @@ from infini_local.core.runtime_authoring.capability_registry import ParamSpec
 
 _ITEM_BASE_STATS = {
     "damageClass": "generic", "damage": 20, "knockback": 3.0,
-    "useTimeTicks": 20, "useAnimationTicks": 20, "manaCost": 0,
+    "useTimeSeconds": 20 / 60, "useAnimationSeconds": 20 / 60, "manaCost": 0,
     "rarity": 1, "valueCopper": 1000, "maxStack": 1, "craftYield": 1,
     "widthPx": 24, "heightPx": 24, "scale": 1.0,
 }
@@ -31,7 +31,7 @@ _ITEM_BASE_USE = {
     "holdoutOffsetX": 0, "holdoutOffsetY": 0,
     "handPose": "one_handed", "customHeldSprite": "hidden",
 }
-_SPAWN = {"velocity": {"constantSpeedPxPerUpdate": 8.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
+_SPAWN = {"velocity": {"constantSpeedBlocksPerSecond": 30.0}, "count": 1, "spreadRadians": 0.0, "offsetBlocks": 0, "aim": "cursor", "position": {"at": "activation_origin"}}
 _DAMAGE = {"damageClass": "generic", "damage": 20, "knockback": 3.0, "ownerHitCheck": False}
 _HITBOX = {"widthPx": 16, "heightPx": 16, "drawScale": 1.0, "hitboxScale": 1.0}
 _COLLISION = {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": {"localCooldown": 10}}
@@ -46,6 +46,11 @@ def _value(spec: ParamSpec, name: str) -> Any:
         return deepcopy(spec.enum[0])
     if spec.kind == "boolean":
         return False
+    if spec.wire_kind:
+        # Pick an admitted engine endpoint before the canonical QA inverse.
+        # Every generated projectile witness explicitly declares N=1 below.
+        base = max(1 if spec.projected_kind == "integer" else 0.1, spec.wire_minimum or 0)
+        return spec.from_wire(base, updates_per_tick=1)
     if spec.kind == "integer":
         base = spec.minimum if spec.minimum is not None else 1
         return int(max(spec.multiple_of or 1, base))
@@ -66,17 +71,18 @@ def _params(fn: str) -> dict[str, Any]:
         "configure_vanilla_ammo_item": {"ammoCategory": "arrow", "projectileId": 1, "notAmmo": False},
         "restore_resources_on_use": {"healLife": 20, "healMana": 0, "usesPotionRules": False},
         "apply_generated_buff_on_use": {
-            "durationTicks": 60, "miningSpeedMultiplier": 1.0, "lightStrength": 0.25,
+            "durationSeconds": 1, "miningSpeedMultiplier": 1.0, "lightStrength": 0.25,
             "lightColor": "white", "oreSenseEnabled": False, "moveSpeedBonusPercent": 0.0,
-            "jumpSpeedBonusPxPerTick": 0.0, "manaRegenBonusPoints": 0, "lifeRegenHpPerSecond": 0,
+            "jumpSpeedBonusBlocksPerSecond": 0.0, "manaRegenBonusPoints": 0, "lifeRegenHpPerSecond": 0,
         },
         "configure_tile_placement": {"tileId": 4, "placeStyle": 0},
         "configure_wall_placement": {"wallId": 1, "placeStyle": 0},
         "present_placed_item_sprite": {"placementCallId": "native_placement"},
         "add_placed_light": {"placementCallId": "native_placement"},
+        "enable_placed_vfx": {"placementCallId": "native_placement", "minFrameY": 0, "maxFrameY": 32767},
         "require_use_condition": {"condition": "grounded"},
-        "move_player_on_use": {"mode": "blink_to_cursor", "rangeTiles": 5, "cooldownTicks": 60, "safeTileOnly": True},
-        "recall_home_on_use": {"cooldownTicks": 60},
+        "move_player_on_use": {"mode": "blink_to_cursor", "rangeTiles": 5, "cooldownSeconds": 1, "safeTileOnly": True},
+        "recall_home_on_use": {"cooldownSeconds": 1},
         "configure_accessory": {"defensePoints": 1},
         "add_equipment_damage_bonus": {"phase": "equipped", "damageClass": "melee", "bonusPercent": 15},
         "configure_armor": {
@@ -84,23 +90,23 @@ def _params(fn: str) -> dict[str, Any]:
         },
         "configure_spawn": deepcopy(_SPAWN),
         "set_projectile_damage": deepcopy(_DAMAGE),
-        "set_projectile_lifetime": {"lifetimeTicks": 120},
+        "set_projectile_lifetime": {"lifetimeSeconds": 2},
         "set_projectile_hitbox": deepcopy(_HITBOX),
         "set_projectile_collision": deepcopy(_COLLISION),
         "move_straight": {},
-        "target_and_fire": {"shotEntity": "witness_shot", "intervalTicks": 30, "rangeTiles": 20, "sameTargetBias": 0.2, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0},
-        "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
-        "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationTicks": 60},
+        "target_and_fire": {"shotEntity": "witness_shot", "intervalSeconds": 0.5, "rangeTiles": 20, "sameTargetBias": 0.2, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0},
+        "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delaySeconds": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
+        "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationSeconds": 1},
         "damage_area_on_event": {"when": "on_hit", "radiusTiles": 3, "damageMultiplier": 0.5},
         "damage_nearest_on_event": {"when": "on_hit", "maxTargets": 1, "rangeTiles": 8, "damageMultiplier": 0.5},
-        "pull_on_event": {"when": "on_hit", "mode": "target_to_owner", "strength": 2.0, "radiusTiles": 8},
-        "pull_owner_to_event_target": {"when": "on_hit", "strength": 2.0},
+        "pull_on_event": {"when": "on_hit", "mode": "target_to_owner", "impulseBlocksPerSecond": 7.5, "radiusTiles": 8},
+        "pull_owner_to_event_target": {"when": "on_hit", "impulseBlocksPerSecond": 7.5},
         "heal_owner_on_event": {"when": "on_hit", "damageFraction": 0.1, "maxHeal": 5},
-        "move_owner_on_event": {"when": "on_hit", "rangeTiles": 8, "cooldownTicks": 60, "safeTileOnly": True},
-        "spawn_entity_from_hit_target": {"when": "on_hit", "entity": "witness_child", "count": 3, "damageMultiplier": 0.5, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "geometry": {"beforeProbability": 0.85, "hitboxMaxSideFactor": 0.6, "clearancePx": 10, "beforePositionJitterRadiusPx": 8, "beforeDirectionJitterRadians": 0.2, "afterFanSpreadRadians": 1.2, "initialIgnoreCountdownUpdates": 10}},
+        "move_owner_on_event": {"when": "on_hit", "rangeTiles": 8, "cooldownSeconds": 1, "safeTileOnly": True},
+        "spawn_entity_from_hit_target": {"when": "on_hit", "entity": "witness_child", "count": 3, "damageMultiplier": 0.5, "delaySeconds": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "geometry": {"beforeProbability": 0.85, "hitboxMaxSideFactor": 0.6, "clearanceBlocks": 0.625, "beforePositionJitterRadiusBlocks": 0.5, "beforeDirectionJitterRadians": 0.2, "afterFanSpreadRadians": 1.2, "initialIgnoreCountdownUpdates": 10}},
         "select_targets_and_emit_on_event": {"when": "on_hit", "entity": "witness_child", "stepCount": 2,
             "stepRangeTiles": 22.5, "selectionAnchor": "previous_target", "repeatPolicy": "allow_revisits",
-            "requireLineOfSight": False, "initialIgnoreCountdownUpdates": 10, "delayTicks": 0},
+            "requireLineOfSight": False, "initialIgnoreCountdownUpdates": 10, "delaySeconds": 0},
     }
     out.update(deepcopy(special.get(fn, {})))
     return out
@@ -178,6 +184,8 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
     if item_target and not projectile_target:
         if fn == "configure_item_stats":
             pass
+        elif cap.category == "item_inventory":
+            calls.append(_call("witness_call", fn, "item"))
         elif fn == "configure_item_use":
             calls.append(_call("witness_call", fn, "item"))
             bindings.append(_binding("witness_binding", "primary_use", "use_item_body", "item"))
@@ -230,7 +238,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
         base = {
             "configure_spawn": _SPAWN,
             "set_projectile_damage": _DAMAGE,
-            "set_projectile_lifetime": {"lifetimeTicks": 120},
+            "set_projectile_lifetime": {"lifetimeSeconds": 2},
             "set_projectile_hitbox": _HITBOX,
             "set_projectile_collision": _COLLISION,
         }
@@ -250,7 +258,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
             for base_fn, params in base.items():
                 child_params = deepcopy(params)
                 if fn in {"spawn_entity_from_hit_target", "select_targets_and_emit_on_event"} and base_fn == "configure_spawn":
-                    child_params.update(position={"at": "activation_origin"}, aim="velocity", offsetPx=0)
+                    child_params.update(position={"at": "activation_origin"}, aim="velocity", offsetBlocks=0)
                 calls.append(_call(f"child_{base_fn}", base_fn, "witness_child", child_params))
             calls.append(_call("child_motion", "move_straight", "witness_child", {}))
 
@@ -273,7 +281,7 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
         # An explicit test composition, not compiler-created dependencies.
         next(row for row in calls if row["fn"] == "configure_item_use")["params"].pop("handPose", None)
         next(row for row in calls if row["fn"] == "configure_spawn")["params"].update(
-            velocity={"constantSpeedPxPerUpdate": 0}, count=1, spreadRadians=0)
+            velocity={"constantSpeedBlocksPerSecond": 0}, count=1, spreadRadians=0)
         next(row for row in calls if row["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
         calls.append(_call("hand_singleton", "set_projectile_concurrency", witness_target, {"maxActive": 1}))
 

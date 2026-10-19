@@ -33,13 +33,13 @@ def _groups(fn="restore_resources_on_use"):
     if fn == "restore_resources_on_use":
         other["params"].update(healLife=0, healMana=35)
     elif fn == "move_player_on_use":
-        other["params"].update(mode="blink_to_cursor", rangeTiles=12, cooldownTicks=90)
+        other["params"].update(mode="blink_to_cursor", rangeTiles=12, cooldownSeconds=(90) / 60)
     elif fn == "recall_home_on_use":
-        other["params"]["cooldownTicks"] = 90
+        other["params"]['cooldownSeconds'] = (90) / 60
     elif fn == "apply_vanilla_buff_on_use":
         other["params"]["buffId"] = 2
     else:
-        other["params"].update(lightStrength=0.5, durationTicks=120)
+        other["params"].update(lightStrength=0.5, durationSeconds=(120) / 60)
     program["bindings"].append(alternate)
     program["calls"].append(other)
     return doc
@@ -67,7 +67,7 @@ def _mobility_pair(first, second):
     doc = _groups(first)
     replacement = deepcopy(next(row for row in build_capability_witness(second)["runtimeProgram"]["calls"] if row["fn"] == second))
     replacement.update(id="second_effect")
-    replacement["params"].update(effectGroupId="second", cooldownTicks=90)
+    replacement["params"].update(effectGroupId="second", cooldownSeconds=(90) / 60)
     doc["runtimeProgram"]["calls"][-1] = replacement
     return doc
 
@@ -103,7 +103,7 @@ def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(fir
         for call in effects:
             group_id = call["params"].get("effectGroupId")
             destination = next(row for row in final["runtimeProgram"]["effectGroups"] if row["id"] == group_id) if group_id else final["gameplay"]
-            assert destination["mobilityCooldownTicks"] == call["params"]["cooldownTicks"]
+            assert destination["mobilityCooldownTicks"] == CAPABILITY_REGISTRY[call["fn"]].params["cooldownSeconds"].to_wire(call["params"]["cooldownSeconds"])
             if call["fn"] == "recall_home_on_use":
                 assert {key: destination[key] for key in CAPABILITY_REGISTRY[call["fn"]].fixed_wire_literals} == dict(CAPABILITY_REGISTRY[call["fn"]].fixed_wire_literals)
         receipts = final["runtimeContract"]["finalWireReceipts"]
@@ -149,11 +149,11 @@ def test_mobility_leaf_repair_keeps_group_identity_and_other_effect_frozen(monke
     format_mode = "json_schema"
     doc = _mobility_pair("move_player_on_use", fn)
     call = doc["runtimeProgram"]["calls"][-1]
-    call["params"]["cooldownTicks"] = True
+    call["params"]['cooldownSeconds'] = True
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": "second_effect", "paths": ["params.cooldownTicks"]}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": "second_effect", "paths": ['params.cooldownSeconds']}]
     fixed = deepcopy(call)
-    fixed["params"]["cooldownTicks"] = 90
+    fixed["params"]['cooldownSeconds'] = (90) / 60
     expected = apply_repair_patch(doc, {"note": "one explicit leaf", "callsUpsert": [fixed]})
     fixed["params"]["effectGroupId"] = "first"
     hostile = deepcopy(doc["runtimeProgram"]["calls"][-2])

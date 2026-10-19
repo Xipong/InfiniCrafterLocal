@@ -7,7 +7,10 @@ import pytest
 
 from infini_local.pipelines import llm_transport
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS
+from infini_local.pipelines.llm_authoring_prompt import PLANNER_PROMPT_LIMIT_CHARS, PLANNER_PROMPT_MIN_HEADROOM_CHARS
+from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog
+from test_author_request_compaction import _expand_constraint_references
+from test_source_unit_guidance import _serialized_chat_request
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -26,7 +29,13 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
     for label in ("A", "B"):
         assert payload["parents"][label]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
     assert request_dossier(request) == payload
-    assert len(json.dumps(payload, ensure_ascii=False, separators=(",", ":"))) < PLANNER_PROMPT_LIMIT_CHARS
+    assert len(user) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    sent = _serialized_chat_request(monkeypatch, request)
+    assert request_dossier(sent, declaration=request) == payload
+    catalog = payload["runtimeCapabilityContract"]["catalog"]
+    expanded = _expand_constraint_references(catalog["capabilities"], catalog["fieldGuide"]["consumerConstraints"])
+    assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
+            for card in expanded] == compact_capability_catalog()
     assert source == before
 
 

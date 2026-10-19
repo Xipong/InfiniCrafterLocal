@@ -20,11 +20,11 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 VELOCITIES = [
-    {"constantSpeedPxPerUpdate": 8.5},
-    {"fanSpeed": {"minSpeedPxPerUpdate": 4.5, "maxSpeedPxPerUpdate": 8.5}},
-    {"radial": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}},
-    {"disk": {"maxSpeedPxPerUpdate": 6}},
-    {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}},
+    {'constantSpeedBlocksPerSecond': (8.5) * 60 / 16},
+    {"fanSpeed": {'minSpeedBlocksPerSecond': (4.5) * 60 / 16, 'maxSpeedBlocksPerSecond': (8.5) * 60 / 16}},
+    {"radial": {'minSpeedBlocksPerSecond': (4) * 60 / 16, 'maxSpeedBlocksPerSecond': (7) * 60 / 16}},
+    {"disk": {'maxSpeedBlocksPerSecond': (6) * 60 / 16}},
+    {"cone": {'minSpeedBlocksPerSecond': (4) * 60 / 16, 'maxSpeedBlocksPerSecond': (7) * 60 / 16, "halfAngleRadians": 0.2}},
 ]
 
 
@@ -89,7 +89,7 @@ def test_root_distribution_still_requires_explicit_count_and_spread(velocity, om
     errors = validate_runtime_program(document)["errors"]
     assert {row["path"].rsplit(".", 1)[-1] for row in errors
             if row["code"] == "missing_dependency_param"} == set(omitted)
-    if "spreadRadians" in omitted and "constantSpeedPxPerUpdate" not in velocity:
+    if "spreadRadians" in omitted and "constantSpeedBlocksPerSecond" not in velocity:
         assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".params.spreadRadians")
                    for row in errors)
     with pytest.raises(ValueError):
@@ -105,10 +105,10 @@ def test_child_neutral_omission_does_not_replace_present_spread(velocity, spread
     call["params"].pop("count")
     call["params"]["spreadRadians"] = spread
     before = deepcopy(document)
-    accepted = "constantSpeedPxPerUpdate" in velocity and spread == 0.5
+    accepted = "constantSpeedBlocksPerSecond" in velocity and spread == 0.5
     report = validate_runtime_program(document)
     assert report["ok"] is accepted
-    if "constantSpeedPxPerUpdate" not in velocity and spread is not False:
+    if "constantSpeedBlocksPerSecond" not in velocity and spread is not False:
         assert any(row["code"] == "incompatible_param_variant" and row["path"].endswith(".params.spreadRadians")
                    for row in report["errors"])
     if accepted:
@@ -144,15 +144,15 @@ def test_unrelated_child_repair_keeps_accepted_neutral_omissions_frozen(velocity
     document, call = child_fixture(velocity)
     call["params"].pop("count")
     call["params"].pop("spreadRadians")
-    call["params"]["offsetPx"] = 257
+    call["params"]['offsetBlocks'] = (257) / 16
     expected = deepcopy(document)
-    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"]["offsetPx"] = 19
+    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"]['offsetBlocks'] = (19) / 16
     candidate = deepcopy(call)
-    candidate["params"].update(offsetPx=19, count=12, spreadRadians=0, velocity=deepcopy(VELOCITIES[0]))
+    candidate["params"].update(offsetBlocks=(19) / 16, count=12, spreadRadians=0, velocity=deepcopy(VELOCITIES[0]))
     repaired, wire = frozen_call_repair(document, [candidate],
-        [{"id": call["id"], "paths": ["params.offsetPx"]}], expected, note="repair offset")
+        [{"id": call["id"], "paths": ['params.offsetBlocks']}], expected, note="repair offset")
     assert component(wire, call)["offsetPx"] == 19
-    assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"] == {**call["params"], "offsetPx": 19}
+    assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"] == {**call["params"], "offsetBlocks": 19 / 16}
 
 
 @pytest.mark.parametrize("velocity,expected", [
@@ -171,7 +171,7 @@ def test_every_velocity_variant_has_strict_provider_inverse_and_exact_receipts(v
     wire = compile_runtime_program(restored)
     assert validate_runtime_wire(wire)["ok"]
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    projected = CAPABILITY_REGISTRY["configure_spawn"].params["velocity"].projected_fields(velocity, "velocity")
+    projected = CAPABILITY_REGISTRY["configure_spawn"].params["velocity"].projected_fields(velocity, "velocity", updates_per_tick=1)
     actual = [row for row in receipts if row.get("callId") == call["id"] and ".params.velocity" in row.get("authoredPath", "")]
     assert len(actual) == len(projected)
     assert component(wire, call)["speedPxPerTick"] == (8.5 if expected is None else 0)
@@ -182,10 +182,10 @@ def test_every_velocity_variant_has_strict_provider_inverse_and_exact_receipts(v
     assert validate_runtime_wire(sanitized)["ok"]
 
 
-@pytest.mark.parametrize("invalid", [None, {}, 8, "radial", {"constantSpeedPxPerUpdate": 8, "disk": {"maxSpeedPxPerUpdate": 6}},
-    {"radial": {}}, {"radial": {"minSpeedPxPerUpdate": 4}}, {"disk": {"maxSpeedPxPerUpdate": 6, "minSpeedPxPerUpdate": 0}},
-    {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}}, {"constantSpeedPxPerUpdate": True},
-    {"fanSpeed": {"minSpeedPxPerUpdate": -1, "maxSpeedPxPerUpdate": 8}}, {"radial": {"minSpeedPxPerUpdate": 0, "maxSpeedPxPerUpdate": 81}}])
+@pytest.mark.parametrize("invalid", [None, {}, 8, "radial", {"constantSpeedBlocksPerSecond": 8, "disk": {"maxSpeedBlocksPerSecond": 6}},
+    {"radial": {}}, {"radial": {"minSpeedBlocksPerSecond": 4}}, {"disk": {"maxSpeedBlocksPerSecond": 6, "minSpeedBlocksPerSecond": 0}},
+    {"cone": {"minSpeedBlocksPerSecond": 4, "maxSpeedBlocksPerSecond": 7}}, {"constantSpeedBlocksPerSecond": True},
+    {"fanSpeed": {"minSpeedBlocksPerSecond": -1, "maxSpeedBlocksPerSecond": 8}}, {"radial": {"minSpeedBlocksPerSecond": 0, "maxSpeedBlocksPerSecond": 1801}}])
 def test_invalid_velocity_variants_remain_red_without_branch_guessing(invalid):
     document, _ = fixture(invalid)
     assert not strict_author_shape_report(document)["ok"]
@@ -194,18 +194,18 @@ def test_invalid_velocity_variants_remain_red_without_branch_guessing(invalid):
 
 @pytest.mark.parametrize("branch", ["fanSpeed", "radial", "cone"])
 def test_reversed_range_repairs_only_minimum_and_freezes_the_selected_distribution(branch):
-    velocity = {branch: {"minSpeedPxPerUpdate": 9, "maxSpeedPxPerUpdate": 7}}
+    velocity = {branch: {"minSpeedBlocksPerSecond": 33.75, "maxSpeedBlocksPerSecond": 26.25}}
     if branch == "cone": velocity[branch]["halfAngleRadians"] = 0.2
     document, call = fixture(velocity)
     errors = validate_runtime_program(document)["errors"]
     assert len([row for row in errors if row["code"] == "unordered_param_range"]) == 1
     expected = deepcopy(document)
-    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"]["velocity"][branch]["minSpeedPxPerUpdate"] = 4
+    next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"]["velocity"][branch]['minSpeedBlocksPerSecond'] = (4) * 60 / 16
     candidate = deepcopy(call)
-    candidate["params"]["velocity"][branch].update(minSpeedPxPerUpdate=4, maxSpeedPxPerUpdate=10)
+    candidate["params"]["velocity"][branch].update(minSpeedBlocksPerSecond=(4) * 60 / 16, maxSpeedBlocksPerSecond=(10) * 60 / 16)
     candidate["target"] = "item"
     repaired, final = frozen_call_repair(document, [candidate],
-        [{"id": call["id"], "paths": [f"params.velocity.{branch}.minSpeedPxPerUpdate"]}], expected,
+        [{"id": call["id"], "paths": [f"params.velocity.{branch}.minSpeedBlocksPerSecond"]}], expected,
         note="fix exact minimum")
     assert component(final, call)["velocityDistribution"]["minSpeedPxPerUpdate"] == 4
     assert component(final, call)["velocityDistribution"]["maxSpeedPxPerUpdate"] == 7
@@ -223,7 +223,7 @@ def test_new_distribution_provenance_requires_one_consistent_variant_and_owner(m
     elif mutation == "wrong-call": minimum["callId"] = "unknown_call"
     elif mutation == "wrong-variant": minimum["authoredPath"] = minimum["authoredPath"].replace(".radial.", ".fanSpeed.")
     elif mutation == "wrong-literal":
-        next(row for row in own if row["finalPath"].endswith(".kind"))["authoredPath"] += ".minSpeedPxPerUpdate"
+        next(row for row in own if row["finalPath"].endswith(".kind"))["authoredPath"] += ".minSpeedBlocksPerSecond"
     elif mutation == "old-speed":
         speed = next(row for row in own if row["finalPath"].endswith(".speedPxPerTick"))
         speed["authoredPath"] = speed["authoredPath"].split(".params.")[0] + ".params.speedPxPerUpdate"
@@ -255,7 +255,7 @@ def test_new_velocity_wire_is_strict_without_diagnostic_receipts(mutation):
 
 def test_old_author_scalar_is_not_a_second_accepted_spelling():
     document, call = fixture(VELOCITIES[0])
-    call["params"]["speedPxPerUpdate"] = call["params"].pop("velocity")["constantSpeedPxPerUpdate"]
+    call["params"]["speedPxPerUpdate"] = call["params"].pop("velocity")['constantSpeedBlocksPerSecond']
     assert not strict_author_shape_report(document)["ok"]
     with pytest.raises(ValueError): compile_runtime_program(document)
 
@@ -352,7 +352,7 @@ def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkey
     permission = next(row for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"])
     assert permission["paths"] == ["params.velocity"]
     candidate = deepcopy(call)
-    candidate["params"]["velocity"] = {"constantSpeedPxPerUpdate": 6}
+    candidate["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (6) * 60 / 16}
     expected = apply_repair_patch(doc, {"note": "model selects full replacement", "callsUpsert": [candidate]})
     assert validate_runtime_program(expected)["ok"]
     candidate["target"] = "item"
@@ -396,14 +396,14 @@ def test_velocity_replacement_requires_an_explicit_new_variant(monkeypatch, form
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_velocity_leaf_permission_does_not_thaw_other_variant_leaves(monkeypatch, format_mode):
-    doc, call = fixture({"cone": {"minSpeedPxPerUpdate": 9, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}})
+    doc, call = fixture({"cone": {"minSpeedBlocksPerSecond": 33.75, "maxSpeedBlocksPerSecond": 26.25, "halfAngleRadians": 0.2}})
     candidate = deepcopy(call)
-    candidate["params"]["velocity"]["cone"]["minSpeedPxPerUpdate"] = 4
+    candidate["params"]["velocity"]["cone"]['minSpeedBlocksPerSecond'] = (4) * 60 / 16
     expected = apply_repair_patch(doc, {"note": "exact minimum only", "callsUpsert": [candidate]})
-    candidate["params"]["velocity"]["cone"].update(maxSpeedPxPerUpdate=10, halfAngleRadians=0.4)
+    candidate["params"]["velocity"]["cone"].update(maxSpeedBlocksPerSecond=(10) * 60 / 16, halfAngleRadians=0.4)
     repaired, dossier = gameplay_repair(monkeypatch, doc,
         {"note": "exact min with hostile siblings", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}, format_mode)
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.velocity.cone.minSpeedPxPerUpdate"]}]
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.velocity.cone.minSpeedBlocksPerSecond']}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)

@@ -143,9 +143,10 @@ def _matches(path: str, pattern: str) -> bool:
     return fnmatch(path, pattern) or fnmatch(path, pattern.replace("**/", ""))
 
 
-def impacted(files: list[str]) -> tuple[list[dict[str, Any]], list[str], bool]:
+def impacted(files: list[str], *, areas: list[str] | None = None) -> tuple[list[dict[str, Any]], list[str], bool]:
     rules = _load(RULES_PATH).get("rules", [])
-    matched = [rule for rule in rules if any(_matches(path, pattern) for path in files for pattern in rule.get("patterns", []))]
+    matched = [rule for rule in rules if rule["area"] in (areas or []) or any(
+        _matches(path, pattern) for path in files for pattern in rule.get("patterns", []))]
     checks = {check for rule in matched for check in rule.get("checks", [])}
     requires_build = any(path.startswith("ModSources/") and path.endswith((".cs", ".csproj")) for path in files)
     requires_build = requires_build or any(bool(rule.get("requiresBuild")) for rule in matched)
@@ -159,10 +160,10 @@ def _test_module(path: str) -> bool:
                for prefix in ("LocalGenerator/tests/", "toolbox/tests/"))
 
 
-def verification_plan(files: list[str], *, final: bool = False) -> dict[str, Any]:
+def verification_plan(files: list[str], *, final: bool = False, areas: list[str] | None = None) -> dict[str, Any]:
     """Small owner-area map for iteration; unknown surfaces require final gates."""
     manifest = _load(MANIFEST_PATH)
-    rules, checks, requires_build = impacted(files)
+    rules, checks, requires_build = impacted(files, areas=areas)
     unknown = [path for path in files if not _test_module(path) and not any(
         _matches(path, pattern) for rule in rules for pattern in rule.get("patterns", []))]
     tests = {path for path in files if _test_module(path)}
@@ -271,21 +272,39 @@ def command_verify(args: argparse.Namespace) -> int:
     return 0 if passed else 2 if report["status"] in {"not_selected", "incomplete"} else 1
 
 
-def _read_context_file(path: str, remaining: int) -> tuple[dict[str, Any], int]:
+def _read_context_file(path: str, remaining: int, *, start_line: int = 1) -> tuple[dict[str, Any], int]:
     target = ROOT / path
     if not target.is_file() or remaining <= 0:
         return {"path": path, "available": False}, remaining
-    text = target.read_text(encoding="utf-8-sig", errors="replace")
+    lines = target.read_text(encoding="utf-8-sig", errors="replace").splitlines(keepends=True)
+    if start_line < 1 or start_line > max(1, len(lines)):
+        raise ValueError(f"context line is outside {path}: {start_line}")
+    text = "".join(lines[start_line - 1:])
     chunk = text[:remaining]
-    return {"path": path, "available": True, "truncated": len(chunk) < len(text), "content": chunk}, remaining - len(chunk)
+    return {
+        "path": path, "available": True, "startLine": start_line if chunk else None,
+        "endLine": start_line + len(chunk.splitlines()) - 1 if chunk else None, "totalLines": len(lines),
+        "truncated": start_line > 1 or len(chunk) < len(text), "content": chunk,
+    }, remaining - len(chunk)
 
 
 def command_context(args: argparse.Namespace) -> int:
-    files = changed_files(args.base)
-    paths = list(dict.fromkeys(args.path or ([] if args.area else files)))
-    for path in paths:
-        if not (ROOT / path).resolve().is_relative_to(ROOT.resolve()):
+    # A source lookup must not scan or repeat an unrelated branch diff. The
+    # verify/diff commands own changed-file reports; context owns this request.
+    scope = "paths" if args.path else "areas" if args.area else "changes"
+    selected = args.path or ([] if args.area else changed_files(args.base))
+    paths: list[str] = []
+    for path in selected:
+        target = (ROOT / path).resolve()
+        if not target.is_relative_to(ROOT.resolve()):
             raise ValueError(f"context path must stay inside checkout: {path}")
+        if args.path and not target.is_file():
+            raise ValueError(f"context path must name an existing file: {path}")
+        paths.append(target.relative_to(ROOT.resolve()).as_posix())
+    paths = list(dict.fromkeys(paths))
+    start_line = getattr(args, "line", None)
+    if start_line is not None and (not args.path or len(paths) != 1 or start_line < 1):
+        raise ValueError("--line requires one --path and a positive line number")
     all_rules = _load(RULES_PATH)["rules"]
     areas = args.area or []
     unknown_areas = set(areas) - {rule["area"] for rule in all_rules}
@@ -293,31 +312,40 @@ def command_context(args: argparse.Namespace) -> int:
         raise ValueError("unknown areas: " + ", ".join(sorted(unknown_areas)))
     rules = [rule for rule in all_rules if rule["area"] in areas or any(
         _matches(path, pattern) for path in paths for pattern in rule["patterns"])]
-    # Put real entrypoints ahead of long general policy, never raw tool JSON.
-    requested = [path for rule in rules for path in rule.get("entrypoints", [])]
-    requested.extend(path for path in paths if (ROOT / path).is_file())
-    requested.extend(path for rule in rules for path in rule.get("context", []))
+    # Exact source first. Broader owner documentation remains opt-in via --area.
+    requested = [path for path in paths if (ROOT / path).is_file()] if args.path else []
+    requested.extend(path for rule in rules for path in rule.get("entrypoints", []))
+    if not args.path:
+        requested.extend(path for path in paths if (ROOT / path).is_file())
+        requested.extend(path for rule in rules for path in rule.get("context", []))
     requested.extend(["docs/development/CODE_MAP_RU.md", "AGENTS.md"])
-    remaining = max(1000, int(args.budget))
+    remaining = int(args.budget)
+    if remaining < 1:
+        raise ValueError("--budget must be positive")
     docs: list[dict[str, Any]] = []
     for path in dict.fromkeys(requested):
-        # A long registry must not crowd out all navigation and policy.
-        row, unused = _read_context_file(path, min(remaining, 3000))
-        remaining -= min(remaining, 3000) - unused
+        limit = remaining if start_line is not None and path == paths[0] else min(remaining, 3000)
+        row, unused = _read_context_file(path, limit, start_line=start_line if start_line is not None and path == paths[0] else 1)
+        remaining -= limit - unused
         docs.append(row)
         if remaining <= 0:
             break
+    plan = verification_plan(paths, areas=areas)
+    plan["paths"] = plan.pop("changedFiles")
     report = {
-        "schema": "infini.agent-context.v2",
+        "schema": "infini.agent-context.v3",
         "task": args.task,
         "baseRevision": _base_revision(),
         "comparisonBase": args.base,
-        "changedFiles": files,
+        "scope": scope,
+        "paths": paths,
         "areas": sorted({rule["area"] for rule in rules}),
         "availableAreas": sorted({rule["area"] for rule in all_rules}),
         "entrypoints": list(dict.fromkeys(path for rule in rules for path in rule.get("entrypoints", []))),
-        "verification": verification_plan(files),
-        "hint": "Choose --area or --path before edits; --task is a human label, not a semantic router.",
+        "suggestedVerification": plan,
+        "validationRun": False,
+        "releaseReady": False,
+        "hint": "Read the selected owner and its callers. Use --line for a known location; verify --changed owns actual diff checks.",
         "documents": docs,
     }
     text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
@@ -464,7 +492,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     doctor = sub.add_parser("doctor"); doctor.set_defaults(func=command_doctor)
     verify = sub.add_parser("verify"); verify.add_argument("--changed", action="store_true"); verify.add_argument("--base"); verify.add_argument("--plan", action="store_true"); verify.add_argument("--require-build", action="store_true"); verify.add_argument("--out"); verify.set_defaults(func=command_verify)
-    context = sub.add_parser("context"); context.add_argument("--task", required=True); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=14000); context.add_argument("--out"); context.set_defaults(func=command_context)
+    context = sub.add_parser("context"); context.add_argument("--task", default=""); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--line", type=int, help="Start the selected source excerpt at this 1-based line (one --path)"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=5000); context.add_argument("--out"); context.set_defaults(func=command_context)
     diff = sub.add_parser("diff"); diff.add_argument("--base"); diff.set_defaults(func=command_diff)
     handoff = sub.add_parser("handoff"); handoff.add_argument("--out"); handoff.add_argument("--base"); handoff.set_defaults(func=command_handoff)
     task_check = sub.add_parser("task-check"); task_check.add_argument("--task-file", required=True); task_check.set_defaults(func=command_task_check)

@@ -61,7 +61,7 @@ def deterministic_low_level_plan(
             "calls": [
                 {
                     "id": "call_item_stats", "fn": "configure_item_stats",
-                    "params": {"damageClass": "melee", "damage": 42, "knockback": 5.0, "useTimeTicks": 24, "useAnimationTicks": 24, "manaCost": 0, "rarity": 2, "valueCopper": 15000, "maxStack": 1, "craftYield": 1, "widthPx": 40, "heightPx": 40, "scale": 1.0},
+                    "params": {"damageClass": "melee", "damage": 42, "knockback": 5.0, "useTimeSeconds": 0.4, "useAnimationSeconds": 0.4, "manaCost": 0, "rarity": 2, "valueCopper": 15000, "maxStack": 1, "craftYield": 1, "widthPx": 40, "heightPx": 40, "scale": 1.0},
                 },
                 {
                     "id": "call_item_use", "fn": "configure_item_use",
@@ -69,32 +69,32 @@ def deterministic_low_level_plan(
                 },
                 {
                     "id": "call_spawn_held", "fn": "configure_spawn", "target": "held_body",
-                    "params": {"velocity": {"constantSpeedPxPerUpdate": 1.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 18, "aim": "cursor", "position": {"at": "owner_center"}},
+                    "params": {"velocity": {"constantSpeedBlocksPerSecond": 3.75}, "count": 1, "spreadRadians": 0.0, "offsetBlocks": 1.125, "aim": "cursor", "position": {"at": "owner_center"}},
                 },
                 {
                     "id": "call_damage_held", "fn": "set_projectile_damage", "target": "held_body",
                     "params": {"damageClass": "melee", "damage": 42, "knockback": 5.0, "ownerHitCheck": True},
                 },
-                {"id": "call_life_held", "fn": "set_projectile_lifetime", "target": "held_body", "params": {"lifetimeTicks": 30}},
+                {"id": "call_life_held", "fn": "set_projectile_lifetime", "target": "held_body", "params": {"lifetimeSeconds": 0.5}},
                 {"id": "call_hitbox_held", "fn": "set_projectile_hitbox", "target": "held_body", "params": {"widthPx": 64, "heightPx": 32, "drawScale": 1.0, "hitboxScale": 1.0}},
                 {"id": "call_collision_held", "fn": "set_projectile_collision", "target": "held_body", "params": {"tileCollide": False, "ignoreWater": False, "bounceCount": 0, "pierce": 3, "updatesPerTick": 1, "immunity": {"localCooldown": 10}}},
-                {"id": "call_move_held", "fn": "move_forward_then_retract", "target": "held_body", "params": {"rangeTiles": 6.0, "durationTicks": 24}},
+                {"id": "call_move_held", "fn": "move_forward_then_retract", "target": "held_body", "params": {"rangeTiles": 6.0, "durationSeconds": 0.4}},
                 {
                     "id": "call_spawn_shards", "fn": "spawn_entity_on_event", "target": "held_body",
-                    "params": {"when": "on_hit", "entity": "child_shard", "count": 3, "spreadRadians": 0.75, "damageMultiplier": 0.45, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
+                    "params": {"when": "on_hit", "entity": "child_shard", "count": 3, "spreadRadians": 0.75, "damageMultiplier": 0.45, "delaySeconds": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
                 },
                 {
                     "id": "call_spawn_child", "fn": "configure_spawn", "target": "child_shard",
-                    "params": {"velocity": {"constantSpeedPxPerUpdate": 9.0}, "count": 1, "spreadRadians": 0.0, "offsetPx": 0, "aim": "velocity", "position": {"at": "activation_origin"}},
+                    "params": {"velocity": {"constantSpeedBlocksPerSecond": 33.75}, "count": 1, "spreadRadians": 0.0, "offsetBlocks": 0, "aim": "velocity", "position": {"at": "activation_origin"}},
                 },
                 {
                     "id": "call_damage_child", "fn": "set_projectile_damage", "target": "child_shard",
                     "params": {"damageClass": "ranged", "damage": 18, "knockback": 2.0, "ownerHitCheck": False},
                 },
-                {"id": "call_life_child", "fn": "set_projectile_lifetime", "target": "child_shard", "params": {"lifetimeTicks": 120}},
+                {"id": "call_life_child", "fn": "set_projectile_lifetime", "target": "child_shard", "params": {"lifetimeSeconds": 2}},
                 {"id": "call_hitbox_child", "fn": "set_projectile_hitbox", "target": "child_shard", "params": {"widthPx": 10, "heightPx": 10, "drawScale": 0.7, "hitboxScale": 1.0}},
                 {"id": "call_collision_child", "fn": "set_projectile_collision", "target": "child_shard", "params": {"tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": 1, "updatesPerTick": 1, "immunity": "once_per_npc"}},
-                {"id": "call_move_child", "fn": "move_gravity_arc", "target": "child_shard", "params": {"accelY": 0.12}},
+                {"id": "call_move_child", "fn": "move_gravity_arc", "target": "child_shard", "params": {"accelerationYBlocksPerSecondSquared": 27}},
             ],
         },
         "id": "dev_" + str(abs(hash(key)))[:16],

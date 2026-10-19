@@ -24,7 +24,7 @@ def constrained_reference(monkeypatch):
         "entity", ("free_projectile", "child_projectile"), False, True))
     requirements = (*source.requirements,
         registry.RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
-            equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
+            equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetBlocks": 0},
             message="The emission reference needs explicit origin/velocity spawn without offset."),
         registry.RequirementSpec("referenced_entity_without_capability", param="entity", capability="emit_light_while_active",
             message="This test-local reference forbids an independently valid light capability."))
@@ -56,7 +56,7 @@ def _new_child(doc, name):
     for row in calls:
         row["target"] = name; row["id"] = row["id"].replace("nail", name)
         if row["fn"] == "configure_spawn":
-            row["params"].update(aim="velocity", position={"at": "activation_origin"}, offsetPx=0)
+            row["params"].update(aim="velocity", position={"at": "activation_origin"}, offsetBlocks=(0) / 16)
     return entity, calls
 
 
@@ -70,13 +70,13 @@ def test_reference_exact_params_have_no_missing_or_boolean_numeric_fallback(cons
     spawn = next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "nail_spawn")
     spawn["params"]["aim"] = "velocity"
     if replacement is None:
-        spawn["params"].pop("offsetPx")
+        spawn["params"].pop("offsetBlocks")
     else:
-        spawn["params"]["offsetPx"] = replacement
+        spawn["params"]['offsetBlocks'] = replacement / 16 if type(replacement) in (int, float) else replacement
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     exact_error = [row for row in report["errors"] if row["code"] == "reference_requirements_unsatisfied"]
-    assert bool(exact_error) is not (type(replacement) is int and replacement == 0)
+    assert bool(exact_error) is not (type(replacement) in (int, float) and replacement == 0)
     if exact_error:
         assert exact_error[0]["path"].endswith(".params.entity")
     assert doc == before
@@ -134,7 +134,7 @@ def test_sole_reference_opens_only_its_registry_exact_dependency(constrained_ref
     assert scope["fieldPermissions"]["calls"] == [{"id": "nail_spawn", "paths": ["params.aim"]}]
     assert not scope["create"]["entities"]["allowed"]
     candidate = deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "nail_spawn"))
-    candidate["params"].update(aim="velocity", offsetPx=1)
+    candidate["params"].update(aim="velocity", offsetBlocks=(1) / 16)
     filtered, audit = filter_repair_patch_scope(doc, {"note": "explicit registry dependency", "callsUpsert": [candidate]}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
     repaired = apply_repair_patch(doc, filtered)

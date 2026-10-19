@@ -102,8 +102,8 @@ def _sparse_event_item(event):
     calls = item["runtimeProgram"]["calls"]
     spawn = next(row for row in calls if row["fn"] == "spawn_entity_on_event")
     selected = {"id": "pull_case", "fn": "pull_on_event", "target": spawn["target"],
-        "params": {"when": {"everyTicks": 6} if event == "periodic" else event,
-                   "mode": "target_to_entity", "strength": 1, "radiusTiles": 8}}
+        "params": {"when": {'everySeconds': (6) / 60} if event == "periodic" else event,
+                   "mode": "target_to_entity", "impulseBlocksPerSecond": 3.75, "radiusTiles": 8}}
     calls.append(selected)
     next(row for row in calls if row["fn"] == "configure_item_stats")["params"].pop("manaCost", None)
     return item, selected
@@ -118,7 +118,7 @@ def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_inva
     encoded = _encode_nullable_fixture(item, contract.author_item_response_schema())
     selected = next(row for row in encoded["runtimeProgram"]["calls"] if row["fn"] == "pull_on_event")
     if control == "required-null":
-        selected["params"]["strength"] = None
+        selected["params"]["impulseBlocksPerSecond"] = None
     elif control == "unknown-function":
         selected["fn"] = "unknown_function"
     before = copy.deepcopy(encoded)
@@ -142,7 +142,7 @@ def test_subscription_author_parse_preserves_nullable_optionals_and_refuses_inva
         assert not report["ok"], "provider projection must not conceal invalid authored values"
         row = next(row for row in parsed["runtimeProgram"]["calls"] if row["id"] == "pull_case")
         if control == "required-null":
-            assert row["params"]["strength"] is None
+            assert row["params"]["impulseBlocksPerSecond"] is None
         else:
             assert row["fn"] == "unknown_function"
 
@@ -154,12 +154,12 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
 
     item, selected = _sparse_event_item("periodic")
     expected = copy.deepcopy(item)
-    selected["params"]["when"].pop("everyTicks")
+    selected["params"]["when"].pop("everySeconds")
     before = copy.deepcopy(item)
     failure = validate_runtime_program(item)
     assert not failure["ok"]
     corrected = copy.deepcopy(selected)
-    corrected["params"].update(when={"everyTicks": 6}, strength=2)  # hostile valid sibling: must stay frozen at 1
+    corrected["params"].update(when={'everySeconds': (6) / 60}, impulseBlocksPerSecond=7.5)  # hostile valid sibling: must stay frozen at 1
     patch = {"note": "exact missing period", "callsUpsert": [corrected], "realizationReplacement": item["realization"]}
     encoded = _encode_nullable_fixture(patch, contract.author_item_repair_response_schema())
     monkeypatch.setattr(author, "USE_LLM", True)
@@ -174,7 +174,7 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     original_filter = author.filter_repair_patch_scope
     def observe(current, delta, scope):
         premerge.append(copy.deepcopy(delta))
-        assert scope["fieldPermissions"]["calls"] == [{"id": selected["id"], "paths": ["params.when.everyTicks"]}]
+        assert scope["fieldPermissions"]["calls"] == [{"id": selected["id"], "paths": ['params.when.everySeconds']}]
         return original_filter(current, delta, scope)
     monkeypatch.setattr(author, "llm_chat_json", respond)
     monkeypatch.setattr(author, "filter_repair_patch_scope", observe)

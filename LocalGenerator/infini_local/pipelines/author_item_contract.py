@@ -129,6 +129,17 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 "or a capability restriction. Let complexity serve player value. Ground power in the actual ingredient power, "
                 "rarity, acquisition facts and resource economy together; distinguish source observations from assumptions. "
                 "Use supplied progression facts when present; do not invent an acquisition tier from rarity, value or identity alone. "
+                "Compare the resulting primary action's useful output, control, repeat-hit policy and recurring payment "
+                "with the parent action it replaces; there is no mandatory upgrade or inheritance, but make losses "
+                "and increased costs purposeful rather than accidental. manaCost is shared by primary and alternate active uses: "
+                "a costly added utility also taxes the main action, so choose that combined price deliberately. "
+                "A source dropSeedsIfInInventory flag describes a native inventory passive; a generated definition gains "
+                "that support only by explicit collect_seeds_from_grass selection (no params or use binding). "
+                "Native seed RNG, drop ownership and inventory slots remain unchanged. This is optional, never mandatory "
+                "inheritance; ammo selection alone does not grant it. "
+                "useAmmoCategoryName describes required ammo; ammoCategoryName describes an ammo item's own category. "
+                "A source marked weapon_item.shoot_field is not a fired-shot observation, even under effectiveProjectile; "
+                "do not confuse that native field with the projectile chosen by an actual ammo shot. "
                 "Read damage in its source role: ammunition damage is a contribution to a compatible launcher's attack, "
                 "not proof of a standalone weapon; ammunition useTime alone does not establish attack cadence. "
                 "Turning that contribution into an autonomous attack is a new benefit: account for the removed launcher "
@@ -178,12 +189,21 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         },
         "realization": {
             "description": (
-                "optional advisory interpretation of the emitted runtimeProgram, not an observed execution; "
+                "optional advisory interpretation of the emitted runtimeProgram, not an observed execution. "
+                "Write a concise item description in clear player language: explain the actual controls "
+                "(use, alternate use, while selected or while equipped), effects, costs, conditions and limits "
+                "that matter in play. Describe only supported behavior of the emitted bindings, calls and events; "
+                "distinguish base values or conditional effects from guaranteed outcomes. Do not invent abilities, "
+                "charges, safety, cooldowns or measured results from names, appearance or intent. "
+                "Use Terraria blocks, blocks/s and seconds for player-facing distance, speed and time; "
+                "gameplay params use their Author cards' human units and lowering produces engine units. Pixel-labelled geometry retains its declared engine units. Prefer readable actions over internal ids, "
+                "capability names or a parameter dump. No extra lore or report is required; "
                 f"string minLength={report_properties['description']['minLength']}, "
                 f"maxLength={report_properties['description']['maxLength']} Unicode code points"
             ),
             "playerExperience": (
-                "optional advisory player-experience notes; "
+                "optional advisory notes on practical use and trade-offs of the same emitted mechanics, "
+                "not additional mechanics or promises; avoid repeating the description; "
                 f"string minLength={report_properties['playerExperience']['minLength']}, "
                 f"maxLength={report_properties['playerExperience']['maxLength']} Unicode code points"
             ),

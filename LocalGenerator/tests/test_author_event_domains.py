@@ -57,7 +57,7 @@ def test_nearest_alias_preserves_exact_event_opcode_parameters_and_authority(whe
         next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
         call["target"] = "item"
         document["runtimeProgram"]["calls"].append(call)
-    call["params"].update(when=when, maxTargets=count, rangeTiles=7.125, damageMultiplier=0.625, delayTicks=37)
+    call["params"].update(when=when, maxTargets=count, rangeTiles=7.125, damageMultiplier=0.625, delaySeconds=(37) / 60)
     wire, entity = compile_and_check(document)
     assert entity["events"][0] == {
         "id": "witness_call", "action": OLD, "actionCode": 4, "event": when,
@@ -78,7 +78,7 @@ def test_nearest_alias_preserves_exact_event_opcode_parameters_and_authority(whe
     ("maxTargets", 0), ("maxTargets", 13), ("maxTargets", 1.5), ("maxTargets", True),
     ("maxTargets", None), ("count", 2), ("rangeTiles", 0.9), ("rangeTiles", 61),
     ("damageMultiplier", 0.049), ("damageMultiplier", 2.01),
-    ("when", "periodic"), ("when", {"everyTicks": 60}), ("event", "on_hit"),
+    ("when", "periodic"), ("when", {"everySeconds": 1}), ("event", "on_hit"),
 ])
 def test_nearest_alias_rejects_old_or_ambiguous_fresh_fields(name, value):
     document = build_capability_witness(NEW)

@@ -90,6 +90,52 @@
           },
           {
             "if": {
+              "required": [
+                "placementBindingId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "anchor": {
+                  "const": "self"
+                },
+                "event": {
+                  "const": "periodic"
+                },
+                "rendererKind": {
+                  "enum": [
+                    "spriteElement",
+                    "libraryParticle",
+                    "lightCue"
+                  ]
+                },
+                "repeatEvery": {
+                  "minimum": 1
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "placementBindingId": {
+                  "const": "alternate_install"
+                }
+              },
+              "required": [
+                "placementBindingId"
+              ]
+            },
+            "then": {
+              "properties": {
+                "entityId": {
+                  "const": "item"
+                }
+              }
+            }
+          },
+          {
+            "if": {
               "properties": {
                 "rendererKind": {
                   "const": "spriteStampTrail"
@@ -2898,6 +2944,13 @@
               "scrollPxPerTick"
             ],
             "type": "object"
+          },
+          "placementBindingId": {
+            "description": "Optional exact accepted placement binding, not held/equipped item. Omit for unchanged item/projectile behavior. Only periodic/self spriteElement/libraryParticle/lightCue. Gate reads top-left native TileFrameY; footprint center is self, +forward right/+side down, velocity zero. Fresh activation after gate off; world particles may finish bounded lifetime.",
+            "enum": [
+              "alternate_install"
+            ],
+            "type": "string"
           },
           "rendererKind": {
             "description": "Select the renderer with the companion fields required by this slot's conditional clauses. lightCue emits world lighting, not a drawn glow sprite or trail. Sound and camera cues own only their explicit payload controls.",

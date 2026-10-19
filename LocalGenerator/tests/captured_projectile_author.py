@@ -146,14 +146,57 @@ def project_captured_projectile_call(call: dict[str, Any]) -> None:
             params["radiusTiles"] = params.pop("radiusPx") / 16
 
 
+def project_captured_world_units(document: dict[str, Any]) -> dict[str, Any]:
+    """Project old test choices only, using canonical predecessor/unit metadata.
+
+    Archives remain untouched. The captured patch corpus uses N=1 when its
+    isolated patch has no collision call; complete sources use their own target.
+    This helper is never imported by production or used for Author admission.
+    """
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, RUNTIME_PROGRAM_SCHEMA
+
+    projected = deepcopy(document)
+    program = projected.get("runtimeProgram", {})
+    if "schema" in program:
+        assert program["schema"] in {"infini.runtime-program.authoring.v4", "infini.runtime-program.authoring.v5", RUNTIME_PROGRAM_SCHEMA}
+        program["schema"] = RUNTIME_PROGRAM_SCHEMA
+    rows = program.get("calls", []) + projected.get("callsUpsert", [])
+    updates = {row.get("target"): row["params"]["updatesPerTick"] for row in rows
+               if row.get("fn") == "set_projectile_collision" and "updatesPerTick" in row.get("params", {})}
+
+    def convert(values, specs, n):
+        if not isinstance(values, dict):
+            return
+        for name, spec in specs.items():
+            old = next((key for key in spec.predecessor_names if key in values), None)
+            if old is not None:
+                assert name not in values
+                value = values.pop(old)
+                # Preserve malformed captured facts so their original refusal
+                # remains observable, rather than coercing bool/null to numbers.
+                values[name] = (spec.from_wire(value, updates_per_tick=n)
+                                if type(value) in (int, float) else value)
+            if name not in values:
+                continue
+            variants = spec.alternatives or (spec,)
+            for variant in variants:
+                convert(values[name], variant.properties, n)
+
+    for row in rows:
+        cap = CAPABILITY_REGISTRY.get(row.get("fn"))
+        if cap is not None:
+            convert(row.get("params", {}), cap.params, updates.get(row.get("target"), 1))
+    return projected
+
+
 def project_captured_author_notation(document: dict[str, Any]) -> dict[str, Any]:
-    """Exact v4->v5 notation projection for archived tests only; never admission."""
+    """Exact notation and declared-unit projection for tests only; never admission."""
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     from infini_local.core.runtime_authoring.capability_registry import INPUT_KIND_REGISTRY, BINDING_ACTION_REGISTRY
     projected = deepcopy(document)
     program = projected.get("runtimeProgram", {})
     if "schema" in program:
-        assert program["schema"] in {"infini.runtime-program.authoring.v4", "infini.runtime-program.authoring.v5"}
+        assert program["schema"] in {"infini.runtime-program.authoring.v4", "infini.runtime-program.authoring.v5", "infini.runtime-program.authoring.v6"}
         program["schema"] = "infini.runtime-program.authoring.v5"
     for row in program.get("calls", []) + projected.get("callsUpsert", []):
         if not isinstance(row, dict):
@@ -188,7 +231,22 @@ def project_captured_author_notation(document: dict[str, Any]) -> dict[str, Any]
                 if key in row:
                     if type(row[key]) is type(value) and row[key] == value:
                         del row[key]
-    return projected
+    return project_captured_world_units(projected)
+
+
+def historical_returning_potion_program(program: dict[str, Any]) -> dict[str, Any]:
+    """Retain the frozen native hash after units emit integral speeds as floats.
+
+    Only this known fixture's two prior integer tokens change representation;
+    assert their complete values first and leave every other native leaf intact.
+    """
+    result = deepcopy(program)
+    entity = next(row for row in result["entities"] if row["id"] == "tonic_flask")
+    assert type(entity["spawn"]["speedPxPerTick"]) is float and entity["spawn"]["speedPxPerTick"] == 12
+    assert type(entity["movement"]["params"]["returnSpeed"]) is float and entity["movement"]["params"]["returnSpeed"] == 15
+    entity["spawn"]["speedPxPerTick"] = 12
+    entity["movement"]["params"]["returnSpeed"] = 15
+    return result
 
 
 def historical_author_binding_wire(compiled: dict[str, Any]) -> dict[str, Any]:

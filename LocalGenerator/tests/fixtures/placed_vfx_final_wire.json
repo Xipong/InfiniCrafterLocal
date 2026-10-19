@@ -1,0 +1,526 @@
+{
+  "accessory": {
+    "enabled": false
+  },
+  "armor": {
+    "enabled": false
+  },
+  "category": "hybrid",
+  "concept": {
+    "coreMechanic": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
+    "parentAContribution": "workbench body",
+    "parentBContribution": "blade and nails",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Execute the authored spawn_entity action."
+      }
+    ],
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events."
+  },
+  "debug": {
+    "placedVfxCpuFixture": {
+      "fixtureSha256": "23e5d7c8dea9af2ac7ad36ce95afb9c7bb0ca924b5fb799b47288f37cea7b67b",
+      "kind": "synthetic_no_image_execution_control",
+      "realImageGeneration": false,
+      "synthetic": true
+    }
+  },
+  "gameplay": {
+    "autoReuse": true,
+    "craftYield": 1,
+    "damage": 42,
+    "damageClass": "generic",
+    "handPose": "one_handed",
+    "height": 32,
+    "holdoutOffsetX": 0,
+    "holdoutOffsetY": 0,
+    "itemScale": 1.0,
+    "kind": "hybrid",
+    "knockback": 4.0,
+    "manaCost": 0,
+    "maxStack": 1,
+    "rarity": 2,
+    "releaseTiming": "immediate",
+    "useAnimation": 24,
+    "useStyleName": "shoot",
+    "useTime": 24,
+    "useTurn": true,
+    "value": 7500,
+    "width": 32
+  },
+  "id": "placed_vfx_cpu_fixture",
+  "name": "Workbench-Backed Blade",
+  "realization": {
+    "description": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity. Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+    "selfEvaluation": "An explicit alternate placement lane was added."
+  },
+  "runtimeApiVersion": "infini.runtime-program.v5",
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "bindings": [
+      {
+        "id": "alternate_install",
+        "input": "alternate_use",
+        "role": "primary",
+        "usePolicy": {
+          "action": {
+            "kind": "place_item",
+            "placement": {
+              "placeStyle": 0,
+              "placedVfx": {
+                "maxFrameY": 35,
+                "minFrameY": 0
+              },
+              "tileId": 1,
+              "wallId": -1
+            },
+            "targetId": "item"
+          },
+          "contactDamage": false,
+          "stackCost": 1
+        }
+      },
+      {
+        "id": "primary_workbench",
+        "input": "primary_use",
+        "role": "secondary",
+        "usePolicy": {
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "workbench_blade"
+          },
+          "contactDamage": true,
+          "stackCost": 0
+        }
+      }
+    ],
+    "entities": [
+      {
+        "events": [],
+        "id": "item",
+        "kind": "item_body",
+        "visual": {
+          "assetMode": "baked_sprite",
+          "prompt": "literal Terraria item",
+          "role": "inventory_item",
+          "scale": 1.0,
+          "silhouette": "readable",
+          "spritePath": "synthetic.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 1.0,
+          "spriteUrl": "",
+          "visualIdentity": "literal composition"
+        },
+        "visualRole": "inventory_item"
+      },
+      {
+        "collision": {
+          "bounceCount": 0,
+          "extraUpdates": 0,
+          "ignoreWater": false,
+          "localNpcHitCooldownTicks": 10,
+          "npcImmunityMode": "local",
+          "pierce": -1,
+          "tileCollide": false
+        },
+        "damage": {
+          "damage": 42,
+          "damageClass": "melee",
+          "enabled": true,
+          "knockback": 4.0,
+          "ownerHitCheck": true
+        },
+        "events": [
+          {
+            "action": "spawn_entity_on_event",
+            "actionCode": 1,
+            "count": 5,
+            "damageBasis": "authored_child",
+            "damageMultiplier": 0.35,
+            "delayTicks": 0,
+            "entityId": "nail",
+            "event": "on_hit",
+            "id": "shed_nails",
+            "knockbackBasis": "authored_child",
+            "spreadRadians": 0.55
+          }
+        ],
+        "hitbox": {
+          "drawScale": 1.0,
+          "heightPx": 34,
+          "hitboxScale": 1.0,
+          "widthPx": 64
+        },
+        "id": "workbench_blade",
+        "kind": "owner_attached_projectile",
+        "lifetimeTicks": 28,
+        "movement": {
+          "code": 19,
+          "name": "move_forward_then_retract",
+          "params": {
+            "durationTicks": 24,
+            "rangeTiles": 6
+          }
+        },
+        "spawn": {
+          "aim": "cursor",
+          "count": 1,
+          "enabled": true,
+          "offsetPx": 0,
+          "overTarget": {
+            "delayTicks": 0,
+            "heightTiles": 0
+          },
+          "placement": "item_use_origin",
+          "speedPxPerTick": 0,
+          "spreadRadians": 0.0
+        },
+        "visual": {
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "role": "held_body",
+          "scale": 1.0,
+          "silhouette": "readable",
+          "spritePath": "synthetic.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 1.0,
+          "spriteUrl": "",
+          "visualIdentity": "literal composition"
+        },
+        "visualRole": "held_body"
+      },
+      {
+        "collision": {
+          "bounceCount": 0,
+          "extraUpdates": 0,
+          "ignoreWater": false,
+          "localNpcHitCooldownTicks": 10,
+          "npcImmunityMode": "local",
+          "pierce": 1,
+          "tileCollide": true
+        },
+        "damage": {
+          "damage": 12,
+          "damageClass": "ranged",
+          "enabled": true,
+          "knockback": 4.0,
+          "ownerHitCheck": false
+        },
+        "events": [],
+        "hitbox": {
+          "drawScale": 1.0,
+          "heightPx": 8,
+          "hitboxScale": 1.0,
+          "widthPx": 8
+        },
+        "id": "nail",
+        "kind": "child_projectile",
+        "lifetimeTicks": 120,
+        "movement": {
+          "code": 0,
+          "name": "move_straight",
+          "params": {}
+        },
+        "spawn": {
+          "aim": "cursor",
+          "count": 1,
+          "enabled": true,
+          "offsetPx": 0,
+          "overTarget": {
+            "delayTicks": 0,
+            "heightTiles": 0
+          },
+          "placement": "item_use_origin",
+          "speedPxPerTick": 13,
+          "spreadRadians": 0.0
+        },
+        "visual": {
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "role": "child_projectile",
+          "scale": 1.0,
+          "silhouette": "readable",
+          "spritePath": "synthetic.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 1.0,
+          "spriteUrl": "",
+          "visualIdentity": "literal composition"
+        },
+        "visualRole": "child_projectile"
+      }
+    ],
+    "itemContact": {
+      "contactForgivenessPx": 4,
+      "hitboxScale": 1.0
+    },
+    "itemEntityId": "item",
+    "itemUse": {
+      "channel": false,
+      "configured": true,
+      "disableMeleeHitbox": false,
+      "handPose": "one_handed",
+      "hideUseGraphic": false,
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0,
+      "releaseTiming": "immediate",
+      "useStyle": "shoot"
+    },
+    "limits": {
+      "maxChildDepth": 3,
+      "maxEntityCount": 12,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "primaryEntityId": "item",
+    "primaryOwner": "item_body",
+    "schema": "infini.runtime-program.wire.v3"
+  },
+  "schemaVersion": 5,
+  "sourceMode": "offline_contract_fixture",
+  "vfxManifest": {
+    "assets": [
+      {
+        "canvasSize": 32,
+        "id": "Glow_A-1",
+        "layout": "cutout",
+        "negativePrompt": "",
+        "prompt": "one isolated luminous ingredient, no text/UI/atlas",
+        "spritePath": "qa-no-image-vfx-12ce446846d0be55842bbda53ae626e42fe2205955a118188e2bc90d91431862.png",
+        "spriteStatus": "generated",
+        "spriteTechnicalScore": 1.0,
+        "spriteUrl": ""
+      }
+    ],
+    "budget": {
+      "maxDrawCalls": 208,
+      "maxParticlesPerTick": 128,
+      "maxParticlesTotal": 5800
+    },
+    "recipeId": "placed-vfx-cpu-fixture",
+    "schema": "infini.vfx.runtime-events.v16",
+    "slots": [
+      {
+        "alpha": 0.8,
+        "anchor": "self",
+        "blend": "alpha",
+        "duration": 20,
+        "element": {
+          "accelerationXPxPerTickSquared": 0.0,
+          "accelerationYPxPerTickSquared": 0.05,
+          "attachment": "source",
+          "colorProfile": {
+            "curve": "linear",
+            "end": {
+              "b": 140,
+              "g": 180,
+              "r": 210
+            },
+            "middle": {
+              "b": 241,
+              "g": 93,
+              "r": 17
+            },
+            "start": {
+              "b": 255,
+              "g": 255,
+              "r": 255
+            }
+          },
+          "count": 2,
+          "drag": 0.95,
+          "heightProfile": {
+            "curve": "easeOut",
+            "end": 0.0,
+            "middle": 1.0,
+            "start": 2.0
+          },
+          "heightPx": 5.0,
+          "inheritVelocity": 0.2,
+          "offsetForwardPx": -8,
+          "offsetSidePx": -12,
+          "opacityProfile": {
+            "curve": "smoothStep",
+            "end": 0.0,
+            "middle": 0.8,
+            "start": 0.0
+          },
+          "rotationRadians": 0.0,
+          "rotationSpeedRadiansPerTick": -0.1,
+          "speedMaxPxPerTick": 0,
+          "speedMinPxPerTick": 0,
+          "spreadRadians": 0.75,
+          "texture": {
+            "assetId": "Glow_A-1",
+            "source": "asset"
+          },
+          "widthProfile": {
+            "curve": "easeIn",
+            "end": 2.0,
+            "middle": 1.0,
+            "start": 0.0
+          },
+          "widthPx": 12.0
+        },
+        "entityId": "item",
+        "event": "periodic",
+        "id": "left_flame",
+        "layer": "BeforeProjectiles",
+        "placementBindingId": "alternate_install",
+        "rendererKind": "spriteElement",
+        "repeatEvery": 2,
+        "slotSeed": 1956143974,
+        "startTick": 0
+      },
+      {
+        "alpha": 0.8,
+        "anchor": "self",
+        "blend": "alpha",
+        "duration": 20,
+        "element": {
+          "accelerationXPxPerTickSquared": 0.0,
+          "accelerationYPxPerTickSquared": 0.05,
+          "attachment": "source",
+          "colorProfile": {
+            "curve": "linear",
+            "end": {
+              "b": 140,
+              "g": 180,
+              "r": 210
+            },
+            "middle": {
+              "b": 241,
+              "g": 93,
+              "r": 17
+            },
+            "start": {
+              "b": 255,
+              "g": 255,
+              "r": 255
+            }
+          },
+          "count": 2,
+          "drag": 0.95,
+          "heightProfile": {
+            "curve": "easeOut",
+            "end": 0.0,
+            "middle": 1.0,
+            "start": 2.0
+          },
+          "heightPx": 5.0,
+          "inheritVelocity": 0.2,
+          "offsetForwardPx": 8,
+          "offsetSidePx": -12,
+          "opacityProfile": {
+            "curve": "smoothStep",
+            "end": 0.0,
+            "middle": 0.8,
+            "start": 0.0
+          },
+          "rotationRadians": 0.0,
+          "rotationSpeedRadiansPerTick": -0.1,
+          "speedMaxPxPerTick": 0,
+          "speedMinPxPerTick": 0,
+          "spreadRadians": 0.75,
+          "texture": {
+            "assetId": "Glow_A-1",
+            "source": "asset"
+          },
+          "widthProfile": {
+            "curve": "easeIn",
+            "end": 2.0,
+            "middle": 1.0,
+            "start": 0.0
+          },
+          "widthPx": 12.0
+        },
+        "entityId": "item",
+        "event": "periodic",
+        "id": "right_flame",
+        "layer": "BeforeProjectiles",
+        "placementBindingId": "alternate_install",
+        "rendererKind": "spriteElement",
+        "repeatEvery": 2,
+        "slotSeed": 1786133965,
+        "startTick": 0
+      },
+      {
+        "alpha": 0.8,
+        "anchor": "self",
+        "blend": "additive",
+        "duration": 20,
+        "entityId": "item",
+        "event": "periodic",
+        "id": "library_star",
+        "layer": "BeforeProjectiles",
+        "particle": {
+          "accelerationXPxPerTickSquared": 0.0,
+          "accelerationYPxPerTickSquared": 0.05,
+          "colorEnd": {
+            "b": 0,
+            "g": 215,
+            "r": 255
+          },
+          "colorStart": {
+            "b": 241,
+            "g": 93,
+            "r": 17
+          },
+          "count": 3,
+          "drag": 0.9,
+          "endOpacity": 0.0,
+          "endScaleMultiplier": 0.0,
+          "heightPx": 2.0,
+          "inheritVelocity": 0.25,
+          "rotationRadians": 0.0,
+          "rotationSpeedRadiansPerTick": 0.1,
+          "speedMaxPxPerTick": 3.0,
+          "speedMinPxPerTick": 1.0,
+          "spreadRadians": 0.5,
+          "textureId": "star",
+          "widthPx": 8.0
+        },
+        "placementBindingId": "alternate_install",
+        "rendererKind": "libraryParticle",
+        "repeatEvery": 3,
+        "slotSeed": 192404279,
+        "startTick": 0
+      },
+      {
+        "anchor": "self",
+        "color": {
+          "b": 20,
+          "g": 90,
+          "r": 255
+        },
+        "entityId": "item",
+        "event": "periodic",
+        "id": "placed_glow",
+        "placementBindingId": "alternate_install",
+        "rendererKind": "lightCue",
+        "repeatEvery": 1,
+        "scale": 1.0,
+        "slotSeed": 1591387976
+      }
+    ]
+  },
+  "visual": {
+    "forwardAngleDegrees": 45,
+    "imagePrompt": "literal Terraria item",
+    "inventoryScale": 1.0,
+    "negativePrompt": "placeholder",
+    "palette": [
+      "brown",
+      "steel"
+    ],
+    "preferredCanvasSize": 32,
+    "renderSizePx": 40,
+    "spritePath": "synthetic.png",
+    "spriteRawPath": "synthetic.png",
+    "spriteStatus": "generated",
+    "spriteTechnicalScore": 1.0,
+    "spriteUrl": "",
+    "worldScale": 1.0
+  }
+}

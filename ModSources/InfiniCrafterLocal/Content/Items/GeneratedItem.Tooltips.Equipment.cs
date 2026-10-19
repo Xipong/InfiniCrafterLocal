@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.UI;
 
 namespace InfiniCrafterLocal.Content.Items;
 
@@ -38,8 +39,8 @@ public partial class GeneratedItem
         Stat("LifeRegen", "EquipmentLifeRegen", a is not null ? a.LifeRegen / 2f : armor!.LifeRegen / 2f);
         Stat("ManaRegen", "EquipmentManaRegen", a?.ManaRegen ?? armor!.ManaRegen);
         Percent("Movement", "EquipmentMovement", a?.MovementSpeed ?? armor!.MovementSpeed);
-        Stat("MaxRunSpeed", "EquipmentMaxRunSpeed", (a?.MaxRunSpeed ?? armor!.MaxRunSpeed) * 60f);
-        Stat("Jump", "EquipmentJump", (a?.JumpSpeed ?? armor!.JumpSpeed) * 60f);
+        Stat("MaxRunSpeed", "EquipmentMaxRunSpeed", PlayerDisplayUnits.BlocksPerSecond(a?.MaxRunSpeed ?? armor!.MaxRunSpeed));
+        Stat("Jump", "EquipmentJump", PlayerDisplayUnits.BlocksPerSecond(a?.JumpSpeed ?? armor!.JumpSpeed));
         Percent("GenericDamage", "EquipmentGenericDamage", a?.GenericDamage ?? armor!.GenericDamage);
         Percent("MeleeDamage", "EquipmentMeleeDamage", a?.MeleeDamage ?? armor!.MeleeDamage);
         Percent("RangedDamage", "EquipmentRangedDamage", a?.RangedDamage ?? armor!.RangedDamage);
@@ -52,7 +53,7 @@ public partial class GeneratedItem
         Stat("Sentries", "EquipmentSentries", a?.SentrySlots ?? armor!.SentrySlots);
         // These executors only admit a positive reduction; do not claim a negative one.
         float manaReduction = a?.ManaCostReduction ?? armor!.ManaCostReduction;
-        if (manaReduction > 0f) Percent("ManaCost", "EquipmentManaCost", manaReduction);
+        if (manaReduction > 0f) Percent("ManaCost", "EquipmentManaCost", -manaReduction);
         float ammoSaving = a?.AmmoSaveChance ?? armor!.AmmoSaveChance;
         if (ammoSaving > 0f) Percent("AmmoSave", "EquipmentAmmoSave", Math.Clamp(ammoSaving, 0f, 0.9999f));
         Stat("Aggro", "EquipmentAggro", a?.Aggro ?? armor!.Aggro);
@@ -71,7 +72,7 @@ public partial class GeneratedItem
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);
-            Stat("SprintFloor", "EquipmentSprintFloor", a.AccRunSpeed * 60f);
+            Stat("SprintFloor", "EquipmentSprintFloor", PlayerDisplayUnits.BlocksPerSecond(a.AccRunSpeed));
         }
         // Item.defense remains on the native tooltip, including prefixes. Do not
         // repeat authored defense as though it were a second equipped contribution.

@@ -88,6 +88,7 @@
       "tests": [
         "LocalGenerator/tests/test_repair_vfx_contract.py",
         "LocalGenerator/tests/test_vfx_dependency_delivery_contracts.py",
+        "LocalGenerator/tests/test_docx_image_readiness.py",
         "LocalGenerator/tests/test_visual_presentation_metadata.py"
       ],
       "entrypoints": [

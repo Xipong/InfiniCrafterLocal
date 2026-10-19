@@ -1,6 +1,6 @@
 # Проверки контрактов и их владельцы
 
-Новый regression сначала относится к **наблюдаемому инварианту**, а не к номеру релиза. Вариант существующего контракта добавляется в named table/corpus, не в отдельный bug-specific файл. Владельцы production-кода — в [карте задач](OWNERS_RU.md); правила изменения runtime — в [AGENTS.md](../../AGENTS.md).
+Новый regression сначала относится к **наблюдаемому инварианту**, а не к номеру релиза. Вариант существующего контракта добавляется в named table/corpus, не в отдельный bug-specific файл. Владельцы production-кода — в [карте задач](CODE_MAP_RU.md); правила изменения runtime — в [AGENTS.md](../../AGENTS.md).
 
 В Studio точные RGB, подписи и DOM-селекторы могут быть устаревшими снимками дизайна: меняй их тесты вместе с интерфейсом, сохраняя проверки поведения. Это оболочка генератора, а не игровой runtime.
 
@@ -54,7 +54,7 @@ python tools/agentctl.py diff --base origin/main
 - `--base` сравнивает committed branch diff от merge-base и добавляет staged/unstaged/untracked изменения. Для stacked PR используй его base branch. Без `--base` учитывается только рабочее дерево.
 - Runtime, Studio, transport и storage выбирают готовые test families; C# — static contract gate и один полный быстрый linked-source CPU runner. Mutation и full pytest остаются финальной приёмкой.
 - Неизвестные пути и общие test fixtures/conftest консервативно выбирают полный набор. Изменённый самостоятельный test module запускается сам. Пустая выборка — `not_selected`, недоступная среда — `unavailable`/`notRun`, не PASS.
-- `--area` явно выбирает контекст до правок, `--path` начинает от конкретного файла; `--task` — описание, а не эвристический router. Большие файлы обрезаются с `truncated`, entrypoints идут первыми.
+- `context --area` выбирает область, `--path` — существующий файл; `--line` начинает его выдержку с нужной строки. Явный контекст не сканирует изменения ветки. `suggestedVerification` — один план выбранного scope, без запуска; реальный diff проверяет `verify --changed`. `--task` — необязательное описание, не эвристический router. Стандартный бюджет — 5000 символов исходников; обрезка отмечается `truncated`, границы — `startLine`/`endLine`.
 - `run_changed_pytests.py --base ...` — только удобный pytest subset из той же карты. Он не заменяет остальные gates.
 - `agentctl diff` — только committed/worktree source diff и список changed paths, без semantic verdict или запуска валидаторов. `--semantic` и дублирующие parity/semantic report tools удалены.
 - Budget scalar-таблицы проверяются через реальные request callers без полного subprocess для каждого значения; изолированные process smoke остаются для import-time настроек и representative Repair routes. Schema/cache reconstruction использует representative стадии и отдельные provider-wire controls вместо повторного product. Исторические inverse projections ради старого whole-document hash и private-name blacklist не являются обязательствами текущей версии; frozen fixture bytes и direct refusal сохраняются.

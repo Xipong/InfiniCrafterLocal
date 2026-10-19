@@ -20,7 +20,9 @@ internal static partial class EngineRuntimeChecks
 {
     // Actual native HeldItem tree and ItemLoader consumer; CPU texture/cache shells.
     // No registered mod, GPU pixels, content loading or world/player update loop.
-    private static void HeldProxyIsReplacedOnlyByReadyInstanceSprite()
+    private static void HeldProxyIsReplacedOnlyByReadyInstanceSprite() => HeldProxyIsReplacedOnlyByReadyInstanceSprite(false);
+
+    private static void HeldProxyIsReplacedOnlyByReadyInstanceSprite(bool delivered)
     {
         using var actorState = new NativeActorState();
         const BindingFlags instance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -45,6 +47,7 @@ internal static partial class EngineRuntimeChecks
         string path = System.IO.Path.Combine(Terraria.Program.SavePath, "held_proxy_cpu.png");
         var data = GeneratedItemData.Placeholder();
         data.Visual.SpritePath = path; data.Visual.RenderSizePx = 32; data.Visual.ForwardAngleDegrees = 0;
+        if (delivered) { data.SourceMode = "generated"; data.Visual.SpriteStatus = "generated"; }
         data.Gameplay.UseStyleName = "hold_up"; data.RuntimeProgram.ItemUse.UseStyle = "hold_up";
         var item = new Item(); item.SetDefaults(ItemID.WoodenSword);
         var generated = new GeneratedItem();
@@ -95,16 +98,21 @@ internal static partial class EngineRuntimeChecks
             Sequence(Render(visualized), "native visualized clone still replaced", generatedTexture);
 
             textures.Remove(path);
-            Sequence(Render(item), "missing PNG preserves native fallback", nativeTexture);
+            Sequence(Render(item), "missing PNG respects generated versus explicit diagnostic ownership", delivered ? Array.Empty<Texture2D>() : new[] { nativeTexture });
+            var missingInfo = Info(item); missingInfo.DrawDataCache.Add(Entry(foreignTexture)); missingInfo.DrawDataCache.Add(Entry(nativeTexture));
+            ItemLoader.ModifyItemDraw(item, ref missingInfo, Entry(nativeTexture), Entry(foreignTexture), Entry(foreignTexture));
+            Sequence(missingInfo, "missing image preserves earlier records and foreign color/glow", delivered
+                ? new[] { foreignTexture, nativeTexture, foreignTexture, foreignTexture }
+                : new[] { foreignTexture, nativeTexture, nativeTexture, foreignTexture, foreignTexture });
             Equal(false, item.noUseGraphic, "missing PNG does not alter flag");
             textures.Add(path, Activator.CreateInstance(record, generatedTexture, 0f, 0L)!);
             player.itemAnimation = 0; item.holdStyle = 1;
-            Sequence(Render(item), "idle native hold preserved", nativeTexture); item.holdStyle = 0; player.itemAnimation = 8;
+            Sequence(Render(item), "idle native hold respects generated versus diagnostic ownership", delivered ? Array.Empty<Texture2D>() : new[] { nativeTexture }); item.holdStyle = 0; player.itemAnimation = 8;
             data.RuntimeProgram.ItemUse.HideUseGraphic = true; data.ApplyToItem(item);
             Sequence(Render(item), "authored hide still hides both");
             data.RuntimeProgram.ItemUse.HideUseGraphic = false; data.ApplyToItem(item);
             data.RuntimeProgram.ItemUse.ReleaseTiming = "immediate";
-            Sequence(Render(item), "immediate hint retains existing native-only behavior", nativeTexture);
+            Sequence(Render(item), "immediate hint cannot expose delivered proxy", delivered ? Array.Empty<Texture2D>() : new[] { nativeTexture });
             data.RuntimeProgram.ItemUse.ReleaseTiming = "";
             player.dead = true; Sequence(Render(item), "dead remains empty"); player.dead = false;
             player.frozen = true; Sequence(Render(item), "frozen remains empty"); player.frozen = false;

@@ -220,6 +220,26 @@ def synthetic_no_image_execution_control(
     # execution-status seam can be bridged, never other readiness failures.
     baseline = gate.visual_delivery_report(data, check_backend_config=False)
     for row in baseline["problems"]:
+        if row["code"] == "entity_item_icon_reference_invalid":
+            # Reuse has no separate PNG producer: its authenticated owner is
+            # the QA item image, whose production status is deliberately RED.
+            root = data.get("visual", {})
+            alias = next((entity.get("visual", {}) for entity in data.get("runtimeProgram", {}).get("entities", [])
+                          if entity.get("id") == row.get("entityId")), {})
+            if (root.get("spriteStatus") == "qa_no_image_fixture"
+                    and alias.get("assetMode") == "reuse_item_icon"
+                    and alias.get("spriteStatus") == "reused_item_icon"
+                    and alias.get("spritePath") == root.get("spritePath")):
+                continue
+        if row["code"] in {
+            "required_item_sprite_missing", "required_entity_sprite_missing",
+            "required_equipment_overlay_missing", "required_impact_sprite_missing",
+        } and row.get("status") == "qa_no_image_fixture":
+            # Fresh delivery correctly refuses QA labels as production readiness.
+            # This private observer may bridge only that exact label; the selected
+            # serving path, PNG bytes/hash and each projector owner are still
+            # authenticated below. Pending/unknown/non-QA remain refusals.
+            continue
         if row["code"] == "required_vfx_texture_not_ready":
             continue
         if row["code"] == "required_vfx_sprite_missing_or_invalid" and row.get("status") == "qa_no_image_fixture":

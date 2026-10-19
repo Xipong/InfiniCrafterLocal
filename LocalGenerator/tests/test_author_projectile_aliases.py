@@ -46,7 +46,7 @@ def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, 
         "tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": -1,
         "extraUpdates": updates - 1, "npcImmunityMode": mode, "localNpcHitCooldownTicks": cooldown,
     }
-    assert entity["spawn"]["speedPxPerTick"] == 8  # no update-rate rescaling
+    assert entity["spawn"]["speedPxPerTick"] == pytest.approx(8 / updates)  # world speed is lowered at the same-target update rate
     relevant = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("callId") == call["id"]]
     immunity_rows = [r for r in relevant if ".params.immunity" in r["authoredPath"]]
     assert len(immunity_rows) == 2
@@ -87,8 +87,8 @@ def test_spawn_position_keeps_all_anchors_height_delay_aim_and_ids(anchor, wire_
     document = build_capability_witness("configure_spawn")
     call = selected(document)
     call["params"].update(position=({"at": anchor} if height is None else {
-        "above": anchor, "heightTiles": height, "activationDelayTicks": delay,
-    }), aim="velocity", offsetPx=-37)
+        "above": anchor, "heightTiles": height, 'activationDelaySeconds': (delay) / 60,
+    }), aim="velocity", offsetBlocks=(-37) / 16)
     wire, entity = compiled_entity(document, call)
     assert entity["spawn"]["placement"] == wire_anchor
     assert entity["spawn"]["overTarget"] == {"heightTiles": height or 0, "delayTicks": delay}
@@ -99,11 +99,11 @@ def test_spawn_position_keeps_all_anchors_height_delay_aim_and_ids(anchor, wire_
 
 
 @pytest.mark.parametrize("position", [
-    {}, {"at": "above_cursor"}, {"at": "cursor", "activationDelayTicks": 1},
-    {"at": "cursor", "above": "cursor", "heightTiles": 3, "activationDelayTicks": 0},
-    {"above": "cursor", "heightTiles": 0, "activationDelayTicks": 0},
+    {}, {"at": "above_cursor"}, {"at": "cursor", "activationDelaySeconds": 1 / 60},
+    {"at": "cursor", "above": "cursor", "heightTiles": 3, "activationDelaySeconds": 0},
+    {"above": "cursor", "heightTiles": 0, "activationDelaySeconds": 0},
     {"above": "cursor", "heightTiles": 3},
-    {"above": "cursor", "heightTiles": 3, "activationDelayTicks": True},
+    {"above": "cursor", "heightTiles": 3, "activationDelaySeconds": True},
 ])
 def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(position):
     document = build_capability_witness("configure_spawn")
@@ -138,18 +138,18 @@ def test_tile_radius_boundaries_keep_exact_pixel_projection(fn, name, wire_name,
     assert document == before
 
 
-@pytest.mark.parametrize("when", ["on_hit", {"everyTicks": 6}, {"everyTicks": 3600}])
+@pytest.mark.parametrize("when", ["on_hit", {"everySeconds": 0.1}, {"everySeconds": 60}])
 def test_owner_pull_uses_exact_old_action_and_ignores_no_authored_radius(when):
     document = build_capability_witness("pull_owner_to_event_target")
     call = selected(document)
-    call["params"].update(when=when, strength=3.125, delayTicks=37)
+    call["params"].update(when=when, impulseBlocksPerSecond=11.71875, delaySeconds=(37) / 60)
     wire, entity = compiled_entity(document, call)
     event = entity["events"][0]
     assert event == {
         "id": "witness_call", "action": "pull_on_event", "actionCode": 5,
         "event": "on_hit" if isinstance(when, str) else "periodic", "mode": "owner_to_target",
         "radiusTiles": 1, "strength": 3.125, "delayTicks": 37,
-        **({"periodTicks": when["everyTicks"]} if isinstance(when, dict) else {}),
+        **({"periodTicks": int(when["everySeconds"] * 60)} if isinstance(when, dict) else {}),
     }
     relevant = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("callId") == call["id"]]
     for literal in ("action", "actionCode", "mode", "radiusTiles"):
@@ -182,7 +182,7 @@ def test_owner_pull_discriminator_receipts_bind_the_exact_existing_executor(muta
     elif mutation == "duplicate":
         receipts.append(deepcopy(action))
     else:
-        action["authoredPath"] = action["authoredPath"].removesuffix(".fn") + ".params.strength"
+        action["authoredPath"] = action["authoredPath"].removesuffix(".fn") + ".params.impulseBlocksPerSecond"
     for source in (None, document):
         report = audit_compiler_receipts(receipts, authored_document=source, final_document=wire)
         assert not report["ok"]
@@ -194,12 +194,12 @@ def test_owner_pull_discriminator_receipts_bind_the_exact_existing_executor(muta
 @pytest.mark.parametrize("fn,when", [
     *(pytest.param("spawn_entity_on_event", when, id="spawn-" + label) for label, when in (
         ("null", None), ("empty", {}), ("bare-periodic", "periodic"),
-        ("below", {"everyTicks": 5}), ("above", {"everyTicks": 3601}),
-        ("fractional", {"everyTicks": 6.5}), ("boolean", {"everyTicks": True}),
-        ("extra-field", {"everyTicks": 6, "event": "on_hit"}),
+        ("below", {"everySeconds": 5 / 60}), ("above", {"everySeconds": 3601 / 60}),
+        ("rounds-below-minimum", {"everySeconds": 5.49 / 60}), ("boolean", {"everySeconds": True}),
+        ("extra-field", {"everySeconds": 0.1, "event": "on_hit"}),
     )),
-    pytest.param("pull_on_event", {"everyTicks": 5}, id="pull-interval-bound"),
-    pytest.param("pull_owner_to_event_target", {"everyTicks": 6, "event": "on_hit"}, id="owner-pull-extra-field"),
+    pytest.param("pull_on_event", {"everySeconds": 5 / 60}, id="pull-interval-bound"),
+    pytest.param("pull_owner_to_event_target", {"everySeconds": 0.1, "event": "on_hit"}, id="owner-pull-extra-field"),
 ])
 def test_periodic_trigger_requires_one_explicit_integer_interval(fn, when):
     document = build_capability_witness(fn)
@@ -336,9 +336,9 @@ def test_repair_resolves_movement_conflict_before_conditional_bounce_omission(de
 
 @pytest.mark.parametrize("fn,broken,value,frozen_key,hostile", [
     ("set_projectile_collision", {"immunity": {"localCooldown": 601}}, {"immunity": {"localCooldown": 19}}, "pierce", 99),
-    ("pull_on_event", {"when": {"everyTicks": 5}}, {"when": {"everyTicks": 19}}, "strength", 4),
-    ("configure_spawn", {"position": {"above": "cursor", "heightTiles": 81, "activationDelayTicks": 37}},
-     {"position": {"above": "owner_center", "heightTiles": 19, "activationDelayTicks": 2}}, "count", 12),
+    ("pull_on_event", {"when": {"everySeconds": 5 / 60}}, {"when": {"everySeconds": 19 / 60}}, "impulseBlocksPerSecond", 15),
+    ("configure_spawn", {"position": {"above": "cursor", "heightTiles": 81, "activationDelaySeconds": 37 / 60}},
+     {"position": {"above": "owner_center", "heightTiles": 19, "activationDelaySeconds": 2 / 60}}, "count", 12),
 ])
 def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_key, hostile):
     document = build_capability_witness(fn)
@@ -347,7 +347,7 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     errors = validate_runtime_program(document)["errors"]
     scope = build_runtime_repair_scope(document, errors)
     paths = next(row["paths"] for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"])
-    leaf = {"set_projectile_collision": "immunity.localCooldown", "pull_on_event": "when.everyTicks",
+    leaf = {"set_projectile_collision": "immunity.localCooldown", "pull_on_event": "when.everySeconds",
             "configure_spawn": "position.heightTiles"}[fn]
     assert paths == ["params." + leaf]
     if fn == "set_projectile_collision":
@@ -360,7 +360,7 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     actual = selected(repaired)["params"]
     assert actual[frozen_key] == call["params"][frozen_key]
     if fn == "configure_spawn":
-        assert actual["position"] == {"above": "cursor", "heightTiles": 19, "activationDelayTicks": 37}
+        assert actual["position"] == {"above": "cursor", "heightTiles": 19, "activationDelaySeconds": 37 / 60}
     assert validate_runtime_program(repaired)["ok"]
 
 
@@ -430,7 +430,7 @@ def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attac
     document = build_capability_witness(fn)
     call = selected(document)
     if fn == "configure_spawn":
-        call["params"]["position"] = {"above": "cursor", "heightTiles": 1, "activationDelayTicks": 0}
+        call["params"]["position"] = {"above": "cursor", "heightTiles": 1, 'activationDelaySeconds': (0) / 60}
     else:
         call["params"]["immunity"] = {"localCooldown": 19}
     wire = compile_runtime_program(document)
@@ -473,7 +473,7 @@ def test_retired_spawn_receipt_owner_is_refused_even_with_complete_outputs(missi
 def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
     document = build_capability_witness("pull_on_event")
     call = selected(document)
-    call["params"].update(when="on_hit", mode="target_to_entity", strength=2, radiusTiles=10, delayTicks=delay)
+    call["params"].update(when="on_hit", mode="target_to_entity", impulseBlocksPerSecond=7.5, radiusTiles=10, delaySeconds=(delay) / 60)
     assert validate_runtime_program(document)["ok"]
     wire, entity = compiled_entity(document, call)
     event = entity["events"][0]

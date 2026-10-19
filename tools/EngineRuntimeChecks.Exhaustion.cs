@@ -242,8 +242,23 @@ internal static partial class EngineRuntimeChecks
             var lifecycle = typeof(InfiniCraftPlayer).Assembly.GetType("InfiniCrafterLocal.Common.Players.GeneratedItemExhaustionLifecycleSystem")
                 ?? throw new InvalidOperationException("world retirement owner missing");
             object system = Activator.CreateInstance(lifecycle)!;
-            lifecycle.GetMethod("OnWorldUnload")!.Invoke(system, null);
-            Equal(0, ExhaustionRows(mp).Count, "explicit world retirement clears");
+            Player? oldRetiredSlot = Terraria.Main.player[0];
+            var retired = new Player();
+            typeof(Player).GetField("modPlayers", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(retired, Array.Empty<Terraria.ModLoader.ModPlayer>());
+            Terraria.Main.player[0] = retired;
+            int retiredLookupThrows = 0;
+            EventHandler<System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs> observe = (_, e) => {
+                if (e.Exception is IndexOutOfRangeException) retiredLookupThrows++;
+            };
+            AppDomain.CurrentDomain.FirstChanceException += observe;
+            try { lifecycle.GetMethod("OnWorldUnload")!.Invoke(system, null); }
+            finally {
+                AppDomain.CurrentDomain.FirstChanceException -= observe;
+                Terraria.Main.player[0] = oldRetiredSlot!;
+            }
+            Equal(0, ExhaustionRows(mp).Count, "explicit world retirement clears after retired native roster slot");
+            Equal(0, retiredLookupThrows, "retired native roster is queried without caught exception/log spam");
             MaterialClock(uint.MaxValue - 20);
             Equal(true, ExhaustionApply(mp, data.Gameplay.GeneratedBuff, data), "wrap timer accepted");
             MaterialClock(10); Equal(69, ExhaustionRows(mp).Single().Ticks, "uint world clock wraps without expiry restart");

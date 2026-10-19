@@ -4,7 +4,7 @@
 
 ## Быстрый вход по задаче
 
-Не начинай с обхода всего дерева: [симптом → entrypoint → проверка](docs/development/CODE_MAP_RU.md#fast-start). Scoped инструкции: [Python](LocalGenerator/infini_local/AGENTS.md) и [C#](ModSources/InfiniCrafterLocal/AGENTS.md). Они направляют к владельцу; правила runtime ниже применяются к затронутым генерационным/игровым контрактам, а не автоматически к каждому файлу Python, CSS или JS.
+Если файл/метод уже известен, открой его и прямых callers. Если неизвестен — выбери один маршрут в [карте задач и исходников](docs/development/CODE_MAP_RU.md#fast-start); это единственная навигационная карта. Scoped инструкции: [Python](LocalGenerator/infini_local/AGENTS.md) и [C#](ModSources/InfiniCrafterLocal/AGENTS.md). Не перечитывай инструкции, карту и generated catalogs перед каждой правкой. Правила runtime ниже применяются к затронутым генерационным/игровым контрактам, а не автоматически к каждому файлу Python, CSS или JS.
 
 ## Масштаб проверки
 
@@ -41,7 +41,7 @@ Gameplay Author непосредственно составляет bounded `run
 
 ## Перед изменением runtime
 
-Найди затронутый owner через [CODE_MAP_RU.md](docs/development/CODE_MAP_RU.md#fast-start) и читай только соответствующие контракт, consumer и документы. Для **новой capability** используй [инструкцию по добавлению](docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) и полный vertical slice ниже; локальная правка не требует предварительного чтения всего runtime-каталога.
+Найди затронутый owner по известному symbol/caller либо [карте](docs/development/CODE_MAP_RU.md#fast-start) и читай только соответствующие контракт, consumer и документы. Для **новой capability** используй [инструкцию по добавлению](docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) и полный vertical slice ниже; локальная правка не требует предварительного чтения всего runtime-каталога.
 
 Owners: authored shape — `program_schema.py`; mechanical/event facts — `capability_registry.py`; lossless projections/receipts — `technical_lowering.py`; model-facing prose — `author_item_contract.py`. Для новой capability нельзя создавать facade/shadow contract или вручную добавлять её лишь в один слой.
 

@@ -188,7 +188,7 @@ def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, 
                    and row["action"]["kind"] == "spawn_entity")
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
                  if row["fn"] == "configure_spawn" and row["target"] == binding["action"]["targetId"])
-    spawn["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
+    spawn["params"]["velocity"] = {"fanSpeed": {'minSpeedBlocksPerSecond': (2.0) * 60 / 16, 'maxSpeedBlocksPerSecond': (8.0) * 60 / 16}}
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert not report["ok"]
@@ -198,12 +198,12 @@ def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, 
     scope = build_runtime_repair_scope(doc, report["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": spawn["id"], "paths": ["params.velocity"]}]
     correction = deepcopy(spawn)
-    correction["params"]["velocity"] = {"constantSpeedPxPerUpdate": 8.0}
+    correction["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (8.0) * 60 / 16}
     correction["params"]["count"] = 4  # hostile valid frozen sibling
     patch = {"note": "exact root velocity replacement", "realizationReplacement": doc["realization"],
              "callsUpsert": [correction]}
     expected = deepcopy(before)
-    expected["runtimeProgram"]["calls"][index]["params"]["velocity"] = {"constantSpeedPxPerUpdate": 8.0}
+    expected["runtimeProgram"]["calls"][index]["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (8.0) * 60 / 16}
     repaired, dossier, final = frozen_gameplay_repair(monkeypatch, doc, patch, response_mode,
         {"calls": scope["fieldPermissions"]["calls"]}, expected)
     assert _ammo_call(repaired)["params"]["speedBasis"] == "native_shot"
@@ -222,7 +222,7 @@ def test_native_ammo_and_velocity_keep_one_selected_root_speed_owner(speed, samp
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
                  if row["fn"] == "configure_spawn" and row["target"] == binding["action"]["targetId"])
     if sampled:
-        spawn["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
+        spawn["params"]["velocity"] = {"fanSpeed": {'minSpeedBlocksPerSecond': (2.0) * 60 / 16, 'maxSpeedBlocksPerSecond': (8.0) * 60 / 16}}
     assert validate_runtime_program(doc)["ok"] is accepted
     if accepted:
         final = compile_runtime_program(doc)
@@ -251,7 +251,7 @@ def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_
             copy["id"] = "side_" + copy["id"]
             copy["target"] = "sampled_side"
             if copy["fn"] == "configure_spawn":
-                copy["params"]["velocity"] = {"fanSpeed": {"minSpeedPxPerUpdate": 2.0, "maxSpeedPxPerUpdate": 8.0}}
+                copy["params"]["velocity"] = {"fanSpeed": {'minSpeedBlocksPerSecond': (2.0) * 60 / 16, 'maxSpeedBlocksPerSecond': (8.0) * 60 / 16}}
             copied.append(copy)
     doc["runtimeProgram"]["calls"].extend(copied)
     binding = deepcopy(active)
@@ -281,7 +281,7 @@ def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_
 def test_weapon_ammo_constant_speed_and_activation_delay_are_an_accepted_composition(basis, delay):
     doc = _weapon(speed=basis)
     spawn = next(call for call in doc["runtimeProgram"]["calls"] if call["fn"] == "configure_spawn")
-    spawn["params"]["position"] = {"above": "activation_origin", "heightTiles": 2, "activationDelayTicks": delay}
+    spawn["params"]["position"] = {"above": "activation_origin", "heightTiles": 2, 'activationDelaySeconds': (delay) / 60}
     before = deepcopy(doc)
     final = compile_runtime_program(doc)
     assert validate_runtime_wire(final)["ok"]

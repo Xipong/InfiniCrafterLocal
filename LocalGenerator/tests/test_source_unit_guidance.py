@@ -55,10 +55,87 @@ def _author_request(monkeypatch, mode, source):
     return request, json.loads(user)
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_actual_author_packet_distinguishes_tile_damage_sentinel_and_native_mana_truncation(monkeypatch, mode):
+    _, packet = _author_request(monkeypatch, mode, {"damage": -1, "createTile": 137, "manaCost": 1})
+    guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
+    source_reading = guide["sourceValues"]
+    assert "Item.damage=-1" in source_reading
+    assert "not an observed damage or firing rate" in source_reading
+    assert "wired tile attack" in source_reading
+    mana = guide["damageClass"]["nativeManaPayment"]
+    assert "integer truncation" in mana and "zero" in mana
+    assert "positive" in mana and "0.1" in mana and "not a minimum of 1 mana" in mana
+
+
 def _mapping(glossary, path, fn):
     root, _, field = path.rpartition(".")
     return next(row["fields"][field] for row in glossary["scopes"]
                 if row["source"] == root and row["fn"] == fn)
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_source_wire_glossary_reads_nested_velocity_with_exact_entity_update_context(monkeypatch, mode):
+    source = _source()
+    source["generatedData"]["runtimeProgram"]["entities"] = [{
+        "id": "source_child", "kind": "child_projectile", "collision": {"extraUpdates": 2},
+        "spawn": {"speedPxPerTick": 0, "velocityDistribution": {
+            "kind": "radial", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 8}},
+    }]
+    before = json.dumps(source, ensure_ascii=False)
+    request, packet = _author_request(monkeypatch, mode, source)
+    glossary = packet["sourceWireUnits"]
+    spawn = next(row for row in glossary["scopes"] if row["fn"] == "configure_spawn"
+                 and row["source"] == "raw.generatedParent.runtimeProgram.entities[].spawn")
+    minimum = spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"]
+    assert "velocity.radial.minSpeedBlocksPerSecond" in minimum[0]
+    assert minimum[1] == "source * 60 * updatesPerTick / 16"
+    assert minimum[2] == "blocks/s"
+    assert "collision.extraUpdates + 1" in glossary["readingRule"]
+    assert "same entity" in glossary["readingRule"]
+    assert "not a branch reconstruction" in glossary["readingRule"]
+    assert json.dumps(source, ensure_ascii=False) == before
+    sent = _serialized_chat_request(monkeypatch, request)
+    dynamic = json.loads(sent["messages"][-1]["content"])
+    assert dynamic["sourceWireUnits"] == glossary
+    assert dynamic["parents"]["A"]["packet"]["raw"]["generatedParent"]["runtimeProgram"]["entities"][0]["collision"]["extraUpdates"] == 2
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_author_human_units_include_source_grounded_vanilla_scale(monkeypatch, mode):
+    request, packet = _author_request(monkeypatch, mode, _source())
+    guide = packet["runtimeCapabilityContract"]["technicalNotes"]
+    assert "Write gameplay world distances in blocks" in guide["distance"]
+    assert "decimal seconds" in guide["time"]
+    assert "nearest world tick" in guide["time"]
+    assert "half-tick ties upward" in guide["time"]
+    assert "Write gameplay speeds in blocks/s" in guide["speed"]
+    assert "lowering" in guide["speed"]
+    assert "normalized UV" in guide["scope"] and "do not divide" in guide["scope"]
+    scale = guide["vanillaScaleReference"]
+    for fact in ("20x42", "1.25x2.625 blocks", "11.25 blocks/s", "18.79 blocks/s", "not a balance ceiling"):
+        assert fact in scale
+    assert "15-update" in scale and "not a distance" in scale
+    assert "height/range" in scale and "not a measured" in scale
+    sent = _serialized_chat_request(monkeypatch, request)
+    assert json.loads(sent["messages"][1]["content"])["runtimeCapabilityContract"]["technicalNotes"] == guide
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_serialized_periodic_instruction_builds_a_valid_half_second_trigger(monkeypatch, mode):
+    import re
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
+    request, _ = _author_request(monkeypatch, mode, _source())
+    sent = _serialized_chat_request(monkeypatch, request)
+    catalog = json.loads(sent["messages"][1]["content"])["runtimeCapabilityContract"]["catalog"]
+    meaning = next(row["constructionMeaning"] for row in catalog["events"] if row["event"] == "periodic")
+    example = re.search(r"when=\{([A-Za-z]+):n\}", meaning)
+    assert example is not None, "periodic instruction must show the current explicit trigger shape"
+    trigger = {example.group(1): 0.5}
+    spec = CAPABILITY_REGISTRY["spawn_entity_on_event"].params["when"]
+    projected = {row.wire_path: row.value for row in spec.projected_fields(trigger, "when")}
+    assert projected == {"event": "periodic", "periodTicks": 30}
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -92,15 +169,117 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
     assert "do not rewrite source" in glossary["readingRule"]
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_serialized_author_and_repair_share_player_description_guidance(monkeypatch, mode):
+    source, item = _source(), _broken_item()
+    author_request, author_packet = _author_request(monkeypatch, mode, source)
+    repair_request, repair_packet = _repair_request(monkeypatch, mode, source, item)
+    advisory = author_packet["requiredJsonShape"]["realization"]
+    assert repair_packet["requiredJsonShape"]["realizationReplacement"] == advisory
+    description = advisory["description"]
+    for rule in (
+        "clear player language", "controls", "effects", "costs", "conditions", "limits",
+        "emitted runtimeProgram", "not an observed execution", "Do not invent",
+        "blocks", "blocks/s", "seconds", "declared engine units",
+        "internal ids", "lore",
+    ):
+        assert rule in description, "optional player description lacks practical grounded guidance"
+    experience = advisory["playerExperience"]
+    assert "practical use" in experience and "trade-offs" in experience
+    assert "not additional mechanics" in experience
+    assert author_packet["requiredJsonShape"]["optionalAdvisory"] == ["concept", "realization"]
+    # Inspect the literal serialized message rows, not just local schema annotations
+    # or the helper's merged view. Strict provider projection removes annotations.
+    for request, shape_key in ((author_request, "realization"), (repair_request, "realizationReplacement")):
+        sent = _serialized_chat_request(monkeypatch, request)
+        message_shapes = [json.loads(row["content"])["requiredJsonShape"]
+                          for row in sent["messages"][1:]
+                          if "requiredJsonShape" in json.loads(row["content"])]
+        assert len(message_shapes) == 1
+        assert message_shapes[0][shape_key] == advisory
+        if mode == "json_schema":
+            assert "clear player language" not in json.dumps(sent["response_format"])
+    assert repair_packet["repairScope"]["fieldPermissions"]["calls"] == [
+        {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_serialized_author_and_repair_distinguish_player_units_from_engine_params(monkeypatch, mode):
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
+    source, item = _source(), _broken_item()
+    source["generatedData"]["accessory"].update(maxRunSpeed=4, jumpSpeed=2)
+    source["generatedData"]["gameplay"]["generatedBuff"]["jumpBoost"] = 2
+    author_request, author_packet = _author_request(monkeypatch, mode, source)
+    repair_request, repair_packet = _repair_request(monkeypatch, mode, source, item)
+    guide = author_packet["runtimeCapabilityContract"]["technicalNotes"]
+    units = repair_packet["runtimeExecutionTruth"]["units"]
+    assert "playerFacingUnits" in units, "Repair lacks the shared player/engine unit distinction"
+    assert units["playerFacingUnits"] == guide
+    for key, facts in {
+        "time": ("60 world ticks = 1 second", "decimal seconds", "nearest world tick", "half-tick ties upward", "counts, not seconds"),
+        "distance": ("1 Terraria block (tile) = 16 world pixels", "Write gameplay world distances in blocks",
+                     "rangeTiles", "radiusTiles", "already mean blocks", "blink", "do not divide again"),
+        "speed": ("Write gameplay speeds in blocks/s", "blocks/s^2", "radians/s",
+                  "canonical lowering", "updatesPerTick", "flat bonuses", "base native launch contribution"),
+        "scope": ("declared units", "compiled wire", "raw parent facts", "collision",
+                  "Texture texels", "normalized UV", "do not divide", "pixels"),
+    }.items():
+        for fact in facts:
+            assert fact in guide[key], f"missing player/engine unit distinction: {fact}"
+    # Literal outbound JSON message rows carry the guide in both provider modes.
+    for request, owner in ((author_request, "runtimeCapabilityContract"), (repair_request, "runtimeExecutionTruth")):
+        sent = _serialized_chat_request(monkeypatch, request)
+        static = json.loads(sent["messages"][1]["content"])
+        delivered = static[owner]
+        assert (delivered["technicalNotes"] if owner == "runtimeCapabilityContract"
+                else delivered["units"]["playerFacingUnits"]) == guide
+    cards = {card["fn"]: card for card in author_packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
+    # Explanatory conversion does not change the parameter contract or raw values.
+    for fn, name in (("configure_accessory", "maxRunSpeedBonusBlocksPerSecond"),
+                     ("apply_generated_buff_on_use", "jumpSpeedBonusBlocksPerSecond")):
+        assert cards[fn]["params"][name]["units"] == CAPABILITY_REGISTRY[fn].params[name].units
+    # Compact cards elide suffix-obvious Tiles units, but keep the same bounds.
+    blink = cards["move_player_on_use"]["params"]["rangeTiles"]
+    assert (blink["min"], blink["max"]) == (0, 120)
+    assert any(unit in CAPABILITY_REGISTRY["move_player_on_use"].params["rangeTiles"].units for unit in ("tiles", "blocks"))
+    raw = author_packet["parents"]["A"]["packet"]["raw"]["generatedParent"]
+    assert raw["accessory"]["maxRunSpeed"] == 4 and raw["accessory"]["jumpSpeed"] == 2
+    assert raw["gameplay"]["generatedBuff"]["jumpBoost"] == 2
+    assert len(json.dumps(guide)) < 2_500
+
+
+def test_lowery_renderer_projects_shared_player_description_and_unit_guidance():
+    import runpy
+    from pathlib import Path
+    from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
+    from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm
+
+    root = Path(__file__).resolve().parents[2]
+    generator = runpy.run_path(str(root / "tools" / "generate_lowery.py"))
+    rendered = generator["render"]()  # Pure renderer: do not refresh parent-owned docs here.
+    assert '<a id="player-text"></a>' in rendered
+    assert "Lowery — технический lowering, не lore" in rendered
+    assert "Author задаёт игровые расстояния в блоках" in rendered
+    assert "schema авторинга" in rendered and "сохранённый engine wire" in rendered
+    assert "не требует нового отчёта и не запускает validator/Repair" in rendered
+    assert "author_item_contract.py" in rendered and "llm_authoring_prompt.py" in rendered
+    advisory = author_item_prompt_shape_card()["realization"]
+    for name in ("description", "playerExperience"):
+        assert advisory[name] in rendered
+    for rule in concise_terraria_tick_guide_for_llm().values():
+        assert rule in rendered, "Lowery must use the same unit explanation as actual model packets"
+
+
 def _assert_native_mana_timing(notation):
     for rule in (
-        "useTimeTicks is the base native activation interval",
-        "useAnimationTicks is the base animation duration",
+        "useTimeSeconds is the base native activation interval",
+        "useAnimationSeconds is the base animation duration",
         "Native manaCost payment is attempted at animation start, not at every activation inside it",
         "spawn count is a batch count, not a payment count",
         "Extra recurring payment requires an explicit capability",
         "Player/prefix timing and mana modifiers can change effective values",
-        "do not report base ticks or mana as measured totals",
+        "do not report base seconds or mana as measured totals",
     ):
         assert rule in notation, "shared guide omits native timing/payment semantics"
 
@@ -113,7 +292,7 @@ def test_author_explains_native_mana_payment_boundary(monkeypatch, mode):
     mana = stats["params"]["manaCost"]
     for rule in (
         "For primary_use/alternate_use, native mana payment is attempted when a new use animation starts",
-        "useTimeTicks can permit additional Shoot/UseItem activations inside that animation without another native mana payment",
+        "useTimeSeconds can permit additional Shoot/UseItem activations inside that animation without another native mana payment",
         "not a per-projectile or per-successful-spawn debit",
         "explicit controller manaPayment may add recurring payment; do not infer it",
         "before player mana-cost modifiers, not guaranteed final mana spent",
@@ -128,6 +307,29 @@ class _Captured(BaseException):
     """Stop before transport without pretending a provider returned anything."""
 
 
+def _serialized_chat_request(monkeypatch, request):
+    """Capture bytes from real provider preparation and HTTP serialization, offline."""
+    sent = []
+
+    def stop(http_request, **kwargs):
+        sent.append(json.loads(http_request.data.decode("utf-8")))
+        raise _Captured()
+
+    with monkeypatch.context() as patch:
+        patch.setattr(transport, "urlopen_no_redirect", stop)
+        patch.setattr(transport, "_reserve_remote_rate_slot", lambda *args, **kwargs: None)
+        with pytest.raises(_Captured):
+            transport._llm_chat_json_exact_context(request, 10, {
+                "provider": "local", "base_url": "http://unit-guidance.invalid/v1",
+                "model": "offline-unit-guidance", "api_mode": "chat_completions",
+                "api_key": "", "profile_id": "offline-unit-guidance",
+            })
+    assert len(sent) == 1
+    assert sent[0]["messages"] == request["messages"]
+    assert sent[0]["response_format"] == request["response_format"]
+    return sent[0]
+
+
 def _broken_item():
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
@@ -135,7 +337,7 @@ def _broken_item():
     item = build_runtime_fixture("held_and_deployed")
     assert validate_runtime_program(item)["ok"]
     life = next(call for call in item["runtimeProgram"]["calls"] if call["id"] == "held_lantern_pike_life")
-    life["params"]["lifetimeTicks"] = 0
+    life["params"]["lifetimeSeconds"] = 0
     return item
 
 
@@ -186,7 +388,7 @@ def test_author_and_scoped_repair_share_contact_suppression_guide(monkeypatch, m
     suppression = "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category"
     assert json.dumps(author_packet).count(suppression) == 1
     assert json.dumps(repair_packet).count(suppression) == 1
-    assert set(units) == {"paramNotation", "sourceWireUnits", "bindingTarget", "descendantSpawnBudget"}
+    assert set(units) == {"paramNotation", "sourceWireUnits", "bindingTarget", "descendantSpawnBudget", "playerFacingUnits"}
     assert units["descendantSpawnBudget"] == author_packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["descendantSpawnBudget"]
     assert repair_packet["repairScope"] == build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
     assert repair_packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
@@ -215,7 +417,7 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
                     if (row["source"], row["fn"]) == (scoped["source"], scoped["fn"]))
         assert scoped["fields"].items() <= full["fields"].items()
     assert units["paramNotation"] == runtime_authoring_prompt_field_guide()["paramNotation"]
-    for clock in ("60/s", "updatesPerTick", "world ticks", "per projectile update", "immunity.localCooldown"):
+    for clock in ("60 ticks/s", "updatesPerTick", "nearest world tick", "algorithm counters", "immunity.localCooldown"):
         assert clock in units["paramNotation"]
     _assert_native_mana_timing(units["paramNotation"])
     report = validate_runtime_program(item)
@@ -223,7 +425,7 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
     assert packet["repairScope"] == scope
     assert packet["exactValidationErrors"] == report["errors"]
     assert scope["fieldPermissions"]["calls"] == [
-        {"id": "held_lantern_pike_life", "paths": ["params.lifetimeTicks"]}]
+        {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
     assert packet["parents"]["a"]["packet"] == author_packet["parents"]["A"]["packet"]
     assert packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert packet["acceptedItemContext"]["concept"] == item["concept"]
@@ -306,7 +508,9 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
         "arbitraryPercent": replace(spec, wire_name="unfamiliar", wire_divisor=37, units="probe percent"),
         "arbitraryRate": replace(spec, wire_name="another", wire_divisor=1, wire_multiplier=7, units="probe rate"),
         "identityAmount": replace(spec, wire_name="same", wire_divisor=1, units="probe units"),
-    }), final_wire_paths=("armor.unfamiliar", "gameplay.generatedBuff.another", "accessory.same", "gameplay.not_a_param"))
+        "ratioAmount": replace(spec, wire_name="ratio", wire_divisor=37, wire_multiplier=7, units="ratio units"),
+        "shiftedCount": replace(spec, kind="integer", wire_name="shifted", wire_divisor=1, wire_multiplier=1, wire_offset=-1, units="count"),
+    }), final_wire_paths=("armor.unfamiliar", "gameplay.generatedBuff.another", "accessory.same", "gameplay.ratio", "gameplay.shifted", "gameplay.not_a_param"))
     mutated = {**registry.CAPABILITY_REGISTRY, arbitrary.name: arbitrary}
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", mutated)
     from infini_local.pipelines import llm_authoring_prompt
@@ -315,6 +519,7 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
     source["generatedData"]["armor"]["unfamiliar"] = 0.2
     source["generatedData"]["gameplay"]["generatedBuff"]["another"] = 7
     source["generatedData"]["accessory"]["same"] = 3
+    source["generatedData"]["gameplay"].update(ratio=7, shifted=1)
     _, packet = _author_request(monkeypatch, mode, source)
     glossary = packet["sourceWireUnits"]
     assert _mapping(glossary, "raw.generatedParent.armor.unfamiliar", arbitrary.name) == [
@@ -323,6 +528,10 @@ def test_packet_glossary_is_derived_from_registry_metadata_not_capability_name(m
         "arbitraryRate", "source / 7", "probe rate"]
     assert _mapping(glossary, "raw.generatedParent.accessory.same", arbitrary.name) == [
         "identityAmount", "source", "probe units"]
+    assert _mapping(glossary, "raw.generatedParent.gameplay.ratio", arbitrary.name) == [
+        "ratioAmount", "source * 37 / 7", "ratio units"]
+    assert _mapping(glossary, "raw.generatedParent.gameplay.shifted", arbitrary.name) == [
+        "shiftedCount", "source + 1", "count"]
     assert "not_a_param" not in json.dumps(glossary)
     assert "raw.item.unfamiliar" not in json.dumps(glossary)
 
@@ -382,21 +591,25 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
     repaired, request = _repair_with_response(monkeypatch, item, patch, mode, out_of_scope_response=True)
     packet = request_dossier(request)
     units = packet["runtimeExecutionTruth"]["units"]
-    # Keep pre-existing unit/contact headroom separately; bound only the new
-    # owned producer explanation. No production prompt guard is widened.
-    existing = {key: value for key, value in units.items()
+    # The Author-unit migration adds canonical seconds/world-unit mappings,
+    # including nested distributions and their exact target-update context.
+    # Keep that larger source glossary bounded; no production guard is widened.
+    previous = {key: value for key, value in units.items() if key != "playerFacingUnits"}
+    existing = {key: value for key, value in previous.items()
                 if key not in {"bindingTarget", "descendantSpawnBudget"}}
-    assert len(json.dumps(existing, separators=(",", ":"))) < 12_500
+    assert len(json.dumps(existing, separators=(",", ":"))) < 24_000
     assert len(units["bindingTarget"]) < 1_500
-    assert len(json.dumps({key: value for key, value in units.items()
-                           if key != "descendantSpawnBudget"}, separators=(",", ":"))) < 14_000
+    assert len(json.dumps({key: value for key, value in previous.items()
+                           if key != "descendantSpawnBudget"}, separators=(",", ":"))) < 25_500
     assert len(units["descendantSpawnBudget"]) < 1_200
-    assert len(json.dumps(units, separators=(",", ":"))) < 15_200
+    assert len(json.dumps(previous, separators=(",", ":"))) < 26_700
+    assert len(json.dumps(units["playerFacingUnits"], separators=(",", ":"))) < 2_500
+    assert len(json.dumps(units, separators=(",", ":"))) < 26_700 + 2_500
     assert len(dossier_text(request)) < 60_000
     authored_request, _ = _author_request(monkeypatch, mode, _source())
     assert len(dossier_text(authored_request)) < PLANNER_PROMPT_LIMIT_CHARS
     expected = copy.deepcopy(item)
-    next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
+    next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == "held_lantern_pike_life")["params"]["lifetimeSeconds"] = 30 / 60
     expected["realization"] = patch["realizationReplacement"]
     assert repaired["debug"]["gameplayRepairScope"] == packet["repairScope"]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]

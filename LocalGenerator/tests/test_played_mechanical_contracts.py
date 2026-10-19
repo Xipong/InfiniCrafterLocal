@@ -18,7 +18,11 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
 
-CAPTURES = json.loads((Path(__file__).with_name('fixtures') / 'played_a2_a3_a4_author.json').read_text())
+from captured_projectile_author import project_captured_world_units
+
+
+_CAPTURED = json.loads((Path(__file__).with_name('fixtures') / 'played_a2_a3_a4_author.json').read_text())
+CAPTURES = {key: project_captured_world_units(value) for key, value in _CAPTURED.items()}
 DOOR = 'g_90e0879b1756a18b'
 PICK = 'g_fb3aca59f2dc1ac3'
 SPEARS = tuple(key for key in CAPTURES if key not in (DOOR, PICK))
@@ -94,7 +98,7 @@ def test_a2_event_flail_preserves_owner_driven_composition_without_forcing_chann
     program['calls'] = [row for row in program['calls'] if row['fn'] != 'configure_tile_placement']
     program['calls'].append({'id': 'event_flail', 'fn': 'spawn_entity_on_event', 'target': body,
         'params': {'when': 'on_use', 'entity': target, 'count': 1, 'spreadRadians': 0,
-                   'damageMultiplier': 1, 'delayTicks': 0, 'damageBasis': 'authored_child',
+                   'damageMultiplier': 1, 'delaySeconds': (0) / 60, 'damageBasis': 'authored_child',
                    'knockbackBasis': 'authored_child'}})
     assert call(doc, 'configure_item_use')['params']['channel'] is False
     assert validate_runtime_program(doc)['ok']
@@ -134,7 +138,7 @@ def yoyo_witness():
     program['calls'] = [row for row in program['calls'] if row['fn'] != 'configure_tile_placement']
     movement = call(doc, 'move_flail_tether')
     movement['fn'] = 'move_yoyo_hover'
-    movement['params'] = {'rangeTiles': 10, 'speed': 14}
+    movement['params'] = {'rangeTiles': 10, 'speedBlocksPerSecond': 52.5}
     return doc
 
 
@@ -195,7 +199,7 @@ def test_passive_and_event_yoyo_keep_existing_owner_channel_semantics(producer):
                                'stackCost': 0, 'contactDamage': False}]
         program['calls'].append({'id': 'event_yoyo', 'fn': 'spawn_entity_on_event', 'target': body,
             'params': {'when': 'on_use', 'entity': target, 'count': 1, 'spreadRadians': 0,
-                       'damageMultiplier': 1, 'delayTicks': 0, 'damageBasis': 'authored_child',
+                       'damageMultiplier': 1, 'delaySeconds': (0) / 60, 'damageBasis': 'authored_child',
                        'knockbackBasis': 'authored_child'}})
     assert call(doc, 'configure_item_use')['params']['channel'] is False
     assert validate_runtime_program(doc)['ok']

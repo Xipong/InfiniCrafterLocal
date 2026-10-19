@@ -26,7 +26,7 @@ def test_targeting_card_uses_current_spawn_position_in_author_and_repair(monkeyp
 
     document = build_capability_witness("target_and_fire")
     call = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "target_and_fire")
-    del call["params"]["intervalTicks"]
+    del call["params"]['intervalSeconds']
     report = validate_runtime_program(document)
     assert not report["ok"]
     dossier = author.build_gameplay_repair_dossier(document, {}, {}, failure_report=report)
@@ -39,8 +39,8 @@ def test_targeting_spawn_example_matches_schema_without_admitting_retired_spelli
     call = {
         "id": "child_spawn", "fn": "configure_spawn", "target": "child",
         "params": {
-            "velocity": {"constantSpeedPxPerUpdate": 8}, "count": 1,
-            "spreadRadians": 0, "offsetPx": 0, "aim": "velocity",
+            "velocity": {'constantSpeedBlocksPerSecond': (8) * 60 / 16}, "count": 1,
+            "spreadRadians": 0, 'offsetBlocks': (0) / 16, "aim": "velocity",
             "position": {"at": "activation_origin"},
         },
     }

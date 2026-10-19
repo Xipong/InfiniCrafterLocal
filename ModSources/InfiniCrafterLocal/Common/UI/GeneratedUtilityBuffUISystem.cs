@@ -7,6 +7,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using ReLogic.Content;
 using Terraria;
+using Terraria.UI.Chat;
 using Terraria.GameContent;
 using Terraria.GameInput;
 using Terraria.ID;
@@ -99,6 +100,13 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         player.mouseInterface = true;
         Main.hoverItemName = "";
         Main.HoverItem = new Item();
-        Main.instance.MouseText(label, tooltip);
+        // Native buffTooltip clamps the body without including the title height.
+        // Submit one bounded multiline cursorText so native MouseTextInner measures
+        // and keeps the WHOLE block inside the screen, including near the bottom.
+        string hoverText = label + "\n" + tooltip;
+        if (FontAssets.MouseText?.IsLoaded == true)
+            hoverText = GeneratedStatusTooltipView.Wrap(label, tooltip, Main.screenWidth, Main.screenHeight,
+                text => ChatManager.GetStringSize(FontAssets.MouseText.Value, text, Vector2.One));
+        Main.instance.MouseText(hoverText, "");
     }
 }

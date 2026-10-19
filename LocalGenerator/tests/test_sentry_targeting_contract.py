@@ -91,10 +91,8 @@ def test_real_author_packet_and_nullable_inverse_preserve_every_explicit_choice(
     request, user, _ = build_initial_author_request({}, {}, "targeting", model_name="test-model")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     card = next(c for c in catalog["capabilities"] if c["fn"] == "target_and_fire")
-    for param in card["params"].values():
-        profile = param.get("consumerConstraint")
-        if isinstance(profile, str):
-            param["consumerConstraint"] = deepcopy(catalog["fieldGuide"]["consumerConstraints"][profile])
+    from test_author_request_compaction import _expand_constraint_references
+    card = _expand_constraint_references(card, catalog["fieldGuide"]["consumerConstraints"])
     expected = CAPABILITY_REGISTRY["target_and_fire"].author_prompt_card()
     expected["constructionMeaning"] = (
         "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "

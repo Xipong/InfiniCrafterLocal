@@ -1,6 +1,6 @@
 # Архитектура и границы authority
 
-InfiniCrafterLocal состоит из Python authoring/asset pipeline и typed tModLoader executor. Модель выбирает дизайн; код проверяет объявленные контракты, технически проецирует их и исполняет. [Карта исходников](CODE_MAP_RU.md) · [Рабочие границы модулей](MODULES_RU.md) · [Задача → owner](OWNERS_RU.md).
+InfiniCrafterLocal состоит из Python authoring/asset pipeline и typed tModLoader executor. Модель выбирает дизайн; код проверяет объявленные контракты, технически проецирует их и исполняет. [Задача → исходник → проверка](CODE_MAP_RU.md) · [Рабочие границы модулей](MODULES_RU.md).
 
 <a id="pipeline"></a>
 ## Как craft проходит систему
@@ -41,7 +41,7 @@ Station A/B inputs
 | Runtime / multiplayer / drawing | [C# consumers](CODE_MAP_RU.md#csharp), [module boundaries](MODULES_RU.md#runtime-presentation) |
 | Studio/config/process lifecycle | Existing native controller + browser adapter; [UI boundary](MODULES_RU.md#studio) |
 
-Registry объявляет runtime `infini.runtime-program.v5`, fresh Author `infini.runtime-program.authoring.v5`, persisted wire `infini.runtime-program.wire.v3`. Entities/bindings/calls, movement/controller slots, event/rate/lifetime/depth limits задаются live registry/schema/validator, не copied counts в обзоре. Это конечная композиция, не arbitrary ECS/VM/generated C#.
+Registry объявляет runtime `infini.runtime-program.v5`, fresh Author `infini.runtime-program.authoring.v6`, persisted wire `infini.runtime-program.wire.v3`. Entities/bindings/calls, movement/controller slots, event/rate/lifetime/depth limits задаются live registry/schema/validator, не copied counts в обзоре. Это конечная композиция, не arbitrary ECS/VM/generated C#.
 
 Whole-weapon macros, semantic family/profile routers, legacy weapon IR и importer, угадывающий/переавторствующий механику, запрещены. Отдельное [локальное чтение сохранённых v5](ENGINE_RUNTIME_BOUNDARIES_RU.md#saved-v5) с перечисленными inert-field removals и точной persisted presentation normalization не является таким importer и не открывает старую grammar для Author/network. Name/category/tags/prose не выбирают механику. Четыре класса преобразований — [Fallback / Fix / declared Normalization / lossless Alias](TECHNICAL_LOWERING_POLICY_RU.md#transformations); generated [boundary](../reference/generated/LOWERY_RU.md) и receipts не являются вторым registry. Новая capability завершается только [полным vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md).
 
@@ -57,7 +57,7 @@ Whole-weapon macros, semantic family/profile routers, legacy weapon IR и import
 - Корневой item envelope закрыт: Author проверяет неизвестные поля, а не скрывает их metadata-проекцией; свежий compiled wire/delivery и network отказывают неизвестным полям до GREEN. Локальный persisted-v5 reader имеет отдельный явный список допустимых исторических metadata removals; это не general unknown-field skip. Только объявленные `runtimeContract`/`visualKit` являются stage-only artifacts и удаляются delivery projection. Текущие advisory/diagnostic sidecars перечислены явно; arbitrary extension warehouse отсутствует.
 - `concept`, `realization`/текстовый `selfEvaluation` и Visual `animationPlan` — optional advisory. Они помогают следующей модели/читателю, но не выбирают gameplay и не вызывают report-only Repair; malformed advisory не превращается в исполняемую ошибку. Обязательные art prompts/size/axis и runtime refs/bounds остаются строгими.
 
-Для свежего/сетевого VFX текущий wire — `infini.vfx.runtime-events.v16`, Director — `infini.vfx-director.runtime-events.v3`, Repair — `infini.vfx-repair-patch.runtime-events.v2`. Простые visible slots имеют local RGB `color={r,g,b}`, material profiles и library endpoints — свои RGB; global color или semantic color routing отсутствуют. Точное чтение поддерживаемых сохранённых VFX v15 color owners ограничено локальной persisted boundary, не меняет текущие selectors. [VFX consumer contracts](../reference/PRESENTATION_CONSISTENCY_RU.md#color-budget).
+Для свежего/сетевого VFX текущий wire — `infini.vfx.runtime-events.v16`, Director — `infini.vfx-director.runtime-events.v3`, Repair — `infini.vfx-repair-patch.runtime-events.v2`. Простые visible slots имеют local RGB `color={r,g,b}`, material profiles и library endpoints — свои RGB; global color или semantic color routing отсутствуют. Локальная persisted boundary принимает пустой v15-конверт как неисполняемое представление; непустые v15 slots требуют снятой семантики renderer и отвергаются. Цвета из старых motif/palette не восстанавливаются. [VFX consumer contracts](../reference/PRESENTATION_CONSISTENCY_RU.md#color-budget).
 
 <a id="primary"></a>
 ## Primary и identity

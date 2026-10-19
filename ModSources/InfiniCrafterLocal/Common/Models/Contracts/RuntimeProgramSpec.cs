@@ -577,7 +577,15 @@ public sealed class RuntimePlacementSpec
         set => _placedBody = value ?? throw new InvalidDataException("present placedBody cannot be null");
     }
 
-    [JsonIgnore] internal bool HasPlacedFootprint => PlacedBody is not null || PlacedLight is not null;
+    [JsonIgnore] internal bool HasPlacedFootprint => PlacedBody is not null || PlacedLight is not null || PlacedVfx is not null;
+
+    private RuntimePlacedVfxSpec? _placedVfx;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimePlacedVfxSpec? PlacedVfx
+    {
+        get => _placedVfx;
+        set => _placedVfx = value ?? throw new InvalidDataException("present placedVfx cannot be null");
+    }
 
     private RuntimePlacedLightSpec? _placedLight;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -597,6 +605,12 @@ public sealed class RuntimePlacementSpec
             throw new InvalidDataException("placement must enable a tile or wall");
         if (PlaceStyle is < 0 or > 1000)
             throw new InvalidDataException("placement style must be 0..1000");
+        if (PlacedVfx is not null)
+        {
+            if (TileId < 0 || WallId >= 0)
+                throw new InvalidDataException("placedVfx requires exact tile-only placement");
+            PlacedVfx.Validate();
+        }
         if (PlacedLight is not null)
         {
             if (TileId < 0 || WallId >= 0)
@@ -609,6 +623,18 @@ public sealed class RuntimePlacementSpec
                 throw new InvalidDataException("placedBody requires exact tile-only placement");
             PlacedBody.Validate();
         }
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class RuntimePlacedVfxSpec
+{
+    [JsonRequired] public int MinFrameY { get; init; }
+    [JsonRequired] public int MaxFrameY { get; init; }
+    public void Validate()
+    {
+        if (MinFrameY is < 0 or > 32767 || MaxFrameY is < 0 or > 32767 || MinFrameY > MaxFrameY)
+            throw new InvalidDataException("placedVfx requires ordered inclusive native TileFrameY bounds 0..32767");
     }
 }
 
@@ -645,6 +671,19 @@ public sealed class RuntimePlacedBodySpec
     [JsonRequired] public int RenderSizePx { get; init; }
     [JsonRequired] public double FootprintAnchorX { get; init; }
     [JsonRequired] public double FootprintAnchorY { get; init; }
+    private string? _pivotSpace;
+    // Omission retains historical full-frame semantics; explicit null is invalid.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PivotSpace
+    {
+        get => _pivotSpace;
+        init
+        {
+            if (value is not ("frame" or "alpha_bounds"))
+                throw new InvalidDataException("placedBody pivotSpace must be frame or alpha_bounds");
+            _pivotSpace = value;
+        }
+    }
     [JsonRequired] public double ImagePivotX { get; init; }
     [JsonRequired] public double ImagePivotY { get; init; }
     [JsonRequired] public int OffsetXPx { get; init; }
@@ -882,6 +921,11 @@ public sealed class RuntimeEntityVisualSpec
     public string ImpactSpriteStatus { get; set; } = "";
     public float ImpactSpriteTechnicalScore { get; set; } = 0f;
 
+    // A retained PNG is not proof that its selected producer completed. Keep
+    // root/body/overlay/impact consumers on the same declared completion domain.
+    internal static bool HasCompletedPngProducer(string? status)
+        => status is "generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation";
+
     public void Normalize()
     {
         Grip?.Validate();
@@ -901,7 +945,7 @@ public sealed class RuntimeEntityVisualSpec
         ImpactSpriteUrl = RuntimeText.Safe(ImpactSpriteUrl, 500);
         ImpactSpriteStatus = RuntimeText.Safe(ImpactSpriteStatus, 48).ToLowerInvariant();
         ImpactSpriteTechnicalScore = Math.Clamp(ImpactSpriteTechnicalScore, 0f, 1f);
-        if (AssetMode == "baked_sprite" && (string.IsNullOrWhiteSpace(SpritePath) || SpriteStatus is "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+        if (AssetMode == "baked_sprite" && (string.IsNullOrWhiteSpace(SpritePath) || !HasCompletedPngProducer(SpriteStatus)))
             throw new InvalidDataException("required baked runtime sprite is unavailable");
         if (AssetMode is not ("baked_sprite" or "reuse_item_icon" or "runtime_geometry" or "no_asset"))
             throw new InvalidDataException($"unknown entity assetMode '{AssetMode}'");
