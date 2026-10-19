@@ -291,6 +291,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         InfiniItemVfxRuntime.ClearUseEventCaches();
         Content.Projectiles.GeneratedProjectile.ClearVfxEventSyncCaches();
         MaterialPaths.Clear();
+        Common.Systems.GeneratedPlacementLedgerSystem.RetirePlacedVfxSources();
         PeriodicElements.Clear();
         LastMaterialsTick=ulong.MaxValue;
         MaterialEmissions.Clear();

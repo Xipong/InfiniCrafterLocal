@@ -285,6 +285,8 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
             )
         elif card["fn"] == "present_placed_item_sprite":
             card["constructionMeaning"] = "Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation."
+        elif card["fn"] == "enable_placed_vfx":
+            card["constructionMeaning"] = "Opt-in live placed effects, certified 16x16/256 cells max, same exact executed tile placement. minFrameY/maxFrameY consume inclusive top-left native TileFrameY; use read-only parent nativeTileState when available, never guess or automatically choose bounds. Full 0..32767 selects all nonnegative frames. VFX Director later authors separate periodic/self spriteElement/libraryParticle/lightCue slots with placementBindingId; none exist yet. Physical root art and optional static present_placed_item_sprite stay independent. No container/actor lifecycle or material return changes."
         elif card["fn"] == "add_placed_light":
             card["constructionMeaning"] = "Independent explicit light; one center cell per committed native footprint, not player/held PNG or sprite heads. Certified 16x16/256 cells max; unproved post-place actors refused before mutation. Strength/color remain required; no default."
         elif card["fn"] == "charge_then_release":

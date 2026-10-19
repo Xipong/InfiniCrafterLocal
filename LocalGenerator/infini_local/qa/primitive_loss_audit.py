@@ -313,6 +313,10 @@ def placed_body_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     return _placed_component_surface_audit("present_placed_item_sprite", "RuntimePlacedBodySpec", dto)
 
 
+def placed_vfx_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
+    return _placed_component_surface_audit("enable_placed_vfx", "RuntimePlacedVfxSpec", dto)
+
+
 def placed_light_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     return _placed_component_surface_audit("add_placed_light", "RuntimePlacedLightSpec", dto)
 
@@ -440,6 +444,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimePlacementSpec": pascal(placement_fields),
         "RuntimePlacedBodySpec": pascal(wire._PLACED_BODY_KEYS),
         "RuntimePlacedLightSpec": pascal(CAPABILITY_REGISTRY["add_placed_light"].params.keys() - {"placementCallId"}),
+        "RuntimePlacedVfxSpec": pascal(CAPABILITY_REGISTRY["enable_placed_vfx"].params.keys() - {"placementCallId"}),
         "RuntimeEntitySpec": pascal(author.entity_schema()["properties"]) | pascal(entity_components)
                              | {"Visual", "VisualRole"},
         "RuntimeEntityVisualSpec": visual_contract | vfx_director_fields | visual_internal,
@@ -455,6 +460,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimePlacementSpec": wire._PLACEMENT_KEYS,
         "RuntimePlacedBodySpec": wire._PLACED_BODY_KEYS,
         "RuntimePlacedLightSpec": CAPABILITY_REGISTRY["add_placed_light"].params.keys() - {"placementCallId"},
+        "RuntimePlacedVfxSpec": CAPABILITY_REGISTRY["enable_placed_vfx"].params.keys() - {"placementCallId"},
         "RuntimeEntitySpec": wire._ENTITY_KEYS,
         "RuntimeEntityVisualSpec": wire._VISUAL_KEYS,
         "RuntimeMovementSpec": wire._DRIVER_KEYS,
@@ -468,11 +474,13 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         wire_drift[cls] = sorted(properties ^ pascal(accepted_wire[cls]))
     placed_storage = placed_body_surface_audit(dto)
     placed_light = placed_light_surface_audit(dto)
+    placed_vfx = placed_vfx_surface_audit(dto)
     effect_groups = item_effect_group_surface_audit()
     weapon_ammo = weapon_ammo_surface_audit()
-    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and placed_light["ok"] and effect_groups["ok"] and weapon_ammo["ok"],
+    return {"ok": not any(unclassified.values()) and not any(wire_drift.values()) and placed_storage["ok"] and placed_light["ok"] and placed_vfx["ok"] and effect_groups["ok"] and weapon_ammo["ok"],
             "placedBodyStorage": placed_storage,
             "placedLightStorage": placed_light,
+            "placedVfxStorage": placed_vfx,
             "itemEffectGroups": effect_groups,
             "weaponAmmo": weapon_ammo,
             "unclassifiedByClass": unclassified, "wireDtoDriftByClass": wire_drift,

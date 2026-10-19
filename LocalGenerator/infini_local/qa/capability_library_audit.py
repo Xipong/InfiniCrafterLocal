@@ -320,9 +320,10 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "csharpBounds": list(csharp),
                 "preserved": bool(projected and projected[0] >= csharp[0] and projected[1] <= csharp[1]),
             })
-    from infini_local.qa.primitive_loss_audit import placed_body_surface_audit, placed_light_surface_audit
+    from infini_local.qa.primitive_loss_audit import placed_body_surface_audit, placed_light_surface_audit, placed_vfx_surface_audit
     for fn, cls, observe in (("present_placed_item_sprite", "RuntimePlacedBodySpec", placed_body_surface_audit),
-                             ("add_placed_light", "RuntimePlacedLightSpec", placed_light_surface_audit)):
+                             ("add_placed_light", "RuntimePlacedLightSpec", placed_light_surface_audit),
+                             ("enable_placed_vfx", "RuntimePlacedVfxSpec", placed_vfx_surface_audit)):
         placed = observe(text.encode())
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
             if spec.kind not in {"integer", "number"}:

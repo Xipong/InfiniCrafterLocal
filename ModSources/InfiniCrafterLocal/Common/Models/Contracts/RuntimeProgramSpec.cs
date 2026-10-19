@@ -577,7 +577,15 @@ public sealed class RuntimePlacementSpec
         set => _placedBody = value ?? throw new InvalidDataException("present placedBody cannot be null");
     }
 
-    [JsonIgnore] internal bool HasPlacedFootprint => PlacedBody is not null || PlacedLight is not null;
+    [JsonIgnore] internal bool HasPlacedFootprint => PlacedBody is not null || PlacedLight is not null || PlacedVfx is not null;
+
+    private RuntimePlacedVfxSpec? _placedVfx;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimePlacedVfxSpec? PlacedVfx
+    {
+        get => _placedVfx;
+        set => _placedVfx = value ?? throw new InvalidDataException("present placedVfx cannot be null");
+    }
 
     private RuntimePlacedLightSpec? _placedLight;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -597,6 +605,12 @@ public sealed class RuntimePlacementSpec
             throw new InvalidDataException("placement must enable a tile or wall");
         if (PlaceStyle is < 0 or > 1000)
             throw new InvalidDataException("placement style must be 0..1000");
+        if (PlacedVfx is not null)
+        {
+            if (TileId < 0 || WallId >= 0)
+                throw new InvalidDataException("placedVfx requires exact tile-only placement");
+            PlacedVfx.Validate();
+        }
         if (PlacedLight is not null)
         {
             if (TileId < 0 || WallId >= 0)
@@ -609,6 +623,18 @@ public sealed class RuntimePlacementSpec
                 throw new InvalidDataException("placedBody requires exact tile-only placement");
             PlacedBody.Validate();
         }
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class RuntimePlacedVfxSpec
+{
+    [JsonRequired] public int MinFrameY { get; init; }
+    [JsonRequired] public int MaxFrameY { get; init; }
+    public void Validate()
+    {
+        if (MinFrameY is < 0 or > 32767 || MaxFrameY is < 0 or > 32767 || MinFrameY > MaxFrameY)
+            throw new InvalidDataException("placedVfx requires ordered inclusive native TileFrameY bounds 0..32767");
     }
 }
 

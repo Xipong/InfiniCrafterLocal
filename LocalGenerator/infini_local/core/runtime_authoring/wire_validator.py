@@ -100,7 +100,7 @@ _EVENT_KEYS = frozenset({
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
-_PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody", "placedLight"})
+_PLACEMENT_KEYS = frozenset({"tileId", "wallId", "placeStyle", "placedBody", "placedLight", "placedVfx"})
 _PLACED_BODY_KEYS = frozenset(name for name in CAPABILITY_REGISTRY["present_placed_item_sprite"].params if name != "placementCallId")
 _ITEM_USE_KEYS = frozenset({"configured", "useStyle", "hideUseGraphic", "disableMeleeHitbox", "channel", "handPose", "releaseTiming", "holdoutOffsetX", "holdoutOffsetY"})
 _ITEM_CONTACT_KEYS = frozenset({"hitboxScale", "contactForgivenessPx"})
@@ -956,6 +956,14 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     body_path = f"{binding_path}.usePolicy.action.placement.{component}"
                     for issue in strict_schema_errors(placement[component], body_schema, path=body_path):
                         errors.append({**issue, "code": "invalid_placed_body", "message": "Placed body must match every required canonical transform leaf."})
+                    component_value = placement[component]
+                    if isinstance(component_value, Mapping):
+                        for requirement in component_cap.requirements:
+                            if requirement.kind == "ordered_params":
+                                low, high = component_value.get(requirement.param), component_value.get(requirement.other_param)
+                                if type(low) is int and type(high) is int and low > high:
+                                    errors.append({"path": body_path + "." + requirement.param,
+                                                   "code": "invalid_placed_body", "message": requirement.message})
                     if type(placement.get("tileId")) is not int or not 0 <= placement["tileId"] <= 65535 or type(placement.get("wallId")) is not int or placement["wallId"] != -1:
                         errors.append({"path": body_path, "code": "placed_body_tile_only", "message": "Placed body requires tile-only placement."})
                 tile_id = placement.get("tileId")

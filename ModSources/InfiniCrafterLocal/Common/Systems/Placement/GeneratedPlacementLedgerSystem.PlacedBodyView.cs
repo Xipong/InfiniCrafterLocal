@@ -11,13 +11,16 @@ using Terraria.ModLoader.IO;
 namespace InfiniCrafterLocal.Common.Systems;
 
 internal sealed record GeneratedPlacedBodyView(string GroupId, string DefinitionHash,
-    GeneratedItemData Data, RuntimePlacedBodySpec? Body, Rectangle Footprint, RuntimePlacedLightSpec? Light, int TileType);
+    GeneratedItemData Data, RuntimePlacedBodySpec? Body, Rectangle Footprint, RuntimePlacedLightSpec? Light, int TileType, string BindingId, string EntityId, RuntimePlacedVfxSpec? Vfx);
 
 public sealed partial class GeneratedPlacementLedgerSystem
 {
     // Derived read-only projection. The existing group/return ledger remains the
     // only authority; this cache cannot create or destroy a material claim.
-    private sealed record PlacedBodyProjection(PlacementGroup Source, string DefinitionJson, GeneratedPlacedBodyView? View);
+    private sealed record PlacedBodyProjection(PlacementGroup Source, string DefinitionJson, GeneratedPlacedBodyView? View)
+    {
+        internal PlacedVfxBinding? Vfx;
+    }
     private static readonly Dictionary<string, PlacedBodyProjection> PlacedBodyViews = new(StringComparer.Ordinal);
 
     // NBT GetInt supplies zero for absence and may deserialize other numeric types.
@@ -87,9 +90,10 @@ public sealed partial class GeneratedPlacementLedgerSystem
                     || placement.TileId != tileType || placement.PlaceStyle != nativeStyle) continue;
                 body?.Validate();
                 placement.PlacedLight?.Validate();
+                placement.PlacedVfx?.Validate();
                 // A recorded optional pose failure remains pending for PNG, but
                 // cannot revoke separately certified material-owned light.
-                if (placement.PlacedLight is not null && witness.ContainsKey("failure")) body = null;
+                if ((placement.PlacedLight is not null || placement.PlacedVfx is not null) && witness.ContainsKey("failure")) body = null;
                 if (!HasPlacedBodyInt(witness,"originX") || !HasPlacedBodyInt(witness,"originY")
                     || !HasPlacedBodyInt(witness,"width") || !HasPlacedBodyInt(witness,"height")) continue;
                 int x = witness.GetInt("originX"), y = witness.GetInt("originY");
@@ -105,7 +109,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
                         "[GeneratedPlacementLedger] placed_body_witness_geometry: projection declined; raw witness/material retained, group=" + group.GroupId);
                     continue;
                 }
-                PlacedBodyViews[group.GroupId] = new(group,group.DefinitionJson,new(group.GroupId,hash,data,body,new(x*16,y*16,width*16,height*16),placement.PlacedLight,tileType));
+                PlacedBodyViews[group.GroupId] = new(group,group.DefinitionJson,new(group.GroupId,hash,data,body,new(x*16,y*16,width*16,height*16),placement.PlacedLight,tileType,binding.Id,binding.UsePolicy.Action.TargetId,placement.PlacedVfx));
             }
             catch { /* Invalid cosmetic projection leaves the durable group untouched. */ }
         }

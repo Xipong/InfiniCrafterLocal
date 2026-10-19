@@ -256,6 +256,26 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "enable_placed_vfx",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::TryGetPlacedVfxFrame",
+      "outputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx.minFrameY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx.maxFrameY"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn",
+        "runtimeProgram.calls[].target",
+        "runtimeProgram.calls[].params.placementCallId",
+        "runtimeProgram.bindings[].action.kind",
+        "runtimeProgram.bindings[].action.targetId",
+        "runtimeProgram.bindings[].action.placementCallId"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "require_use_condition",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.cs::UseBlockedReason",

@@ -34,6 +34,8 @@
     <Compile Include="EngineRuntimeChecks.Float32BuffIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.PlacedBody.cs" />
     <Compile Include="EngineRuntimeChecks.PlacedLight.cs" />
+    <Compile Include="EngineRuntimeChecks.PlacedVfx.cs" />
+    <Compile Include="EngineRuntimeChecks.ParentTileState.cs" />
     <Compile Include="EngineRuntimeChecks.PlacedBodyLedger.cs" />
     <Compile Include="EngineRuntimeChecks.PlacedBodyPeerIdentity.cs" />
     <Compile Include="EngineRuntimeChecks.TransportIdentity.cs" />

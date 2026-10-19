@@ -2507,6 +2507,79 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "enable_placed_vfx"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "placementCallId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-reference": {
+                          "namespace": "call",
+                          "targetKinds": [
+                            "item_body"
+                          ],
+                          "allowSelf": false,
+                          "graphEdge": false
+                        }
+                      },
+                      "minFrameY": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 32767,
+                        "description": "Inclusive actual top-left native TileFrameY lower bound, not animation age",
+                        "x-infini-units": "native frame coordinate",
+                        "x-infini-semanticType": "unitless_scalar"
+                      },
+                      "maxFrameY": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 32767,
+                        "description": "Inclusive actual top-left native TileFrameY upper bound",
+                        "x-infini-units": "native frame coordinate",
+                        "x-infini-semanticType": "unitless_scalar"
+                      }
+                    },
+                    "required": [
+                      "placementCallId",
+                      "minFrameY",
+                      "maxFrameY"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "require_use_condition"
                   },
                   "target": {

@@ -168,7 +168,7 @@ public static partial class InfiniItemVfxRuntime
     private static bool HasExactSlot(GeneratedItemData data, string entityId, string eventName)
     {
         foreach (VfxSlotSpec slot in data.VfxManifest.Slots)
-            if (string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) && string.Equals(slot.Event, eventName, StringComparison.Ordinal)) return true;
+            if (slot.PlacementBindingId is null && string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) && string.Equals(slot.Event, eventName, StringComparison.Ordinal)) return true;
         return false;
     }
 
@@ -180,7 +180,7 @@ public static partial class InfiniItemVfxRuntime
         var eventAllowance=sharedAllowance??new MaterialEventAllowance(data.VfxManifest.Budget.MaxParticlesTotal);
         foreach (VfxSlotSpec slot in data.VfxManifest.Slots)
         {
-            if (!string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
+            if (slot.PlacementBindingId is not null || !string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
             if(InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
                     VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,null,data),itemBudget:true,allowance:eventAllowance);

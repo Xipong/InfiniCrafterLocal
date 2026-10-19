@@ -174,6 +174,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         _nextPlacementSequence = 0;
         _placedBodyRevision = 0;
         _bodyFootprintMaintenanceCursor = 0;
+        RetirePlacedVfxSources();
         PlacedBodyViews.Clear();
         ClearPlacedBodyMirrorState();
     }

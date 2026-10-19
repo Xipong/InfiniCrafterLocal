@@ -429,6 +429,7 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
     return {
         "acceptedPresentationMechanicsReadOnly": mechanics,
         "spritePresentationReadOnly": {
+            "placedVfx": "Accepted placement.placedVfx opt-in bounds are read-only actual top-left native TileFrameY, not an animation schedule. Root PNG is stable physical furniture/art; separate live flames, sparks or glow can be independently generated existing VFX assets later. Later VFX slots are not yet authored: describe intended independent live effects without claiming they exist, inserting slots, changing accepted mechanics or animating/pulsing/rotating the whole root PNG. Existing optional placedBody remains a static root picture; baked flames in it stay static even when off. Do not automatically strip accepted or authored decorative art; compose deliberate stable physical root vs intended independent live effects. VFX Director owns exact slots/assets after Visual.",
             "placedBody": {
                 "operation": "present_placed_item_sprite",
                 **{key: copy.deepcopy(value) for key, value in CAPABILITY_REGISTRY["present_placed_item_sprite"].prompt_card().items() if key == "params"},

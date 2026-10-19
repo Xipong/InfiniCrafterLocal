@@ -74,6 +74,7 @@ def _params(fn: str) -> dict[str, Any]:
         "configure_wall_placement": {"wallId": 1, "placeStyle": 0},
         "present_placed_item_sprite": {"placementCallId": "native_placement"},
         "add_placed_light": {"placementCallId": "native_placement"},
+        "enable_placed_vfx": {"placementCallId": "native_placement", "minFrameY": 0, "maxFrameY": 32767},
         "require_use_condition": {"condition": "grounded"},
         "move_player_on_use": {"mode": "blink_to_cursor", "rangeTiles": 5, "cooldownTicks": 60, "safeTileOnly": True},
         "recall_home_on_use": {"cooldownTicks": 60},

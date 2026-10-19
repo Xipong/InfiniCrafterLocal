@@ -155,7 +155,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             ["nativeStyle"] = authorization.ExactPlacement.PlaceStyle,
         };
         if (authorization.ExactPlacement.PlacedBody is null) witness["lightOnly"] = 1;
-        if (authorization.ExactPlacement.PlacedLight is not null)
+        if (authorization.ExactPlacement.PlacedLight is not null || authorization.ExactPlacement.PlacedVfx is not null)
         {
             // FindExactPlacedBodyCells already proved this complete rectangle.
             // Light needs material geometry, not the optional PNG pose decoder.

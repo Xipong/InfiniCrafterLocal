@@ -1154,7 +1154,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     # opt-in reference adapters contribute when selected; old programs keep
     # their exact diagnostic bytes as well as their gameplay wire.
     counted_capabilities = [cap for cap in CAPABILITY_REGISTRY.values()
-                            if cap.name not in {"present_placed_item_sprite", "add_placed_light", "select_targets_and_emit_on_event", "move_front_hand"}
+                            if cap.name not in {"present_placed_item_sprite", "add_placed_light", "enable_placed_vfx", "select_targets_and_emit_on_event", "move_front_hand"}
                             or any(call.get("fn") == cap.name for call in calls)]
     stats = {
         "entities": len(entities),

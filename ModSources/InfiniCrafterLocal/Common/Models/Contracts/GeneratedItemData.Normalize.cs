@@ -269,6 +269,13 @@ public sealed partial class GeneratedItemData
             RuntimeEntitySpec? entity = RuntimeProgram.TryGetEntity(slot.EntityId);
             if (entity is null)
                 throw new InvalidDataException($"VFX slot '{slot.Id}' references unknown entity '{slot.EntityId}'");
+            if (slot.PlacementBindingId is not null)
+            {
+                RuntimeBindingSpec? placedBinding = RuntimeProgram.Bindings.SingleOrDefault(b => b.Id == slot.PlacementBindingId);
+                if (entity.Kind != RuntimeEntityKind.ItemBody || placedBinding?.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem
+                    || placedBinding.UsePolicy.Action.TargetId != entity.Id || placedBinding.UsePolicy.Action.Placement?.PlacedVfx is null)
+                    throw new InvalidDataException("VFX placementBindingId requires same-item accepted place_item binding with placedVfx");
+            }
             try { RuntimeEventKind.ValidateProducer(entity, slot.Event, hasItemContactBinding, hasEmittingItemUse); }
             catch (InvalidDataException error)
             {
