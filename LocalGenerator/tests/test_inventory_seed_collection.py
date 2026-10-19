@@ -190,7 +190,16 @@ def test_native_seed_dto_keeps_nullable_omitted_storage_for_old_definition_ident
     assert item_gameplay_surface_audit(source)["ok"]
 
 
-def test_committed_native_fixture_is_actual_final_delivery():
+def test_committed_native_fixture_preserves_compiler_delivery_in_headless_mode():
     actual = sanitize_recipe_for_delivery(compile_runtime_program(seed_source()))
+    # The compiler emits mechanics, not a completed image stage. Declare this
+    # CPU-only fixture honestly and fix identity so pre/post native hashes are
+    # comparable; do not counterfeit ready PNG status or let the DTO invent IDs.
+    actual.update(sourceMode="test_fixture", id="g_1122334455667788",
+                  recipeKey="inventory_seed_native_fixture")
+    # This fixture exercises inventory queries, never art/drawing. Supply an
+    # explicit no-image choice rather than an incomplete pre-Visual asset mode.
+    for entity in actual["runtimeProgram"]["entities"]:
+        entity["visual"]["assetMode"] = "no_asset"
     fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/inventory-seed-collection.json"
     assert json.loads(fixture.read_text()) == actual

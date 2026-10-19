@@ -76,6 +76,8 @@ public partial class GeneratedItem
                 }
             }
         }
+        if (data.Gameplay.CollectSeedsFromGrass == true)
+            Add("InventorySeedCollection", "InventorySeedCollection");
         AddRuntimeEquipmentStats(data, Add);
         if (program.TryGetEffectGroup(program.HeldEffectGroupId)?.GeneratedBuff is { } held)
             AddRuntimeExhaustion(held, "Hold", RuntimeTooltipText("InputHold"), Add);

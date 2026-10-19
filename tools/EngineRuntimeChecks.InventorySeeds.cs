@@ -16,7 +16,7 @@ internal static partial class EngineRuntimeChecks
     // source, so missing capability/system gives native RED rather than a build error.
     private static GeneratedItemData InventorySeedData()
         => GeneratedItemData.FromJson(File.ReadAllText("tools/fixtures/inventory-seed-collection.json"))
-            ?? throw new Exception("seed delivery DTO refused");
+            ?? throw new Exception("seed delivery DTO refused: " + ContractJsonDiagnostics.LastError?.Message);
 
     private static PropertyInfo SeedFlag() => typeof(GameplaySpec).GetProperty("CollectSeedsFromGrass")
         ?? throw new Exception("missing per-definition inventory seed flag");
@@ -58,6 +58,21 @@ internal static partial class EngineRuntimeChecks
             catch (Exception e) when (e is System.Text.Json.JsonException or InvalidDataException) { refused = true; }
             Equal(true, refused, "native strict boolean refusal " + bad);
         }
+        WithForgePresentationLanguages(locale => {
+            var visible = InventorySeedData();
+            var host = AttachItem(new GeneratedItem(), new Item(ItemID.WoodenSword), visible);
+            typeof(ModType).GetProperty("Mod", TestInstance)!.SetValue(host, new TooltipProbeMod());
+            var rows = new System.Collections.Generic.List<TooltipLine>();
+            host.ModifyTooltips(rows);
+            string expected = locale == "ru-RU"
+                ? "В инвентаре: позволяет получать семена при срезании травы"
+                : "While in inventory: allows grass to drop Seeds";
+            Equal(expected, rows.Single(row => row.Name == "InfiniInventorySeedCollection").Text,
+                "inventory passive is disclosed as its actual native condition, not an active-use promise");
+            SeedFlag().SetValue(visible.Gameplay, false);
+            rows.Clear(); host.ModifyTooltips(rows);
+            Equal(false, rows.Any(row => row.Name == "InfiniInventorySeedCollection"), "inactive flag makes no seed promise");
+        });
     }
 
     private static void InventorySeedAbsentDefinitionPreservesBytes()

@@ -37,7 +37,8 @@
         "visualRole": "inventory_item",
         "events": [],
         "visual": {
-          "role": "inventory_item"
+          "role": "inventory_item",
+          "assetMode": "no_asset"
         }
       },
       {
@@ -46,7 +47,8 @@
         "visualRole": "held_body",
         "events": [],
         "visual": {
-          "role": "held_body"
+          "role": "held_body",
+          "assetMode": "no_asset"
         },
         "spawn": {
           "speedPxPerTick": 8.0,
@@ -152,5 +154,8 @@
   "armor": {
     "enabled": false
   },
-  "debug": {}
+  "debug": {},
+  "sourceMode": "test_fixture",
+  "id": "g_1122334455667788",
+  "recipeKey": "inventory_seed_native_fixture"
 }

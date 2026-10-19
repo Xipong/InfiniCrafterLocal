@@ -140,6 +140,7 @@ StationUI: {
 }
 
 RuntimeTooltip: {
+	InventorySeedCollection: "While in inventory: allows grass to drop Seeds"
 	SecondaryArea: "{0}: area damage after {1}; radius {2} px around the event position (NPC centers), up to 16 enemies; base damage {3}{4}. Final damage depends on combat modifiers and defense."
 	SecondaryDirectExcluded: "; directly hit target excluded"
 	SecondaryChildren: "{0}: spawn up to {2} real projectile(s) after {1}; {3}{4}. Shared spawn limits apply; hits and DPS are not guaranteed."
