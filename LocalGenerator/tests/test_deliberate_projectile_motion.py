@@ -1,20 +1,21 @@
 """Movement choices stay explicit; source identity never selects a driver."""
+
 import copy
 import json
 
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.pipelines import llm_transport
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_actual_author_packet_explains_no_hidden_ballistics(monkeypatch, mode):
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     parent = {"id": 39, "name": "Wooden Bow", "shoot": 1, "directProjectileRaw": {"type": 1, "fullName": "Terraria/WoodenArrowFriendly", "aiStyle": 1, "arrow": True}}
     before = copy.deepcopy(parent)
     _, user, _ = build_initial_author_request(parent, {}, "physics-choice", model_name="offline")

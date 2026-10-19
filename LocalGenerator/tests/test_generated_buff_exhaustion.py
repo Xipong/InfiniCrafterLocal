@@ -1,4 +1,5 @@
 """Offline presence-sensitive generated-buff policy, authenticated source and Repair."""
+
 from copy import deepcopy
 import json
 from typing import Any
@@ -6,10 +7,11 @@ from typing import Any
 import pytest
 
 from repair_test_helpers import gameplay_repair, provider_roundtrip
+from infini_local.core import llm_config
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.pipelines import llm_authoring_pipeline as author
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -70,7 +72,7 @@ def _buff(final, group=None):
 @pytest.mark.parametrize("group", [None, "survey"])
 @pytest.mark.parametrize("value", [OMITTED, 0, 1, 21600])
 def test_serialized_author_presence_policy_and_registered_card(monkeypatch, mode, group, value):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, "policy", model_name="offline")
     request = json.loads(json.dumps(request))
     card = next(c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
@@ -292,7 +294,7 @@ def test_default_and_named_policies_are_independently_authored_not_inferred(monk
     primary = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
     primary["params"].pop("effectGroupId")
     doc["runtimeProgram"]["bindings"][0]["action"].pop("effectGroupId")
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, _, _ = author.build_initial_author_request({}, {}, "mixed-policy", model_name="offline")
     doc = provider_roundtrip(doc, request["response_format"])
     final = compile_runtime_program(doc)
@@ -310,7 +312,7 @@ def test_provider_null_scaffolding_is_only_optional_omission_not_authored_null(m
     from infini_local.pipelines.author_item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, _, _ = author.build_initial_author_request({}, {}, "policy-null", model_name="offline")
     doc, call = _policy_fixture(None)
     assert not validate_runtime_program(doc)["ok"]
@@ -335,7 +337,7 @@ def test_serialized_strict_provider_rejects_bad_policy_tokens(monkeypatch, value
     from infini_local.pipelines.author_item_contract import author_item_response_schema
     from test_codex_subscription_contract import _encode_nullable_fixture
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     request, _, _ = author.build_initial_author_request({}, {}, "policy-typed", model_name="offline")
     doc, call = _policy_fixture(180)
     payload = _encode_nullable_fixture(doc, author_item_response_schema())
@@ -346,7 +348,7 @@ def test_serialized_strict_provider_rejects_bad_policy_tokens(monkeypatch, value
 
 
 def test_explicit_held_refresh_preserves_policy_on_its_exact_generated_group(monkeypatch):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     _, user, _ = author.build_initial_author_request({}, {}, "held-policy", model_name="offline")
     card = next(c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]
                 if c["fn"] == "refresh_generated_effect_group_while_held")

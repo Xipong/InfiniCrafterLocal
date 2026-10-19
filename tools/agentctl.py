@@ -26,12 +26,12 @@ def _load(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _git(*args: str) -> subprocess.CompletedProcess[str]:
+def run_git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
 
 
 def _base_revision() -> str:
-    proc = _git("rev-parse", "HEAD")
+    proc = run_git("rev-parse", "HEAD")
     if proc.returncode == 0:
         return proc.stdout.strip()
     source_index = ROOT / "SOURCE_FILE_INDEX.txt"
@@ -114,23 +114,23 @@ def changed_files(base: str | None = None) -> list[str]:
     --base is a merge-base comparison, so unrelated upstream commits are not
     attributed to this task. --no-renames retains both sides of moves.
     """
-    if _git("rev-parse", "--show-toplevel").returncode != 0:
+    if run_git("rev-parse", "--show-toplevel").returncode != 0:
         if base:
             raise ValueError("--base requires a Git checkout")
         return _source_index_changes()
     commands: list[tuple[str, ...]] = [("diff", "--name-only", "-z", "--no-renames", "HEAD"),
                                       ("ls-files", "--others", "--exclude-standard", "-z")]
     if base:
-        revision = _git("rev-parse", "--verify", "--end-of-options", base + "^{commit}")
+        revision = run_git("rev-parse", "--verify", "--end-of-options", base + "^{commit}")
         if revision.returncode:
             raise ValueError(f"invalid --base revision: {base}")
-        ancestor = _git("merge-base", revision.stdout.strip(), "HEAD")
+        ancestor = run_git("merge-base", revision.stdout.strip(), "HEAD")
         if ancestor.returncode:
             raise ValueError(f"no merge base with {base}")
         commands.insert(0, ("diff", "--name-only", "-z", "--no-renames", ancestor.stdout.strip(), "HEAD"))
     rows: set[str] = set()
     for command in commands:
-        proc = _git(*command)
+        proc = run_git(*command)
         if proc.returncode:
             raise ValueError(proc.stderr.strip() or "git change discovery failed")
         rows.update(path for path in proc.stdout.split("\0") if path and not _ignored_repository_path(path))
@@ -145,12 +145,28 @@ def _matches(path: str, pattern: str) -> bool:
 
 def impacted(files: list[str], *, areas: list[str] | None = None) -> tuple[list[dict[str, Any]], list[str], bool]:
     rules = _load(RULES_PATH).get("rules", [])
+    unknown_areas = set(areas or []) - {rule["area"] for rule in rules}
+    if unknown_areas:
+        raise ValueError("unknown areas: " + ", ".join(sorted(unknown_areas)))
     matched = [rule for rule in rules if rule["area"] in (areas or []) or any(
         _matches(path, pattern) for path in files for pattern in rule.get("patterns", []))]
     checks = {check for rule in matched for check in rule.get("checks", [])}
     requires_build = any(path.startswith("ModSources/") and path.endswith((".cs", ".csproj")) for path in files)
     requires_build = requires_build or any(bool(rule.get("requiresBuild")) for rule in matched)
     return matched, sorted(checks), requires_build
+
+
+def repository_paths(paths: list[str], *, require_files: bool = False) -> list[str]:
+    selected: list[str] = []
+    root = ROOT.resolve()
+    for path in paths:
+        target = (ROOT / path).resolve()
+        if not target.is_relative_to(root):
+            raise ValueError(f"path must stay inside checkout: {path}")
+        if require_files and not target.is_file():
+            raise ValueError(f"path must name an existing file: {path}")
+        selected.append(target.relative_to(root).as_posix())
+    return list(dict.fromkeys(selected))
 
 
 def _test_module(path: str) -> bool:
@@ -242,8 +258,17 @@ def command_doctor(_: argparse.Namespace) -> int:
 
 def command_verify(args: argparse.Namespace) -> int:
     manifest = _load(MANIFEST_PATH)
-    files = changed_files(args.base)
-    plan = verification_plan(files, final=not args.changed)
+    paths = getattr(args, "path", None) or []
+    areas = getattr(args, "area", None) or []
+    explicit = bool(paths or areas)
+    if explicit and (args.changed or args.base):
+        raise ValueError("--path/--area select an explicit scope; use --changed/--base separately for the branch diff")
+    files = repository_paths(paths, require_files=True) if explicit else changed_files(args.base)
+    plan = verification_plan(files, final=not (args.changed or explicit), areas=areas)
+    plan["scope"] = "paths" if paths else "areas" if areas else "changes"
+    plan["areas"] = sorted(set(areas))
+    if explicit:
+        plan["paths"] = plan.pop("changedFiles")
     if args.require_build and "tml_build" not in plan["checks"]:
         plan["checks"].append("tml_build")
     if args.plan:
@@ -254,7 +279,7 @@ def command_verify(args: argparse.Namespace) -> int:
         checks.append(_run_check("focused_pytest", ["python", "tools/run_focused_pytests.py", *plan["tests"]]))
     passed = bool(checks) and all(row["status"] == "passed" for row in checks)
     report = {
-        "schema": "infini.agent-run-result.v2",
+        "schema": "infini.agent-run-result.v3",
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         **plan,
         "ok": passed,
@@ -293,25 +318,13 @@ def command_context(args: argparse.Namespace) -> int:
     # verify/diff commands own changed-file reports; context owns this request.
     scope = "paths" if args.path else "areas" if args.area else "changes"
     selected = args.path or ([] if args.area else changed_files(args.base))
-    paths: list[str] = []
-    for path in selected:
-        target = (ROOT / path).resolve()
-        if not target.is_relative_to(ROOT.resolve()):
-            raise ValueError(f"context path must stay inside checkout: {path}")
-        if args.path and not target.is_file():
-            raise ValueError(f"context path must name an existing file: {path}")
-        paths.append(target.relative_to(ROOT.resolve()).as_posix())
-    paths = list(dict.fromkeys(paths))
+    paths = repository_paths(selected, require_files=bool(args.path))
     start_line = getattr(args, "line", None)
     if start_line is not None and (not args.path or len(paths) != 1 or start_line < 1):
         raise ValueError("--line requires one --path and a positive line number")
     all_rules = _load(RULES_PATH)["rules"]
     areas = args.area or []
-    unknown_areas = set(areas) - {rule["area"] for rule in all_rules}
-    if unknown_areas:
-        raise ValueError("unknown areas: " + ", ".join(sorted(unknown_areas)))
-    rules = [rule for rule in all_rules if rule["area"] in areas or any(
-        _matches(path, pattern) for path in paths for pattern in rule["patterns"])]
+    rules, _, _ = impacted(paths, areas=areas)
     # Exact source first. Broader owner documentation remains opt-in via --area.
     requested = [path for path in paths if (ROOT / path).is_file()] if args.path else []
     requested.extend(path for rule in rules for path in rule.get("entrypoints", []))
@@ -345,7 +358,7 @@ def command_context(args: argparse.Namespace) -> int:
         "suggestedVerification": plan,
         "validationRun": False,
         "releaseReady": False,
-        "hint": "Read the selected owner and its callers. Use --line for a known location; verify --changed owns actual diff checks.",
+        "hint": "Read the selected owner and its callers. Use verify --path/--area for this scope; verify --changed checks the branch diff.",
         "documents": docs,
     }
     text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
@@ -360,8 +373,8 @@ def command_diff(args: argparse.Namespace) -> int:
     scopes = {"workingTree": ["HEAD"]}
     if args.base:
         scopes["committed"] = [args.base + "...HEAD"]
-    diffs = {name: {"stat": _git("diff", "--stat", *scope),
-                    "nameStatus": _git("diff", "--name-status", *scope)}
+    diffs = {name: {"stat": run_git("diff", "--stat", *scope),
+                    "nameStatus": run_git("diff", "--name-status", *scope)}
              for name, scope in scopes.items()}
     ok = all(row.returncode == 0 for result in diffs.values() for row in result.values())
     report = {
@@ -491,7 +504,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="agentctl")
     sub = parser.add_subparsers(dest="command", required=True)
     doctor = sub.add_parser("doctor"); doctor.set_defaults(func=command_doctor)
-    verify = sub.add_parser("verify"); verify.add_argument("--changed", action="store_true"); verify.add_argument("--base"); verify.add_argument("--plan", action="store_true"); verify.add_argument("--require-build", action="store_true"); verify.add_argument("--out"); verify.set_defaults(func=command_verify)
+    verify = sub.add_parser("verify", help="Run owner checks for paths/areas, the changed diff, or full acceptance")
+    verify.add_argument("--changed", action="store_true")
+    verify.add_argument("--path", action="append", help="Check an existing repository file without scanning the diff (repeatable)")
+    verify.add_argument("--area", action="append", help="Check a declared owner area without scanning the diff (repeatable)")
+    verify.add_argument("--base")
+    verify.add_argument("--plan", action="store_true")
+    verify.add_argument("--require-build", action="store_true")
+    verify.add_argument("--out")
+    verify.set_defaults(func=command_verify)
     context = sub.add_parser("context"); context.add_argument("--task", default=""); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--line", type=int, help="Start the selected source excerpt at this 1-based line (one --path)"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=5000); context.add_argument("--out"); context.set_defaults(func=command_context)
     diff = sub.add_parser("diff"); diff.add_argument("--base"); diff.set_defaults(func=command_diff)
     handoff = sub.add_parser("handoff"); handoff.add_argument("--out"); handoff.add_argument("--base"); handoff.set_defaults(func=command_handoff)

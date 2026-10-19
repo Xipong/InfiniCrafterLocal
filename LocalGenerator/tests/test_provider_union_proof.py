@@ -155,7 +155,7 @@ def test_typed_registry_schema_reaches_actual_author_request_and_repair_inverse(
     original = registry.CAPABILITY_REGISTRY["configure_item_stats"]
     changed = replace(original, params={**original.params, "proofChoice": CONDITIONS})
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", {**registry.CAPABILITY_REGISTRY, original.name: changed})
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_schema")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_schema")
     call = next(row for row in item["runtimeProgram"]["calls"] if row["fn"] == original.name)
     call["params"]["proofChoice"] = value
     request, text, _ = build_initial_author_request({}, {}, "offline-union-proof", model_name="offline")

@@ -1,5 +1,7 @@
 """Offline production packets: fewer build anecdotes, unchanged expressive contracts."""
 from __future__ import annotations
+
+from infini_local.core import llm_config
 from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 
 from copy import deepcopy
@@ -11,7 +13,6 @@ from prompt_packet_helpers import request_dossier
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport as transport
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.qa.capability_witnesses import build_capability_witness
 
@@ -28,7 +29,7 @@ def _capture_visual(monkeypatch, data, *, repair=False):
         sent.append(deepcopy(request))
         return {"choices": [{"message": {"content": "{}"}}]}
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(visual, "llm_chat_json", offline_response)
     kwargs = {"repair_errors": [], "previous": {}, "repair_scope": {}} if repair else {}
@@ -63,7 +64,7 @@ def _capture_vfx(monkeypatch, data, *, repair=False):
         sent.append(deepcopy(request))
         return {"choices": [{"message": {"content": "{}"}}]}
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
     monkeypatch.setattr(vfx_transport, "llm_chat_json", offline_response)
@@ -120,7 +121,7 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     )
     from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     parent = {"name": "Source object", "damage": 13, "useTime": 21,
               "tooltipLines": ["Exact source fact, not a recipe example."]}
     frozen = deepcopy(parent)

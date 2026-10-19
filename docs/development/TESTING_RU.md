@@ -46,15 +46,18 @@
 python tools/agentctl.py context --task "новая capability" --area runtime
 python tools/agentctl.py context --task "настройка Studio" --area studio
 python tools/agentctl.py context --task "projectile bug" --path ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs
+python tools/agentctl.py verify --path LocalGenerator/infini_local/core/runtime_authoring/validator.py
+python tools/agentctl.py verify --area transport
 python tools/agentctl.py verify --changed --base origin/main --plan
 python tools/agentctl.py verify --changed --base origin/main
 python tools/agentctl.py diff --base origin/main
 ```
 
+- `verify --path` и `--area` запускают existing owner checks даже в чистом checkout/source archive; оба флага повторяемы и объединяют выбранные области. Выбор не сканирует Git diff и отражается в `paths`, а не в `changedFiles`. Не смешивай явный scope с `--changed`/`--base`; для branch diff есть отдельный запуск. `--plan` только показывает команды, без проверки.
 - `--base` сравнивает committed branch diff от merge-base и добавляет staged/unstaged/untracked изменения. Для stacked PR используй его base branch. Без `--base` учитывается только рабочее дерево.
 - Runtime, Studio, transport и storage выбирают готовые test families; C# — static contract gate и один полный быстрый linked-source CPU runner. Mutation и full pytest остаются финальной приёмкой.
 - Неизвестные пути и общие test fixtures/conftest консервативно выбирают полный набор. Изменённый самостоятельный test module запускается сам. Пустая выборка — `not_selected`, недоступная среда — `unavailable`/`notRun`, не PASS.
-- `context --area` выбирает область, `--path` — существующий файл; `--line` начинает его выдержку с нужной строки. Явный контекст не сканирует изменения ветки. `suggestedVerification` — один план выбранного scope, без запуска; реальный diff проверяет `verify --changed`. `--task` — необязательное описание, не эвристический router. Стандартный бюджет — 5000 символов исходников; обрезка отмечается `truncated`, границы — `startLine`/`endLine`.
+- `context --area` выбирает область, `--path` — существующий файл; `--line` начинает его выдержку с нужной строки. Явный контекст не сканирует изменения ветки. `suggestedVerification` — один план выбранного scope, без запуска; его исполняют `verify --path`/`--area`, реальный diff проверяет `verify --changed`. `--task` — необязательное описание, не эвристический router. Стандартный бюджет — 5000 символов исходников; обрезка отмечается `truncated`, границы — `startLine`/`endLine`.
 - `run_changed_pytests.py --base ...` — только удобный pytest subset из той же карты. Он не заменяет остальные gates.
 - `agentctl diff` — только committed/worktree source diff и список changed paths, без semantic verdict или запуска валидаторов. `--semantic` и дублирующие parity/semantic report tools удалены.
 - Budget scalar-таблицы проверяются через реальные request callers без полного subprocess для каждого значения; изолированные process smoke остаются для import-time настроек и representative Repair routes. Schema/cache reconstruction использует representative стадии и отдельные provider-wire controls вместо повторного product. Исторические inverse projections ради старого whole-document hash и private-name blacklist не являются обязательствами текущей версии; frozen fixture bytes и direct refusal сохраняются.
@@ -90,4 +93,27 @@ dotnet build tools/EngineRuntimeChecks.csproj -c Release \
 dotnet tools/bin/Release/net8.0/EngineRuntimeChecks.dll --check-filter "<named behavior>"
 ```
 
+Новый `tools/EngineRuntimeChecks*.cs` входит в Compile автоматически; добавь явный вызов check в `RunChecks`. C# source gate проверяет развёрнутый compile roster и фактическую регистрацию.
+
 Filter должен выбрать хотя бы одну проверку; compile и registration smoke не равны execution. Без .NET/tML/FNA/native DLL — `notRun`, не PASS. CPU/headless не доказывает GPU/game-loop или сетевой матч. Не меняй production, operator config, captured fixtures или generated artifacts ради tests-only GREEN.
+
+
+## Advisory-контроль сложности Python
+
+```bash
+python tools/check_code_health.py --base origin/main
+python tools/check_code_health.py --base origin/main --path LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py
+```
+
+Команда сравнивает текущие Python implementation files с Git merge-base; без `--path` учитывает committed, staged, unstaged и untracked изменения. Без `--base` baseline — `HEAD`. Tests и декларации вне функций не входят в измерение; функции внутри большого registry проверяются как обычно. Старый показатель выше ориентира становится своим текущим пределом: сохранение или уменьшение не даёт предупреждения, рост показывает before/after/cap.
+
+| Метрика | Начальный ориентир |
+|---|---:|
+| Физические строки функции | 300 |
+| Точки ветвления AST внутри функции | 20 |
+| Вложенные control-flow blocks | 6 |
+| Строки функций файла, без двойного счёта вложенных функций | 2000 |
+
+Точки ветвления включают if/циклы/except, условные выражения, булевы связи, comprehensions и match cases; это простая структурная метрика. Цепочка elif имеет один уровень вложенности. Перенос с единственным одинаковым AST в baseline и текущем scope сохраняет предел функции; копия или перенос с изменённой сигнатурой/телом считается новой функцией. Для распознавания переноса выбери оба владельца или весь diff.
+
+Это отдельный advisory-отчёт, без CI/release gate и без baseline-файла, который нужно вручную обновлять. Предупреждения возвращают exit 0 и требуют человеческой оценки; недоступный Git baseline, неверный путь и ошибка разбора возвращают exit 2. Удобное выделение самостоятельного helper иногда увеличивает суммарные строки: такой сигнал сам по себе не требует дробить код дальше. Отчёт никогда не объявляет `releaseReady`.

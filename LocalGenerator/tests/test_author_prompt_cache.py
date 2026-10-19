@@ -1,5 +1,8 @@
 """Author cache boundaries and local request-build work, without provider calls."""
 from __future__ import annotations
+
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_provider_wire
 from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 
@@ -8,12 +11,11 @@ import json
 import pytest
 
 from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport as transport
 
 
 @pytest.mark.parametrize("mode", ["json_object", "off"])
 def test_author_does_not_build_unused_provider_schema(monkeypatch, mode):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     calls = []
 
     def schema():
@@ -34,8 +36,8 @@ def test_schema_factory_is_evaluated_only_for_schema_mode(monkeypatch):
         calls.append(True)
         return schema
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
-    result = transport.llm_json_response_format("probe", schema=factory, strict=True)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
+    result = llm_provider_wire.llm_json_response_format("probe", schema=factory, strict=True)
     assert calls == [True]
     assert result is not None
     assert result["json_schema"]["schema"] == schema
@@ -56,7 +58,7 @@ def test_schema_factory_is_evaluated_only_for_schema_mode(monkeypatch):
 def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, source_b):
     from copy import deepcopy
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     before = deepcopy((source_a, source_b))
     request, user, _ = author.build_initial_author_request(
         source_a, source_b, "no-damage-advice", model_name="test-model",
@@ -86,7 +88,7 @@ def _marked_prefix(request):
 
 
 def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     first, first_user, _ = author.build_initial_author_request(
         {"name": "Workbench"}, {"name": "Sword"}, "workbench+sword", model_name="test-model",
     )
@@ -120,7 +122,7 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
 
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(author, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     requests = []
 
     def capture(request, **_kwargs):
@@ -168,7 +170,7 @@ def test_vfx_cache_boundary_survives_production_transport_helper(monkeypatch, re
 
     monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     monkeypatch.setattr(vfx_transport, "resolve_llm_model", lambda: "test-model")
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     requests = []
 
     def capture(request, **_kwargs):

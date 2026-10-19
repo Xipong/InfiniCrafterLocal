@@ -25,6 +25,7 @@ include = [
   "LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py",
   "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
   "tools/agentctl.py",
+  "tools/check_code_health.py",
   "tools/config_registry.py",
   "tools/replay_generation_case.py",
   "tools/mutation_contract_gate.py",

@@ -36,7 +36,7 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     item = build_runtime_fixture(fixture_name)
     before = copy.deepcopy(item)
     compiled_before = compile_runtime_program(item)
@@ -66,7 +66,7 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
 
 
 def test_format_repair_with_coherence_advice_preserves_existing_placement(monkeypatch):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     item = build_runtime_fixture("fishing_platform_tool")
     before = copy.deepcopy(item)
     content = json.dumps(item)
@@ -260,7 +260,7 @@ def test_author_entrypoint_uses_effective_format_preserves_raw_and_carries_mode_
 def test_format_repair_preserves_source_contract_without_mode_upgrade(monkeypatch, source_schema, mode, actual, accepted):
     from infini_local.core.errors import PlannerUnavailable
 
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     item = build_runtime_fixture("workbench_blade")
     _stats(item)["params"]["manaCost"] = None
     content = json.dumps(item)

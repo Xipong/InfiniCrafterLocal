@@ -1,3 +1,4 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Creative freedom is prose-only; inspect actual Author/Repair messages offline."""
 from copy import deepcopy
@@ -5,12 +6,13 @@ import json
 
 import pytest
 
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_authoring_pipeline as author
 
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema', 'off'])
 def test_actual_author_scopes_provenance_to_parent_claims_not_invented_mechanics(monkeypatch, mode):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = author.build_initial_author_request({}, {}, 'fusion', model_name='offline')
     assert dossier_text(request) == user
     header = ' '.join(json.loads(user)['priorityHeader'])
@@ -25,7 +27,7 @@ def test_actual_author_scopes_provenance_to_parent_claims_not_invented_mechanics
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema', 'off'])
 def test_actual_author_does_not_turn_coherence_or_source_units_into_inheritance_rules(monkeypatch, mode):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = author.build_initial_author_request({'name': 'A', 'damage': 0}, {'name': 'B'}, 'coherence', model_name='offline')
     packet = request_dossier(request)
     assert user == dossier_text(request)
@@ -62,7 +64,7 @@ def test_actual_shared_repair_report_is_an_account_not_a_design_rejection(monkey
         requests.append(deepcopy(request))
         raise Captured()
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     for name, value in dict(USE_LLM=True, resolve_llm_model=lambda: 'offline', llm_chat_json=capture,
                            trace_event=lambda *a, **k: None, trace_stage_request=lambda *a, **k: None,
                            llm_reasoning_system_suffix=lambda *a, **k: '',
@@ -94,7 +96,7 @@ def test_actual_periodic_producer_guidance_discloses_exhaustion_without_forcing_
     from infini_local.qa.capability_witnesses import build_capability_witness
     from test_author_prompt_consistency import _stationary_periodic_shooter
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     _, user, _ = author.build_initial_author_request({}, {}, 'producer', model_name='offline')
     packet = json.loads(user)
     catalog = packet['runtimeCapabilityContract']['catalog']

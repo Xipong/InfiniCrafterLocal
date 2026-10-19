@@ -495,6 +495,74 @@ def test_native_iteration_runs_one_native_owner_without_duplicate_tml_build(
     assert calls == ["csharp_contracts", "native_checks"]
 
 
+@pytest.mark.parametrize("paths,areas", [
+    (["LocalGenerator/infini_local/core/runtime_authoring/validator.py"], []),
+    ([], ["transport"]),
+    (["./tools/agentctl.py", "tools/agentctl.py"], ["native", "native"]),
+])
+def test_verify_explicit_scope_executes_owner_checks_without_discovering_changes(
+    paths, areas, tmp_path, monkeypatch, capsys,
+):
+    import jsonschema
+
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("explicit verification must not scan the diff"))
+    monkeypatch.setattr(agentctl, "ARTIFACTS", tmp_path)
+    calls = []
+
+    def run(name, command):
+        calls.append((name, command))
+        return {"name": name, "status": "passed"}
+
+    monkeypatch.setattr(agentctl, "_run_check", run)
+    arguments = ["agentctl", "verify"]
+    for path in paths:
+        arguments.extend(["--path", path])
+    for area in areas:
+        arguments.extend(["--area", area])
+    monkeypatch.setattr(agentctl.sys, "argv", arguments)
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    expected_paths = sorted({path.removeprefix("./") for path in paths})
+    expected = agentctl.verification_plan(expected_paths, areas=areas)
+    assert report["paths"] == expected_paths
+    assert report["scope"] == ("paths" if paths else "areas")
+    assert report["areas"] == sorted(set(areas))
+    assert "changedFiles" not in report
+    assert report["mode"] == "iteration" and not report["releaseReady"]
+    assert report["status"] == "passed" and report["ok"]
+    assert [name for name, _ in calls] == expected["checks"] + (["focused_pytest"] if expected["tests"] else [])
+    if expected["tests"]:
+        assert calls[-1][1] == ["python", "tools/run_focused_pytests.py", *expected["tests"]]
+    jsonschema.validate(report, json.loads((ROOT / ".agent/run_result.schema.json").read_text()))
+
+
+def test_explicit_unmapped_file_keeps_full_fallback_visible_in_plan(monkeypatch, capsys):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("do not discover changes"))
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("--plan must not execute checks"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "verify", "--path", "pyproject.toml", "--plan"])
+    assert agentctl.main() == 0
+    plan = json.loads(capsys.readouterr().out)
+    assert plan["mode"] == "final_fallback"
+    assert plan["unmappedPaths"] == plan["paths"] == ["pyproject.toml"]
+    assert plan["checks"] == json.loads(agentctl.MANIFEST_PATH.read_text())["fullChecks"]
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--path", "missing-source.py"],
+    ["--path", "tools"],
+    ["--path", "../outside.py"],
+    ["--area", "unknown-owner"],
+    ["--area", "runtime", "--changed"],
+    ["--path", "tools/agentctl.py", "--base", "HEAD"],
+])
+def test_verify_refuses_invalid_or_ambiguous_explicit_scope(monkeypatch, capsys, arguments):
+    monkeypatch.setattr(agentctl, "changed_files", lambda *_: pytest.fail("invalid explicit scope must not scan changes"))
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("invalid scope must not execute checks"))
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "verify", *arguments])
+    assert agentctl.main() == 2
+    assert json.loads(capsys.readouterr().err)["ok"] is False
+
+
 @pytest.mark.parametrize('group', ['runtime', 'config', 'docs'])
 def test_refresh_rebuilds_handbook_once(group: str, monkeypatch: pytest.MonkeyPatch) -> None:
     import validate_release as validation
@@ -548,7 +616,7 @@ def test_diff_reports_git_scope_without_running_validation(monkeypatch, capsys):
     def git(*args):
         calls.append(args)
         return subprocess.CompletedProcess(args, 0, stdout="changed source", stderr="")
-    monkeypatch.setattr(agentctl, "_git", git)
+    monkeypatch.setattr(agentctl, "run_git", git)
     monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["example.py"])
     monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("diff must not execute validation"))
     assert agentctl.command_diff(SimpleNamespace(base="origin/main")) == 0

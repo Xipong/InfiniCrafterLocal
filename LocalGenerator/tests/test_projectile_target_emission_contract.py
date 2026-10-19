@@ -1,4 +1,5 @@
 """Explicit bounded target links emit authored physical children; no radial alias."""
+
 from copy import deepcopy
 import hashlib
 import json
@@ -7,6 +8,7 @@ import pytest
 from repair_test_helpers import gameplay_repair, frozen_gameplay_repair
 from jsonschema import Draft202012Validator
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
@@ -83,7 +85,7 @@ def test_representative_selection_choices_reach_exact_opcode_and_receipts(anchor
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_real_author_packet_and_nullable_inverse_preserve_full_emission_choice(wire_transport, monkeypatch, mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     responses, requests = wire_transport
     doc = _doc(selectionAnchor="event_target", repeatPolicy="exclude_visited", requireLineOfSight=True,
                stepCount=12, stepRangeTiles=59.99999999999999, initialIgnoreCountdownUpdates=0, delaySeconds=1 / 60)
@@ -309,7 +311,6 @@ def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire_transport, monkeypatch, format_mode):
     """Current-main additions coexist with this feature through real offline callers."""
-    from infini_local.pipelines import llm_transport as transport
 
     doc = _doc()
     binding = doc["runtimeProgram"]["bindings"][0]
@@ -339,7 +340,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
                 row.pop("target", None)
             calls.append(row)
     before = json.dumps(doc, sort_keys=True)
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     responses, requests = wire_transport
     payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
     responses.append(payload)

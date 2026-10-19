@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
@@ -7,6 +8,7 @@ import json
 import socket
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.storage import trace_runtime, trace_tools
 
 
@@ -181,12 +183,12 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
 @pytest.mark.parametrize('changed_value', [False, True], ids=['syntax-only', 'semantic-change-refused'])
 def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields(monkeypatch, tmp_path, context_join, changed_value):
     from infini_local.core.errors import PlannerUnavailable
-    from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+    from infini_local.pipelines import llm_authoring_pipeline as author
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     _cache(monkeypatch, tmp_path)
     monkeypatch.setattr(author, 'USE_LLM', True)
     monkeypatch.setattr(author, 'resolve_llm_model', lambda: 'offline-model')
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     native_builder = author.build_initial_author_request
     def build_without_owner_join(*args, **kwargs):
         request, user, system = native_builder(*args, **kwargs)

@@ -8,6 +8,7 @@
 - Visual: `pipelines/visual_generation_pipeline.py`; VFX request: `pipelines/vfx_generation_pipeline.py`, VFX contract/Repair: `core/vfx_manifest.py`.
 - Чтение уже принятого wire для presentation: `core/runtime_authoring/wire_views.py`. Не вызывай compiler для чтения сохранённой вещи.
 - Runtime факты/shape/lowering: импортируй прямо defining module. `runtime_authoring/__init__.py` не реэкспортирует API и не запускает другие owners. Общий JSON helper не должен требовать импорта другой LLM-стадии.
+- LLM HTTP/deadline/retry: `pipelines/llm_transport.py`; profiles/leases — `llm_profiles.py`, quota/admission — `llm_admission.py`, provider payload/cache shape — `llm_provider_wire.py` в той же папке. Импортируй defining owner; scalar settings принадлежат `core/llm_config.py`.
 - Image attempts/delivery: `pipelines/visual_sprite_generation.py` / `visual_delivery_gate.py`; world recipe persistence: `storage/world_storage.py`.
 - Browser Studio: `desktop/webui/{index.html,studio.css,studio.js}` — представление; `desktop/web_studio.py` — HTTP bridge; `desktop/settings_controller.py` и `desktop/studio_operations.py` — состояние и запуск генератора.
 

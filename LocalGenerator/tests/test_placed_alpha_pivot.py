@@ -1,4 +1,5 @@
 """Opt-in alpha-bounds pivot: real Author/compiler/final-wire boundaries, offline."""
+
 import copy
 import json
 import pytest
@@ -6,6 +7,7 @@ import pytest
 from prompt_packet_helpers import request_dossier
 from test_low_level_three_stage_pipeline import wire_transport
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
@@ -61,14 +63,13 @@ def test_neutral_omission_receipt_and_historical_wire_absence_preserve_frame():
 def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_transport, monkeypatch, mode):
     from infini_local.pipelines import author_item_contract as contract
     from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import llm_transport as transport
     from infini_local.pipelines import visual_generation_pipeline as visual
     from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
     from test_codex_subscription_contract import _encode_nullable_fixture
     from test_low_level_three_stage_pipeline import _visual_kit
     from jsonschema import Draft202012Validator
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     document = placed()
     document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
     responses, requests = wire_transport

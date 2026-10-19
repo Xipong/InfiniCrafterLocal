@@ -58,8 +58,8 @@ from infini_local.pipelines.image_backend_pipeline import (
     resolve_comfyui_workflow_path,
     sdcpp_debug_snapshot,
 )
+from infini_local.pipelines.llm_profiles import active_llm_provider
 from infini_local.pipelines.llm_transport import (
-    active_llm_provider,
     llm_auth_snapshot,
     resolve_llm_model,
 )

@@ -12,6 +12,9 @@ from urllib.error import HTTPError, URLError
 
 import pytest
 
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_profiles
+from infini_local.pipelines import llm_provider_wire
 from infini_local.services import codex_auth as auth
 from infini_local.storage import trace_tools
 
@@ -119,8 +122,8 @@ def test_text_503_has_one_transport_owner_and_one_logical_author_stage(monkeypat
     from infini_local.pipelines import llm_transport as llm
     from infini_local.services import codex_text_backend as text
     monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", "2")
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "synthetic-codex-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "synthetic-codex-model")
     monkeypatch.setattr(llm, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))
     monkeypatch.setattr(auth, "get_credentials", lambda: auth.Credentials("synthetic-access", "synthetic-refresh", "synthetic-account", 9999999999))
     completion = {"type": "response.completed", "response": {"status": "completed", "output": [{
@@ -134,11 +137,11 @@ def test_text_503_has_one_transport_owner_and_one_logical_author_stage(monkeypat
                 raise HTTPError(request.full_url, 503, "busy", Message(), io.BytesIO(b'{"error":{"message":"temporary"}}'))
             return io.BytesIO(b"data: " + json.dumps(completion).encode() + b"\n\n")
     monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_a: Opener())
-    packet = llm.with_llm_stage({"model": "synthetic-codex-model", "messages": [
+    packet = llm_provider_wire.with_llm_stage({"model": "synthetic-codex-model", "messages": [
         {"role": "system", "content": "JSON exact authored rules."}, {"role": "user", "content": "Keep exact факт."},
     ], "response_format": {"type": "json_object"}}, "llm")
     before = copy.deepcopy(packet)
-    with llm.llm_item_lease("transport-only") as lease:
+    with llm_profiles.llm_item_lease("transport-only") as lease:
         result = llm.llm_chat_json(packet, timeout=3)
         assert lease.call_count == 1 and lease.stages == ["llm"] and not lease.failovers
     assert result["choices"][0]["message"]["content"] == '{"valid":true}'
@@ -229,8 +232,8 @@ def test_image_transport_budget_exhaustion_never_enters_semantic_retry(codex_ima
 def test_text_terminal_failures_do_not_multiply_logical_or_physical_budget(monkeypatch, status, budget, expected_calls):
     from infini_local.pipelines import llm_transport as llm
     monkeypatch.setenv("INFINI_LLM_FALLBACK_NETWORK_FAILS", str(budget))
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "synthetic-codex-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "synthetic-codex-model")
     monkeypatch.setattr(llm, "http_json", lambda *_a, **_k: pytest.fail("paid transport called"))
     monkeypatch.setattr(auth, "get_credentials", lambda: auth.Credentials("synthetic-access", "synthetic-refresh", "synthetic-account", 9999999999))
     calls = []
@@ -239,8 +242,8 @@ def test_text_terminal_failures_do_not_multiply_logical_or_physical_budget(monke
             calls.append(request.data)
             raise HTTPError(request.full_url, status, "busy", Message(), io.BytesIO(b'{"error":{"message":"synthetic-access"}}'))
     monkeypatch.setattr(auth.urlrequest, "build_opener", lambda *_args: Opener())
-    packet = llm.with_llm_stage({"messages": [{"role": "user", "content": "exact facts"}]}, "visual_director")
-    with llm.llm_item_lease("bounded-terminal") as lease:
+    packet = llm_provider_wire.with_llm_stage({"messages": [{"role": "user", "content": "exact facts"}]}, "visual_director")
+    with llm_profiles.llm_item_lease("bounded-terminal") as lease:
         with pytest.raises(auth.CodexError, match=f"HTTP {status}") as caught:
             llm.llm_chat_json(packet, timeout=3)
         assert lease.call_count == 1 and lease.stages == ["visual_director"] and not lease.failovers

@@ -123,7 +123,7 @@ def test_extension_cannot_be_smuggled_into_another_driver(component, code, name)
 
 @pytest.mark.parametrize("mode", ("json_object", "json_schema"))
 def test_real_production_packet_and_nullable_inverse_expose_all_choices(monkeypatch, mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = build_initial_author_request({}, {}, "beam", model_name="test-model")
     doc, call = _fixture(**OPTIONS)
     assert project_provider_author_item_to_local(doc, response_format=request["response_format"]) == doc

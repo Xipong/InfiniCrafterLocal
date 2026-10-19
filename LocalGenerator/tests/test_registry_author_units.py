@@ -1,5 +1,7 @@
 """Author units -> compiler receipts -> frozen C# wire: no aliases or quantization."""
 
+
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import RUNTIME_PROGRAM_SCHEMA, CAPABILITY_REGISTRY
 from copy import deepcopy
 import hashlib
@@ -339,10 +341,9 @@ def test_ordinary_binary64_collision_is_not_replaced_by_a_roundtrip_lattice():
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_numeric_constraints_reach_serialized_author_and_exact_repair(monkeypatch, mode):
-    from infini_local.pipelines import llm_transport as transport
     from test_gameplay_repair_readonly_context import _capture_request
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, text, _ = build_initial_author_request({}, {}, "numeric-contract", model_name="offline-test")
     assert request["response_format"]["type"] == mode
     catalog = json.loads(text)["runtimeCapabilityContract"]["catalog"]

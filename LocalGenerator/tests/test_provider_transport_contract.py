@@ -21,6 +21,11 @@ import pytest
 
 from provider_test_support import HttpReply, HttpSender, physical_attempt, loopback_server, write_json_response
 
+from infini_local.pipelines import llm_admission
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_profiles
+from infini_local.pipelines import llm_provider_wire
+from provider_test_support import reset_llm_runtime
 from infini_local.pipelines import llm_transport as transport
 
 PIN = "ExactVendor/Endpoint-Turbo"
@@ -34,7 +39,7 @@ def packet(stage="planner", *, schema=False):
             "name": "pin_probe", "strict": True,
             "schema": {"type": "object", "properties": {}, "additionalProperties": False},
         }}
-    return transport.with_llm_stage({
+    return llm_provider_wire.with_llm_stage({
         "model": "ignored",
         "messages": [
             {"role": "system", "content": f"{stage} instructions"},
@@ -65,8 +70,8 @@ class Wire:
 
     def configure(self, **values):
         for name, value in values.items():
-            self.monkeypatch.setattr(transport, name, value, raising=False)
-        transport._reset_llm_pool_runtime_for_tests()
+            self.monkeypatch.setattr(llm_config, name, value)
+        reset_llm_runtime()
 
     def __call__(self, url, payload, timeout=10, headers=None):
         self.calls.append((url, copy.deepcopy(payload), dict(headers or {})))
@@ -103,7 +108,7 @@ def wire(monkeypatch):
     monkeypatch.setattr(transport, "http_json", recorder)
     monkeypatch.setattr(transport, "http_get_json", lambda *_args, **_kwargs: pytest.fail("unexpected model discovery"))
     yield recorder
-    transport._reset_llm_pool_runtime_for_tests()
+    reset_llm_runtime()
 
 
 @pytest.fixture
@@ -155,7 +160,7 @@ def loopback_transport(monkeypatch):
         def make_endpoint(replies=()):
             return stack.enter_context(endpoint(replies))
         yield make_endpoint, events
-    transport._reset_llm_pool_runtime_for_tests()
+    reset_llm_runtime()
 
 
 @pytest.mark.parametrize("kind,status", [
@@ -172,14 +177,14 @@ def test_real_http_redirects_fail_closed_without_forwarding_bearer_or_adopting_f
     redirected_path = "/v1/models" if kind == "models" else (
         "/v1/responses" if kind == "responses" else "/v1/chat/completions")
     source_url, observed = endpoint([{"status": status, "headers": {"Location": foreign_url + redirected_path}}])
-    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", source_url)
-    monkeypatch.setattr(transport, "LLM_API_MODE", "chat_completions" if kind == "models" else kind)
+    monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", source_url)
+    monkeypatch.setattr(llm_config, "LLM_API_MODE", "chat_completions" if kind == "models" else kind)
     if kind == "models":
-        monkeypatch.setattr(transport, "OPENROUTER_MODEL", "auto")
+        monkeypatch.setattr(llm_config, "OPENROUTER_MODEL", "auto")
         resolved = transport.resolve_llm_model()
         assert resolved == ("vendor/advertised:free" if status == 200 else "")
     else:
-        with transport.llm_item_lease("redirect-policy") as lease:
+        with llm_profiles.llm_item_lease("redirect-policy") as lease:
             if status == 200:
                 result = transport.llm_chat_json(packet(), timeout=1)
                 assert result["choices"][0]["message"]["content"] == "{}"
@@ -208,9 +213,9 @@ def test_real_http_deadline_covers_trickle_headers_error_body_and_retry(loopback
         "retry": [{"status": 503, "before_headers": 0.11}, {"before_headers": 0.11}],
     }[phase]
     base, observed = endpoint(replies)
-    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
     started = time.monotonic()
-    with transport.llm_item_lease("whole-call-deadline") as lease:
+    with llm_profiles.llm_item_lease("whole-call-deadline") as lease:
         if phase == "fast":
             result = transport.llm_chat_json(packet(), timeout=budget)
             assert result["choices"][0]["message"]["content"] == "{}"
@@ -227,10 +232,10 @@ def test_real_http_deadline_covers_trickle_headers_error_body_and_retry(loopback
 def test_real_http_deadline_prevents_sending_after_rate_wait(loopback_transport, monkeypatch, reason):
     endpoint, _events = loopback_transport
     base, observed = endpoint()
-    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
-    monkeypatch.setattr(transport, "_remote_rate_key", lambda *_args: "synthetic-rate-key")
+    monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(llm_admission, "_remote_rate_key", lambda *_args: "synthetic-rate-key")
     now = time.monotonic()
-    transport._LLM_RATE_STATE["synthetic-rate-key"] = {
+    llm_admission._LLM_RATE_STATE["synthetic-rate-key"] = {
         "events": [], "lastRequest": now if reason == "pacing" else -1.0e30,
         "blockedUntil": now + 10 if reason == "provider_429" else 0,
     }
@@ -241,7 +246,7 @@ def test_real_http_deadline_prevents_sending_after_rate_wait(loopback_transport,
     assert caught.value._infini_transport_debug["physicalAttempts"] == []
     assert time.monotonic() - started < 0.33
     assert observed == []
-    assert transport._LLM_RATE_STATE["synthetic-rate-key"]["events"] == []
+    assert llm_admission._LLM_RATE_STATE["synthetic-rate-key"]["events"] == []
 
 
 @pytest.mark.parametrize("oversized", [False, True])
@@ -271,13 +276,13 @@ def test_real_http_physical_attempt_timeline_is_bounded_safe_and_survives_failur
         "body": {"choices": [{"message": {"content": "{}"}}],
                  "_debug": {"credential": secret, "promptEcho": "PRIVATE_AUTHOR_PACKET"}}}
     base, observed = endpoint([{"status": 404}, {"status": 400, "raw_body": escaped}, final])
-    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
-    monkeypatch.setattr(transport, "LLM_API_MODE", "auto")
+    monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(llm_config, "LLM_API_MODE", "auto")
     if outcome == "bounded":
         monkeypatch.setattr(transport, "_LLM_MAX_DIAGNOSTIC_ATTEMPTS", 2)
     request = packet(schema=True)
     request["messages"][1]["content"] = "PRIVATE_AUTHOR_PACKET"
-    with transport.llm_item_lease("physical-attribution") as lease:
+    with llm_profiles.llm_item_lease("physical-attribution") as lease:
         if outcome == "fatal":
             with pytest.raises(urllib.error.HTTPError) as caught:
                 transport.llm_chat_json(request, timeout=1)
@@ -304,8 +309,8 @@ def test_real_http_physical_attempt_timeline_is_bounded_safe_and_survives_failur
 def test_real_http_429_timeline_distinguishes_one_send_from_unsent_cooldown(loopback_transport, monkeypatch):
     endpoint, events = loopback_transport
     base, observed = endpoint([{"status": 429, "headers": {"Retry-After": "60"}}])
-    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
-    monkeypatch.setattr(transport, "_remote_rate_key", lambda *_args: "synthetic-rate-key")
+    monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(llm_admission, "_remote_rate_key", lambda *_args: "synthetic-rate-key")
     with pytest.raises(TimeoutError) as caught:
         transport.llm_chat_json(packet(), timeout=0.45)
     debug = caught.value._infini_transport_debug
@@ -349,12 +354,12 @@ def test_real_http_failover_keeps_one_budget_and_does_not_escape_after_expiry(lo
     endpoint, events = loopback_transport
     secondary, secondary_calls = endpoint()
     source, source_calls = endpoint([{"status": 503, **({"trickle": 0.005} if expired else {})}])
-    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", source)
-    monkeypatch.setattr(transport, "OPENROUTER_PROVIDER", "")
-    monkeypatch.setattr(transport, "LLM_POOL_PROFILES", ({"id": "llm_2", "enabled": True,
+    monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", source)
+    monkeypatch.setattr(llm_config, "OPENROUTER_PROVIDER", "")
+    monkeypatch.setattr(llm_config, "LLM_POOL_PROFILES", ({"id": "llm_2", "enabled": True,
         "provider": "openrouter", "base_url": secondary, "model": "vendor/secondary",
         "api_mode": "chat_completions", "api_key": "synthetic-loopback-key", "openrouter_provider": PIN},))
-    with transport.llm_item_lease("deadline-failover") as lease:
+    with llm_profiles.llm_item_lease("deadline-failover") as lease:
         if expired:
             with pytest.raises(TimeoutError) as caught:
                 transport.llm_chat_json(packet(), timeout=0.18)
@@ -387,7 +392,7 @@ def test_codex_stream_boundary_reports_only_owned_observations_without_generic_h
     request = packet()
     request["reasoning"] = {"effort": "high", "exclude": True}
     before = copy.deepcopy(request)
-    with transport.llm_item_lease("codex-boundary") as lease:
+    with llm_profiles.llm_item_lease("codex-boundary") as lease:
         if failure:
             with pytest.raises(CodexError) as caught:
                 transport.llm_chat_json(request, timeout=1)
@@ -441,7 +446,7 @@ def test_profile_routing_wire(wire, provider, pin, mode):
     if url.endswith("/responses"):
         assert_responses_dossier(body, request)
     else:
-        expected = {key: value for key, value in request.items() if key not in {transport.LLM_STAGE_KEY, "provider"}}
+        expected = {key: value for key, value in request.items() if key not in {llm_provider_wire.LLM_STAGE_KEY, "provider"}}
         expected["model"] = body["model"]
         if pinned:
             expected["provider"] = {"only": [PIN], "allow_fallbacks": False}
@@ -463,7 +468,7 @@ def test_profile_selection_persists_for_every_stage(wire, preferred):
                    OPENAI_COMPAT_MODEL="model-one", LLM_POOL_PROFILES=profiles)
     selected = []
     for recipe in ("r1", "r2", "r3", "r4"):
-        lease, token = transport.begin_llm_item_lease(recipe, preferred_profile_id="llm_2" if preferred else "")
+        lease, token = llm_profiles.begin_llm_item_lease(recipe, preferred_profile_id="llm_2" if preferred else "")
         try:
             selected.append(lease.profile_id)
             if preferred:
@@ -472,21 +477,21 @@ def test_profile_selection_persists_for_every_stage(wire, preferred):
             for stage in ("visual_director", "vfx_director"):
                 transport.llm_chat_json(packet(stage), timeout=1)
         finally:
-            transport.end_llm_item_lease(lease, token)
+            llm_profiles.end_llm_item_lease(lease, token)
     assert selected == (["llm_2"] * 4 if preferred else ["llm_1", "llm_2", "llm_3", "llm_1"])
     assert [url.split("//", 1)[1].split(".", 1)[0] for url, _, _ in wire.calls] == (
         ["two"] * 8 if preferred else ["one", "one", "two", "two", "three", "three", "one", "one"])
     if preferred:
         assert all(body["provider"] == {"only": ["PreferredVendor/Endpoint"], "allow_fallbacks": False} for _, body, _ in wire.calls)
-    assert transport.current_llm_item_lease() is None
+    assert llm_profiles.current_llm_item_lease() is None
 
 
 def test_responses_chain_keeps_full_authored_stage_dossier(wire):
     wire.configure(LLM_API_MODE="responses")
-    with transport.llm_item_lease("responses-chain") as lease:
+    with llm_profiles.llm_item_lease("responses-chain") as lease:
         for stage in STAGES:
             request = packet(stage)
-            request[transport.LLM_MODEL_OVERRIDE_KEY] = f"override/{stage}"
+            request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = f"override/{stage}"
             before = copy.deepcopy(request)
             result = transport.llm_chat_json(request, timeout=1)
             url, body, _ = wire.calls[-1]
@@ -494,7 +499,7 @@ def test_responses_chain_keeps_full_authored_stage_dossier(wire):
             assert body["provider"] == {"only": [PIN], "allow_fallbacks": False}
             assert body["model"] == f"override/{stage}"
             assert_responses_dossier(body, request)
-            assert transport.LLM_MODEL_OVERRIDE_KEY not in body and transport.LLM_STAGE_KEY not in body
+            assert llm_provider_wire.LLM_MODEL_OVERRIDE_KEY not in body and llm_provider_wire.LLM_STAGE_KEY not in body
             assert request == before
             assert result["choices"][0]["message"]["content"] == "{}"
             assert result["_debug"]["apiMode"] == "responses"
@@ -523,7 +528,7 @@ def test_strict_pin_failure_never_crosses_profile_boundary(wire, mode, lease_mod
     wire.replies.extend([reply, reply])
     lease = token = None
     if lease_mode != "no_lease":
-        lease, token = transport.begin_llm_item_lease("pinned-must-fail-closed")
+        lease, token = llm_profiles.begin_llm_item_lease("pinned-must-fail-closed")
     try:
         with pytest.raises((urllib.error.URLError, RuntimeError)):
             transport.llm_chat_json(packet(), timeout=1)
@@ -533,11 +538,11 @@ def test_strict_pin_failure_never_crosses_profile_boundary(wire, mode, lease_mod
             assert lease.failovers == [] and lease.call_count == 1
     finally:
         if lease is not None:
-            transport.end_llm_item_lease(lease, token)
+            llm_profiles.end_llm_item_lease(lease, token)
     assert 1 <= len(wire.calls) <= 2
     assert all("primary.example" in url for url, _, _ in wire.calls)
     assert all(body["provider"] == {"only": [PIN], "allow_fallbacks": False} for _, body, _ in wire.calls)
-    assert transport.current_llm_item_lease() is None
+    assert llm_profiles.current_llm_item_lease() is None
 
 
 @pytest.mark.parametrize("target", ["pool", "legacy"], ids=["pool-adopts-target", "credit-adopts-legacy"])
@@ -550,10 +555,10 @@ def test_failover_adopts_target_for_later_stages(wire, target):
         LLM_FALLBACK_BASE_URL=secondary["base_url"], LLM_FALLBACK_API_KEY=secondary["api_key"],
         LLM_FALLBACK_OPENROUTER_PROVIDER=secondary["openrouter_provider"])
     wire.replies.append(503 if target == "pool" else 402)
-    with transport.llm_item_lease("failover-item") as lease:
+    with llm_profiles.llm_item_lease("failover-item") as lease:
         for stage in ("visual_director", "vfx_director"):
             request = packet(stage)
-            request[transport.LLM_MODEL_OVERRIDE_KEY] = "override/main-only"
+            request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = "override/main-only"
             result = transport.llm_chat_json(request, timeout=1)
             assert result["choices"][0]["message"]["content"] == "{}"
         assert lease.call_count == 2
@@ -563,7 +568,7 @@ def test_failover_adopts_target_for_later_stages(wire, target):
     assert [body.get("provider") for _, body, _ in wire.calls] == [None, *[{
         "only": ["TargetVendor/Endpoint"], "allow_fallbacks": False}] * 2]
     assert all(headers["Authorization"] == "Bearer synthetic-secondary" for _, _, headers in wire.calls[1:])
-    assert all(transport.LLM_MODEL_OVERRIDE_KEY not in body for _, body, _ in wire.calls)
+    assert all(llm_provider_wire.LLM_MODEL_OVERRIDE_KEY not in body for _, body, _ in wire.calls)
 
 
 @pytest.mark.parametrize("stage,mode,attempts", [
@@ -576,16 +581,16 @@ def test_content_retry_keeps_selected_pin_model_and_logical_call(wire, stage, mo
         "choices": [{"finish_reason": "length", "message": {"content": "{"}}]}
     wire.replies.append(first)
     request = packet(stage)
-    request[transport.LLM_MODEL_OVERRIDE_KEY] = f"override/{stage}"
+    request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = f"override/{stage}"
     before = copy.deepcopy(request)
-    with transport.llm_item_lease("length-retry-pin") as lease:
+    with llm_profiles.llm_item_lease("length-retry-pin") as lease:
         result = transport.llm_chat_json(request, timeout=1)
         assert lease.call_count == 1 and lease.failovers == [] and len(lease.stages) == 1
         assert lease.context["openrouter_provider"] == PIN
     assert len(wire.calls) == attempts
     assert all(body["provider"] == {"only": [PIN], "allow_fallbacks": False} for _, body, _ in wire.calls)
     assert all(body["model"] == f"override/{stage}" for _, body, _ in wire.calls)
-    assert all(transport.LLM_MODEL_OVERRIDE_KEY not in body for _, body, _ in wire.calls)
+    assert all(llm_provider_wire.LLM_MODEL_OVERRIDE_KEY not in body for _, body, _ in wire.calls)
     assert request == before
     if attempts == 2:
         retry_body = dict(wire.calls[1][1])
@@ -607,8 +612,8 @@ def test_transient_retry_budget_never_changes_selected_route(wire, provider, mod
                    LLM_FALLBACK_PROVIDER="openai_compat", LLM_FALLBACK_MODEL="paid-fallback" if provider == "openrouter" else "")
     wire.replies.append(503)
     request = packet("vfx_director")
-    request[transport.LLM_MODEL_OVERRIDE_KEY] = "override/retry"
-    with transport.llm_item_lease("transient-retry") as lease:
+    request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = "override/retry"
+    with llm_profiles.llm_item_lease("transient-retry") as lease:
         if attempts == 1:
             with pytest.raises(urllib.error.HTTPError):
                 transport.llm_chat_json(request, timeout=1)
@@ -691,9 +696,10 @@ class RateClock:
 def rate_clock(monkeypatch):
     from infini_local.core import http_io
     clock = RateClock()
-    transport._reset_llm_pool_runtime_for_tests()
+    reset_llm_runtime()
     fake_time = SimpleNamespace(monotonic=clock.monotonic, sleep=clock.sleep, time=lambda: 1_700_000_020.0)
     monkeypatch.setattr(transport, "time", fake_time)
+    monkeypatch.setattr(llm_admission, "time", fake_time)
     monkeypatch.setattr(http_io, "time", fake_time)
     monkeypatch.setattr(transport, "log_event", lambda *_args, **_kwargs: None)
 
@@ -704,10 +710,10 @@ def rate_clock(monkeypatch):
             return self.is_set()
 
     # Isolate only this module's waiter primitive; never patch threading globally.
-    monkeypatch.setattr(transport, "threading", SimpleNamespace(Event=GateEvent))
+    monkeypatch.setattr(llm_admission, "threading", SimpleNamespace(Event=GateEvent))
     yield clock
     clock.close()
-    transport._reset_llm_pool_runtime_for_tests()
+    reset_llm_runtime()
 
 
 @pytest.mark.parametrize("url,model,cached,policy,wait,second_sent", [
@@ -744,7 +750,7 @@ def test_http_admission_uses_feedback_only_for_exact_nous_route(
         assert [sent[1] for sent in sender.sends] == [1000.0, 1005.1]
         assert [sent[2] for sent in sender.sends] == [1010.0, 1010.0]
         assert observations[1]["rateWaitMs"] == 5100
-        assert transport._LLM_RATE_STATE[transport._remote_rate_key(url, payload)]["events"] == []
+        assert llm_admission._LLM_RATE_STATE[llm_admission._remote_rate_key(url, payload)]["events"] == []
         assert [row["rateAdmissionPolicy"] for row in observations] == [policy] * 2
     else:
         assert clock.step("second", 1010.0) == "done"
@@ -813,8 +819,8 @@ def test_real_urllib_quota_headers_reach_logical_diagnostics(loopback_transport,
                "X-RateLimit-Reset-Requests": "6m0s", "Set-Cookie": "synthetic-secret-cookie",
                "ChatGPT-Account-Id": "synthetic-account-id"}
     base, observed = endpoint([{"status": status, "headers": headers}])
-    monkeypatch.setattr(transport, "OPENROUTER_BASE_URL", base)
-    monkeypatch.setattr(transport, "LLM_FALLBACK_NETWORK_FAILS", 1)
+    monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
+    monkeypatch.setattr(llm_config, "LLM_FALLBACK_NETWORK_FAILS", 1)
     if status == 200:
         debug = transport.llm_chat_json(packet(), timeout=1)["_debug"]
     else:
@@ -827,7 +833,7 @@ def test_real_urllib_quota_headers_reach_logical_diagnostics(loopback_transport,
     assert row["rateLimitHeaders"] == {"x-ratelimit-limit-requests": 10,
                                        "x-ratelimit-remaining-requests": 0,
                                        "x-ratelimit-reset-requests": 360.0}
-    assert transport._LLM_RATE_STATE == {}
+    assert llm_admission._LLM_RATE_STATE == {}
     assert "synthetic-secret-cookie" not in json.dumps(debug)
     assert "synthetic-account-id" not in json.dumps(events)
 
@@ -836,14 +842,14 @@ def test_http_rate_fifo_reaches_sender_without_changing_wire_or_deadline(rate_cl
     clock = rate_clock
     url = "https://provider.example/v1/chat/completions"
     model = "vendor/model"
-    transport._reserve_remote_rate_slot(url, {"model": model}, b"{}")
+    llm_admission._reserve_remote_rate_slot(url, {"model": model}, b"{}")
     sends, diagnostics = [], {}
 
     sender = HttpSender(monkeypatch, transport, clock)
     sends = sender.sends
 
     def call(name, content):
-        request = transport.with_llm_stage({"model": model, "messages": [
+        request = llm_provider_wire.with_llm_stage({"model": model, "messages": [
             {"role": "user", "content": content}], "response_format": {"type": "json_object"}}, "visual_director")
         state = transport._new_llm_diagnostics(request)
         token = transport._CURRENT_LLM_DIAGNOSTICS.set(state)
@@ -873,7 +879,7 @@ def test_http_rate_fifo_reaches_sender_without_changing_wire_or_deadline(rate_cl
     assert first["physicalAttempts"][0]["httpStatus"] == 200
     assert second["physicalAttemptCount"] == 0 and second["physicalAttempts"] == []
     assert second["rateWaitReason"] == "token_window" and second["rateWaitMsTotal"] == 70_000
-    assert not transport._LLM_RATE_STATE[transport._remote_rate_key(url, {"model": model})]["waiters"]
+    assert not llm_admission._LLM_RATE_STATE[llm_admission._remote_rate_key(url, {"model": model})]["waiters"]
 
 
 def test_concurrent_leases_isolate_profile_and_response_chain(wire, monkeypatch):
@@ -891,14 +897,14 @@ def test_concurrent_leases_isolate_profile_and_response_chain(wire, monkeypatch)
 
     def run_item(index):
         recipe = f"item-{index}"
-        with transport.llm_item_lease(recipe):
+        with llm_profiles.llm_item_lease(recipe):
             barrier.wait(timeout=5)
             request = packet()
             request["messages"][1]["content"] = json.dumps({"recipe": recipe})
             for _ in range(2):
                 result = transport.llm_chat_json(request, timeout=1)
                 assert result["choices"][0]["message"]["content"] == "{}"
-        assert transport.current_llm_item_lease() is None
+        assert llm_profiles.current_llm_item_lease() is None
         return recipe
 
     monkeypatch.setattr(transport, "http_json", respond)
@@ -911,7 +917,7 @@ def test_concurrent_leases_isolate_profile_and_response_chain(wire, monkeypatch)
         assert [body.get("previous_response_id") for _, body in owned] == [None, f"resp_{recipe}"]
     assert {url for _, url, _ in calls} == {
         "https://primary.example/v1/responses", "https://secondary.example/v1/responses"}
-    assert transport.current_llm_item_lease() is None
+    assert llm_profiles.current_llm_item_lease() is None
 
 
 @pytest.mark.parametrize("metadata,retained", [
@@ -923,6 +929,6 @@ def test_concurrent_leases_isolate_profile_and_response_chain(wire, monkeypatch)
 ])
 def test_effective_schema_tracks_actual_transport_metadata(metadata, retained):
     response_format = {"type": "json_schema", "json_schema": {"strict": True}}
-    actual = transport.effective_response_format({"response_format": response_format}, {"_debug": metadata})
+    actual = llm_provider_wire.effective_response_format({"response_format": response_format}, {"_debug": metadata})
     assert actual is (response_format if retained else None)
-    assert transport.effective_response_format({}, {"_debug": metadata}) is None
+    assert llm_provider_wire.effective_response_format({}, {"_debug": metadata}) is None

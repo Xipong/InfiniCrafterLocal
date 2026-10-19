@@ -1,9 +1,11 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Current Author notation: one source admission/compiler/Repair boundary."""
 from copy import deepcopy
 
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -39,7 +41,7 @@ def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monk
     witnesses = [CAPABILITY_REGISTRY[name] for name in (
         "configure_accessory", "set_projectile_lifetime", "move_straight", "collect_seeds_from_grass")]
     assert shapes == {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in witnesses}
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = build_initial_author_request({}, {}, "call-envelope", model_name="offline")
     packet = json.loads(user)
     assert [set(row) for row in packet["requiredJsonShape"]["runtimeProgram"]["calls"]] == [{"id", "fn", "target", "params"}]
@@ -99,7 +101,7 @@ def test_nullable_transport_does_not_erase_invalid_present_call_neighbours(monke
     from infini_local.pipelines.author_item_contract import author_item_response_schema, project_provider_author_item_to_local
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     from test_codex_subscription_contract import _encode_nullable_fixture
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, _, _ = build_initial_author_request({}, {}, "invalid-call-envelope", model_name="offline")
     source = _explicit_calls(build_runtime_fixture("workbench_blade"))
     encoded = _encode_nullable_fixture(source, author_item_response_schema()) if mode == "json_schema" else deepcopy(source)
@@ -448,11 +450,10 @@ def test_current_scoped_repair_preserves_original_bad_rows_and_frozen_lanes():
 def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(monkeypatch):
     import json
     from infini_local.pipelines import llm_authoring_pipeline as pipeline
-    from infini_local.pipelines import llm_transport as transport
     from test_repair_gameplay_contract import _offline_gameplay_repair
     source = build_runtime_fixture("workbench_blade")
     for mode in ("json_object", "json_schema"):
-        monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+        monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
         request, user, _ = pipeline.build_initial_author_request({}, {}, "canonical-offline", model_name="offline")
         card = json.loads(user)["runtimeCapabilityContract"]["shape"] if "shape" in json.loads(user)["runtimeCapabilityContract"] else json.loads(user)["requiredJsonShape"]
         assert "usePolicy" not in json.dumps(card)
@@ -466,7 +467,7 @@ def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(
         repaired, dossier = _offline_gameplay_repair(monkeypatch, broken, patch, mode)
         assert "usePolicy" not in json.dumps(dossier["requiredJsonShape"])
         assert repaired["runtimeProgram"] == source["runtimeProgram"]
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     content = json.dumps(source)
     requests = []
     def respond(request, **kwargs):
@@ -585,7 +586,7 @@ def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     import json
     from infini_local.core.runtime_authoring.capability_registry import capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     request, _, _ = build_initial_author_request({}, {}, "current-call-grammar", model_name="offline")
     packet = request_dossier(request)
     calls = packet["requiredJsonShape"]["runtimeProgram"]["calls"]

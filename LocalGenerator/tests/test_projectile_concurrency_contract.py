@@ -86,7 +86,7 @@ def test_present_malformed_concurrency_is_refused_at_author_and_saved_wire(value
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_registry_concurrency_choice_reaches_actual_model_packet(monkeypatch, format_mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
     request, content, _ = build_initial_author_request(parent, parent, "concurrency", model_name="test-model")
     assert dossier_text(request) == content
@@ -313,7 +313,7 @@ def _assert_contact_facts(card):
     pytest.param(CAPABILITY, "maxActive", 0, (), id="concurrency"),
 ])
 def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_transport, monkeypatch, mode, fn, leaf, bad, phrases):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
     _, content, _ = build_initial_author_request(parent, parent, "contact-facts", model_name="test-model")
     cards = {row["fn"]: row for row in json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]}

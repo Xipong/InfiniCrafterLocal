@@ -33,7 +33,11 @@
       "tests": [
         "LocalGenerator/tests/test_registry_*contract.py",
         "LocalGenerator/tests/test_repair_gameplay_contract.py",
-        "LocalGenerator/tests/test_low_level_three_stage_pipeline.py"
+        "LocalGenerator/tests/test_low_level_three_stage_pipeline.py",
+        "LocalGenerator/tests/test_repair_frozen_contract.py",
+        "LocalGenerator/tests/test_repair_structure_unions.py",
+        "LocalGenerator/tests/test_gameplay_repair_readonly_context.py",
+        "LocalGenerator/tests/test_repair_diagnostic_composition.py"
       ],
       "entrypoints": [
         "LocalGenerator/infini_local/AGENTS.md",
@@ -125,7 +129,10 @@
       "patterns": [
         "LocalGenerator/infini_local/core/llm_json_tools.py",
         "LocalGenerator/infini_local/core/schema_validation.py",
-        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+        "LocalGenerator/infini_local/pipelines/llm_transport.py",
+        "LocalGenerator/infini_local/pipelines/llm_profiles.py",
+        "LocalGenerator/infini_local/pipelines/llm_admission.py",
+        "LocalGenerator/infini_local/pipelines/llm_provider_wire.py"
       ],
       "checks": [
         "project_hygiene"
@@ -137,7 +144,12 @@
       "tests": [
         "LocalGenerator/tests/test_provider_*contract.py",
         "LocalGenerator/tests/test_repair_frozen_contract.py",
-        "LocalGenerator/tests/test_registry_vertical_contract.py"
+        "LocalGenerator/tests/test_registry_vertical_contract.py",
+        "LocalGenerator/tests/test_codex_subscription_contract.py",
+        "LocalGenerator/tests/test_codex_transport_trace.py",
+        "LocalGenerator/tests/test_codex_static_instruction_prefix.py",
+        "LocalGenerator/tests/test_transport_retry_redaction.py",
+        "LocalGenerator/tests/test_llm_auth_diagnostics_contract.py"
       ],
       "entrypoints": [
         "LocalGenerator/infini_local/AGENTS.md",
@@ -180,13 +192,15 @@
         "tools/validate_release*",
         "tools/render_validation_report.py",
         ".agent/**",
-        ".github/workflows/ci.yml"
+        ".github/workflows/ci.yml",
+        "tools/check_code_health.py"
       ],
       "checks": [
         "project_hygiene"
       ],
       "tests": [
-        "LocalGenerator/tests/test_pytest_runner_selection.py"
+        "LocalGenerator/tests/test_pytest_runner_selection.py",
+        "LocalGenerator/tests/test_code_health.py"
       ],
       "entrypoints": [
         "docs/development/TESTING_RU.md",

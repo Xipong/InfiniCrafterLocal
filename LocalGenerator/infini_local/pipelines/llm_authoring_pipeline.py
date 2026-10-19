@@ -46,16 +46,18 @@ from infini_local.pipelines.llm_authoring_prompt import (
     runtime_units_for_llm,
 )
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-from infini_local.pipelines.llm_transport import (
+from infini_local.pipelines.llm_provider_wire import (
     effective_response_format,
-    active_llm_provider,
     apply_minimum_reasoning_effort,
     apply_llm_common_options,
-    llm_chat_json,
     llm_json_response_format,
     llm_reasoning_system_suffix,
-    resolve_llm_model,
     with_llm_stage,
+)
+from infini_local.pipelines.llm_profiles import active_llm_provider
+from infini_local.pipelines.llm_transport import (
+    llm_chat_json,
+    resolve_llm_model,
 )
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 from infini_local.storage.trace_tools import trace_message_summary

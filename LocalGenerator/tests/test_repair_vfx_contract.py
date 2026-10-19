@@ -1,3 +1,4 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Canonical VFX Repair contracts; actual serialized stage, exact merge and final wire.
 
@@ -11,10 +12,11 @@ from pathlib import Path
 
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.schema_validation import strict_schema_errors
-from infini_local.pipelines import vfx_generation_pipeline as stage, llm_transport
+from infini_local.pipelines import vfx_generation_pipeline as stage
 from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
 from tests.vfx_material_fixtures import _asset, _data, _legacy, _path, _sprite, _with_asset
 
@@ -27,7 +29,7 @@ def _offline_transport(monkeypatch, case, replies):
     pending, captured = iter(replies), []
     monkeypatch.setattr(stage, "USE_LLM", True)
     monkeypatch.setattr(stage, "resolve_llm_model", lambda: "explicit-offline-fixture-model")
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
 
     def send(request, **_kwargs):
         captured.append(json.loads(json.dumps(request)))

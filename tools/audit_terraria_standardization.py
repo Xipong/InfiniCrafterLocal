@@ -72,12 +72,12 @@ def report() -> dict[str, Any]:
     dto = read("ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs")
     projectile = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs")
     executors = read("ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs")
-    transport = read("LocalGenerator/infini_local/pipelines/llm_transport.py")
+    profiles = read("LocalGenerator/infini_local/pipelines/llm_profiles.py")
     image_config = read("LocalGenerator/infini_local/pipelines/pipeline_visual_config.py")
     parent_cards = read("LocalGenerator/infini_local/pipelines/parent_context_cards.py")
     parent_constants = read("LocalGenerator/infini_local/pipelines/pipeline_runtime_constants.py")
-    generator_client = read("ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.cs")
-    generated_item = read("ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.cs")
+    generator_client = read("ModSources/InfiniCrafterLocal/Common/Services/Generation/GeneratorClient.ParentFacts.cs")
+    generated_item = read("ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.Use.cs")
     program_schema = read("LocalGenerator/infini_local/core/runtime_authoring/program_schema.py")
 
     for token, owner in DAMAGE_CLASS_TMODLOADER_NAMES.items():
@@ -171,7 +171,7 @@ def report() -> dict[str, Any]:
             check(f"lowery:{required[:24]}", required in text, f"lowery.md missing guardrail: {required}")
 
     # Non-gameplay aliases remain intentionally finite and documented.
-    check("provider_aliases_documented", all(x in transport for x in ('"openai", "openai_compat", "api", "remote"', '"local", "lmstudio", "lm_studio", "ollama", ""')), "documented provider aliases must match transport")
+    check("provider_aliases_documented", all(x in profiles for x in ('"openai", "openai_compat", "api", "remote"', '"local", "lmstudio", "lm_studio", "ollama", ""')), "documented provider aliases must match profile normalization")
     check("image_backend_aliases_documented", all(x in image_config for x in ('"openai_compat_image": "image_api"', '"stable-diffusion.cpp": "sdcpp"', '"disabled": "off"')), "documented image backend aliases must match visual config")
     # Execute canonical grammar: retired category/color routers are refusal
     # controls, not capabilities that documentation must promise to preserve.

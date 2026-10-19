@@ -1,33 +1,81 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "infini.agent-run-result.v1",
+  "$id": "infini.agent-run-result.v3",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema",
     "ok",
+    "status",
+    "mode",
+    "scope",
+    "areas",
     "baseRevision",
-    "changedFiles",
-    "checks"
+    "comparisonBase",
+    "checks",
+    "tests",
+    "impactedRules",
+    "unmappedPaths",
+    "requiresBuild",
+    "releaseScope",
+    "releaseReady",
+    "generatedAt"
   ],
   "properties": {
     "schema": {
-      "const": "infini.agent-run-result.v1"
+      "const": "infini.agent-run-result.v3"
     },
     "ok": {
       "type": "boolean"
     },
-    "releaseReady": {
-      "type": "boolean"
+    "status": {
+      "enum": [
+        "not_selected",
+        "passed",
+        "incomplete",
+        "failed"
+      ]
     },
-    "baseRevision": {
-      "type": "string"
+    "mode": {
+      "enum": [
+        "iteration",
+        "final_fallback",
+        "final"
+      ]
+    },
+    "scope": {
+      "enum": [
+        "paths",
+        "areas",
+        "changes"
+      ]
+    },
+    "areas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "changedFiles": {
       "type": "array",
       "items": {
         "type": "string"
       }
+    },
+    "baseRevision": {
+      "type": "string"
+    },
+    "comparisonBase": {
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "impactedRules": {
       "type": "array",
@@ -41,26 +89,56 @@
         "type": "object"
       }
     },
-    "blocked": {
+    "tests": {
       "type": "array",
       "items": {
         "type": "string"
       }
     },
-    "generatedAt": {
-      "type": "string",
-      "format": "date-time"
+    "unmappedPaths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "requiresBuild": {
       "type": "boolean"
     },
-    "buildStatus": {
-      "enum": [
-        "not-required",
-        "passed",
-        "failed",
-        "blocked",
-        "unavailable"
+    "releaseScope": {
+      "type": "boolean"
+    },
+    "releaseReady": {
+      "type": "boolean"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "if": {
+    "properties": {
+      "scope": {
+        "const": "changes"
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "changedFiles"
+    ],
+    "not": {
+      "required": [
+        "paths"
+      ]
+    }
+  },
+  "else": {
+    "required": [
+      "paths"
+    ],
+    "not": {
+      "required": [
+        "changedFiles"
       ]
     }
   }

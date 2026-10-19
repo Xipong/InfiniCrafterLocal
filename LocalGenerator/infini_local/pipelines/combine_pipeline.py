@@ -30,7 +30,10 @@ from infini_local.pipelines.vfx_generation_pipeline import call_llm_vfx_director
 from infini_local.pipelines.final_normalize import final_normalize
 from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
 from infini_local.pipelines.llm_authoring_pipeline import try_llm_plan
-from infini_local.pipelines.llm_transport import begin_llm_item_lease, end_llm_item_lease
+from infini_local.pipelines.llm_profiles import (
+    begin_llm_item_lease,
+    end_llm_item_lease,
+)
 from infini_local.pipelines.pipeline_visual_config import VISUAL_PIPELINE_PROFILE, contract_versions_payload
 from infini_local.pipelines.visual_asset_plan import finalize_visual_asset_runtime_gates
 from infini_local.pipelines.visual_delivery_gate import assert_visual_delivery_ready, visual_delivery_report

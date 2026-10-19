@@ -4,7 +4,9 @@ import threading
 
 import pytest
 
-from infini_local.pipelines import combine_pipeline, llm_transport
+from infini_local.pipelines import llm_profiles
+from provider_test_support import reset_llm_runtime
+from infini_local.pipelines import combine_pipeline
 from infini_local.services import combine_endpoint
 from infini_local.storage.world_recipe_runtime import recipe_key
 
@@ -15,10 +17,10 @@ def test_multidev_profiles_are_exact_pinned_and_have_independent_recipe_identity
         {"profile_id": "llm_2", "label": "llm_2", "provider": "openai_compat", "base_url": "http://two", "model": "two", "api_mode": "chat_completions"},
         {"profile_id": "llm_3", "label": "llm_3", "provider": "openai_compat", "base_url": "http://three", "model": "three", "api_mode": "chat_completions"},
     ]
-    monkeypatch.setattr(llm_transport, "configured_llm_pool", lambda: profiles)
-    llm_transport._reset_llm_pool_runtime_for_tests()
+    monkeypatch.setattr(llm_profiles, "configured_llm_pool", lambda: profiles)
+    reset_llm_runtime()
 
-    lease, token = llm_transport.begin_llm_item_lease("recipe", preferred_profile_id="llm_2")
+    lease, token = llm_profiles.begin_llm_item_lease("recipe", preferred_profile_id="llm_2")
     try:
         assert lease.profile_id == "llm_2"
         assert lease.context["model"] == "two"
@@ -27,10 +29,10 @@ def test_multidev_profiles_are_exact_pinned_and_have_independent_recipe_identity
         assert [row["profile_id"] for row in lease.profiles] == ["llm_2"]
         assert lease.legacy_fallback_allowed is False
     finally:
-        llm_transport.end_llm_item_lease(lease, token)
+        llm_profiles.end_llm_item_lease(lease, token)
 
     with pytest.raises(RuntimeError, match="llm_4.*unavailable"):
-        llm_transport.begin_llm_item_lease("recipe", preferred_profile_id="llm_4")
+        llm_profiles.begin_llm_item_lease("recipe", preferred_profile_id="llm_4")
 
     a = {"id": 1, "name": "A"}
     b = {"id": 2, "name": "B"}

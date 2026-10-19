@@ -109,9 +109,10 @@ def nullable_number_rejection_bounds(data: bytes, class_name: str, property_name
     return None
 
 
-def _method_bounds(data: bytes, signature: bytes, next_signature: bytes) -> tuple[int, int]:
+def _method_bounds(data: bytes, signature: bytes, next_signature: bytes | None = None) -> tuple[int, int]:
     start = data.find(signature)
-    end = data.find(next_signature, start + len(signature)) if start >= 0 else -1
+    # The last method in a dedicated owner partial needs no unrelated next hook.
+    end = len(data) if next_signature is None else data.find(next_signature, start + len(signature))
     if start < 0 or end < 0 or data.find(signature, start + 1) != -1:
         raise ValueError(f"C# executor ownership anchors changed: {signature!r}")
     return start, end
@@ -146,7 +147,7 @@ def _declared(group: str) -> set[str]:
 
 def equipment_surface_audit(dto: bytes | None = None, executor: bytes | None = None) -> dict[str, Any]:
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/GeneratedItemData.Model.cs").read_bytes()
-    executor = executor if executor is not None else (_MODEL_ROOT / "Content/Items/GeneratedItem.cs").read_bytes()
+    executor = executor if executor is not None else (_MODEL_ROOT / "Content/Items/GeneratedItem.Equipment.cs").read_bytes()
     accessory = _class_properties(dto, "AccessorySpec")
     armor = _class_properties(dto, "ArmorSpec")
     access_bounds = _method_bounds(executor,
@@ -155,9 +156,7 @@ def equipment_surface_audit(dto: bytes | None = None, executor: bytes | None = N
     armor_bounds = _method_bounds(executor,
         b"private static void ApplyEquipmentEffects(Player player, ArmorSpec a)",
         b"private static void AddEquipmentLight(Player player")
-    set_bounds = _method_bounds(executor,
-        b"public override void UpdateArmorSet(Player player)",
-        b"public override bool PreDrawInInventory(")
+    set_bounds = _method_bounds(executor, b"public override void UpdateArmorSet(Player player)")
     consumed = {
         "accessory": _member_reads(executor, access_bounds) | {"Defense"},
         "armor": _member_reads(executor, armor_bounds) | _member_reads(executor, set_bounds) | {"Defense", "Slot", "SetKey"},
@@ -196,14 +195,13 @@ def event_surface_audit(
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
     executor = executor if executor is not None else (_MODEL_ROOT / "Common/Runtime/RuntimeProgramExecutor.cs").read_bytes()
     scheduler = scheduler if scheduler is not None else (_MODEL_ROOT / "Common/Runtime/RuntimeDelayedActionScheduler.cs").read_bytes()
-    item_events = item_events if item_events is not None else (_MODEL_ROOT / "Content/Items/GeneratedItem.cs").read_bytes()
+    item_events = item_events if item_events is not None else (_MODEL_ROOT / "Content/Items/GeneratedItem.RuntimeEvents.cs").read_bytes()
     projectile_events = projectile_events if projectile_events is not None else (_MODEL_ROOT / "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs").read_bytes()
     properties = _class_properties(dto, "RuntimeEventActionSpec")
-    item_bounds = _method_bounds(item_events, b"private void RunPeriodicItemEvents(", b"public override bool Shoot(")
     reads_by_seam = {
         "executor": _member_reads(executor, (0, len(executor)), b"action"),
         "scheduler": _member_reads(scheduler, (0, len(scheduler)), b"action"),
-        "item": _member_reads(item_events, item_bounds, b"action"),
+        "item": _member_reads(item_events, (0, len(item_events)), b"action"),
         "projectile": _member_reads(projectile_events, (0, len(projectile_events)), b"action"),
     }
     if not {"DamageMultiplier", "CooldownTicks"} <= reads_by_seam["executor"] or not (

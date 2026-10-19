@@ -76,7 +76,7 @@ class OfflineCapture:
         from infini_local.core import llm_config, vfx_manifest
         from infini_local.core.runtime_authoring.compiler import compile_runtime_program
         from infini_local.core.runtime_authoring.validator import validate_runtime_program
-        from infini_local.pipelines import llm_authoring_pipeline, llm_transport, visual_generation_pipeline, vfx_generation_pipeline
+        from infini_local.pipelines import llm_admission, llm_authoring_pipeline, llm_profiles, llm_transport, visual_generation_pipeline, vfx_generation_pipeline
         from infini_local.pipelines.generated_parent_summary import attach_generated_parent_summary
         from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
         from infini_local.services import codex_auth
@@ -84,6 +84,7 @@ class OfflineCapture:
         from vfx_material_fixtures import _legacy
         self.config, self.vfx = llm_config, vfx_manifest
         self.author, self.transport = llm_authoring_pipeline, llm_transport
+        self.profiles, self.admission = llm_profiles, llm_admission
         self.visual, self.vfx_sender = visual_generation_pipeline, vfx_generation_pipeline
         self.compile, self.validate, self.fixture = compile_runtime_program, validate_runtime_program, build_runtime_fixture
         self.attach_parent, self.auth = attach_generated_parent_summary, codex_auth
@@ -101,12 +102,12 @@ class OfflineCapture:
         settings = [
             (socket, {"create_connection": forbidden, "getaddrinfo": forbidden}),
             (socket.socket, {"connect": forbidden, "connect_ex": forbidden}),
-            (self.config, {"PROMPT_STYLE": "Default"}),
-            (self.transport, {"_primary_llm_context": lambda: self.contexts["chat_completions"],
-                              "LLM_REASONING_MODE": "off", "LLM_MAX_TOKENS": 9000,
-                              "CODEX_VISUAL_REASONING": "inherit",
+            (self.config, {"PROMPT_STYLE": "Default", "LLM_REASONING_MODE": "off", "LLM_MAX_TOKENS": 9000,
+                           "CODEX_VISUAL_REASONING": "inherit"}),
+            (self.profiles, {"_primary_llm_context": lambda: self.contexts["chat_completions"]}),
+            (self.admission, {"_reserve_remote_rate_slot": lambda *_a, **_kw: None}),
+            (self.transport, {
                               "_llm_replay_json_response": lambda *_: None,
-                              "_reserve_remote_rate_slot": lambda *_a, **_kw: None,
                               "urlopen_no_redirect": forbidden, "http_get_json": forbidden}),
             (self.auth, {"get_credentials": lambda: SimpleNamespace(access_token="offline", account_id="offline"),
                          "_generation_request": forbidden}),
@@ -179,7 +180,7 @@ class OfflineCapture:
         return fn(*args, **kwargs)
 
     def builder(self, stage, cohort, mode):
-        self.transport.LLM_RESPONSE_FORMAT_MODE = mode
+        self.config.LLM_RESPONSE_FORMAT_MODE = mode
         inputs = self.stage_inputs(cohort)
         a, b, authored, data = [inputs[key] for key in ("parentA", "parentB", "authored", "data")]
         requests = []

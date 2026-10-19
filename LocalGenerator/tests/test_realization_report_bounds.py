@@ -1,5 +1,6 @@
 """Finite report bounds preserve authored prose and never change gameplay."""
 from __future__ import annotations
+
 from prompt_packet_helpers import request_dossier
 
 import copy
@@ -8,6 +9,7 @@ import json
 import jsonschema
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
@@ -107,7 +109,6 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
 @pytest.mark.parametrize("mode", ["json_object", "off"])
 def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(monkeypatch, mode):
     import infini_local.core.runtime_authoring.program_schema as program_schema
-    from infini_local.pipelines import llm_transport
 
     canonical = program_schema.realization_schema
 
@@ -121,7 +122,7 @@ def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(mo
     # A changed schema fact must reach the actual consumers: matching copies of
     # hard-coded prompt numbers would pass a plain equality test but fail this.
     monkeypatch.setattr(program_schema, "realization_schema", changed_report_schema)
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     monkeypatch.setattr(pipeline, "USE_LLM", True)
     monkeypatch.setattr(pipeline, "resolve_llm_model", lambda: "offline-report-test")
     item = build_runtime_fixture("workbench_blade")

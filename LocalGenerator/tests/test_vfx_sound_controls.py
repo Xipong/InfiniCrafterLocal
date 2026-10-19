@@ -1,11 +1,13 @@
 """Explicit sound controls survive the real VFX boundary and frozen Repair."""
 from __future__ import annotations
+
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
 
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.core import vfx_manifest as vfx
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.pipelines import vfx_generation_pipeline as stage
@@ -151,7 +153,6 @@ def test_interval_relation_only_thaws_variance_and_never_chooses_a_new_pitch():
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("missing_container", [False, True])
 def test_actual_repair_transport_restores_only_sound_scope_and_keeps_other_choices(monkeypatch, mode, missing_container):
-    from infini_local.pipelines import llm_transport
     data = _data()
     accepted = _sound(data, "Item152")
     raw = copy.deepcopy(accepted)
@@ -165,7 +166,7 @@ def test_actual_repair_transport_restores_only_sound_scope_and_keeps_other_choic
         candidate["sound"].update(pitch=0.7, pitchVariance=0.6)
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "restore diagnosed sound choices", "slotsUpsert": [candidate]}
     sent = _offline_transport(monkeypatch, "sound_controls_" + mode + str(missing_container), [raw, patch])
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     final = vfx.attach_vfx_manifest(data, "sound-control-repair", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert final["debug"]["vfxRepairFilterAudit"]["acceptedPaths"] == [

@@ -6,6 +6,9 @@ import json
 
 import pytest
 
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_profiles
+from infini_local.pipelines import llm_provider_wire
 from infini_local.services import codex_auth as auth, codex_text_backend as text
 from infini_local.storage import trace_runtime as trace, trace_tools
 
@@ -70,8 +73,8 @@ def test_stalled_failed_trace_writer_cannot_delay_post_or_sse_parsing(recording,
             {"type": "response.completed", "response": {"status": "completed"}}))
     monkeypatch.setattr(trace_tools, "append_ndjson", stalled)
     install_opener(monkeypatch, opened)
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(llm.llm_chat_json, {"messages": [{"role": "user", "content": "fixture"}]}, timeout=.3)
         try:
@@ -135,8 +138,8 @@ def test_transport_ndjson_lock_does_not_block_generation_event_logging(recording
         return MemoryResponse(sse({"type": "response.output_text.delta", "delta": "{}"},
             {"type": "response.completed", "response": {"status": "completed"}}))
     install_opener(monkeypatch, opened)
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(llm.llm_chat_json, {"messages": [{"role": "user", "content": "fixture"}]}, timeout=.3)
         try:
@@ -159,8 +162,8 @@ def test_artifact_fsync_does_not_block_generation_event_logging(recording, monke
     install_opener(monkeypatch, lambda *_a, **_k: MemoryResponse(sse(
         {"type": "response.output_text.delta", "delta": "{}"},
         {"type": "response.completed", "response": {"status": "completed"}})))
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(llm.llm_chat_json, {"messages": [{"role": "user", "content": "fixture"}]}, timeout=.3)
         try:
@@ -185,8 +188,8 @@ def test_expired_before_real_opener_reports_zero_physical_posts(recording, monke
         return Opener()
     monkeypatch.setattr(auth, "urlopen_no_redirect", http_io.urlopen_no_redirect)
     monkeypatch.setattr(http_io.urlrequest, "build_opener", prepare)
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     with pytest.raises(http_io.HttpDeadlineExceeded) as caught:
         llm.llm_chat_json({"messages": [{"role": "user", "content": "fixture"}]}, timeout=3)
     assert opened == []
@@ -199,15 +202,15 @@ def test_concurrent_codex_calls_keep_join_and_attempt_state_request_local(record
     from threading import Barrier
     from infini_local.pipelines import llm_transport as llm
     barrier = Barrier(2)
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     def opened(req, *, deadline):
         barrier.wait(timeout=5)
         fact = json.loads(req.data)["input"][0]["content"][0]["text"]
         return MemoryResponse(sse({"type": "response.output_text.delta", "delta": fact}, {"type": "response.completed", "response": {"status": "completed"}}))
     install_opener(monkeypatch, opened)
     def call(index):
-        with llm.llm_item_lease("fixture-" + str(index)):
+        with llm_profiles.llm_item_lease("fixture-" + str(index)):
             return llm.llm_chat_json({"messages": [{"role": "user", "content": str(index)}]}, timeout=3)
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(call, [1, 2]))
@@ -225,8 +228,8 @@ def test_concurrent_codex_calls_keep_join_and_attempt_state_request_local(record
 def test_observed_codex_zero_send_removes_unknown_scope(recording, monkeypatch):
     from infini_local.core.http_io import HttpDeadlineExceeded
     from infini_local.pipelines import llm_transport as llm
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     remaining = auth.remaining_seconds
     def expired_on_entry(deadline):
         # Only the native generation owner is stopped; no authentication or I/O.
@@ -257,8 +260,8 @@ def test_malformed_provider_event_type_is_recorded_before_original_parser_reject
 def test_trace_off_still_counts_physical_posts_but_never_traces_auth(recording, monkeypatch, transport):
     from infini_local.pipelines import llm_transport as llm
     monkeypatch.setattr(trace, "TRACE_PROMPTS_ENABLED", False)
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     def opened(req, *, deadline):
         return MemoryResponse(sse({"type": "response.completed", "response": {"status": "completed", "output": [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "{}"}]}]}}))
     install_opener(monkeypatch, opened)
@@ -607,8 +610,8 @@ def test_llm_logical_summary_counts_actual_codex_retry_posts(recording, monkeypa
     from email.message import Message
     from urllib.error import HTTPError
     from infini_local.pipelines import llm_transport as llm
-    monkeypatch.setattr(llm, "LLM_PROVIDER", "openai_codex")
-    monkeypatch.setattr(llm, "CODEX_LLM_MODEL", "fixture-model")
+    monkeypatch.setattr(llm_config, "LLM_PROVIDER", "openai_codex")
+    monkeypatch.setattr(llm_config, "CODEX_LLM_MODEL", "fixture-model")
     calls = []
     def opened(req, *, deadline):
         calls.append(req.data)
@@ -616,8 +619,8 @@ def test_llm_logical_summary_counts_actual_codex_retry_posts(recording, monkeypa
             raise HTTPError(req.full_url, 503, "fixture busy", Message(), MemoryResponse(b'{"error":{"message":"fixture busy"}}'))
         return MemoryResponse(sse({"type": "response.completed", "response": {"status": "completed", "output": [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": "{}"}]}]}}))
     install_opener(monkeypatch, opened)
-    with llm.llm_item_lease("fixture-join") as lease:
-        result = llm.llm_chat_json(llm.with_llm_stage({"messages": [{"role": "user", "content": "fact"}]}, "planner"), timeout=3)
+    with llm_profiles.llm_item_lease("fixture-join") as lease:
+        result = llm.llm_chat_json(llm_provider_wire.with_llm_stage({"messages": [{"role": "user", "content": "fact"}]}, "planner"), timeout=3)
         debug = result["_debug"]
         assert debug["physicalAttemptCount"] == len(calls) == 2
         assert debug["physicalAttemptScope"] == "llm_generation_http_post"

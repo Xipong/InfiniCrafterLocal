@@ -1,8 +1,10 @@
+
 import io
 from urllib.error import HTTPError
 
 import pytest
 
+from infini_local.pipelines import llm_profiles
 from infini_local.pipelines import llm_transport
 
 
@@ -15,9 +17,9 @@ def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
     monkeypatch.setattr(server.generation_debug, "last_combine_failure_summary", lambda: None)
     primary = {"provider": "openrouter", "base_url": "https://openrouter.ai/api/v1",
                "model": "test-model", "api_key": ""}
-    monkeypatch.setattr(llm_transport, "_legacy_primary_llm_context", lambda: primary)
-    monkeypatch.setattr(llm_transport, "configured_llm_pool", lambda: [])
-    monkeypatch.setattr(llm_transport, "_fallback_llm_context", lambda: None)
+    monkeypatch.setattr(llm_profiles, "_legacy_primary_llm_context", lambda: primary)
+    monkeypatch.setattr(llm_profiles, "configured_llm_pool", lambda: [])
+    monkeypatch.setattr(llm_profiles, "_fallback_llm_context", lambda: None)
     snapshot = llm_transport.llm_auth_snapshot()
     assert snapshot["provider"] == "openrouter"
     assert snapshot["apiKeyConfigured"] is False
@@ -26,11 +28,11 @@ def test_openrouter_auth_diagnostics_are_exposed_and_fail_fast(monkeypatch):
     assert "api_key" not in snapshot
     assert server._health_payload()["llmAuth"] == snapshot
     with pytest.raises(RuntimeError, match="INFINI_OPENROUTER_API_KEY"):
-        llm_transport.ensure_llm_auth_configured(primary)
+        llm_profiles.ensure_llm_auth_configured(primary)
     primary["api_key"] = "test-key-not-real"
     configured = llm_transport.llm_auth_snapshot()
     assert configured["status"] == "configured"
-    llm_transport.ensure_llm_auth_configured(primary)
+    llm_profiles.ensure_llm_auth_configured(primary)
     health = server._health_payload()
     assert health["llmAuth"] == configured
     assert "api_key" not in health["llmAuth"]

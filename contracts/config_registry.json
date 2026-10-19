@@ -5038,7 +5038,7 @@
       "declarations": [
         {
           "default": "",
-          "file": "LocalGenerator/infini_local/pipelines/llm_transport.py",
+          "file": "LocalGenerator/infini_local/pipelines/llm_provider_wire.py",
           "maximum": null,
           "minimum": null,
           "type": "string"
@@ -5052,7 +5052,7 @@
       "minimum": null,
       "name": "INFINI_VISUAL_DIRECTOR_MAX_TOKENS",
       "owners": [
-        "LocalGenerator/infini_local/pipelines/llm_transport.py"
+        "LocalGenerator/infini_local/pipelines/llm_provider_wire.py"
       ],
       "secret": true,
       "type": "string",
@@ -5370,7 +5370,7 @@
   ],
   "errors": [],
   "fieldCount": 218,
-  "fingerprint": "ea15bcf9d05451e0ca869425c98c90460a396b0d41a89291480324ea6e7e059f",
+  "fingerprint": "8a7da0e47954cf17c4b73105801ef2afc60b3cda4bc4607477c8f4c16883f9f9",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

@@ -1,3 +1,4 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Actual Author packets keep registry mechanics without contradictory global prose."""
 from copy import deepcopy
@@ -5,11 +6,12 @@ import json
 
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, compact_capability_catalog
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_author_request_compaction import _expand_constraint_references
@@ -34,7 +36,7 @@ def _stationary_periodic_shooter(pool=None):
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema", "off"])
 def test_serialized_initial_packet_preserves_registry_and_source_without_repeated_global_blocks(monkeypatch, mode):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     parents = ({"name": "Native source", "useAmmo": 97},
                {"name": "Generated source", "generatedData": compile_runtime_program(build_capability_witness("configure_weapon_ammo"))})
     before = deepcopy(parents)

@@ -13,7 +13,7 @@ from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_size_leaf_sender_has_only_permitted_grammar_and_frozen_art(wire_transport, monkeypatch, mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     previous = _visual_kit(data)
     previous["item"]["renderSizePx"] = None
@@ -39,7 +39,7 @@ def test_size_leaf_sender_has_only_permitted_grammar_and_frozen_art(wire_transpo
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("target", ["grip", "entity", "overlay"])
 def test_partial_owner_patch_retains_valid_siblings_and_exact_schema(wire_transport, monkeypatch, mode, target):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     data = compile_runtime_program(build_runtime_fixture("equipment_tool_combat" if target == "overlay" else "door_on_chain"))
     previous = _visual_kit(data)
     if target == "grip":
@@ -92,7 +92,7 @@ def test_hostile_complete_patch_still_hits_authoritative_frozen_filter(wire_tran
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_whole_response_repair_keeps_complete_contract_and_raw_source(wire_transport, monkeypatch, mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     source = visual.MalformedVisualDirectorOutput(raw_text='{"schema":', error="syntax")
     errors = [{"path": "$", "message": "malformed_json"}]
@@ -127,7 +127,7 @@ def test_malformed_entity_collection_keeps_complete_replacement_domain(wire_tran
 @pytest.mark.parametrize("bad_id", [[], {}], ids=["array-id", "object-id"])
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_malformed_entity_identity_reaches_authorized_replacement_repair(wire_transport, monkeypatch, mode, bad_id):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
     accepted = _visual_kit(data)
     broken = copy.deepcopy(accepted)

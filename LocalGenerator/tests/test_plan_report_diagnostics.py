@@ -64,7 +64,7 @@ def test_serialized_author_and_repair_preserve_diagnostic_report(monkeypatch, fo
     monkeypatch.setattr(socket.socket, "connect", denied)
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
     monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     monkeypatch.setattr(llm_authoring_pipeline, "USE_LLM", True)
     monkeypatch.setattr(llm_authoring_pipeline, "resolve_llm_model", lambda: "offline-test-model")
     monkeypatch.setattr(llm_authoring_pipeline, "trace_stage_request", lambda *args, **kwargs: None)

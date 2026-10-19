@@ -14,7 +14,7 @@ from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("envelope", ["root", "fingerprint"])
 def test_native_required_ammo_category_reaches_actual_author_request(monkeypatch, format_mode, envelope):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     facts = {"useAmmo": 283, "useAmmoCategoryName": "dart", "ammo": 0, "ammoCategoryName": ""}
     # Neutral identity ensures there is no name-based category interpretation.
     parent = {"name": "opaque source", **(facts if envelope == "root" else {envelope: facts})}
@@ -74,7 +74,7 @@ def test_author_advisory_exposes_inheritance_tradeoffs_and_shared_active_cost():
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_actual_author_cards_explain_spawn_axes_event_origin_and_yoyo_rotation(monkeypatch, format_mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     request, _, _ = build_initial_author_request({}, {}, "emission-reading", model_name="offline-test-model")
     cards = {row["fn"]: row for row in request_dossier(request)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     spawn = json.dumps(cards["configure_spawn"], ensure_ascii=False)
