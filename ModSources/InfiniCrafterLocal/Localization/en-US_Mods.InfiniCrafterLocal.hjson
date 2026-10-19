@@ -184,7 +184,7 @@ RuntimeTooltip: {
 	EquipmentKnockback: "{0}: generic knockback contribution {1}%"
 	EquipmentMinions: "{0}: minion capacity contribution {1}"
 	EquipmentSentries: "{0}: sentry capacity contribution {1}"
-	EquipmentManaCost: "{0}: mana cost reduction {1}% of base cost (additive; final cost is rounded down)"
+	EquipmentManaCost: "{0}: mana cost modifier: {1}% (additive; final cost rounded down)"
 	EquipmentAmmoSave: "{0}: independent generated ammo conservation chance {1}%"
 	EquipmentAggro: "{0}: aggro contribution {1}"
 	EquipmentEndurance: "{0}: damage reduction contribution {1} percentage points"
