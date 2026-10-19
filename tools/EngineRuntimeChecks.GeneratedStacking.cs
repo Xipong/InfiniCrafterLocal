@@ -45,17 +45,26 @@ internal static partial class EngineRuntimeChecks
             });
         Equal(true, ReferenceEquals(different.Item, inventory[11]), "native QuickStack mask restores exact instance");
 
-        // Exercise the actual Item.IsTheSameAs dispatch used by nearby native
-        // chests, rather than only testing a new helper never called by Terraria.
+        // The old native IsTheSameAs predicate only exists on older tML builds.
+        // The current native chest code uses Item.CanStack; both must honor
+        // the same exact generated identity without breaking vanilla items.
         var owner = new GeneratedQuickStackSystem();
         try
         {
             owner.Load();
-            Equal(true, first.Item.IsTheSameAs(equal.Item), "native same-item accepts the same generated definition");
-            Equal(false, first.Item.IsTheSameAs(different.Item), "native nearby-chest selector rejects other definition");
-            Equal(false, different.Item.IsTheSameAs(first.Item), "native selector is symmetric for generated items");
-            Equal(true, new Item(ItemID.Wood, 1).IsTheSameAs(new Item(ItemID.Wood, 1)),
-                "unrelated vanilla matching behavior remains native");
+            var legacy = typeof(Item).GetMethod("IsTheSameAs", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                null, new[] { typeof(Item) }, null);
+            if (legacy is not null)
+            {
+                bool Same(Item left, Item right) => (bool)legacy.Invoke(left, new object[] { right })!;
+                Equal(true, Same(first.Item, equal.Item), "legacy native selector accepts exact generated definition");
+                Equal(false, Same(first.Item, different.Item), "legacy nearby selector rejects other definition");
+                Equal(false, Same(different.Item, first.Item), "legacy selector rejects both directions");
+                Equal(true, Same(new Item(ItemID.Wood, 1), new Item(ItemID.Wood, 1)),
+                    "legacy vanilla comparison remains native");
+            }
+            Equal(true, ItemLoader.CanStack(first.Item, equal.Item), "native stacking hook accepts exact generated identity");
+            Equal(false, ItemLoader.CanStack(first.Item, different.Item), "native stacking hook rejects different generated identity");
         }
         finally { owner.Unload(); }
     }

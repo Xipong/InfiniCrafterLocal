@@ -13,8 +13,8 @@ namespace InfiniCrafterLocal.Common.Systems;
 
 /// <summary>
 /// A single proxy Item.type represents many unrelated generated definitions.
-/// Terraria's nearby-chest search uses Item.IsTheSameAs and the open-chest
-/// QuickStack prefilter uses netID; neither alone distinguishes those items.
+/// Old nearby-chest paths use Item.IsTheSameAs; the newer global
+/// QuickStack groups by shared netID. Open-chest operations use exact identity.
 /// Leave the native chest transfer, packet and inventory lifecycle untouched.
 /// </summary>
 public sealed class GeneratedQuickStackSystem : ModSystem
@@ -26,15 +26,18 @@ public sealed class GeneratedQuickStackSystem : ModSystem
         if (_hooks.Count != 0) return;
         try
         {
-            MethodInfo same = typeof(Item).GetMethod(nameof(Item.IsTheSameAs),
-                BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(Item) }, null)
-                ?? throw new InvalidOperationException("native Item.IsTheSameAs signature unavailable");
+            // The legacy method was removed in 1.4.5; optional exact
+            // equality detour is needed only for older native chest routines.
+            MethodInfo? same = typeof(Item).GetMethod("IsTheSameAs",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance, null,
+                new[] { typeof(Item) }, null);
             MethodInfo? legacyQuick = typeof(ChestUI).GetMethod(nameof(ChestUI.QuickStack),
                 BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
             MethodInfo? quickWithContext = typeof(ChestUI).GetMethod(nameof(ChestUI.QuickStack),
                 BindingFlags.Public | BindingFlags.Static, null,
                 new[] { typeof(ContainerTransferContext), typeof(bool) }, null);
-            _hooks.Add(new Hook(same, (Func<Func<Item, Item, bool>, Item, Item, bool>)NativeSameItem));
+            if (same is not null)
+                _hooks.Add(new Hook(same, (Func<Func<Item, Item, bool>, Item, Item, bool>)NativeSameItem));
             if (legacyQuick is not null)
                 _hooks.Add(new Hook(legacyQuick, (Action<Action>)OpenChestQuickStack));
             if (quickWithContext is not null)
@@ -42,6 +45,10 @@ public sealed class GeneratedQuickStackSystem : ModSystem
                     (Action<Action<ContainerTransferContext, bool>, ContainerTransferContext, bool>)OpenChestQuickStackWithContext));
             if (legacyQuick is null && quickWithContext is null)
                 throw new InvalidOperationException("Unsupported native ChestUI.QuickStack signature");
+            MethodInfo nearby = typeof(Player).GetMethod(nameof(Player.QuickStackAllChests),
+                BindingFlags.Instance | BindingFlags.Public, null, Type.EmptyTypes, null)
+                ?? throw new InvalidOperationException("native Player.QuickStackAllChests signature unavailable");
+            _hooks.Add(new Hook(nearby, (Action<Action<Player>, Player>)NearbyQuickStack));
         }
         catch { Unload(); throw; }
     }
@@ -98,6 +105,22 @@ public sealed class GeneratedQuickStackSystem : ModSystem
             foreach (var (slot, original) in hidden)
                 inventory[slot] = original;
         }
+    }
+
+    // Terraria's global nearby quickstack indexes chests by the shared item
+    // netID (and 1.4.5 Similar Stack can choose categories). There is no safe
+    // per-definition target selector in this API. Do not let generated items
+    // enter that path and end up in an unrelated chest; explicit opened-chest
+    // QuickStack remains available for an exact matching definition.
+    private static void NearbyQuickStack(Action<Player> orig, Player player)
+    {
+        if (player is null) return;
+        WithExactQuickStackCandidates(player.inventory, Array.Empty<Item>(), () => {
+            if (player.bank4?.item is Item[] voidVault)
+                WithExactQuickStackCandidates(voidVault, Array.Empty<Item>(), () => orig(player));
+            else
+                orig(player);
+        });
     }
 
     private static void OpenChestQuickStack(Action orig)
