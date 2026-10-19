@@ -873,6 +873,10 @@ public sealed class GeneratorClient
             ["ammoCategoryName"] = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.ammo),
             ["notAmmo"] = item.notAmmo,
             ["useAmmo"] = item.useAmmo,
+            ["useAmmoCategoryName"] = TerrariaRuntimeVocabulary.CanonicalAmmoCategoryToken(item.useAmmo),
+            // Literal native inventory flag, not a generated capability or inheritance rule.
+            ["dropSeedsIfInInventory"] = item.type >= 0 && item.type < ItemID.Sets.DropSeedsIfInInventory.Length
+                && ItemID.Sets.DropSeedsIfInInventory[item.type],
             ["shoot"] = item.shoot,
             ["shootSpeed"] = item.shootSpeed,
             ["knockback"] = item.knockBack,

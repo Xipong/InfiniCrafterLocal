@@ -291,12 +291,17 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
         InfiniItemVfxRuntime.ClearUseEventCaches();
         Content.Projectiles.GeneratedProjectile.ClearVfxEventSyncCaches();
         MaterialPaths.Clear();
-        MaterialPathEffect?.Dispose();MaterialPathEffect=null;
         PeriodicElements.Clear();
         LastMaterialsTick=ulong.MaxValue;
         MaterialEmissions.Clear();
         Emissions.Clear();
         DrawCallsBySource.Clear();
         ParticleBudgetsBySource.Clear();
+        // SaveAndQuit calls OnWorldUnload on a worker. Retire all world-owned
+        // CPU state before queuing any graphics work, and capture this exact
+        // generation: a late callback must not dispose a new world's effect.
+        BasicEffect? retiredEffect = System.Threading.Interlocked.Exchange(ref MaterialPathEffect, null);
+        if (retiredEffect is not null)
+            Main.QueueMainThreadAction(retiredEffect.Dispose);
     }
 }

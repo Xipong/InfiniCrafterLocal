@@ -85,7 +85,7 @@ internal static class GeneratedUtilityBuffStatusView
     private static string Effect(GeneratedUtilityBuffValues value, GeneratedUtilityBuffField field, CultureInfo culture)
     {
         bool russian = culture.TwoLetterISOLanguageName == "ru";
-        string Number(float number) => float.IsFinite(number) ? number.ToString("G7", culture) : "unavailable";
+        string Number(float number) => float.IsFinite(number) ? GeneratedStatusTooltipView.Number(number, culture) : "unavailable";
         string Signed(float number) => (number >= 0f ? "+" : "") + Number(number);
         return field switch
         {
@@ -103,9 +103,7 @@ internal static class GeneratedUtilityBuffStatusView
 
     private static string Duration(int ticks, CultureInfo culture)
     {
-        decimal seconds = ticks / 60m;
-        return (decimal.Round(seconds, 3) == seconds ? "" : "≈")
-            + seconds.ToString("0.###", culture)
+        return GeneratedStatusTooltipView.CountdownSeconds(ticks, culture)
             + (culture.TwoLetterISOLanguageName == "ru" ? " с" : " s");
     }
 

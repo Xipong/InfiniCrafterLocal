@@ -90,7 +90,7 @@ internal static partial class EngineRuntimeChecks
                 Equal("InfiniCrafterLocal/Assets/Exhaustion", PresentationExhaustionValue<string>(row, "IconPath"), "approved custom icon, not TextureAssets.Buff");
                 Equal(true, PresentationExhaustionValue<string>(row, "Label").Contains(data[i].Name), "own hover name");
                 string tip = PresentationExhaustionValue<string>(row, "Tooltip");
-                Equal(true, tip.Contains((ticks[i] / 60m).ToString("0.###", Language.ActiveCulture.CultureInfo))
+                Equal(true, tip.Contains(((ticks[i] + 59) / 60).ToString(Language.ActiveCulture.CultureInfo))
                     && !tip.Contains("ticks") && !tip.Contains("тиков") && !tip.Contains("Mods.InfiniCrafterLocal."), "localized own seconds; exact ticks stay in row");
                 Equal(true, tip.Contains(locale == "ru-RU" ? "только повторное применение" : "only reapplication"), "generated-buff-only refusal meaning");
             }
@@ -309,7 +309,8 @@ internal static partial class EngineRuntimeChecks
                         Terraria.Main.mouseX = position.X + 1; Terraria.Main.mouseY = position.Y + 1;
                         hovers.Clear(); draw.Invoke(null, null);
                         Equal(1, hovers.Count, "one actual hover target");
-                        Equal(true, hovers[0].Name.Contains(items[i].Name) && hovers[0].Text.Contains((new[] { 61, 122, 183, 244, 305 }[i] / 60m).ToString("0.###", Language.ActiveCulture.CultureInfo)), "actual MouseText gets this definition name and exact own countdown");
+                        Equal(true, hovers[0].Name.Contains(items[i].Name) && hovers[0].Name.Contains(((new[] { 61, 122, 183, 244, 305 }[i] + 59) / 60).ToString(Language.ActiveCulture.CultureInfo)), "actual native cursorText gets this definition name and own whole-second countdown");
+                        Equal("", hovers[0].Text, "whole block uses native cursorText measurement, not title-excluding buffTooltip clamp");
                     }
                 }
                 Equal(true, slots.SequenceEqual(player.buffType), "presentation never creates gameplay buff slots");
@@ -346,9 +347,10 @@ internal static partial class EngineRuntimeChecks
                     Terraria.Main.mouseX = point.X + 1; Terraria.Main.mouseY = point.Y + 1;
                     draw.Invoke(null, null);
                     Equal(1, hovers.Count, "mobility reaches native hover boundary");
-                    Equal(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.MobilityCooldownStatus"), hovers[0].Name, "mobility label is distinct from fatigue");
-                    Equal(true, hovers[0].Text.Contains(locale == "en-US" ? "2.017" : "2,017")
-                        && !hovers[0].Text.Contains("121"), "mobility hover uses seconds");
+                    Equal(true, hovers[0].Name.StartsWith(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.MobilityCooldownStatus") + "\n"), "mobility label is distinct from fatigue in whole native text block");
+                    Equal(true, hovers[0].Name.Contains(locale == "en-US" ? "3 s" : "3 с")
+                        && !hovers[0].Name.Contains("121"), "mobility hover uses stable whole seconds");
+                    Equal("", hovers[0].Text, "mobility body joins whole native cursorText clamp");
                     Equal(121, owner.GeneratedMobilityCooldownTicks, "HUD draw leaves mobility timer untouched");
                 }
                 Equal(false, owner.TryReserveGeneratedMobilityCooldown(1800), "failed repeat does not restart HUD timer");

@@ -17,9 +17,7 @@ internal static class GeneratedMobilityCooldownStatusView
     internal static GeneratedMobilityCooldownStatus? Build(int remainingTicks, CultureInfo culture)
     {
         if (remainingTicks <= 0) return null;
-        decimal seconds = remainingTicks / 60m;
-        string display = seconds.ToString("0.###", culture);
-        if (decimal.Round(seconds, 3) != seconds) display = "≈" + display;
+        string display = GeneratedStatusTooltipView.CountdownSeconds(remainingTicks, culture);
         string time = Language.GetTextValue(Key + "Time", display);
         // Borrow only the native teleport-cooldown texture. Never apply its buff.
         return new(remainingTicks, BuffID.ChaosState,

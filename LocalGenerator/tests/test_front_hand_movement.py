@@ -250,6 +250,14 @@ def test_real_author_packet_explains_center_travel_vs_native_front_hand_without_
     launch_axis = [r for r in hand["requires"] if r.get("capability") == "configure_spawn" and r.get("param") == "aim"]
     declared_axis = next(r for r in CAPABILITY_REGISTRY["move_front_hand"].requirements
                          if r.capability == "configure_spawn" and r.param == "aim")
+    # Foreground the design decision before the long catalog. Merely exposing a
+    # working hand driver did not stop new generations copying center-offset
+    # motion from another parent and calling it a held physical weapon.
+    priority = " ".join(request_dossier(request)["priorityHeader"])
+    for fact in ("continuous hand contact", "move_front_hand", "owner_attached_projectile",
+                 "held_body", "handPose", "grip", "do not attach", "collision",
+                 "deliberately detached", "not an upgrade recommendation"):
+        assert fact in priority
     assert launch_axis == [{"kind": "item_capability_param", "target": "same_target",
         "capability": "configure_spawn", "param": "aim", "anyOf": ["cursor", "facing", "velocity"],
         "message": declared_axis.message}]

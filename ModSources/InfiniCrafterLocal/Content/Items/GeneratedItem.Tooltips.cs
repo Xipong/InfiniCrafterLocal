@@ -6,6 +6,7 @@ using Terraria.GameContent;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.UI;
 using Terraria;
 using Terraria.Localization;
 using Terraria.ModLoader;
@@ -283,10 +284,10 @@ public partial class GeneratedItem
         => Language.GetTextValue(RuntimeTooltipKey + key, args);
     private static CultureInfo RuntimeTooltipCulture => Language.ActiveCulture.CultureInfo;
     private static string RuntimeTooltipNumber(int value) => value.ToString(RuntimeTooltipCulture);
-    private static string RuntimeTooltipNumber(float value) => value.ToString("G7", RuntimeTooltipCulture);
+    private static string RuntimeTooltipNumber(float value) => GeneratedStatusTooltipView.Number(value, RuntimeTooltipCulture);
     private static bool RuntimeTooltipFinite(float value, float min, float max) => float.IsFinite(value) && value >= min && value <= max;
     private static string RuntimeTooltipSignedPercent(float value)
-        => (value > 0f ? "+" : "") + ((double)value * 100d).ToString("G7", RuntimeTooltipCulture);
+        => (value > 0f ? "+" : "") + GeneratedStatusTooltipView.Number((double)value * 100d, RuntimeTooltipCulture);
     private static string RuntimeTooltipTime(int ticks)
     {
         // Display-only seconds: authoritative/debug data keeps its exact ticks.

@@ -1446,7 +1446,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "ammoCategory": {
-                    "description": "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks",
+                    "description": "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks. Seeds share the dart category; the category does not select projectile appearance or copy the chosen ammo's AI",
                     "enum": [
                       "arrow",
                       "bullet",
@@ -3686,7 +3686,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "aim": {
-                    "description": "Initial aim axis and forward offset; radial/disk sample their own directions. none is zero velocity for constant speed.",
+                    "description": "Initial aim axis and forward offset: facing uses current owner.direction on the horizontal axis; velocity uses the producer-supplied gameplay axis; cursor uses MouseWorld minus the shifted spawn position. These are not the visible sprite's rotation. radial/disk sample their own directions. none is zero velocity for constant speed.",
                     "enum": [
                       "cursor",
                       "facing",
@@ -3721,7 +3721,7 @@
                         "description": "At the explicit anchor, with no vertical offset",
                         "properties": {
                           "at": {
-                            "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
+                            "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
                             "enum": [
                               "activation_origin",
                               "owner_center",
@@ -3742,7 +3742,7 @@
                         "description": "Above the explicit anchor",
                         "properties": {
                           "above": {
-                            "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
+                            "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
                             "enum": [
                               "activation_origin",
                               "owner_center",

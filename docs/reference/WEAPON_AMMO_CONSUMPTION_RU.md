@@ -43,6 +43,12 @@ Native missing-ammo selection отказывает до runtime shot. Existing o
 
 Поддерживается существующий finite vocabulary, включая arrow и bullet из исторического consumer. Sand не входит в этот контракт. Отсутствие weapon capability не добавляет требования ammo к generated ammo item, healing item или обычному runtime projectile launcher.
 
+## Родительские наблюдения, не наследование механики
+
+Native capture передаёт `useAmmoCategoryName` из `Item.useAmmo` отдельно от `ammoCategoryName` из `Item.ammo`. Пропуск в старом packet остаётся неизвестным, Python не декодирует категорию по имени/ID. `weapon_item.shoot_field`, даже под ключом `effectiveProjectile`, — наблюдение поля weapon, не результат реального выстрела или выбранного боеприпаса. Accepted generated parent передаёт полный `runtimeProgram`, включая `weaponAmmo`, homing и collision, без выбора одного «типичного» projectile.
+
+`dart` — общая native категория семян и дротиков; она не требует дротикообразного спрайта. Weapon runtime entity сохраняет явно authored внешность/поведение независимо от выбранного ammo. `dropSeedsIfInInventory` — буквальный source flag `ItemID.Sets.DropSeedsIfInInventory[type]`, не новая capability и не обещание сбора семян generated предметом. Native grass-drop consumer проверяет inventory по type set; shared generated proxy нельзя пометить ради одной definition. Полноценный per-instance inventory passive требует отдельного согласованного vertical slice. Ни описание, ни выбор `dart` его не исполняют.
+
 ## Строгая граница и Repair
 
 Present `RuntimeWeaponAmmoSpec` допускает только `ammoCategory` и `speedBasis`. Native DTO проверяет exact enum, обязательный active spawn binding и отсутствие двойной ammo role; null payload и неизвестные поля отклоняются. Нет normalization, выбирающей другую категорию или speed basis.

@@ -1156,7 +1156,7 @@ _SPAWN_ANCHORS: Final[Mapping[str, str]] = MappingProxyType({
 
 def _spawn_position_param() -> ParamSpec:
     def anchor() -> ParamSpec:
-        return _p("string", "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
+        return _p("string", "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
                   enum=_SPAWN_ANCHORS, wire_enum=_SPAWN_ANCHORS, wire_name="placement")
     return _p("union", "Choose an anchor and optionally a literal vertical height above it; aim is computed after this shift",
               semantic_type="spawn_position", alternatives=(
@@ -1321,11 +1321,11 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_weapon_ammo",
-        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. Native inventory-only item flags are not inherited by this call. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
         "item",
         ("item_body",),
         {
-            "ammoCategory": _p("string", "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks", enum=VANILLA_AMMO_CATEGORY_TOKENS),
+            "ammoCategory": _p("string", "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks. Seeds share the dart category; the category does not select projectile appearance or copy the chosen ammo's AI", enum=VANILLA_AMMO_CATEGORY_TOKENS),
             "speedBasis": _p("string", "authored_spawn keeps configure_spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative", enum=("authored_spawn", "native_shot")),
         },
         requirements=(RequirementSpec(
@@ -1678,7 +1678,7 @@ _CAPS: list[CapabilitySpec] = [
             "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it", minimum=1, maximum=12, required=False, default=1, neutral=1, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "spreadRadians": _p("number", "Total angular spread. May be omitted only for child_projectile, whose producers override it", minimum=0, maximum=6.283185307179586, units="radians", required=False, default=0, neutral=0, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
-            "aim": _p("string", "Initial aim axis and forward offset; radial/disk sample their own directions. none is zero velocity for constant speed.", enum=("cursor", "facing", "velocity", "none")),
+            "aim": _p("string", "Initial aim axis and forward offset: facing uses current owner.direction on the horizontal axis; velocity uses the producer-supplied gameplay axis; cursor uses MouseWorld minus the shifted spawn position. These are not the visible sprite's rotation. radial/disk sample their own directions. none is zero velocity for constant speed.", enum=("cursor", "facing", "velocity", "none")),
             "position": _spawn_position_param(),
         },
         component_slot="spawn",
@@ -1994,7 +1994,7 @@ _CAPS.extend([
         when_spawned_by_inputs=("primary_use", "alternate_use"),
         message="An active flail spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release or reaching the leash latches return. Passive/event producers only observe existing owner channel.",
     ),), targets=("owner_attached_projectile",)),
-    _movement("move_yoyo_hover", "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.", 17, {
+    _movement("move_yoyo_hover", "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. This movement rotates the body by 0.35 radians per projectile update and does not turn the player toward the cursor; a child aiming by facing still uses the player's direction, not the rotating body. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.", 17, {
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
         "speed": _p("number", "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update", minimum=1, maximum=80, units="pixels/projectile update", wire_name="returnSpeed"),
     }, requirements=(RequirementSpec(

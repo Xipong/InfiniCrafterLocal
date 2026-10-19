@@ -447,7 +447,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. Native inventory-only item flags are not inherited by this call. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4943,7 +4943,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.",
+      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. This movement rotates the body by 0.35 radians per projectile update and does not turn the player toward the cursor; a child aiming by facing still uses the player's direction, not the rotating body. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

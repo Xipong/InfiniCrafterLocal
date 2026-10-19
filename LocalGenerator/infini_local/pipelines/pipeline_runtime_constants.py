@@ -37,7 +37,8 @@ LLM_ITEM_RAW_KEYS = [
     "headSlot", "bodySlot", "legSlot", "createTile", "createWall", "placeStyle",
     "pickPower", "axePower", "hammerPower", "pick", "axe", "hammer",
     "healLife", "healMana", "potion", "manaCost", "buffType", "buffTime",
-    "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "shoot", "shootSpeed", "fishingPole", "bait",
+    "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "useAmmoCategoryName", "dropSeedsIfInInventory",
+    "shoot", "shootSpeed", "fishingPole", "bait",
 ]
 LLM_PROJECTILE_RAW_KEYS = [
     "source", "inventorySlot", "type", "internalName", "sourceMod", "fullName",
