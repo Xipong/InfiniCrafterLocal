@@ -373,7 +373,7 @@ internal static partial class EngineRuntimeChecks
             ("native chest predictable support refusal before drop", NativeChestUnsupportedGroundRefusesBeforeVanillaDrop),
             ("native chest authored body light VFX actor liveness", NativeChestPreservesAuthoredBodyLightVfxAndActorLiveness),
             ("native chest bounded cached maintenance", NativeChestMaintenanceBoundsNativeActorsAndDefinitionReads),
-            ("native chest two families style zero only", NativeChestCanonicalStylesAndRefusals),
+            ("native chest single family style zero only", NativeChestCanonicalStylesAndRefusals),
             ("native chest admission", NativeChestAdmission),
             ("native chest bare tiles are not storage", NativeChestBareTilesCannotCommit),
             ("placed body ledger selected identity save and network", PlacedBodyLedgerKeepsExplicitIdentityAcrossSaveAndNetwork),

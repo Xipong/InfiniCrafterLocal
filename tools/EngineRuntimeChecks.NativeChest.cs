@@ -85,6 +85,7 @@ internal static partial class EngineRuntimeChecks {
   var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
   Equal(false,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),$"reject unsupported native chest style {rejected}");
   Equal(false,GeneratedPlacementLedgerSystem.PreparePlacement(player,source.Data,placement),"unsupported style cannot bypass authorization through ordinary placement");
+  NativeChestPlayerPlace(player); // An intercepted native placement must not bypass the refusal.
   Equal(-1,Chest.FindChest(40,39),"unsupported style never allocates a native inventory");
   Equal(false,Terraria.Main.tile[40,39].HasTile,"unsupported style never places a tile");
   Equal(0,PlacedLedgerGroups(ledger).Count,"unsupported style never commits a material claim");
