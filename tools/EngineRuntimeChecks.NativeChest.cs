@@ -13,17 +13,17 @@ internal static partial class EngineRuntimeChecks {
   var row=TileObjectData.GetTileData(tileType,0);Equal(true,TileID.Sets.BasicChest[tileType],"native BasicChest metadata family");
   Equal(nameof(Chest.FindEmptyChest),row.HookCheckIfCanPlace.hook.Method.Name,"native capacity callback");Equal(nameof(Chest.AfterPlacement_Hook),row.HookPostPlaceMyPlayer.hook.Method.Name,"native inventory callback");
   Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),"native family authorizes with independent authored body");
-  Console.WriteLine($"NATIVE_CHEST_FAMILY tileId={tileType} styles={(tileType==TileID.Containers?Chest.chestItemSpawn.Length:Chest.chestItemSpawn2.Length)}");
+  Console.WriteLine($"NATIVE_CHEST_FAMILY tileId={tileType} supportedStyle=0");
  }); }
  private static void NativeChestBareTilesCannotCommit(){ WithNativeChestWorld((player,ledger)=>{
  var old=Terraria.Main.chest;bool solid=Terraria.Main.tileSolid[1], frame=Terraria.Main.tileFrameImportant[21];
  try { Terraria.Main.chest=new Chest[8000];TileObjectData.Initialize();Terraria.Main.tileSolid[1]=true;Terraria.Main.tileFrameImportant[21]=true;
  Terraria.Main.netMode=NetmodeID.SinglePlayer;
  for(int x=40;x<42;x++){var t=Terraria.Main.tile[x,41];t.HasTile=true;t.TileType=1;}
- var data=PlacedLedgerData("chest-bare-red");var p=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;p.TileId=21;p.PlaceStyle=17;
+ var data=PlacedLedgerData("chest-bare-red");var p=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;p.TileId=21;p.PlaceStyle=0;
  player.inventory[0]=ReviewItem(data).Item;
  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,p,40,40),"real chest authorized");
- var obj=new TileObject{xCoord=40,yCoord=39,type=21,style=17,alternate=0};
+ var obj=new TileObject{xCoord=40,yCoord=39,type=21,style=0,alternate=0};
  Equal(true,TileObject.Place(obj),"real native tiles written");
  Equal(-1,Chest.FindChest(40,39),"bare TileObject.Place did not create inventory");
  Equal(false,GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player),"tiles without authenticated native callback outcome cannot charge or commit");
@@ -43,7 +43,7 @@ internal static partial class EngineRuntimeChecks {
  check(player,ledger);
  }finally{Array.Copy(chestDrops,Chest.chestItemSpawn,chestDrops.Length);Array.Copy(chestDrops2,Chest.chestItemSpawn2,chestDrops2.Length);Array.Copy(dresserDrops,Chest.dresserItemSpawn,dresserDrops.Length);Terraria.Main.guideItem=guide;Recipe.maxRecipes=recipes;foreach(var f in hookFields)f.SetValue(null,null);Terraria.Main.chest=old;Terraria.Main.tileSolid[1]=solid;Terraria.Main.tileFrameImportant[21]=frame;Terraria.Main.tileContainer[21]=container;Terraria.Main.tileFrameImportant[467]=frame2;Terraria.Main.tileContainer[467]=container2;Terraria.Main.dedServ=ded;Terraria.Main.myPlayer=my;Player.tileTargetX=tx;Player.tileTargetY=ty;}
  });}
- private static InfiniCrafterLocal.Content.Items.GeneratedItem NativeChestItem(Player player,string id="native-chest",int? nativeType=null,int tileType=TileID.Containers,int style=17){
+ private static InfiniCrafterLocal.Content.Items.GeneratedItem NativeChestItem(Player player,string id="native-chest",int? nativeType=null,int tileType=TileID.Containers,int style=0){
  var data=PlacedLedgerData(id);var p=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;p.TileId=tileType;p.PlaceStyle=style;
  var item=nativeType is int type ? (InfiniCrafterLocal.Content.Items.GeneratedItem)new Item(type).ModItem : ReviewItem(data);
  if(nativeType.HasValue)GeneratedPrefixSetData(item,data);
@@ -54,9 +54,10 @@ internal static partial class EngineRuntimeChecks {
  var obj=new TileObject{xCoord=40,yCoord=39,type=tileType,style=style,alternate=0};
  typeof(Player).GetMethod("PlaceThing_Tiles_PlaceIt",PersistenceInstance)!.Invoke(player,new object[]{true,obj,tileType});
  }
- private static void NativeChestVanillaFamiliesAndStyles(){
+ private static void NativeChestCanonicalStylesAndRefusals(){
  foreach(int tile in new[]{TileID.Containers,TileID.Containers2})
- foreach(int style in Enumerable.Range(0,tile==TileID.Containers ? Chest.chestItemSpawn.Length : Chest.chestItemSpawn2.Length))WithNativeChestWorld((player,ledger)=>{
+ WithNativeChestWorld((player,ledger)=>{
+  int style=0;
   var tuple=(tile,style);
   var source=NativeChestItem(player,"native-family",tileType:tuple.Item1,style:tuple.Item2);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
   Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),$"ordinary native chest family/style authorizes {tuple}");NativeChestPlayerPlace(player);
@@ -74,7 +75,21 @@ internal static partial class EngineRuntimeChecks {
   using var pool=new NativeItemPoolState();Terraria.Main.item=Enumerable.Range(0,Terraria.Main.maxItems+1).Select(_=>new Item{active=true}).ToArray();Terraria.Main.timeItemSlotCannotBeReusedFor=new int[Terraria.Main.maxItems+1];
   ledger.PostUpdateWorld();Equal(0,PlacedLedgerGroups(ledger).Count,"native style empty removal retires material group");Equal(1,PlacedLedgerSaved(ledger).GetList<Terraria.ModLoader.IO.TagCompound>("infiniGeneratedPlacementReturnsV2").Count,"native style removal uses sole pending-return owner");
   Console.WriteLine($"PASS native style lifecycle {tile}/{style}");
- });}
+ });
+ // Refuse even valid vanilla styles before native tiles, inventory, or claims exist.
+ foreach(var rejected in new[]{(Tile:TileID.Containers,Style:1),(Tile:TileID.Containers,Style:2),
+   (Tile:TileID.Containers,Style:17),(Tile:TileID.Containers,Style:51),
+   (Tile:TileID.Containers2,Style:1),(Tile:TileID.Containers2,Style:16)})
+ WithNativeChestWorld((player,ledger)=>{
+  var source=NativeChestItem(player,"native-unsupported-style",tileType:rejected.Tile,style:rejected.Style);
+  var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
+  Equal(false,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),$"reject unsupported native chest style {rejected}");
+  Equal(false,GeneratedPlacementLedgerSystem.PreparePlacement(player,source.Data,placement),"unsupported style cannot bypass authorization through ordinary placement");
+  Equal(-1,Chest.FindChest(40,39),"unsupported style never allocates a native inventory");
+  Equal(false,Terraria.Main.tile[40,39].HasTile,"unsupported style never places a tile");
+  Equal(0,PlacedLedgerGroups(ledger).Count,"unsupported style never commits a material claim");
+ });
+ }
  private static void NativeChestSinglePlayerOutcome(){WithNativeChestWorld((player,ledger)=>{
  var item=NativeChestItem(player);var p=item.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,item.Data,p,40,40),"SP intent before native mutation");
@@ -124,9 +139,9 @@ internal static partial class EngineRuntimeChecks {
  Equal(1,PlacedLedgerSaved(ledger).GetList<Terraria.ModLoader.IO.TagCompound>("infiniGeneratedPlacementReturnsV2").Count,"one durable native prefix-preserving generated return");
  });}
 
- private static void NativeChestMultiplayerAuthenticatedOutcome(){NativeChestMultiplayerScenario("success",TileID.Containers,0);NativeChestMultiplayerScenario("success",TileID.Containers,51);NativeChestMultiplayerScenario("success",TileID.Containers2,16);}
+ private static void NativeChestMultiplayerAuthenticatedOutcome(){NativeChestMultiplayerScenario("success",TileID.Containers,0);NativeChestMultiplayerScenario("success",TileID.Containers2,0);}
  private static void NativeChestMultiplayerRefusalMatrix(){foreach(int tile in new[]{TileID.Containers,TileID.Containers2})foreach(string scenario in new[]{"full","collision","capacity_race","callback_fault","partial_actor_fault","partial_reused_open_slot","changed_source","changed_prefix","replayed"})NativeChestMultiplayerScenario(scenario,tile,0);}
- private static void NativeChestMultiplayerScenario(string scenario,int tileType=TileID.Containers,int style=17){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
+ private static void NativeChestMultiplayerScenario(string scenario,int tileType=TileID.Containers,int style=0){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
  using var peers=new ReviewPeers();using var states=new PlacedIdentityPeerState();
  var players=Terraria.Main.player;Array.Resize(ref players,256);Terraria.Main.player=players;
  using var network=new NativeChestNetworkScope();
@@ -191,8 +206,8 @@ internal static partial class EngineRuntimeChecks {
   Equal(true,calls>0,"real native CanPlace executed global veto");Equal(allow,Chest.FindChest(40,39)>=0,"native global veto decides actual placement");
   Equal(allow,Terraria.ModLoader.ItemLoader.ConsumeItem(source.Item,player),"only native global-veto success can debit");Equal(allow?1:0,PlacedLedgerGroups(ledger).Count,"native veto never invents a claim");
  });}
- private static void NativeChestOrdinaryStylesRespectNativeHooks(){
- foreach(var selection in new[]{(Type:TileID.Containers,Style:0,Allow:true),(Type:TileID.Containers,Style:16,Allow:true),
+ private static void NativeChestCanonicalStylesRespectNativeHooks(){
+ foreach(var selection in new[]{(Type:TileID.Containers,Style:0,Allow:true),
   (Type:TileID.Containers2,Style:0,Allow:true),(Type:TileID.Containers,Style:0,Allow:false)}){
  WithNativeChestWorld((player,ledger)=>{
   var source=NativeChestItem(player,"ordinary-container",tileType:selection.Type,style:selection.Style);
@@ -225,20 +240,20 @@ internal static partial class EngineRuntimeChecks {
  }
  private static void NativeChestMetadataAndCapacityRefuseBeforeMutation(){WithNativeChestWorld((player,ledger)=>{
  var item=NativeChestItem(player,"chest-admission-matrix");var placement=item.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
- var data=TileObjectData.GetTileData(21,17);Console.WriteLine($"CHEST_ANCHOR bottom={(int)data.AnchorBottom.type} full={data.CoordinateFullWidth}x{data.CoordinateFullHeight} top={data.AnchorTop.tileCount} left={data.AnchorLeft.tileCount} right={data.AnchorRight.tileCount}");
+ var data=TileObjectData.GetTileData(21,0);Console.WriteLine($"CHEST_ANCHOR bottom={(int)data.AnchorBottom.type} full={data.CoordinateFullWidth}x{data.CoordinateFullHeight} top={data.AnchorTop.tileCount} left={data.AnchorLeft.tileCount} right={data.AnchorRight.tileCount}");
  var original=data.HookPostPlaceMyPlayer;
  foreach(string fault in new[]{"delegate","multicast","badReturn","badResponse","coordinates","override","wrongStyle"}){
  try{
   var changed=original;
   switch(fault){case "delegate":changed.hook=(x,y,t,s,d,a)=>Chest.AfterPlacement_Hook(x,y,t,s,d,a);break;
    case "multicast":changed.hook+=original.hook;break;case "badReturn":changed.badReturn=0;break;case "badResponse":changed.badResponse=1;break;
-   case "coordinates":changed.processedCoordinates=true;break;case "override":data.HookPlaceOverride=original;break;case "wrongStyle":placement.PlaceStyle=Chest.chestItemSpawn.Length;break;}
+   case "coordinates":changed.processedCoordinates=true;break;case "override":data.HookPlaceOverride=original;break;case "wrongStyle":placement.PlaceStyle=1;break;}
   data.HookPostPlaceMyPlayer=changed;
   Equal(false,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,item.Data,placement,40,40),"uncertified native family/tuple refuses: "+fault);
   Equal(false,Terraria.Main.tile[40,39].HasTile,"unknown callback never mutates");
- }finally{data.HookPostPlaceMyPlayer=original;data.HookPlaceOverride=default;placement.PlaceStyle=17;}
+ }finally{data.HookPostPlaceMyPlayer=original;data.HookPlaceOverride=default;placement.PlaceStyle=0;}
  }
- var detached=new InfiniCrafterLocal.Common.Models.RuntimePlacementSpec{TileId=21,WallId=-1,PlaceStyle=17};
+ var detached=new InfiniCrafterLocal.Common.Models.RuntimePlacementSpec{TileId=21,WallId=-1,PlaceStyle=0};
  Equal(false,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,item.Data,detached,40,40),"detached same-type placement cannot erase the actual binding authored body/light/VFX");
  var plain=PersistencePlacementData("unselected-callback-family");plain.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement=new InfiniCrafterLocal.Common.Models.RuntimePlacementSpec{TileId=TileID.Dressers,WallId=-1,PlaceStyle=0};
  player.inventory[0]=ReviewItem(plain).Item;
@@ -349,19 +364,19 @@ internal static partial class EngineRuntimeChecks {
  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,p,40,40),"source intent captured before native support changes");
  for(int x=40;x<42;x++){var support=Terraria.Main.tile[x,41];support.HasTile=false;}
  NativeChestPlayerPlace(player);
- Equal(0,Terraria.Main.item.Count(item=>item.active&&item.type==ItemID.WaterChest),"predictable native support refusal cannot create a vanilla chest compensation/drop");
+ Equal(0,Terraria.Main.item.Count(item=>item.active&&item.type==ItemID.Chest),"predictable native support refusal cannot create a vanilla chest compensation/drop");
  Equal(0,Terraria.Main.chest.Count(actor=>actor is not null),"predictable support refusal never allocates a native actor");Equal(false,Terraria.Main.tile[40,39].HasTile,"unsupported native target never mutates");Equal(false,Terraria.ModLoader.ItemLoader.ConsumeItem(source.Item,player),"native support refusal never debits");
  }finally{Terraria.Main.rand=random;WorldGen.gen=gen;}
  });}
 
  private static void NativeChestMaintenanceBoundsNativeActorsAndDefinitionReads(){WithNativeChestWorld((player,ledger)=>{
- var data=PersistencePlacementData("native-chest-maintenance");var placement=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;placement.TileId=21;placement.WallId=-1;placement.PlaceStyle=17;
+ var data=PersistencePlacementData("native-chest-maintenance");var placement=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;placement.TileId=21;placement.WallId=-1;placement.PlaceStyle=0;
  string json=data.ToNetworkJson(),hash=InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.DefinitionIdentity(data);var rows=new System.Collections.Generic.List<Terraria.ModLoader.IO.TagCompound>();
  for(int i=0;i<40;i++){
   int x=20+i%10*4,y=20+i/10*4;for(int sx=x;sx<x+2;sx++){var support=Terraria.Main.tile[sx,y+2];support.HasTile=true;support.TileType=1;}
-  Equal(true,WorldGen.PlaceChest(x,y+1,21,false,17)>=0,"actual native inventory for maintenance fixture");
+  Equal(true,WorldGen.PlaceChest(x,y+1,21,false,0)>=0,"actual native inventory for maintenance fixture");
   var cells=new System.Collections.Generic.List<Terraria.ModLoader.IO.TagCompound>();for(int cx=x;cx<x+2;cx++)for(int cy=y;cy<y+2;cy++)cells.Add(new(){["layer"]=1,["x"]=cx,["y"]=cy});
-  rows.Add(new(){["groupId"]=(i+1).ToString("x32"),["generatedItemId"]=data.Id,["definitionJson"]=json,["cells"]=cells,["nativeChest"]=new Terraria.ModLoader.IO.TagCompound{["version"]=1,["x"]=x,["y"]=y,["tileType"]=21,["nativeStyle"]=17,["bindingId"]="place",["definitionHash"]=hash}});
+  rows.Add(new(){["groupId"]=(i+1).ToString("x32"),["generatedItemId"]=data.Id,["definitionJson"]=json,["cells"]=cells,["nativeChest"]=new Terraria.ModLoader.IO.TagCompound{["version"]=1,["x"]=x,["y"]=y,["tileType"]=21,["nativeStyle"]=0,["bindingId"]="place",["definitionHash"]=hash}});
  }
  ledger.LoadWorldData(new Terraria.ModLoader.IO.TagCompound{["infiniGeneratedPlacementLedgerV2"]=rows});int visits=0;
  using(var count=new MonoMod.RuntimeDetour.ILHook(typeof(GeneratedPlacementLedgerSystem).GetMethod("NativeChestHealthy",PersistenceStatic)!,il=>new MonoMod.Cil.ILCursor(il).EmitDelegate<Action>(()=>visits++))){ledger.PostUpdateWorld();Equal(true,visits<=32,"native chest reconciliation is bounded per world tick");ledger.PostUpdateWorld();}

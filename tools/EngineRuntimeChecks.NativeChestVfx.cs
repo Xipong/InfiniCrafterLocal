@@ -12,8 +12,8 @@ using Terraria;
 using Terraria.ID;
 internal static partial class EngineRuntimeChecks
 {
- private static void NativeChestPreservesAuthoredBodyLightVfxAndActorLiveness(){NativeChestPresentationScenario(TileID.Containers,0);NativeChestPresentationScenario(TileID.Containers2,16);NativeChestPresentationScenario(TileID.Containers,2,true);}
- private static void NativeChestPresentationScenario(int tileType,int style,bool unlock=false){WithNativeChestWorld((player,ledger)=>WithVfxGeometryQueue((batch,texture,count,positions,colors)=>WithLighting((config,lights)=>{
+ private static void NativeChestPreservesAuthoredBodyLightVfxAndActorLiveness(){NativeChestPresentationScenario(TileID.Containers,0);NativeChestPresentationScenario(TileID.Containers2,0);NativeChestPresentationScenario(TileID.Containers,0,true);}
+ private static void NativeChestPresentationScenario(int tileType,int style,bool mixedStyle=false){WithNativeChestWorld((player,ledger)=>WithVfxGeometryQueue((batch,texture,count,positions,colors)=>WithLighting((config,lights)=>{
   ulong tick=Terraria.Main.GameUpdateCount;var system=new InfiniDetachedVfxSystem();using var cache=new BorrowedSpriteCache();
   try{
    system.OnWorldUnload();config.ParticleSpawnMultiplier=1;config.PresentationLightMultiplier=0;
@@ -25,13 +25,12 @@ internal static partial class EngineRuntimeChecks
    var placement=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;string exact=data.ToNetworkJson();var source=ReviewItem(data);source.Item.createTile=tileType;source.Item.placeStyle=style;player.inventory[0]=source.Item;
    Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),"literal composed native chest authorization");Terraria.Main.dedServ=true;NativeChestPlayerPlace(player);
    var actor=Terraria.Main.chest[Chest.FindChest(40,39)];actor.item[0]=new Item(ItemID.Wood,19);
-   if(unlock)NativeChestUnlock(actor);
    Terraria.Main.dedServ=false;MaterialClock(tick+1);ledger.PostUpdateEverything();system.PostUpdateEverything();
    Equal(true,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,39),"authored PNG remains selected over actual native chest body");Equal(1,GeneratedPlacementLedgerSystem.VisiblePlacedBodies().Count(),"exact body projection survives native actor creation");
    Equal(1,lights.Count,"authored placed light reaches real native CPU lighting independent of VFX multiplier");Equal(1,OwnedMaterialQueue().Count,"authored independent placed VFX remains executable");
    typeof(InfiniDetachedVfxSystem).GetMethod("DrawMaterialSprites",PersistenceStatic)!.Invoke(null,new object[]{"BeforeProjectiles",batch,(Action)(()=>{})});Equal(2,count(),"actual authored chest VFX reaches native FNA CPU quad submission");
    Equal(false,Chest.DestroyChest(40,39),"native populated refusal never retires authored presentation");Equal(true,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,39),"native populated refusal preserves body");
-   if(unlock){
+   if(mixedStyle){
     var cell=Terraria.Main.tile[41,40];short frame=cell.TileFrameX;cell.TileFrameX+=36;
     Equal(false,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,39),"mixed-style native footprint cannot inherit authored body");
     Equal(1,PlacedLedgerGroups(ledger).Count,"mixed-style refusal retains original material claim");

@@ -1735,7 +1735,7 @@ _CAPS: list[CapabilitySpec] = [
     *(
         _cap(
             "configure_" + layer + "_placement", "Select one exact loaded " + layer + " and placement style for one referenced placement transaction."
-            + (" Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused." if layer == "tile" else ""),
+            + (" Native chest tiles 21 (Containers) and 467 (Containers2) support only placeStyle=0: ordinary world chests, never Piggy Bank or Void Bag. Terraria owns inventory, opening and persistence; generated-item identity and return stay with this placement. Other chest styles and custom callback families are refused." if layer == "tile" else ""),
             "item_placeable", ("item_body",),
             {layer + "Id": _p("integer", "Exact loaded " + layer + " ID; copy from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_" + layer + "_id"),
              "placeStyle": _p("integer", "Exact Item.placeStyle for the selected loaded placement", minimum=0, maximum=255)},
