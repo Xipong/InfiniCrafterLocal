@@ -74,6 +74,52 @@ internal static partial class EngineRuntimeChecks
         Equal(false, projectile.friendly, "rejected projectile cannot deal contact damage");
     }
 
+    private static void RepeatedProjectileHydrationRetainsSpentPenetration()
+    {
+        using var peers = new ReviewPeers();
+        var data = ReviewProjectileData("on_spawn");
+        data.VfxManifest = VfxManifestSpec.Empty();
+        var entity = data.RuntimeProgram.TryGetEntity("actor")!;
+        // Same admitted finite-pierce lane as the captured Jester musket (3).
+        // The test owns only metadata hydration, not a simulated NPC hit count.
+        entity.Collision.Pierce = 3;
+        peers.Register(data);
+        var original = peers.Host(data);
+        byte[] payload = ReviewExtra(original);
+        peers.Mode(NetmodeID.MultiplayerClient, 1);
+        var remote = peers.Host(data, extra: payload);
+        var projectile = remote.Projectile;
+        Equal(true, ProjectileConfigured(remote), "initial cached definition hydrates");
+        Equal(3, projectile.penetrate, "first hydration initializes authored finite penetration");
+        Equal(3, projectile.maxPenetrate, "native immunity keeps authored initial penetration");
+
+        // Native damage owns the remaining counter. ExtraAI carries runtime
+        // metadata, not a grant of fresh hits to this already configured source.
+        projectile.penetrate = 2;
+        projectile.localNPCImmunity[5] = 27;
+        remote.ReceiveExtraAI(new BinaryReader(new MemoryStream(payload)));
+        Equal(2, projectile.penetrate, "same-source ExtraAI cannot refill spent penetration");
+        Equal(3, projectile.maxPenetrate, "rehydration retains native initial-penetration semantics");
+        Equal(27, projectile.localNPCImmunity[5], "rehydration never clears native local immunity");
+
+        ((System.Collections.IDictionary)peers.Registry.GetType().GetField("_byId",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(peers.Registry)!).Remove(data.Id);
+        projectile.penetrate = 1;
+        remote.ReceiveExtraAI(new BinaryReader(new MemoryStream(payload)));
+        Equal(false, ProjectileConfigured(remote), "same source can wait for an evicted definition");
+        peers.Register(data);
+        remote.AI();
+        Equal(1, projectile.penetrate, "late rehydration cannot refill the same live source either");
+        Equal(27, projectile.localNPCImmunity[5], "late rehydration retains local NPC immunity");
+
+        var replacement = peers.Host(data, slot: 4, identity: 72);
+        remote.ReceiveExtraAI(new BinaryReader(new MemoryStream(ReviewExtra(replacement))));
+        Equal(3, projectile.penetrate, "a genuinely new source initializes its own authored allowance");
+        projectile.penetrate = 1;
+        remote.Configure(data, entity, 0, 0, Vector2.UnitX);
+        Equal(3, projectile.penetrate, "explicit fresh local Configure initializes its own allowance");
+    }
+
     private static bool ProjectileConfigured(GeneratedProjectile projectile)
         => (bool)typeof(GeneratedProjectile).GetField("_configured", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(projectile)!;

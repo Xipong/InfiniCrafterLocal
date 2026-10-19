@@ -81,6 +81,7 @@ internal static partial class EngineRuntimeChecks
             ("sampled velocity native spawn owner authority", SampledVelocityReachesNativeSpawnOnlyOnOwner),
             ("sampled velocity delay ExtraAI and hydration", SampledVelocityDelayExtraAiAndHydrationPreserveChosenVector),
             ("late definition retains latest native projectile velocity", LateDefinitionRetainsLatestNativeProjectileVelocity),
+            ("repeated projectile hydration retains spent penetration", RepeatedProjectileHydrationRetainsSpentPenetration),
             ("hit target delayed native boundary and reservation ownership", HitTargetDelayedNativeBoundaryAndReservationOwnership),
             ("initial NPC exclusion exact incarnation and counter", InitialNpcExclusionUsesExactIncarnationAndCounter),
             ("retirement projectile old ExtraAI refused and current remaining retained", InitialNpcExclusionExtraAiPreservesRemainingAndOldAbsence),
