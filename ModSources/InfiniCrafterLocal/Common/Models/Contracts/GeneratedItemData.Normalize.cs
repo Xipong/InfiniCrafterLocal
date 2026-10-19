@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
 using System;
 using System.Collections.Generic;
@@ -256,7 +257,7 @@ public sealed partial class GeneratedItemData
     private void ValidateVfxEntityEventReferences()
     {
         foreach (VfxAssetSpec asset in VfxManifest.Assets ?? Array.Empty<VfxAssetSpec>())
-            if (string.IsNullOrWhiteSpace(asset.SpritePath) || !asset.SpritePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            if (GeneratedAssetSyncService.FileNameFromPath(asset.SpritePath).Length == 0
                 || asset.SpriteStatus is not ("generated" or "generated_warn_invalid"))
                 throw new InvalidDataException("Required individual VFX PNG unavailable: " + asset.Id);
         bool hasItemContactBinding = RuntimeProgram.Bindings.Any(x => x.UsePolicy.ContactDamage);
@@ -314,7 +315,7 @@ public sealed partial class GeneratedItemData
                 bool itemProducer = selected == "item" || entity.Visual.AssetMode == "reuse_item_icon";
                 string png = itemProducer ? Visual.SpritePath : entity.Visual.SpritePath;
                 string status = itemProducer ? Visual.SpriteStatus : entity.Visual.SpriteStatus;
-                if (string.IsNullOrWhiteSpace(png) || !png.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                if (GeneratedAssetSyncService.FileNameFromPath(png).Length == 0
                     || !RuntimeEntityVisualSpec.HasCompletedPngProducer(status))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires its selected producer's ready PNG");
             }
@@ -326,8 +327,7 @@ public sealed partial class GeneratedItemData
                 if (!(VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Any(s => s.EntityId == entity.Id && s.RendererKind == "impactSprite"))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires exact same-entity impactSprite producer");
                 if ((texture is not null || SourceMode is not ("developer_fixture" or "test_fixture"))
-                    && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
-                        || !entity.Visual.ImpactSpritePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                    && (GeneratedAssetSyncService.FileNameFromPath(entity.Visual.ImpactSpritePath).Length == 0
                         || !RuntimeEntityVisualSpec.HasCompletedPngProducer(entity.Visual.ImpactSpriteStatus)))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires an authored impact PNG for '{entity.Id}'");
             }
