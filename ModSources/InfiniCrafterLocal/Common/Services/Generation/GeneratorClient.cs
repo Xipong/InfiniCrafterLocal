@@ -884,6 +884,8 @@ public sealed class GeneratorClient
             ["buffTime"] = item.buffTime,
             ["material"] = item.material,
         };
+        if (NativeTileStateFacts.Capture(facts["createTile"]?.GetValue<int>(), facts["placeStyle"]?.GetValue<int>()) is JsonObject tileState)
+            facts["nativeTileState"] = tileState;
         return new(facts, JsonSerializer.SerializeToNode(DirectProjectileRawFromItem(item), WireJsonOptions));
     }
 
