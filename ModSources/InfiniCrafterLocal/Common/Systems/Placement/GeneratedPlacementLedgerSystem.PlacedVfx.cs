@@ -60,6 +60,10 @@ public sealed partial class GeneratedPlacementLedgerSystem
         RefreshPlacedBodyViews();
         foreach (var projection in PlacedBodyViews.Values) {
             if (projection.Vfx is {} prior && !prior.IsLive) projection.Vfx = null;
+            // Inactive particle-only sources may be culled before a cell walk.
+            // Active bindings still validate offscreen to retire on/off changes.
+            if (projection.Vfx is null && (projection.View is not { } candidate
+                || !InfiniDetachedVfxSystem.MayNeedPlacedVfxFrame(candidate))) continue;
             if (!TryGetPlacedVfxFrame(projection,out _)) continue;
             var binding = projection.Vfx ??= new PlacedVfxBinding(projection);
             yield return (projection.View!,binding,binding.SourceKey);
