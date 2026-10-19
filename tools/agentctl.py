@@ -293,10 +293,13 @@ def command_context(args: argparse.Namespace) -> int:
         raise ValueError("unknown areas: " + ", ".join(sorted(unknown_areas)))
     rules = [rule for rule in all_rules if rule["area"] in areas or any(
         _matches(path, pattern) for path in paths for pattern in rule["patterns"])]
-    # Put real entrypoints ahead of long general policy, never raw tool JSON.
-    requested = [path for rule in rules for path in rule.get("entrypoints", [])]
-    requested.extend(path for path in paths if (ROOT / path).is_file())
-    requested.extend(path for rule in rules for path in rule.get("context", []))
+    # Exact paths are already known owners: show them first, without broad
+    # area catalogs crowding out the source. --area retains the wider context.
+    requested = [path for path in paths if (ROOT / path).is_file()] if args.path else []
+    requested.extend(path for rule in rules for path in rule.get("entrypoints", []))
+    if not args.path:
+        requested.extend(path for path in paths if (ROOT / path).is_file())
+        requested.extend(path for rule in rules for path in rule.get("context", []))
     requested.extend(["docs/development/CODE_MAP_RU.md", "AGENTS.md"])
     remaining = max(1000, int(args.budget))
     docs: list[dict[str, Any]] = []
@@ -320,6 +323,10 @@ def command_context(args: argparse.Namespace) -> int:
         "hint": "Choose --area or --path before edits; --task is a human label, not a semantic router.",
         "documents": docs,
     }
+    if args.path:
+        requested_plan = verification_plan(paths)
+        requested_plan["requestedPaths"] = requested_plan.pop("changedFiles")
+        report["requestedVerification"] = {**requested_plan, "validationRun": False, "releaseReady": False}
     text = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True)
     if args.out:
         Path(args.out).write_text(text + "\n", encoding="utf-8")

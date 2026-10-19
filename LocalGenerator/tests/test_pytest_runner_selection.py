@@ -426,6 +426,44 @@ def test_clean_task_context_selects_entrypoints_before_tool_metadata(monkeypatch
         agentctl.command_context(args)
 
 
+@pytest.mark.parametrize("path", [
+    "ModSources/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs",
+    "ModSources/InfiniCrafterLocal/Common/VFX/InfiniVfxRuntime.cs",
+])
+def test_requested_path_context_previews_checks_without_claiming_a_changed_diff(
+    path: str, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: ["tools/agentctl.py"])
+    monkeypatch.setattr(agentctl, "_run_check", lambda *_: pytest.fail("context must not execute checks"))
+    args = SimpleNamespace(base=None, path=[path], area=None, task="renderer", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["changedFiles"] == report["verification"]["changedFiles"] == ["tools/agentctl.py"]
+    expected = agentctl.verification_plan([path])
+    expected["requestedPaths"] = expected.pop("changedFiles")
+    assert report["requestedVerification"] == {**expected, "validationRun": False, "releaseReady": False}
+    assert "native_checks" in report["requestedVerification"]["checks"]
+    assert report["requestedVerification"]["requiresBuild"] is True
+
+
+def test_explicit_path_context_keeps_source_ahead_of_generic_native_catalogs(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    path = "ModSources/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs"
+    args = SimpleNamespace(base=None, path=[path], area=None, task="renderer", budget=14000, out=None)
+    assert agentctl.command_context(args) == 0
+    report = json.loads(capsys.readouterr().out)
+    documents = report["documents"]
+    assert documents[0]["path"] == path
+    assert documents[0]["available"] is True
+    assert "ModSources/InfiniCrafterLocal/AGENTS.md" in {row["path"] for row in documents}
+    rules, _, _ = agentctl.impacted([path])
+    generic_context = {context for rule in rules for context in rule.get("context", [])}
+    assert not generic_context.intersection(row["path"] for row in documents)
+    assert sum(len(row.get("content", "")) for row in documents) <= args.budget
+
+
 @pytest.mark.parametrize("status,exit_code", [("passed", 0), ("notRun", 2), ("unavailable", 2), ("failed", 1)])
 def test_iteration_never_claims_release_or_missing_execution_passed(
     status: str, exit_code: int, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
