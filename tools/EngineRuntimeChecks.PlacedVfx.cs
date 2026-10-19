@@ -169,6 +169,7 @@ internal static partial class EngineRuntimeChecks
     private static void PlacedVfxContinuousBurstBudgets()
     {
         PlacedVfxRegistrationAndViewportRegressions();
+        PlacedVfxInactiveLedgerBroadPhaseRetainsRetirement();
         WithPlacedLedger((player,ledger)=>WithLighting((config,_)=>{
             ulong tick=Terraria.Main.GameUpdateCount;var system=new InfiniDetachedVfxSystem();
             try {
@@ -281,6 +282,63 @@ internal static partial class EngineRuntimeChecks
                 system.OnWorldUnload();MaterialClock(tick);config.EnableScreenCulling=culling;
                 Terraria.Main.screenPosition=camera;Terraria.Main.screenWidth=width;Terraria.Main.screenHeight=height;
                 if(matrix is not null)matrix.Zoom=zoom;
+            }
+        }));
+    }
+
+    private static void PlacedVfxInactiveLedgerBroadPhaseRetainsRetirement()
+    {
+        WithPlacedLedger((player,ledger) => WithLighting((config,_) => {
+            var system = new InfiniDetachedVfxSystem();
+            Vector2 camera = Main.screenPosition;
+            int width = Main.screenWidth, height = Main.screenHeight;
+            var matrix = Main.GameViewMatrix;
+            Vector2 zoom = matrix?.Zoom ?? Vector2.One;
+            bool culling = config.EnableScreenCulling;
+            try
+            {
+                system.OnWorldUnload();
+                config.EnableScreenCulling = true;
+                Main.screenWidth = 320; Main.screenHeight = 240;
+                if (matrix is not null) matrix.Zoom = Vector2.One;
+                var data = ParseMaterialElement(PlacedVfxWire());
+                GeneratedItemRegistryService.StampCurrentWorld(data);
+                var placement = data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
+                player.inventory[player.selectedItem] = ReviewItem(data).Item;
+                var tile = Main.tile[40,40]; tile.HasTile = false;
+                Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),"inactive source placement authorization");
+                tile.HasTile = true; tile.TileType = TileID.Stone; tile.TileFrameY = 0;
+                Equal(true,GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player),"inactive source material commit");
+
+                Main.screenPosition = new Vector2(100000,100000);
+                Equal(0,GeneratedPlacementLedgerSystem.ActivePlacedVfxSources().Count(),
+                    "distant inactive particle-only source does not allocate a binding");
+                Equal(1,PlacedLedgerGroups(ledger).Count,"offscreen culling retains material owner");
+                Main.screenPosition = new Vector2(600,600);
+                var active = GeneratedPlacementLedgerSystem.ActivePlacedVfxSources().Single();
+                object firstGeneration = active.Binding.Generation;
+                Equal(true,active.Binding.IsLive,"nearby placement activates normally");
+
+                Main.screenPosition = new Vector2(100000,100000);
+                tile.TileFrameY = 36;
+                Equal(0,GeneratedPlacementLedgerSystem.ActivePlacedVfxSources().Count(),
+                    "existing source still checks offscreen frame gate and retires");
+                Equal(false,active.Binding.IsLive,"offscreen gate change retires existing generation");
+                tile.TileFrameY = 0;
+                Equal(0,GeneratedPlacementLedgerSystem.ActivePlacedVfxSources().Count(),
+                    "reenabled but still distant placement cannot allocate new source");
+                Main.screenPosition = new Vector2(600,600);
+                var again = GeneratedPlacementLedgerSystem.ActivePlacedVfxSources().Single();
+                Equal(false,ReferenceEquals(firstGeneration,again.Binding.Generation),
+                    "returning to viewport creates a fresh generation after gate retirement");
+                Equal(1,PlacedLedgerGroups(ledger).Count,"broad phase never mutates material ledger");
+            }
+            finally
+            {
+                system.OnWorldUnload();
+                config.EnableScreenCulling = culling;
+                Main.screenPosition = camera; Main.screenWidth = width; Main.screenHeight = height;
+                if (matrix is not null) matrix.Zoom = zoom;
             }
         }));
     }
