@@ -71,6 +71,20 @@ internal static partial class EngineRuntimeChecks
         });
     }
 
+    private static void DocxNativeItemReadyDomainRejectsUnfinishedProducer()
+    {
+        var wire = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText("tools/fixtures/docx-image-ready-delivered.json"))!;
+        foreach (string status in new[] { "pending", "generating", "skipped_disabled_by_settings", "not_required", "future_unknown" }) {
+            wire["visual"]!["spriteStatus"] = status;
+            Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "unfinished root producer refused: " + status);
+        }
+        foreach (string status in new[] { "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation" }) {
+            wire["visual"]!["spriteStatus"] = status;
+            var data = GeneratedItemData.FromJson(wire.ToJsonString());
+            Equal(true, data is not null, "existing completed producer admitted: " + status);
+        }
+    }
+
     private static void DocxExplicitUnavailableAndFixtureKeepDiagnosticProxy()
     {
         WithLighting((_, __) => {
