@@ -1100,7 +1100,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Select one exact loaded tile and placement style for one referenced placement transaction.",
+      "purpose": "Select one exact loaded tile and placement style for one referenced placement transaction. Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1339,7 +1339,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member. Either this presentation or add_placed_light selects a certified native footprint with exact bounded metadata (16x16/256 cells max): callback-free tiles, or the certified Tile 21/style 17 WaterChest actor lifecycle with SP/MP placement, native contents/open/save/load and exact generated-item return. Unknown container post-place hooks remain unsupported. The certified chest needs matching client/server protocol 6 and the supported native runtime; neither call invents an actor lifecycle for other containers.",
+      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this presentation call.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1443,7 +1443,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Either this light or present_placed_item_sprite selects a certified native footprint with exact bounded metadata (16x16/256 cells max): callback-free tiles, or the certified Tile 21/style 17 WaterChest actor lifecycle with SP/MP placement, native contents/open/save/load and exact generated-item return. Unknown container post-place hooks remain unsupported. The certified chest needs matching client/server protocol 6 and the supported native runtime; neither call invents an actor lifecycle for other containers.",
+      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this light call.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1535,7 +1535,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Opt in to independent live placed VFX slots on one exact committed native tile footprint, not held-item effects. Bounds consume actual top-left native TileFrameY inclusively, not animation time/count: 0..32767 selects all nonnegative frames. Native state facts are read-only; never infer a gate from names. VFX Director later selects this placement binding for periodic self spriteElement/libraryParticle/lightCue. Same item root PNG remains stable physical art; existing independent VFX assets can animate separate flames without rotating/pulsing the whole root. No effects/defaults are inserted. Requires exact bounded native metadata (16x16/256 cells max): callback-free tiles or the certified Tile 21/style 17 WaterChest actor lifecycle with SP/MP placement, native contents/open/save/load and exact generated return. Unknown containers remain unsupported; the certified chest requires matching client/server protocol 6 and the supported native runtime. Does not change native mechanics, material ownership or returns.",
+      "purpose": "Opt in to independent live placed VFX slots on one exact committed native tile footprint, not held-item effects. Bounds consume actual top-left native TileFrameY inclusively, not animation time/count: 0..32767 selects all nonnegative frames. Native state facts are read-only; never infer a gate from names. VFX Director later selects this placement binding for periodic self spriteElement/libraryParticle/lightCue. Same item root PNG remains stable physical art; existing independent VFX assets can animate separate flames without rotating/pulsing the whole root. No effects/defaults are inserted. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Does not change its native container behavior, material ownership or returns.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
