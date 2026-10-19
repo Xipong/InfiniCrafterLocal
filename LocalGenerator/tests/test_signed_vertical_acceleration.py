@@ -75,7 +75,9 @@ def test_zero_is_explicit_and_schema_prompt_advertise_the_same_signed_domain():
     card = next(row for row in compact_capability_catalog() if row["fn"] == FN)
     assert card["params"][PARAM]["min"] == spec.minimum and card["params"][PARAM]["max"] == spec.maximum
     assert "negative accelerates upward" in card["does"]
-    assert "updatesPerTick" in card["params"][PARAM]["meaning"]
+    assert "target clock" in card["params"][PARAM]["meaning"]
+    assert card["params"][PARAM]["projectionConstraints"]["targetContext"] == (
+        "same target's unique set_projectile_collision.updatesPerTick")
     assert card["params"][PARAM]["units"] == "blocks/s²"
     document = build_capability_witness(FN)
     del selected(document)["params"][PARAM]
