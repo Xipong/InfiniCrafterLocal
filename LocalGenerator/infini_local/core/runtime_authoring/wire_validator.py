@@ -952,7 +952,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     specs = component_cap.params
                     body_schema = {"type": "object", "additionalProperties": False,
                                    "properties": {name: spec.schema() for name, spec in specs.items() if name != "placementCallId"},
-                                   "required": [name for name in specs if name != "placementCallId"]}
+                                   "required": [name for name, spec in specs.items() if name != "placementCallId" and spec.required]}
                     body_path = f"{binding_path}.usePolicy.action.placement.{component}"
                     for issue in strict_schema_errors(placement[component], body_schema, path=body_path):
                         errors.append({**issue, "code": "invalid_placed_body", "message": "Placed body must match every required canonical transform leaf."})

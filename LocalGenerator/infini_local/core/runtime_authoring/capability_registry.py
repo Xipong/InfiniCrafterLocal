@@ -1500,7 +1500,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "present_placed_item_sprite",
-        "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member.",
+        "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member. Either this presentation or add_placed_light selects a certified callback-free native footprint: exact bounded native metadata is required (16x16/256 cells max). Native container post-place hooks (e.g. WaterChest) are unsupported; neither call adds container/actor lifecycle. Ordinary configure_tile_placement without either call remains separate.",
         "item_placed_body",
         ("item_body",),
         {
@@ -1508,8 +1508,9 @@ _CAPS: list[CapabilitySpec] = [
             "renderSizePx": _p("integer", "Longest side of the final full PNG frame in world pixels; aspect preserved, independent of item scale, dropped worldScale and Visual renderSizePx", minimum=1, maximum=512, units="world pixels"),
             "footprintAnchorX": _p("number", "Normalized committed footprint rectangle X: 0 left, 1 right", minimum=0, maximum=1),
             "footprintAnchorY": _p("number", "Normalized committed footprint rectangle Y: 0 top, 1 bottom", minimum=0, maximum=1),
-            "imagePivotX": _p("number", "Normalized full delivered PNG frame pivot X, not alpha bounds or grip", minimum=0, maximum=1),
-            "imagePivotY": _p("number", "Normalized full delivered PNG frame pivot Y, not alpha bounds or grip", minimum=0, maximum=1),
+            "pivotSpace": _p("string", "Pivot basis only: frame (also omission) preserves full delivered PNG padding; alpha_bounds maps imagePivotX/Y inside the nonzero-alpha bounding rectangle of the final selected PNG, using pixel edges. For deliberate visible bottom contact choose alpha_bounds with imagePivotY=1; frame remains legal for intentional padding. Unknown or empty alpha bounds refuse the custom body draw. Whole PNG stays uncropped and renderSizePx/rotation/flips/offsets are unchanged; never infer this choice from names or parents", enum=("frame", "alpha_bounds"), required=False, default="frame", neutral="frame"),
+            "imagePivotX": _p("number", "Normalized X inside the selected pivotSpace rectangle, not held grip", minimum=0, maximum=1),
+            "imagePivotY": _p("number", "Normalized Y inside the selected pivotSpace rectangle: 0 top pixel edge, 1 bottom pixel edge", minimum=0, maximum=1),
             "offsetXPx": _p("integer", "World-axis offset; positive right", minimum=-512, maximum=512, units="world pixels"),
             "offsetYPx": _p("integer", "World-axis offset; positive down", minimum=-512, maximum=512, units="world pixels"),
             "rotationDegrees": _p("number", "Clockwise bitmap rotation in y-down world axes; no inferred forward-axis correction", minimum=-180, maximum=180, units="degrees"),
@@ -1529,7 +1530,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "add_placed_light",
-        "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged.",
+        "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Either this light or present_placed_item_sprite selects a certified callback-free native footprint: exact bounded native metadata is required (16x16/256 cells max). Native container post-place hooks (e.g. WaterChest) are unsupported; neither call adds container/actor lifecycle. Ordinary configure_tile_placement without either call remains separate.",
         "item_placed_body", ("item_body",),
         {
             "placementCallId": _p("string", "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedLight"),

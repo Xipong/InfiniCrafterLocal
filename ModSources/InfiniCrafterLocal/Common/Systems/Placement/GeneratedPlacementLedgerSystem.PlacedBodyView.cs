@@ -78,6 +78,8 @@ public sealed partial class GeneratedPlacementLedgerSystem
                 if (data is null || data.Id != group.GeneratedItemId
                     || GeneratedItemRegistryService.DefinitionIdentity(data) != hash) continue;
                 RuntimeBindingSpec? binding = data.RuntimeProgram.Bindings.SingleOrDefault(b => b.Id == bindingId);
+                // Keep the exact accepted optional PivotSpace (including absence)
+                // on the DTO; the view never measures pixels or reanchors old data.
                 RuntimePlacedBodySpec? body = binding?.UsePolicy.Action.Placement?.PlacedBody;
                 RuntimePlacementSpec? placement = binding?.UsePolicy.Action.Placement;
                 if (placement?.HasPlacedFootprint != true

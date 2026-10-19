@@ -204,6 +204,7 @@
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.renderSizePx",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.pivotSpace",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotY",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetXPx",

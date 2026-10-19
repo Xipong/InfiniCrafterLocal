@@ -1169,6 +1169,7 @@
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.renderSizePx",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.pivotSpace",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotY",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetXPx",
@@ -1260,6 +1261,19 @@
           "semanticType": "pixels",
           "units": "world pixels"
         },
+        "pivotSpace": {
+          "enum": [
+            "frame",
+            "alpha_bounds"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "placementCallId": {
           "enum": [],
           "kind": "string",
@@ -1299,7 +1313,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member.",
+      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member. Either this presentation or add_placed_light selects a certified callback-free native footprint: exact bounded native metadata is required (16x16/256 cells max). Native container post-place hooks (e.g. WaterChest) are unsupported; neither call adds container/actor lifecycle. Ordinary configure_tile_placement without either call remains separate.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1403,7 +1417,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged.",
+      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Either this light or present_placed_item_sprite selects a certified callback-free native footprint: exact bounded native metadata is required (16x16/256 cells max). Native container post-place hooks (e.g. WaterChest) are unsupported; neither call adds container/actor lifecycle. Ordinary configure_tile_placement without either call remains separate.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

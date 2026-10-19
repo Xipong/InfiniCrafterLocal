@@ -1,0 +1,257 @@
+"""Opt-in alpha-bounds pivot: real Author/compiler/final-wire boundaries, offline."""
+import copy
+import json
+import pytest
+
+from prompt_packet_helpers import request_dossier
+from test_low_level_three_stage_pipeline import wire_transport
+
+from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.validator import validate_runtime_program
+from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+from test_placed_body_capability import FN, placed, placement
+
+
+def test_explicit_alpha_pivot_compiles_losslessly_with_exact_receipt():
+    document = placed()
+    document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
+    before = copy.deepcopy(document)
+    report = validate_runtime_program(document)
+    assert report["ok"], report["errors"]
+    wire = compile_runtime_program(document)
+    assert placement(wire)["placedBody"]["pivotSpace"] == "alpha_bounds"
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    receipt = next(r for r in receipts if r.get("fn") == FN and r["authoredPath"].endswith(".pivotSpace"))
+    assert receipt["status"] == "delivered"
+    assert receipt["value"] == "alpha_bounds"
+    assert receipt["finalPath"].endswith(".placement.placedBody.pivotSpace")
+    assert audit_compiler_receipts(receipts, authored_document=document, final_document=wire)["ok"]
+    assert validate_runtime_wire(wire)["ok"]
+    assert document == before
+    # Delivery without source receipts retains this accepted low-level choice.
+    final_wire = copy.deepcopy(wire)
+    final_wire.pop("runtimeContract")
+    assert validate_runtime_wire(json.loads(json.dumps(final_wire)))["ok"]
+
+
+def test_neutral_omission_receipt_and_historical_wire_absence_preserve_frame():
+    document = placed()
+    before = copy.deepcopy(document)
+    wire = compile_runtime_program(document)
+    assert document == before
+    assert placement(wire)["placedBody"]["pivotSpace"] == "frame"
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    receipt = next(r for r in rows if r.get("fn") == FN and r["authoredPath"].endswith(".pivotSpace"))
+    assert receipt["status"] == "declared_neutral_omission" and receipt["value"] == "frame"
+    assert audit_compiler_receipts(rows, authored_document=document, final_document=wire)["ok"]
+    assert audit_compiler_receipts(rows, final_document=wire)["ok"]
+    historical = copy.deepcopy(wire)
+    historical.pop("runtimeContract")
+    placement(historical)["placedBody"].pop("pivotSpace")
+    assert validate_runtime_wire(historical)["ok"], validate_runtime_wire(historical)
+    explicit = copy.deepcopy(document)
+    explicit["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "frame"
+    explicit_wire = compile_runtime_program(explicit)
+    assert explicit_wire["runtimeProgram"] == wire["runtimeProgram"]
+    assert next(r for r in explicit_wire["runtimeContract"]["finalWireReceipts"] if r.get("fn") == FN and r["authoredPath"].endswith(".pivotSpace"))["status"] == "delivered"
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_transport, monkeypatch, mode):
+    from infini_local.pipelines import author_item_contract as contract
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from infini_local.pipelines import llm_transport as transport
+    from infini_local.pipelines import visual_generation_pipeline as visual
+    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from test_codex_subscription_contract import _encode_nullable_fixture
+    from test_low_level_three_stage_pipeline import _visual_kit
+    from jsonschema import Draft202012Validator
+
+    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    document = placed()
+    document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
+    responses, requests = wire_transport
+    payload = _encode_nullable_fixture(document, contract.author_item_response_schema()) if mode == "json_schema" else document
+    responses.append(payload)
+    accepted = author.try_llm_plan({"name":"A"}, {"name":"B"}, "offline-alpha-pivot")
+    assert accepted is not None
+    request = requests[-1]
+    assert request["response_format"]["type"] == mode
+    if mode == "json_schema":
+        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
+    dossier = request_dossier(request)
+    card = next(c for c in dossier["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
+    assert set(card["params"]["pivotSpace"]["enum"]) == {"frame", "alpha_bounds"}
+    wire = compile_runtime_program(accepted)
+    before = copy.deepcopy(wire)
+    kit = _visual_kit(wire)
+    for repair in (False, True):
+        responses.append(kit if not repair else {"schema":visual.VISUAL_REPAIR_PATCH_SCHEMA,"note":"offline no-op"})
+        visual._request_visual_kit(wire, {}, {}, **({"repair_errors":[],"previous":kit,"repair_scope":{}} if repair else {}))
+        packet = request_dossier(requests[-1])
+        guidance = packet["spritePresentationReadOnly"]["placedBody"]
+        assert "pivotSpace" in guidance["ownership"]
+        assert "alpha_bounds" in guidance["ownership"]
+        assert "final" in guidance["ownership"]
+        assert "uncropped" in guidance["ownership"]
+        bindings = packet["acceptedPresentationMechanicsReadOnly"]["bindings"]
+        assert bindings == wire["runtimeProgram"]["bindings"]
+        assert placement({"runtimeProgram":{"bindings":bindings}})["placedBody"]["pivotSpace"] == "alpha_bounds"
+    assert wire == before
+    projected = visual._apply_kit(wire, kit)
+    frame = copy.deepcopy(projected)
+    placement(frame)["placedBody"]["pivotSpace"] = "frame"
+    assert build_visual_asset_plan(projected) == build_visual_asset_plan(frame)
+    assert placement(projected)["placedBody"]["pivotSpace"] == "alpha_bounds"
+
+
+def test_current_nested_dto_audit_classifies_optional_selector_not_hidden_storage():
+    from infini_local.qa.primitive_loss_audit import placed_body_surface_audit
+    report = placed_body_surface_audit()
+    assert report["ok"], report
+    assert report["storageByField"]["PivotSpace"] == "string?"
+
+
+def test_outgoing_author_cards_disclose_body_or_light_callback_free_footprint(wire_transport):
+    from infini_local.pipelines import llm_authoring_pipeline as author
+    from test_placed_light_capability import lit
+    from test_dual_use_placeable_contract import _dual_use_placeable
+    responses, requests = wire_transport
+    document = placed()
+    document["runtimeProgram"]["calls"].append(lit()["runtimeProgram"]["calls"][-1])
+    responses.append(document)
+    accepted = author.try_llm_plan({"name":"A"}, {"name":"B"}, "offline-native-precondition")
+    assert accepted is not None
+    cards = request_dossier(requests[-1])["runtimeCapabilityContract"]["catalog"]["capabilities"]
+    for fn in (FN, "add_placed_light"):
+        summary = next(c for c in cards if c["fn"] == fn)["does"].lower()
+        assert "callback-free" in summary
+        assert "footprint" in summary and "certified" in summary
+        assert "either" in summary and "post-place" in summary
+        assert "container" in summary and "actor lifecycle" in summary
+        assert "unsupported" in summary
+    wire = compile_runtime_program(accepted)
+    assert {"placedBody", "placedLight"} <= placement(wire).keys()
+    # No content-specific router/removal and no widening of plain placement.
+    assert validate_runtime_program(lit())["ok"]
+    assert validate_runtime_program(placed())["ok"]
+    plain = compile_runtime_program(_dual_use_placeable())
+    assert "placedBody" not in placement(plain) and "placedLight" not in placement(plain)
+
+
+@pytest.mark.parametrize("bad", [None, "alpha", "FRAME", " alpha_bounds ", "", True, 0, {}, []])
+def test_present_invalid_pivot_space_is_strict_without_mutation(bad):
+    document = placed()
+    document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = bad
+    before = copy.deepcopy(document)
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    assert any(e["path"].endswith(".params.pivotSpace") for e in report["errors"])
+    with pytest.raises(ValueError):
+        compile_runtime_program(document)
+    assert document == before
+    wire = compile_runtime_program(placed())
+    wire.pop("runtimeContract")
+    placement(wire)["placedBody"]["pivotSpace"] = bad
+    before = copy.deepcopy(wire)
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(e["code"] == "invalid_placed_body" and e["path"].endswith(".pivotSpace") for e in report["errors"])
+    assert wire == before
+
+
+@pytest.mark.parametrize("attack", ["missing", "duplicate", "wrong-call", "wrong-path", "omission-for-alpha", "wire-value"])
+def test_alpha_receipt_cannot_be_forged_or_dropped(attack):
+    document = placed()
+    document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
+    wire = compile_runtime_program(document)
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    row = next(r for r in rows if r.get("fn") == FN and r["authoredPath"].endswith(".pivotSpace"))
+    if attack == "missing": rows.remove(row)
+    elif attack == "duplicate": rows.append(copy.deepcopy(row))
+    elif attack == "wrong-call": row["callId"] = "install_tile"
+    elif attack == "wrong-path": row["finalPath"] = row["finalPath"].replace("bindings[0]", "bindings[1]")
+    elif attack == "omission-for-alpha": row["status"] = "declared_neutral_omission"
+    else: placement(wire)["placedBody"]["pivotSpace"] = "frame"
+    for source in (None, document):
+        assert not audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    assert not validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("old", ["absent", "alpha_bounds", "frame", "invalid"])
+def test_frozen_leaf_repair_preserves_basis_and_absence(old):
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    document = placed()
+    call = document["runtimeProgram"]["calls"][-1]
+    if old != "absent": call["params"]["pivotSpace"] = old
+    bad_leaf = "pivotSpace" if old == "invalid" else "offsetYPx"
+    if old != "invalid": call["params"][bad_leaf] = 900
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(document, report["errors"])
+    assert scope["fieldPermissions"]["calls"] == [{"id":"placed_body", "paths":[f"params.{bad_leaf}"]}]
+    candidate = copy.deepcopy(call)
+    candidate["params"].update(pivotSpace="alpha_bounds", offsetYPx=0, renderSizePx=512, flipY=True)
+    filtered, audit = filter_repair_patch_scope(document, {"note":"leaf only", "callsUpsert":[candidate]}, scope)
+    assert audit["ok"], audit
+    result = apply_repair_patch(document, filtered)
+    expected = copy.deepcopy(document)
+    expected["runtimeProgram"]["calls"][-1]["params"][bad_leaf] = candidate["params"][bad_leaf]
+    assert result == expected
+    assert validate_runtime_wire(compile_runtime_program(result))["ok"]
+
+
+def test_immutable_old_delivery_keeps_absence_through_current_sanitizer(tmp_path, monkeypatch):
+    import hashlib
+    from pathlib import Path
+    from PIL import Image
+    from infini_local.pipelines import visual_delivery_gate as gate
+    from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+    path = Path(__file__).resolve().parents[2] / "tools/fixtures/placed-body-pre-alpha-delivered.json"
+    raw = path.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == "90d1d3c16b4d6b0b5cf5ce69eaa25731bb3a9518b80bd8c8c896f09a585e7fa7"
+    old = json.loads(raw)
+    assert "pivotSpace" not in placement(old)["placedBody"]
+    assert validate_runtime_wire(old)["ok"]
+    png = tmp_path / "placed.png"
+    Image.new("RGBA", (32,32), (240,90,20,255)).save(png)
+    monkeypatch.setattr(gate, "_resolved_asset_path", lambda p: png if p and Path(str(p)).name == "placed.png" else None)
+    before = copy.deepcopy(old)
+    final = sanitize_recipe_for_delivery(old)
+    assert final == old == before
+    assert "pivotSpace" not in placement(json.loads(json.dumps(final)))["placedBody"]
+
+
+def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_leaf(tmp_path, monkeypatch):
+    from pathlib import Path
+    from PIL import Image
+    from infini_local.pipelines import visual_generation_pipeline as visual
+    from infini_local.pipelines import visual_delivery_gate as gate
+    from infini_local.storage.world_storage import sanitize_recipe_for_delivery, is_deliverable_recipe_payload
+    from infini_local.core.vfx_manifest import attach_vfx_manifest
+    from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output
+    document = placed()
+    document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
+    wire = compile_runtime_program(document)
+    wire = visual._apply_kit(wire, _visual_kit(wire))
+    wire = attach_vfx_manifest(wire, "offline-alpha-delivery", llm_director=lambda *_a, **_kw: _vfx_output(wire))
+    wire.update(id="alpha_delivery_fixture", sourceMode="llm", schemaVersion=5, runtimeApiVersion="infini.runtime-program.v5")
+    png = tmp_path / "alpha.png"
+    image = Image.new("RGBA", (64,64)); image.paste((240,90,20,255), (7,9,49,48)); image.save(png)
+    wire["visual"].update(spritePath="alpha.png", spriteStatus="generated")
+    for entity in wire["runtimeProgram"]["entities"]: entity["visual"].update(spritePath="alpha.png", spriteStatus="generated")
+    monkeypatch.setattr(gate, "_resolved_asset_path", lambda p: png if p and Path(str(p)).name == "alpha.png" else None)
+    before = copy.deepcopy(wire)
+    assert is_deliverable_recipe_payload(wire)
+    final_wire = sanitize_recipe_for_delivery(wire)
+    assert placement(final_wire)["placedBody"]["pivotSpace"] == "alpha_bounds"
+    expected = json.loads((Path(__file__).resolve().parents[2] / "tools/fixtures/placed-alpha-pivot-delivered.json").read_text())
+    assert final_wire == expected  # same retained final payload used by the native observer
+    assert validate_runtime_wire(json.loads(json.dumps(final_wire)))["ok"]
+    assert wire == before
+    for leaf, value in (("pivotSpace", None), ("foreignAlphaCrop", True)):
+        bad = copy.deepcopy(wire)
+        placement(bad)["placedBody"][leaf] = value
+        assert not is_deliverable_recipe_payload(bad)

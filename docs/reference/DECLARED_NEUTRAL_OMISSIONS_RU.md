@@ -18,6 +18,7 @@ Schema `default` — аннотация, не обещание provider constrai
 |---|---|
 | `configure_item_stats` | `manaCost → 0` при любом explicit damageClass; melee может потреблять mana, magic может иметь нулевой cost |
 | `configure_item_use` | `holdoutOffsetX/holdoutOffsetY → 0` **независимо** друг от друга |
+| `present_placed_item_sprite` | `pivotSpace → frame`; только базис pivot, все десять прежних transform-полей обязательны. Explicit `alpha_bounds` — отдельный opt-in, не crop/default ground correction; [контракт](PRESENT_PLACED_ITEM_SPRITE_RU.md) |
 | `apply_generated_buff_on_use` | `miningSpeedMultiplier → 1`; `oreSenseEnabled → false` (wire `oreSenseRadiusTiles=0`); `moveSpeedBonusPercent/jumpSpeedBonusPxPerTick/manaRegenBonusPoints/lifeRegenHpPerSecond → 0` |
 | `channel_beam` | `manaPayment → initial_use_only`; `initialDamageMultiplier/initialWidthMultiplier/damageStartProgress → 1.0`; `raycastTiles → false`; совместные сочетания и native semantics — [A7](CHANNEL_BEAM_SUSTAIN_GEOMETRY_RU.md) |
 

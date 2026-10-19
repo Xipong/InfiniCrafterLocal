@@ -5,22 +5,31 @@
 ## Author → wire
 
 - `target` — существующий `item_body`.
-- `placementCallId` — точный ID `configure_placeable` того же item-body, на который ссылается исполняемый `place_item` binding.
+- `placementCallId` — точный ID `configure_tile_placement` того же item-body, на который ссылается исполняемый `place_item` binding.
 - Placement — tile-only (`tileId >= 0`, `wallId = -1`). Wall, чужая/неисполняемая ссылка и дублирующая presentation-ссылка отвергаются.
-- Никакого default transform: все параметры ниже обязательны.
+- Десять исходных transform-полей обязательны. Только новый `pivotSpace` optional: отсутствие точно эквивалентно `frame`, без переавторства сохранённых definitions.
 
 | Параметр | Тип / границы | Значение |
 |---|---|---|
 | `renderSizePx` | integer, 1…512 | Длинная сторона **полного PNG frame** в world pixels; прозрачные поля входят в размер. |
 | `footprintAnchorX`, `footprintAnchorY` | number, 0…1 | Точка прямоугольника native footprint: 0 — левый/верхний край, 1 — правый/нижний. |
-| `imagePivotX`, `imagePivotY` | number, 0…1 | Опорная точка полного PNG frame. |
+| `pivotSpace` | optional enum: `frame`, `alpha_bounds` | Базис pivot: полный frame либо прямоугольник ненулевой alpha **финального выбранного PNG**. Omission = `frame`. |
+| `imagePivotX`, `imagePivotY` | number, 0…1 | Нормализованная точка внутри выбранного базиса; 0/1 — края пикселей, не центры. |
 | `offsetXPx`, `offsetYPx` | integer, −512…512 | Смещение world anchor: +X вправо, +Y вниз. |
 | `rotationDegrees` | number, −180…180 | Поворот вокруг pivot в экранной/world системе с +Y вниз. |
 | `flipX`, `flipY` | boolean | Отражение вокруг явно заданного pivot, до поворота. |
 
-Compiler переносит ровно десять transform-полей в `runtimeProgram.bindings[].usePolicy.action.placement.placedBody`. `placementCallId` остаётся source association/receipt, не новым C# wire-полем. Каждое поле имеет точный source→wire receipt; association имеет отдельный технический receipt. Double-поля не сужаются в compiler/DTO: float-конверсия происходит только при вызове графического API. Отсутствие `placedBody` допустимо; present-null, неизвестные/пропущенные transform-поля и выход за границы — RED.
+Compiler переносит десять обязательных transform-полей и выбранный `pivotSpace` в `runtimeProgram.bindings[].usePolicy.action.placement.placedBody`. `placementCallId` остаётся source association/receipt, не новым C# wire-полем. Каждое поле имеет точный source→wire receipt; association имеет отдельный технический receipt. Для пропущенного optional `pivotSpace` после полной validation материализуется только объявленная нейтраль `frame` с `declared_neutral_omission` receipt; явные `frame`/`alpha_bounds` имеют `delivered`. Double-поля не сужаются в compiler/DTO: float-конверсия происходит только при вызове графического API. Отсутствие `placedBody` допустимо; present-null, неизвестные/пропущенные обязательные transform-поля и выход за границы — RED.
 
 Visual Director и его существующий Repair получают выбранную placement presentation read-only. Они не могут менять её transform или механику. Root PNG остаётся обязательным selected asset, без нового project/source selector; отсутствие PNG — pending/error, не повод показывать native body или подставлять картинку.
+
+## Явная регистрация по alpha bounds
+
+Для `alpha_bounds` cache измеряет все пиксели с **alpha > 0** в уже существующем `Color[]` premultiply/upload проходе. Никакого нового decoder, второго `GetData`, per-draw обхода или threshold PCA. Bounds сохраняются на том же exact selected `CachedTexture` generation, что texture и local forward angle. Правая/нижняя граница exclusive: `(left, top, right, bottom)` охватывает полные pixel cells. Полностью прозрачный PNG имеет измеренный empty bounds; borrowed 3-argument fixture имеет unknown bounds. Оба случая при явном `alpha_bounds` отказывают только custom body draw — **без** подмены базиса на frame/native, изменения ledger или возврата материала.
+
+`pivot = (left + (right-left)*imagePivotX, top + (bottom-top)*imagePivotY)`. После этого прежние scale, отражение вокруг pivot, поворот и world-axis offset применяются к **целому uncropped PNG**. Viewport culling использует тот же pivot, но полный frame. `renderSizePx` всегда измеряет полный frame: alpha-bounds не растягивает видимую часть до этого размера. Отсутствие/явный `frame` сохраняют прежний pivot, включая намеренные прозрачные поля.
+
+Для нового неподвижного наземного рисунка Author может сознательно выбрать `pivotSpace=alpha_bounds`, `imagePivotY=1`, `footprintAnchorY=1`, нулевые `offsetYPx`/`rotationDegrees` и `flipY=false`: нижний край alpha rectangle совпадёт с нижним краем native footprint. Это не автоматическое правило для мебели и не универсальное доказательство соприкосновения силуэта/collider: glow/shadow с ненулевой alpha тоже входит в bounds; другие rotation/flip/offset/composition могут сознательно оставлять воздух. `frame` остаётся законным выбором. Нет name/category/parent routing, обязательного self-report, crop или миграции существующего мира.
 
 ## Runtime ownership
 
@@ -34,7 +43,7 @@ Visual Director и его существующий Repair получают вы�
 
 Source adapter закрывает normal/basic/flame/sliced/Xmas/track и cached special passes, в том числе native tree/grass/vine/pylon/trophy/lens submissions. Он подавляет **final visual call**, сохраняя argument evaluation, updates, RNG, light, dust/liquids и чужие neighbors; не заменяет global texture и не прекращает whole Draw. Устанавливается полный набор 19 hooks / 156 final submissions атомарно и снимается своим lifecycle owner.
 
-Эта v1 сертифицирует два проверенных native DLL profiles и bounded native footprints (до 16×16 и 256 cells). Unknown DLL/изменённая hook-chain shape, ModTile/чужие tile-visual callbacks и post-place actor/callback без отдельного ownership certificate дают явный отказ **до mutation**. Наличие пустого `TileEntity.ByPosition` до placement не считается доказательством отсутствия будущего actor. Indirect actor hooks присутствуют, но actor placements без generation/content/callback certificate не допускаются. Это не обещание покрыть arbitrary cross-mod drawing.
+Эта v1 сертифицирует два проверенных native DLL profiles и bounded native footprints (до 16×16 и 256 cells). Любой из `present_placed_item_sprite`/`add_placed_light` выбирает `HasPlacedFootprint` и требует exact callback-free native metadata, включая alternates. Native container post-place hooks (например WaterChest) не поддерживаются: эти calls не добавляют container/actor lifecycle; обычный `configure_tile_placement` без них остаётся отдельной границей. Unknown DLL/изменённая hook-chain shape, ModTile/чужие tile-visual callbacks и post-place actor/callback без отдельного ownership certificate дают явный отказ **до mutation**. Наличие пустого `TileEntity.ByPosition` до placement не считается доказательством отсутствия будущего actor. Indirect actor hooks присутствуют, но actor placements без generation/content/callback certificate не допускаются. Это не обещание покрыть arbitrary cross-mod drawing.
 
 Native byte profiles: installed `fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5`; SDK tModLoader 2026.7.3.0 `d530e508b2841e66d880ce279a609624b5ab66ce8093eedfa04f47c3d12d485c`. Каждый profile проходит прежний полный preflight 19 exact method shapes и повторную проверку текущей MonoMod hook chain; совпадение версии без точного SHA256 не даёт admission. Refusal диагностируется через существующий mod logger; disabled adapter не разрешает PNG overlay поверх неподтверждённого native тела.
 

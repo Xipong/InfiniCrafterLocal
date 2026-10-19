@@ -19,6 +19,7 @@ from test_registry_receipt_identity import _call, _receipt
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
 
 DECLARED = {
+    "present_placed_item_sprite": {"pivotSpace": "frame"},
     "configure_spawn": {"count": 1, "spreadRadians": 0},
     "set_projectile_collision": {"bounceCount": 0},
     "channel_beam": {"manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,

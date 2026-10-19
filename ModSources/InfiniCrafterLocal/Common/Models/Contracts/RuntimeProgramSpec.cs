@@ -645,6 +645,19 @@ public sealed class RuntimePlacedBodySpec
     [JsonRequired] public int RenderSizePx { get; init; }
     [JsonRequired] public double FootprintAnchorX { get; init; }
     [JsonRequired] public double FootprintAnchorY { get; init; }
+    private string? _pivotSpace;
+    // Omission retains historical full-frame semantics; explicit null is invalid.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PivotSpace
+    {
+        get => _pivotSpace;
+        init
+        {
+            if (value is not ("frame" or "alpha_bounds"))
+                throw new InvalidDataException("placedBody pivotSpace must be frame or alpha_bounds");
+            _pivotSpace = value;
+        }
+    }
     [JsonRequired] public double ImagePivotX { get; init; }
     [JsonRequired] public double ImagePivotY { get; init; }
     [JsonRequired] public int OffsetXPx { get; init; }

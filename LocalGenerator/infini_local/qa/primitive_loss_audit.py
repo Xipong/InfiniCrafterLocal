@@ -323,7 +323,8 @@ def _placed_component_surface_audit(fn: str, class_name: str, dto: bytes | None)
     cap = CAPABILITY_REGISTRY[fn]
     expected = {(spec.wire_name or name)[0].upper() + (spec.wire_name or name)[1:]:
                 ("double" if spec.consumer_storage == "float64" else "float") if spec.kind == "number"
-                else "int" if spec.kind == "integer" else "bool" if spec.kind == "boolean" else "string"
+                else "int" if spec.kind == "integer" else "bool" if spec.kind == "boolean"
+                else "string" if spec.required else "string?"
                 for name, spec in cap.params.items() if name != "placementCallId"}
     actual: dict[str, str] = {}
     block = ""

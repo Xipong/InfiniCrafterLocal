@@ -46,6 +46,9 @@ public sealed class RuntimeSpriteCache : IDisposable
     {
         public readonly Texture2D Texture;
         public readonly float LocalForwardRadians;
+        // Null is unknown (e.g. a borrowed headless fixture); Empty is measured
+        // alpha-empty. Neither may masquerade as a full-frame alpha basis.
+        public readonly Rectangle? AlphaBounds;
         public long LastAccessTick;
 
         public CachedTexture(Texture2D texture, float localForwardRadians, long lastAccessTick)
@@ -53,6 +56,12 @@ public sealed class RuntimeSpriteCache : IDisposable
             Texture = texture;
             LocalForwardRadians = localForwardRadians;
             LastAccessTick = lastAccessTick;
+        }
+
+        public CachedTexture(Texture2D texture, float localForwardRadians, long lastAccessTick, Rectangle alphaBounds)
+            : this(texture, localForwardRadians, lastAccessTick)
+        {
+            AlphaBounds = alphaBounds;
         }
     }
 
@@ -104,11 +113,17 @@ public sealed class RuntimeSpriteCache : IDisposable
         }
     }
 
-    public Texture2D? TryGet(string path) => TryGet(path, out _);
+    public Texture2D? TryGet(string path) => TryGet(path, out _, out _);
 
     public Texture2D? TryGet(string path, out float localForwardRadians)
+        => TryGet(path, out localForwardRadians, out _);
+
+    // All facts belong to this exact selected CachedTexture generation. No
+    // second key lookup, image read or per-draw metadata reconstruction.
+    public Texture2D? TryGet(string path, out float localForwardRadians, out Rectangle? alphaBounds)
     {
         localForwardRadians = 0f;
+        alphaBounds = null;
         if (string.IsNullOrWhiteSpace(path) || Main.dedServ) return null;
         lock (_lock)
         {
@@ -128,6 +143,7 @@ public sealed class RuntimeSpriteCache : IDisposable
                     _hitCount++;
                     cached.LastAccessTick = ++_accessCounter;
                     localForwardRadians = cached.LocalForwardRadians;
+                    alphaBounds = cached.AlphaBounds;
                     return cached.Texture;
                 }
                 if (_missingOrBad.TryGetValue(key, out DateTime lastBad))
@@ -176,9 +192,10 @@ public sealed class RuntimeSpriteCache : IDisposable
                     return null;
                 }
 
+                Rectangle loadedAlphaBounds;
                 try
                 {
-                    localForwardRadians = PrepareTextureAndMeasureLocalForwardRadians(tex);
+                    localForwardRadians = PrepareTextureAndMeasureLocalForwardRadians(tex, out loadedAlphaBounds);
                 }
                 catch
                 {
@@ -187,7 +204,8 @@ public sealed class RuntimeSpriteCache : IDisposable
                     try { tex.Dispose(); } catch { }
                     throw;
                 }
-                _textures[key] = new CachedTexture(tex, localForwardRadians, ++_accessCounter);
+                _textures[key] = new CachedTexture(tex, localForwardRadians, ++_accessCounter, loadedAlphaBounds);
+                alphaBounds = loadedAlphaBounds;
                 _loadSuccessCount++;
                 TrimTextureCacheIfNeeded(limits.MaxCachedTextures);
                 return tex;
@@ -221,7 +239,7 @@ public sealed class RuntimeSpriteCache : IDisposable
         return key;
     }
 
-    private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture)
+    private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture, out Rectangle alphaBounds)
     {
         int width = texture.Width;
         int height = texture.Height;
@@ -231,11 +249,19 @@ public sealed class RuntimeSpriteCache : IDisposable
         // PngReader.PreMultiplyAlpha (tML 29bf9785f5f4de8cd305be002c4cc48aa1177b20):
         // integer channel * alpha / 255, preserving alpha exactly. Convert only on
         // cache insertion, never on hits or on disk; reuse the existing PCA buffer.
+        int left = width, top = height, right = 0, bottom = 0;
         for (int i = 0; i < pixels.Length; i++)
         {
             Color color = pixels[i];
+            if (color.A > 0)
+            {
+                int x = i % width, y = i / width;
+                left = Math.Min(left, x); top = Math.Min(top, y);
+                right = Math.Max(right, x + 1); bottom = Math.Max(bottom, y + 1);
+            }
             pixels[i] = new Color(color.R * color.A / 255, color.G * color.A / 255, color.B * color.A / 255, color.A);
         }
+        alphaBounds = right > left && bottom > top ? new Rectangle(left, top, right - left, bottom - top) : Rectangle.Empty;
         texture.SetData(pixels);
         return MeasureLocalForwardRadians(pixels, width, height);
     }

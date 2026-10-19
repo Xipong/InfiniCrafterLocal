@@ -2276,11 +2276,22 @@
                           "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
                         }
                       },
+                      "pivotSpace": {
+                        "type": "string",
+                        "enum": [
+                          "frame",
+                          "alpha_bounds"
+                        ],
+                        "description": "Pivot basis only: frame (also omission) preserves full delivered PNG padding; alpha_bounds maps imagePivotX/Y inside the nonzero-alpha bounding rectangle of the final selected PNG, using pixel edges. For deliberate visible bottom contact choose alpha_bounds with imagePivotY=1; frame remains legal for intentional padding. Unknown or empty alpha bounds refuse the custom body draw. Whole PNG stays uncropped and renderSizePx/rotation/flips/offsets are unchanged; never infer this choice from names or parents",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "frame",
+                        "x-infini-neutral": "frame"
+                      },
                       "imagePivotX": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 1,
-                        "description": "Normalized full delivered PNG frame pivot X, not alpha bounds or grip",
+                        "description": "Normalized X inside the selected pivotSpace rectangle, not held grip",
                         "x-infini-semanticType": "unitless_scalar",
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
@@ -2292,7 +2303,7 @@
                         "type": "number",
                         "minimum": 0,
                         "maximum": 1,
-                        "description": "Normalized full delivered PNG frame pivot Y, not alpha bounds or grip",
+                        "description": "Normalized Y inside the selected pivotSpace rectangle: 0 top pixel edge, 1 bottom pixel edge",
                         "x-infini-semanticType": "unitless_scalar",
                         "x-infini-consumerConstraint": {
                           "storage": "float64",

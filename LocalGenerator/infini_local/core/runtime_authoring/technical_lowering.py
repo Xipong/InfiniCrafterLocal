@@ -1577,13 +1577,20 @@ def audit_compiler_receipts(
                     continue
                 association = associations[0]
                 source_base = association["authoredPath"].rsplit(".", 1)[0]
-                for name in component_cap.params:
+                for name, spec in component_cap.params.items():
                     if name == "placementCallId":
                         continue
+                    # Additive optional leaves may be absent in accepted historical
+                    # wire. Fresh neutral materialization still needs its own receipt.
+                    if not spec.required and isinstance(placement[component], Mapping) and name not in placement[component]:
+                        continue
+                    statuses = {"delivered"}
+                    if name in declared_neutral_omissions(component_cap.name, {}):
+                        statuses.add("declared_neutral_omission")
                     matching = [r for r in receipt_rows if r.get("fn") == component_cap.name
                                 and r.get("callId") == association.get("callId")
                                 and r.get("authoredPath") == f"{source_base}.{name}"
-                                and r.get("finalPath") == f"{base}.{name}" and r.get("status") == "delivered"]
+                                and r.get("finalPath") == f"{base}.{name}" and r.get("status") in statuses]
                     if len(matching) != 1:
                         violations.append({"finalPath": f"{base}.{name}", "reason": "placed transform has no unique originating receipt"})
         # Wire-only auditing has no Author call list: require coverage of each
