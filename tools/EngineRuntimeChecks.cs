@@ -367,6 +367,7 @@ internal static partial class EngineRuntimeChecks
             ("native chest live actor replacement incarnation", NativeChestLiveActorReplacementCannotRebind),
             ("native chest exact native return durable pool prefix", NativeChestExactReturnUsesOnlyExistingPendingOwner),
             ("native chest post-load mine before maintenance exact return", NativeChestPostLoadBreakBeforeMaintenance),
+            ("native chest ordinary unlock keeps actor and return", NativeChestUnlockKeepsNativeActorAndGeneratedReturn),
             ("native chest untracked player path refused", NativeChestUntrackedPlayerPathCannotCreateStorage),
             ("native chest partial native actor allocation abort", NativeChestPartialActorInitializationRollsBackOwnedSlot),
             ("native chest predictable support refusal before drop", NativeChestUnsupportedGroundRefusesBeforeVanillaDrop),

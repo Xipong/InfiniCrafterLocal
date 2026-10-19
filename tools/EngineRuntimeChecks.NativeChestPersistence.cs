@@ -80,6 +80,20 @@ internal static partial class EngineRuntimeChecks
   for(int x=40;x<42;x++)for(int y=39;y<41;y++){var cell=Terraria.Main.tile[x,y];cell.HasTile=false;}
   ledger.PostUpdateWorld();Equal(0,PlacedLedgerGroups(ledger).Count,"rebound actor removal releases only original material claim");
  }));}
+ private static void NativeChestUnlockKeepsNativeActorAndGeneratedReturn(){WithNativeChestWorld((player,ledger)=>{
+  using var pool=new NativeItemPoolState();Terraria.Main.item=Enumerable.Range(0,Terraria.Main.maxItems+1).Select(_=>new Item{active=true}).ToArray();Terraria.Main.timeItemSlotCannotBeReusedFor=new int[Terraria.Main.maxItems+1];
+  var source=NativeChestItem(player,"native-unlock",tileType:TileID.Containers,style:2);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
+  Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),"native locked chest authorizes");NativeChestPlayerPlace(player);
+  var actor=Terraria.Main.chest[Chest.FindChest(40,39)];
+  Equal(true,Chest.Unlock(40,39),"actual native Unlock transition");Equal(true,ReferenceEquals(actor,Terraria.Main.chest[Chest.FindChest(40,39)]),"unlock retains the same native contents actor");
+  Equal(true,GeneratedPlacementLedgerSystem.ShouldSuppressPlacedBody(40,39),"ordinary native unlock must preserve generated presentation");
+  var saved=PersistenceNbtRoundtrip(PlacedLedgerSaved(ledger));using var memory=new MemoryStream();
+  using(var writer=new BinaryWriter(memory,System.Text.Encoding.UTF8,true))typeof(Terraria.IO.WorldFile).GetMethod("SaveChests",PersistenceStatic)!.Invoke(null,new object[]{writer});
+  Terraria.Main.chest=new Chest[8000];memory.Position=0;using(var reader=new BinaryReader(memory,System.Text.Encoding.UTF8,true))typeof(Terraria.IO.WorldFile).GetMethod("LoadChests",PersistenceStatic)!.Invoke(null,new object[]{reader});
+  ledger.LoadWorldData(saved);bool gen=WorldGen.gen;try{WorldGen.gen=true;WorldGen.KillTile(40,40);}finally{WorldGen.gen=gen;}
+  ledger.PostUpdateWorld();Equal(0,PlacedLedgerGroups(ledger).Count,"unlocked native chest remains returnable after reload");
+  Equal(1,PlacedLedgerSaved(ledger).GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Count,"unlock does not create another material owner or lose the generated return");
+ });}
  private static void NativeChestExactReturnUsesOnlyExistingPendingOwner()=>NativeChestExactReturnScenario(false);
  private static void NativeChestPostLoadBreakBeforeMaintenance(){foreach(var tuple in new[]{(TileID.Containers,0),(TileID.Containers,51),(TileID.Containers2,0),(TileID.Containers2,16)})NativeChestExactReturnScenario(true,tuple.Item1,tuple.Item2);}
  private static void NativeChestExactReturnScenario(bool reload,int tileType=TileID.Containers,int style=17){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{

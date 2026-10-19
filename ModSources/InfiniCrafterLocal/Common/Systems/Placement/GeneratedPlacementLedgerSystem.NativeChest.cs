@@ -256,8 +256,15 @@ public sealed partial class GeneratedPlacementLedgerSystem
         catch{return false;}
     }
     private static bool NativeChestFootprint(PlacementGroup group,int x,int y)
-        => group.Cells.All(cell=>TryResolveMaterialFootprint(cell.X,cell.Y,group.NativeChest!.GetInt("tileType"),group.NativeChest.GetInt("nativeStyle"),out int ox,out int oy,out int w,out int h)
+    {
+        if(!WorldGen.InWorld(x,y,1)) return false;
+        int type=group.NativeChest!.GetInt("tileType"),style=TileObjectData.GetTileStyle(Main.tile[x,y]);
+        // The witness authenticates the originally placed item. Native Unlock
+        // changes its tile style, not its contents actor or material identity.
+        // Placement/rollback still require the exact authored initial style.
+        return IsNativeChestStyle(type,style) && group.Cells.All(cell=>TryResolveMaterialFootprint(cell.X,cell.Y,type,style,out int ox,out int oy,out int w,out int h)
             && ox==x && oy==y && w==2 && h==2);
+    }
     private static void DiagnoseNativeChest(PlacementGroup group,string reason)
     {
         if(group.NativeChestDiagnostic==reason) return;
@@ -325,9 +332,10 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private static int NativeChestPlaceAction(int tileType)
         => tileType==TileID.Containers ? 0 : tileType==TileID.Containers2 ? 4 : -1;
     private static bool IsNativeChestPlacement(RuntimePlacementSpec? placement)
-        => placement is { WallId: < 0, PlaceStyle: >= 0 } && NativeChestPlaceAction(placement.TileId)>=0
-            && TileID.Sets.BasicChest[placement.TileId]
-            && placement.PlaceStyle < (placement.TileId==TileID.Containers ? Chest.chestItemSpawn.Length : Chest.chestItemSpawn2.Length);
+        => placement is { WallId: < 0 } && IsNativeChestStyle(placement.TileId,placement.PlaceStyle);
+    private static bool IsNativeChestStyle(int tileType,int style)
+        => style>=0 && NativeChestPlaceAction(tileType)>=0 && TileID.Sets.BasicChest[tileType]
+            && style < (tileType==TileID.Containers ? Chest.chestItemSpawn.Length : Chest.chestItemSpawn2.Length);
 
     private static bool AdmitNativeChestMetadata(RuntimePlacementSpec placement)
     {
