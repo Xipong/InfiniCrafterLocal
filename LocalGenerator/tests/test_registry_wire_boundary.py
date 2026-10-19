@@ -287,7 +287,7 @@ def test_generated_buff_dependency_and_legacy_absence(change):
 def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch, wire, mutation, error_path, code):
     from infini_local.pipelines import visual_delivery_gate
     from infini_local.pipelines.combine_pipeline import _cached_payload_report, combine_cache_lookup
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     from infini_local.storage import world_recipe_runtime, world_storage
 
     monkeypatch.setattr(world_recipe_runtime, "WORLD_RECIPES_DIR", tmp_path)
@@ -297,8 +297,10 @@ def test_rejected_wire_is_quarantined_by_real_cache_lookup(tmp_path, monkeypatch
     key, cached = combine_cache_lookup(payload)
     assert cached is None
     wire["visual"] = {"preferredCanvasSize": 32}
-    hydrate_no_image_fixture_assets(wire, write_no_image_fixture_png(tmp_path / "cache-control.png"))
+    fixture = write_no_image_fixture_png(tmp_path / "cache-control.png")
+    hydrate_no_image_fixture_assets(wire, fixture)
     wire["vfxManifest"] = _compile_manifest(wire, {"slots": []}, key)
+    wire = synthetic_no_image_execution_control(wire, fixture)
     assert _cached_payload_report(wire)["ok"]
     path = world_storage.world_recipe_file(tmp_path, "audit-world", key)
     world_storage.write_world_recipe_cache(tmp_path, "test", key, "audit-world", wire)

@@ -277,6 +277,23 @@ def campaign_case(tmp_path):
     return build
 
 
+@pytest.mark.parametrize("corruption", ["pending-root", "wrong-alias-path"])
+def test_no_image_execution_control_does_not_repair_invalid_reuse(campaign_case, corruption):
+    from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
+
+    fixture, data, entity = campaign_case(selection="reuse_item_icon")
+    alias = next(row["visual"] for row in data["runtimeProgram"]["entities"] if row["id"] == entity["id"])
+    if corruption == "pending-root":
+        data["visual"]["spriteStatus"] = "pending"
+    else:
+        alias["spritePath"] = str(write_no_image_fixture_png(fixture.with_name("other-owner.png")))
+    before = copy.deepcopy(data)
+    control = synthetic_no_image_execution_control(data, fixture)
+    assert not visual_delivery_report(control, check_backend_config=False)["ok"]
+    assert control["visual"]["spriteStatus"] == data["visual"]["spriteStatus"]
+    assert data == before
+
+
 CAMPAIGN_CONSUMPTION_CASES = [
     pytest.param("fixture", "projection", "final", "changed", id="fixture-during-projection"),
     *(pytest.param("fixture", boundary, consumer, "changed", id=f"fixture-{consumer}-{boundary}")
@@ -446,7 +463,9 @@ def test_campaign_malformed_ingredient_provenance_refuses(campaign_case, entry):
     assert not report["ok"]
 
 
-def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path: Path) -> None:
+def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from infini_local.core.runtime_authoring.capability_registry import VISUAL_ROLE_BY_ENTITY_KIND
+    monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path)
     fixture_path = write_no_image_fixture_png(tmp_path / "qa-fixture.png")
     # Exercise the decoder used by delivery consumers, not a parallel partial PNG parser.
     with Image.open(fixture_path) as image:
@@ -463,20 +482,24 @@ def test_no_image_fixture_hydrates_real_delivery_paths_without_backend(tmp_path:
     with pytest.raises(OSError):
         Image.open(BytesIO(damaged)).load()
 
-    data = build_runtime_fixture("workbench_blade")
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     data["visual"] = {"preferredCanvasSize": 32}
     non_item = [
         entity
         for entity in data["runtimeProgram"]["entities"]
         if entity["kind"] != "item_body"
     ]
-    non_item[0]["visualRole"] = "projectile"
+    non_item[0]["visualRole"] = VISUAL_ROLE_BY_ENTITY_KIND[non_item[0]["kind"]]
     non_item[0]["visual"] = {"assetMode": "baked_sprite", "preferredCanvasSize": 32}
-    non_item[1]["visualRole"] = "child"
+    non_item[1]["visualRole"] = VISUAL_ROLE_BY_ENTITY_KIND[non_item[1]["kind"]]
     non_item[1]["visual"] = {"assetMode": "reuse_item_icon"}
+    data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "qa-path-hydration")
 
     hydrated = hydrate_no_image_fixture_assets(data, fixture_path)
-    report = visual_delivery_report(hydrated, check_backend_config=False)
+    from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
+    assert not visual_delivery_report(hydrated, check_backend_config=False)["ok"]
+    control = synthetic_no_image_execution_control(hydrated, fixture_path)
+    report = visual_delivery_report(control, check_backend_config=False)
 
     assert report["ok"], report
     assert hydrated["visual"]["spriteStatus"] == "qa_no_image_fixture"
@@ -524,8 +547,11 @@ def test_no_image_fixture_hydrates_canonical_required_asset_plan_roles(tmp_path:
         str(problem.get("code") or "")
         for problem in visual_delivery_report(hydrated, check_backend_config=False)["problems"]
     }
-    assert "required_equipment_overlay_missing" not in problem_codes
-    assert "required_impact_sprite_missing" not in problem_codes
+    # Hydration supplies real files with QA provenance, not a completed
+    # production image result. This partial plan is not full VFX wire either;
+    # the complete impact consumer is exercised by the next test below.
+    assert "required_equipment_overlay_missing" in problem_codes
+    assert "vfx_manifest_invalid" in problem_codes
 
 
 def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does(tmp_path: Path) -> None:
@@ -546,7 +572,9 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
 
     hydrate_no_image_fixture_assets(data, fixture)
     assert "impactSpritePath" not in entity["visual"]
-    ring_report = visual_delivery_report(data, check_backend_config=False)
+    from infini_local.qa.live_no_image_fixture import synthetic_no_image_execution_control
+    ring_control = synthetic_no_image_execution_control(data, fixture)
+    ring_report = visual_delivery_report(ring_control, check_backend_config=False)
     assert ring_report["ok"], ring_report["problems"]
     assert not any(slot["role"] == "impact:" + entity["id"] for slot in ring_report["slots"])
 
@@ -561,8 +589,8 @@ def test_primitive_impact_ring_does_not_require_a_texture_but_impact_sprite_does
     assert "required_vfx_texture_not_ready" in {
         problem["code"] for problem in visual_delivery_report(data, check_backend_config=False)["problems"]
     }
-    # The no-image hydrator deliberately labels QA bytes, not a completed image
-    # execution. Supply that result explicitly for this offline delivery fixture.
-    entity["visual"]["impactSpriteStatus"] = "generated"
-    final_report = visual_delivery_report(data, check_backend_config=False)
+    # Only the authenticated private control may bridge the QA labels; keep
+    # the original fixture and every production readiness guard unchanged.
+    final_control = synthetic_no_image_execution_control(data, fixture)
+    final_report = visual_delivery_report(final_control, check_backend_config=False)
     assert final_report["ok"], final_report["problems"]
