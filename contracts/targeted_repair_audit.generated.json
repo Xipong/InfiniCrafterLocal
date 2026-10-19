@@ -9,7 +9,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 41159,
+      "dossierChars": 52398,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -41,7 +41,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 40591,
+      "dossierChars": 51830,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -85,7 +85,7 @@
         "move_vortex_orb",
         "move_whip_lash"
       ],
-      "dossierChars": 53501,
+      "dossierChars": 69170,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -105,7 +105,7 @@
     {
       "brokenCounts": {
         "bindings": 0,
-        "calls": 1,
+        "calls": 2,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
@@ -113,11 +113,17 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 47000,
+      "dossierChars": 62181,
       "errorCodes": [
+        "shape_one_of",
+        "shape_required",
+        "shape_additional_property",
         "missing_item_capability_param"
       ],
       "errorPaths": [
+        "$.runtimeProgram.calls[8]",
+        "$.runtimeProgram.calls[8].params.warmupSeconds",
+        "$.runtimeProgram.calls[8].params.warmupTicks",
         "$.runtimeProgram.calls[8]"
       ],
       "existingBrokenCapabilities": [
@@ -127,9 +133,9 @@
       "name": "existing_dependency_parameter_mismatch",
       "nonRepairableCount": 0,
       "readOnlyDependencyCounts": {
-        "bindings": 0,
-        "calls": 1,
-        "entities": 1
+        "bindings": 1,
+        "calls": 0,
+        "entities": 2
       },
       "supportingCapabilities": []
     }
@@ -153,7 +159,7 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 170083,
+  "fullAuthorPayloadChars": 189732,
   "fullCapabilityCatalogCount": 70,
   "ok": true,
   "policyCoverage": {

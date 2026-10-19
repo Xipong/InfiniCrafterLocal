@@ -30,7 +30,7 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
     calls = document["runtimeProgram"]["calls"]
     held = next(row for row in calls if row.get("target") == "held_lantern_pike" and row["fn"] == "move_forward_then_retract")
     held.update(fn="channel_beam", params={
-        "rangeTiles": 20, "widthPx": 12, "warmupTicks": 12, "manaPayment": "each_use_time",
+        "rangeTiles": 20, "widthPx": 12, "warmupSeconds": 0.2, "manaPayment": "each_use_time",
         "initialDamageMultiplier": 0.35, "initialWidthMultiplier": 0.22,
         "damageStartProgress": 0.08, "raycastTiles": True,
     })
@@ -45,9 +45,9 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
         {"id": "native", "fn": "set_projectile_sentry", "target": "deployed_lantern", "params": {"enabled": True}},
         {"id": "pool", "fn": "set_descendant_concurrency", "target": "deployed_lantern", "params": {"maxActive": 12}},
         {"id": "shot_event", "fn": "spawn_entity_on_event", "target": "deployed_lantern", "params": {
-            "when": {"everyTicks": 90}, "entity": "lantern_bolt", "count": 2, "spreadRadians": 0.5,
+            "when": {'everySeconds': (90) / 60}, "entity": "lantern_bolt", "count": 2, "spreadRadians": 0.5,
             "damageBasis": damage_basis, "knockbackBasis": knockback_basis,
-            "damageMultiplier": multiplier, "delayTicks": 3,
+            "damageMultiplier": multiplier, 'delaySeconds': (3) / 60,
         }},
     ])
     return document
@@ -196,7 +196,7 @@ def test_fresh_missing_choice_requires_leaf_repair_without_reauthoring_valid_sib
     candidate = deepcopy(call)
     candidate["target"] = "item"
     candidate["params"][name] = value
-    candidate["params"]["damageMultiplier" if name != "damageMultiplier" else "intervalTicks"] = 3
+    candidate["params"]["damageMultiplier" if name != "damageMultiplier" else "intervalSeconds"] = 3
     repaired, final = frozen_call_repair(document, [candidate],
         [{"id": call["id"], "paths": ["params." + name]}], expected, note="fill exact missing choice")
     assert _wire_component(final, call)[name] == value

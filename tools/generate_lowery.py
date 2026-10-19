@@ -174,7 +174,7 @@ def render() -> str:
     lines += table(("runtime token", "tModLoader field"), [(k, v) for k, v in AMMO_CATEGORY_TMODLOADER_NAMES.items()])
     lines += [
         "",
-        "`configure_vanilla_ammo_item` отдельно принимает `projectileId` и `shootSpeedContributionPxPerUpdate`, напрямую записывая `Item.shoot` и ammo-вклад `Item.shootSpeed`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом». Отдельная capability `configure_weapon_ammo` задаёт `Item.useAmmo` для active spawn_entity shots: native selection/conservation и damage/knockback сохраняются, поведение projectile принадлежит authored entity. Author явно выбирает `speedBasis=authored_spawn|native_shot`. Другие use lanes и passive hold не расходуют ammo. Одновременная роль ammo stack и ammo consumer у одного generated item отклоняется.",
+        "`configure_vanilla_ammo_item` отдельно принимает `projectileId` и `shootSpeedContributionBlocksPerSecond`, переводя базовый ammo-вклад в native `Item.shootSpeed`; `projectileId` задаёт `Item.shoot`. Категория не выбирает projectile автоматически. `Item.ammo` означает «этот предмет является боеприпасом». Отдельная capability `configure_weapon_ammo` задаёт `Item.useAmmo` для active spawn_entity shots: native selection/conservation и damage/knockback сохраняются, поведение projectile принадлежит authored entity. Author явно выбирает `speedBasis=authored_spawn|native_shot`. Другие use lanes и passive hold не расходуют ammo. Одновременная роль ammo stack и ammo consumer у одного generated item отклоняется.",
         "",
         "### Loaded content IDs",
         "",
@@ -191,7 +191,12 @@ def render() -> str:
         "### Описание игроку и engine units — разные представления",
         "",
         "Lowery — технический lowering, не lore и не автор дополнительной механики. "
-        "Перевод единиц в player-facing prose не меняет runtimeProgram, schema, wire или единицы параметров. "
+        "Author задаёт игровые расстояния в блоках, длительности в секундах, скорости в блоках/с. "
+        "Меняется schema авторинга; сохранённый engine wire остаётся в прежних единицах. "
+        "Canonical lowering выполняет объявленные проекции с учётом updatesPerTick именно затронутой сущности. "
+        "Секунды разрешаются до ближайшего целого world tick, половина тика округляется вверх; "
+        "неположенное обнуление ненулевого эффекта отклоняется, а не скрыто меняет механику. "
+        "Pixel-labelled collision/sprite geometry и texture/UV units сохраняют своё объявленное пространство. "
         "Описание остаётся optional advisory: оно не требует нового отчёта и не запускает validator/Repair. "
         "Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.",
         "",

@@ -1,5 +1,6 @@
 """Explicit native-front-hand movement: real Author/compiler/provenance boundary."""
 from copy import deepcopy
+from repair_test_helpers import projected_params
 
 import pytest
 
@@ -11,7 +12,7 @@ from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_R
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-PARAMS = {"aimMode": "cursor", "durationTicks": 13, "startStretch": "quarter",
+PARAMS = {"aimMode": "cursor", 'durationSeconds': (13) / 60, "startStretch": "quarter",
           "peakStretch": "full", "hitboxOffsetPx": 11}
 
 
@@ -21,7 +22,7 @@ def fixture(**params):
     call = next(c for c in calls if c["id"] == "witness_call")
     call.update(fn="move_front_hand", params={**PARAMS, **params})
     next(c for c in calls if c["fn"] == "configure_spawn")["params"].update(
-        velocity={"constantSpeedPxPerUpdate": 0}, count=1, spreadRadians=0)
+        velocity={'constantSpeedBlocksPerSecond': (0) * 60 / 16}, count=1, spreadRadians=0)
     next(c for c in calls if c["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
     next(c for c in calls if c["fn"] == "configure_item_use")["params"].pop("handPose")
     calls.append({"id": "singleton", "fn": "set_projectile_concurrency",
@@ -40,7 +41,7 @@ def test_explicit_call_compiles_literal_five_params_without_adding_mechanics():
     assert report["ok"], report["errors"]
     wire = compile_runtime_program(doc)
     assert doc == before
-    assert entity(wire)["movement"] == {"name": "move_front_hand", "code": 20, "params": call["params"]}
+    assert entity(wire)["movement"] == {"name": "move_front_hand", "code": 20, "params": projected_params("move_front_hand", call["params"])}
     assert MOVEMENT_OPCODE["move_forward_then_retract"] == 19 and MOVEMENT_OPCODE["move_front_hand"] == 20
     cap = CAPABILITY_REGISTRY["move_front_hand"]
     assert cap.component_slot == cap.exclusive_group == "movement"
@@ -51,8 +52,8 @@ def test_explicit_call_compiles_literal_five_params_without_adding_mechanics():
     for key, value in call["params"].items():
         rows = [r for r in wire["runtimeContract"]["finalWireReceipts"]
                 if r.get("callId") == call["id"] and r["authoredPath"].endswith(".params." + key)]
-        assert len(rows) == 1 and rows[0]["value"] == value and rows[0]["status"] == "delivered"
-        assert rows[0]["finalPath"].endswith(".movement.params." + key)
+        assert len(rows) == 1 and rows[0]["value"] == cap.params[key].to_wire(value, updates_per_tick=1) and rows[0]["status"] == "delivered"
+        assert rows[0]["finalPath"].endswith(".movement.params." + (cap.params[key].wire_name or key))
     assert "controller" not in entity(wire)
 
 
@@ -82,7 +83,7 @@ def test_new_present_leaves_require_unique_exact_receipts_but_old_duration_does_
     if mutation == "shared_duration_legacy":
         wire = compile_runtime_program(build_capability_witness("move_forward_then_retract"))
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    row = next(r for r in receipts if r.get("callId") == "witness_call" and r["authoredPath"].endswith(".params.durationTicks"))
+    row = next(r for r in receipts if r.get("callId") == "witness_call" and r["authoredPath"].endswith('.params.durationSeconds'))
     if mutation == "shared_duration_legacy":
         assert audit_compiler_receipts(receipts, final_document=wire)["ok"]
         wire.pop("runtimeContract")
@@ -90,7 +91,7 @@ def test_new_present_leaves_require_unique_exact_receipts_but_old_duration_does_
         return
     if mutation == "missing": receipts.remove(row)
     if mutation == "value": row["value"] += 1
-    if mutation == "source": row["authoredPath"] = row["authoredPath"].replace("durationTicks", "hitboxOffsetPx")
+    if mutation == "source": row["authoredPath"] = row["authoredPath"].replace("durationSeconds", "hitboxOffsetPx")
     if mutation == "call": row["callId"] = "forged"
     if mutation == "duplicate": receipts.append(deepcopy(row))
     if mutation == "all": receipts.clear()
@@ -116,14 +117,14 @@ def test_front_hand_declared_dependencies_reject_only_conflicting_composition(mu
     if mutation == "cap_two": p("set_projectile_concurrency")["maxActive"] = 2
     if mutation == "count": p("configure_spawn")["count"] = 2
     if mutation == "spread": p("configure_spawn")["spreadRadians"] = 0.1
-    if mutation == "speed": p("configure_spawn")["velocity"] = {"constantSpeedPxPerUpdate": 1}
-    if mutation == "sampled_speed": p("configure_spawn")["velocity"] = {"disk": {"maxSpeedPxPerUpdate": 1}}
+    if mutation == "speed": p("configure_spawn")["velocity"] = {"constantSpeedBlocksPerSecond": 3.75}
+    if mutation == "sampled_speed": p("configure_spawn")["velocity"] = {"disk": {"maxSpeedBlocksPerSecond": 3.75}}
     if mutation == "tile": p("set_projectile_collision")["tileCollide"] = True
     if mutation == "handPose": p("configure_item_use")["handPose"] = "one_handed"
     if mutation == "controller":
         p("configure_item_use")["channel"] = True
-        calls.append({"id": "charge", "fn": "charge_then_release", "target": "witness_entity", "params": {"chargeTicks": 12, "powerMultiplier": 1}})
-    if mutation == "over_target": p("configure_spawn")["position"] = {"above": "cursor", "heightTiles": 3, "activationDelayTicks": 0}
+        calls.append({"id": "charge", "fn": "charge_then_release", "target": "witness_entity", "params": {'chargeSeconds': (12) / 60, "powerMultiplier": 1}})
+    if mutation == "over_target": p("configure_spawn")["position"] = {"above": "cursor", "heightTiles": 3, "activationDelaySeconds": 0}
     if mutation == "secondary": doc["runtimeProgram"]["primaryEntityId"] = "item"
     if mutation == "hold": doc["runtimeProgram"]["bindings"][0]["input"] = "hold"
     if mutation == "cross_binding":
@@ -163,11 +164,11 @@ def test_frozen_dependency_repair_changes_only_exact_spawn_leaf_and_does_not_cre
     good, _ = fixture()
     broken = deepcopy(good)
     spawn = next(c for c in broken["runtimeProgram"]["calls"] if c["fn"] == "configure_spawn")
-    spawn["params"]["velocity"] = {"constantSpeedPxPerUpdate": 3}
+    spawn["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (3) * 60 / 16}
     scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": spawn["id"], "paths": ["params.velocity"]}]
     hostile = deepcopy(spawn)
-    hostile["params"].update(velocity={"constantSpeedPxPerUpdate": 0}, aim="facing", count=2)
+    hostile["params"].update(velocity={'constantSpeedBlocksPerSecond': (0) * 60 / 16}, aim="facing", count=2)
     patch, audit = filter_repair_patch_scope(broken, {"callsUpsert": [hostile], "note": "zero velocity only"}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
     assert apply_repair_patch(broken, patch) == good
@@ -259,7 +260,7 @@ def test_real_author_packet_explains_center_travel_vs_native_front_hand_without_
 
 @pytest.mark.parametrize("key,value", [
     ("aimMode", "initial "), ("aimMode", None), ("aimMode", True),
-    ("durationTicks", 1), ("durationTicks", 241), ("durationTicks", 2.5), ("durationTicks", "13"),
+    ("durationSeconds", 1 / 60), ("durationSeconds", 241 / 60), ("durationSeconds", 0.001), ("durationSeconds", "13"),
     ("startStretch", "threequarters"), ("peakStretch", "quarter "),
     ("hitboxOffsetPx", False), ("hitboxOffsetPx", "11"), ("hitboxOffsetPx", None),
     ("hitboxOffsetPx", -193), ("hitboxOffsetPx", float("nan")), ("hitboxOffsetPx", float("inf")),
@@ -285,7 +286,7 @@ def test_no_new_required_choice_has_omission_lowering(key):
 
 @pytest.mark.parametrize("aim,offset,duration", [("initial", -192, 2), ("cursor", 192, 240), ("initial", 0, 13)])
 def test_independent_non_damage_hand_animation_does_not_select_style_class_visibility_or_metadata(aim, offset, duration):
-    doc, _ = fixture(aimMode=aim, hitboxOffsetPx=offset, durationTicks=duration)
+    doc, _ = fixture(aimMode=aim, hitboxOffsetPx=offset, durationSeconds=duration / 60)
     doc["name"] = "Unrelated equipment-shaped ornament"
     doc["category"] = "equipment"
     calls = doc["runtimeProgram"]["calls"]
@@ -354,7 +355,7 @@ def test_front_hand_directional_event_compositions_remain_explicit_and_admitted(
     next(row for row in child_calls if row["fn"] == "configure_spawn")["params"]["aim"] = "velocity"
     event = deepcopy(next(row for row in event_program["calls"] if row["fn"] == fn))
     event["id"] = "hand_child_event"
-    event["params"].update(when={"everyTicks": 6} if lane == "periodic" else "on_hit", delayTicks=delay)
+    event["params"].update(when={'everySeconds': (6) / 60} if lane == "periodic" else "on_hit", delaySeconds=(delay) / 60)
     doc["runtimeProgram"]["calls"].extend([*child_calls, event])
     before = deepcopy(doc)
     report = validate_runtime_program(doc)

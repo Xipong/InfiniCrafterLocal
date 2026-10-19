@@ -34,11 +34,11 @@ def _accepted_visual_data(*, long_art: bool = False, curve_mirror: bool | None =
     if curve_mirror is not None:
         for target in ("workbench_blade", "nail"):
             author["runtimeProgram"]["calls"].append({"id": "curve_" + target, "fn": "set_projectile_hitbox_curve", "target": target,
-                "params": {"startScale": .25, "endScale": 8, "startDelayTicks": 5, "durationTicks": 60, "curve": "exponential", "mirrorToSprite": curve_mirror}})
+                "params": {"startScale": .25, "endScale": 8, 'startDelaySeconds': (5) / 60, 'durationSeconds': (60) / 60, "curve": "exponential", "mirrorToSprite": curve_mirror}})
     if visual_curve:
         for target in ("workbench_blade", "nail"):
             author["runtimeProgram"]["calls"].append({"id": "visual_curve_" + target, "fn": "set_projectile_visual_scale_curve", "target": target,
-                "params": {"startScale": 8, "endScale": .25, "startDelayTicks": 7, "durationTicks": 30, "curve": "linear"}})
+                "params": {"startScale": 8, "endScale": .25, 'startDelaySeconds': (7) / 60, 'durationSeconds': (30) / 60, "curve": "linear"}})
     data = compile_runtime_program(author)
     item_id = data["runtimeProgram"]["itemEntityId"]
     item_art = "Four short blades around a red glass vial, copper handle and oak brace."

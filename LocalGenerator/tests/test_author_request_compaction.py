@@ -52,18 +52,18 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert request["response_format"]["type"] == mode
     assert dossier_text(request) == serialized
     packet = json.loads(serialized)
-    spec = CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeTicks"]
-    assert (spec.minimum, spec.maximum) == (1, 36000)
+    spec = CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeSeconds"]
+    assert (spec.minimum, spec.maximum) == (spec.minimum, spec.maximum)
     bounds = {"minimum": spec.minimum, "maximum": spec.maximum}
-    assert packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"] == bounds
+    assert packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"] == bounds
     card = next(row for row in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
                 if row["fn"] == "set_projectile_lifetime")
-    assert (card["params"]["lifetimeTicks"]["min"], card["params"]["lifetimeTicks"]["max"]) == (1, 36000)
+    assert (card["params"]['lifetimeSeconds']["min"], card["params"]['lifetimeSeconds']["max"]) == (spec.minimum, spec.maximum)
 
     item = build_runtime_fixture("workbench_blade")
     index, lifetime = next((index, row) for index, row in enumerate(item["runtimeProgram"]["calls"])
                            if row["fn"] == "set_projectile_lifetime")
-    lifetime["params"]["lifetimeTicks"] = 36000
+    lifetime["params"]['lifetimeSeconds'] = (36000) / 60
     local_schema = contract.author_item_response_schema()
     provider_schema = contract.author_item_provider_response_schema()
     assert Draft202012Validator(local_schema).is_valid(item)
@@ -78,22 +78,22 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert entity["lifetimeTicks"] == 36000
     accepted_before = copy.deepcopy(item)
     for ticks in (1, 21600):
-        lifetime["params"]["lifetimeTicks"] = ticks
+        lifetime["params"]['lifetimeSeconds'] = (ticks) / 60
         retained = compile_runtime_program(item)
         retained_entity = next(row for row in retained["runtimeProgram"]["entities"]
                                if row["id"] == lifetime["target"])
         assert retained_entity["lifetimeTicks"] == ticks
         assert validate_runtime_wire(retained)["ok"]
-    lifetime["params"]["lifetimeTicks"] = 36000
+    lifetime["params"]['lifetimeSeconds'] = (36000) / 60
     assert item == accepted_before
 
-    lifetime["params"]["lifetimeTicks"] = 36001
+    lifetime["params"]['lifetimeSeconds'] = (36001) / 60
     assert not Draft202012Validator(local_schema).is_valid(item)
-    provider_item["runtimeProgram"]["calls"][index]["params"]["lifetimeTicks"] = 36001
+    provider_item["runtimeProgram"]["calls"][index]["params"]['lifetimeSeconds'] = (36001) / 60
     assert not Draft202012Validator(provider_schema).is_valid(provider_item)
     invalid_before = copy.deepcopy(item)
     failure = validate_runtime_program(item)
-    path = f"$.runtimeProgram.calls[{index}].params.lifetimeTicks"
+    path = f"$.runtimeProgram.calls[{index}].params.lifetimeSeconds"
     assert not failure["ok"]
     assert any(row["path"] == path and row["code"] == "shape_maximum"
                for row in failure["errors"]), failure
@@ -110,11 +110,11 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     repair = request_dossier(repair_request)
     repair_card = next(row for row in repair["existingBrokenCapabilityCards"]
                        if row["fn"] == "set_projectile_lifetime")
-    assert (repair_card["params"]["lifetimeTicks"]["min"],
-            repair_card["params"]["lifetimeTicks"]["max"]) == (1, 36000)
+    assert (repair_card["params"]['lifetimeSeconds']["min"],
+            repair_card["params"]['lifetimeSeconds']["max"]) == (spec.minimum, spec.maximum)
     assert repair["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
     assert repair["repairScope"]["fieldPermissions"]["calls"] == [
-        {"id": lifetime["id"], "paths": ["params.lifetimeTicks"]}]
+        {"id": lifetime["id"], "paths": ['params.lifetimeSeconds']}]
     assert item == invalid_before and parents == before
 
     # Syntax-only Repair preserves its exact malformed source, not a second
@@ -129,13 +129,13 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
 
     # A different declared maximum must reach the real packet, not a copied cap.
     cap = CAPABILITY_REGISTRY["set_projectile_lifetime"]
-    changed = replace(cap, params={**cap.params, "lifetimeTicks": replace(spec, maximum=21000)})
+    changed = replace(cap, params={**cap.params, "lifetimeSeconds": replace(spec, maximum=350)})
     monkeypatch.setattr(balance, "CAPABILITY_REGISTRY", {**CAPABILITY_REGISTRY, cap.name: changed})
     variant_request, variant_serialized, _ = author.build_initial_author_request(
         *parents, "lifetime-guidance", model_name="offline-readonly-context")
     variant_packet = json.loads(variant_serialized)
-    assert variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] == 21000
-    variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeTicks"]["maximum"] = spec.maximum
+    assert variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"]["maximum"] == 350
+    variant_packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"]["maximum"] = spec.maximum
     assert variant_packet == packet
     variant_request["messages"][2]["content"] = request["messages"][2]["content"]
     assert variant_request == request  # System, parents, other guidance and transport stay exact.
@@ -246,7 +246,7 @@ def test_nullable_inverse_accepts_both_exact_projection_policies(omit_annotation
     pytest.param("move_straight", {}, None, id="omitted-noarg-params"),
     pytest.param("set_projectile_collision", {"immunity": {"localCooldown": 37}}, None, id="typed-union"),
     pytest.param("configure_armor", {"setBonuses": {"minionSlotsBonus": 2}}, None, id="nested-optional-object"),
-    pytest.param("spawn_entity_on_event", {"when": {"everyTicks": 30}}, None, id="event-object-branch"),
+    pytest.param("spawn_entity_on_event", {"when": {"everySeconds": 0.5}}, None, id="event-object-branch"),
 ])
 def test_compact_provider_roundtrips_structural_witnesses(fn, params, omitted):
     item = build_capability_witness(fn)

@@ -59,7 +59,7 @@ def _source_packets(parent, captured):
     request, _, _ = author.build_initial_author_request(parent, {}, "source-fact-units", model_name="offline-test-model")
     captured.append(request)
     broken = build_runtime_fixture("workbench_blade")
-    next(call for call in broken["runtimeProgram"]["calls"] if call["fn"] == "set_projectile_lifetime")["params"]["lifetimeTicks"] = 0
+    next(call for call in broken["runtimeProgram"]["calls"] if call["fn"] == "set_projectile_lifetime")["params"]['lifetimeSeconds'] = (0) / 60
     report = validate_runtime_program(broken)
     assert not report["ok"]
     with pytest.raises(_CapturedRequest):
@@ -108,13 +108,13 @@ def _vfx_packets(data, captured):
 
 
 @pytest.mark.parametrize("author_field,wire_field,value", [
-    ("useTimeTicks", "useTime", 47), ("useAnimationTicks", "useAnimation", 53), ("scale", "itemScale", 2.75),
+    ("useTimeSeconds", "useTime", 47), ("useAnimationSeconds", "useAnimation", 53), ("scale", "itemScale", 2.75),
 ])
 def test_vfx_actual_packets_keep_independent_accepted_cadence_and_scale(offline_packets, author_field, wire_field, value):
     captured, _ = offline_packets
     left = build_runtime_fixture("workbench_blade")
     right = copy.deepcopy(left)
-    next(call for call in right["runtimeProgram"]["calls"] if call["fn"] == "configure_item_stats")["params"][author_field] = value
+    next(call for call in right["runtimeProgram"]["calls"] if call["fn"] == "configure_item_stats")["params"][author_field] = value / 60 if author_field.endswith("Seconds") else value
     assert validate_runtime_program(left)["ok"] and validate_runtime_program(right)["ok"]
     data = [compile_runtime_program(source) for source in (left, right)]
     kit = _accepted_visual_data("workbench_blade")["visualKit"]

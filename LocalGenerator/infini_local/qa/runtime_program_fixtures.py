@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from infini_local.core.runtime_authoring.binding_use_policy import action_kind as binding_action_kind
 
-"""Non-archetypal v5 runtime-program acceptance fixtures.
+"""Non-archetypal Author runtime-program acceptance fixtures.
 
 Each fixture is a complete Author response.  The helper intentionally writes every
 runtime component explicitly; it never derives movement, attachment, damage, or
@@ -15,13 +15,13 @@ from typing import Any
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, RUNTIME_PROGRAM_API_VERSION, RUNTIME_PROGRAM_SCHEMA
 
 
-def _item_stats(*, damage: int = 30, damage_class: str = "generic", use_time: int = 24) -> dict[str, Any]:
+def _item_stats(*, damage: int = 30, damage_class: str = "generic", use_time: float = 0.4) -> dict[str, Any]:
     return {
         "damageClass": damage_class,
         "damage": damage,
         "knockback": 4.0,
-        "useTimeTicks": use_time,
-        "useAnimationTicks": use_time,
+        "useTimeSeconds": use_time,
+        "useAnimationSeconds": use_time,
         "manaCost": 0,
         "rarity": 2,
         "valueCopper": 7500,
@@ -48,12 +48,12 @@ def _item_use(*, style: str = "shoot", channel: bool = False, hide: bool = False
     }
 
 
-def _spawn(*, speed: float = 10.0, count: int = 1, placement: str = "activation_origin", aim: str = "cursor", offset: int = 0) -> dict[str, Any]:
+def _spawn(*, speed: float = 37.5, count: int = 1, placement: str = "activation_origin", aim: str = "cursor", offset: float = 0) -> dict[str, Any]:
     return {
-        "velocity": {"constantSpeedPxPerUpdate": speed},
+        "velocity": {"constantSpeedBlocksPerSecond": speed},
         "count": count,
         "spreadRadians": 0.0,
-        "offsetPx": int(offset),
+        "offsetBlocks": offset,
         "aim": aim,
         "position": {"at": placement},
     }
@@ -152,8 +152,8 @@ class _Builder:
         entity_id: str,
         kind: str,
         *,
-        speed: float = 10.0,
-        lifetime: int = 180,
+        speed: float = 37.5,
+        lifetime: float = 3,
         damage: int = 30,
         damage_class: str = "generic",
         tile: bool = True,
@@ -168,7 +168,7 @@ class _Builder:
         self.entity(entity_id, kind)
         self.call(f"{entity_id}_spawn", "configure_spawn", entity_id, _spawn(speed=speed, placement=placement, aim=aim))
         self.call(f"{entity_id}_damage", "set_projectile_damage", entity_id, _damage(value=damage, damage_class=damage_class, owner_hit_check=kind == "owner_attached_projectile"))
-        self.call(f"{entity_id}_life", "set_projectile_lifetime", entity_id, {"lifetimeTicks": lifetime})
+        self.call(f"{entity_id}_life", "set_projectile_lifetime", entity_id, {"lifetimeSeconds": lifetime})
         self.call(f"{entity_id}_hitbox", "set_projectile_hitbox", entity_id, _hitbox(width, height))
         self.call(f"{entity_id}_collision", "set_projectile_collision", entity_id, _collision(tile=tile, pierce=pierce))
         if movement:
@@ -212,17 +212,17 @@ class _Builder:
 
 def _workbench_blade() -> dict[str, Any]:
     b = _Builder("workbench_blade", name="Workbench-Backed Blade", mechanic="Thrusts a literal workbench-backed blade and knocks loose nails into targets.", damage=42, item_body_contact=True)
-    b.projectile("workbench_blade", "owner_attached_projectile", speed=0, lifetime=28, damage=42, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 6, "durationTicks": 24}, width=64, height=34)
-    b.projectile("nail", "child_projectile", speed=13, lifetime=120, damage=12, damage_class="ranged", tile=True, pierce=1, movement="move_straight", width=8, height=8)
+    b.projectile("workbench_blade", "owner_attached_projectile", speed=0, lifetime=28 / 60, damage=42, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 6, "durationSeconds": 0.4}, width=64, height=34)
+    b.projectile("nail", "child_projectile", speed=48.75, lifetime=2, damage=12, damage_class="ranged", tile=True, pierce=1, movement="move_straight", width=8, height=8)
     b.bind("primary_workbench", "primary_use", "spawn_entity", "workbench_blade")
-    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"when": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"})
+    b.call("shed_nails", "spawn_entity_on_event", "workbench_blade", {"when": "on_hit", "entity": "nail", "count": 5, "spreadRadians": 0.55, "damageMultiplier": 0.35, "delaySeconds": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"})
     return b.finish(primary_entity_id="item", composition="A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.", parent_a="workbench body", parent_b="blade and nails")
 
 
 def _umbrella_grenade() -> dict[str, Any]:
     b = _Builder("umbrella_grenade", name="Umbrella Grenadier", mechanic="Primary use braces an umbrella; alternate use lobs a timed explosive canopy weight.", damage=34, channel=True)
-    b.projectile("umbrella_guard", "owner_attached_projectile", speed=0, lifetime=32, damage=18, tile=False, pierce=-1, movement="move_yoyo_hover", movement_params={"rangeTiles": 2, "speed": 12}, width=54, height=28)
-    b.projectile("grenade_weight", "free_projectile", speed=9, lifetime=90, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"accelY": 0.25}, width=18, height=18)
+    b.projectile("umbrella_guard", "owner_attached_projectile", speed=0, lifetime=32 / 60, damage=18, tile=False, pierce=-1, movement="move_yoyo_hover", movement_params={"rangeTiles": 2, "speedBlocksPerSecond": 45}, width=54, height=28)
+    b.projectile("grenade_weight", "free_projectile", speed=33.75, lifetime=1.5, damage=34, tile=True, pierce=1, movement="move_gravity_arc", movement_params={"accelerationYBlocksPerSecondSquared": 56.25}, width=18, height=18)
     b.bind("primary_guard", "primary_use", "spawn_entity", "umbrella_guard")
     b.bind("alternate_grenade", "alternate_use", "spawn_entity", "grenade_weight")
     b.call("grenade_burst", "damage_area_on_event", "grenade_weight", {"when": "on_expire", "radiusTiles": 7, "damageMultiplier": 1.4})
@@ -231,18 +231,18 @@ def _umbrella_grenade() -> dict[str, Any]:
 
 def _door_on_chain() -> dict[str, Any]:
     b = _Builder("door_on_chain", name="Door on a Chain", mechanic="Swings a literal reinforced door from a bounded tether.", damage=48, channel=True)
-    b.projectile("chained_door", "owner_attached_projectile", speed=0, lifetime=180, damage=48, damage_class="melee", tile=True, pierce=-1, movement="move_flail_tether", movement_params={"rangeTiles": 10, "returnSpeed": 14}, width=36, height=72)
+    b.projectile("chained_door", "owner_attached_projectile", speed=0, lifetime=3, damage=48, damage_class="melee", tile=True, pierce=-1, movement="move_flail_tether", movement_params={"rangeTiles": 10, "returnSpeedBlocksPerSecond": 52.5}, width=36, height=72)
     b.bind("primary_chain", "primary_use", "spawn_entity", "chained_door")
-    b.call("door_stun", "apply_status_on_event", "chained_door", {"when": "on_hit", "buffId": 31, "durationTicks": 90})
+    b.call("door_stun", "apply_status_on_event", "chained_door", {"when": "on_hit", "buffId": 31, "durationSeconds": 1.5})
     return b.finish(primary_entity_id="chained_door", composition="A full door remains intact and is fastened to a chain.", parent_a="door slab", parent_b="chain tether")
 
 
 def _returning_potion() -> dict[str, Any]:
     b = _Builder("returning_potion", name="Returning Tonic", mechanic="Throws a potion flask that returns and heals its owner on a hit.", damage=24)
-    b.projectile("tonic_flask", "free_projectile", speed=12, lifetime=180, damage=24, damage_class="magic", tile=True, pierce=2, movement="move_boomerang", movement_params={"returnAfterTicks": 36, "returnSpeed": 15}, width=18, height=24)
+    b.projectile("tonic_flask", "free_projectile", speed=45, lifetime=3, damage=24, damage_class="magic", tile=True, pierce=2, movement="move_boomerang", movement_params={"returnAfterSeconds": 0.6, "returnSpeedBlocksPerSecond": 56.25}, width=18, height=24)
     b.bind("primary_tonic", "primary_use", "spawn_entity", "tonic_flask")
     b.call("tonic_heal", "heal_owner_on_event", "tonic_flask", {"when": "on_hit", "damageFraction": 0.18, "maxHeal": 12})
-    b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"when": "on_hit", "buffId": 20, "durationTicks": 120})
+    b.call("tonic_splash", "apply_status_on_event", "tonic_flask", {"when": "on_hit", "buffId": 20, "durationSeconds": 2})
     return b.finish(primary_entity_id="tonic_flask", composition="A sealed potion bottle is thrown whole and returns like a boomerang.", parent_a="potion bottle", parent_b="returning-flight mechanism")
 
 
@@ -257,8 +257,8 @@ def _fishing_platform_tool() -> dict[str, Any]:
 
 def _shield_and_disc() -> dict[str, Any]:
     b = _Builder("shield_and_disc", name="Shield with Breakaway Disc", mechanic="Primary use holds a contact shield; alternate use launches a returning disc.", damage=32)
-    b.projectile("shield_body", "owner_attached_projectile", speed=0, lifetime=40, damage=16, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 2, "durationTicks": 32}, width=44, height=52)
-    b.projectile("shield_disc", "free_projectile", speed=14, lifetime=150, damage=32, damage_class="melee", tile=True, pierce=3, movement="move_returning_glaive", movement_params={"returnAfterTicks": 30, "returnSpeed": 16}, width=28, height=28)
+    b.projectile("shield_body", "owner_attached_projectile", speed=0, lifetime=40 / 60, damage=16, damage_class="melee", tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 2, "durationSeconds": 32 / 60}, width=44, height=52)
+    b.projectile("shield_disc", "free_projectile", speed=52.5, lifetime=2.5, damage=32, damage_class="melee", tile=True, pierce=3, movement="move_returning_glaive", movement_params={"returnAfterSeconds": 0.5, "returnSpeedBlocksPerSecond": 60}, width=28, height=28)
     b.bind("primary_shield", "primary_use", "spawn_entity", "shield_body")
     b.bind("alternate_disc", "alternate_use", "spawn_entity", "shield_disc")
     return b.finish(primary_entity_id="shield_body", composition="A shield stays whole while its central plate detaches as a disc.", parent_a="shield body", parent_b="detachable disc")
@@ -266,11 +266,11 @@ def _shield_and_disc() -> dict[str, Any]:
 
 def _held_and_deployed() -> dict[str, Any]:
     b = _Builder("held_and_deployed", name="Lantern Pike Turret", mechanic="Primary use drives a held lighted body; alternate use deploys an independent targeter.", damage=36)
-    b.projectile("held_lantern_pike", "owner_attached_projectile", speed=0, lifetime=30, damage=36, tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 5, "durationTicks": 26}, width=58, height=24)
+    b.projectile("held_lantern_pike", "owner_attached_projectile", speed=0, lifetime=0.5, damage=36, tile=False, pierce=-1, movement="move_forward_then_retract", movement_params={"rangeTiles": 5, "durationSeconds": 26 / 60}, width=58, height=24)
     b.call("held_light", "emit_light_while_active", "held_lantern_pike", {"strength": 0.9, "color": "orange"})
-    b.projectile("deployed_lantern", "stationary_projectile", speed=0, lifetime=900, damage=0, tile=True, pierce=-1, movement=None, placement="ground_at_cursor", aim="none", width=28, height=42)
-    b.projectile("lantern_bolt", "child_projectile", speed=11, lifetime=150, damage=18, damage_class="magic", tile=True, pierce=1, movement="move_slow_homing", movement_params={"rangeTiles": 28, "homingStrength": 0.08}, width=12, height=12)
-    b.call("deployed_targeter", "target_and_fire", "deployed_lantern", {"shotEntity": "lantern_bolt", "intervalTicks": 45, "rangeTiles": 30, "sameTargetBias": 0.35, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0})
+    b.projectile("deployed_lantern", "stationary_projectile", speed=0, lifetime=15, damage=0, tile=True, pierce=-1, movement=None, placement="ground_at_cursor", aim="none", width=28, height=42)
+    b.projectile("lantern_bolt", "child_projectile", speed=41.25, lifetime=2.5, damage=18, damage_class="magic", tile=True, pierce=1, movement="move_slow_homing", movement_params={"rangeTiles": 28, "homingStrength": 0.08}, width=12, height=12)
+    b.call("deployed_targeter", "target_and_fire", "deployed_lantern", {"shotEntity": "lantern_bolt", "intervalSeconds": 0.75, "rangeTiles": 30, "sameTargetBias": 0.35, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0})
     b.bind("primary_pike", "primary_use", "spawn_entity", "held_lantern_pike")
     b.bind("alternate_deploy", "alternate_use", "spawn_entity", "deployed_lantern")
     return b.finish(primary_entity_id="held_lantern_pike", composition="A lantern is mounted on a pike and can be planted without ceasing to be literal.", parent_a="pike body", parent_b="lantern targeter")

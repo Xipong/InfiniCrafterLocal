@@ -1,0 +1,882 @@
+{
+  "name": "Capability Witness apply_generated_buff_on_use",
+  "category": "generic",
+  "concept": {
+    "literalSynthesis": "A minimal literal test object.",
+    "coreMechanic": "Execute apply_generated_buff_on_use through its public typed contract.",
+    "parentAContribution": "test body",
+    "parentBContribution": "test mechanism",
+    "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Execute apply_generated_buff_on_use through its public typed contract."
+      }
+    ]
+  },
+  "realization": {
+    "description": "A minimal runtime witness executing apply_generated_buff_on_use.",
+    "playerExperience": "The selected capability runs without inferred archetype behaviour.",
+    "selfEvaluation": "Optional fixture self-check; not observed execution."
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.wire.v3",
+    "itemEntityId": "item",
+    "primaryEntityId": "item",
+    "primaryOwner": "item_body",
+    "limits": {
+      "maxEntityCount": 12,
+      "maxChildDepth": 3,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "entities": [
+      {
+        "id": "item",
+        "kind": "item_body",
+        "visualRole": "inventory_item",
+        "events": [],
+        "visual": {
+          "role": "inventory_item"
+        }
+      }
+    ],
+    "bindings": [
+      {
+        "id": "witness_binding",
+        "input": "primary_use",
+        "usePolicy": {
+          "action": {
+            "kind": "apply_item_effects",
+            "targetId": "item"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        },
+        "role": "primary"
+      }
+    ],
+    "itemUse": {
+      "configured": true,
+      "useStyle": "shoot",
+      "hideUseGraphic": false,
+      "disableMeleeHitbox": true,
+      "channel": false,
+      "handPose": "one_handed",
+      "releaseTiming": "immediate",
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0
+    }
+  },
+  "runtimeContract": {
+    "compiledSchema": "infini.runtime-program.wire.v3",
+    "runtimeApiVersion": "infini.runtime-program.v5",
+    "finalWireReceipts": [
+      {
+        "lowererId": "primary_entity_kind_to_owner",
+        "authoredPaths": [
+          "runtimeProgram.primaryEntityId",
+          "runtimeProgram.entities[0].id",
+          "runtimeProgram.entities[0].kind"
+        ],
+        "finalPath": "runtimeProgram.primaryOwner",
+        "value": "item_body",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "primary_entity_to_binding_role",
+        "authoredPaths": [
+          "runtimeProgram.primaryEntityId",
+          "runtimeProgram.bindings[0].id",
+          "runtimeProgram.bindings[0].input",
+          "runtimeProgram.bindings[0].action.kind",
+          "runtimeProgram.entities[0].id",
+          "runtimeProgram.entities[0].kind"
+        ],
+        "finalPath": "runtimeProgram.bindings[0].role",
+        "value": "primary",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "entity_kind_to_visual_role",
+        "authoredPaths": [
+          "runtimeProgram.entities[0].kind"
+        ],
+        "finalPath": "runtimeProgram.entities[0].visualRole",
+        "value": "inventory_item",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "entity_kind_to_visual_role",
+        "authoredPaths": [
+          "runtimeProgram.entities[0].kind"
+        ],
+        "finalPath": "runtimeProgram.entities[0].visual.role",
+        "value": "inventory_item",
+        "status": "technical_projection"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.damageClass",
+        "finalPath": "gameplay.damageClass",
+        "value": "generic",
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.damage",
+        "finalPath": "gameplay.damage",
+        "value": 20,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.knockback",
+        "finalPath": "gameplay.knockback",
+        "value": 3.0,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.useTimeTicks",
+        "finalPath": "gameplay.useTime",
+        "value": 20,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.useAnimationTicks",
+        "finalPath": "gameplay.useAnimation",
+        "value": 20,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.manaCost",
+        "finalPath": "gameplay.manaCost",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.rarity",
+        "finalPath": "gameplay.rarity",
+        "value": 1,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.valueCopper",
+        "finalPath": "gameplay.value",
+        "value": 1000,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.maxStack",
+        "finalPath": "gameplay.maxStack",
+        "value": 1,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.craftYield",
+        "finalPath": "gameplay.craftYield",
+        "value": 1,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.widthPx",
+        "finalPath": "gameplay.width",
+        "value": 24,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.heightPx",
+        "finalPath": "gameplay.height",
+        "value": 24,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_stats",
+        "fn": "configure_item_stats",
+        "authoredPath": "runtimeProgram.calls[0].params.scale",
+        "finalPath": "gameplay.itemScale",
+        "value": 1.0,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].fn",
+        "finalPath": "runtimeProgram.itemUse.configured",
+        "value": true,
+        "status": "technical_projection"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.useStyle",
+        "finalPath": "gameplay.useStyleName",
+        "value": "shoot",
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.autoReuse",
+        "finalPath": "gameplay.autoReuse",
+        "value": false,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.useTurn",
+        "finalPath": "gameplay.useTurn",
+        "value": true,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetX",
+        "finalPath": "gameplay.holdoutOffsetX",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetY",
+        "finalPath": "gameplay.holdoutOffsetY",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.handPose",
+        "finalPath": "gameplay.handPose",
+        "value": "one_handed",
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.customHeldSprite",
+        "finalPath": "gameplay.releaseTiming",
+        "value": "immediate",
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.useStyle",
+        "finalPath": "runtimeProgram.itemUse.useStyle",
+        "value": "shoot",
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.hideUseGraphic",
+        "finalPath": "runtimeProgram.itemUse.hideUseGraphic",
+        "value": false,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.disableMeleeHitbox",
+        "finalPath": "runtimeProgram.itemUse.disableMeleeHitbox",
+        "value": true,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.channel",
+        "finalPath": "runtimeProgram.itemUse.channel",
+        "value": false,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.handPose",
+        "finalPath": "runtimeProgram.itemUse.handPose",
+        "value": "one_handed",
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.customHeldSprite",
+        "finalPath": "runtimeProgram.itemUse.releaseTiming",
+        "value": "immediate",
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetX",
+        "finalPath": "runtimeProgram.itemUse.holdoutOffsetX",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "callId": "item_use",
+        "fn": "configure_item_use",
+        "authoredPath": "runtimeProgram.calls[1].params.holdoutOffsetY",
+        "finalPath": "runtimeProgram.itemUse.holdoutOffsetY",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.durationTicks",
+        "finalPath": "gameplay.generatedBuff.durationTicks",
+        "value": 60,
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.miningSpeedMultiplier",
+        "finalPath": "gameplay.generatedBuff.miningSpeedMultiplier",
+        "value": 1.0,
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.lightStrength",
+        "finalPath": "gameplay.generatedBuff.emitLightStrength",
+        "value": 0.25,
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.lightColor",
+        "finalPath": "gameplay.generatedBuff.lightColorName",
+        "value": "white",
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.oreSenseEnabled",
+        "finalPath": "gameplay.generatedBuff.oreSenseRadiusTiles",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.moveSpeedBonusPercent",
+        "finalPath": "gameplay.generatedBuff.movementSpeed",
+        "value": 0.0,
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.jumpSpeedBonusPxPerTick",
+        "finalPath": "gameplay.generatedBuff.jumpBoost",
+        "value": 0,
+        "status": "declared_neutral_omission"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.manaRegenBonusPoints",
+        "finalPath": "gameplay.generatedBuff.manaRegen",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "callId": "witness_call",
+        "fn": "apply_generated_buff_on_use",
+        "authoredPath": "runtimeProgram.calls[2].params.lifeRegenHpPerSecond",
+        "finalPath": "gameplay.generatedBuff.lifeRegen",
+        "value": 0,
+        "status": "delivered"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.bindings[0].id"
+        ],
+        "finalPath": "runtimeProgram.bindings[0].id",
+        "value": "witness_binding",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.bindings[0].id",
+          "runtimeProgram.bindings[0].input"
+        ],
+        "finalPath": "runtimeProgram.bindings[0].input",
+        "value": "primary_use",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.bindings[0].id",
+          "runtimeProgram.bindings[0].action.kind"
+        ],
+        "finalPath": "runtimeProgram.bindings[0].usePolicy.action.kind",
+        "value": "apply_item_effects",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.bindings[0].id",
+          "runtimeProgram.bindings[0].input",
+          "runtimeProgram.bindings[0].action.kind",
+          "runtimeProgram.entities[0].id",
+          "runtimeProgram.entities[0].kind"
+        ],
+        "finalPath": "runtimeProgram.bindings[0].usePolicy.action.targetId",
+        "value": "item",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.bindings[0].id",
+          "runtimeProgram.bindings[0].stackCost"
+        ],
+        "finalPath": "runtimeProgram.bindings[0].usePolicy.stackCost",
+        "value": 0,
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.bindings[0].id",
+          "runtimeProgram.bindings[0].contactDamage"
+        ],
+        "finalPath": "runtimeProgram.bindings[0].usePolicy.contactDamage",
+        "value": false,
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.primaryEntityId"
+        ],
+        "finalPath": "runtimeProgram.primaryEntityId",
+        "value": "item",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.entities[0].id",
+          "runtimeProgram.entities[0].kind"
+        ],
+        "finalPath": "runtimeProgram.itemEntityId",
+        "value": "item",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.entities[0].id",
+          "runtimeProgram.entities[0].id"
+        ],
+        "finalPath": "runtimeProgram.entities[0].id",
+        "value": "item",
+        "status": "technical_projection"
+      },
+      {
+        "lowererId": "author_binding_lanes",
+        "authoredPaths": [
+          "runtimeProgram.entities[0].id",
+          "runtimeProgram.entities[0].kind"
+        ],
+        "finalPath": "runtimeProgram.entities[0].kind",
+        "value": "item_body",
+        "status": "technical_projection"
+      }
+    ],
+    "validation": {
+      "schema": "infini.runtime-program-validation.v1",
+      "ok": true,
+      "errors": [],
+      "stats": {
+        "entities": 1,
+        "bindings": 1,
+        "calls": 3,
+        "eventSpawnBudget": 0,
+        "spawnGraphDepth": 0,
+        "capabilitiesUsed": [
+          "apply_generated_buff_on_use",
+          "configure_item_stats",
+          "configure_item_use"
+        ],
+        "primaryEntityId": "item",
+        "registryDrivenChecks": {
+          "typedReferences": 3,
+          "requirements": 68,
+          "exclusiveGroups": [
+            "ammo_role",
+            "controller",
+            "item_mobility",
+            "movement",
+            "placeable"
+          ]
+        }
+      }
+    },
+    "technicalLoweringAudit": {
+      "schema": "infini.technical-lowering-audit.v1",
+      "ok": true,
+      "violations": [],
+      "lowerers": [
+        {
+          "id": "author_binding_lanes",
+          "inputs": [
+            "runtimeProgram.bindings[].id",
+            "runtimeProgram.bindings[].input",
+            "runtimeProgram.bindings[].action.kind",
+            "runtimeProgram.bindings[].action.targetId",
+            "runtimeProgram.bindings[].stackCost",
+            "runtimeProgram.bindings[].contactDamage",
+            "runtimeProgram.bindings[].action.effectGroupId",
+            "runtimeProgram.entities[].id",
+            "runtimeProgram.entities[].kind",
+            "runtimeProgram.primaryEntityId"
+          ],
+          "outputs": [
+            "runtimeProgram.bindings[].id",
+            "runtimeProgram.bindings[].input",
+            "runtimeProgram.bindings[].usePolicy.action.kind",
+            "runtimeProgram.bindings[].usePolicy.action.targetId",
+            "runtimeProgram.bindings[].usePolicy.action.effectGroupId",
+            "runtimeProgram.bindings[].usePolicy.stackCost",
+            "runtimeProgram.bindings[].usePolicy.contactDamage",
+            "runtimeProgram.entities[].id",
+            "runtimeProgram.entities[].kind",
+            "runtimeProgram.primaryEntityId",
+            "runtimeProgram.itemEntityId"
+          ],
+          "equivalence": "exact current source lanes and uniquely declared fixed-branch/body dependencies; sorted outputs retain exact id association",
+          "preserves": [
+            "input",
+            "action",
+            "target",
+            "stack",
+            "contact",
+            "primary",
+            "identity",
+            "JSON type"
+          ],
+          "addsDesignChoice": false
+        },
+        {
+          "id": "entity_kind_to_visual_role",
+          "inputs": [
+            "runtimeProgram.entities[].kind"
+          ],
+          "outputs": [
+            "runtimeProgram.entities[].visualRole",
+            "runtimeProgram.entities[].visual.role"
+          ],
+          "equivalence": "one canonical renderer role name for each explicitly authored entity kind",
+          "preserves": [
+            "entity kind",
+            "entity identity",
+            "all gameplay components"
+          ],
+          "addsDesignChoice": false
+        },
+        {
+          "id": "primary_entity_to_binding_role",
+          "inputs": [
+            "runtimeProgram.primaryEntityId",
+            "runtimeProgram.bindings[].action.targetId",
+            "runtimeProgram.bindings[].id",
+            "runtimeProgram.bindings[].input",
+            "runtimeProgram.bindings[].action.kind",
+            "runtimeProgram.entities[].id",
+            "runtimeProgram.entities[].kind"
+          ],
+          "outputs": [
+            "runtimeProgram.bindings[].role"
+          ],
+          "equivalence": "primary exactly when the authored binding target equals the exact authored primary entity id; secondary otherwise",
+          "preserves": [
+            "primary entity identity",
+            "binding identity",
+            "binding target",
+            "input",
+            "action"
+          ],
+          "addsDesignChoice": false
+        },
+        {
+          "id": "primary_entity_kind_to_owner",
+          "inputs": [
+            "runtimeProgram.primaryEntityId",
+            "runtimeProgram.entities[].id",
+            "runtimeProgram.entities[].kind"
+          ],
+          "outputs": [
+            "runtimeProgram.primaryOwner"
+          ],
+          "equivalence": "wire owner family for the exact kind of the exact authored primary entity id",
+          "preserves": [
+            "primary entity identity",
+            "entity kind"
+          ],
+          "addsDesignChoice": false
+        },
+        {
+          "id": "capability_name_to_opcode",
+          "inputs": [
+            "runtimeProgram.calls[].fn"
+          ],
+          "outputs": [
+            "runtimeProgram.entities[].movement.code",
+            "runtimeProgram.entities[].controller.code",
+            "runtimeProgram.entities[].events[].actionCode"
+          ],
+          "equivalence": "finite numeric wire opcode for the exact authored capability name",
+          "preserves": [
+            "capability identity",
+            "target",
+            "params",
+            "event links"
+          ],
+          "addsDesignChoice": false
+        },
+        {
+          "id": "item_fields_to_tml_projection",
+          "inputs": [
+            "item_body capability params"
+          ],
+          "outputs": [
+            "gameplay.damageClass",
+            "gameplay.damage",
+            "gameplay.knockback",
+            "gameplay.useTime",
+            "gameplay.useAnimation",
+            "gameplay.manaCost",
+            "gameplay.rarity",
+            "gameplay.value",
+            "gameplay.maxStack",
+            "gameplay.craftYield",
+            "gameplay.width",
+            "gameplay.height",
+            "gameplay.itemScale",
+            "gameplay.useStyleName",
+            "gameplay.autoReuse",
+            "gameplay.useTurn",
+            "gameplay.holdoutOffsetX",
+            "gameplay.holdoutOffsetY",
+            "gameplay.handPose",
+            "gameplay.releaseTiming",
+            "runtimeProgram.itemUse.configured",
+            "runtimeProgram.itemUse.useStyle",
+            "runtimeProgram.itemUse.hideUseGraphic",
+            "runtimeProgram.itemUse.disableMeleeHitbox",
+            "runtimeProgram.itemUse.channel",
+            "runtimeProgram.itemUse.handPose",
+            "runtimeProgram.itemUse.releaseTiming",
+            "runtimeProgram.itemUse.holdoutOffsetX",
+            "runtimeProgram.itemUse.holdoutOffsetY",
+            "runtimeProgram.itemContact.hitboxScale",
+            "runtimeProgram.itemContact.contactForgivenessPx",
+            "gameplay.ammoCategory",
+            "gameplay.ammoProjectileId",
+            "gameplay.ammoShootSpeedPxPerTick",
+            "gameplay.notAmmo",
+            "gameplay.healLife",
+            "gameplay.healMana",
+            "gameplay.potion",
+            "gameplay.extraBuffs[].buffCode",
+            "gameplay.extraBuffs[].buffTime",
+            "gameplay.generatedBuff.durationTicks",
+            "gameplay.generatedBuff.exhaustionTicks",
+            "gameplay.generatedBuff.miningSpeedMultiplier",
+            "gameplay.generatedBuff.emitLightStrength",
+            "gameplay.generatedBuff.lightColorName",
+            "gameplay.generatedBuff.oreSenseRadiusTiles",
+            "gameplay.generatedBuff.movementSpeed",
+            "gameplay.generatedBuff.jumpBoost",
+            "gameplay.generatedBuff.manaRegen",
+            "gameplay.generatedBuff.lifeRegen",
+            "gameplay.pickPower",
+            "gameplay.axePower",
+            "gameplay.hammerPower",
+            "gameplay.miningSpeedScale",
+            "gameplay.useConditionMode",
+            "gameplay.useConditionMinLife",
+            "gameplay.useConditionMinMana",
+            "gameplay.holdLightStrength",
+            "gameplay.holdLightColorName",
+            "gameplay.mobilityMode",
+            "gameplay.mobilityRangeTiles",
+            "gameplay.mobilityCooldownTicks",
+            "gameplay.mobilitySafeTileOnly",
+            "accessory.enabled",
+            "accessory.defense",
+            "accessory.maxLife",
+            "accessory.maxMana",
+            "accessory.lifeRegen",
+            "accessory.manaRegen",
+            "accessory.movementSpeed",
+            "accessory.maxRunSpeed",
+            "accessory.jumpSpeed",
+            "accessory.genericCrit",
+            "accessory.attackSpeed",
+            "accessory.knockback",
+            "accessory.minionSlots",
+            "accessory.sentrySlots",
+            "accessory.manaCostReduction",
+            "accessory.ammoSaveChance",
+            "accessory.aggro",
+            "accessory.endurance",
+            "accessory.armorPenetration",
+            "accessory.whipRange",
+            "accessory.summonTagDamage",
+            "accessory.lightStrength",
+            "accessory.lightColorName",
+            "accessory.fallDamageImmune",
+            "accessory.lavaImmune",
+            "accessory.waterWalk",
+            "accessory.iceSkate",
+            "accessory.noKnockback",
+            "accessory.fireWalk",
+            "accessory.accRunSpeed",
+            "accessory.rocketBoots",
+            "accessory.wireVision",
+            "armor.enabled",
+            "armor.slot",
+            "armor.setKey",
+            "armor.defense",
+            "armor.maxLife",
+            "armor.maxMana",
+            "armor.lifeRegen",
+            "armor.manaRegen",
+            "armor.movementSpeed",
+            "armor.maxRunSpeed",
+            "armor.jumpSpeed",
+            "armor.genericCrit",
+            "armor.attackSpeed",
+            "armor.knockback",
+            "armor.minionSlots",
+            "armor.sentrySlots",
+            "armor.manaCostReduction",
+            "armor.ammoSaveChance",
+            "armor.aggro",
+            "armor.endurance",
+            "armor.armorPenetration",
+            "armor.whipRange",
+            "armor.summonTagDamage",
+            "armor.lightStrength",
+            "armor.lightColorName",
+            "armor.fallDamageImmune",
+            "armor.lavaImmune",
+            "armor.waterWalk",
+            "armor.setBonusGenericCrit",
+            "armor.setBonusMovementSpeed",
+            "armor.setBonusLifeRegen",
+            "armor.setBonusManaRegen",
+            "armor.setBonusMinionSlots",
+            "armor.setBonusSentrySlots",
+            "armor.setBonusManaCostReduction",
+            "armor.setBonusAmmoSaveChance",
+            "armor.setBonusAggro",
+            "armor.setBonusEndurance",
+            "armor.setBonusArmorPenetration",
+            "accessory.genericDamage",
+            "accessory.meleeDamage",
+            "accessory.rangedDamage",
+            "accessory.magicDamage",
+            "accessory.summonDamage",
+            "armor.genericDamage",
+            "armor.meleeDamage",
+            "armor.rangedDamage",
+            "armor.magicDamage",
+            "armor.summonDamage",
+            "armor.setBonusGenericDamage",
+            "armor.setBonusMeleeDamage",
+            "armor.setBonusRangedDamage",
+            "armor.setBonusMagicDamage",
+            "armor.setBonusSummonDamage"
+          ],
+          "equivalence": "same authored semantic value copied into the exact DTO fields consumed by Terraria/tModLoader",
+          "preserves": [
+            "all authored item values",
+            "explicit zero",
+            "units"
+          ],
+          "addsDesignChoice": false
+        }
+      ]
+    }
+  },
+  "gameplay": {
+    "kind": "generic",
+    "damageClass": "generic",
+    "damage": 20,
+    "knockback": 3.0,
+    "useTime": 20,
+    "useAnimation": 20,
+    "manaCost": 0,
+    "rarity": 1,
+    "value": 1000,
+    "maxStack": 1,
+    "craftYield": 1,
+    "width": 24,
+    "height": 24,
+    "itemScale": 1.0,
+    "useStyleName": "shoot",
+    "autoReuse": false,
+    "useTurn": true,
+    "holdoutOffsetX": 0,
+    "holdoutOffsetY": 0,
+    "handPose": "one_handed",
+    "releaseTiming": "immediate",
+    "generatedBuff": {
+      "durationTicks": 60,
+      "miningSpeedMultiplier": 1.0,
+      "emitLightStrength": 0.25,
+      "lightColorName": "white",
+      "oreSenseRadiusTiles": 0,
+      "movementSpeed": 0.0,
+      "jumpBoost": 0,
+      "manaRegen": 0,
+      "lifeRegen": 0
+    }
+  },
+  "accessory": {
+    "enabled": false
+  },
+  "armor": {
+    "enabled": false
+  }
+}

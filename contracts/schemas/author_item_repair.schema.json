@@ -1143,7 +1143,7 @@
                   },
                   "manaCost": {
                     "default": 0,
-                    "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeTicks can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.",
+                    "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeSeconds can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.",
                     "maximum": 500,
                     "minimum": 0,
                     "type": "integer",
@@ -1171,21 +1171,29 @@
                     "type": "number",
                     "x-infini-semanticType": "draw_scale"
                   },
-                  "useAnimationTicks": {
-                    "description": "Duration of one use animation, independent of useTimeTicks; differing values can allow multiple uses during one animation, not necessarily one projectile per click",
-                    "maximum": 600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "useAnimationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Duration of one use animation, independent of useTimeSeconds; differing values can allow multiple uses during one animation, not necessarily one projectile per click",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
-                  "useTimeTicks": {
-                    "description": "Terraria use/reuse interval (60 ticks/s), not the animation length",
-                    "maximum": 600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "useTimeSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Terraria use/reuse interval (60 ticks/s), not the animation length",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "valueCopper": {
                     "description": "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount",
@@ -1208,8 +1216,8 @@
                   "damageClass",
                   "damage",
                   "knockback",
-                  "useTimeTicks",
-                  "useAnimationTicks",
+                  "useTimeSeconds",
+                  "useAnimationSeconds",
                   "rarity",
                   "valueCopper",
                   "maxStack",
@@ -1552,19 +1560,28 @@
                     "type": "integer",
                     "x-infini-semanticType": "terraria_projectile_id"
                   },
-                  "shootSpeedContributionPxPerUpdate": {
-                    "description": "Exact Item.shootSpeed contribution of this ammo to vanilla PickAmmo",
-                    "maximum": 80,
-                    "minimum": -20,
+                  "shootSpeedContributionBlocksPerSecond": {
+                    "description": "Author units: blocks/s (base native launch contribution, not final projectile speed). Native consumer: Base/native launch contribution to Item.shootSpeed via vanilla PickAmmo, in blocks/s. No eventual projectile updatesPerTick is known here; this contribution is not a guaranteed final projectile speed",
+                    "maximum": 300.0,
+                    "minimum": -75.0,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/projectile update contribution"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s (base native launch contribution, not final projectile speed)",
+                    "x-infini-units": "blocks/s (base native launch contribution, not final projectile speed)"
                   }
                 },
                 "required": [
                   "ammoCategory",
                   "projectileId",
-                  "shootSpeedContributionPxPerUpdate",
+                  "shootSpeedContributionBlocksPerSecond",
                   "notAmmo"
                 ],
                 "type": "object"
@@ -1681,13 +1698,17 @@
                     "type": "integer",
                     "x-infini-semanticType": "terraria_buff_id"
                   },
-                  "durationTicks": {
-                    "description": "Buff duration",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Buff duration",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
                     "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
@@ -1698,7 +1719,7 @@
                 },
                 "required": [
                   "buffId",
-                  "durationTicks"
+                  "durationSeconds"
                 ],
                 "type": "object"
               },
@@ -1737,13 +1758,17 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "durationTicks": {
-                    "description": "Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
                     "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
@@ -1751,29 +1776,36 @@
                     "type": "string",
                     "x-infini-semanticType": "item_effect_group_identity"
                   },
-                  "exhaustionTicks": {
-                    "description": "Optional per-player/item-definition generated-buff lockout; copies/groups share it, including zero/omitted groups while active. Blocked attempts refresh neither timer. Omission stays absent; explicit zero stays zero; neither starts exhaustion. Policy only, not a buff stat or normal-attack cooldown.",
-                    "maximum": 21600,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "world ticks"
-                  },
-                  "jumpSpeedBonusPxPerTick": {
-                    "default": 0,
-                    "description": "Add to Player.jumpSpeedBoost in pixels/tick",
-                    "maximum": 8,
+                  "exhaustionSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Optional per-player/item-definition generated-buff lockout; copies/groups share it, including zero/omitted groups while active. Blocked attempts refresh neither timer. Omission stays absent; explicit zero stays zero; neither starts exhaustion. Policy only, not a buff stat or normal-attack cooldown.",
+                    "maximum": 360.0,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "jumpSpeedBonusBlocksPerSecond": {
+                    "default": 0.0,
+                    "description": "Author units: blocks/s. Native consumer: Add to Player.jumpSpeedBoost in pixels/tick",
+                    "maximum": 30.0,
+                    "minimum": 0.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 0,
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/world tick"
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "lifeRegenHpPerSecond": {
                     "default": 0,
@@ -1874,7 +1906,7 @@
                   }
                 },
                 "required": [
-                  "durationTicks",
+                  "durationSeconds",
                   "lightStrength",
                   "lightColor"
                 ],
@@ -2558,13 +2590,17 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "cooldownTicks": {
-                    "description": "Cooldown",
-                    "maximum": 3600,
+                  "cooldownSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Cooldown",
+                    "maximum": 60.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
                     "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
@@ -2586,7 +2622,7 @@
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "safeTileOnly": {
                     "description": "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; ignored for recall_home; not a general hazard check",
@@ -2597,7 +2633,7 @@
                 "required": [
                   "mode",
                   "rangeTiles",
-                  "cooldownTicks",
+                  "cooldownSeconds",
                   "safeTileOnly"
                 ],
                 "type": "object"
@@ -2637,13 +2673,17 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "cooldownTicks": {
-                    "description": "Shared player mobility cooldown after success",
-                    "maximum": 3600,
+                  "cooldownSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared player mobility cooldown after success",
+                    "maximum": 60.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
                     "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
@@ -2653,7 +2693,7 @@
                   }
                 },
                 "required": [
-                  "cooldownTicks"
+                  "cooldownSeconds"
                 ],
                 "type": "object"
               },
@@ -2692,20 +2732,23 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "accRunSpeedPxPerTick": {
-                    "description": "Native sprint-speed floor in pixels/world tick: max(Player.accRunSpeed, value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus",
-                    "maximum": 20,
-                    "minimum": 0,
+                  "accRunSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Native sprint-speed floor: max(Player.accRunSpeed, lowered value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus",
+                    "maximum": 75.0,
+                    "minimum": 0.0,
                     "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 0,
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels_per_tick"
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "aggroPoints": {
                     "description": "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
@@ -2837,14 +2880,23 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "jumpSpeedBonusPxPerTick": {
-                    "description": "Add to Player.jumpSpeedBoost (positive raises jump speed)",
-                    "maximum": 20,
-                    "minimum": -5,
+                  "jumpSpeedBonusBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Add to Player.jumpSpeedBoost (positive raises jump speed)",
+                    "maximum": 75.0,
+                    "minimum": -18.75,
                     "type": "number",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "pixels_per_tick",
-                    "x-infini-units": "pixels_per_tick"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "lavaImmune": {
                     "description": "Grant lava immunity while equipped",
@@ -2936,14 +2988,23 @@
                     "x-infini-semanticType": "mana_points",
                     "x-infini-units": "mana_points"
                   },
-                  "maxRunSpeedBonusPxPerTick": {
-                    "description": "Add to Player.maxRunSpeed, subject to other Terraria movement limits",
-                    "maximum": 20,
-                    "minimum": -5,
+                  "maxRunSpeedBonusBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Add to Player.maxRunSpeed, subject to other Terraria movement limits",
+                    "maximum": 75.0,
+                    "minimum": -18.75,
                     "type": "number",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "pixels_per_tick",
-                    "x-infini-units": "pixels_per_tick"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "minionSlotsBonus": {
                     "description": "Add minion slots",
@@ -3204,14 +3265,23 @@
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
                   },
-                  "jumpSpeedBonusPxPerTick": {
-                    "description": "Add to Player.jumpSpeedBoost (positive raises jump speed)",
-                    "maximum": 20,
-                    "minimum": -5,
+                  "jumpSpeedBonusBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Add to Player.jumpSpeedBoost (positive raises jump speed)",
+                    "maximum": 75.0,
+                    "minimum": -18.75,
                     "type": "number",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "pixels_per_tick",
-                    "x-infini-units": "pixels_per_tick"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "lavaImmune": {
                     "description": "Grant lava immunity while equipped",
@@ -3303,14 +3373,23 @@
                     "x-infini-semanticType": "mana_points",
                     "x-infini-units": "mana_points"
                   },
-                  "maxRunSpeedBonusPxPerTick": {
-                    "description": "Add to Player.maxRunSpeed, subject to other Terraria movement limits",
-                    "maximum": 20,
-                    "minimum": -5,
+                  "maxRunSpeedBonusBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Add to Player.maxRunSpeed, subject to other Terraria movement limits",
+                    "maximum": 75.0,
+                    "minimum": -18.75,
                     "type": "number",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "pixels_per_tick",
-                    "x-infini-units": "pixels_per_tick"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "minionSlotsBonus": {
                     "description": "Add minion slots",
@@ -3705,13 +3784,17 @@
                     "x-infini-neutral": 1,
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
-                  "offsetPx": {
-                    "description": "Forward spawn offset",
-                    "maximum": 256,
-                    "minimum": -128,
-                    "type": "integer",
-                    "x-infini-semanticType": "pixels",
-                    "x-infini-units": "pixels"
+                  "offsetBlocks": {
+                    "description": "Author units: blocks. Native consumer: Forward spawn offset",
+                    "maximum": 16.0,
+                    "minimum": -8.0,
+                    "multipleOf": 0.0625,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
                   },
                   "position": {
                     "description": "Choose an anchor and optionally a literal vertical height above it; aim is computed after this shift",
@@ -3752,25 +3835,30 @@
                             ],
                             "type": "string"
                           },
-                          "activationDelayTicks": {
-                            "description": "Delay activation of this already spawned projectile; occupies a live slot, and initial timeLeft includes both lifetime and this delay",
-                            "maximum": 600,
+                          "activationDelaySeconds": {
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay activation of this already spawned projectile; occupies a live slot, and initial timeLeft includes both lifetime and this delay",
+                            "maximum": 10.0,
                             "minimum": 0,
-                            "type": "integer",
-                            "x-infini-units": "ticks"
+                            "type": "number",
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                            },
+                            "x-infini-semanticType": "seconds",
+                            "x-infini-units": "seconds"
                           },
                           "heightTiles": {
                             "description": "Vertical offset above the selected anchor",
                             "maximum": 80,
                             "minimum": 1,
                             "type": "number",
-                            "x-infini-units": "tiles"
+                            "x-infini-units": "blocks (tiles)"
                           }
                         },
                         "required": [
                           "above",
                           "heightTiles",
-                          "activationDelayTicks"
+                          "activationDelaySeconds"
                         ],
                         "type": "object"
                       }
@@ -3794,24 +3882,54 @@
                         "additionalProperties": false,
                         "description": "Exact constant-speed deterministic fan; preserves the established wire.",
                         "properties": {
-                          "constantSpeedPxPerUpdate": {
-                            "description": "Initial velocity magnitude; each extra update moves this many pixels before movement/collisions.",
-                            "maximum": 80,
-                            "minimum": 0,
+                          "constantSpeedBlocksPerSecond": {
+                            "description": "Author units: blocks/s. Native consumer: Initial world-speed magnitude before subsequent movement and collisions.",
+                            "maximum": 1800.0,
+                            "minimum": 0.0,
                             "type": "number",
+                            "x-infini-authorProjection": {
+                              "boundsAtUpdatesPerTick1To6": [
+                                [
+                                  0.0,
+                                  300.0
+                                ],
+                                [
+                                  0.0,
+                                  600.0
+                                ],
+                                [
+                                  0.0,
+                                  900.0
+                                ],
+                                [
+                                  0.0,
+                                  1200.0
+                                ],
+                                [
+                                  0.0,
+                                  1500.0
+                                ],
+                                [
+                                  0.0,
+                                  1800.0
+                                ]
+                              ],
+                              "nonzeroMustRemainNonzero": true,
+                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                            },
                             "x-infini-consumerConstraint": {
-                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                              "neutral": 0,
+                              "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                              "neutral": 0.0,
                               "rule": "nonneutral_must_remain_nonneutral",
                               "storage": "float32"
                             },
-                            "x-infini-neutral": 0,
-                            "x-infini-semanticType": "initial_velocity_speed",
-                            "x-infini-units": "pixels/projectile update"
+                            "x-infini-neutral": 0.0,
+                            "x-infini-semanticType": "blocks/s",
+                            "x-infini-units": "blocks/s"
                           }
                         },
                         "required": [
-                          "constantSpeedPxPerUpdate"
+                          "constantSpeedBlocksPerSecond"
                         ],
                         "type": "object"
                       },
@@ -3823,40 +3941,100 @@
                             "additionalProperties": false,
                             "description": "Keep the authored deterministic fan directions; independently sample each speed uniformly between min and max.",
                             "properties": {
-                              "maxSpeedPxPerUpdate": {
-                                "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
-                                "maximum": 80,
-                                "minimum": 0,
+                              "maxSpeedBlocksPerSecond": {
+                                "description": "Author units: blocks/s. Native consumer: Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                "maximum": 1800.0,
+                                "minimum": 0.0,
                                 "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      300.0
+                                    ],
+                                    [
+                                      0.0,
+                                      600.0
+                                    ],
+                                    [
+                                      0.0,
+                                      900.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1200.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1800.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
                                 "x-infini-consumerConstraint": {
-                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                                  "neutral": 0,
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": 0.0,
                                   "rule": "nonneutral_must_remain_nonneutral",
                                   "storage": "float32"
                                 },
-                                "x-infini-neutral": 0,
-                                "x-infini-semanticType": "initial_velocity_speed",
-                                "x-infini-units": "pixels/projectile update"
+                                "x-infini-neutral": 0.0,
+                                "x-infini-semanticType": "blocks/s",
+                                "x-infini-units": "blocks/s"
                               },
-                              "minSpeedPxPerUpdate": {
-                                "description": "Lower sampled speed; must not exceed maxSpeedPxPerUpdate.",
-                                "maximum": 80,
-                                "minimum": 0,
+                              "minSpeedBlocksPerSecond": {
+                                "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeedBlocksPerSecond.",
+                                "maximum": 1800.0,
+                                "minimum": 0.0,
                                 "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      300.0
+                                    ],
+                                    [
+                                      0.0,
+                                      600.0
+                                    ],
+                                    [
+                                      0.0,
+                                      900.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1200.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1800.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
                                 "x-infini-consumerConstraint": {
-                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                                  "neutral": 0,
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": 0.0,
                                   "rule": "nonneutral_must_remain_nonneutral",
                                   "storage": "float32"
                                 },
-                                "x-infini-neutral": 0,
-                                "x-infini-semanticType": "initial_velocity_speed",
-                                "x-infini-units": "pixels/projectile update"
+                                "x-infini-neutral": 0.0,
+                                "x-infini-semanticType": "blocks/s",
+                                "x-infini-units": "blocks/s"
                               }
                             },
                             "required": [
-                              "minSpeedPxPerUpdate",
-                              "maxSpeedPxPerUpdate"
+                              "minSpeedBlocksPerSecond",
+                              "maxSpeedBlocksPerSecond"
                             ],
                             "type": "object"
                           }
@@ -3874,40 +4052,100 @@
                             "additionalProperties": false,
                             "description": "Sample each direction uniformly over the full circle and speed uniformly between min and max.",
                             "properties": {
-                              "maxSpeedPxPerUpdate": {
-                                "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
-                                "maximum": 80,
-                                "minimum": 0,
+                              "maxSpeedBlocksPerSecond": {
+                                "description": "Author units: blocks/s. Native consumer: Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                "maximum": 1800.0,
+                                "minimum": 0.0,
                                 "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      300.0
+                                    ],
+                                    [
+                                      0.0,
+                                      600.0
+                                    ],
+                                    [
+                                      0.0,
+                                      900.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1200.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1800.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
                                 "x-infini-consumerConstraint": {
-                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                                  "neutral": 0,
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": 0.0,
                                   "rule": "nonneutral_must_remain_nonneutral",
                                   "storage": "float32"
                                 },
-                                "x-infini-neutral": 0,
-                                "x-infini-semanticType": "initial_velocity_speed",
-                                "x-infini-units": "pixels/projectile update"
+                                "x-infini-neutral": 0.0,
+                                "x-infini-semanticType": "blocks/s",
+                                "x-infini-units": "blocks/s"
                               },
-                              "minSpeedPxPerUpdate": {
-                                "description": "Lower sampled speed; must not exceed maxSpeedPxPerUpdate.",
-                                "maximum": 80,
-                                "minimum": 0,
+                              "minSpeedBlocksPerSecond": {
+                                "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeedBlocksPerSecond.",
+                                "maximum": 1800.0,
+                                "minimum": 0.0,
                                 "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      300.0
+                                    ],
+                                    [
+                                      0.0,
+                                      600.0
+                                    ],
+                                    [
+                                      0.0,
+                                      900.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1200.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1800.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
                                 "x-infini-consumerConstraint": {
-                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                                  "neutral": 0,
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": 0.0,
                                   "rule": "nonneutral_must_remain_nonneutral",
                                   "storage": "float32"
                                 },
-                                "x-infini-neutral": 0,
-                                "x-infini-semanticType": "initial_velocity_speed",
-                                "x-infini-units": "pixels/projectile update"
+                                "x-infini-neutral": 0.0,
+                                "x-infini-semanticType": "blocks/s",
+                                "x-infini-units": "blocks/s"
                               }
                             },
                             "required": [
-                              "minSpeedPxPerUpdate",
-                              "maxSpeedPxPerUpdate"
+                              "minSpeedBlocksPerSecond",
+                              "maxSpeedBlocksPerSecond"
                             ],
                             "type": "object"
                           }
@@ -3925,24 +4163,54 @@
                             "additionalProperties": false,
                             "description": "Sample velocity uniformly by area in the zero-centred disk; radial speed is max*sqrt(U), not uniform radius.",
                             "properties": {
-                              "maxSpeedPxPerUpdate": {
-                                "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
-                                "maximum": 80,
-                                "minimum": 0,
+                              "maxSpeedBlocksPerSecond": {
+                                "description": "Author units: blocks/s. Native consumer: Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                "maximum": 1800.0,
+                                "minimum": 0.0,
                                 "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      300.0
+                                    ],
+                                    [
+                                      0.0,
+                                      600.0
+                                    ],
+                                    [
+                                      0.0,
+                                      900.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1200.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1800.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
                                 "x-infini-consumerConstraint": {
-                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                                  "neutral": 0,
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": 0.0,
                                   "rule": "nonneutral_must_remain_nonneutral",
                                   "storage": "float32"
                                 },
-                                "x-infini-neutral": 0,
-                                "x-infini-semanticType": "initial_velocity_speed",
-                                "x-infini-units": "pixels/projectile update"
+                                "x-infini-neutral": 0.0,
+                                "x-infini-semanticType": "blocks/s",
+                                "x-infini-units": "blocks/s"
                               }
                             },
                             "required": [
-                              "maxSpeedPxPerUpdate"
+                              "maxSpeedBlocksPerSecond"
                             ],
                             "type": "object"
                           }
@@ -3975,40 +4243,100 @@
                                 "x-infini-semanticType": "radians",
                                 "x-infini-units": "radians"
                               },
-                              "maxSpeedPxPerUpdate": {
-                                "description": "Upper sampled speed, inclusive at the degenerate min=max boundary.",
-                                "maximum": 80,
-                                "minimum": 0,
+                              "maxSpeedBlocksPerSecond": {
+                                "description": "Author units: blocks/s. Native consumer: Upper sampled speed, inclusive at the degenerate min=max boundary.",
+                                "maximum": 1800.0,
+                                "minimum": 0.0,
                                 "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      300.0
+                                    ],
+                                    [
+                                      0.0,
+                                      600.0
+                                    ],
+                                    [
+                                      0.0,
+                                      900.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1200.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1800.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
                                 "x-infini-consumerConstraint": {
-                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                                  "neutral": 0,
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": 0.0,
                                   "rule": "nonneutral_must_remain_nonneutral",
                                   "storage": "float32"
                                 },
-                                "x-infini-neutral": 0,
-                                "x-infini-semanticType": "initial_velocity_speed",
-                                "x-infini-units": "pixels/projectile update"
+                                "x-infini-neutral": 0.0,
+                                "x-infini-semanticType": "blocks/s",
+                                "x-infini-units": "blocks/s"
                               },
-                              "minSpeedPxPerUpdate": {
-                                "description": "Lower sampled speed; must not exceed maxSpeedPxPerUpdate.",
-                                "maximum": 80,
-                                "minimum": 0,
+                              "minSpeedBlocksPerSecond": {
+                                "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeedBlocksPerSecond.",
+                                "maximum": 1800.0,
+                                "minimum": 0.0,
                                 "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      300.0
+                                    ],
+                                    [
+                                      0.0,
+                                      600.0
+                                    ],
+                                    [
+                                      0.0,
+                                      900.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1200.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1800.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
                                 "x-infini-consumerConstraint": {
-                                  "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                                  "neutral": 0,
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": 0.0,
                                   "rule": "nonneutral_must_remain_nonneutral",
                                   "storage": "float32"
                                 },
-                                "x-infini-neutral": 0,
-                                "x-infini-semanticType": "initial_velocity_speed",
-                                "x-infini-units": "pixels/projectile update"
+                                "x-infini-neutral": 0.0,
+                                "x-infini-semanticType": "blocks/s",
+                                "x-infini-units": "blocks/s"
                               }
                             },
                             "required": [
-                              "minSpeedPxPerUpdate",
-                              "maxSpeedPxPerUpdate",
+                              "minSpeedBlocksPerSecond",
+                              "maxSpeedBlocksPerSecond",
                               "halfAngleRadians"
                             ],
                             "type": "object"
@@ -4025,7 +4353,7 @@
                 },
                 "required": [
                   "velocity",
-                  "offsetPx",
+                  "offsetBlocks",
                   "aim",
                   "position"
                 ],
@@ -4310,17 +4638,21 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "lifetimeTicks": {
-                    "description": "Lifetime",
-                    "maximum": 36000,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "lifetimeSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Lifetime",
+                    "maximum": 600.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   }
                 },
                 "required": [
-                  "lifetimeTicks"
+                  "lifetimeSeconds"
                 ],
                 "type": "object"
               },
@@ -4454,13 +4786,17 @@
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "durationTicks": {
-                    "description": "Active world ticks from startScale to endScale",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time duration from startScale to endScale",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "endScale": {
                     "description": "Damage-rectangle multiplier at/after curve completion",
@@ -4481,13 +4817,17 @@
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "startDelayTicks": {
-                    "description": "Active world ticks to hold startScale before interpolation",
-                    "maximum": 21600,
+                  "startDelaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Active world-time delay holding startScale before interpolation",
+                    "maximum": 360.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "startScale": {
                     "description": "Damage-rectangle multiplier before/start of the curve",
@@ -4507,8 +4847,8 @@
                 "required": [
                   "startScale",
                   "endScale",
-                  "startDelayTicks",
-                  "durationTicks",
+                  "startDelaySeconds",
+                  "durationSeconds",
                   "curve",
                   "mirrorToSprite"
                 ],
@@ -4555,42 +4895,80 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "durationTicks": {
-                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "startDelayTicks": {
-                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
-                    "maximum": 21600,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "turnRadiansPerUpdate": {
-                    "description": "Signed velocity rotation on each active projectile AI update",
-                    "maximum": 0.5,
-                    "minimum": -0.5,
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
                     "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "startDelaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Begin phase after this active world-time delay; activation waiting is excluded",
+                    "maximum": 360.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "turnRadiansPerSecond": {
+                    "description": "Author units: radians/s. Native consumer: Signed world-time velocity rotation rate during the active phase",
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -30.0,
+                          30.0
+                        ],
+                        [
+                          -60.0,
+                          60.0
+                        ],
+                        [
+                          -90.0,
+                          90.0
+                        ],
+                        [
+                          -120.0,
+                          120.0
+                        ],
+                        [
+                          -150.0,
+                          150.0
+                        ],
+                        [
+                          -180.0,
+                          180.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 0,
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "radians/projectile update"
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "radians/s",
+                    "x-infini-units": "radians/s"
                   }
                 },
                 "required": [
-                  "turnRadiansPerUpdate",
-                  "startDelayTicks",
-                  "durationTicks"
+                  "turnRadiansPerSecond",
+                  "startDelaySeconds",
+                  "durationSeconds"
                 ],
                 "type": "object"
               },
@@ -4631,27 +5009,61 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "durationTicks": {
-                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "maxSpeed": {
-                    "description": "Inclusive magnitude cap applied after the multiplication",
-                    "maximum": 80,
-                    "minimum": 0.1,
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
                     "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "maxSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Inclusive magnitude cap applied after the multiplication",
+                    "maximum": 1800.0,
+                    "minimum": 0.375,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.375,
+                          300.0
+                        ],
+                        [
+                          0.75,
+                          600.0
+                        ],
+                        [
+                          1.125,
+                          900.0
+                        ],
+                        [
+                          1.5,
+                          1200.0
+                        ],
+                        [
+                          1.875,
+                          1500.0
+                        ],
+                        [
+                          2.25,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
                       "neutral": null,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/projectile update"
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "speedMultiplierPerUpdate": {
                     "description": "Velocity multiplier per active projectile update",
@@ -4668,20 +5080,24 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "dimensionless multiplier/update"
                   },
-                  "startDelayTicks": {
-                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
-                    "maximum": 21600,
+                  "startDelaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Begin phase after this active world-time delay; activation waiting is excluded",
+                    "maximum": 360.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   }
                 },
                 "required": [
                   "speedMultiplierPerUpdate",
-                  "maxSpeed",
-                  "startDelayTicks",
-                  "durationTicks"
+                  "maxSpeedBlocksPerSecond",
+                  "startDelaySeconds",
+                  "durationSeconds"
                 ],
                 "type": "object"
               },
@@ -4722,27 +5138,61 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "durationTicks": {
-                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "maxTurnRadiansPerUpdate": {
-                    "description": "Maximum absolute rotation toward the target each active projectile update; values at least pi can fully turn toward the target",
-                    "maximum": 3.2,
-                    "minimum": 0.0001,
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
                     "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "maxTurnRadiansPerSecond": {
+                    "description": "Author units: radians/s. Native consumer: Maximum angular turn rate toward the target; each update integrates its elapsed world time and stops at full alignment",
+                    "maximum": 1152.0,
+                    "minimum": 0.006,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.006,
+                          192.0
+                        ],
+                        [
+                          0.012,
+                          384.0
+                        ],
+                        [
+                          0.018000000000000002,
+                          576.0
+                        ],
+                        [
+                          0.024,
+                          768.0
+                        ],
+                        [
+                          0.03,
+                          960.0
+                        ],
+                        [
+                          0.036000000000000004,
+                          1152.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
                       "neutral": null,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "radians/projectile update"
+                    "x-infini-semanticType": "radians/s",
+                    "x-infini-units": "radians/s"
                   },
                   "rangeTiles": {
                     "description": "Hard target radius from this projectile center",
@@ -4756,28 +5206,32 @@
                       "storage": "float32"
                     },
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "requireLineOfSight": {
                     "description": "Require native CanHitLine from projectile box to candidate box before selecting it",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "startDelayTicks": {
-                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
-                    "maximum": 21600,
+                  "startDelaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Begin phase after this active world-time delay; activation waiting is excluded",
+                    "maximum": 360.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   }
                 },
                 "required": [
                   "rangeTiles",
-                  "maxTurnRadiansPerUpdate",
+                  "maxTurnRadiansPerSecond",
                   "requireLineOfSight",
-                  "startDelayTicks",
-                  "durationTicks"
+                  "startDelaySeconds",
+                  "durationSeconds"
                 ],
                 "type": "object"
               },
@@ -4818,13 +5272,61 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "durationTicks": {
-                    "description": "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "accelerationBlocksPerSecondSquared": {
+                    "description": "Author units: blocks/s² (NPC world-tick velocity). Native consumer: World acceleration of NPC velocity before falloff and resistance, integrated over the active projectile clock",
+                    "maximum": 5400.0,
+                    "minimum": 0.225,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.225,
+                          900.0
+                        ],
+                        [
+                          0.45,
+                          1800.0
+                        ],
+                        [
+                          0.675,
+                          2700.0
+                        ],
+                        [
+                          0.9,
+                          3600.0
+                        ],
+                        [
+                          1.125,
+                          4500.0
+                        ],
+                        [
+                          1.35,
+                          5400.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s² (NPC world-tick velocity)",
+                    "x-infini-units": "blocks/s² (NPC world-tick velocity)"
+                  },
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "falloff": {
                     "description": "constant=1; linear=max(0,1-distance/radius), including zero at radius",
@@ -4854,38 +5356,28 @@
                       "storage": "float32"
                     },
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
-                  "startDelayTicks": {
-                    "description": "Begin phase after this many active world ticks; activation waiting is excluded",
-                    "maximum": 21600,
+                  "startDelaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Begin phase after this active world-time delay; activation waiting is excluded",
+                    "maximum": 360.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "strengthPerUpdate": {
-                    "description": "Additive NPC velocity impulse coefficient per projectile AI update before falloff and resistance",
-                    "maximum": 4,
-                    "minimum": 0.001,
                     "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                     },
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "NPC velocity units/projectile update"
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   }
                 },
                 "required": [
                   "rangeTiles",
-                  "strengthPerUpdate",
+                  "accelerationBlocksPerSecondSquared",
                   "falloff",
                   "maxTargets",
-                  "startDelayTicks",
-                  "durationTicks"
+                  "startDelaySeconds",
+                  "durationSeconds"
                 ],
                 "type": "object"
               },
@@ -4939,13 +5431,17 @@
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "durationTicks": {
-                    "description": "Active world ticks from startScale to endScale",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time duration from startScale to endScale",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "endScale": {
                     "description": "Visual multiplier at/after curve completion",
@@ -4961,13 +5457,17 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "dimensionless multiplier"
                   },
-                  "startDelayTicks": {
-                    "description": "Active world ticks to hold startScale",
-                    "maximum": 21600,
+                  "startDelaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Active world-time delay holding startScale",
+                    "maximum": 360.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "startScale": {
                     "description": "Visual multiplier before/start of the curve",
@@ -4987,8 +5487,8 @@
                 "required": [
                   "startScale",
                   "endScale",
-                  "startDelayTicks",
-                  "durationTicks",
+                  "startDelaySeconds",
+                  "durationSeconds",
                   "curve"
                 ],
                 "type": "object"
@@ -5250,7 +5750,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   }
                 },
                 "required": [
@@ -5300,24 +5800,54 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "accelY": {
-                    "description": "Signed vertical acceleration: increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap",
-                    "maximum": 2,
-                    "minimum": -2,
+                  "accelerationYBlocksPerSecondSquared": {
+                    "description": "Author units: blocks/s². Native consumer: Signed world vertical acceleration after activation; Terraria Y increases downward. Lowered over the explicitly authored target clock. Explicit zero adds no acceleration; missing is invalid. Not displacement or a speed cap",
+                    "maximum": 16200.0,
+                    "minimum": -16200.0,
                     "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -450.0,
+                          450.0
+                        ],
+                        [
+                          -1800.0,
+                          1800.0
+                        ],
+                        [
+                          -4050.0,
+                          4050.0
+                        ],
+                        [
+                          -7200.0,
+                          7200.0
+                        ],
+                        [
+                          -11250.0,
+                          11250.0
+                        ],
+                        [
+                          -16200.0,
+                          16200.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
                     "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 0,
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
                       "rule": "nonneutral_must_remain_nonneutral",
                       "storage": "float32"
                     },
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: vertical velocity increment per update"
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "blocks/s²",
+                    "x-infini-units": "blocks/s²"
                   }
                 },
                 "required": [
-                  "accelY"
+                  "accelerationYBlocksPerSecondSquared"
                 ],
                 "type": "object"
               },
@@ -5423,7 +5953,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   }
                 },
                 "required": [
@@ -5472,26 +6002,66 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "returnAfterTicks": {
-                    "description": "Outbound duration",
-                    "maximum": 600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "returnSpeed": {
-                    "description": "Return speed",
-                    "maximum": 80,
-                    "minimum": 1,
+                  "returnAfterSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Outbound duration",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/projectile update"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "returnSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Return speed",
+                    "maximum": 1800.0,
+                    "minimum": 3.75,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          3.75,
+                          300.0
+                        ],
+                        [
+                          7.5,
+                          600.0
+                        ],
+                        [
+                          11.25,
+                          900.0
+                        ],
+                        [
+                          15.0,
+                          1200.0
+                        ],
+                        [
+                          18.75,
+                          1500.0
+                        ],
+                        [
+                          22.5,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   }
                 },
                 "required": [
-                  "returnAfterTicks",
-                  "returnSpeed"
+                  "returnAfterSeconds",
+                  "returnSpeedBlocksPerSecond"
                 ],
                 "type": "object"
               },
@@ -5550,7 +6120,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "waveVelocityCoefficient": {
                     "description": "Raw lateral velocity coefficient: sin(age×0.18) × waveVelocityCoefficient × 0.03 before velocity direction normalization; not displacement pixels",
@@ -5664,13 +6234,49 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "maxSpeed": {
-                    "description": "Speed cap",
-                    "maximum": 80,
-                    "minimum": 1,
+                  "maxSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Speed cap",
+                    "maximum": 1800.0,
+                    "minimum": 3.75,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/projectile update"
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          3.75,
+                          300.0
+                        ],
+                        [
+                          7.5,
+                          600.0
+                        ],
+                        [
+                          11.25,
+                          900.0
+                        ],
+                        [
+                          15.0,
+                          1200.0
+                        ],
+                        [
+                          18.75,
+                          1500.0
+                        ],
+                        [
+                          22.5,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   },
                   "speedMultiplierPerUpdate": {
                     "description": "Velocity multiplier per projectile update until maxSpeed cap; 1 unchanged",
@@ -5683,7 +6289,7 @@
                 },
                 "required": [
                   "speedMultiplierPerUpdate",
-                  "maxSpeed"
+                  "maxSpeedBlocksPerSecond"
                 ],
                 "type": "object"
               },
@@ -5728,17 +6334,53 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "turnRadiansPerUpdate": {
-                    "description": "Angular velocity turn per projectile update",
-                    "maximum": 0.5,
-                    "minimum": -0.5,
+                  "turnRadiansPerSecond": {
+                    "description": "Author units: radians/s. Native consumer: World-time angular velocity turn rate",
+                    "maximum": 180.0,
+                    "minimum": -180.0,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "radians/update"
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -30.0,
+                          30.0
+                        ],
+                        [
+                          -60.0,
+                          60.0
+                        ],
+                        [
+                          -90.0,
+                          90.0
+                        ],
+                        [
+                          -120.0,
+                          120.0
+                        ],
+                        [
+                          -150.0,
+                          150.0
+                        ],
+                        [
+                          -180.0,
+                          180.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians/s",
+                    "x-infini-units": "radians/s"
                   }
                 },
                 "required": [
-                  "turnRadiansPerUpdate"
+                  "turnRadiansPerSecond"
                 ],
                 "type": "object"
               },
@@ -5783,13 +6425,49 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "pullStrength": {
-                    "description": "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update",
-                    "maximum": 4,
-                    "minimum": 0,
+                  "accelerationBlocksPerSecondSquared": {
+                    "description": "Author units: blocks/s² (NPC world-tick velocity). Native consumer: World acceleration toward the center, scaled by clamped NPC knockBackResist",
+                    "maximum": 5400.0,
+                    "minimum": 0.0,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: NPC velocity impulse coefficient"
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.0,
+                          900.0
+                        ],
+                        [
+                          0.0,
+                          1800.0
+                        ],
+                        [
+                          0.0,
+                          2700.0
+                        ],
+                        [
+                          0.0,
+                          3600.0
+                        ],
+                        [
+                          0.0,
+                          4500.0
+                        ],
+                        [
+                          0.0,
+                          5400.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s² (NPC world-tick velocity)",
+                    "x-infini-units": "blocks/s² (NPC world-tick velocity)"
                   },
                   "rangeTiles": {
                     "description": "Pull radius",
@@ -5797,11 +6475,11 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   }
                 },
                 "required": [
-                  "pullStrength",
+                  "accelerationBlocksPerSecondSquared",
                   "rangeTiles"
                 ],
                 "type": "object"
@@ -5847,13 +6525,49 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "pullStrength": {
-                    "description": "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update",
-                    "maximum": 4,
-                    "minimum": 0,
+                  "accelerationBlocksPerSecondSquared": {
+                    "description": "Author units: blocks/s² (NPC world-tick velocity). Native consumer: World acceleration toward the center, scaled by clamped NPC knockBackResist",
+                    "maximum": 5400.0,
+                    "minimum": 0.0,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: NPC velocity impulse coefficient"
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.0,
+                          900.0
+                        ],
+                        [
+                          0.0,
+                          1800.0
+                        ],
+                        [
+                          0.0,
+                          2700.0
+                        ],
+                        [
+                          0.0,
+                          3600.0
+                        ],
+                        [
+                          0.0,
+                          4500.0
+                        ],
+                        [
+                          0.0,
+                          5400.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s² (NPC world-tick velocity)",
+                    "x-infini-units": "blocks/s² (NPC world-tick velocity)"
                   },
                   "rangeTiles": {
                     "description": "Pull radius",
@@ -5861,11 +6575,11 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   }
                 },
                 "required": [
-                  "pullStrength",
+                  "accelerationBlocksPerSecondSquared",
                   "rangeTiles"
                 ],
                 "type": "object"
@@ -5925,7 +6639,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "triggerRadiusTiles": {
                     "description": "Trigger radius on the exact 1/16-tile pixel lattice",
@@ -5934,7 +6648,7 @@
                     "multipleOf": 0.0625,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   }
                 },
                 "required": [
@@ -5985,26 +6699,66 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "returnAfterTicks": {
-                    "description": "Outbound duration",
-                    "maximum": 600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "returnSpeed": {
-                    "description": "Return speed",
-                    "maximum": 80,
-                    "minimum": 1,
+                  "returnAfterSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Outbound duration",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/projectile update"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "returnSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Return speed",
+                    "maximum": 1800.0,
+                    "minimum": 3.75,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          3.75,
+                          300.0
+                        ],
+                        [
+                          7.5,
+                          600.0
+                        ],
+                        [
+                          11.25,
+                          900.0
+                        ],
+                        [
+                          15.0,
+                          1200.0
+                        ],
+                        [
+                          18.75,
+                          1500.0
+                        ],
+                        [
+                          22.5,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   }
                 },
                 "required": [
-                  "returnAfterTicks",
-                  "returnSpeed"
+                  "returnAfterSeconds",
+                  "returnSpeedBlocksPerSecond"
                 ],
                 "type": "object"
               },
@@ -6118,20 +6872,56 @@
                     "minimum": 2,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
-                  "returnSpeed": {
-                    "description": "Return speed",
-                    "maximum": 80,
-                    "minimum": 1,
+                  "returnSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Return speed",
+                    "maximum": 1800.0,
+                    "minimum": 3.75,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/projectile update"
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          3.75,
+                          300.0
+                        ],
+                        [
+                          7.5,
+                          600.0
+                        ],
+                        [
+                          11.25,
+                          900.0
+                        ],
+                        [
+                          15.0,
+                          1200.0
+                        ],
+                        [
+                          18.75,
+                          1500.0
+                        ],
+                        [
+                          22.5,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   }
                 },
                 "required": [
                   "rangeTiles",
-                  "returnSpeed"
+                  "returnSpeedBlocksPerSecond"
                 ],
                 "type": "object"
               },
@@ -6177,20 +6967,56 @@
                     "minimum": 2,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
-                  "speed": {
-                    "description": "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update",
-                    "maximum": 80,
-                    "minimum": 1,
+                  "speedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update",
+                    "maximum": 1800.0,
+                    "minimum": 3.75,
                     "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "pixels/projectile update"
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          3.75,
+                          300.0
+                        ],
+                        [
+                          7.5,
+                          600.0
+                        ],
+                        [
+                          11.25,
+                          900.0
+                        ],
+                        [
+                          15.0,
+                          1200.0
+                        ],
+                        [
+                          18.75,
+                          1500.0
+                        ],
+                        [
+                          22.5,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
                   }
                 },
                 "required": [
                   "rangeTiles",
-                  "speed"
+                  "speedBlocksPerSecond"
                 ],
                 "type": "object"
               },
@@ -6236,7 +7062,7 @@
                     "minimum": 2,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "segments": {
                     "description": "Collision curve segments",
@@ -6288,13 +7114,17 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "durationTicks": {
-                    "description": "Full forward/retract cycle",
-                    "maximum": 240,
-                    "minimum": 2,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Full forward/retract cycle",
+                    "maximum": 4.0,
+                    "minimum": 0.025,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "rangeTiles": {
                     "description": "Peak triangular displacement beyond the 18px owner-center baseline; not distance from the hand",
@@ -6302,12 +7132,12 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   }
                 },
                 "required": [
                   "rangeTiles",
-                  "durationTicks"
+                  "durationSeconds"
                 ],
                 "type": "object"
               },
@@ -6356,13 +7186,17 @@
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "durationTicks": {
-                    "description": "One extension/retraction pose cycle in completed active world ticks: activeTicks=floor(activeAIUpdates/(extraUpdates+1)). Subupdates retain that tick's stretch. After completion hold startStretch; lifetime and item animation remain independent",
-                    "maximum": 240,
-                    "minimum": 2,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "active world ticks"
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: One extension/retraction pose cycle in world seconds, lowered to whole active ticks. Native activeTicks=floor(activeAIUpdates/(extraUpdates+1)). Subupdates retain that tick's stretch. After completion hold startStretch; lifetime and item animation remain independent",
+                    "maximum": 4.0,
+                    "minimum": 0.025,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "hitboxOffsetPx": {
                     "description": "Signed collision-center offset from native hand along the aimed world axis. Explicit zero is valid; not inferred from art, scale or grip",
@@ -6379,7 +7213,7 @@
                     "x-infini-units": "pixels"
                   },
                   "peakStretch": {
-                    "description": "Native peak stretch. q=1-abs(2*clamp(activeTicks/durationTicks,0,1)-1); interpolate native lengths and select nearest, ties shorter. Equal endpoints keep a fixed stretch",
+                    "description": "Native peak stretch. Over the lowered whole-tick duration, use triangular extension/retraction progress; interpolate native lengths and select nearest, ties shorter. Equal endpoints keep a fixed stretch",
                     "enum": [
                       "none",
                       "quarter",
@@ -6403,7 +7237,7 @@
                 },
                 "required": [
                   "aimMode",
-                  "durationTicks",
+                  "durationSeconds",
                   "startStretch",
                   "peakStretch",
                   "hitboxOffsetPx"
@@ -6506,7 +7340,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "raycastTiles": {
                     "default": false,
@@ -6516,13 +7350,17 @@
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "tile clipping enabled"
                   },
-                  "warmupTicks": {
-                    "description": "Warmup ramp duration in world ticks; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.",
-                    "maximum": 600,
+                  "warmupSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Warmup ramp duration in world seconds; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "widthPx": {
                     "description": "Beam collision width",
@@ -6536,7 +7374,7 @@
                 "required": [
                   "rangeTiles",
                   "widthPx",
-                  "warmupTicks"
+                  "warmupSeconds"
                 ],
                 "type": "object"
               },
@@ -6576,13 +7414,17 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "chargeTicks": {
-                    "description": "Full charge duration",
-                    "maximum": 600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "chargeSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Full charge duration",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "powerMultiplier": {
                     "description": "Full-charge damage/knockback and release velocity multiplier; partial charge interpolates from 1; 1 unchanged",
@@ -6593,7 +7435,7 @@
                   }
                 },
                 "required": [
-                  "chargeTicks",
+                  "chargeSeconds",
                   "powerMultiplier"
                 ],
                 "type": "object"
@@ -6668,13 +7510,17 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "intervalTicks": {
-                    "description": "Firing interval",
-                    "maximum": 3600,
-                    "minimum": 6,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "intervalSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Firing interval",
+                    "maximum": 60.0,
+                    "minimum": 0.09166666666666666,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "knockbackBasis": {
                     "description": "Child knockback source: its authored knockback, or this parent projectile's actual knockBack at firing time",
@@ -6691,7 +7537,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "requireLineOfSight": {
                     "default": false,
@@ -6757,7 +7603,7 @@
                 },
                 "required": [
                   "shotEntity",
-                  "intervalTicks",
+                  "intervalSeconds",
                   "rangeTiles",
                   "sameTargetBias",
                   "damageBasis",
@@ -6826,13 +7672,17 @@
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
-                  "delayTicks": {
-                    "description": "Delay after event",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay after event",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "entity": {
                     "description": "Referenced entity id",
@@ -6890,18 +7740,23 @@
                       },
                       {
                         "additionalProperties": false,
-                        "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash",
+                        "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash",
                         "properties": {
-                          "everyTicks": {
-                            "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
-                            "maximum": 3600,
-                            "minimum": 6,
-                            "type": "integer",
-                            "x-infini-units": "ticks"
+                          "everySeconds": {
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                            "maximum": 60.0,
+                            "minimum": 0.09166666666666666,
+                            "type": "number",
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                            },
+                            "x-infini-semanticType": "seconds",
+                            "x-infini-units": "seconds"
                           }
                         },
                         "required": [
-                          "everyTicks"
+                          "everySeconds"
                         ],
                         "type": "object"
                       }
@@ -6917,7 +7772,7 @@
                   "damageBasis",
                   "knockbackBasis",
                   "damageMultiplier",
-                  "delayTicks"
+                  "delaySeconds"
                 ],
                 "type": "object"
               },
@@ -6986,16 +7841,20 @@
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
-                  "delayTicks": {
-                    "description": "World-tick delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "entity": {
-                    "description": "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetPx 0, with no above-position transform",
+                    "description": "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetBlocks 0, with no above-position transform",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-reference": {
@@ -7043,20 +7902,23 @@
                         "x-infini-semanticType": "spawn_geometry",
                         "x-infini-units": "radians"
                       },
-                      "beforePositionJitterRadiusPx": {
-                        "description": "Before-target origin gets uniform-area disk jitter of this radius; 0 disables positional jitter.",
-                        "maximum": 128,
-                        "minimum": 0,
+                      "beforePositionJitterRadiusBlocks": {
+                        "description": "Author units: blocks. Native consumer: Before-target origin gets uniform-area disk jitter of this radius; 0 disables positional jitter.",
+                        "maximum": 8.0,
+                        "minimum": 0.0,
                         "type": "number",
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true
+                        },
                         "x-infini-consumerConstraint": {
-                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                          "neutral": 0,
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                          "neutral": 0.0,
                           "rule": "nonneutral_must_remain_nonneutral",
                           "storage": "float32"
                         },
-                        "x-infini-neutral": 0,
-                        "x-infini-semanticType": "spawn_geometry",
-                        "x-infini-units": "pixels"
+                        "x-infini-neutral": 0.0,
+                        "x-infini-semanticType": "blocks",
+                        "x-infini-units": "blocks"
                       },
                       "beforeProbability": {
                         "description": "Independent per-child probability of the before-target branch; this is geometry, not a promised re-hit chance.",
@@ -7072,23 +7934,26 @@
                         "x-infini-semanticType": "spawn_geometry",
                         "x-infini-units": "probability"
                       },
-                      "clearancePx": {
-                        "description": "Additional target-centre clearance, explicitly added to the selected hitbox radius.",
-                        "maximum": 128,
-                        "minimum": 0,
+                      "clearanceBlocks": {
+                        "description": "Author units: blocks. Native consumer: Additional target-centre clearance, explicitly added to the selected hitbox radius.",
+                        "maximum": 8.0,
+                        "minimum": 0.0,
                         "type": "number",
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true
+                        },
                         "x-infini-consumerConstraint": {
-                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                          "neutral": 0,
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                          "neutral": 0.0,
                           "rule": "nonneutral_must_remain_nonneutral",
                           "storage": "float32"
                         },
-                        "x-infini-neutral": 0,
-                        "x-infini-semanticType": "spawn_geometry",
-                        "x-infini-units": "pixels"
+                        "x-infini-neutral": 0.0,
+                        "x-infini-semanticType": "blocks",
+                        "x-infini-units": "blocks"
                       },
                       "hitboxMaxSideFactor": {
-                        "description": "Clearance radius uses max(target.width,target.height) times this factor, plus clearancePx.",
+                        "description": "Clearance radius uses max(target.width,target.height) times this factor, plus clearanceBlocks converted to pixels.",
                         "maximum": 2,
                         "minimum": 0,
                         "type": "number",
@@ -7103,7 +7968,7 @@
                         "x-infini-units": "hitbox max-side factor"
                       },
                       "initialIgnoreCountdownUpdates": {
-                        "description": "Exact initial NPC exclusion counter, decremented before collision: 10 blocks before first AI and the next 9 post-AI collision opportunities; 1 only before first AI; 0 disables exclusion. Counts extra AI updates, not world ticks.",
+                        "description": "Exact initial NPC exclusion counter, decremented before collision: 10 excludes the target before first AI and the next 9 post-AI collision opportunities; 1 only before first AI; 0 disables exclusion. Counts extra AI updates, not world ticks.",
                         "maximum": 600,
                         "minimum": 0,
                         "type": "integer",
@@ -7114,8 +7979,8 @@
                     "required": [
                       "beforeProbability",
                       "hitboxMaxSideFactor",
-                      "clearancePx",
-                      "beforePositionJitterRadiusPx",
+                      "clearanceBlocks",
+                      "beforePositionJitterRadiusBlocks",
                       "beforeDirectionJitterRadians",
                       "afterFanSpreadRadians",
                       "initialIgnoreCountdownUpdates"
@@ -7150,7 +8015,7 @@
                   "damageBasis",
                   "knockbackBasis",
                   "damageMultiplier",
-                  "delayTicks"
+                  "delaySeconds"
                 ],
                 "type": "object"
               },
@@ -7195,13 +8060,17 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "delayTicks": {
-                    "description": "Dispatch delay in world ticks; delayed source NPC must retain its active exact incarnation",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Dispatch delay in world seconds; delayed source NPC must retain its active exact incarnation",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "world ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "entity": {
                     "description": "Independent free/child projectile with explicit origin/velocity spawn, zero offset and no over-target adapter",
@@ -7263,7 +8132,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
                     "description": "Execute on this exact emitted event",
@@ -7284,7 +8153,7 @@
                   "repeatPolicy",
                   "requireLineOfSight",
                   "initialIgnoreCountdownUpdates",
-                  "delayTicks"
+                  "delaySeconds"
                 ],
                 "type": "object"
               },
@@ -7337,22 +8206,30 @@
                     "type": "integer",
                     "x-infini-semanticType": "terraria_buff_id"
                   },
-                  "delayTicks": {
-                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
-                  "durationTicks": {
-                    "description": "Status duration",
-                    "maximum": 21600,
-                    "minimum": 1,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Status duration",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "when": {
                     "description": "Execute on this exact emitted event",
@@ -7367,7 +8244,7 @@
                 "required": [
                   "when",
                   "buffId",
-                  "durationTicks"
+                  "durationSeconds"
                 ],
                 "type": "object"
               },
@@ -7420,14 +8297,18 @@
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
-                  "delayTicks": {
-                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "radiusTiles": {
                     "description": "Damage radius on the exact 1/16-tile pixel lattice",
@@ -7436,7 +8317,7 @@
                     "multipleOf": 0.0625,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
                     "description": "Execute on this exact emitted event",
@@ -7507,14 +8388,18 @@
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
-                  "delayTicks": {
-                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "maxTargets": {
                     "description": "Maximum additional NPCs selected from the same event center, nearest first; the directly hit NPC is excluded",
@@ -7529,7 +8414,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
                     "description": "Execute on this exact emitted event",
@@ -7591,14 +8476,35 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "delayTicks": {
-                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "impulseBlocksPerSecond": {
+                    "description": "Author units: blocks/s (one-off velocity impulse). Native consumer: Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement",
+                    "maximum": 15.0,
+                    "minimum": 0.0375,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s (one-off velocity impulse)",
+                    "x-infini-units": "blocks/s (one-off velocity impulse)"
                   },
                   "mode": {
                     "description": "Pull direction",
@@ -7615,15 +8521,7 @@
                     "minimum": 1,
                     "type": "number",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
-                  },
-                  "strength": {
-                    "description": "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement",
-                    "maximum": 4,
-                    "minimum": 0.01,
-                    "type": "number",
-                    "x-infini-semanticType": "effect_strength",
-                    "x-infini-units": "engine units: velocity impulse coefficient per event"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
                     "description": "Exact event or explicit periodic interval",
@@ -7638,18 +8536,23 @@
                       },
                       {
                         "additionalProperties": false,
-                        "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash",
+                        "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash",
                         "properties": {
-                          "everyTicks": {
-                            "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
-                            "maximum": 3600,
-                            "minimum": 6,
-                            "type": "integer",
-                            "x-infini-units": "ticks"
+                          "everySeconds": {
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                            "maximum": 60.0,
+                            "minimum": 0.09166666666666666,
+                            "type": "number",
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                            },
+                            "x-infini-semanticType": "seconds",
+                            "x-infini-units": "seconds"
                           }
                         },
                         "required": [
-                          "everyTicks"
+                          "everySeconds"
                         ],
                         "type": "object"
                       }
@@ -7660,7 +8563,7 @@
                 "required": [
                   "when",
                   "mode",
-                  "strength",
+                  "impulseBlocksPerSecond",
                   "radiusTiles"
                 ],
                 "type": "object"
@@ -7706,22 +8609,35 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "delayTicks": {
-                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
-                  },
-                  "strength": {
-                    "description": "Player velocity impulse toward the event's active direct target",
-                    "maximum": 4,
-                    "minimum": 0.01,
                     "type": "number",
-                    "x-infini-semanticType": "effect_strength",
-                    "x-infini-units": "engine units: velocity impulse coefficient per event"
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "impulseBlocksPerSecond": {
+                    "description": "Author units: blocks/s (one-off velocity impulse). Native consumer: Player velocity impulse toward the event's active direct target",
+                    "maximum": 15.0,
+                    "minimum": 0.0375,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s (one-off velocity impulse)",
+                    "x-infini-units": "blocks/s (one-off velocity impulse)"
                   },
                   "when": {
                     "description": "Exact event or explicit periodic interval",
@@ -7736,18 +8652,23 @@
                       },
                       {
                         "additionalProperties": false,
-                        "description": "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash",
+                        "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash",
                         "properties": {
-                          "everyTicks": {
-                            "description": "World ticks between periodic executions; item and projectile clocks retain their own phase",
-                            "maximum": 3600,
-                            "minimum": 6,
-                            "type": "integer",
-                            "x-infini-units": "ticks"
+                          "everySeconds": {
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                            "maximum": 60.0,
+                            "minimum": 0.09166666666666666,
+                            "type": "number",
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                            },
+                            "x-infini-semanticType": "seconds",
+                            "x-infini-units": "seconds"
                           }
                         },
                         "required": [
-                          "everyTicks"
+                          "everySeconds"
                         ],
                         "type": "object"
                       }
@@ -7757,7 +8678,7 @@
                 },
                 "required": [
                   "when",
-                  "strength"
+                  "impulseBlocksPerSecond"
                 ],
                 "type": "object"
               },
@@ -7809,14 +8730,18 @@
                     "type": "number",
                     "x-infini-semanticType": "unitless_scalar"
                   },
-                  "delayTicks": {
-                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "maxHeal": {
                     "description": "Per-event heal cap",
@@ -7885,22 +8810,30 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
-                  "cooldownTicks": {
-                    "description": "Shared owner mobility cooldown",
-                    "maximum": 3600,
+                  "cooldownSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared owner mobility cooldown",
+                    "maximum": 60.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
-                  "delayTicks": {
-                    "description": "Delay this exact action after the chosen event; 0 executes immediately",
-                    "maximum": 600,
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
                     "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "ticks",
-                    "x-infini-units": "ticks"
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   },
                   "rangeTiles": {
                     "description": "Maximum movement range",
@@ -7908,7 +8841,7 @@
                     "minimum": 1,
                     "type": "integer",
                     "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tiles"
+                    "x-infini-units": "blocks (tiles)"
                   },
                   "safeTileOnly": {
                     "description": "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check",
@@ -7929,7 +8862,7 @@
                 "required": [
                   "when",
                   "rangeTiles",
-                  "cooldownTicks",
+                  "cooldownSeconds",
                   "safeTileOnly"
                 ],
                 "type": "object"

@@ -238,6 +238,10 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         default_class = class_name
         for param_name, spec in (leaf for name, param in cap.params.items()
                                  for leaf in _numeric_parameter_leaves(param, name)):
+            # Compare native guards against the declared ENGINE domain, not
+            # the union Author envelope spanning projectile update rates 1..6.
+            wire_bounds = ([spec.wire_minimum, spec.wire_maximum] if spec.wire_kind else
+                           [spec.to_wire(spec.minimum), spec.to_wire(spec.maximum)])
             wire_name = spec.wire_name or param_name.rsplit(".", 1)[-1]
             field = wire_name
             class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
@@ -263,7 +267,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 rows.append({"capability": cap.name, "param": param_name,
                              "csharpClass": class_name, "authorBounds": authored_bounds,
                              "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
-                             "preserved": reject_bounds == authored_bounds})
+                             "wireBounds": wire_bounds, "preserved": reject_bounds == wire_bounds})
                 continue
             if cap.name == "channel_beam" and spec.default is not None:
                 block = _class_block(text, class_name)
@@ -284,13 +288,13 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                              "csharpClass": class_name, "authorBounds": authored_bounds,
                              "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
                              "consumerPrecisionPreserved": preserves_precision,
-                             "preserved": reject_bounds == authored_bounds and preserves_precision})
+                             "wireBounds": wire_bounds, "preserved": reject_bounds == wire_bounds and preserves_precision})
                 continue
             if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"} or (
-                cap.name == "select_targets_and_emit_on_event" and param_name != "delayTicks"
+                cap.name == "select_targets_and_emit_on_event" and field != "delayTicks"
             ):
                 block = _class_block(text, class_name)
-                storage = "int" if spec.kind == "integer" else "double"
+                storage = "int" if spec.projected_kind == "integer" else "double"
                 finite_guard = r"!double\.IsFinite\(value\.Value\) \|\| " if storage == "double" else ""
                 declaration = re.search(
                     rf"\[JsonIgnore\(Condition = JsonIgnoreCondition.WhenWritingNull\)\]\s*"
@@ -304,12 +308,12 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 rows.append({"capability": cap.name, "param": param_name,
                              "csharpClass": class_name, "authorBounds": authored_bounds,
                              "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
-                             "preserved": reject_bounds == authored_bounds})
+                             "wireBounds": wire_bounds, "preserved": reject_bounds == wire_bounds})
                 continue
             if csharp is None:
                 continue
             authored = (spec.minimum, spec.maximum) if spec.minimum is not None and spec.maximum is not None else None
-            projected = (spec.to_wire(authored[0]), spec.to_wire(authored[1])) if authored else None
+            projected = tuple(wire_bounds) if authored else None
             rows.append({
                 "capability": cap.name,
                 "param": param_name,

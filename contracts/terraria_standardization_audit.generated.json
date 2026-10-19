@@ -274,7 +274,7 @@
     {
       "name": "ammo_shoot_speed_range_parity",
       "ok": true,
-      "detail": "ammo Item.shootSpeed contribution must preserve the exact Author range at the C# boundary"
+      "detail": "human-unit ammo contribution must project to the unchanged Item.shootSpeed wire range at the C# boundary"
     },
     {
       "name": "vanilla_projectile_id_guard",

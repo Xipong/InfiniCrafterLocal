@@ -43,10 +43,10 @@ def test_damage_class_prompt_explains_choices_without_engine_documentation() -> 
 def test_binding_use_policy_and_ammo_are_distinct_terraria_owners() -> None:
     ammo = CAPABILITY_REGISTRY["configure_vanilla_ammo_item"]
     assert "configure_consumption" not in CAPABILITY_REGISTRY
-    assert tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedContributionPxPerUpdate", "notAmmo")
+    assert tuple(ammo.params) == ("ammoCategory", "projectileId", "shootSpeedContributionBlocksPerSecond", "notAmmo")
     assert ammo.params["ammoCategory"].enum == VANILLA_AMMO_CATEGORY_TOKENS
-    assert ammo.params["shootSpeedContributionPxPerUpdate"].minimum == -20
-    assert ammo.params["shootSpeedContributionPxPerUpdate"].maximum == 80
+    assert ammo.params["shootSpeedContributionBlocksPerSecond"].wire_schema()["minimum"] == -20
+    assert ammo.params["shootSpeedContributionBlocksPerSecond"].wire_schema()["maximum"] == 80
     assert not ammo.requirements
 
 

@@ -147,7 +147,7 @@ def test_frozen_repair_fixes_only_invalid_width_and_keeps_accepted_omissions():
     assert scope["fieldPermissions"]["calls"] == [{"id": bad_call["id"], "paths": ["params.initialWidthMultiplier"]}]
     hostile = deepcopy(good_call)
     hostile["params"].update(OPTIONS)
-    hostile["params"]["warmupTicks"] += 10
+    hostile["params"]["warmupSeconds"] += 10 / 60
     filtered, audit = filter_repair_patch_scope(broken, {"callsUpsert": [hostile], "note": "width only"}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
     assert apply_repair_patch(broken, filtered) == good

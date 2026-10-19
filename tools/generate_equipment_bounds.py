@@ -56,7 +56,7 @@ def render() -> str:
             member = wire[0].upper() + wire[1:]
             # Author decimals can lower to an integer DTO (e.g. HP/s × 2).
             # Select C# overloads from the declared wire projection, not Author kind.
-            wire_integer = spec.kind == "integer" or spec.wire_multiplier != 1
+            wire_integer = spec.projected_kind == "integer"
             rows.append(f"        a.{member} = Math.Clamp(a.{member}, "
                         f"{_literal(low, integer=wire_integer)}, "
                         f"{_literal(high, integer=wire_integer)});")

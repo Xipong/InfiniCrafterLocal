@@ -21,6 +21,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     authored_event,
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
+    target_updates_per_tick,
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
@@ -500,10 +501,14 @@ def _validate_requirement(
         elif spec.structured and isinstance(expected, Mapping):
             valid = not strict_schema_errors(actual, spec.schema())
             if valid:
-                actual_rows = tuple((r.wire_path, r.value) for r in spec.projected_fields(actual, requirement.param))
-                expected_rows = tuple((r.wire_path, r.value) for r in spec.projected_fields(expected, requirement.param))
-                valid = len(actual_rows) == len(expected_rows) and all(
-                    a[0] == b[0] and a[1] == b[1] and type(a[1]) is not bool for a, b in zip(actual_rows, expected_rows))
+                try:
+                    updates = target_updates_per_tick(calls or [], target_id) if spec.requires_update_context else None
+                    actual_rows = tuple((r.wire_path, r.value) for r in spec.projected_fields(actual, requirement.param, updates_per_tick=updates))
+                    expected_rows = tuple((r.wire_path, r.value) for r in spec.projected_fields(expected, requirement.param, updates_per_tick=updates))
+                    valid = len(actual_rows) == len(expected_rows) and all(
+                        a[0] == b[0] and a[1] == b[1] and type(a[1]) is not bool for a, b in zip(actual_rows, expected_rows))
+                except ValueError:
+                    valid = False
         elif spec.kind == "number":
             valid = type(actual) in (int, float) and actual == expected
         else:
@@ -869,7 +874,17 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         for param_name, param_spec in cap.params.items():
             if param_name in params:
                 for leaf_name, leaf_spec, leaf_value in param_spec.leaf_values(params[param_name], param_name):
-                    consumer_error = leaf_spec.consumer_value_error(leaf_value)
+                    try:
+                        updates = target_updates_per_tick(calls, target_id) if leaf_spec.wire_updates_power else None
+                    except ValueError:
+                        # The missing/invalid/ambiguous collision clock owns the
+                        # diagnostic. Unknown projection context does not prove
+                        # another valid authored value is invalid or editable.
+                        continue
+                    try:
+                        consumer_error = leaf_spec.consumer_value_error(leaf_value, updates_per_tick=updates)
+                    except ValueError as exc:
+                        consumer_error = str(exc)
                     if consumer_error is not None:
                         issues.append(ValidationIssue(
                             f"$.runtimeProgram.calls[{index}].params.{leaf_name}", "consumer_representability", consumer_error,

@@ -47,10 +47,13 @@ def stat_profile_for(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "sourceDamage": damages,
         "sourceNumericProgressionFacts": progression_facts,
         "balanceEnvelope": {
-            "useTimeTicks": {"minimum": 4, "maximum": 600},
-            "lifetimeTicks": {
-                "minimum": 1,
-                "maximum": CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeTicks"].maximum,
+            "useTimeSeconds": {
+                "minimum": CAPABILITY_REGISTRY["configure_item_stats"].params["useTimeSeconds"].from_wire(4),
+                "maximum": CAPABILITY_REGISTRY["configure_item_stats"].params["useTimeSeconds"].from_wire(600),
+            },
+            "lifetimeSeconds": {
+                "minimum": CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeSeconds"].minimum,
+                "maximum": CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeSeconds"].maximum,
             },
             "entityCount": {"minimum": 1, "maximum": 12},
             "eventSpawnsPerActivation": {"minimum": 0, "maximum": 32},

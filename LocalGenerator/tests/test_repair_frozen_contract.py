@@ -32,11 +32,14 @@ def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     assert hashlib.sha256(raw).hexdigest() == "d9a149814d5fa0894e1757fe384882bffbfa20813c700f540c2a0b4404c6b89c"
     saved = json.loads(raw)
     before = copy.deepcopy(saved)
+    from captured_projectile_author import project_captured_world_units
+    assert not validate_runtime_program(saved)["ok"]
+    current = project_captured_world_units(saved)
     requests = []
 
     def respond(request, **_kwargs):
         requests.append(copy.deepcopy(request))
-        return {"choices": [{"message": {"content": raw.decode("utf-8")}}]}
+        return {"choices": [{"message": {"content": json.dumps(current)}}]}
 
     def no_repair(*_args, **_kwargs):
         raise AssertionError("saved initial Author must not invoke Repair")
@@ -45,17 +48,17 @@ def test_saved_initial_projectile_lifetime_compiles_without_repair(monkeypatch):
     monkeypatch.setattr(combine, "repair_author_item_after_failure", no_repair)
     initial = author.try_llm_plan({}, {}, "saved-initial-projectile-lifetime")
     assert initial is not None
-    assert initial["runtimeProgram"] == saved["runtimeProgram"]
+    assert initial["runtimeProgram"] == current["runtimeProgram"]
     wire = combine.compile_and_validate_authored_runtime(
         initial, {}, {}, "saved-initial-projectile-lifetime",
         run_stage=lambda _label, fn, *args, **kwargs: fn(*args, **kwargs))
     assert len(requests) == 1
     assert wire["debug"]["llmStageAccounting"]["gameplayRepairCalls"] == 0
     assert saved == before
-    assert initial["runtimeProgram"] == saved["runtimeProgram"]
+    assert initial["runtimeProgram"] == current["runtimeProgram"]
     assert validate_runtime_wire(wire)["ok"]
     assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
-                                   authored_document=saved, final_document=wire)["ok"]
+                                   authored_document=current, final_document=wire)["ok"]
     sentry = next(row for row in wire["runtimeProgram"]["entities"]
                   if row["id"] == "queen_ichor_sentry")
     assert sentry["lifetimeTicks"] == 36000
