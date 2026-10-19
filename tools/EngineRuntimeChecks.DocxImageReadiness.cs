@@ -44,8 +44,12 @@ internal static partial class EngineRuntimeChecks
     {
         WithLighting((_, __) => {
             using var peers = new ReviewPeers(); using var probe = new AssetInvalidationProbe();
-            string file = "docx_missing_" + Guid.NewGuid().ToString("N") + ".png";
-            var item = probe.Item("docx_missing", Path.Combine(probe.Sync.CacheRoot, file));
+            // Keep the synthetic key inside the existing 260-character DTO path
+            // bound even when the native harness uses a long isolated UNC root.
+            string file = "dx_" + Guid.NewGuid().ToString("N")[..8] + ".png";
+            string requestedPath = Path.Combine(probe.Sync.CacheRoot, file);
+            var item = probe.Item("docx_missing", requestedPath);
+            Equal(requestedPath, item.Data.Visual.SpritePath, "fixture exercises a missing PNG, not bounded path truncation");
             void NoProxy(string label) {
                 int before = probe.QueuedSprites; float rotation = 0, scale = 1;
                 Equal(false, item.PreDrawInInventory(probe.Batch, Vector2.Zero, new Rectangle(0, 0, 32, 32), Color.White, Color.White, Vector2.Zero, 1), label + " inventory vetoes proxy");
