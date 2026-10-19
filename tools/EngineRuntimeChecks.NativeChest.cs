@@ -8,7 +8,7 @@ using Terraria.ID;
 using Terraria.ObjectData;
 internal static partial class EngineRuntimeChecks {
  private static void NativeChestAdmission(){
- foreach(int tileType in new[]{TileID.Containers,TileID.Containers2})WithNativeChestWorld((player,ledger)=>{
+ WithNativeChestWorld((player,ledger)=>{
   var source=NativeChestItem(player,"native-admission",tileType:tileType,style:0);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
   var row=TileObjectData.GetTileData(tileType,0);Equal(true,TileID.Sets.BasicChest[tileType],"native BasicChest metadata family");
   Equal(nameof(Chest.FindEmptyChest),row.HookCheckIfCanPlace.hook.Method.Name,"native capacity callback");Equal(nameof(Chest.AfterPlacement_Hook),row.HookPostPlaceMyPlayer.hook.Method.Name,"native inventory callback");
@@ -55,9 +55,8 @@ internal static partial class EngineRuntimeChecks {
  typeof(Player).GetMethod("PlaceThing_Tiles_PlaceIt",PersistenceInstance)!.Invoke(player,new object[]{true,obj,tileType});
  }
  private static void NativeChestCanonicalStylesAndRefusals(){
- foreach(int tile in new[]{TileID.Containers,TileID.Containers2})
  WithNativeChestWorld((player,ledger)=>{
-  int style=0;
+  int tile=TileID.Containers,style=0;
   var tuple=(tile,style);
   var source=NativeChestItem(player,"native-family",tileType:tuple.Item1,style:tuple.Item2);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
   Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),$"ordinary native chest family/style authorizes {tuple}");NativeChestPlayerPlace(player);
@@ -79,7 +78,8 @@ internal static partial class EngineRuntimeChecks {
  // Refuse even valid vanilla styles before native tiles, inventory, or claims exist.
  foreach(var rejected in new[]{(Tile:TileID.Containers,Style:1),(Tile:TileID.Containers,Style:2),
    (Tile:TileID.Containers,Style:17),(Tile:TileID.Containers,Style:51),
-   (Tile:TileID.Containers2,Style:1),(Tile:TileID.Containers2,Style:16)})
+   (Tile:TileID.Containers2,Style:0),(Tile:TileID.Containers2,Style:1),
+   (Tile:TileID.Containers2,Style:16)})
  WithNativeChestWorld((player,ledger)=>{
   var source=NativeChestItem(player,"native-unsupported-style",tileType:rejected.Tile,style:rejected.Style);
   var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
@@ -139,8 +139,8 @@ internal static partial class EngineRuntimeChecks {
  Equal(1,PlacedLedgerSaved(ledger).GetList<Terraria.ModLoader.IO.TagCompound>("infiniGeneratedPlacementReturnsV2").Count,"one durable native prefix-preserving generated return");
  });}
 
- private static void NativeChestMultiplayerAuthenticatedOutcome(){NativeChestMultiplayerScenario("success",TileID.Containers,0);NativeChestMultiplayerScenario("success",TileID.Containers2,0);}
- private static void NativeChestMultiplayerRefusalMatrix(){foreach(int tile in new[]{TileID.Containers,TileID.Containers2})foreach(string scenario in new[]{"full","collision","capacity_race","callback_fault","partial_actor_fault","partial_reused_open_slot","changed_source","changed_prefix","replayed"})NativeChestMultiplayerScenario(scenario,tile,0);}
+ private static void NativeChestMultiplayerAuthenticatedOutcome()=>NativeChestMultiplayerScenario("success",TileID.Containers,0);
+ private static void NativeChestMultiplayerRefusalMatrix(){foreach(string scenario in new[]{"full","collision","capacity_race","callback_fault","partial_actor_fault","partial_reused_open_slot","changed_source","changed_prefix","replayed"})NativeChestMultiplayerScenario(scenario,TileID.Containers,0);}
  private static void NativeChestMultiplayerScenario(string scenario,int tileType=TileID.Containers,int style=0){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
  using var peers=new ReviewPeers();using var states=new PlacedIdentityPeerState();
  var players=Terraria.Main.player;Array.Resize(ref players,256);Terraria.Main.player=players;
@@ -201,14 +201,14 @@ internal static partial class EngineRuntimeChecks {
  private static void NativeChestGlobalCanPlaceUsesNativeVeto(){foreach(bool allow in new[]{false,true})WithNativeChestWorld((player,ledger)=>{
   var field=typeof(Terraria.ModLoader.TileLoader).GetField("HookCanPlace",PersistenceStatic)!;var previous=field.GetValue(null);int calls=0;
   field.SetValue(null,new Func<int,int,int,bool>[] {(_,_,_)=>{calls++;return allow;}});using var restore=new PersistenceRestore(()=>field.SetValue(null,previous));
-  var source=NativeChestItem(player,"native-global-veto",tileType:TileID.Containers2,style:0);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
+  var source=NativeChestItem(player,"native-global-veto",tileType:TileID.Containers,style:0);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
   Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),"native veto hook is not a foreign post-placement actor callback");NativeChestPlayerPlace(player);
   Equal(true,calls>0,"real native CanPlace executed global veto");Equal(allow,Chest.FindChest(40,39)>=0,"native global veto decides actual placement");
   Equal(allow,Terraria.ModLoader.ItemLoader.ConsumeItem(source.Item,player),"only native global-veto success can debit");Equal(allow?1:0,PlacedLedgerGroups(ledger).Count,"native veto never invents a claim");
  });}
  private static void NativeChestCanonicalStylesRespectNativeHooks(){
  foreach(var selection in new[]{(Type:TileID.Containers,Style:0,Allow:true),
-  (Type:TileID.Containers2,Style:0,Allow:true),(Type:TileID.Containers,Style:0,Allow:false)}){
+  (Type:TileID.Containers,Style:0,Allow:false)}){
  WithNativeChestWorld((player,ledger)=>{
   var source=NativeChestItem(player,"ordinary-container",tileType:selection.Type,style:selection.Style);
   var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;

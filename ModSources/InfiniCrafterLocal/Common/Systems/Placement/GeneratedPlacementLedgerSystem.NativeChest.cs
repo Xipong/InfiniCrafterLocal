@@ -341,8 +341,8 @@ public sealed partial class GeneratedPlacementLedgerSystem
         }
     }
 
-    // Ordinary wooden/crystal native chests only. The two vanilla tile families
-    // use style 0; cosmetic and locked styles do not enter generated placement.
+    // Only tile 21/style 0 is generated. Recognize both vanilla chest tile
+    // families to refuse unsupported placements and their native packets.
     private static bool IsNativeChestTile(int tileType)
         => tileType is >=0 and <=ushort.MaxValue
             && tileType<TileID.Sets.BasicChest.Length && TileID.Sets.BasicChest[tileType];

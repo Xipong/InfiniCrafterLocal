@@ -60,7 +60,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private static bool AdmitPlacedBodyNativeBoundary(RuntimePlacementSpec placement)
     {
         // Never route unsupported native chest styles through generic tile placement.
-        if (NativeChestPlaceAction(placement.TileId) >= 0) return AdmitNativeChestMetadata(placement);
+        if (IsNativeChestTile(placement.TileId)) return AdmitNativeChestMetadata(placement);
         if (placement.TileId < 0) return !placement.HasPlacedFootprint;
         if (placement.PlacedBody is not null
             && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out string reason))

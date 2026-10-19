@@ -12,7 +12,7 @@ using Terraria;
 using Terraria.ID;
 internal static partial class EngineRuntimeChecks
 {
- private static void NativeChestPreservesAuthoredBodyLightVfxAndActorLiveness(){NativeChestPresentationScenario(TileID.Containers,0);NativeChestPresentationScenario(TileID.Containers2,0);NativeChestPresentationScenario(TileID.Containers,0,true);}
+ private static void NativeChestPreservesAuthoredBodyLightVfxAndActorLiveness(){NativeChestPresentationScenario(TileID.Containers,0);NativeChestPresentationScenario(TileID.Containers,0,true);}
  private static void NativeChestPresentationScenario(int tileType,int style,bool mixedStyle=false){WithNativeChestWorld((player,ledger)=>WithVfxGeometryQueue((batch,texture,count,positions,colors)=>WithLighting((config,lights)=>{
   ulong tick=Terraria.Main.GameUpdateCount;var system=new InfiniDetachedVfxSystem();using var cache=new BorrowedSpriteCache();
   try{
