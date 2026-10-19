@@ -115,7 +115,7 @@ def test_delivery_and_director_reject_the_same_missing_selected_metadata(monkeyp
 
 @pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
 def test_director_and_frozen_repair_packets_explain_exact_hand_dependencies(wire_transport, monkeypatch, format_name):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_name)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_name)
     data, raw = _hand_input("reuse_item_icon")
     responses, requests = wire_transport
     responses.extend([raw, dict(schema=visual.VISUAL_REPAIR_PATCH_SCHEMA,

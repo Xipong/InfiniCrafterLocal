@@ -126,7 +126,7 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
     monkeypatch.setattr(socket.socket, "connect", denied)
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
     monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     monkeypatch.setattr(visual, "USE_LLM", True)
     monkeypatch.setattr(visual, "VISUAL_DIRECTOR_LLM", True)
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
@@ -228,7 +228,7 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
     monkeypatch.setattr(socket.socket, "connect", denied)
     monkeypatch.setattr(socket.socket, "connect_ex", denied)
     monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
     monkeypatch.setattr(visual, "trace_stage_request", lambda *a, **k: None)
     parent = {
@@ -308,7 +308,7 @@ def test_verified_motion_reference_is_exact_in_author_visual_repair(monkeypatch,
     _, user, _ = author.build_initial_author_request(parent, {}, "source-motion", model_name="offline-test-model")
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
     monkeypatch.setattr(visual, "trace_stage_request", lambda *a, **k: None)
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     requests = []
 
     def provider_stub(request, **kwargs):

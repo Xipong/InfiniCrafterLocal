@@ -13,6 +13,21 @@ import threading
 import time
 
 
+def reset_llm_runtime():
+    """Reset each owner's process state between offline transport scenarios."""
+    from infini_local.pipelines import llm_admission, llm_profiles, llm_transport
+
+    with llm_profiles._LLM_POOL_LOCK:
+        llm_profiles._LLM_POOL_CURSOR = 0
+        llm_profiles._LLM_LEASE_SEQUENCE = 0
+        llm_profiles._PROFILE_COOLDOWN_UNTIL.clear()
+    llm_transport._RESOLVED_LLM_MODELS.clear()
+    llm_transport._RESPONSES_CAPABILITY.clear()
+    llm_transport._STRICT_SCHEMA_CAPABILITY.clear()
+    with llm_admission._LLM_RATE_LOCK:
+        llm_admission._LLM_RATE_STATE.clear()
+
+
 @contextmanager
 def loopback_server(handler):
     """Own a bounded loopback HTTP lifetime, including thread teardown."""

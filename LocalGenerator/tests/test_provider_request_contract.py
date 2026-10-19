@@ -6,6 +6,9 @@ import urllib.error
 
 import pytest
 
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_profiles
+from infini_local.pipelines import llm_provider_wire
 from infini_local.core.llm_json_tools import json_object_candidates, parse_first_valid_llm_json, recover_object_with_syntax_only_repairs
 from infini_local.core.llm_prompt_cache import with_prompt_cache_prefix
 from infini_local.pipelines import llm_transport as llm
@@ -27,8 +30,8 @@ def context_scalars(monkeypatch):
     """Direct legacy scalar seams only; never broaden runtime/native imports."""
     def configure(default):
         monkeypatch.setattr(llm, "resolve_llm_model", lambda context=None: (context or default)["model"])
-        monkeypatch.setattr(llm, "active_llm_provider", lambda context=None: (context or default)["provider"])
-        monkeypatch.setattr(llm, "llm_base_url", lambda context=None: (context or default)["base_url"])
+        monkeypatch.setattr(llm_profiles, "active_llm_provider", lambda context=None: (context or default)["provider"])
+        monkeypatch.setattr(llm_profiles, "llm_base_url", lambda context=None: (context or default)["base_url"])
     return configure
 
 
@@ -46,10 +49,10 @@ def test_reasoning_control_is_native_to_the_selected_context(wire, monkeypatch, 
                "api_mode": "chat_completions", "api_key": "synthetic-reasoning-key"}
     local = {"provider": "local", "base_url": "http://127.0.0.1:1234/v1", "model": "local-model"}
     default = local if source == "local-intent" else context
-    monkeypatch.setattr(llm, "LLM_REASONING_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_REASONING_MODE", mode)
     context_scalars(default)
     if source in {"options", "local-intent"}:
-        request = llm.apply_llm_common_options({}, model_name=default["model"])
+        request = llm_provider_wire.apply_llm_common_options({}, model_name=default["model"])
     else:
         request = {"reasoning": {"effort": effort, "exclude": True}} if source == "envelope" else {"reasoning_effort": effort}
     before = copy.deepcopy(request)
@@ -58,7 +61,7 @@ def test_reasoning_control_is_native_to_the_selected_context(wire, monkeypatch, 
     if base == GOOGLE:
         assert prepared["reasoning_effort"] == effort and "reasoning" not in prepared
     else:
-        assert prepared["reasoning"] == {"effort": effort, "exclude": llm.LLM_REASONING_EXCLUDE}
+        assert prepared["reasoning"] == {"effort": effort, "exclude": llm_config.LLM_REASONING_EXCLUDE}
         assert "reasoning_effort" not in prepared
     assert request == before and all(not key.startswith("_infini_") for key in prepared)
     if source == "local-intent":
@@ -96,11 +99,11 @@ def test_reasoning_headroom_preserves_answer_budget_only_for_actual_google(wire,
 
 @pytest.mark.parametrize("initial,expected", [("off", "medium"), ("high", "high")])
 def test_author_reasoning_floor_does_not_lower_explicit_high(monkeypatch, initial, expected):
-    monkeypatch.setattr(llm, "active_llm_provider", lambda context=None: "openai_compat")
-    monkeypatch.setattr(llm, "llm_base_url", lambda context=None: GOOGLE)
-    monkeypatch.setattr(llm, "LLM_REASONING_MODE", initial)
-    request = llm.apply_llm_common_options({}, model_name="gemini-3.5-flash-lite") if initial == "off" else {"reasoning_effort": "high"}
-    assert llm.apply_minimum_reasoning_effort(request, model_name="gemini-3.5-flash-lite", minimum="medium")["reasoning_effort"] == expected
+    monkeypatch.setattr(llm_profiles, "active_llm_provider", lambda context=None: "openai_compat")
+    monkeypatch.setattr(llm_profiles, "llm_base_url", lambda context=None: GOOGLE)
+    monkeypatch.setattr(llm_config, "LLM_REASONING_MODE", initial)
+    request = llm_provider_wire.apply_llm_common_options({}, model_name="gemini-3.5-flash-lite") if initial == "off" else {"reasoning_effort": "high"}
+    assert llm_provider_wire.apply_minimum_reasoning_effort(request, model_name="gemini-3.5-flash-lite", minimum="medium")["reasoning_effort"] == expected
 
 
 @pytest.mark.parametrize("cause", ["messages", "unsupported_valid", "unsupported_failed", "unsupported_malformed", "complexity", "model_override", "model_override_whitespace"])
@@ -130,7 +133,7 @@ def test_real_http_schema_cache_requires_relevant_rejection_valid_recovery_and_e
                "api_key": "synthetic-loopback-key"}
     request = packet(schema=True)
     if cause in {"model_override", "model_override_whitespace"}:
-        request[llm.LLM_MODEL_OVERRIDE_KEY] = " override/first " if cause == "model_override_whitespace" else "override/first"
+        request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = " override/first " if cause == "model_override_whitespace" else "override/first"
     before = copy.deepcopy(request)
     if cause in {"messages", "unsupported_failed"}:
         with pytest.raises(urllib.error.HTTPError):
@@ -146,7 +149,7 @@ def test_real_http_schema_cache_requires_relevant_rejection_valid_recovery_and_e
     if cause == "complexity":
         next_request["response_format"]["json_schema"]["schema"]["properties"] = {"value": {"type": "string"}}
     elif cause in {"model_override", "model_override_whitespace"}:
-        next_request[llm.LLM_MODEL_OVERRIDE_KEY] = "override/first" if cause == "model_override_whitespace" else "override/second"
+        next_request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = "override/first" if cause == "model_override_whitespace" else "override/second"
     llm._llm_chat_json_single_context(next_request, 1, context)
     formats = [body["response_format"]["type"] for _, _, body, _ in observed]
     assert formats == {
@@ -178,7 +181,7 @@ def test_shape_rejection_reaches_actual_author_failure_with_operator_diagnosis(w
     monkeypatch.setattr(author, "build_initial_author_request", lambda *_a, **_k: (request, "literal task", "literal rules"))
     # Connect the real exact-wire rejection owner to the real Author consumer;
     # schema negotiation (including a second, unrelated rejection) is tested above.
-    monkeypatch.setattr(author, "llm_chat_json", lambda payload, timeout: llm._llm_chat_json_exact_context(payload, timeout, llm._primary_llm_context()))
+    monkeypatch.setattr(author, "llm_chat_json", lambda payload, timeout: llm._llm_chat_json_exact_context(payload, timeout, llm_profiles._primary_llm_context()))
     monkeypatch.setattr(author, "trace_event", lambda *args, **kw: events.append(args))
     monkeypatch.setattr(llm, "log_event", lambda level, message, data=None: logs.append((message, data)))
     with pytest.raises(PlannerUnavailable) as caught:
@@ -266,7 +269,7 @@ def test_cache_wire_fields_are_provider_model_and_api_scoped(wire, monkeypatch, 
     pytest.param({"input_tokens_details": {"cached_tokens": 20, "cache_write_tokens": 0}}, 20, True, 0, id="positive-hit"),
 ])
 def test_usage_distinguishes_missing_zero_and_real_cache_hit(usage, cached, hit, write):
-    result = llm._usage_fields({"usage": usage})
+    result = llm_provider_wire._usage_fields({"usage": usage})
     assert result["cachedInputTokens"] == cached and result["cacheHit"] is hit
     assert result["cacheWriteTokens"] == write
 
@@ -286,7 +289,7 @@ def test_usage_reasoning_reads_chat_and_responses_without_rewriting_usage(detail
     response = {"usage": {"prompt_tokens": 120, "completion_tokens": 6,
                           "prompt_tokens_details": {"cached_tokens": 0}, **details}}
     before = copy.deepcopy(response)
-    diagnostic = llm._usage_fields(response)
+    diagnostic = llm_provider_wire._usage_fields(response)
     assert diagnostic["reasoningTokens"] == expected
     assert diagnostic["cachedInputTokens"] == 0 and diagnostic["cacheHit"] is False
     assert response == before
@@ -308,7 +311,7 @@ def test_usage_reasoning_reads_chat_and_responses_without_rewriting_usage(detail
 def test_usage_totals_preserve_zero_missing_and_invalid(usage, input_tokens, output_tokens):
     response = {"usage": usage}
     before = copy.deepcopy(response)
-    diagnostic = llm._usage_fields(response)
+    diagnostic = llm_provider_wire._usage_fields(response)
     assert diagnostic["inputTokens"] == input_tokens
     assert diagnostic["outputTokens"] == output_tokens
     assert response == before
@@ -377,7 +380,7 @@ def test_platform_responses_explicit_breakpoint_preserves_exact_content_and_is_s
     sent = []
     ctx = {"provider": "openai_compat", "base_url": "https://api.openai.com/v1", "model": "gpt-5.6", "api_mode": "responses", "api_key": "test"}
     marked = with_prompt_cache_prefix(cache_packet(), message_index=1, prefix_chars=len('{"catalog":[], '))
-    with llm.llm_item_lease("first") as lease:
+    with llm_profiles.llm_item_lease("first") as lease:
         # Exercise the actual same-profile lease branch, including a pre-existing
         # continuation. A distinct context object would bypass this guard.
         lease.context = ctx
@@ -407,10 +410,10 @@ def test_google_length_retry_preserves_valid_output_and_reasoning_intent(monkeyp
         return {"choices": [{"finish_reason": "length" if len(calls) == 1 else "stop",
             "message": {"content": content if len(calls) == 1 else "{}"}}]}
     monkeypatch.setattr(llm, "_llm_json_single_context", single)
-    monkeypatch.setattr(llm, "_is_google_openai_compat_reasoning_model", lambda _model, _context: True)
+    monkeypatch.setattr(llm_provider_wire, "_is_google_openai_compat_reasoning_model", lambda _model, _context: True)
     monkeypatch.setattr(llm, "log_event", lambda *_a, **_k: None)
     request = {"model": "gemini-3.1-flash-lite", "messages": [],
-        "response_format": {"type": "json_object"}, llm._REASONING_INTENT_KEY: {"effort": "minimal" if complete else "low", "exclude": True}}
+        "response_format": {"type": "json_object"}, llm_provider_wire._REASONING_INTENT_KEY: {"effort": "minimal" if complete else "low", "exclude": True}}
     before = copy.deepcopy(request)
     result = llm._llm_json_single_context_with_length_retry(request, 1, {"model": request["model"]})
     assert request == before
@@ -420,4 +423,4 @@ def test_google_length_retry_preserves_valid_output_and_reasoning_intent(monkeyp
         assert "transportRetryCount" not in result.get("_debug", {})
     else:
         assert result["choices"][0]["finish_reason"] == "stop"
-        assert calls[1][llm._REASONING_INTENT_KEY]["effort"] == "minimal"
+        assert calls[1][llm_provider_wire._REASONING_INTENT_KEY]["effort"] == "minimal"

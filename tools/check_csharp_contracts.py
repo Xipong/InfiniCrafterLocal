@@ -48,7 +48,10 @@ def source_policy_issues(sources: dict[str, str]) -> list[str]:
         if re.search(r"#\s*(?:pragma\s+warning\s+disable|nullable\s+disable\s+warnings)\b", code):
             issues.append(f"warning_suppression:{path}")
         if (Path(path).parent.as_posix() in {"Common/Models/Contracts", "Common/Models/Runtime"}
-                and Path(path).name.startswith("GeneratedItemData")) or path == "Content/Items/GeneratedItem.cs":
+                and Path(path).name.startswith("GeneratedItemData")) or (
+                    Path(path).parent.as_posix() == "Content/Items"
+                    and Path(path).name.startswith("GeneratedItem.")
+                    and not Path(path).name.startswith("GeneratedItem.Tooltips")):
             if re.search(r"\b(?:Tooltip|TooltipLine|ModifyTooltips|SetBonusText)\b|\bplayer\s*\.\s*setBonus\b", code):
                 issues.append(f"authored_tooltip:{path}")
         if path == "Common/Systems/Diagnostics/InfiniAgentContractSelfTestSystem.cs":
@@ -71,7 +74,8 @@ def source_policy_issues(sources: dict[str, str]) -> list[str]:
                     issues.append(f"proxy_tooltip:{path}:{name}")
         if path == "Common/Models/Runtime/GeneratedItemData.Apply.cs":
             patterns = [r"\b(?:item|Item)\s*\.\s*useStyle\s*=\s*0\s*;"]
-        elif path == "Common/Services/Generation/GeneratorClient.cs":
+        elif (Path(path).parent.as_posix() == "Common/Services/Generation"
+              and (Path(path).name == "GeneratorClient.cs" or Path(path).name.startswith("GeneratorClient."))):
             patterns = [r"\.\s*shoot\s*(?:>|<=)\s*0\b", r"\bprojectileType\s*(?:<=|>=)\s*0\b",
                         r"\.\s*create(?:Tile|Wall)\s*>=\s*0\b", r"\.\s*rare\s*>=\s*3\b"]
         elif path in {"Common/Commands/InfiniDumpCommand.cs", "Common/Commands/InfiniDumpPictureCommand.cs"}:

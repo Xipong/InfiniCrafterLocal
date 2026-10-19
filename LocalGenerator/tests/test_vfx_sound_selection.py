@@ -1,5 +1,6 @@
 """Explicit offline sound choices through the real VFX stage, never a provider call."""
 from __future__ import annotations
+
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from infini_local.core import llm_config
 from infini_local.core import vfx_manifest as vfx
 from infini_local.pipelines import vfx_generation_pipeline as stage
 from tests.test_repair_vfx_contract import _offline_transport
@@ -161,7 +163,6 @@ def test_sound_absence_refuses_director_persisted_wire_and_cache_without_default
     pytest.param("both-absent", "json_object", id="object-both-absent"),
 ])
 def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
-    from infini_local.pipelines import llm_transport
     data = _data()
     before = copy.deepcopy(data)
     accepted = _sound(data, "Splash")
@@ -183,7 +184,7 @@ def test_real_repair_corrects_only_diagnosed_sound_leaf(monkeypatch, bad, mode):
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "sound only", "slotsUpsert": [candidate], "slotIdsDelete": ["explicit_sound"]}
     raw_before = copy.deepcopy(raw)
     sent = _offline_transport(monkeypatch, "sound_repair_" + str(bad) + mode, [raw, patch])
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     final = vfx.attach_vfx_manifest(data, "sound-repair", llm_director=stage.call_llm_vfx_director)
     assert final["debug"]["vfxDirectorRaw"] == accepted
     assert raw == raw_before
@@ -255,12 +256,11 @@ def test_non_sound_wire_omission_remains_valid_without_audio_materialization(sil
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_real_transport_never_strips_present_null_to_legacy_absence(monkeypatch, mode):
     from infini_local.core.errors import PlannerUnavailable
-    from infini_local.pipelines import llm_transport
     data = _data()
     raw = _sound(data, None)
     patch = {"schema": vfx.VFX_REPAIR_PATCH_SCHEMA, "note": "no sound correction"}
     sent = _offline_transport(monkeypatch, "null_sound_noop_" + mode, [raw, patch])
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     with pytest.raises(PlannerUnavailable, match="VFX Repair did not produce"):
         vfx.attach_vfx_manifest(data, "null-audio", llm_director=stage.call_llm_vfx_director)
     assert len(sent) == 2 and "vfxManifest" not in data

@@ -406,7 +406,7 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     responses, requests = wire_transport
     fn = "apply_generated_buff_on_use" if case == "huge-number" else "restore_resources_on_use"
     good = build_capability_witness(fn)
@@ -456,7 +456,7 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from test_pipeline_repair_contract import _bounded_invalid_buff_calls
 
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     responses, requests = wire_transport
     current, good = _bounded_invalid_buff_calls(fields)
     assert validate_runtime_program(good)["ok"]
@@ -493,7 +493,7 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
 def test_oversized_author_response_refuses_before_format_or_gameplay_repair(wire_transport, monkeypatch, mode, oversized_surface):
     import infini_local.core.runtime_authoring.program_schema as program_schema
 
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     responses, requests = wire_transport
     current = build_runtime_fixture("workbench_blade")
     nodes, _, _, _ = program_schema._author_schema_work_bounds(program_schema.author_item_response_schema())

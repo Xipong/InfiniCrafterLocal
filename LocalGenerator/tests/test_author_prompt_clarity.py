@@ -1,13 +1,15 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Model-visible ownership and actual field paths, without runtime design policy."""
 import json
 import pytest
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_authoring_pipeline as author
 
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_author_packet_names_real_fields_without_harness_instructions(monkeypatch, mode):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     req, user, _ = author.build_initial_author_request({}, {}, 'clarity', model_name='test-model')
     assert dossier_text(req) == user
     payload = json.loads(user)
@@ -28,7 +30,7 @@ def test_author_packet_names_real_fields_without_harness_instructions(monkeypatc
 
 def test_author_declares_only_static_app_contract_as_instruction_prefix(monkeypatch):
     from infini_local.core.llm_prompt_cache import instruction_segment_index
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     req, user, _ = author.build_initial_author_request({'name': 'user-owned-parent'}, {}, 'recipe', model_name='test-model')
     assert req['_infini_prompt_cache'] == {'instructionMessageIndex': 1}
     assert instruction_segment_index(req) == 1
@@ -42,7 +44,7 @@ def test_author_declares_only_static_app_contract_as_instruction_prefix(monkeypa
 def test_area_damage_card_scopes_direct_target_exclusion_in_author_and_repair(monkeypatch):
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'area-clarity', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     card = next(row for row in catalog['capabilities'] if row['fn'] == 'damage_area_on_event')
@@ -60,7 +62,7 @@ def test_area_damage_card_scopes_direct_target_exclusion_in_author_and_repair(mo
 
 
 def test_author_guidance_is_local_and_report_coverage_is_authored_not_potential(monkeypatch):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'local-task', model_name='test-model')
     payload = json.loads(user)
     shape = payload['requiredJsonShape']
@@ -78,7 +80,7 @@ def test_author_guidance_is_local_and_report_coverage_is_authored_not_potential(
 
 
 def test_primary_and_projectile_lifecycle_card_explains_choice_not_invented_fields(monkeypatch):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'lifecycle', model_name='test-model')
     payload = json.loads(user)
     rule = payload['runtimeProgramInvariants']['primaryEntityOwnership']['primaryRule']
@@ -100,7 +102,7 @@ def test_primary_and_projectile_lifecycle_card_explains_choice_not_invented_fiel
 
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 def test_author_system_suffix_does_not_explain_other_model_tasks(monkeypatch, mode):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     _, _, system = author.build_initial_author_request({}, {}, 'local-system', model_name='test-model')
     assert 'Repair' not in system
     assert 'realizationReplacement' not in system
@@ -110,7 +112,7 @@ def test_author_system_suffix_does_not_explain_other_model_tasks(monkeypatch, mo
 
 
 def test_immunity_is_one_required_typed_choice(monkeypatch):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'cooldown', model_name='test-model')
     cat = json.loads(user)['runtimeCapabilityContract']['catalog']
     params = next(c for c in cat['capabilities'] if c['fn'] == 'set_projectile_collision')['params']
@@ -164,7 +166,7 @@ def test_binding_examples_keep_optional_rules_and_fixed_branch_omissions_in_actu
     from infini_local.core.runtime_authoring.capability_registry import STACK_COST_RULE
     from infini_local.core.runtime_authoring.program_schema import binding_schema
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     _, user, _ = author.build_initial_author_request({}, {}, 'binding-guidance', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     rule = catalog['fieldGuide']['stackCost']
@@ -192,7 +194,7 @@ def test_condition_card_describes_its_existing_union_and_placement_guide_matches
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'typed-guidance', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     cards = {row['fn']: row for row in catalog['capabilities']}
@@ -220,7 +222,7 @@ def test_movement_execution_meaning_reaches_initial_and_repair_cards(monkeypatch
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'movement-guidance', model_name='test-model')
     cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
     assert cards[fn]['does'] == CAPABILITY_REGISTRY[fn].prompt_card()['does']
@@ -235,7 +237,7 @@ def test_movement_execution_meaning_reaches_initial_and_repair_cards(monkeypatch
 def test_conditional_neutral_guidance_preserves_optional_contract(monkeypatch):
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'neutral-guidance', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
     cards = {row['fn']: row for row in catalog['capabilities']}
@@ -252,7 +254,7 @@ def test_balance_distinguishes_ammunition_contribution_from_autonomous_attack(mo
     from copy import deepcopy
     from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     source = {'name': 'Unnamed source', 'damage': 50, 'useTime': 10, 'ammo': 71,
               'consumable': True, 'value': 500,
               'ammoRaw': {'mode': 'this_item_is_ammo', 'ammoId': 71}}
@@ -274,7 +276,7 @@ def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(mo
     from copy import deepcopy
     from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     parents = ({'name': 'Source A', 'damage': 0, 'value': 100, 'rare': 0, 'consumable': True},
                {'name': 'Source B', 'damage': 0, 'value': 1, 'rare': 0, 'consumable': True})
     before = deepcopy(parents)
@@ -304,7 +306,7 @@ def test_ingredient_grounded_balance_prices_total_output_and_reusable_benefit(mo
 def test_future_author_accounts_for_refreshable_utility_economy_without_item_router(monkeypatch, mode):
     from copy import deepcopy
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     parent = {'name': 'Arbitrary object', 'damage': 4, 'useTime': 18, 'maxStack': 1}
     before = deepcopy(parent)
     first, user, _ = author.build_initial_author_request(parent, {}, 'future-economy', model_name='test-model')
@@ -326,7 +328,7 @@ def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_sco
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'utility-refresh', model_name='test-model')
     cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
     card = cards['apply_generated_buff_on_use']

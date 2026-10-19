@@ -24,7 +24,7 @@ from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_k
     pytest.param("vfx", True, "json_schema", id="vfx-scoped-repair-schema"),
 ])
 def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(wire_transport, monkeypatch, director, repair, mode):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     responses, sent = wire_transport
     packets = []
     for fixture, width in (("workbench_blade", 40), ("door_on_chain", 73)):

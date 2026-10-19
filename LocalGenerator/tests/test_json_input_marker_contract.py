@@ -5,6 +5,7 @@ import copy
 
 import pytest
 
+from infini_local.pipelines import llm_provider_wire
 from infini_local.pipelines import llm_transport as transport
 
 
@@ -12,7 +13,7 @@ MARKER = {"role": "user", "content": "JSON response."}
 
 
 def test_nous_mapped_repair_json_mode_has_marker_in_input_not_only_system(monkeypatch):
-    packet = transport.with_llm_stage({
+    packet = llm_provider_wire.with_llm_stage({
         "model": "openai/gpt-6.1-sol",
         "messages": [
             {"role": "system", "name": "vfx_repair_contract", "content": "Gameplay is immutable. Return strict JSON only."},
@@ -50,7 +51,7 @@ def test_nous_explicit_responses_repair_json_mode_keeps_system_outside_input():
         "temperature": 0.12, "max_tokens": 18000}
     original = copy.deepcopy(packet)
     context = {"provider": "openai_compat", "base_url": "https://inference-api.nousresearch.com/v1"}
-    wire = transport._responses_payload_from_chat(packet, "existing_response", context=context)
+    wire = llm_provider_wire._responses_payload_from_chat(packet, "existing_response", context=context)
     assert wire["input"] == [original["messages"][1], MARKER]
     assert wire["instructions"] == original["messages"][0]["content"]
     assert wire["previous_response_id"] == "existing_response"
@@ -63,7 +64,7 @@ def test_nous_explicit_responses_repair_json_mode_keeps_system_outside_input():
 @pytest.mark.parametrize("api_mode", ["chat_completions", "responses"])
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema", None])
 def test_marker_is_protocol_only_for_ordinary_and_repair_packets(monkeypatch, stage, api_mode, format_mode):
-    packet = transport.with_llm_stage({"model": "openai/gpt-6-luna", "messages": [
+    packet = llm_provider_wire.with_llm_stage({"model": "openai/gpt-6-luna", "messages": [
         {"role": "system", "name": "frozen_contract", "content": "JSON result; preserve every accepted fact."},
         {"role": "user", "name": "frozen_context", "content": '{"exactFact":14,"repairScope":{"fieldPermissions":[]}}'},
     ], "max_tokens": 18000, "temperature": 0.12,
@@ -89,7 +90,7 @@ def test_marker_is_protocol_only_for_ordinary_and_repair_packets(monkeypatch, st
     wire = captured[0]
     prepared = transport._payload_for_context(original, context)
     if api_mode == "responses":
-        expected = transport._responses_payload_from_chat(prepared)
+        expected = llm_provider_wire._responses_payload_from_chat(prepared)
         expected["input"] = [*expected["input"], MARKER] if format_mode == "json_object" else expected["input"]
     else:
         expected = prepared
@@ -120,8 +121,8 @@ def test_marker_checks_word_in_projected_input_content_only(monkeypatch, api_mod
     context = {"provider": "openai_compat", "base_url": "https://inference-api.nousresearch.com/v1", "model": packet["model"]}
     prepared = transport._payload_for_context(packet, context)
     if api_mode == "responses":
-        baseline = transport._responses_payload_from_chat(prepared)
-        wire = transport._responses_payload_from_chat(prepared, context=context)
+        baseline = llm_provider_wire._responses_payload_from_chat(prepared)
+        wire = llm_provider_wire._responses_payload_from_chat(prepared, context=context)
         field = "input"
     else:
         captured = []
@@ -152,7 +153,7 @@ def test_other_routes_and_models_retain_exact_wire(monkeypatch, api_mode, provid
     context = {"provider": provider, "base_url": base_url, "model": model, "api_key": "offline-synthetic-key"}
     prepared = transport._payload_for_context(packet, context)
     if api_mode == "responses":
-        assert transport._responses_payload_from_chat(prepared, context=context) == transport._responses_payload_from_chat(prepared)
+        assert llm_provider_wire._responses_payload_from_chat(prepared, context=context) == llm_provider_wire._responses_payload_from_chat(prepared)
     else:
         captured = []
         monkeypatch.setattr(transport, "http_json", lambda url, body, **kwargs:
@@ -174,9 +175,9 @@ def test_input_marker_handles_text_blocks_idempotently(content, present):
     expected = copy.deepcopy(messages)
     if not present:
         expected.append(MARKER)
-    transport._ensure_json_input_marker(messages)
+    llm_provider_wire._ensure_json_input_marker(messages)
     assert messages == expected
-    transport._ensure_json_input_marker(messages)
+    llm_provider_wire._ensure_json_input_marker(messages)
     assert messages == expected
 
 
@@ -189,10 +190,10 @@ def test_protocol_marker_keeps_existing_prompt_cache_key_and_prefix(monkeypatch)
         PROMPT_CACHE_METADATA_KEY: {"messageIndex": 1, "prefixChars": 18}}
     original = copy.deepcopy(packet)
     context = {"provider": "openai_compat", "base_url": "https://inference-api.nousresearch.com/v1", "model": packet["model"]}
-    monkeypatch.setattr(transport, "_cache_route", lambda *_args: "explicit")
+    monkeypatch.setattr(llm_provider_wire, "_cache_route", lambda *_args: "explicit")
     prepared = transport._payload_for_context(packet, context)
     expected = copy.deepcopy(prepared)
-    transport._cache_wire_options(expected, packet, context, api_mode="chat")
+    llm_provider_wire._cache_wire_options(expected, packet, context, api_mode="chat")
     cache_key = expected["prompt_cache_key"]
     captured = []
     monkeypatch.setattr(transport, "http_json", lambda url, body, **kwargs:

@@ -12,7 +12,7 @@ from test_author_request_compaction import _expand_constraint_references
 
 
 def _request(monkeypatch):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     blade = {"id": "blade", "name": "Blade", "damage": 7, "useTime": 20}
     bench = {"id": "bench", "name": "Workbench", "createTile": 18, "useTime": 15}
     request, user, _ = build_initial_author_request(blade, bench, "blade+bench", model_name="gemini-2.5-flash")

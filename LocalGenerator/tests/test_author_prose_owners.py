@@ -1,3 +1,4 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Serialized Author/Repair keep each construction rule at its owning guide."""
 from copy import deepcopy
@@ -5,16 +6,17 @@ import json
 
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.pipelines.author_item_contract import RUNTIME_ROW_SHAPE_RULE
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object", "off"])
 def test_serialized_author_keeps_spelling_once_and_preserves_mechanical_guides(monkeypatch, mode):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, system = author.build_initial_author_request({}, {}, "owners", model_name="offline")
     assert dossier_text(request) == user
     packet = json.loads(user)
@@ -52,7 +54,7 @@ def test_serialized_author_keeps_spelling_once_and_preserves_mechanical_guides(m
 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object", "off"])
 def test_serialized_overlays_keep_only_facts_missing_from_canonical_cards(monkeypatch, mode):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     _, user, _ = author.build_initial_author_request({}, {}, "overlays", model_name="offline")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     placed = next(row for row in catalog["capabilities"] if row["fn"] == "present_placed_item_sprite")
@@ -87,7 +89,7 @@ def test_actual_repair_request_keeps_shape_guidance_without_duplicate_mechanical
         requests.append(deepcopy(request))
         raise CapturedRequest()
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     for name, value in dict(
         USE_LLM=True, resolve_llm_model=lambda: "offline", llm_chat_json=capture,
         trace_event=lambda *args, **kwargs: None, trace_stage_request=lambda *args, **kwargs: None,

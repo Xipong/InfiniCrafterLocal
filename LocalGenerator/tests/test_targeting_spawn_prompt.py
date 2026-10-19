@@ -1,3 +1,4 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Targeting guidance must use the same spawn syntax accepted by Author v5."""
 import copy
@@ -6,15 +7,16 @@ import json
 import pytest
 from jsonschema import Draft202012Validator
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_targeting_card_uses_current_spawn_position_in_author_and_repair(monkeypatch, mode):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, "targeting-position", model_name="test-model")
     assert dossier_text(request) == user
     cards = json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]

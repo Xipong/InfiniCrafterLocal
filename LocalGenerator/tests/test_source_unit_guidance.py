@@ -1,5 +1,6 @@
 """Registry-owned unit explanations at real Author/Repair request boundaries."""
 from __future__ import annotations
+
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
@@ -8,6 +9,8 @@ import socket
 
 import pytest
 
+from infini_local.pipelines import llm_admission
+from infini_local.core import llm_config
 from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.pipelines import llm_transport as transport
 
@@ -44,7 +47,7 @@ def _source():
 
 
 def _author_request(monkeypatch, mode, source):
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     before = json.dumps(source, ensure_ascii=False)
     request, user, system = author.build_initial_author_request(
         source, {}, "offline-unit-source", model_name="offline-unit-guidance")
@@ -317,7 +320,7 @@ def _serialized_chat_request(monkeypatch, request):
 
     with monkeypatch.context() as patch:
         patch.setattr(transport, "urlopen_no_redirect", stop)
-        patch.setattr(transport, "_reserve_remote_rate_slot", lambda *args, **kwargs: None)
+        patch.setattr(llm_admission, "_reserve_remote_rate_slot", lambda *args, **kwargs: None)
         with pytest.raises(_Captured):
             transport._llm_chat_json_exact_context(request, 10, {
                 "provider": "local", "base_url": "http://unit-guidance.invalid/v1",
@@ -350,7 +353,7 @@ def _repair_request(monkeypatch, mode, source, item):
         requests.append(copy.deepcopy(request))
         raise _Captured()
 
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(author, "resolve_llm_model", lambda: "offline-unit-guidance")
     monkeypatch.setattr(author, "llm_chat_json", stop)

@@ -1,5 +1,6 @@
 """Native base crit reaches Author without becoming a generated stat default."""
 from __future__ import annotations
+
 from prompt_packet_helpers import request_dossier, dossier_text
 
 import copy
@@ -8,8 +9,8 @@ import socket
 
 import pytest
 
+from infini_local.core import llm_config
 from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 
@@ -29,7 +30,7 @@ def offline(monkeypatch):
 @pytest.mark.parametrize("crit", [0, 4, 29])
 @pytest.mark.parametrize("surface", ["top_level", "fingerprint"])
 def test_native_crit_reaches_actual_author_message_unchanged(monkeypatch, mode, crit, surface):
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     parent = {"name": "native base crit source", "damage": 40, "damageClass": "ranged"}
     parent.update({"crit": crit} if surface == "top_level" else {"fingerprint": {"crit": crit}})
     before = copy.deepcopy(parent)
@@ -47,7 +48,7 @@ def test_native_crit_reaches_actual_author_message_unchanged(monkeypatch, mode, 
 
 @pytest.mark.parametrize("mode", ["json_schema", "json_object", "off"])
 def test_source_crit_is_not_confused_with_generated_equipment_bonus(monkeypatch, mode):
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     data = compile_runtime_program(build_capability_witness("configure_accessory"))
     data["accessory"]["genericCrit"] = 17.0
     parent = {"name": "generated equipped bonus source", "crit": 0, "generatedData": data}

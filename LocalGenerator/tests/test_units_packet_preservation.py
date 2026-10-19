@@ -1,5 +1,7 @@
 """Source-preserving units at the actual offline serialized stage boundaries."""
 from __future__ import annotations
+
+from infini_local.core import llm_config
 from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 from prompt_packet_helpers import request_dossier, dossier_text
 
@@ -15,7 +17,6 @@ from infini_local.core import vfx_manifest as vfx
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as author
-from infini_local.pipelines import llm_transport
 from infini_local.pipelines import visual_generation_pipeline as visual
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from tests.test_low_level_three_stage_pipeline import _accepted_visual_data, _vfx_output
@@ -33,7 +34,7 @@ def offline_packets(monkeypatch, request):
     for name in ("connect", "connect_ex"):
         monkeypatch.setattr(socket.socket, name, denied)
     monkeypatch.setattr(socket, "create_connection", denied)
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", request.param)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", request.param)
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(vfx_transport, "USE_LLM", True)
     captured = []

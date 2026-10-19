@@ -16,6 +16,8 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_provider_wire
 from infini_local.pipelines import llm_transport as llm, pipeline_visual_config as config
 from infini_local.services import codex_auth as auth, codex_catalog as catalog, codex_text_backend as backend
 from test_provider_transport_contract import PIN, packet, wire  # noqa: F401 - imported pytest fixture
@@ -51,13 +53,13 @@ def _assert_structured_outputs_subset(schema):
 def test_subscription_sends_supported_schema_without_mutating_authored_packet(monkeypatch, subscription_sends, stage):
     from infini_local.pipelines import author_item_contract as contract, llm_authoring_pipeline as author
 
-    monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     if stage == "author":
         request, _, _ = author.build_initial_author_request(
             {"name": "Workbench"}, {"name": "Sword"}, "schema-replay", model_name="gpt-6-sol")
     else:
         request = {"model": "gpt-6-sol", "messages": [{"role": "user", "content": "Repair the exact invalid leaf."}],
-                   "response_format": llm.llm_json_response_format(
+                   "response_format": llm_provider_wire.llm_json_response_format(
                        "infini_low_level_runtime_author_repair", schema=contract.author_item_provider_repair_response_schema, strict=True)}
     before = copy.deepcopy(request)
     _response, _credentials, calls = subscription_sends
@@ -165,7 +167,7 @@ def test_subscription_repair_wire_inverse_precedes_frozen_merge(monkeypatch):
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(author, "resolve_llm_model", lambda: "gpt-6-sol")
     monkeypatch.setattr(author, "trace_event", lambda *_a, **_kw: None)
-    monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_schema")
     requests, premerge = [], []
     def respond(request, **_options):
         requests.append(copy.deepcopy(backend._request_payload(request)))
@@ -346,7 +348,7 @@ def test_subscription_cache_instruction_attribution_survives_usage_projection(su
             "metadata": credentials.access_token,
         }}, "items": {credentials.refresh_token: {"input_tokens": 10}}}
     result = backend.generate_chat({"model": "gpt-6.1-sol", "messages": [{"role": "user", "content": "test"}]}, timeout=3)
-    diagnostic = llm._usage_fields(result)
+    diagnostic = llm_provider_wire._usage_fields(result)
     assert diagnostic["reasoningTokens"] == 100
     assert diagnostic["instructionsInputTokens"] == (value if present and type(value) is int and value >= 0 else None)
     assert diagnostic["instructionsCachedInputTokens"] == (value if present and type(value) is int and value >= 0 else None)
@@ -437,7 +439,7 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
     request["provider"] = {"only": [PIN], "allow_fallbacks": False}
     request["reasoning"] = {"effort": "high"}
     if override:
-        request[llm.LLM_MODEL_OVERRIDE_KEY] = override
+        request[llm_provider_wire.LLM_MODEL_OVERRIDE_KEY] = override
     if scenario == "failure":
         with pytest.raises(auth.CodexError, match="429"):
             llm.llm_chat_json(request, timeout=3)
@@ -452,12 +454,12 @@ def test_subscription_dispatch_strips_foreign_pin_and_never_pays_for_fallback(wi
             {"type": "message", "role": "developer", "content": [{"type": "input_text", "text": "JSON response."}]},
             {"type": "message", "role": "user", "content": [{"type": "input_text", "text": request["messages"][1]["content"]}]},
         ]
-        assert "provider" not in body and llm.LLM_MODEL_OVERRIDE_KEY not in body
+        assert "provider" not in body and llm_provider_wire.LLM_MODEL_OVERRIDE_KEY not in body
     assert len(calls) == len(prepared_calls) == 1
     assert calls[0][0] == CODEX + "/responses"
     assert calls[0][2]["headers"]["Authorization"] == "Bearer " + credentials.access_token
     assert "synthetic-paid-key" not in repr(calls)
-    assert "provider" not in prepared_calls[0] and llm.LLM_MODEL_OVERRIDE_KEY not in prepared_calls[0]
+    assert "provider" not in prepared_calls[0] and llm_provider_wire.LLM_MODEL_OVERRIDE_KEY not in prepared_calls[0]
     assert prepared_calls[0]["model"] == (override or "test-model")
 
 
@@ -498,12 +500,12 @@ def test_subscription_request_preserves_packet_and_only_supported_wire_options(m
 def test_subscription_reasoning_respects_stage_owner_and_catalog_max(wire, monkeypatch, stage, configured, expected):
     wire.configure(LLM_PROVIDER="openai_codex", LLM_REASONING_MODE=configured, CODEX_VISUAL_REASONING="low")
     context = {"provider": "openai_codex", "model": "gpt-6-sol", "base_url": CODEX, "api_mode": "responses", "api_key": ""}
-    reasoning = llm.llm_reasoning_payload("gpt-6-sol", context)
+    reasoning = llm_provider_wire.llm_reasoning_payload("gpt-6-sol", context)
     assert reasoning is not None and reasoning["effort"] == configured
-    prepared = llm._payload_for_context({"messages": [{"role": "user", "content": "test"}], "reasoning": reasoning, llm.LLM_STAGE_KEY: stage}, context)
+    prepared = llm._payload_for_context({"messages": [{"role": "user", "content": "test"}], "reasoning": reasoning, llm_provider_wire.LLM_STAGE_KEY: stage}, context)
     assert prepared["reasoning"]["effort"] == expected
     if configured == "max":
-        assert llm.apply_minimum_reasoning_effort({"reasoning": reasoning}, model_name="gpt-6-sol", minimum="medium")["reasoning"]["effort"] == "max"
+        assert llm_provider_wire.apply_minimum_reasoning_effort({"reasoning": reasoning}, model_name="gpt-6-sol", minimum="medium")["reasoning"]["effort"] == "max"
 
 
 def test_account_catalog_protocol_discovers_newly_gated_models(monkeypatch, subscription):

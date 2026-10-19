@@ -1,59 +1,29 @@
+"""Execute logical LLM requests with one deadline across physical attempts.
+
+Profiles own leases and cooldowns, admission owns quota waits, and provider wire
+owns payload projection. This executor owns HTTP, diagnostics and negotiation.
+"""
 from __future__ import annotations
 
-from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
-from email.utils import parsedate_to_datetime
 from functools import wraps
 import copy
 import hashlib
 import json
-import math
 import re
 from pathlib import Path
 import threading
 import time
-from typing import Any, Callable, Mapping
+from typing import Any
 from urllib import request as urlrequest
 from urllib import error as urlerror
-from urllib.parse import urlsplit
 
+from infini_local.core import llm_config as config
 from infini_local.core.env_utils import env_str
 from infini_local.core.http_io import HttpDeadlineExceeded, HttpResponseTooLarge, remaining_seconds, read_with_deadline, urlopen_no_redirect
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, static_instruction_prefix_parts, instruction_segment_index
 from infini_local.core.llm_json_tools import parse_first_valid_llm_json
-from infini_local.core.generation_defaults import GENERATION_DEFAULTS
-from infini_local.core.llm_config import (
-    CODEX_LLM_MODEL,
-    CODEX_VISUAL_REASONING,
-    LLM_FALLBACK_API_KEY,
-    LLM_FALLBACK_BASE_URL,
-    LLM_FALLBACK_MODEL,
-    LLM_FALLBACK_NETWORK_FAILS,
-    LLM_FALLBACK_OPENROUTER_PROVIDER,
-    LLM_FALLBACK_PROVIDER,
-    LLM_API_MODE,
-    LLM_LOCAL_REASONING_PROMPT,
-    LLM_MAX_TOKENS,
-    LLM_PROVIDER,
-    LLM_POOL_FAILURE_COOLDOWN_SECONDS,
-    LLM_POOL_PROFILES,
-    LLM_REASONING_EXCLUDE,
-    LLM_REASONING_MAX_TOKENS,
-    LLM_REASONING_MODE,
-    LLM_RESPONSE_FORMAT_MODE,
-    LMSTUDIO_MODEL,
-    LMSTUDIO_URL,
-    OPENAI_COMPAT_API_KEY,
-    OPENAI_COMPAT_BASE_URL,
-    OPENAI_COMPAT_MODEL,
-    OPENROUTER_API_KEY,
-    OPENROUTER_APP_TITLE,
-    OPENROUTER_BASE_URL,
-    OPENROUTER_HTTP_REFERER,
-    OPENROUTER_MODEL,
-    OPENROUTER_PROVIDER,
-)
+from infini_local.pipelines import llm_admission as admission, llm_profiles as profiles, llm_provider_wire as wire
 from infini_local.storage.trace_runtime import log_event
 from infini_local.storage.failure_state import PROVIDER_ERROR_CODES, PROVIDER_ERROR_PARAMS
 from infini_local.services.combine_endpoint import update_generation_activity
@@ -64,6 +34,7 @@ _CURRENT_LLM_DIAGNOSTICS: ContextVar[dict[str, Any] | None] = ContextVar("infini
 _CURRENT_LLM_ATTEMPT: ContextVar[dict[str, Any] | None] = ContextVar("infini_llm_attempt", default=None)
 _LLM_MAX_DIAGNOSTIC_ATTEMPTS = 16
 _LLM_CALL_SEQUENCE = 0
+_LLM_CALL_LOCK = threading.Lock()
 
 
 def _request_deadline(timeout: float) -> float:
@@ -109,12 +80,12 @@ def _bounded_llm_call(call):
 
 
 def _reasoning_diagnostic(payload: dict[str, Any]) -> dict[str, Any]:
-    raw = payload.get("reasoning") or payload.get(_REASONING_INTENT_KEY)
+    raw = payload.get("reasoning") or payload.get(wire._REASONING_INTENT_KEY)
     raw = raw if isinstance(raw, dict) else {}
     out = {}
     effort = payload.get("reasoning_effort") or raw.get("effort")
     if effort:
-        out["effort"] = effort if isinstance(effort, str) and effort in _REASONING_EFFORT_RANK else "unsupported"
+        out["effort"] = effort if isinstance(effort, str) and effort in wire._REASONING_EFFORT_RANK else "unsupported"
     if type(raw.get("max_tokens")) is int:
         out["max_tokens"] = max(0, min(64000, raw["max_tokens"]))
     for name in ("enabled", "exclude"):
@@ -134,14 +105,14 @@ def _format_diagnostic(payload: dict[str, Any]) -> str:
 
 def _new_llm_diagnostics(payload: dict[str, Any]) -> dict[str, Any]:
     global _LLM_CALL_SEQUENCE
-    with _LLM_POOL_LOCK:
+    with _LLM_CALL_LOCK:
         _LLM_CALL_SEQUENCE += 1
         sequence = _LLM_CALL_SEQUENCE
-    lease = _CURRENT_LLM_ITEM_LEASE.get()
+    lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     return {
         "logicalCallId": f"{lease.lease_id if lease else 'standalone'}:call:{sequence}",
         "stage": _llm_replay_stage_from_payload(payload), "leaseId": lease.lease_id if lease else "",
-        "requestedApiMode": _normalized_api_mode(_primary_llm_context().get("api_mode")),
+        "requestedApiMode": profiles._normalized_api_mode(profiles._primary_llm_context().get("api_mode")),
         "requestedResponseFormat": _format_diagnostic(payload), "requestedReasoning": _reasoning_diagnostic(payload),
         "physicalAttemptCount": 0, "physicalAttemptsDropped": 0, "physicalAttempts": [],
         "lastAttempt": {}, "nextReason": "initial", "rateWaitMsTotal": 0.0, "diagnosticEventCount": 0,
@@ -218,12 +189,12 @@ def _failure_metadata(error: BaseException, last: dict[str, Any]) -> dict[str, A
 def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: dict[str, Any], *, api_mode: str) -> dict[str, Any]:
     state = _CURRENT_LLM_DIAGNOSTICS.get()
     if state is None:
-        return http_json(url, wire, timeout=timeout, headers=llm_headers(context=context))
+        return http_json(url, wire, timeout=timeout, headers=profiles.llm_headers(context=context))
     effective_reasoning = _reasoning_diagnostic(wire)
     row = {
         **{name: state[name] for name in ("logicalCallId", "stage", "leaseId", "requestedApiMode", "requestedResponseFormat", "requestedReasoning")},
-        "profileId": _profile_id(context), "provider": active_llm_provider(context),
-        "openrouterProvider": _openrouter_provider(context),
+        "profileId": profiles._profile_id(context), "provider": profiles.active_llm_provider(context),
+        "openrouterProvider": profiles._openrouter_provider(context),
         "effectiveApiMode": api_mode, "effectiveResponseFormat": _format_diagnostic(wire),
         "effectiveReasoning": effective_reasoning,
         "unsupportedReasoningFields": sorted(set(state["requestedReasoning"]) - set(effective_reasoning)),
@@ -233,7 +204,7 @@ def _perform_llm_http(url: str, wire: dict[str, Any], timeout: float, context: d
     }
     token = _CURRENT_LLM_ATTEMPT.set(row)
     try:
-        return http_json(url, wire, timeout=timeout, headers=llm_headers(context=context))
+        return http_json(url, wire, timeout=timeout, headers=profiles.llm_headers(context=context))
     except urlerror.HTTPError as error:
         row["httpStatus"] = error.code
         row.update(_provider_error_metadata(_read_llm_http_error(error, timeout)))
@@ -279,601 +250,7 @@ _RESPONSES_CAPABILITY: dict[str, bool] = {}
 # has refused the schema, later stages in the same run stop paying for a request
 # that is already known to be rejected.
 _STRICT_SCHEMA_CAPABILITY: dict[str, bool] = {}
-_PROFILE_COOLDOWN_UNTIL: dict[str, float] = {}
-_LLM_POOL_LOCK = threading.Lock()
-_LLM_POOL_CURSOR = 0
-_LLM_LEASE_SEQUENCE = 0
 
-# Remote admission is process-wide per endpoint+model. Unknown routes retain the
-# legacy conservative wire estimate; this is local policy, NOT a provider quota.
-# The verified Nous OpenAI route uses pacing + provider feedback instead (see
-# docs/LLM_PROVIDER_ADMISSION_RU.md). Native Codex owns its separate SSE transport.
-_LLM_RATE_LOCK = threading.Lock()
-_LLM_RATE_STATE: dict[str, dict[str, Any]] = {}
-_LLM_RATE_WINDOW_SECONDS = 60.0
-_LLM_RATE_TOKENS_PER_WINDOW = 16_000
-_LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS = 5.1
-
-
-def _quota_reset_seconds(value: Any) -> float | None:
-    if not isinstance(value, str) or len(value) > 64:
-        return None
-    value = value.strip()
-    if re.fullmatch(r"\d+(?:\.\d+)?", value):
-        seconds = float(value)
-    elif re.fullmatch(r"(?:\d+(?:\.\d+)?(?:ms|s|m|h|d))+", value):
-        units = {"ms": .001, "s": 1, "m": 60, "h": 3600, "d": 86400}
-        seconds = sum(float(count) * units[unit] for count, unit in re.findall(r"(\d+(?:\.\d+)?)(ms|s|m|h|d)", value))
-    else:
-        return None
-    return seconds if math.isfinite(seconds) and 0 <= seconds <= 31_536_000 else None
-
-
-def _selected_quota_headers(headers: Any) -> dict[str, int | float]:
-    # Never retain raw headers, account IDs, cookies or unvalidated strings.
-    safe: dict[str, int | float] = {}
-    if headers is None:
-        return safe
-    for resource in ("requests", "tokens", "project-tokens"):
-        for field_name in ("limit", "remaining", "reset"):
-            name = f"x-ratelimit-{field_name}-{resource}"
-            values = headers.get_all(name, []) if hasattr(headers, "get_all") else [
-                value for key, value in headers.items() if key.lower() == name]
-            if len(values) != 1 or not isinstance(values[0], str):
-                continue
-            value = values[0].strip()
-            if field_name == "reset":
-                parsed = _quota_reset_seconds(value)
-            else:
-                parsed = int(value) if len(value) <= 12 and re.fullmatch(r"\d+", value) else None
-            if parsed is not None:
-                safe[name] = parsed
-    values = headers.get_all("retry-after", []) if hasattr(headers, "get_all") else [
-        value for key, value in headers.items() if key.lower() == "retry-after"]
-    if len(values) == 1:
-        seconds = _quota_reset_seconds(values[0])
-        if seconds is None and isinstance(values[0], str) and len(values[0]) <= 64:
-            try:
-                date = parsedate_to_datetime(values[0])
-                seconds = max(0.0, date.timestamp() - time.time()) if date.tzinfo is not None else None
-            except (ValueError, TypeError, OverflowError):
-                seconds = None
-            if seconds is not None and (not math.isfinite(seconds) or seconds > 31_536_000):
-                seconds = None
-        if seconds is not None:
-            safe["retry-after"] = seconds
-    return safe
-
-
-def _observe_remote_quota_headers(url: str, payload: dict[str, Any], headers: Any) -> dict[str, int | float]:
-    safe = _selected_quota_headers(headers)
-    row = _CURRENT_LLM_ATTEMPT.get()
-    if row is not None:
-        row["rateLimitHeaders"] = safe
-    key = _remote_rate_key(url, payload)
-    if key:
-        # Only explicit exhaustion establishes a block. Positive remaining tokens
-        # are not a tokenizer, a cache discount or permission to lift local policy.
-        resets = [safe[f"x-ratelimit-reset-{resource}"] for resource in ("requests", "tokens", "project-tokens")
-                  if safe.get(f"x-ratelimit-remaining-{resource}") == 0 and f"x-ratelimit-reset-{resource}" in safe]
-        if resets:
-            with _LLM_RATE_LOCK:
-                state = _LLM_RATE_STATE.setdefault(key, {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0})
-                state["quotaUntil"] = max(float(state.get("quotaUntil") or 0.0), time.monotonic() + max(resets))
-    return safe
-
-
-def _remote_admission_policy(url: str, payload: dict[str, Any]) -> str:
-    parsed = urlsplit(url)
-    try:
-        canonical = (parsed.scheme == "https" and parsed.port is None
-                     and parsed.username is None and parsed.password is None
-                     and not parsed.query and not parsed.fragment)
-    except ValueError:
-        canonical = False
-    if (canonical and parsed.hostname == "inference-api.nousresearch.com"
-            and parsed.path in {"/v1/chat/completions", "/v1/responses"}
-            and isinstance(payload.get("model"), str) and payload["model"].startswith("openai/")):
-        return "nous_openai_feedback"
-    return "unknown_conservative"
-
-
-def _remote_rate_key(url: str, payload: dict[str, Any]) -> str:
-    parsed = urlsplit(url)
-    host = (parsed.hostname or "").strip().lower()
-    if host in {"", "localhost", "127.0.0.1", "::1"}:
-        return ""
-    model = str(payload.get("model") or "unknown").strip().lower()
-    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}|{model}"
-
-
-def _model_min_interval_seconds(model: Any) -> float:
-    normalized = str(model or "").strip().lower()
-    if "gemma" in normalized:
-        return 62.0
-    if "gemini" in normalized:
-        return 12.0
-    return _LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS
-
-
-def _estimated_wire_tokens(serialized_bytes: bytes) -> int:
-    # Conservative provider-independent estimate; exact tokenizers are not shared
-    # across the configured pool.  One request may consume the whole window but can
-    # never deadlock merely because its schema is large.
-    return min(
-        _LLM_RATE_TOKENS_PER_WINDOW,
-        max(1, int(math.ceil(len(serialized_bytes.decode("utf-8", "replace")) / 4.0))),
-    )
-
-
-def _reserve_remote_rate_slot(
-    url: str,
-    payload: dict[str, Any],
-    serialized_bytes: bytes,
-    *,
-    max_wait_seconds: float | None = None,
-) -> None:
-    key = _remote_rate_key(url, payload)
-    policy = _remote_admission_policy(url, payload) if key else "local_exempt"
-    row = _CURRENT_LLM_ATTEMPT.get()
-    if row is not None:
-        row["rateAdmissionPolicy"] = policy
-    if not key:
-        return
-    uses_token_window = policy == "unknown_conservative"
-    tokens = _estimated_wire_tokens(serialized_bytes) if uses_token_window else 0
-    minimum_interval = (_model_min_interval_seconds(payload.get("model")) if uses_token_window
-                        else _LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS)
-    deadline = None if max_wait_seconds is None else time.monotonic() + max(0.0, max_wait_seconds)
-    waiter = threading.Event()
-    with _LLM_RATE_LOCK:
-        state = _LLM_RATE_STATE.setdefault(
-            key,
-            {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0},
-        )
-        waiters = state.setdefault("waiters", [])
-        waiters.append(waiter)
-    try:
-        while True:
-            if deadline is not None:
-                remaining_seconds(deadline)
-            wait_seconds = 0.0
-            queue_timeout = None
-            with _LLM_RATE_LOCK:
-                now = time.monotonic()
-                if deadline is not None:
-                    remaining_seconds(deadline)
-                is_head = waiters[0] is waiter
-                row = _CURRENT_LLM_ATTEMPT.get()
-                if not is_head:
-                    # Only the oldest request may spend this key's quota. Smaller
-                    # newcomers must not keep renewing the window ahead of it.
-                    queue_timeout = None if deadline is None else deadline - now
-                    if row is not None:
-                        row["rateWaitReason"] = "rate_queue"
-                    update_generation_activity(wait_reason="rate_queue", network_started=False)
-                else:
-                    events = [
-                        (float(at), int(count))
-                        for at, count in state.get("events", [])
-                        if float(at) > now - _LLM_RATE_WINDOW_SECONDS
-                    ]
-                    state["events"] = events
-                    blocked_wait = max(0.0, float(state.get("blockedUntil") or 0.0) - now)
-                    quota_wait = max(0.0, float(state.get("quotaUntil") or 0.0) - now)
-                    pacing_wait = max(
-                        0.0,
-                        float(state.get("lastRequest", -1.0e30)) + minimum_interval - now,
-                    )
-                    wait_seconds = max(blocked_wait, quota_wait, pacing_wait)
-                    used_tokens = sum(count for _, count in events)
-                    token_wait = uses_token_window and events and used_tokens + tokens > _LLM_RATE_TOKENS_PER_WINDOW
-                    if token_wait:
-                        wait_seconds = max(
-                            wait_seconds,
-                            events[0][0] + _LLM_RATE_WINDOW_SECONDS - now,
-                        )
-                    if row is not None and wait_seconds > 0.0:
-                        row["rateWaitReason"] = (
-                            "provider_cooldown" if blocked_wait >= wait_seconds else
-                            "provider_quota" if quota_wait >= wait_seconds else
-                            "token_window" if token_wait else "pacing")
-                    if wait_seconds > 0.0:
-                        update_generation_activity(wait_reason=(
-                            "provider_cooldown" if blocked_wait >= wait_seconds else
-                            "provider_quota" if quota_wait >= wait_seconds else
-                            "token_window" if token_wait else "pacing"), network_started=False)
-                    if wait_seconds <= 0.0:
-                        update_generation_activity(wait_reason="none", network_started=False)
-                        if uses_token_window:
-                            events.append((now, tokens))
-                        state["lastRequest"] = now
-                        return
-            if not is_head:
-                waiter.wait(queue_timeout)
-                continue
-            # Own pacing and provider cooldown both consume the logical budget;
-            # neither may reserve/send after it is spent. No event means no send.
-            if deadline is not None and now + wait_seconds > deadline:
-                time.sleep(max(0.0, deadline - time.monotonic()))
-                raise HttpDeadlineExceeded("remote LLM rate wait exhausted the deadline; request not sent")
-            time.sleep(wait_seconds)
-    finally:
-        with _LLM_RATE_LOCK:
-            was_head = waiters[0] is waiter
-            waiters.remove(waiter)
-            if was_head and waiters:
-                waiters[0].set()
-
-
-def _mark_remote_rate_limited(url: str, payload: dict[str, Any], error: urlerror.HTTPError) -> None:
-    key = _remote_rate_key(url, payload)
-    if not key:
-        return
-    retry_after = _selected_quota_headers(error.headers).get("retry-after", 0.0)
-    cooldown = max(60.0, retry_after, _model_min_interval_seconds(payload.get("model")))
-    with _LLM_RATE_LOCK:
-        state = _LLM_RATE_STATE.setdefault(
-            key,
-            {"events": [], "lastRequest": -1.0e30, "blockedUntil": 0.0},
-        )
-        state["blockedUntil"] = max(
-            float(state.get("blockedUntil") or 0.0),
-            time.monotonic() + cooldown,
-        )
-
-
-@dataclass
-class LlmItemLease:
-    recipe_key: str
-    lease_id: str
-    profile_id: str
-    context: dict[str, Any]
-    pool_size: int
-    initial_profile_id: str = ""
-    profiles: tuple[dict[str, Any], ...] = ()
-    legacy_fallback_allowed: bool = False
-    previous_response_id: str = ""
-    responses_disabled: bool = False
-    call_count: int = 0
-    stages: list[str] = field(default_factory=list)
-    failovers: list[dict[str, str]] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        if not self.initial_profile_id:
-            self.initial_profile_id = self.profile_id
-
-    def snapshot(self) -> dict[str, Any]:
-        return {
-            "leaseId": self.lease_id,
-            "initialProfileId": self.initial_profile_id,
-            "profileId": self.profile_id,
-            "provider": self.context.get("provider"),
-            "baseUrl": self.context.get("base_url"),
-            "model": self.context.get("model"),
-            "apiMode": self.context.get("api_mode"),
-            "openrouterProvider": _openrouter_provider(self.context),
-            "poolSize": self.pool_size,
-            "callCount": self.call_count,
-            "stages": list(self.stages),
-            "failovers": list(self.failovers),
-            "responseChainActive": bool(self.previous_response_id and not self.responses_disabled),
-        }
-
-
-_CURRENT_LLM_ITEM_LEASE: ContextVar[LlmItemLease | None] = ContextVar("infini_llm_item_lease", default=None)
-
-
-
-def _normalized_llm_provider(configured: str) -> str:
-    configured = (configured or "").strip().lower().replace("-", "_")
-    if configured in {"openrouter", "or"}:
-        return "openrouter"
-    if configured in {"openai", "openai_compat", "api", "remote"}:
-        return "openai_compat"
-    if configured in {"local", "lmstudio", "lm_studio", "ollama", ""}:
-        if not configured and OPENROUTER_API_KEY and OPENROUTER_MODEL and str(OPENROUTER_MODEL).lower() not in {"auto", "default"}:
-            return "openrouter"
-        return "local"
-    return configured
-
-def active_llm_provider(context: dict[str, Any] | None = None) -> str:
-    if isinstance(context, dict) and context.get("provider"):
-        return str(context.get("provider") or "local")
-    lease = _CURRENT_LLM_ITEM_LEASE.get()
-    if lease is not None and lease.context.get("provider"):
-        return str(lease.context.get("provider") or "local")
-    return _normalized_llm_provider(LLM_PROVIDER or "")
-
-
-def _normalized_api_mode(value: Any) -> str:
-    mode = str(value or "auto").strip().lower().replace("-", "_")
-    if mode in {"responses", "response"}:
-        return "responses"
-    if mode in {"chat", "chat_completion", "chat_completions", "completions"}:
-        return "chat_completions"
-    return "auto"
-
-
-def _openrouter_provider(context: dict[str, Any]) -> str:
-    if active_llm_provider(context) != "openrouter":
-        return ""
-    return str(context.get("openrouter_provider") or "").strip()
-
-
-def _llm_context_key(context: dict[str, Any] | None) -> str:
-    ctx = context or {}
-    key = "|".join([
-        str(ctx.get("provider") or "local"),
-        str(ctx.get("base_url") or ""),
-        str(ctx.get("model") or "auto"),
-        str(ctx.get("api_mode") or "chat_completions"),
-    ])
-    upstream = _openrouter_provider(ctx)
-    return f"{key}|{upstream}" if upstream else key
-
-
-def _legacy_primary_llm_context() -> dict[str, Any]:
-    provider = _normalized_llm_provider(LLM_PROVIDER or "")
-    if provider == "openai_codex":
-        return {
-            "provider": provider,
-            "base_url": "https://chatgpt.com/backend-api/codex",
-            "model": CODEX_LLM_MODEL,
-            "api_key": "",
-            "label": "llm_1",
-            "profile_id": "llm_1",
-            "api_mode": "responses",
-        }
-    if provider == "openrouter":
-        return {
-            "provider": provider,
-            "base_url": OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1",
-            "model": OPENROUTER_MODEL or "auto",
-            "openrouter_provider": OPENROUTER_PROVIDER,
-            "api_key": OPENROUTER_API_KEY,
-            "http_referer": OPENROUTER_HTTP_REFERER,
-            "app_title": OPENROUTER_APP_TITLE,
-            "label": "llm_1",
-            "profile_id": "llm_1",
-            "api_mode": _normalized_api_mode(LLM_API_MODE),
-        }
-    if provider == "openai_compat":
-        return {
-            "provider": provider,
-            "base_url": OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/"),
-            "model": OPENAI_COMPAT_MODEL or "auto",
-            "api_key": OPENAI_COMPAT_API_KEY,
-            "label": "llm_1",
-            "profile_id": "llm_1",
-            "api_mode": _normalized_api_mode(LLM_API_MODE),
-        }
-    return {
-        "provider": "local",
-        "base_url": LMSTUDIO_URL,
-        "model": LMSTUDIO_MODEL or "auto",
-        "api_key": "",
-        "label": "llm_1",
-        "profile_id": "llm_1",
-        "api_mode": _normalized_api_mode(LLM_API_MODE),
-    }
-
-
-def _primary_llm_context() -> dict[str, Any]:
-    lease = _CURRENT_LLM_ITEM_LEASE.get()
-    return lease.context if lease is not None else _legacy_primary_llm_context()
-
-
-def _pool_profile_context(raw: dict[str, Any]) -> dict[str, Any] | None:
-    if not bool(raw.get("enabled")):
-        return None
-    model = str(raw.get("model") or "").strip()
-    if not model:
-        return None
-    provider = _normalized_llm_provider(str(raw.get("provider") or "openai_compat"))
-    base_url = str(raw.get("base_url") or "").rstrip("/")
-    api_key = str(raw.get("api_key") or "")
-    if provider == "openrouter":
-        base_url = base_url or OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1"
-        api_key = api_key or OPENROUTER_API_KEY
-    elif provider == "local":
-        base_url = base_url or LMSTUDIO_URL
-        api_key = ""
-    elif provider == "openai_codex":
-        base_url = "https://chatgpt.com/backend-api/codex"
-        api_key = ""
-    else:
-        provider = "openai_compat"
-        base_url = base_url or OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
-        api_key = api_key or OPENAI_COMPAT_API_KEY
-    profile_id = str(raw.get("id") or "llm_pool").strip()
-    return {
-        "provider": provider,
-        "base_url": base_url,
-        "model": model,
-        "api_key": api_key,
-        "label": profile_id,
-        "profile_id": profile_id,
-        "api_mode": "responses" if provider == "openai_codex" else _normalized_api_mode(raw.get("api_mode")),
-        "http_referer": OPENROUTER_HTTP_REFERER if provider == "openrouter" else "",
-        "app_title": OPENROUTER_APP_TITLE if provider == "openrouter" else "",
-        "openrouter_provider": str(raw.get("openrouter_provider") or "").strip() if provider == "openrouter" else "",
-    }
-
-
-def configured_llm_pool() -> list[dict[str, Any]]:
-    profiles = [_legacy_primary_llm_context()]
-    seen_ids = {"llm_1"}
-    for raw in LLM_POOL_PROFILES:
-        context = _pool_profile_context(raw)
-        if context is None:
-            continue
-        profile_id = str(context.get("profile_id") or "")
-        if profile_id and profile_id not in seen_ids:
-            profiles.append(context)
-            seen_ids.add(profile_id)
-    return profiles
-
-
-def _profile_id(context: dict[str, Any]) -> str:
-    return str(context.get("profile_id") or context.get("label") or "llm_1")
-
-
-def _profile_is_available(context: dict[str, Any], *, now: float | None = None) -> bool:
-    current = time.monotonic() if now is None else now
-    return _PROFILE_COOLDOWN_UNTIL.get(_profile_id(context), 0.0) <= current
-
-
-def _available_profile_index(profiles: list[dict[str, Any]], start_index: int) -> int:
-    now = time.monotonic()
-    for offset in range(len(profiles)):
-        index = (start_index + offset) % len(profiles)
-        if _profile_is_available(profiles[index], now=now):
-            return index
-    return start_index % len(profiles)
-
-
-def begin_llm_item_lease(recipe_key: str, *, preferred_profile_id: str = "") -> tuple[LlmItemLease, Any]:
-    global _LLM_POOL_CURSOR, _LLM_LEASE_SEQUENCE
-    profiles = configured_llm_pool()
-    preferred = str(preferred_profile_id or "").strip().lower()
-    with _LLM_POOL_LOCK:
-        if preferred:
-            selected_index = next(
-                (index for index, context in enumerate(profiles) if _profile_id(context).lower() == preferred),
-                -1,
-            )
-            if selected_index < 0:
-                from infini_local.core.errors import PlannerUnavailable
-                error = PlannerUnavailable(f"Configured LLM profile {preferred!r} is unavailable for multi-dev lane")
-                setattr(error, "_infini_transport_debug", {"failureCategory": "profile_unavailable", "networkStarted": False})
-                raise error
-        else:
-            selected_index = _available_profile_index(profiles, _LLM_POOL_CURSOR % len(profiles))
-            _LLM_POOL_CURSOR = (selected_index + 1) % len(profiles)
-        selected = dict(profiles[selected_index])
-        _LLM_LEASE_SEQUENCE += 1
-        sequence = _LLM_LEASE_SEQUENCE
-    profile_id = str(selected.get("profile_id") or selected.get("label") or "llm_1")
-    pinned_profiles = (dict(selected),) if preferred else tuple(dict(profile) for profile in profiles)
-    lease = LlmItemLease(
-        recipe_key=str(recipe_key or ""),
-        lease_id=f"{profile_id}:{sequence}",
-        profile_id=profile_id,
-        context=selected,
-        pool_size=len(pinned_profiles),
-        profiles=pinned_profiles,
-        legacy_fallback_allowed=not preferred and len(profiles) == 1,
-    )
-    token = _CURRENT_LLM_ITEM_LEASE.set(lease)
-    try:
-        update_generation_activity(profile_id=profile_id)
-        log_event("info", "LLM item lease acquired", lease.snapshot())
-    except BaseException:
-        _CURRENT_LLM_ITEM_LEASE.reset(token)
-        raise
-    return lease, token
-
-
-def end_llm_item_lease(lease: LlmItemLease, token: Any) -> None:
-    try:
-        log_event("info", "LLM item lease released", lease.snapshot())
-    finally:
-        _CURRENT_LLM_ITEM_LEASE.reset(token)
-
-
-@contextmanager
-def llm_item_lease(recipe_key: str):
-    lease, token = begin_llm_item_lease(recipe_key)
-    try:
-        yield lease
-    finally:
-        end_llm_item_lease(lease, token)
-
-
-def current_llm_item_lease() -> LlmItemLease | None:
-    return _CURRENT_LLM_ITEM_LEASE.get()
-
-
-def _reset_llm_pool_runtime_for_tests() -> None:
-    global _LLM_POOL_CURSOR, _LLM_LEASE_SEQUENCE, _RESOLVED_LLM_MODELS, _RESPONSES_CAPABILITY, _PROFILE_COOLDOWN_UNTIL, _STRICT_SCHEMA_CAPABILITY
-    with _LLM_POOL_LOCK:
-        _LLM_POOL_CURSOR = 0
-        _LLM_LEASE_SEQUENCE = 0
-    _RESOLVED_LLM_MODELS = {}
-    _RESPONSES_CAPABILITY = {}
-    _STRICT_SCHEMA_CAPABILITY = {}
-    _PROFILE_COOLDOWN_UNTIL = {}
-    with _LLM_RATE_LOCK:
-        _LLM_RATE_STATE.clear()
-
-
-def _fallback_llm_context() -> dict[str, Any] | None:
-    model = str(LLM_FALLBACK_MODEL or "").strip()
-    if not model:
-        return None
-    primary = _legacy_primary_llm_context()
-    provider = _normalized_llm_provider(LLM_FALLBACK_PROVIDER or str(primary.get("provider") or "local"))
-    ctx: dict[str, Any] = {
-        "provider": provider,
-        "model": model,
-        "label": "fallback",
-        "profile_id": "legacy_fallback",
-        "api_mode": "chat_completions",
-    }
-    if provider == "openrouter":
-        ctx["base_url"] = LLM_FALLBACK_BASE_URL or OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1"
-        ctx["api_key"] = LLM_FALLBACK_API_KEY or OPENROUTER_API_KEY
-        ctx["http_referer"] = OPENROUTER_HTTP_REFERER
-        ctx["app_title"] = OPENROUTER_APP_TITLE
-        ctx["openrouter_provider"] = LLM_FALLBACK_OPENROUTER_PROVIDER
-    elif provider == "openai_compat":
-        ctx["base_url"] = LLM_FALLBACK_BASE_URL or OPENAI_COMPAT_BASE_URL or env_str("OPENAI_BASE_URL", "").rstrip("/")
-        ctx["api_key"] = LLM_FALLBACK_API_KEY or OPENAI_COMPAT_API_KEY
-    elif provider == "openai_codex":
-        ctx["base_url"] = "https://chatgpt.com/backend-api/codex"
-        ctx["api_key"] = ""
-        ctx["api_mode"] = "responses"
-    else:
-        ctx["provider"] = "local"
-        ctx["base_url"] = LLM_FALLBACK_BASE_URL or LMSTUDIO_URL
-        ctx["api_key"] = ""
-    if _llm_context_key(ctx) == _llm_context_key(primary):
-        return None
-    return ctx
-
-def _join_openai_compat_url(base: str, endpoint: str) -> str:
-    base = (base or "").rstrip("/")
-    endpoint = "/" + endpoint.strip("/")
-    if not base:
-        return endpoint
-    if base.endswith("/v1") or base.endswith("/api/v1"):
-        return base + endpoint
-    return base + "/v1" + endpoint
-
-def llm_base_url(context: dict[str, Any] | None = None) -> str:
-    ctx = context or _primary_llm_context()
-    return str(ctx.get("base_url") or "")
-
-def llm_chat_completions_url(context: dict[str, Any] | None = None) -> str:
-    if active_llm_provider(context or _primary_llm_context()) == "openai_codex":
-        from infini_local.services.codex_auth import CodexError
-        raise CodexError("Codex subscription does not support chat/completions")
-    return _join_openai_compat_url(llm_base_url(context), "/chat/completions")
-
-
-def llm_responses_url(context: dict[str, Any] | None = None) -> str:
-    if active_llm_provider(context or _primary_llm_context()) == "openai_codex":
-        from infini_local.services.codex_text_backend import RESPONSES_URL
-        return RESPONSES_URL
-    return _join_openai_compat_url(llm_base_url(context), "/responses")
-
-
-def llm_models_url(context: dict[str, Any] | None = None) -> str:
-    if active_llm_provider(context or _primary_llm_context()) == "openai_codex":
-        from infini_local.services.codex_catalog import CLIENT_VERSION, MODELS_URL
-        return f"{MODELS_URL}?client_version={CLIENT_VERSION}"
-    return _join_openai_compat_url(llm_base_url(context), "/models")
 
 def llm_auth_snapshot() -> dict[str, Any]:
     """Small UI/trace diagnostic for the currently selected LLM backend.
@@ -881,8 +258,8 @@ def llm_auth_snapshot() -> dict[str, Any]:
     This is intentionally config-only; it does not call remote APIs. It makes the
     common failure mode visible: OpenRouter selected, but no API key is loaded.
     """
-    primary = _legacy_primary_llm_context()
-    provider = active_llm_provider(primary)
+    primary = profiles._legacy_primary_llm_context()
+    provider = profiles.active_llm_provider(primary)
     pool_view = [
         {
             "profileId": context.get("profile_id"),
@@ -890,17 +267,17 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "baseUrl": context.get("base_url"),
             "model": context.get("model"),
             "apiMode": context.get("api_mode"),
-            "openrouterProvider": _openrouter_provider(context),
+            "openrouterProvider": profiles._openrouter_provider(context),
             "apiKeyConfigured": (
                 bool(context.get("api_key"))
                 if context.get("provider") in {"openrouter", "openai_compat"}
                 else None
             ),
-            "responsesSupported": _RESPONSES_CAPABILITY.get(_llm_context_key(context)),
+            "responsesSupported": _RESPONSES_CAPABILITY.get(profiles._llm_context_key(context)),
         }
-        for context in configured_llm_pool()
+        for context in profiles.configured_llm_pool()
     ]
-    fallback = _fallback_llm_context()
+    fallback = profiles._fallback_llm_context()
     fallback_view = None
     if fallback is not None:
         fallback_view = {
@@ -908,15 +285,15 @@ def llm_auth_snapshot() -> dict[str, Any]:
             "baseUrl": fallback.get("base_url"),
             "model": fallback.get("model"),
             "apiKeyConfigured": bool(fallback.get("api_key")) if fallback.get("provider") in {"openrouter", "openai_compat"} else None,
-            "networkFailsBeforeSwitch": LLM_FALLBACK_NETWORK_FAILS,
-            "openrouterProvider": _openrouter_provider(fallback),
+            "networkFailsBeforeSwitch": config.LLM_FALLBACK_NETWORK_FAILS,
+            "openrouterProvider": profiles._openrouter_provider(fallback),
         }
     if provider == "openrouter":
         configured = bool(primary.get("api_key"))
         return {
             "provider": provider,
             "baseUrl": primary.get("base_url") or "https://openrouter.ai/api/v1",
-            "openrouterProvider": _openrouter_provider(primary),
+            "openrouterProvider": profiles._openrouter_provider(primary),
             "model": primary.get("model") or "auto",
             "apiKeyConfigured": configured,
             "status": "configured" if configured else "missing_api_key",
@@ -954,7 +331,7 @@ def llm_auth_snapshot() -> dict[str, Any]:
         }
     return {
         "provider": provider or "local",
-        "baseUrl": primary.get("base_url") or LMSTUDIO_URL,
+        "baseUrl": primary.get("base_url") or config.LMSTUDIO_URL,
         "model": primary.get("model") or "auto",
         "apiKeyConfigured": None,
         "status": "local_endpoint_required",
@@ -963,294 +340,6 @@ def llm_auth_snapshot() -> dict[str, Any]:
         "pool": pool_view,
     }
 
-def ensure_llm_auth_configured(context: dict[str, Any] | None = None) -> None:
-    ctx = context or _primary_llm_context()
-    provider = active_llm_provider(ctx)
-    if provider == "openrouter" and not ctx.get("api_key"):
-        raise RuntimeError("OpenRouter API key is missing: set INFINI_OPENROUTER_API_KEY in config.env or choose the local LM Studio preset.")
-
-def llm_headers(extra: dict[str, str] | None = None, context: dict[str, Any] | None = None) -> dict[str, str]:
-    ctx = context or _primary_llm_context()
-    provider = active_llm_provider(ctx)
-    headers: dict[str, str] = {"Content-Type": "application/json"}
-    if provider == "openrouter":
-        if ctx.get("api_key"):
-            headers["Authorization"] = f"Bearer {ctx.get('api_key')}"
-        if ctx.get("http_referer"):
-            headers["HTTP-Referer"] = str(ctx.get("http_referer"))
-        if ctx.get("app_title"):
-            headers["X-OpenRouter-Title"] = str(ctx.get("app_title"))
-    elif provider == "openai_compat":
-        if ctx.get("api_key"):
-            headers["Authorization"] = f"Bearer {ctx.get('api_key')}"
-    if extra:
-        headers.update(extra)
-    return headers
-
-def llm_json_response_format(
-    name: str = "infini_json",
-    *,
-    schema: dict[str, Any] | Callable[[], dict[str, Any]] | None = None,
-    strict: bool = False,
-    auto_preference: str | None = None,
-) -> dict[str, Any] | None:
-    """OpenAI-compatible structured JSON hint.
-
-    ``auto`` normally uses provider-safe ``json_object`` on remote gateways and
-    JSON Schema on local servers.  A large-stage caller may request a lighter
-    auto default without overriding an explicit environment choice.  Remote or
-    local constrained decoding can otherwise duplicate a very large schema and
-    time out before the authoritative local boundary sees the answer.
-    """
-    mode = LLM_RESPONSE_FORMAT_MODE
-    if mode == "auto":
-        preferred = str(auto_preference or "").strip().lower()
-        if preferred not in {"", "json_object", "json_schema"}:
-            raise ValueError(f"unsupported auto response-format preference: {auto_preference!r}")
-        mode = preferred or ("json_schema" if active_llm_provider() == "local" else "json_object")
-    if mode in {"off", "none", "0", "false", "disabled"}:
-        return None
-    if mode == "json_object":
-        return {"type": "json_object"}
-    # Stage schemas can be large. Do not construct a provider projection that
-    # json_object/off will discard; local validation remains unchanged.
-    resolved_schema = schema() if callable(schema) else schema
-    return {
-        "type": "json_schema",
-        "json_schema": {
-            "name": name,
-            "strict": bool(strict),
-            "schema": resolved_schema or {"type": "object", "additionalProperties": True},
-        },
-    }
-
-def llm_answer_max_tokens(default: int | None = None) -> int:
-    raw = LLM_MAX_TOKENS if default is None else default
-    try:
-        value = int(raw)
-    except Exception:
-        value = int(GENERATION_DEFAULTS["INFINI_LLM_MAX_TOKENS"])
-    return max(512, min(64000, value))
-
-def visual_director_max_tokens() -> int:
-    """Token budget for the visual-director LLM step.
-
-    If INFINI_VISUAL_DIRECTOR_MAX_TOKENS is blank/unset, inherit the global
-    INFINI_LLM_MAX_TOKENS so the main GUI setting also affects the Z-Image
-    prompt-authoring hop.
-    """
-    raw = env_str("INFINI_VISUAL_DIRECTOR_MAX_TOKENS", "")
-    if not raw:
-        return llm_answer_max_tokens()
-    try:
-        value = int(raw)
-    except Exception:
-        return llm_answer_max_tokens()
-    return max(512, min(64000, value))
-
-def _configured_reasoning_payload() -> dict[str, Any] | None:
-    mode = str(LLM_REASONING_MODE or "off").strip().lower().replace("-", "_")
-    if mode in {"", "off", "false", "0", "disabled", "disable"}:
-        return None
-    exclude = bool(LLM_REASONING_EXCLUDE)
-    if mode in {"auto", "default", "enabled", "on"}:
-        return {"enabled": True, "exclude": exclude}
-    if mode in {"none", "no_reasoning"}:
-        return {"effort": "none", "exclude": exclude}
-    if mode in {"minimal", "low", "medium", "high", "xhigh"}:
-        return {"effort": mode, "exclude": exclude}
-    if mode in {"tokens", "token_budget", "max_tokens", "budget"}:
-        return {"max_tokens": max(0, min(64000, int(LLM_REASONING_MAX_TOKENS or 0))), "exclude": exclude}
-    # prompt_light / prompt_strong are local-only/prompt-only modes; do not send API field.
-    return None
-
-
-def llm_reasoning_payload(model_name: str = "", context: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    """Return OpenRouter/OpenAI-compatible reasoning controls, or None.
-
-    OpenRouter normalizes reasoning through `reasoning`: effort/max_tokens/enabled/exclude.
-    Local LM Studio/Ollama-compatible servers often reject this field, so local reasoning is
-    handled by system-prompt hinting instead.
-    """
-    configured = _configured_reasoning_payload()
-    provider = active_llm_provider(context)
-    if configured is None and provider == "openai_codex" and str(LLM_REASONING_MODE or "").strip().lower() == "max":
-        configured = {"effort": "max", "exclude": bool(LLM_REASONING_EXCLUDE)}
-    if configured is None or provider == "local":
-        return None
-    return configured
-
-
-def _is_google_openai_compat_reasoning_model(model_name: str, context: dict[str, Any] | None = None) -> bool:
-    lowered = str(model_name or "").lower()
-    try:
-        parsed_base_url = urlsplit(llm_base_url(context))
-        hostname = str(parsed_base_url.hostname or "").lower()
-        _ = parsed_base_url.port  # Validate malformed and out-of-range explicit ports.
-        if parsed_base_url.username is not None or parsed_base_url.password is not None:
-            hostname = ""
-    except ValueError:
-        hostname = ""
-    return (
-        active_llm_provider(context) == "openai_compat"
-        and hostname == "generativelanguage.googleapis.com"
-        and ("gemini" in lowered or "gemma" in lowered)
-    )
-
-
-def _google_reasoning_effort(reasoning: dict[str, Any]) -> str:
-    """Map Infini reasoning controls to Google's documented OpenAI-compatible field."""
-    effort = str(reasoning.get("effort") or "").strip().lower()
-    if effort == "xhigh":
-        return "high"
-    if effort in {"minimal", "low", "medium", "high"}:
-        return effort
-    # Gemini 3 cannot disable thinking. Keep explicit none bounded rather than sending
-    # an unsupported semantic value; auto/enabled gets useful but not maximal thinking.
-    if effort == "none":
-        return "minimal"
-    if reasoning.get("max_tokens") is not None:
-        budget = int(reasoning.get("max_tokens") or 0)
-        if budget <= 1024:
-            return "low"
-        if budget <= 8192:
-            return "medium"
-        return "high"
-    return "medium"
-
-
-_REASONING_INTENT_KEY = "_infini_reasoning_intent"
-LLM_MODEL_OVERRIDE_KEY = "_infini_model_override"
-
-
-def _remap_reasoning_for_context(payload: dict[str, Any], *, model_name: str, context: dict[str, Any]) -> None:
-    """Rewrite reasoning controls for the provider that will actually receive the request."""
-    intent = payload.get(_REASONING_INTENT_KEY) if isinstance(payload.get(_REASONING_INTENT_KEY), dict) else None
-    explicit = payload.get("reasoning") if isinstance(payload.get("reasoning"), dict) else None
-    effort = str(payload.get("reasoning_effort") or "").strip().lower()
-    payload.pop(_REASONING_INTENT_KEY, None)
-    payload.pop("reasoning", None)
-    payload.pop("reasoning_effort", None)
-    if active_llm_provider(context) == "local":
-        return
-    reasoning = dict(explicit or intent or {})
-    if not reasoning and effort:
-        reasoning = {"effort": effort, "exclude": bool(LLM_REASONING_EXCLUDE)}
-    if not reasoning:
-        return
-    if _is_google_openai_compat_reasoning_model(model_name, context):
-        payload["reasoning_effort"] = _google_reasoning_effort(reasoning)
-    else:
-        payload["reasoning"] = reasoning
-
-
-def _apply_google_high_reasoning_completion_headroom(
-    payload: dict[str, Any],
-    *,
-    model_name: str,
-    context: dict[str, Any],
-) -> None:
-    """Translate Infini's answer budget to Google's reasoning-inclusive cap.
-
-    Infini stage ``max_tokens`` values are budgets for the emitted JSON answer.
-    Google's OpenAI-compatible Gemini endpoint counts hidden reasoning tokens
-    against that same provider field.  At high effort, reserve one additional
-    answer budget for hidden reasoning so it cannot truncate the JSON while
-    leaving the logical stage budget unchanged.
-    """
-    if not _is_google_openai_compat_reasoning_model(model_name, context):
-        return
-    if str(payload.get("reasoning_effort") or "").strip().lower() != "high":
-        return
-    try:
-        answer_budget = int(payload.get("max_tokens") or 0)
-    except (TypeError, ValueError):
-        return
-    if answer_budget <= 0:
-        return
-    payload["max_tokens"] = min(64000, answer_budget * 2)
-
-
-def llm_reasoning_system_suffix(model_name: str = "") -> str:
-    """Tiny prompt-only reasoning hint for local models.
-
-    This does not ask the model to expose chain-of-thought. It just allows a private
-    checklist before emitting the required JSON. Useful for Qwen/Gemma local runs where
-    OpenRouter-style `reasoning` parameters are unavailable.
-    """
-    mode = str(LLM_REASONING_MODE or "off").strip().lower().replace("-", "_")
-    provider = active_llm_provider()
-    if mode in {"", "off", "false", "0", "disabled", "disable", "none", "no_reasoning"}:
-        return ""
-    if provider != "local" and mode not in {"prompt", "prompt_light", "prompt_strong", "local_prompt", "local_light", "local_strong"}:
-        return ""
-    if not LLM_LOCAL_REASONING_PROMPT:
-        return ""
-    if mode in {"prompt_strong", "local_strong"}:
-        return " Privately check parent facts, engine functions, schema, and balance. Output only the final JSON object."
-    return " Privately check constraints briefly. Output only the final JSON object."
-
-def apply_llm_common_options(req: dict[str, Any], *, model_name: str, default_max_tokens: int | None = None, allow_reasoning: bool = True) -> dict[str, Any]:
-    req["max_tokens"] = llm_answer_max_tokens(default_max_tokens)
-    if allow_reasoning:
-        configured = _configured_reasoning_payload()
-        if configured:
-            # Internal intent survives a local-primary attempt and is stripped before
-            # every real HTTP request; remote fallbacks remap it for their provider.
-            req[_REASONING_INTENT_KEY] = dict(configured)
-        reasoning = llm_reasoning_payload(model_name)
-        if reasoning:
-            if _is_google_openai_compat_reasoning_model(model_name):
-                req["reasoning_effort"] = _google_reasoning_effort(reasoning)
-            else:
-                req["reasoning"] = reasoning
-    return req
-
-
-_REASONING_EFFORT_RANK = {
-    "none": 0,
-    "minimal": 1,
-    "low": 2,
-    "medium": 3,
-    "high": 4,
-    "xhigh": 5,
-    "max": 6,
-}
-
-
-def apply_minimum_reasoning_effort(
-    req: dict[str, Any],
-    *,
-    model_name: str,
-    minimum: str = "medium",
-) -> dict[str, Any]:
-    """Apply a stage-local reasoning floor without lowering a stronger user choice."""
-    floor = str(minimum or "").strip().lower()
-    if floor not in _REASONING_EFFORT_RANK:
-        raise ValueError(f"unsupported minimum reasoning effort: {minimum!r}")
-    intent_raw = req.get(_REASONING_INTENT_KEY)
-    intent: dict[str, Any] = intent_raw if isinstance(intent_raw, dict) else {}
-    explicit_raw = req.get("reasoning")
-    explicit: dict[str, Any] = explicit_raw if isinstance(explicit_raw, dict) else {}
-    current = str(
-        req.get("reasoning_effort")
-        or explicit.get("effort")
-        or intent.get("effort")
-        or ""
-    ).strip().lower()
-    selected = current if _REASONING_EFFORT_RANK.get(current, -1) >= _REASONING_EFFORT_RANK[floor] else floor
-    reasoning = {"effort": selected, "exclude": bool(LLM_REASONING_EXCLUDE)}
-    req[_REASONING_INTENT_KEY] = dict(reasoning)
-    if active_llm_provider() == "local":
-        req.pop("reasoning", None)
-        req.pop("reasoning_effort", None)
-    elif _is_google_openai_compat_reasoning_model(model_name):
-        req.pop("reasoning", None)
-        req["reasoning_effort"] = _google_reasoning_effort(reasoning)
-    else:
-        req.pop("reasoning_effort", None)
-        req["reasoning"] = reasoning
-    return req
 
 def http_get_json(url: str, timeout: float = 5, headers: dict[str, str] | None = None) -> dict[str, Any]:
     merged = {"Accept": "application/json"}
@@ -1273,19 +362,19 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
     select a :free model from /models, then falls back to the first advertised model.
     """
     global _RESOLVED_LLM_MODELS
-    ctx = context or _primary_llm_context()
-    provider = active_llm_provider(ctx)
+    ctx = context or profiles._primary_llm_context()
+    provider = profiles.active_llm_provider(ctx)
     configured = str(ctx.get("model") or "auto").strip()
     if provider == "openai_codex" and configured.lower() in {"", "auto", "default"}:
         from infini_local.services.codex_auth import CodexError
         raise CodexError("Choose an available Codex text model in settings before generating")
     if configured and configured.lower() not in {"auto", "local-model", "local_model", "default"}:
         return configured
-    cache_key = _llm_context_key(ctx)
+    cache_key = profiles._llm_context_key(ctx)
     if _RESOLVED_LLM_MODELS.get(cache_key):
         return _RESOLVED_LLM_MODELS[cache_key]
     try:
-        models = http_get_json(llm_models_url(ctx), timeout=6, headers=llm_headers({"Accept": "application/json"}, context=ctx))
+        models = http_get_json(profiles.llm_models_url(ctx), timeout=6, headers=profiles.llm_headers({"Accept": "application/json"}, context=ctx))
         data = models.get("data") if isinstance(models, dict) else None
         if isinstance(data, list) and data:
             preferred = None
@@ -1302,7 +391,7 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
                 log_event("info", "resolved LLM model", {"provider": provider, "model": mid, "label": ctx.get("label")})
                 return mid
     except Exception as e:
-        log_event("warn", "could not auto-resolve LLM model", {"provider": provider, "error": repr(e), "url": llm_models_url(ctx), "label": ctx.get("label")})
+        log_event("warn", "could not auto-resolve LLM model", {"provider": provider, "error": repr(e), "url": profiles.llm_models_url(ctx), "label": ctx.get("label")})
     if provider == "openrouter":
         # No invented fallback slug: "~openai/gpt-latest" does not exist on
         # OpenRouter, so sending it would fail every call with an opaque
@@ -1313,128 +402,6 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
         return configured if configured.lower() not in {"auto", "default"} else ""
     return configured or "local-model"
 
-LLM_STAGE_KEY = "_infini_stage"
-LLM_STAGES = frozenset({
-    "llm",
-    "planner",
-    "author_repair",
-    "genome_repair",
-    "name_repair",
-    "visual_director",
-    "visual_repair",
-    "vfx_director",
-    "vfx_repair",
-})
-
-
-def _normalized_llm_stage(value: Any) -> str:
-    stage = str(value or "llm").strip()
-    if stage not in LLM_STAGES:
-        raise ValueError(f"unsupported finite LLM stage: {stage!r}")
-    return stage
-
-
-def with_llm_stage(payload: dict[str, Any], stage: str) -> dict[str, Any]:
-    """Attach internal finite stage metadata without mutating the provider payload."""
-    out = dict(payload)
-    out[LLM_STAGE_KEY] = _normalized_llm_stage(stage)
-    return out
-
-
-def _clean_llm_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    out = json.loads(json.dumps(payload, ensure_ascii=False))
-    out.pop(LLM_STAGE_KEY, None)
-    out.pop(PROMPT_CACHE_METADATA_KEY, None)
-    if out.get("response_format") is None:
-        out.pop("response_format", None)
-    return out
-
-def _prompt_cache_boundary(payload: dict[str, Any]) -> tuple[int, int] | None:
-    segment = instruction_segment_index(payload)
-    if segment is not None:
-        return segment, len(payload["messages"][segment]["content"])
-    marker = payload.get(PROMPT_CACHE_METADATA_KEY)
-    if not isinstance(marker, dict):
-        return None
-    index, chars = marker.get("messageIndex"), marker.get("prefixChars")
-    messages = payload.get("messages")
-    if (type(index) is not int or type(chars) is not int or not isinstance(messages, list)
-            or index < 0 or index >= len(messages)):
-        return None
-    message = messages[index]
-    if (not isinstance(message, dict) or message.get("role") != "user"
-            or not isinstance(message.get("content"), str)
-            or chars <= 0 or chars > len(message["content"])):
-        return None
-    return index, chars
-
-def _prompt_cache_identity(payload: dict[str, Any], model: str, *, context: dict[str, Any] | None = None) -> str:
-    """Content-derived routing hint, never a receipt of provider cache reuse."""
-    boundary = _prompt_cache_boundary(payload)
-    if boundary is None:
-        raise ValueError("prompt cache identity requires a valid static boundary")
-    index, chars = boundary
-    messages = payload["messages"]
-    if context is not None and active_llm_provider(context) == "openai_codex":
-        from infini_local.services.codex_text_backend import _request_payload
-        # Hash exactly what this provider consumes, not client-only message names
-        # or ignored reasoning.exclude. The adapter is the canonical projection
-        # owner; other providers retain their existing identity semantics.
-        prefix_packet = _clean_llm_payload(payload)
-        prefix_packet["model"] = model
-        prefix_packet.pop("prompt_cache_key", None)  # Never hash our own routing hint.
-        prefix_packet["messages"] = prefix_packet["messages"][:index + 1]
-        prefix_packet["messages"][index]["content"] = messages[index]["content"][:chars]
-        static_prefix = static_instruction_prefix_parts(payload)
-        if static_prefix is not None:
-            prefix_packet["messages"][index] = {"role": "developer", "content": static_prefix[1]}
-        stable = {"provider": "openai_codex", "wire": _request_payload(prefix_packet)}
-        if static_prefix is not None or instruction_segment_index(payload) is not None:
-            stable["framing"] = {"version": 1, "authority": "builder-declared-static-instructions"}
-    else:
-        stable = {
-            "model": model,
-            "messages": [*messages[:index], {**messages[index], "content": messages[index]["content"][:chars]}],
-            "response_format": payload.get("response_format"),
-            "reasoning": payload.get("reasoning"),
-            "reasoning_effort": payload.get("reasoning_effort"),
-        }
-    if instruction_segment_index(payload) is not None and (context is None or active_llm_provider(context) != "openai_codex"):
-        stable["framing"] = "complete-builder-instructions-v1"
-    segment = instruction_segment_index(payload)
-    if segment is not None and "schemaDefinitions" in json.loads(messages[segment]["content"]):
-        stable["framing"] = "complete-builder-instructions-and-grammar-v1"
-        # The full schema is a case-dependent constraint, not routing affinity.
-        # Mode/name/strictness remain identity; canonical definitions are already
-        # included in the declared DEVELOPER endpoint. Author identity is untouched.
-        if "wire" in stable:
-            shape = stable["wire"].get("text", {}).get("format", {})
-        else:
-            shape = copy.deepcopy(stable.get("response_format") or {})
-            stable["response_format"] = shape or None
-            shape = shape.get("json_schema", {})
-        shape.pop("schema", None)
-    digest = hashlib.sha256(json.dumps(stable, ensure_ascii=False, sort_keys=True,
-                                     separators=(",", ":")).encode("utf-8")).hexdigest()
-    return "infini-" + digest[:32]
-
-def _cache_route(context: dict[str, Any], model: str) -> str:
-    """Only documented canonical OpenAI Platform / OpenRouter endpoint+model pairs."""
-    parsed = urlsplit(str(context.get("base_url") or "").rstrip("/"))
-    base = (parsed.scheme.lower(), (parsed.hostname or "").lower(), parsed.path.rstrip("/"))
-    provider = active_llm_provider(context)
-    if provider == "openai_compat" and base == ("https", "inference-api.nousresearch.com", "/v1") and not parsed.port and model.startswith("openai/"):
-        return "key"  # Measured Chat subscription field; no Platform breakpoints/retention.
-    if provider == "openai_compat" and base == ("https", "api.openai.com", "/v1") and not parsed.port:
-        slug = model
-    elif provider == "openrouter" and base == ("https", "openrouter.ai", "/api/v1") and not parsed.port and model.startswith("openai/"):
-        slug = model.removeprefix("openai/")
-    else:
-        return ""
-    match = re.fullmatch(r"gpt-(\d+)(?:\.(\d+))?(?:-[a-z0-9-]+)?", slug.lower())
-    if not match:
-        return ""
-    return "explicit" if (int(match.group(1)), int(match.group(2) or 0)) >= (5, 6) else "key"
 
 def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -1445,7 +412,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
     update_generation_activity(wait_reason="none", network_started=False)
     wait_started = time.monotonic()
     try:
-        _reserve_remote_rate_slot(url, payload, data, max_wait_seconds=remaining_seconds(deadline))
+        admission._reserve_remote_rate_slot(url, payload, data, max_wait_seconds=remaining_seconds(deadline), attempt=row)
     finally:
         if row is not None:
             row["rateWaitMs"] = round((time.monotonic() - wait_started) * 1000, 3)
@@ -1465,7 +432,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
             if row is not None:
                 row["openMs"] = round((time.monotonic() - open_started) * 1000, 3)
         with response as resp:
-            _observe_remote_quota_headers(url, payload, getattr(resp, "headers", None))
+            admission._observe_remote_quota_headers(url, payload, getattr(resp, "headers", None), attempt=row)
             if row is not None:
                 row["httpStatus"] = resp.status
             read_started = time.monotonic()
@@ -1480,9 +447,9 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
             return result
     except urlerror.HTTPError as error:
         setattr(error, "_infini_deadline", deadline)
-        _observe_remote_quota_headers(url, payload, error.headers)
+        admission._observe_remote_quota_headers(url, payload, error.headers, attempt=row)
         if error.code == 429:
-            _mark_remote_rate_limited(url, payload, error)
+            admission._mark_remote_rate_limited(url, payload, error)
         raise
 
 def _read_llm_http_error(error: urlerror.HTTPError, timeout: float) -> str:
@@ -1510,7 +477,7 @@ def _read_llm_http_error(error: urlerror.HTTPError, timeout: float) -> str:
 
 def _llm_replay_stage_from_payload(payload: dict[str, Any]) -> str:
     """Read explicit finite transport metadata; never inspect prompt content."""
-    return _normalized_llm_stage(payload.get(LLM_STAGE_KEY))
+    return wire._normalized_llm_stage(payload.get(wire.LLM_STAGE_KEY))
 
 def _replay_content_from_json_object(obj: Any, stage: str) -> str | None:
     if isinstance(obj, str):
@@ -1659,18 +626,18 @@ def request_shape_rejection_diagnosis(
     schema_root = response_format.get("json_schema") if isinstance(response_format, dict) else None
     schema = schema_root.get("schema") if isinstance(schema_root, dict) else None
     schema_chars = len(json.dumps(schema, ensure_ascii=False, default=str)) if schema is not None else 0
-    api_mode = _normalized_api_mode((context or {}).get("api_mode"))
+    api_mode = profiles._normalized_api_mode((context or {}).get("api_mode"))
     return {
         "code": "provider_rejected_request_shape",
         "status": exc.code,
         "providerBody": _public_provider_body(str(getattr(exc, "_infini_body", "")), context or {}),
-        "provider": active_llm_provider(context),
+        "provider": profiles.active_llm_provider(context),
         "model": str((context or {}).get("model") or ""),
         "baseUrl": str((context or {}).get("base_url") or ""),
-        "configuredResponseFormat": LLM_RESPONSE_FORMAT_MODE,
+        "configuredResponseFormat": config.LLM_RESPONSE_FORMAT_MODE,
         "sentResponseFormat": response_mode,
         "configuredApiMode": api_mode,
-        "openrouterProvider": _openrouter_provider(context or _primary_llm_context()),
+        "openrouterProvider": profiles._openrouter_provider(context or profiles._primary_llm_context()),
         "schemaChars": schema_chars,
         "knownWorkingResponseFormat": "",
         "knownWorkingApiMode": "",
@@ -1679,7 +646,7 @@ def request_shape_rejection_diagnosis(
         "schemaCapabilityScope": _strict_schema_rejection_scope(exc, request),
         "hint": (
             "Провайдер явно отклонил json_schema/response_format; по одному статусу 400 причина не определяется. "
-            f"Отправлен response_format={response_mode} (INFINI_LLM_RESPONSE_FORMAT={LLM_RESPONSE_FORMAT_MODE}), "
+            f"Отправлен response_format={response_mode} (INFINI_LLM_RESPONSE_FORMAT={config.LLM_RESPONSE_FORMAT_MODE}), "
             f"схема {schema_chars} символов, INFINI_LLM_API_MODE={api_mode}. "
             "Кандидат для того же промпта — INFINI_LLM_RESPONSE_FORMAT=json_object и "
             "INFINI_LLM_API_MODE=chat_completions. Пригодность этой комбинации ещё не проверена; "
@@ -1711,36 +678,36 @@ def _responses_chat_fallback_allowed(exc: Exception) -> bool:
     ))
 
 def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-    if active_llm_provider(context) == "openai_codex" or instruction_segment_index(payload) is not None:
+    if profiles.active_llm_provider(context) == "openai_codex" or instruction_segment_index(payload) is not None:
         # Validate the original typed envelope before JSON copying can coerce an
         # invalid declared boundary (e.g. tuple messages) into an admitted shape.
         static_instruction_prefix_parts(payload)
-    out = _clean_llm_payload(payload)
-    if (active_llm_provider(context) == "openai_codex" or instruction_segment_index(payload) is not None) and PROMPT_CACHE_METADATA_KEY in payload:
+    out = wire._clean_llm_payload(payload)
+    if (profiles.active_llm_provider(context) == "openai_codex" or instruction_segment_index(payload) is not None) and PROMPT_CACHE_METADATA_KEY in payload:
         # Native adapter-only metadata; retain even invalid explicit declarations
         # so the authority validator refuses them instead of silently downgrading.
         out[PROMPT_CACHE_METADATA_KEY] = copy.deepcopy(payload[PROMPT_CACHE_METADATA_KEY])
     # Routing belongs to the selected profile, not a stale caller payload.
     out.pop("provider", None)
-    upstream = _openrouter_provider(context)
+    upstream = profiles._openrouter_provider(context)
     if upstream:
         out["provider"] = {"only": [upstream], "allow_fallbacks": False}
-    model_override = str(out.pop(LLM_MODEL_OVERRIDE_KEY, "") or "").strip()
+    model_override = str(out.pop(wire.LLM_MODEL_OVERRIDE_KEY, "") or "").strip()
     model_name = model_override or resolve_llm_model(context)
     out["model"] = model_name
-    _remap_reasoning_for_context(out, model_name=model_name, context=context)
-    if active_llm_provider(context) == "openai_codex" and payload.get(LLM_STAGE_KEY) in {"visual_director", "visual_repair"}:
-        if CODEX_VISUAL_REASONING == "model_default":
+    wire._remap_reasoning_for_context(out, model_name=model_name, context=context)
+    if profiles.active_llm_provider(context) == "openai_codex" and payload.get(wire.LLM_STAGE_KEY) in {"visual_director", "visual_repair"}:
+        if config.CODEX_VISUAL_REASONING == "model_default":
             out.pop("reasoning", None)
             out.pop("reasoning_effort", None)
-        elif CODEX_VISUAL_REASONING != "inherit":
+        elif config.CODEX_VISUAL_REASONING != "inherit":
             from infini_local.services.codex_auth import CodexError
             from infini_local.services.codex_text_backend import EFFORTS
-            if CODEX_VISUAL_REASONING not in EFFORTS:
+            if config.CODEX_VISUAL_REASONING not in EFFORTS:
                 raise CodexError("Unsupported Visual Director Codex reasoning effort")
-            out["reasoning"] = {"effort": CODEX_VISUAL_REASONING}
+            out["reasoning"] = {"effort": config.CODEX_VISUAL_REASONING}
             out.pop("reasoning_effort", None)
-    _apply_google_high_reasoning_completion_headroom(
+    wire._apply_google_high_reasoning_completion_headroom(
         out,
         model_name=model_name,
         context=context,
@@ -1748,201 +715,10 @@ def _payload_for_context(payload: dict[str, Any], context: dict[str, Any]) -> di
     return out
 
 
-def _usage_fields(result: dict[str, Any]) -> dict[str, Any]:
-    usage_raw = result.get("usage")
-    usage: dict[str, Any] = usage_raw if isinstance(usage_raw, dict) else {}
-    input_details_raw = usage.get("input_tokens_details")
-    prompt_details_raw = usage.get("prompt_tokens_details")
-    input_details: dict[str, Any] = input_details_raw if isinstance(input_details_raw, dict) else {}
-    prompt_details: dict[str, Any] = prompt_details_raw if isinstance(prompt_details_raw, dict) else {}
-
-    def counter(name: str) -> int | None:
-        for details in (input_details, prompt_details):
-            value = details.get(name)
-            if type(value) is int and value >= 0:
-                return value
-        return None
-
-    cached = counter("cached_tokens")
-    output_details = usage.get("output_tokens_details")
-    if not isinstance(output_details, dict):
-        output_details = usage.get("completion_tokens_details")
-    reasoning = output_details.get("reasoning_tokens") if isinstance(output_details, dict) else None
-    attribution = usage.get("attribution")
-    request_fields = attribution.get("request_fields") if isinstance(attribution, dict) else None
-    instructions = request_fields.get("instructions") if isinstance(request_fields, dict) else None
-
-    def instruction_counter(name: str) -> int | None:
-        value = instructions.get(name) if isinstance(instructions, dict) else None
-        return value if type(value) is int and value >= 0 else None
-
-    def total_counter(primary: str, alternate: str) -> int | None:
-        value = usage.get(primary) if primary in usage else usage.get(alternate)
-        return value if type(value) is int and value >= 0 else None
-
-    return {
-        "inputTokens": total_counter("input_tokens", "prompt_tokens"),
-        "outputTokens": total_counter("output_tokens", "completion_tokens"),
-        "cachedInputTokens": cached,
-        "cacheWriteTokens": counter("cache_write_tokens"),
-        "cacheHit": (cached > 0) if cached is not None else None,
-        "reasoningTokens": reasoning if type(reasoning) is int and reasoning >= 0 else None,
-        "instructionsInputTokens": instruction_counter("input_tokens"),
-        "instructionsCachedInputTokens": instruction_counter("cached_tokens"),
-        "instructionsCacheWriteTokens": instruction_counter("cache_write_tokens"),
-    }
-
-
-def _response_format_for_responses(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict):
-        return None
-    kind = str(value.get("type") or "")
-    if kind == "json_object":
-        return {"type": "json_object"}
-    if kind != "json_schema" or not isinstance(value.get("json_schema"), dict):
-        return None
-    schema_raw = value["json_schema"]
-    schema: dict[str, Any] = schema_raw
-    return {
-        "type": "json_schema",
-        "name": str(schema.get("name") or "infini_json"),
-        "strict": bool(schema.get("strict")),
-        "schema": schema.get("schema") or {"type": "object", "additionalProperties": True},
-    }
-
-
-def _cache_wire_options(wire: dict[str, Any], source: dict[str, Any],
-                        context: dict[str, Any], *, api_mode: str) -> None:
-    boundary = _prompt_cache_boundary(source)
-    wire.pop(PROMPT_CACHE_METADATA_KEY, None)
-    if boundary is None:
-        return
-    model = str(wire.get("model") or "")
-    route = _cache_route(context, model)
-    if api_mode == "responses" and llm_responses_url(context) == "https://inference-api.nousresearch.com/v1/responses":
-        route = ""  # Chat-only measured subscription cache hint; do not guess Responses support.
-    if not route:
-        return
-    index, chars = boundary
-    content = source["messages"][index]["content"]
-    if route == "explicit":
-        if api_mode == "responses":
-            target = index - sum(1 for message in source["messages"][:index]
-                                 if isinstance(message, dict) and message.get("role") == "system")
-            messages = wire.get("input")
-            block_type = "input_text"
-        else:
-            target = index
-            messages = wire.get("messages")
-            block_type = "text"
-        if (not isinstance(messages, list) or target >= len(messages) or target < 0
-                or messages[target].get("content") != content):
-            return
-        # The two blocks concatenate to precisely the original authored text.
-        blocks = [{"type": block_type, "text": content[:chars],
-                   "prompt_cache_breakpoint": {"mode": "explicit"}}]
-        if chars < len(content):
-            blocks.append({"type": block_type, "text": content[chars:]})
-        messages[target]["content"] = blocks
-        wire["prompt_cache_options"] = {"mode": "explicit"}
-    # Breakpoints define what is reusable; a content-stable routing key also
-    # keeps different recipes on the same provider cache route. Hash effective
-    # reasoning settings, not superseded pre-adapter aliases.
-    identity_source = {**source, "reasoning": wire.get("reasoning"),
-                       "reasoning_effort": wire.get("reasoning_effort")}
-    wire["prompt_cache_key"] = _prompt_cache_identity(identity_source, model, context=context)
-
-
-def _ensure_json_input_marker(messages: list[dict[str, Any]]) -> None:
-    """Frame JSON mode without editing an authored dossier or its cache identity."""
-    for message in messages:
-        if not isinstance(message, dict) or message.get("role") not in {"user", "developer", "assistant"}:
-            continue
-        content = message.get("content")
-        if isinstance(content, str):
-            texts = [content]
-        elif isinstance(content, list):
-            texts = [part.get("text") for part in content if isinstance(part, dict)
-                     and part.get("type") in {"text", "input_text", "output_text"}]
-        else:
-            texts = []
-        if any(isinstance(text, str) and re.search(r"\bjson\b", text, re.IGNORECASE) for text in texts):
-            return
-    messages.append({"role": "user", "content": "JSON response."})
-
-
-def _responses_payload_from_chat(payload: dict[str, Any], previous_response_id: str = "", *,
-                                 cache_source: dict[str, Any] | None = None,
-                                 context: dict[str, Any] | None = None) -> dict[str, Any]:
-    instructions: list[str] = []
-    input_messages: list[dict[str, Any]] = []
-    for raw in payload.get("messages") or []:
-        if not isinstance(raw, dict):
-            continue
-        role = str(raw.get("role") or "user")
-        content = str(raw.get("content") or "")
-        if role == "system":
-            if content:
-                instructions.append(content)
-            continue
-        if role not in {"developer", "user", "assistant"}:
-            raise ValueError(f"Responses cannot preserve unsupported message role: {role}")
-        input_messages.append({"role": role, "content": content})
-    out: dict[str, Any] = {
-        "model": payload.get("model"),
-        "input": input_messages,
-    }
-    if instructions:
-        out["instructions"] = "\n\n".join(instructions)
-    if context is not None and active_llm_provider(context) == "openrouter" and isinstance(payload.get("provider"), dict):
-        out["provider"] = copy.deepcopy(payload["provider"])
-    if previous_response_id:
-        out["previous_response_id"] = previous_response_id
-    if payload.get("temperature") is not None:
-        out["temperature"] = payload.get("temperature")
-    if payload.get("max_tokens") is not None:
-        out["max_output_tokens"] = payload.get("max_tokens")
-    response_format = _response_format_for_responses(payload.get("response_format"))
-    if response_format is not None:
-        out["text"] = {"format": response_format}
-    reasoning_raw = payload.get("reasoning")
-    reasoning: dict[str, Any] = reasoning_raw if isinstance(reasoning_raw, dict) else {}
-    effort = str(payload.get("reasoning_effort") or reasoning.get("effort") or "").strip()
-    if effort:
-        out["reasoning"] = {"effort": "high" if effort == "xhigh" else effort}
-    if cache_source is not None and context is not None:
-        _cache_wire_options(out, cache_source, context, api_mode="responses")
-    if (context is not None and active_llm_provider(context) == "openai_compat"
-            and llm_responses_url(context) == "https://inference-api.nousresearch.com/v1/responses"
-            and str(out.get("model") or "").startswith("openai/")
-            and response_format == {"type": "json_object"}):
-        _ensure_json_input_marker(out["input"])
-    return out
-
-
-def _responses_output_text(result: dict[str, Any]) -> str:
-    direct = result.get("output_text")
-    if isinstance(direct, str) and direct.strip():
-        return direct
-    chunks: list[str] = []
-    for item in result.get("output") or []:
-        if not isinstance(item, dict):
-            continue
-        for part in item.get("content") or []:
-            if not isinstance(part, dict):
-                continue
-            if str(part.get("type") or "") == "refusal":
-                raise RuntimeError(str(part.get("refusal") or "LLM Responses request refused"))
-            text = part.get("text")
-            if isinstance(text, str):
-                chunks.append(text)
-    return "".join(chunks).strip()
-
-
 def _llm_responses_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
-    ensure_llm_auth_configured(context)
+    profiles.ensure_llm_auth_configured(context)
     prepared = _payload_for_context(payload, context)
-    lease = _CURRENT_LLM_ITEM_LEASE.get()
+    lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     previous_id = ""
     messages_raw = prepared.get("messages")
     messages: list[Any] = messages_raw if isinstance(messages_raw, list) else []
@@ -1955,29 +731,29 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: float, 
     )
     if lease is not None and lease.context is context and not lease.responses_disabled and clean_stage_dossier and PROMPT_CACHE_METADATA_KEY not in payload:
         previous_id = lease.previous_response_id
-    request_payload = _responses_payload_from_chat(prepared, previous_id, cache_source=payload, context=context)
+    request_payload = wire._responses_payload_from_chat(prepared, previous_id, cache_source=payload, context=context)
     try:
-        result = _perform_llm_http(llm_responses_url(context), request_payload, timeout, context, api_mode="responses")
+        result = _perform_llm_http(profiles.llm_responses_url(context), request_payload, timeout, context, api_mode="responses")
         if not isinstance(result, dict):
             raise RuntimeError("LLM Responses endpoint returned a non-object response")
         status = str(result.get("status") or "completed").lower()
         if status in {"failed", "cancelled", "incomplete"}:
             raise RuntimeError(f"LLM Responses request ended with status={status}")
-        content = _responses_output_text(result)
+        content = wire._responses_output_text(result)
         if not content:
             raise RuntimeError("LLM Responses endpoint returned no output text")
         response_id = str(result.get("id") or "")
         if lease is not None and lease.context is context:
             lease.previous_response_id = "" if PROMPT_CACHE_METADATA_KEY in payload else response_id
-        usage = _usage_fields(result)
+        usage = wire._usage_fields(result)
         return {
             "choices": [{"message": {"role": "assistant", "content": content}}],
             "usage": result.get("usage") or {},
             "_debug": {
                 "apiMode": "responses",
-                "openrouterProvider": _openrouter_provider(context),
+                "openrouterProvider": profiles._openrouter_provider(context),
                 "requestMode": "exact",
-                "provider": active_llm_provider(context),
+                "provider": profiles.active_llm_provider(context),
                 "profileId": context.get("profile_id"),
                 "responseId": response_id,
                 "previousResponseId": previous_id,
@@ -1991,7 +767,7 @@ def _llm_responses_json_single_context(payload: dict[str, Any], timeout: float, 
 
 def _record_llm_stage(payload: dict[str, Any]) -> str:
     stage = _llm_replay_stage_from_payload(payload)
-    lease = _CURRENT_LLM_ITEM_LEASE.get()
+    lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     if lease is not None:
         lease.call_count += 1
         lease.stages.append(stage)
@@ -2007,12 +783,12 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
     replay = _llm_replay_json_response(payload)
     if replay is not None:
         return replay
-    if active_llm_provider(context) == "openai_codex":
+    if profiles.active_llm_provider(context) == "openai_codex":
         from infini_local.services.codex_text_backend import generate_chat, _request_payload
         prepared = _payload_for_context(payload, context)
-        if _prompt_cache_boundary(payload) is not None:
+        if wire._prompt_cache_boundary(payload) is not None:
             identity_source = {**prepared, PROMPT_CACHE_METADATA_KEY: payload[PROMPT_CACHE_METADATA_KEY]}
-            prepared["prompt_cache_key"] = _prompt_cache_identity(identity_source, str(prepared["model"]), context=context)
+            prepared["prompt_cache_key"] = wire._prompt_cache_identity(identity_source, str(prepared["model"]), context=context)
         state = _CURRENT_LLM_DIAGNOSTICS.get()
         if state is not None:
             state["physicalAttemptCount"] = None  # Unknown until the generation owner reports; excludes auth I/O.
@@ -2032,7 +808,7 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
             if observation["event"] == "post_start":
                 state["physicalAttemptCount"] = (state["physicalAttemptCount"] or 0) + 1
             if observation["event"] == "attempt_end" and observation["networkStarted"]:
-                row = {**state["lastAttempt"], **observation, "provider": "openai_codex", "profileId": _profile_id(context)}
+                row = {**state["lastAttempt"], **observation, "provider": "openai_codex", "profileId": profiles._profile_id(context)}
                 state["lastAttempt"] = row
                 if len(state["physicalAttempts"]) < _LLM_MAX_DIAGNOSTIC_ATTEMPTS:
                     state["physicalAttempts"].append(copy.deepcopy(row))
@@ -2040,14 +816,14 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
                     state["physicalAttemptsDropped"] += 1
         with generation_observations(join, observe_codex):
             result = generate_chat(prepared, timeout=remaining_seconds(_request_deadline(timeout)))
-        usage = _usage_fields(result)
+        usage = wire._usage_fields(result)
         result["_debug"] = {**(result.get("_debug") or {}), **usage}
         log_event("info", "LLM usage", {"stage": stage, **result["_debug"]})
         return result
-    mode = _normalized_api_mode(context.get("api_mode"))
-    effective_model = str(payload.get(LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
-    capability_key = _llm_context_key({**context, "model": effective_model})
-    lease = _CURRENT_LLM_ITEM_LEASE.get()
+    mode = profiles._normalized_api_mode(context.get("api_mode"))
+    effective_model = str(payload.get(wire.LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
+    capability_key = profiles._llm_context_key({**context, "model": effective_model})
+    lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
     responses_allowed = mode in {"auto", "responses"}
     responses_to_chat_fallback = False
     had_working_chain = False
@@ -2075,7 +851,7 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
             log_event("warn", "LLM Responses incompatible; retrying same stage through stateless Chat Completions", {
                 "stage": stage,
                 "profileId": context.get("profile_id"),
-                "provider": active_llm_provider(context),
+                "provider": profiles.active_llm_provider(context),
                 "status": getattr(error, "code", None),
                 "error": repr(error),
             })
@@ -2087,7 +863,7 @@ def _llm_json_single_context(payload: dict[str, Any], timeout: float, context: d
             **debug,
             "apiMode": "chat_completions",
             "profileId": context.get("profile_id"),
-            **_usage_fields(result),
+            **wire._usage_fields(result),
         }
         if responses_to_chat_fallback:
             if not had_working_chain:
@@ -2160,8 +936,8 @@ def _strict_schema_rejected(exc: Exception, payload: dict[str, Any]) -> bool:
 
 
 def _strict_schema_capability_keys(payload: dict[str, Any], context: dict[str, Any]) -> tuple[str, str]:
-    model = str(payload.get(LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
-    base = _llm_context_key({**context, "model": model, "api_mode": "chat_completions"})
+    model = str(payload.get(wire.LLM_MODEL_OVERRIDE_KEY) or "").strip() or resolve_llm_model(context)
+    base = profiles._llm_context_key({**context, "model": model, "api_mode": "chat_completions"})
     schema_bytes = json.dumps(payload.get("response_format"), ensure_ascii=False,
                              sort_keys=True, separators=(",", ":")).encode("utf-8")
     return base, base + "|schema=" + hashlib.sha256(schema_bytes).hexdigest()
@@ -2169,7 +945,7 @@ def _strict_schema_capability_keys(payload: dict[str, Any], context: dict[str, A
 
 @_bounded_llm_call
 def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, context: dict[str, Any]) -> dict[str, Any]:
-    ensure_llm_auth_configured(context)
+    profiles.ensure_llm_auth_configured(context)
     prepared = dict(payload)
     capability_key, schema_key = _strict_schema_capability_keys(payload, context)
     schema_downgraded = False
@@ -2198,14 +974,14 @@ def _llm_chat_json_single_context(payload: dict[str, Any], timeout: float, conte
         log_event("warn", "LLM strict json_schema rejected; retrying same stage with json_object for this run", {
             "stage": _llm_replay_stage_from_payload(payload),
             "profileId": context.get("profile_id"),
-            "provider": active_llm_provider(context),
+            "provider": profiles.active_llm_provider(context),
             "model": str(context.get("model") or ""),
             "status": error.code,
             "repairedFor": "this run only; config.env is not modified",
             "was": "json_schema",
             "now": "json_object",
             "schemaChars": (diagnosis or {}).get("schemaChars"),
-            "configuredResponseFormat": LLM_RESPONSE_FORMAT_MODE,
+            "configuredResponseFormat": config.LLM_RESPONSE_FORMAT_MODE,
             "detail": (
                 "Провайдер явно отклонил json_schema (HTTP 400). Тот же промпт повторяется с "
                 "response_format=json_object; успешное восстановление ещё не установлено. "
@@ -2240,11 +1016,11 @@ def _llm_chat_json_exact_context(
     schema_downgraded: bool = False,
 ) -> dict[str, Any]:
     candidate = _payload_for_context(payload, context)
-    _cache_wire_options(candidate, payload, context, api_mode="chat")
-    url = llm_chat_completions_url(context)
+    wire._cache_wire_options(candidate, payload, context, api_mode="chat")
+    url = profiles.llm_chat_completions_url(context)
     # This gateway maps OpenAI Chat JSON mode to Responses, whose input check
     # excludes system instructions. Keep the logical packet/cache source intact.
-    if (active_llm_provider(context) == "openai_compat"
+    if (profiles.active_llm_provider(context) == "openai_compat"
             and url == "https://inference-api.nousresearch.com/v1/chat/completions"
             and str(candidate.get("model") or "").startswith("openai/")
             and candidate.get("response_format") == {"type": "json_object"}):
@@ -2253,7 +1029,7 @@ def _llm_chat_json_exact_context(
             if candidate["messages"][-1] != marker:
                 candidate["messages"].append(marker)
         else:
-            _ensure_json_input_marker(candidate["messages"])
+            wire._ensure_json_input_marker(candidate["messages"])
     try:
         result = _perform_llm_http(url, candidate, timeout, context, api_mode="chat_completions")
         choices = result.get("choices") if isinstance(result, dict) else None
@@ -2267,8 +1043,8 @@ def _llm_chat_json_exact_context(
         result["_debug"] = {
             **debug,
             "requestMode": "exact",
-            "provider": active_llm_provider(context),
-            "openrouterProvider": _openrouter_provider(context),
+            "provider": profiles.active_llm_provider(context),
+            "openrouterProvider": profiles._openrouter_provider(context),
             "responseFormatRequested": bool(response_format),
             "responseFormatUsed": bool(response_format),
             "responseFormatType": str(response_format.get("type") or "") if isinstance(response_format, dict) else "",
@@ -2281,12 +1057,12 @@ def _llm_chat_json_exact_context(
         return result
     except urlerror.HTTPError as error:
         body = _public_provider_body(_read_llm_http_error(error, timeout), context)
-        provider = active_llm_provider(context)
+        provider = profiles.active_llm_provider(context)
         if provider == "openrouter" and error.code == 401:
             message = "OpenRouter auth failed: API key is missing/invalid or was not saved in config.env (401 Unauthorized)."
-            log_event("warn", "OpenRouter auth failed", {"provider": provider, "openrouterProvider": _openrouter_provider(context), "status": error.code, "body": body, "hint": message, "label": context.get("label")})
+            log_event("warn", "OpenRouter auth failed", {"provider": provider, "openrouterProvider": profiles._openrouter_provider(context), "status": error.code, "body": body, "hint": message, "label": context.get("label")})
             raise RuntimeError(message) from error
-        log_event("warn", "LLM HTTP error", {"provider": provider, "openrouterProvider": _openrouter_provider(context), "status": error.code, "body": body, "label": context.get("label")})
+        log_event("warn", "LLM HTTP error", {"provider": provider, "openrouterProvider": profiles._openrouter_provider(context), "status": error.code, "body": body, "label": context.get("label")})
         diagnosis = request_shape_rejection_diagnosis(error, candidate, context)
         if diagnosis is not None:
             setattr(error, "_infini_shape_diagnosis", diagnosis)
@@ -2302,71 +1078,6 @@ def _is_profile_failover_failure(error: Exception) -> bool:
         or _is_transport_error(error)
         or isinstance(error, (urlerror.HTTPError, RuntimeError, ValueError, KeyError, json.JSONDecodeError))
     )
-
-
-def _mark_profile_failed(context: dict[str, Any], error: Exception) -> None:
-    cooldown = max(1, int(LLM_POOL_FAILURE_COOLDOWN_SECONDS or 45))
-    profile_id = _profile_id(context)
-    with _LLM_POOL_LOCK:
-        _PROFILE_COOLDOWN_UNTIL[profile_id] = time.monotonic() + cooldown
-    log_event("warn", "LLM profile entered failure cooldown", {
-        "profileId": profile_id,
-        "provider": active_llm_provider(context),
-        "model": context.get("model"),
-        "cooldownSeconds": cooldown,
-        "error": repr(error),
-    })
-
-
-def _next_lease_profile(lease: LlmItemLease, attempted: set[str]) -> dict[str, Any] | None:
-    # A strict upstream selection may retry in place, never leave its profile.
-    if _openrouter_provider(lease.context):
-        return None
-    profiles = list(lease.profiles)
-    if len(profiles) <= 1:
-        return None
-    current_id = lease.profile_id
-    current_index = next((index for index, context in enumerate(profiles) if _profile_id(context) == current_id), 0)
-    ordered = [profiles[(current_index + offset) % len(profiles)] for offset in range(1, len(profiles))]
-    candidates = [context for context in ordered if _profile_id(context) not in attempted]
-    available = [context for context in candidates if _profile_is_available(context)]
-    selected = available[0] if available else (candidates[0] if candidates else None)
-    return dict(selected) if isinstance(selected, dict) else None
-
-
-def _switch_lease_profile(lease: LlmItemLease, context: dict[str, Any], error: Exception) -> None:
-    _attempt_reason("profile_failover")
-    previous_id = lease.profile_id
-    next_id = _profile_id(context)
-    lease.context = context
-    lease.profile_id = next_id
-    update_generation_activity(profile_id=next_id)
-    lease.previous_response_id = ""
-    lease.responses_disabled = False
-    lease.failovers.append({
-        "fromProfileId": previous_id,
-        "toProfileId": next_id,
-        "reason": type(error).__name__,
-    })
-    log_event("warn", "LLM item lease switched to next profile", {
-        "leaseId": lease.lease_id,
-        "recipeKey": lease.recipe_key,
-        "fromProfileId": previous_id,
-        "toProfileId": next_id,
-        "provider": active_llm_provider(context),
-        "model": context.get("model"),
-        "reason": repr(error),
-    })
-
-
-def _switch_lease_to_legacy_fallback(lease: LlmItemLease | None, fallback: dict[str, Any]) -> None:
-    _attempt_reason("legacy_fallback")
-    if lease is None:
-        return
-    lease.context = fallback
-    lease.profile_id = str(fallback.get("profile_id") or "legacy_fallback")
-    lease.previous_response_id = ""
-    lease.responses_disabled = False
 
 
 def _with_transport_retry_debug(
@@ -2404,7 +1115,7 @@ def _llm_json_single_context_with_length_retry(
     result = _llm_json_single_context(payload, timeout, context)
     choices = result.get("choices") if isinstance(result, dict) else None
     first = choices[0] if isinstance(choices, list) and choices and isinstance(choices[0], dict) else {}
-    model_name = str(payload.get(LLM_MODEL_OVERRIDE_KEY) or resolve_llm_model(context) or "")
+    model_name = str(payload.get(wire.LLM_MODEL_OVERRIDE_KEY) or resolve_llm_model(context) or "")
     finish_reason = str(first.get("finish_reason") or "").lower()
     raw_message = first.get("message")
     message = raw_message if isinstance(raw_message, dict) else {}
@@ -2422,7 +1133,7 @@ def _llm_json_single_context_with_length_retry(
         finish_reason == "length"
         and not complete_json
         and "gemini-3.1-flash" in model_name.lower()
-        and _is_google_openai_compat_reasoning_model(model_name, context)
+        and wire._is_google_openai_compat_reasoning_model(model_name, context)
     )
     if not gemini_length and not malformed_json:
         return result
@@ -2430,17 +1141,17 @@ def _llm_json_single_context_with_length_retry(
     # content retry may silently turn one logical stage into a second HTTP
     # request. The malformed response is returned to the caller for normal
     # domain failure accounting.
-    if int(LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
+    if int(config.LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
         return result
 
     retry_payload = copy.deepcopy(payload)
     if gemini_length:
         retry_payload.pop("reasoning", None)
         retry_payload.pop("reasoning_effort", None)
-        retry_payload[_REASONING_INTENT_KEY] = {"effort": "minimal", "exclude": bool(LLM_REASONING_EXCLUDE)}
+        retry_payload[wire._REASONING_INTENT_KEY] = {"effort": "minimal", "exclude": bool(config.LLM_REASONING_EXCLUDE)}
     retry_cause = "length" if gemini_length else "malformed_json"
     log_event("warn", "retrying incomplete JSON LLM response within the same logical call", {
-        "provider": active_llm_provider(context),
+        "provider": profiles.active_llm_provider(context),
         "model": model_name,
         "finishReason": finish_reason,
         "cause": retry_cause,
@@ -2451,10 +1162,10 @@ def _llm_json_single_context_with_length_retry(
 
 
 def _payload_without_model_override(payload: dict[str, Any]) -> dict[str, Any]:
-    if LLM_MODEL_OVERRIDE_KEY not in payload:
+    if wire.LLM_MODEL_OVERRIDE_KEY not in payload:
         return payload
     out = copy.deepcopy(payload)
-    out.pop(LLM_MODEL_OVERRIDE_KEY, None)
+    out.pop(wire.LLM_MODEL_OVERRIDE_KEY, None)
     return out
 
 
@@ -2480,7 +1191,7 @@ def _transport_footprint(payload: dict[str, Any], mode: str) -> dict[str, Any]:
     schema_chars = len(json.dumps(schema, ensure_ascii=False, default=str)) if schema is not None else 0
     user_chars = 0 if is_repair else authored_user_chars
     repair_chars = authored_user_chars if is_repair else 0
-    total_chars = len(json.dumps(_clean_llm_payload(payload), ensure_ascii=False, default=str))
+    total_chars = len(json.dumps(wire._clean_llm_payload(payload), ensure_ascii=False, default=str))
     response_mode = str(schema.get("type") or "text") if isinstance(schema, dict) else "text"
     return {
         "mode": mode,
@@ -2496,8 +1207,8 @@ def _transport_footprint(payload: dict[str, Any], mode: str) -> dict[str, Any]:
         "repairChars": repair_chars,
         "repairTokensEstimate": token_estimate(repair_chars),
         "totalChars": total_chars,
-        "totalTokensEstimate": _estimated_wire_tokens(
-            json.dumps(_clean_llm_payload(payload), ensure_ascii=False, default=str).encode("utf-8")
+        "totalTokensEstimate": admission._estimated_wire_tokens(
+            json.dumps(wire._clean_llm_payload(payload), ensure_ascii=False, default=str).encode("utf-8")
         ),
     }
 
@@ -2512,7 +1223,7 @@ def _with_transport_footprint(result: dict[str, Any], payload: dict[str, Any], m
     raw_debug = out.get("_debug")
     debug = dict(raw_debug) if isinstance(raw_debug, dict) else {}
     footprint = _transport_footprint(payload, mode)
-    footprint["provider"] = str(debug.get("provider") or active_llm_provider())
+    footprint["provider"] = str(debug.get("provider") or profiles.active_llm_provider())
     footprint["profile"] = str(debug.get("profileId") or "")
     debug["transportFootprint"] = footprint
     out["_debug"] = debug
@@ -2526,11 +1237,11 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
     def finish(result: dict[str, Any], used_payload: dict[str, Any]) -> dict[str, Any]:
         return _with_transport_footprint(result, used_payload, mode)
 
-    lease = _CURRENT_LLM_ITEM_LEASE.get()
-    if active_llm_provider(_primary_llm_context()) == "openai_codex":
+    lease = profiles._CURRENT_LLM_ITEM_LEASE.get()
+    if profiles.active_llm_provider(profiles._primary_llm_context()) == "openai_codex":
         # A subscription quota/auth failure must never switch silently to a
         # paid Platform/OpenRouter route or multiply one stage into retries.
-        return finish(_llm_json_single_context(payload, timeout, _primary_llm_context()), payload)
+        return finish(_llm_json_single_context(payload, timeout, profiles._primary_llm_context()), payload)
     if lease is not None and lease.pool_size > 1:
         attempted: set[str] = set()
         retry_causes: list[str] = []
@@ -2546,19 +1257,20 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
                 remaining_seconds(_request_deadline(timeout))
                 if not _is_profile_failover_failure(profile_error):
                     raise
-                _mark_profile_failed(context, profile_error)
-                if int(LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
+                profiles._mark_profile_failed(context, profile_error)
+                if int(config.LLM_FALLBACK_NETWORK_FAILS or 2) <= 1:
                     raise
-                next_context = _next_lease_profile(lease, attempted)
+                next_context = profiles._next_lease_profile(lease, attempted)
                 if next_context is None:
                     raise
                 retry_causes.append("profile_failover")
-                _switch_lease_profile(lease, next_context, profile_error)
+                _attempt_reason("profile_failover")
+                profiles._switch_lease_profile(lease, next_context, profile_error)
 
-    primary = _primary_llm_context()
+    primary = profiles._primary_llm_context()
     fallback = (
-        _fallback_llm_context()
-        if not _openrouter_provider(primary) and (lease is None or lease.legacy_fallback_allowed)
+        profiles._fallback_llm_context()
+        if not profiles._openrouter_provider(primary) and (lease is None or lease.legacy_fallback_allowed)
         else None
     )
     primary_payload = payload
@@ -2574,7 +1286,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
                 raise
             last_error = first_error
             retry_causes: list[str] = []
-            total_attempts = max(1, int(LLM_FALLBACK_NETWORK_FAILS or 2))
+            total_attempts = max(1, int(config.LLM_FALLBACK_NETWORK_FAILS or 2))
             for attempt in range(2, total_attempts + 1):
                 retry_causes.append("transient_http")
                 _attempt_reason("transient_http")
@@ -2583,7 +1295,7 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
                     "attempt": attempt,
                     "maxAttempts": total_attempts,
                     "delaySeconds": delay,
-                    "provider": active_llm_provider(primary),
+                    "provider": profiles.active_llm_provider(primary),
                     "model": primary.get("model"),
                     "status": getattr(last_error, "code", None),
                 })
@@ -2598,8 +1310,9 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
             raise last_error
 
         if _is_budget_or_auth_failure(first_error):
-            log_event("warn", "LLM primary failed; switching to fallback", {"reason": "budget_or_auth", "primaryProvider": active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
-            _switch_lease_to_legacy_fallback(lease, fallback)
+            log_event("warn", "LLM primary failed; switching to fallback", {"reason": "budget_or_auth", "primaryProvider": profiles.active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": profiles.active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
+            _attempt_reason("legacy_fallback")
+            profiles._switch_lease_to_legacy_fallback(lease, fallback)
             fallback_payload = _payload_without_model_override(payload)
             result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
             return finish(_with_transport_retry_debug(result, ["budget_or_auth_fallback"]), fallback_payload)
@@ -2607,44 +1320,31 @@ def llm_chat_json(payload: dict[str, Any], timeout: float = 10) -> dict[str, Any
         if _is_transport_error(first_error):
             last_error = first_error
             retry_causes = []
-            total_attempts = max(1, int(LLM_FALLBACK_NETWORK_FAILS or 2))
+            total_attempts = max(1, int(config.LLM_FALLBACK_NETWORK_FAILS or 2))
             for attempt in range(2, total_attempts + 1):
                 retry_causes.append("primary_transport")
                 _attempt_reason("primary_transport")
                 try:
-                    log_event("warn", "retrying primary LLM transport before fallback", {"attempt": attempt, "maxAttempts": total_attempts, "provider": active_llm_provider(primary), "model": primary.get("model")})
+                    log_event("warn", "retrying primary LLM transport before fallback", {"attempt": attempt, "maxAttempts": total_attempts, "provider": profiles.active_llm_provider(primary), "model": primary.get("model")})
                     result = _llm_json_single_context_with_length_retry(primary_payload, timeout, primary)
                     return finish(_with_transport_retry_debug(result, retry_causes), primary_payload)
                 except Exception as retry_error:
                     last_error = retry_error
                     if _is_budget_or_auth_failure(retry_error):
-                        log_event("warn", "LLM primary changed from transport failure to budget/auth failure; switching to fallback", {"provider": active_llm_provider(primary), "fallbackProvider": active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
-                        _switch_lease_to_legacy_fallback(lease, fallback)
+                        log_event("warn", "LLM primary changed from transport failure to budget/auth failure; switching to fallback", {"provider": profiles.active_llm_provider(primary), "fallbackProvider": profiles.active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
+                        _attempt_reason("legacy_fallback")
+                        profiles._switch_lease_to_legacy_fallback(lease, fallback)
                         fallback_payload = _payload_without_model_override(payload)
                         result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
                         retry_causes.append("budget_or_auth_fallback")
                         return finish(_with_transport_retry_debug(result, retry_causes), fallback_payload)
                     if not _is_transport_error(retry_error):
                         raise
-            log_event("warn", "LLM primary transport failed repeatedly; switching to fallback", {"attempts": total_attempts, "primaryProvider": active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
-            _switch_lease_to_legacy_fallback(lease, fallback)
+            log_event("warn", "LLM primary transport failed repeatedly; switching to fallback", {"attempts": total_attempts, "primaryProvider": profiles.active_llm_provider(primary), "primaryModel": primary.get("model"), "fallbackProvider": profiles.active_llm_provider(fallback), "fallbackModel": fallback.get("model")})
+            _attempt_reason("legacy_fallback")
+            profiles._switch_lease_to_legacy_fallback(lease, fallback)
             fallback_payload = _payload_without_model_override(payload)
             result = _llm_json_single_context_with_length_retry(fallback_payload, timeout, fallback)
             retry_causes.append("primary_transport_fallback")
             return finish(_with_transport_retry_debug(result, retry_causes), fallback_payload)
         raise
-
-
-__all__ = ['LLM_STAGE_KEY', 'LLM_STAGES', '_normalized_llm_stage', 'with_llm_stage', '_normalized_llm_provider', 'active_llm_provider', '_llm_context_key', '_primary_llm_context', '_fallback_llm_context', '_join_openai_compat_url', 'llm_base_url', 'llm_chat_completions_url', 'llm_models_url', 'llm_auth_snapshot', 'ensure_llm_auth_configured', 'llm_headers', 'llm_json_response_format', 'llm_answer_max_tokens', 'visual_director_max_tokens', 'llm_reasoning_payload', 'llm_reasoning_system_suffix', 'apply_llm_common_options', 'http_get_json', 'resolve_llm_model', '_clean_llm_payload', 'http_json', '_llm_replay_stage_from_payload', '_replay_content_from_json_object', '_load_llm_replay_raw', '_llm_replay_json_response', '_llm_error_text', '_is_transport_error', '_is_budget_or_auth_failure', 'request_shape_rejection_diagnosis', '_payload_for_context', 'transport_footprint', '_llm_chat_json_single_context', 'llm_chat_json']
-
-
-def effective_response_format(request: Mapping[str, Any], raw: Mapping[str, Any]) -> Mapping[str, Any] | None:
-    """Use actual transport metadata when a provider relaxed the requested schema."""
-    response_format = request.get("response_format")
-    debug = raw.get("_debug")
-    if isinstance(debug, Mapping):
-        if debug.get("strictSchemaDowngraded") or debug.get("responseFormatUsed") is False:
-            return None
-        if "responseFormatType" in debug and debug["responseFormatType"] != "json_schema":
-            return None
-    return response_format if isinstance(response_format, Mapping) else None

@@ -1,5 +1,7 @@
 """Generation defaults observed through real callers with offline HTTP only."""
 from __future__ import annotations
+
+from infini_local.core import llm_config
 from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
 
 import json
@@ -56,7 +58,7 @@ def _observe(*, stages, repair, corrupt_budget):
 
     calls, replies = [], deque()
     if corrupt_budget:
-        transport.LLM_MAX_TOKENS = "invalid-runtime-scalar"
+        llm_config.LLM_MAX_TOKENS = "invalid-runtime-scalar"
 
     def http_reply(url, payload, timeout=10, headers=None):
         expected_url = ("http://offline.invalid:1234/v1/chat/completions"

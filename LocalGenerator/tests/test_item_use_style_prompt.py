@@ -23,7 +23,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
 
 
 def test_serialized_item_use_style_guide_covers_exact_enum_and_no_mechanics(monkeypatch):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", "json_object")
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
     parent_a = {"id": "blade", "name": "Blade", "damage": 7, "useTime": 20}
     parent_b = {"id": "bench", "name": "Workbench", "createTile": 18, "useTime": 15}
     request, user_content, _ = build_initial_author_request(
@@ -56,7 +56,7 @@ def test_serialized_item_use_style_guide_covers_exact_enum_and_no_mechanics(monk
 @pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
 @pytest.mark.parametrize("hidden,hint", [(False, "inherit"), (True, "inherit"), (True, "visible")])
 def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_transport, monkeypatch, format_mode, hidden, hint):
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     responses, requests = wire_transport
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
     author, user, _ = build_initial_author_request(parent, parent, "visibility", model_name="test-model")

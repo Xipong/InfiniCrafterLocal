@@ -13,6 +13,10 @@ from urllib.error import HTTPError
 
 import pytest
 from provider_test_support import deliverable_recipe, loopback_server, write_json_response, endpoint_options
+from infini_local.pipelines import llm_admission
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_profiles
+from provider_test_support import reset_llm_runtime
 from infini_local.pipelines import (
     combine_pipeline as pipeline,
     gameplay_stage,
@@ -49,17 +53,17 @@ def isolation(monkeypatch):
     monkeypatch.setattr(endpoint, "_GENERATION_ACCEPTING", True)
     monkeypatch.setattr(endpoint, "COMBINE_SEMAPHORE", threading.BoundedSemaphore(1))
     monkeypatch.setattr(endpoint, "COMBINE_BUSY_WAIT_SECONDS", 0)
-    transport._reset_llm_pool_runtime_for_tests()
+    reset_llm_runtime()
     generation_debug.clear_combine_failure("test_isolation")
-    monkeypatch.setattr(transport, "LLM_FALLBACK_NETWORK_FAILS", 1)
-    monkeypatch.setattr(transport, "_fallback_llm_context", lambda: None)
+    monkeypatch.setattr(llm_config, "LLM_FALLBACK_NETWORK_FAILS", 1)
+    monkeypatch.setattr(llm_profiles, "_fallback_llm_context", lambda: None)
     monkeypatch.setattr(transport, "log_event", lambda *_a, **_k: None)
     monkeypatch.setattr(author, "USE_LLM", True)
     monkeypatch.setattr(pipeline, "USE_LLM", True)
     yield
     assert endpoint.generation_activity_snapshot()["active"] == 0
     assert endpoint.generation_activity_snapshot()["waiting"] == 0
-    assert transport.current_llm_item_lease() is None
+    assert llm_profiles.current_llm_item_lease() is None
 
 
 @pytest.fixture
@@ -88,7 +92,7 @@ def route_worker():
 def configured_profiles(monkeypatch):
     """Patch only the declared profile keys; malformed/legacy omissions stay absent."""
     def install(*profiles):
-        monkeypatch.setattr(transport, "configured_llm_pool", lambda: list(profiles))
+        monkeypatch.setattr(llm_profiles, "configured_llm_pool", lambda: list(profiles))
     return install
 
 
@@ -213,7 +217,7 @@ def test_real_author_provider_failure_has_safe_actionable_metadata(
             "api_mode": "chat_completions",
             "profile_id": "llm_1",
         }
-        monkeypatch.setattr(transport, "configured_llm_pool", lambda: [context])
+        monkeypatch.setattr(llm_profiles, "configured_llm_pool", lambda: [context])
         if fault == "deadline":
             from infini_local.core.http_io import HttpDeadlineExceeded
 
@@ -263,7 +267,7 @@ def test_disabled_profile_records_own_prelease_failure_on_real_route(monkeypatch
         "api_mode": "chat_completions",
         "profile_id": "llm_1",
     }
-    monkeypatch.setattr(transport, "configured_llm_pool", lambda: [context])
+    monkeypatch.setattr(llm_profiles, "configured_llm_pool", lambda: [context])
     generation_debug.record_combine_failure(
         "05_visual_director", PlannerUnavailable("prior unrelated request"), {"worldId": "other-world"}, None, []
     )
@@ -300,7 +304,7 @@ def test_actual_active_stages_are_private_detached_and_removed_with_logging_off(
     monkeypatch.setattr(trace_runtime, "TRACE_PROMPTS_ENABLED", False)
     monkeypatch.setattr(server, "llm_auth_snapshot", lambda: {"provider": "local", "model": "offline"})
     monkeypatch.setattr(
-        transport,
+        llm_profiles,
         "configured_llm_pool",
         lambda: [
             {
@@ -407,11 +411,11 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
             }
             for i in (1, 2)
         ]
-        monkeypatch.setattr(transport, "configured_llm_pool", lambda: contexts)
-        monkeypatch.setattr(transport, "_remote_rate_key", lambda *_: "fixture-rate-key")
-        monkeypatch.setattr(transport, "_remote_admission_policy", lambda *_: "nous_openai_feedback")
-        monkeypatch.setattr(transport, "_LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS", 0.05)
-        transport._LLM_RATE_STATE["fixture-rate-key"] = {"events": [], "lastRequest": time.monotonic() + 1.0, "blockedUntil": 0.0}
+        monkeypatch.setattr(llm_profiles, "configured_llm_pool", lambda: contexts)
+        monkeypatch.setattr(llm_admission, "_remote_rate_key", lambda *_: "fixture-rate-key")
+        monkeypatch.setattr(llm_admission, "_remote_admission_policy", lambda *_: "nous_openai_feedback")
+        monkeypatch.setattr(llm_admission, "_LLM_RATE_GENERIC_MIN_INTERVAL_SECONDS", 0.05)
+        llm_admission._LLM_RATE_STATE["fixture-rate-key"] = {"events": [], "lastRequest": time.monotonic() + 1.0, "blockedUntil": 0.0}
         sleep = time.sleep
 
         def gated_sleep(seconds):
@@ -468,7 +472,7 @@ def test_real_author_rate_queue_and_network_start_are_live_across_sibling_lanes(
         assert status == 424 and body["error"] == "llm_auth_failed"
         assert body["lastFailure"]["worldId"] == f"world-{i}"
     assert endpoint.generation_activity_snapshot()["requests"] == []
-    assert not transport._LLM_RATE_STATE["fixture-rate-key"]["waiters"]
+    assert not llm_admission._LLM_RATE_STATE["fixture-rate-key"]["waiters"]
 
 
 def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, real_route):
@@ -485,6 +489,7 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
 
     clock = SimpleNamespace(monotonic=lambda: now[0], sleep=advance, time=time.time)
     monkeypatch.setattr(transport, "time", clock)
+    monkeypatch.setattr(llm_admission, "time", clock)
     monkeypatch.setattr(http_io, "time", clock)
 
     context = {
@@ -495,9 +500,9 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
         "api_key": "PRIVATE",
         "profile_id": "llm_1",
     }
-    monkeypatch.setattr(transport, "configured_llm_pool", lambda: [context])
-    monkeypatch.setattr(transport, "_remote_rate_key", lambda *_: "fixture-deadline")
-    transport._LLM_RATE_STATE["fixture-deadline"] = {"events": [], "lastRequest": now[0], "blockedUntil": now[0] + 10}
+    monkeypatch.setattr(llm_profiles, "configured_llm_pool", lambda: [context])
+    monkeypatch.setattr(llm_admission, "_remote_rate_key", lambda *_: "fixture-deadline")
+    llm_admission._LLM_RATE_STATE["fixture-deadline"] = {"events": [], "lastRequest": now[0], "blockedUntil": now[0] + 10}
     call = author.llm_chat_json
     monkeypatch.setattr(author, "llm_chat_json", lambda payload, timeout=10: call(payload, timeout=0.04))
     monkeypatch.setattr(transport, "urlopen_no_redirect", lambda *_a, **_k: pytest.fail("expired admission must never send"))
@@ -508,7 +513,7 @@ def test_real_author_unsent_rate_deadline_is_not_provider_timeout(monkeypatch, r
     assert debug["networkStarted"] is False and debug["physicalAttemptCount"] == 0
     assert debug["rateWaitReason"] == "provider_cooldown"
     assert "no request was sent" in body["playerMessage"]
-    assert not transport._LLM_RATE_STATE["fixture-deadline"]["waiters"]
+    assert not llm_admission._LLM_RATE_STATE["fixture-deadline"]["waiters"]
     assert endpoint.generation_activity_snapshot()["requests"] == []
 
 
@@ -627,14 +632,14 @@ def test_lease_context_is_released_even_when_diagnostic_logging_fails(monkeypatc
         raise OSError("diagnostic write failed")
 
     if phase == "end":
-        lease, token = transport.begin_llm_item_lease("offline-key")
-    monkeypatch.setattr(transport, "log_event", broken_log)
+        lease, token = llm_profiles.begin_llm_item_lease("offline-key")
+    monkeypatch.setattr(llm_profiles, "log_event", broken_log)
     with pytest.raises(OSError, match="diagnostic write failed"):
         if phase == "begin":
-            transport.begin_llm_item_lease("offline-key")
+            llm_profiles.begin_llm_item_lease("offline-key")
         else:
-            transport.end_llm_item_lease(lease, token)
-    assert transport.current_llm_item_lease() is None
+            llm_profiles.end_llm_item_lease(lease, token)
+    assert llm_profiles.current_llm_item_lease() is None
 
 
 def test_profile_permit_is_returned_if_generation_admission_raises(monkeypatch):

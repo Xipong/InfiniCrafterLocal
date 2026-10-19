@@ -1,14 +1,16 @@
+
 from prompt_packet_helpers import request_dossier, dossier_text
 """Cold-reader gaps and concise prose without reducing the executable language."""
 import copy
 import json
 import pytest
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from infini_local.pipelines import llm_authoring_pipeline as author, llm_transport as transport
+from infini_local.pipelines import llm_authoring_pipeline as author
 
 
 def packet(monkeypatch, a=None, b=None):
-    monkeypatch.setattr(transport, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     request, user, _ = author.build_initial_author_request(a or {}, b or {}, 'cold-clarity', model_name='test-model')
     assert dossier_text(request) == user
     return json.loads(user)

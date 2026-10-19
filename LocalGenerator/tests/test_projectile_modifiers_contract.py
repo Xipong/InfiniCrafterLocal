@@ -1,3 +1,4 @@
+
 from prompt_packet_helpers import request_dossier
 """A13/B15.1 explicit phase modifiers, ownership, provenance and frozen Repair."""
 from copy import deepcopy
@@ -7,6 +8,7 @@ from repair_test_helpers import (
     DELETE, projected_params, edit_fields, frozen_call_repair, frozen_gameplay_repair,
 )
 
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -47,13 +49,13 @@ def entity(wire, fn):
     ("set_projectile_homing_modifier", "json_schema", True),
 ])
 def test_actual_visual_and_repair_packets_preserve_exact_modifier_owner(wire_transport, monkeypatch, fn, format_mode, repair):
-    from infini_local.pipelines import llm_transport, visual_generation_pipeline as visual
+    from infini_local.pipelines import visual_generation_pipeline as visual
 
     data = compile_runtime_program(source(fn))
     frozen = deepcopy(data)
     responses, sent = wire_transport
     responses.append({})
-    monkeypatch.setattr(llm_transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     kwargs = {"repair_errors": [{"path": "$.item.renderSizePx", "message": "required"}], "previous": {"item": {}}, "repair_scope": {}} if repair else {}
     visual._request_visual_kit(data, {}, {}, **kwargs)
     packet = request_dossier(sent[-1])

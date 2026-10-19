@@ -63,7 +63,7 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
 ):
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 
-    monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = build_initial_author_request({}, {}, "combined-combat", model_name="test-model")
     packet = json.loads(user)
     names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}

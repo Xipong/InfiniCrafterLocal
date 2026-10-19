@@ -12,6 +12,9 @@ import sys
 
 import pytest
 
+from infini_local.core import llm_config
+from infini_local.pipelines import llm_profiles
+from infini_local.pipelines import llm_provider_wire
 from infini_local.core.llm_prompt_cache import PROMPT_CACHE_METADATA_KEY, with_prompt_cache_prefix
 from infini_local.pipelines import llm_transport as llm
 from infini_local.services import codex_auth as auth, codex_text_backend as backend
@@ -102,8 +105,8 @@ def test_cache_key_isolates_explicit_authority_and_tracks_only_effective_prefix(
     else:
         other["messages"][1]["name"] = "trace-only"
     before = copy.deepcopy((source, other))
-    key = llm._prompt_cache_identity(source, source["model"], context=CONTEXT)
-    assert (key == llm._prompt_cache_identity(other, other["model"], context=CONTEXT)) is equal
+    key = llm_provider_wire._prompt_cache_identity(source, source["model"], context=CONTEXT)
+    assert (key == llm_provider_wire._prompt_cache_identity(other, other["model"], context=CONTEXT)) is equal
     assert (source, other) == before
 
 
@@ -249,7 +252,7 @@ def test_ordinary_codex_messages_remain_verbatim_without_instruction_authority(n
     body = native_wire[0][1]
     expected = backend._request_payload({key: value for key, value in source.items() if key != PROMPT_CACHE_METADATA_KEY})
     if marker_mode == "cache-only":
-        expected["prompt_cache_key"] = llm._prompt_cache_identity(source, source["model"], context=CONTEXT)
+        expected["prompt_cache_key"] = llm_provider_wire._prompt_cache_identity(source, source["model"], context=CONTEXT)
     assert body == expected
     assert body["input"][-1] == input_message("user", source["messages"][1]["content"])
     assert source == before
@@ -314,8 +317,8 @@ def test_user_json_cannot_self_declare_instruction_authority(native_wire):
 @pytest.mark.parametrize("failure", [False, True])
 def test_public_dispatch_keeps_one_request_and_no_fallback(monkeypatch, native_wire, authorized, failure):
     source = packet(authorized=authorized)
-    monkeypatch.setattr(llm, "_primary_llm_context", lambda: CONTEXT)
-    monkeypatch.setattr(llm, "_fallback_llm_context", lambda: pytest.fail("subscription fallback attempted"))
+    monkeypatch.setattr(llm_profiles, "_primary_llm_context", lambda: CONTEXT)
+    monkeypatch.setattr(llm_profiles, "_fallback_llm_context", lambda: pytest.fail("subscription fallback attempted"))
     if failure:
         class RefusedOpener:
             def open(self, request, timeout):
@@ -337,9 +340,9 @@ def test_framing_authority_version_is_in_identity_and_survives_process_restart()
     expected = {"provider": "openai_codex", "wire": stable_wire,
                 "framing": {"version": 1, "authority": "builder-declared-static-instructions"}}
     digest = hashlib.sha256(json.dumps(expected, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    key = llm._prompt_cache_identity(source, source["model"], context=CONTEXT)
+    key = llm_provider_wire._prompt_cache_identity(source, source["model"], context=CONTEXT)
     assert key == "infini-" + digest[:32]
-    script = "from infini_local.pipelines.llm_transport import _prompt_cache_identity; print(_prompt_cache_identity(" + repr(source) + ", " + repr(source["model"]) + ", context=" + repr(CONTEXT) + "))"
+    script = "from infini_local.pipelines.llm_provider_wire import _prompt_cache_identity; print(_prompt_cache_identity(" + repr(source) + ", " + repr(source["model"]) + ", context=" + repr(CONTEXT) + "))"
     child = subprocess.run([sys.executable, "-c", script], cwd=Path(__file__).resolve().parents[1],
                            env={**os.environ, "PYTHONHASHSEED": "71"}, text=True, capture_output=True, check=True, timeout=30)
     assert child.stdout.strip() == key
@@ -349,7 +352,7 @@ def test_framing_authority_version_is_in_identity_and_survives_process_restart()
 def test_current_author_builder_explicit_opt_in_preserves_all_fields_and_dynamic_parents(monkeypatch, native_wire, format_mode):
     from infini_local.pipelines import llm_authoring_pipeline as author
 
-    monkeypatch.setattr(llm, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     packets = []
     for name in ("Workbench", "Lens"):
         source, user, _ = author.build_initial_author_request(
@@ -370,7 +373,7 @@ def test_current_author_builder_explicit_opt_in_preserves_all_fields_and_dynamic
         assert {**json.loads(static_text), **json.loads(dynamic_text)} == json.loads(user)
         assert source == before and prepared["messages"] == source["messages"]
         expected = backend._request_payload(prepared)
-        expected["prompt_cache_key"] = llm._prompt_cache_identity(prepared, prepared["model"], context=CONTEXT)
+        expected["prompt_cache_key"] = llm_provider_wire._prompt_cache_identity(prepared, prepared["model"], context=CONTEXT)
         assert body == expected
         packets.append(body)
     assert len(native_wire) == 2

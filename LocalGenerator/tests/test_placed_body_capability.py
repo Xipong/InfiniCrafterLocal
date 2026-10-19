@@ -1,11 +1,13 @@
 """Explicit placed-body Author -> compiler -> wire tracer bullets (offline)."""
 from __future__ import annotations
+
 from prompt_packet_helpers import request_dossier, dossier_text
 import copy
 import hashlib
 import json
 from pathlib import Path
 import pytest
+from infini_local.core import llm_config
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
@@ -367,7 +369,6 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.pipelines import author_item_contract as contract
     from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines import llm_transport as transport
     from test_codex_subscription_contract import _encode_nullable_fixture
     from test_repair_gameplay_contract import _offline_gameplay_repair
 
@@ -385,7 +386,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
                 row.pop("target", None)
             calls.append(row)
     before = json.dumps(doc, sort_keys=True)
-    monkeypatch.setattr(transport, "LLM_RESPONSE_FORMAT_MODE", format_mode)
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     responses, requests = wire_transport
     payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
     responses.append(payload)

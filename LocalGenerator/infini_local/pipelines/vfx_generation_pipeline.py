@@ -16,9 +16,15 @@ from infini_local.core.vfx_manifest import (
     MalformedVfxDirectorOutput, VFX_PROMPT_STATIC_KEYS, VFX_REPAIR_PROMPT_STATIC_KEYS,
     vfx_schema_instruction_paths,
 )
+from infini_local.pipelines.llm_provider_wire import (
+    apply_llm_common_options,
+    llm_json_response_format,
+    llm_reasoning_system_suffix,
+    with_llm_stage,
+)
 from infini_local.pipelines.llm_transport import (
-    apply_llm_common_options, llm_chat_json, llm_json_response_format,
-    llm_reasoning_system_suffix, resolve_llm_model, with_llm_stage,
+    llm_chat_json,
+    resolve_llm_model,
 )
 from infini_local.storage.trace_runtime import trace_event, trace_stage_request
 
