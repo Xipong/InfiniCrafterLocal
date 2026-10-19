@@ -580,6 +580,17 @@ def test_docs_reuses_one_audit_for_both_renderers(monkeypatch, tmp_path, capsys)
     assert docs.main() == 1  # a current projection cannot conceal a failed audit
 
 
+def test_context_known_path_needs_no_filler_task_label(monkeypatch, capsys):
+    path = "ModSources/InfiniCrafterLocal/Common/Systems/Presentation/GeneratedPlacedBodyDrawSystem.cs"
+    monkeypatch.setattr(agentctl.sys, "argv", ["agentctl", "context", "--path", path, "--budget", "5000"])
+    monkeypatch.setattr(agentctl, "changed_files", lambda base=None: [])
+    assert agentctl.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["documents"][0]["path"] == path
+    assert report["task"] == ""
+    assert report["requestedVerification"]["validationRun"] is False
+
+
 def test_validation_translates_paths_only_for_windows_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
     import validate_release as validation
 

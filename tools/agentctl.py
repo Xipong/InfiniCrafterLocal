@@ -471,7 +471,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     doctor = sub.add_parser("doctor"); doctor.set_defaults(func=command_doctor)
     verify = sub.add_parser("verify"); verify.add_argument("--changed", action="store_true"); verify.add_argument("--base"); verify.add_argument("--plan", action="store_true"); verify.add_argument("--require-build", action="store_true"); verify.add_argument("--out"); verify.set_defaults(func=command_verify)
-    context = sub.add_parser("context"); context.add_argument("--task", required=True); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=14000); context.add_argument("--out"); context.set_defaults(func=command_context)
+    context = sub.add_parser("context"); context.add_argument("--task", default=""); context.add_argument("--area", action="append"); context.add_argument("--path", action="append"); context.add_argument("--base"); context.add_argument("--budget", type=int, default=14000); context.add_argument("--out"); context.set_defaults(func=command_context)
     diff = sub.add_parser("diff"); diff.add_argument("--base"); diff.set_defaults(func=command_diff)
     handoff = sub.add_parser("handoff"); handoff.add_argument("--out"); handoff.add_argument("--base"); handoff.set_defaults(func=command_handoff)
     task_check = sub.add_parser("task-check"); task_check.add_argument("--task-file", required=True); task_check.set_defaults(func=command_task_check)

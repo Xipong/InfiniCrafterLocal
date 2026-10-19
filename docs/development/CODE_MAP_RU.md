@@ -25,7 +25,7 @@
 
 ### Короткий рабочий цикл агента
 
-1. Соблюдай [consumer-first workflow](ARCHITECTURE_RU.md#consumer-first); открой [OWNERS](OWNERS_RU.md) для границы задачи и строку выше для entrypoint; [MODULES](MODULES_RU.md) нужен только для затронутого owner. Перед runtime-правкой выполни prerequisites из [AGENTS](../../AGENTS.md#перед-изменением-runtime).
+1. Для известного файла начни с `python tools/agentctl.py context --path <repo-relative-file> --budget 5000`: requested source идёт первым, общие generated catalogs не вытесняют его. `requestedVerification` — только план для запрошенного файла (`validationRun:false`), отдельно от проверок реального diff; это не PASS. Для неизвестной области используй [OWNERS](OWNERS_RU.md) и одну строку выше, не полный обход дерева. [MODULES](MODULES_RU.md) нужен только при пересечении owner; prerequisites из [AGENTS](../../AGENTS.md#перед-изменением-runtime) остаются.
 2. Найди **symbol в указанном файле**, его caller и точный saved input. Расширяй поиск лишь если этот seam уходит в другой owner. Не читай целиком generated catalogs и все `artifacts/` ради одного метода.
 3. Найди существующее behavioral test family в [TESTING](TESTING_RU.md). Native Compile roster — `tools/EngineRuntimeChecks.csproj`; invocation/filter roster — `tools/EngineRuntimeChecks.cs`. Новый файл без обеих регистраций не исполняется.
 4. Для headless native запуска нужны actual tML/FNA и external DLL paths, private SavePath и **source-root cwd** для locale/fixture readers. Запускай точную свежесобранную DLL; успешный `dotnet build` не доказывает, что `dotnet run` выбрал её.

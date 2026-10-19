@@ -93,6 +93,10 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     assert reference["reference"]["namespace"] == "call"
     assert "Exact same-item configure_tile_placement call" in reference["meaning"]
     assert "native" in card["does"]
+    # Static whole-body replacement also removes native flame/state pictures;
+    # mechanical wiring/light retention must not imply visual animation survives.
+    for fact in ("native animation", "on/off", "baked flames", "omit this call"):
+        assert fact in card["does"].lower()
     assert all(term in card["constructionMeaning"].lower() for term in ("certified", "16x16", "256 cells", "callbacks", "before mutation"))
     wire = compile_runtime_program(document)
     before = json.dumps(wire, sort_keys=True)
@@ -106,6 +110,8 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
         assert guidance["operation"] == FN
         assert set(guidance["params"]) == {"placementCallId", "pivotSpace", *TRANSFORM}
         assert "existing" in guidance["meaning"] and "light" in guidance["meaning"]
+        for fact in ("native animation", "on/off", "baked flames", "omit this call"):
+            assert fact in guidance["meaning"].lower()
         packet["acceptedPresentationMechanicsReadOnly"]["bindings"].clear()
     assert json.dumps(wire, sort_keys=True) == before
     with_body = visual._apply_kit(wire, kit)

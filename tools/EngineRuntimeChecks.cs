@@ -205,6 +205,7 @@ internal static partial class EngineRuntimeChecks
             ("individual material budgets share legacy active detached costs", MaterialBudgetsShareLegacyActiveAndDetachedCosts),
             ("individual material occurrence identity distinguishes hits and replay", MaterialOccurrencesKeepTwoRealHitsButRejectSameOccurrence),
             ("explicit ParticleLibrary readiness count capture and expiry", ExplicitLibraryReadinessWaitPreservesCountAndExpires),
+            ("ParticleLibrary world pass scopes foreign water offset", LibraryWorldPassScopesForeignWaterOffset),
             ("spawn damage survives Configure", SpawnDamageSurvivesConfigure),
             ("live combat state survives rehydration", CombatStateSurvivesRehydration),
             ("hitbox sizing preserves spawn center", HitboxSizingPreservesCenter),

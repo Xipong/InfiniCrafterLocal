@@ -48,6 +48,7 @@
     <Compile Include="EngineRuntimeChecks.VfxGeometry.cs" />
     <Compile Include="EngineRuntimeChecks.MaterialElements.cs" />
     <Compile Include="EngineRuntimeChecks.LibraryVfx.cs" />
+    <Compile Include="EngineRuntimeChecks.LibraryInterop.cs" />
     <Compile Include="EngineRuntimeChecks.MaterialReview.cs" />
     <Compile Include="EngineRuntimeChecks.ItemVfxEvents.cs" />
     <Compile Include="EngineRuntimeChecks.BodyGeometry.cs" />
