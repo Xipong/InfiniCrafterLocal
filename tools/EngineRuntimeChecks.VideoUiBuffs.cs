@@ -253,6 +253,14 @@ internal static partial class EngineRuntimeChecks
 
     public static void VFUI19CapturedActionsKeepAuthoredManaAndSeparateStackCosts()
     {
+        // This headless locale scope owns mod text, not Terraria's content-loaded
+        // buff cache. Keep the real Lang.GetBuffName reader with an initialized
+        // cache; vanilla buff names are not what this cost-label check asserts.
+        var buffCache = typeof(Lang).GetField("_buffNameCache", BindingFlags.Static | BindingFlags.NonPublic)!;
+        object? oldBuffNames = buffCache.GetValue(null);
+        try
+        {
+        buffCache.SetValue(null, Enumerable.Repeat(LocalizedText.Empty, BuffLoader.BuffCount).ToArray());
         WithForgePresentationLanguages(locale => {
             var parent = VideoUiFixture("g_4efc7c05f7b078e0");
             var child = VideoUiFixture("g_17d5099f992a900b");
@@ -274,11 +282,15 @@ internal static partial class EngineRuntimeChecks
                 Equal(before, VideoUiSnapshot(host.Data), "no saved action reauthoring");
             }
         });
+        }
+        finally { buffCache.SetValue(null, oldBuffNames); }
     }
 
     public static void VFUI20StackIdentityUsesIdAndRecipeNotName()
     {
-        var data = MobilityConsumptionFixture("", 0);
+        // An empty mobility fixture has an effect binding with no executable
+        // effect and cannot round-trip. Use an actually admitted definition.
+        var data = VideoUiFixture("g_89cda498eb1f9925");
         data.Id = "stack-a"; data.RecipeKey = "recipe-a";
         var a = AttachItem(new GeneratedItem(), new Item { type = ItemID.Wood, stack = 1 }, data);
         GeneratedItem B(GeneratedItemData other) => AttachItem(new GeneratedItem(), new Item { type = ItemID.Wood, stack = 1 }, other);

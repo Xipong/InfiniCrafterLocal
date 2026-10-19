@@ -90,6 +90,7 @@ internal static partial class EngineRuntimeChecks
         Terraria.Main.netMode = NetmodeID.Server;
         generationHook.OnSpawn(target, owner.GetSource_Misc("spawn"));
         Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+        Terraria.Main.myPlayer = owner.whoAmI; // actual owner-client receipt gate
         using (var wire = new MemoryStream())
         {
             generationHook.SendExtraAI(target, null!, new BinaryWriter(wire));
