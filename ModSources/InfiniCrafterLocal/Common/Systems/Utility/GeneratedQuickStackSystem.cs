@@ -5,6 +5,7 @@ using System.Reflection;
 using InfiniCrafterLocal.Content.Items;
 using MonoMod.RuntimeDetour;
 using Terraria;
+using Terraria.GameContent;
 using Terraria.ModLoader;
 using Terraria.UI;
 
@@ -28,14 +29,19 @@ public sealed class GeneratedQuickStackSystem : ModSystem
             MethodInfo same = typeof(Item).GetMethod(nameof(Item.IsTheSameAs),
                 BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(Item) }, null)
                 ?? throw new InvalidOperationException("native Item.IsTheSameAs signature unavailable");
-            MethodInfo? quick = typeof(ChestUI).GetMethod(nameof(ChestUI.QuickStack),
+            MethodInfo? legacyQuick = typeof(ChestUI).GetMethod(nameof(ChestUI.QuickStack),
                 BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            MethodInfo? quickWithContext = typeof(ChestUI).GetMethod(nameof(ChestUI.QuickStack),
+                BindingFlags.Public | BindingFlags.Static, null,
+                new[] { typeof(ContainerTransferContext), typeof(bool) }, null);
             _hooks.Add(new Hook(same, (Func<Func<Item, Item, bool>, Item, Item, bool>)NativeSameItem));
-            // The 1.4.4 UI has a no-argument QuickStack with a netID prefilter.
-            // Newer tML builds changed that signature and route through hooked
-            // Item.CanStack; the legacy prefilter does not exist in that shape.
-            if (quick is not null)
-                _hooks.Add(new Hook(quick, (Action<Action>)OpenChestQuickStack));
+            if (legacyQuick is not null)
+                _hooks.Add(new Hook(legacyQuick, (Action<Action>)OpenChestQuickStack));
+            if (quickWithContext is not null)
+                _hooks.Add(new Hook(quickWithContext,
+                    (Action<Action<ContainerTransferContext, bool>, ContainerTransferContext, bool>)OpenChestQuickStackWithContext));
+            if (legacyQuick is null && quickWithContext is null)
+                throw new InvalidOperationException("Unsupported native ChestUI.QuickStack signature");
         }
         catch { Unload(); throw; }
     }
@@ -95,15 +101,22 @@ public sealed class GeneratedQuickStackSystem : ModSystem
     }
 
     private static void OpenChestQuickStack(Action orig)
+        => WithQuickStackGuard(orig);
+
+    private static void OpenChestQuickStackWithContext(Action<ContainerTransferContext, bool> orig,
+        ContainerTransferContext context, bool voidStack)
+        => WithQuickStackGuard(() => orig(context, voidStack));
+
+    private static void WithQuickStackGuard(Action native)
     {
         if (Main.netMode == Terraria.ID.NetmodeID.Server || Main.LocalPlayer is not { } player)
         {
-            orig();
+            native();
             return;
         }
         Item[] container;
         try { ChestUI.GetContainerUsageInfo(out _, out container); }
-        catch { container = Array.Empty<Item>(); } // fail closed for generated candidates
-        WithExactQuickStackCandidates(player.inventory, container, orig);
+        catch { container = Array.Empty<Item>(); } // refuse unrelated generated candidates on unavailable metadata
+        WithExactQuickStackCandidates(player.inventory, container, native);
     }
 }
