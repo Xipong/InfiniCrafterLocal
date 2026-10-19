@@ -111,6 +111,20 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static void DocxVfxProducerQueryAliasMatchesAssetOwner()
+    {
+        string json = File.ReadAllText("LocalGenerator/tests/fixtures/placed_vfx_final_wire.json");
+        foreach (string path in new[] { "synthetic.png", "https://offline.invalid/synthetic.png?revision=2#cached" })
+        {
+            var wire = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+            wire["vfxManifest"]!["slots"]![0]!["element"]!["texture"]!["source"] = "item";
+            wire["vfxManifest"]!["slots"]![0]!["element"]!["texture"]!["assetId"] = "";
+            wire["visual"]!["spritePath"] = path;
+            Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is not null,
+                "VFX selected PNG uses the serving/cache filename owner: " + path);
+        }
+    }
+
     private static void DocxExplicitUnavailableAndFixtureKeepDiagnosticProxy()
     {
         WithLighting((_, __) => {
