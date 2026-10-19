@@ -21,8 +21,10 @@ internal static partial class EngineRuntimeChecks
     private static IDisposable ObserveRuntimeSpriteFileOpen(Action<string> observe)
     {
         // Observe the caller's exact IL site: optimized JIT code may inline File.OpenRead.
+        // The two-argument API now forwards to the exact selected-generation
+        // loader which returns alpha bounds too. Observe the actual I/O owner.
         return new MonoMod.RuntimeDetour.ILHook(typeof(RuntimeSpriteCache).GetMethod("TryGet",
-            new[] { typeof(string), typeof(float).MakeByRefType() })!, il => {
+            new[] { typeof(string), typeof(float).MakeByRefType(), typeof(Rectangle?).MakeByRefType() })!, il => {
             var sites = il.Body.Instructions.Where(ins => ins.OpCode == Mono.Cecil.Cil.OpCodes.Call
                 && ins.Operand is Mono.Cecil.MethodReference method && method.DeclaringType.FullName == typeof(File).FullName
                 && method.Name == nameof(File.OpenRead) && method.Parameters.Count == 1

@@ -105,14 +105,17 @@ internal static partial class EngineRuntimeChecks
 
     private static void PlacedAlphaCacheMeasuresOnceAndReturnsSelectedGeneration()
     {
-        bool dedicated=Main.dedServ; Main.dedServ=false;
+        bool dedicated=Terraria.Main.dedServ; Terraria.Main.dedServ=false;
         var hooks=new List<MonoMod.RuntimeDetour.ILHook>();
         try
         {
             Texture2D texture=CpuTexture(8,6); int reads=0,uploads=0;
             var source=new Color[48]; source[2+8]=new Color(255,90,20,1); source[6+4*8]=new Color(100,80,60,255);
             SpriteGpuBoundaries(hooks.Add,(_,pixels)=>{reads++;Array.Copy(source,pixels,source.Length);},(_,pixels)=>{
-                uploads++; Equal((byte)1,pixels[10].A,"alpha=1 retained"); Equal((byte)1,pixels[10].R,"real premultiplication unchanged");
+                uploads++;
+                if (uploads == 1) {
+                    Equal((byte)1,pixels[10].A,"alpha=1 retained"); Equal((byte)1,pixels[10].R,"real premultiplication unchanged");
+                } else Equal(true,pixels.All(pixel=>pixel == Color.Transparent),"second alpha-empty image stays transparent");
             },_=>throw new InvalidOperationException("CPU shell must not dispose"));
             var prepare=typeof(RuntimeSpriteCache).GetMethods(PersistenceStatic).Single(m=>m.Name=="PrepareTextureAndMeasureLocalForwardRadians");
             object?[] args=prepare.GetParameters().Length==2?new object?[]{texture,null}:new object?[]{texture};
@@ -142,7 +145,7 @@ internal static partial class EngineRuntimeChecks
             query.Invoke(cache.Cache,queryArgs); Equal(null,queryArgs[2],"3arg fixture ctor honestly means unknown bounds");
             Equal(2,reads,"hot cache did no additional pixel reads"); Equal(2,uploads,"hot cache did no uploads");
         }
-        finally { foreach(var hook in hooks.AsEnumerable().Reverse())hook.Dispose(); Main.dedServ=dedicated; }
+        finally { foreach(var hook in hooks.AsEnumerable().Reverse())hook.Dispose(); Terraria.Main.dedServ=dedicated; }
     }
 
     private static void PlacedAlphaDtoKeepsOptionalClosedChoice()
@@ -212,12 +215,12 @@ internal static partial class EngineRuntimeChecks
     private static void PlacedAlphaProjectionPreservesMaterialAndPhysics()
     {
         WithPlacedLedger((player,ledger)=>{
-            Main.netMode=NetmodeID.SinglePlayer;
+            Terraria.Main.netMode=NetmodeID.SinglePlayer;
             var data=PlacedLedgerData("alpha-placed-projection"); var placement=data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
             placement.PlacedBody=AlphaBody("alpha_bounds");
             var prop=typeof(RuntimePlacedBodySpec).GetProperty("PivotSpace"); Equal(true,prop is not null,"real DTO choice required");
             player.inventory[player.selectedItem]=ReviewItem(data).Item;
-            var tile=Main.tile[40,40];tile.HasTile=false;
+            var tile=Terraria.Main.tile[40,40];tile.HasTile=false;
             Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,data,placement,40,40),"explicit alpha authorizes same native placement");
             tile.HasTile=true;tile.TileType=TileID.Stone;
             Equal(true,GeneratedPlacementLedgerSystem.TryCommitAuthorizedPlacement(player),"existing material ledger commits");

@@ -1378,6 +1378,43 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "collect_seeds_from_grass"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {},
+                "required": [],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "configure_item_contact_hitbox"
               },
               "id": {

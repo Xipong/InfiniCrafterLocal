@@ -50,6 +50,17 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "collect_seeds_from_grass",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
+      "outputs": [
+        "gameplay.collectSeedsFromGrass"
+      ],
+      "wirePresencePath": "gameplay.collectSeedsFromGrass"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "configure_item_contact_hitbox",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.cs::UseItemHitbox/OnHitNPC",
@@ -1323,6 +1334,7 @@
         "runtimeProgram.itemUse.releaseTiming",
         "runtimeProgram.itemUse.holdoutOffsetX",
         "runtimeProgram.itemUse.holdoutOffsetY",
+        "gameplay.collectSeedsFromGrass",
         "runtimeProgram.itemContact.hitboxScale",
         "runtimeProgram.itemContact.contactForgivenessPx",
         "gameplay.ammoCategory",

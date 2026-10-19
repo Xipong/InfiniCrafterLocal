@@ -337,6 +337,32 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "collect_seeds_from_grass",
+      "componentSlot": "inventory_seed_collection",
+      "conflicts": [],
+      "csharpOwner": "Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.collectSeedsFromGrass"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "native_worldgen",
+      "parameters": {},
+      "positionOwnership": "none",
+      "purpose": "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG, nearest-player selection and drop/MP lifecycle remain unchanged. Does not consume the item, choose ammo, change attack costs, or inherit automatically from a parent flag. No parameters.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "one bounded native inventory witness; no added spawns or RNG",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "configure_item_contact_hitbox",
       "componentSlot": "item_contact",
       "conflicts": [],
