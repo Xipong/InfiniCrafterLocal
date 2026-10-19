@@ -91,6 +91,7 @@ NETWORK_AUTHORITIES: Final[tuple[str, ...]] = (
     "server_execute",
     "owner_execute_sync",
     "client_visual_only",
+    "native_worldgen",  # Existing WorldGen lifecycle/owner; inventory witness only.
 )
 
 
@@ -1303,6 +1304,21 @@ _CAPS: list[CapabilitySpec] = [
             "runtimeProgram.itemUse.holdoutOffsetY",
         ),
         lowering=("gameplay.useStyle", "gameplay.autoReuse", "gameplay.useTurn", "runtimeProgram.itemUse.*"),
+    ),
+    _cap(
+        "collect_seeds_from_grass",
+        "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG, nearest-player selection and drop/MP lifecycle remain unchanged. Does not consume the item, choose ammo, change attack costs, or inherit automatically from a parent flag. No parameters.",
+        "item_inventory",
+        ("item_body",),
+        {},
+        component_slot="inventory_seed_collection",
+        authority="native_worldgen",
+        budget="one bounded native inventory witness; no added spawns or RNG",
+        py=_COMPILER_OWNER,
+        cs="Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
+        wire=("gameplay.collectSeedsFromGrass",),
+        fixed_wire_literals={"collectSeedsFromGrass": True},
+        wire_presence_path="gameplay.collectSeedsFromGrass",
     ),
     _cap(
         "configure_item_contact_hitbox",

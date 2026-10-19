@@ -245,7 +245,8 @@ def test_real_author_packet_explains_center_travel_vs_native_front_hand_without_
     assert "quarter" in packet and "three_quarters" in packet
     from prompt_packet_helpers import request_dossier
     catalog = request_dossier(request)["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    assert len(catalog) == 70
+    assert len(catalog) == len(CAPABILITY_REGISTRY)
+    assert {card["fn"] for card in catalog} == set(CAPABILITY_REGISTRY)
     hand = next(c for c in catalog if c["fn"] == "move_front_hand")
     launch_axis = [r for r in hand["requires"] if r.get("capability") == "configure_spawn" and r.get("param") == "aim"]
     declared_axis = next(r for r in CAPABILITY_REGISTRY["move_front_hand"].requirements

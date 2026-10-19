@@ -253,8 +253,9 @@ def _compile_item_call(
     if fn == "add_hold_light":
         project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})
         return
-    if fn == "recall_home_on_use":
-        ctx.project_parameter(call=call, param="cooldownTicks", value=p["cooldownTicks"], target=gameplay, prefix=effect_prefix)
+    if fn in {"recall_home_on_use", "collect_seeds_from_grass"}:
+        if fn == "recall_home_on_use":
+            ctx.project_parameter(call=call, param="cooldownTicks", value=p["cooldownTicks"], target=gameplay, prefix=effect_prefix)
         for key, value in CAPABILITY_REGISTRY[fn].fixed_wire_literals.items():
             ctx.write_derived(call=call, path=f"{effect_prefix}.{key}", value=value, target=gameplay, key=key,
                               source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")

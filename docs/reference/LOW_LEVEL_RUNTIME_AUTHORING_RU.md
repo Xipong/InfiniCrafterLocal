@@ -37,6 +37,8 @@ binding с `stackCost=1`: вероятность применяется посл
 
 `configure_weapon_ammo` отдельно выбирает exact ammo category и initial speed basis для active `spawn_entity` shots. Terraria владеет выбором/расходом/экономией ammo и его вкладом в damage/knockback; authored entity сохраняет поведение projectile. `stackCost` остаётся стоимостью самого generated item. Полная граница и ограничения — [weapon ammo consumption](WEAPON_AMMO_CONSUMPTION_RU.md).
 
+`collect_seeds_from_grass` — независимый opt-in inventory passive без параметров/use binding: ровно `gameplay.collectSeedsFromGrass=true` от выбранного `.fn`. Native grass seed RNG/drop/owner остаются у Terraria; shared proxy flags не меняются. Ammo category и source parent flag сами эту capability не добавляют. [Точная inventory/native граница](WEAPON_AMMO_CONSUMPTION_RU.md#явный-inventory-passive-сбора-семян).
+
 <a id="construction"></a>
 ## Прямое построение, не procedural self-check
 

@@ -178,6 +178,8 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
     if item_target and not projectile_target:
         if fn == "configure_item_stats":
             pass
+        elif cap.category == "item_inventory":
+            calls.append(_call("witness_call", fn, "item"))
         elif fn == "configure_item_use":
             calls.append(_call("witness_call", fn, "item"))
             bindings.append(_binding("witness_binding", "primary_use", "use_item_body", "item"))

@@ -215,7 +215,9 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     )
     field_guide["sourceValues"] = (
         "Choose meaningful params from design/source facts or omit unnecessary calls. "
-        "Never guess tile/wall/buff IDs or copy source sentinel -1 into a param whose card minimum is 0."
+        "Never guess tile/wall/buff IDs or copy source sentinel -1 into a param whose card minimum is 0. "
+        "A placeable native Item.damage=-1 is not an observed damage or firing rate of its wired tile attack; "
+        "that sentinel alone does not show weak trap power."
     )
     field_guide["projectileMotion"] = (
         "Decide the trajectory of every moving entity deliberately. move_straight has no falling arc; "
@@ -228,6 +230,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     )
     field_guide["damageClass"] = {
         "builtInTokens": list(DAMAGE_CLASS_TOKENS), "meaningByToken": dict(DAMAGE_CLASS_MEANINGS),
+        "nativeManaPayment": "Native integer truncation can make cheap spells cost zero even with a positive mana-cost coefficient. The coefficient floor 0.1 is not a minimum of 1 mana.",
         "scope": "Damage/stat inheritance and class effects only; no movement, minions, ammo consumption or mana cost. Parent damageClass=none is source-only, not a runtime token. Modded token is exact parent-backed ModName/ClassName; no other tokens.",
     }
     field_guide["itemUseStyle"] = {

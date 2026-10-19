@@ -978,6 +978,15 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
 
     gameplay_raw = data.get("gameplay")
     gameplay: Mapping[str, Any] = gameplay_raw if isinstance(gameplay_raw, Mapping) else {}
+    # Fn-selected root boolean opt-ins keep strict DTO types after delivery
+    # strips provenance. False remains the native inactive serialization value;
+    # the compiler's explicit selection still requires its exact true receipt.
+    for cap in CAPABILITY_REGISTRY.values():
+        for field, literal in cap.fixed_wire_literals.items():
+            if (type(literal) is bool and cap.wire_presence_path == f"gameplay.{field}"
+                    and field in gameplay and type(gameplay[field]) is not bool):
+                errors.append({"path": f"$.gameplay.{field}", "code": "invalid_boolean",
+                               "message": "Inventory opt-in must be a boolean without coercion."})
     for requirement in CAPABILITY_REGISTRY["configure_spawn"].requirements:
         if requirement.kind != "present_params_forbid_item_capability_when_active_spawn":
             continue

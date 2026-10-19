@@ -67,7 +67,8 @@ def test_author_advisory_exposes_inheritance_tradeoffs_and_shared_active_cost():
     assert "manaCost is shared by primary and alternate active uses" in guidance
     assert "no mandatory upgrade or inheritance" in guidance
     assert "dropSeedsIfInInventory" in guidance
-    assert "not executable support" in guidance
+    assert "only by explicit collect_seeds_from_grass selection" in guidance
+    assert "never mandatory inheritance" in guidance
     assert "concept" not in author_item_response_schema()["required"]
 
 

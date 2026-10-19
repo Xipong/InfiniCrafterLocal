@@ -55,6 +55,19 @@ def _author_request(monkeypatch, mode, source):
     return request, json.loads(user)
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_actual_author_packet_distinguishes_tile_damage_sentinel_and_native_mana_truncation(monkeypatch, mode):
+    _, packet = _author_request(monkeypatch, mode, {"damage": -1, "createTile": 137, "manaCost": 1})
+    guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
+    source_reading = guide["sourceValues"]
+    assert "Item.damage=-1" in source_reading
+    assert "not an observed damage or firing rate" in source_reading
+    assert "wired tile attack" in source_reading
+    mana = guide["damageClass"]["nativeManaPayment"]
+    assert "integer truncation" in mana and "zero" in mana
+    assert "positive" in mana and "0.1" in mana and "not a minimum of 1 mana" in mana
+
+
 def _mapping(glossary, path, fn):
     root, _, field = path.rpartition(".")
     return next(row["fields"][field] for row in glossary["scopes"]

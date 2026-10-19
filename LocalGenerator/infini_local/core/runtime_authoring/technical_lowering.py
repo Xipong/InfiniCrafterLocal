@@ -1518,8 +1518,9 @@ def audit_compiler_receipts(
         for presence_fn, presence_cap in CAPABILITY_REGISTRY.items():
             if not presence_cap.wire_presence_path:
                 continue
-            for index, _ in enumerate(entities if isinstance(entities, list) else []):
-                base = presence_cap.wire_presence_path.replace("[]", f"[{index}]", 1)
+            indices = (range(len(entities)) if isinstance(entities, list) else ()) if "[]" in presence_cap.wire_presence_path else (None,)
+            for index in indices:
+                base = presence_cap.wire_presence_path.replace("[]", f"[{index}]", 1) if index is not None else presence_cap.wire_presence_path
                 if _final_value(final_document, base) is _MISSING:
                     continue
                 matching = [row for row in receipt_rows if row.get("fn") == presence_fn

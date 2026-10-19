@@ -47,7 +47,21 @@ Native missing-ammo selection отказывает до runtime shot. Existing o
 
 Native capture передаёт `useAmmoCategoryName` из `Item.useAmmo` отдельно от `ammoCategoryName` из `Item.ammo`. Пропуск в старом packet остаётся неизвестным, Python не декодирует категорию по имени/ID. `weapon_item.shoot_field`, даже под ключом `effectiveProjectile`, — наблюдение поля weapon, не результат реального выстрела или выбранного боеприпаса. Accepted generated parent передаёт полный `runtimeProgram`, включая `weaponAmmo`, homing и collision, без выбора одного «типичного» projectile.
 
-`dart` — общая native категория семян и дротиков; она не требует дротикообразного спрайта. Weapon runtime entity сохраняет явно authored внешность/поведение независимо от выбранного ammo. `dropSeedsIfInInventory` — буквальный source flag `ItemID.Sets.DropSeedsIfInInventory[type]`, не новая capability и не обещание сбора семян generated предметом. Native grass-drop consumer проверяет inventory по type set; shared generated proxy нельзя пометить ради одной definition. Полноценный per-instance inventory passive требует отдельного согласованного vertical slice. Ни описание, ни выбор `dart` его не исполняют.
+`dart` — общая native категория семян и дротиков; она не требует дротикообразного спрайта. Weapon runtime entity сохраняет явно authored внешность/поведение независимо от выбранного ammo. `dropSeedsIfInInventory` остаётся буквальным source flag `ItemID.Sets.DropSeedsIfInInventory[type]`, а не командой наследования. Для generated определения существует независимая явная capability ниже; ни описание, ни выбор `dart` её не добавляют.
+
+### Явный inventory passive сбора семян
+
+```json
+{"id":"seed_collection","fn":"collect_seeds_from_grass"}
+```
+
+Capability работает только на единственном `item_body`; можно явно передать его `target` и пустые `params:{}`, содержательных параметров нет. Она не требует use/hold/equipped binding, оружия, ammo category или buff. Author сам решает, сохранять ли этот смысл родителей: обязательного наследования нет. Это **Alias Lowering**: точный `fn` пишет только `gameplay.collectSeedsFromGrass=true` с единственным literal receipt от `.fn`. Отсутствие capability ничего не пишет; отсутствие wire поля или `false` не даёт passive. Native storage — nullable `GameplaySpec.CollectSeedsFromGrass`, `null` при отсутствии пропускается сериализатором: прежние network bytes/definition hash не получают новый default false. Явный wire `false` сохраняется как inert значение, present `null`/не-boolean отклоняется; compiler capability пишет только `true`. Normalize не материализует поле. Старые definitions/сохранения не переписываются.
+
+Native consumer — [GeneratedInventorySeedSystem.HasItem](../../ModSources/InfiniCrafterLocal/Common/Systems/Utility/GeneratedInventorySeedSystem.cs). Strongly typed `On_Player.HasItem_BooleanArray` сначала сохраняет результат original. Только при original=false и reference-equal `ItemID.Sets.DropSeedsIfInInventory` добавляется witness конкретной generated instance с полным текущим world-scoped definition и explicit flag. Native scan `[0,58)` и `stack>0` сохранён: equipment, mouse slot 58, банки/Void Bag и чужой игрок не считаются; air, placeholder, foreign-world и ещё не hydrated save reference не дают permission. Сам `Player.HasItem(bool[])` не проверяет active/dead; native `WorldGen.GetPlayerForTile` по-прежнему выбирает игрока. Обычный inventory hydration остаётся прежним, query не запрашивает definition и не пишет registry.
+
+Ни один proxy type не помечается в глобальном set. Другие `HasItem` overloads и reference-distinct flag arrays не меняются. `WorldGen.KillTile_ShouldDropSeeds` оставляет исходный `Main.rand.Next(2)==0`, native допустимые grass tiles, owner selection, drop и SP/MP lifecycle. Нет второго seed-spawn hook, extra RNG/stack debit, нового ammo выбора, изменения mana/стоимости или inventory slots.
+
+[Python seed regressions](../../LocalGenerator/tests/test_inventory_seed_collection.py) проверяют actual Author/provider и frozen Repair, unique exact receipts (с исходником и без), strict final delivery и неизменные ammo/costs. [Native rows](../../tools/EngineRuntimeChecks.InventorySeeds.cs) проверяют DTO/Normalize, настоящие `Player.HasItem` и `WorldGen.KillTile_ShouldDropSeeds`, vanilla positives, instance/container/player negatives и точный RNG stream. Они baseline-compilable для отдельного native RED replay; наличие source/test не означает выполненный native check или игровой MP smoke.
 
 ## Строгая граница и Repair
 
