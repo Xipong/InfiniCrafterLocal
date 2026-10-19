@@ -34,7 +34,7 @@ LLM_ITEM_RAW_KEYS = [
     "damage", "damageClass", "knockback", "crit",
     "useStyle", "useStyleName", "useTime", "useAnimation", "reuseDelay", "autoReuse", "channel", "noMelee", "noUseGraphic", "useTurn",
     "rare", "rarityDetails", "value", "maxStack", "consumable", "material", "accessory", "defense",
-    "headSlot", "bodySlot", "legSlot", "createTile", "createWall", "placeStyle",
+    "headSlot", "bodySlot", "legSlot", "createTile", "createWall", "placeStyle", "nativeTileState",
     "pickPower", "axePower", "hammerPower", "pick", "axe", "hammer",
     "healLife", "healMana", "potion", "manaCost", "buffType", "buffTime",
     "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "useAmmoCategoryName", "dropSeedsIfInInventory",
