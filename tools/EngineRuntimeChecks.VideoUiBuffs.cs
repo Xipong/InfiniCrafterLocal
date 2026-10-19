@@ -198,6 +198,20 @@ internal static partial class EngineRuntimeChecks
             player.manaCost = .12f; host.UpdateAccessory(player, false);
             Equal(.1f, player.manaCost, "existing generated equipment floor is coefficient 0.1, not minimum one mana");
             Equal(0, player.GetManaCost(new Item { type = ItemID.Wood, mana = 1 }), "native integer truncation can still produce zero cost");
+            // Exercise the actual inventory tooltip consumer, not just the
+            // localization templates. The saved +0.05 reduction must render -5%.
+            typeof(ModType).GetProperty("Mod", TestInstance)!.SetValue(host, new TooltipProbeMod());
+            WithForgePresentationLanguages(locale => {
+                var lines = new List<TooltipLine>();
+                host.ModifyTooltips(lines);
+                var manaLines = lines.Where(row => row.Name.StartsWith("InfiniEquipmentManaCost", StringComparison.Ordinal)).ToArray();
+                Equal(true,manaLines.Length > 0,locale + " actual equipment tooltip line emitted");
+                string rendered = string.Join(" ",manaLines.Select(row => row.Text));
+                Equal(true,rendered.Contains("-5%",StringComparison.Ordinal),locale + " actual tooltip shows negative five percent");
+                Equal(false,rendered.Contains("+5%",StringComparison.Ordinal),locale + " positive reduction sign is never displayed");
+                Equal(true,rendered.Contains(locale == "ru-RU" ? "расход маны" : "mana cost",StringComparison.OrdinalIgnoreCase),
+                    locale + " exact mana-cost label is used");
+            });
             Equal(before, VideoUiSnapshot(host.Data), "audit does not rebalance saved crystal");
         });
     }
