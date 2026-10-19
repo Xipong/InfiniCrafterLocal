@@ -191,6 +191,7 @@ internal static partial class EngineRuntimeChecks
             ("runtime sprite conflicting certificates preserve inventory ownership", RuntimeSpriteConflictingCertificatesPreserveInventoryOwnership),
             ("DOCX image readiness held producer missing and ready", () => HeldProxyIsReplacedOnlyByReadyInstanceSprite(true)),
             ("DOCX image readiness cursor missing and ready", () => CursorDeathRetiresGeneratedPreviewOnly(true)),
+            ("DOCX image readiness sibling producer status admission", DocxNativeSiblingProducerStatusesMatchDelivery),
             ("DOCX image readiness native producer status admission", DocxNativeItemReadyDomainRejectsUnfinishedProducer),
             ("DOCX image readiness query alias inventory and world", DocxReadyQueryAliasReachesInventoryAndWorld),
             ("DOCX image readiness missing failure and verified recovery", DocxMissingImageSuppressesProxyAndVerifiedCommitRecovers),

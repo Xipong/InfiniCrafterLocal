@@ -85,6 +85,32 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static void DocxNativeSiblingProducerStatusesMatchDelivery()
+    {
+        string json = File.ReadAllText("tools/fixtures/docx-image-ready-delivered.json");
+        foreach (string status in new[] { "generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation", "pending", "generating", "not_required", "future_unknown", "" })
+        {
+            bool expected = status is "generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation";
+            var wire = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+            var visual = wire["runtimeProgram"]!["entities"]![2]!["visual"]!;
+            visual["assetMode"] = "baked_sprite";
+            visual["renderSizePx"] = 16;
+            visual["forwardAngleDegrees"] = 0;
+            visual["spriteStatus"] = status;
+            Equal(expected, GeneratedItemData.FromJson(wire.ToJsonString()) is not null,
+                "baked entity completion status matches final delivery: " + status);
+
+            var equipment = GeneratedItemData.FromJson(json)!;
+            equipment.Accessory.Enabled = true;
+            equipment.Visual.EquipOverlayPath = "offline-equipment-overlay.png";
+            equipment.Visual.EquipOverlayStatus = status;
+            bool accepted = true;
+            try { equipment.Normalize(); }
+            catch (InvalidDataException) { accepted = false; }
+            Equal(expected, accepted, "equipment overlay completion status matches final delivery: " + status);
+        }
+    }
+
     private static void DocxExplicitUnavailableAndFixtureKeepDiagnosticProxy()
     {
         WithLighting((_, __) => {
