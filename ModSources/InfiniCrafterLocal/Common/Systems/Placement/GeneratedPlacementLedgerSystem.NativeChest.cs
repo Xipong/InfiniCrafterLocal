@@ -189,7 +189,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         for(int x=attempt.X;x<attempt.X+2;x++) for(int y=attempt.Y;y<attempt.Y+2;y++)
         {
             Tile cell=Main.tile[x,y];
-            if(cell.HasTile && cell.TileType==21 && cell.TileFrameX==17*36+(x-attempt.X)*18
+            if(cell.HasTile && cell.TileType==TileID.Containers && cell.TileFrameX==17*36+(x-attempt.X)*18
                 && cell.TileFrameY==(y-attempt.Y)*18) cell.HasTile=false;
         }
     }
