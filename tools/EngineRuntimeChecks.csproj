@@ -73,6 +73,7 @@
     <Compile Include="EngineRuntimeChecks.SentryLifecycle.cs" />
     <Compile Include="EngineRuntimeChecks.Assets.cs" />
     <Compile Include="EngineRuntimeChecks.AssetIdentity.cs" />
+    <Compile Include="EngineRuntimeChecks.DocxImageReadiness.cs" />
     <Compile Include="EngineRuntimeChecks.AssetLifecycle.cs" />
     <Compile Include="EngineRuntimeChecks.Events.cs" />
     <Compile Include="EngineRuntimeChecks.SwarmRuntime.cs" />
