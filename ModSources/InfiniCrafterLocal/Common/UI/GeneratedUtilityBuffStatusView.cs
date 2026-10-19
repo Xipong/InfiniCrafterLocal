@@ -94,7 +94,7 @@ internal static class GeneratedUtilityBuffStatusView
             // Existing runtime sets findTreasure, not an enforced authored radius.
             GeneratedUtilityBuffField.OreSenseRadiusTiles => russian ? (value.OreSenseRadiusTiles > 0 ? "обнаружение сокровищ включено" : "обнаружение сокровищ выключено") : "findTreasure = " + (value.OreSenseRadiusTiles > 0 ? "true" : "false"),
             GeneratedUtilityBuffField.MovementSpeed => Signed(value.MovementSpeed) + (russian ? " к коэффициенту скорости передвижения" : " moveSpeed factor"),
-            GeneratedUtilityBuffField.JumpBoost => Signed(value.JumpBoost * 60f) + (russian ? " пикс./с к скорости прыжка" : " px/s (jumpSpeedBoost)"),
+            GeneratedUtilityBuffField.JumpBoost => Signed(PlayerDisplayUnits.BlocksPerSecond(value.JumpBoost)) + (russian ? " блоков/с к скорости прыжка" : " blocks/s jump-speed bonus"),
             GeneratedUtilityBuffField.ManaRegen => "+" + value.ManaRegen.ToString(culture) + (russian ? " единиц manaRegenBonus" : " manaRegenBonus points"),
             GeneratedUtilityBuffField.LifeRegen => "+" + Number(value.LifeRegen / 2f) + (russian ? " ОЗ/с — вклад в регенерацию" : " HP/s contribution"),
             _ => "",

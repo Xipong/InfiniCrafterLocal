@@ -43,9 +43,31 @@ VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(CAPABILITY_REGISTRY))
 
 
 def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
+    """Shared presentation arithmetic, never a params/wire transformation."""
     return {
-        "time": "60 ticks = 1 second",
-        "distance": "1 tile = 16 pixels",
+        "time": (
+            "60 world ticks = 1 second; describe world-tick durations/intervals as ticks / 60 seconds. "
+            "Do not treat per-projectile-update counters or immunity.localCooldown raw engine counts as world ticks; read the card."
+        ),
+        "distance": (
+            "1 Terraria block (tile) = 16 world pixels; describe world distance as pixels / 16 blocks. "
+            "rangeTiles/radiusTiles are already blocks, including blink rangeTiles: do not divide again."
+        ),
+        "speed": (
+            "pixels/world tick * 60 / 16 = blocks/s. For initial projectile launch velocity, "
+            "constantSpeedPxPerUpdate * 60 * updatesPerTick / 16 = nominal blocks/s, "
+            "where updatesPerTick = extraUpdates + 1. Example: 4 px/update at 2 updates/tick is 30 blocks/s, "
+            "not 15. Movement, acceleration, collisions and player modifiers can change actual speed; "
+            "these are base contributions, not measured outcomes. Raw equipment/buff flat speed additions "
+            "in pixels/world tick use * 60 / 16; percentages remain percentages, not absolute speed or jump height."
+        ),
+        "scope": (
+            "Conversions here are for player prose only. Keep runtime params in their declared engine units: "
+            "pixels/world tick, pixels/projectile update, ticks or blocks as each card specifies. "
+            "Never rescale authored mechanics, wire, raw parent facts or config to match prose. "
+            "Pixel-art texture dimensions, UV coordinates and declared pixel hitbox fields remain pixels; "
+            "sprite size is not gameplay reach."
+        ),
         "spread": "radians; total span",
     }
 
@@ -158,6 +180,7 @@ def runtime_units_for_llm() -> dict[str, Any]:
     guide = runtime_authoring_prompt_field_guide()
     return {
         "paramNotation": guide["paramNotation"],
+        "playerFacingUnits": concise_terraria_tick_guide_for_llm(),
         "sourceWireUnits": source_wire_units_for_llm(),
         "bindingTarget": guide["bindingTarget"],
         "descendantSpawnBudget": descendant_spawn_budget_for_llm(),

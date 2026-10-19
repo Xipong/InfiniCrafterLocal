@@ -19,15 +19,15 @@ internal static partial class EngineRuntimeChecks
         WithLighting((config, lights) => WithPlayer((player, _) =>
         {
             var system = new InfiniDetachedVfxSystem();
-            var previousPlayer = Main.player[0];
-            int previousMode = Main.netMode, previousLocal = Main.myPlayer;
-            bool previousServer = Main.dedServ;
-            uint previousTick = Main.GameUpdateCount;
+            var previousPlayer = Terraria.Main.player[0];
+            int previousMode = Terraria.Main.netMode, previousLocal = Terraria.Main.myPlayer;
+            bool previousServer = Terraria.Main.dedServ;
+            uint previousTick = Terraria.Main.GameUpdateCount;
             try
             {
-                Main.netMode = NetmodeID.SinglePlayer; Main.myPlayer = 0;
-                Main.dedServ = false; config.PresentationLightMultiplier = 1f;
-                Main.player[0] = player; player.whoAmI = 0; player.active = true; player.dead = false;
+                Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.myPlayer = 0;
+                Terraria.Main.dedServ = false; config.PresentationLightMultiplier = 1f;
+                Terraria.Main.player[0] = player; player.whoAmI = 0; player.active = true; player.dead = false;
                 player.Center = new Vector2(160f, 160f); player.itemLocation = player.Center;
                 for (int i = 0; i < player.armor.Length; i++) player.armor[i] = new Item();
                 InfiniItemVfxRuntime.ClearUseEventCaches(); system.OnWorldUnload(); MaterialClock(510);
@@ -84,8 +84,8 @@ internal static partial class EngineRuntimeChecks
             finally
             {
                 system.OnWorldUnload(); InfiniItemVfxRuntime.ClearUseEventCaches();
-                Main.player[0] = previousPlayer; Main.netMode = previousMode; Main.myPlayer = previousLocal;
-                Main.dedServ = previousServer; MaterialClock(previousTick);
+                Terraria.Main.player[0] = previousPlayer; Terraria.Main.netMode = previousMode; Terraria.Main.myPlayer = previousLocal;
+                Terraria.Main.dedServ = previousServer; MaterialClock(previousTick);
             }
         }));
     }

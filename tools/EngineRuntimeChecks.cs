@@ -136,7 +136,7 @@ internal static partial class EngineRuntimeChecks
             ("persistence ForeignDormantClaimDoesNotBecomeCurrentAuthorityOrBlockFreshInputs", ForeignDormantClaimDoesNotBecomeCurrentAuthorityOrBlockFreshInputs),
             ("dynamic projectile pierce preserves native maximum and immunity", RuntimeDynamicPierceKeepsNativeMaximumAndImmunity),
             ("generated tooltips describe exact executable bindings", GeneratedTooltipsDescribeExactExecutableBindings),
-            ("played tooltip speeds display only pixels per second", PlayedTooltipSpeedsAreDisplayOnlyPixelsPerSecond),
+            ("played tooltip speeds display only blocks per second", PlayedTooltipSpeedsAreDisplayOnlyBlocksPerSecond),
             ("played secondary tooltips exact delivered combat", PlayedSecondaryTooltipsDescribeExactDeliveredCombat),
             ("secondary tooltips unreachable events and bounded facts", SecondaryTooltipsRejectUnreachableEventsAndStayBounded),
             ("played stats seconds percent native equipment units", PlayedStatsUseSecondsCleanPercentAndNativeEquipmentUnits),

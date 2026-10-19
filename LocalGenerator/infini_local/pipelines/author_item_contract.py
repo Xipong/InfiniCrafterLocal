@@ -178,12 +178,21 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         },
         "realization": {
             "description": (
-                "optional advisory interpretation of the emitted runtimeProgram, not an observed execution; "
+                "optional advisory interpretation of the emitted runtimeProgram, not an observed execution. "
+                "Write a concise item description in clear player language: explain the actual controls "
+                "(use, alternate use, while selected or while equipped), effects, costs, conditions and limits "
+                "that matter in play. Describe only supported behavior of the emitted bindings, calls and events; "
+                "distinguish base values or conditional effects from guaranteed outcomes. Do not invent abilities, "
+                "charges, safety, cooldowns or measured results from names, appearance or intent. "
+                "Use Terraria blocks, blocks/s and seconds for player-facing distance, speed and time; "
+                "runtime params retain their declared engine units. Prefer readable actions over internal ids, "
+                "capability names or a parameter dump. No extra lore or report is required; "
                 f"string minLength={report_properties['description']['minLength']}, "
                 f"maxLength={report_properties['description']['maxLength']} Unicode code points"
             ),
             "playerExperience": (
-                "optional advisory player-experience notes; "
+                "optional advisory notes on practical use and trade-offs of the same emitted mechanics, "
+                "not additional mechanics or promises; avoid repeating the description; "
                 f"string minLength={report_properties['playerExperience']['minLength']}, "
                 f"maxLength={report_properties['playerExperience']['maxLength']} Unicode code points"
             ),

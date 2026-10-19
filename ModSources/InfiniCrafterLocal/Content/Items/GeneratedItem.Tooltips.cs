@@ -6,6 +6,7 @@ using Terraria.GameContent;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Services;
+using InfiniCrafterLocal.Common.UI;
 using Terraria;
 using Terraria.Localization;
 using Terraria.ModLoader;
@@ -260,7 +261,7 @@ public partial class GeneratedItem
             if (RuntimeTooltipFinite(generated.MovementSpeed, -0.5f, 2f) && generated.MovementSpeed != 0f)
                 Effect("Movement", "Movement", RuntimeTooltipSignedPercent(generated.MovementSpeed));
             if (RuntimeTooltipFinite(generated.JumpBoost, 0f, 8f) && generated.JumpBoost > 0f)
-                Effect("Jump", "Jump", RuntimeTooltipNumber(generated.JumpBoost * 60f));
+                Effect("Jump", "Jump", RuntimeTooltipNumber(PlayerDisplayUnits.BlocksPerSecond(generated.JumpBoost)));
             if (generated.ManaRegen is > 0 and <= 120) Effect("ManaRegen", "ManaRegen", RuntimeTooltipNumber(generated.ManaRegen));
             if (generated.LifeRegen is > 0 and <= 120) Effect("LifeRegen", "LifeRegen", RuntimeTooltipNumber(generated.LifeRegen / 2f));
             if (RuntimeTooltipFinite(generated.EmitLightStrength, 0f, 1.5f) && generated.EmitLightStrength > 0f)

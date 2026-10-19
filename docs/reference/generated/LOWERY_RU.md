@@ -1,11 +1,11 @@
 # Low-level authoring и Lowery — канонический контракт
 
 > Generated: [`tools/generate_lowery.py`](../../../tools/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).
-> Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), [Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), [lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), [tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py).
+> Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), [Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), [lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), [tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), [Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py), [unit guide](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py).
 
 Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v5` / `infini.runtime-program.wire.v3`.
 
-**Навигация:** [граница](#boundary) · [owners](#owners) · [Author → wire](#wire) · [manifest](#lowering) · [технические отображения](#mappings) · [config/UI aliases](#config-aliases) · [proxy runtime](#runtime) · [обновление и проверка](#refresh).
+**Навигация:** [граница](#boundary) · [owners](#owners) · [Author → wire](#wire) · [manifest](#lowering) · [технические отображения](#mappings) · [текст и единицы игрока](#player-text) · [config/UI aliases](#config-aliases) · [proxy runtime](#runtime) · [обновление и проверка](#refresh).
 
 <a id="boundary"></a>
 
@@ -28,7 +28,7 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v5` / `
 | Author JSON shape, primaryEntity fields, repair patch shape | runtime_authoring/program_schema.py | prompt schema, validator, Repair filter |
 | capabilities, entity/input/action/event facts and event producers | runtime_authoring/capability_registry.py | Author catalog, validator, Repair alternatives, docs |
 | lossless projections, exact outputs, receipts, repetition policy | runtime_authoring/technical_lowering.py | compiler, audits, this document |
-| Author/Repair model-facing prose | pipelines/author_item_contract.py | Author and Repair system prompts |
+| Author/Repair model-facing prose and unit explanation | pipelines/author_item_contract.py + pipelines/llm_authoring_prompt.py | serialized Author/Repair messages, this document |
 | validation truth | runtime_authoring/validator.py | Repair requirements and final acceptance |
 | Repair permissions/filter | runtime_authoring/repair_scope.py | conditional Repair dossier and merge report |
 | wire materialization | runtime_authoring/compiler.py | RuntimeProgram wire + finalWireReceipts |
@@ -154,6 +154,27 @@ Gameplay Author-visible semantic aliases: **нет**. У каждой механ
 - `valueCopper` напрямую пишет `Item.value`; это base/shop value в copper, а не обещание конкретной суммы resale игроком.
 - Author `configure_tool.axePowerTooltipPercent` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.
 - Author `apply_generated_buff_on_use.lifeRegenHpPerSecond` задаёт вклад в HP/с (0..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.
+
+<a id="player-text"></a>
+
+### Описание игроку и engine units — разные представления
+
+Lowery — технический lowering, не lore и не автор дополнительной механики. Перевод единиц в player-facing prose не меняет runtimeProgram, schema, wire или единицы параметров. Описание остаётся optional advisory: оно не требует нового отчёта и не запускает validator/Repair. Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.
+
+Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. Author получает его в `requiredJsonShape.realization` и `runtimeCapabilityContract.technicalNotes`; Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.
+
+| optional prose | shared guidance |
+|---|---|
+| realization.description | optional advisory interpretation of the emitted runtimeProgram, not an observed execution. Write a concise item description in clear player language: explain the actual controls (use, alternate use, while selected or while equipped), effects, costs, conditions and limits that matter in play. Describe only supported behavior of the emitted bindings, calls and events; distinguish base values or conditional effects from guaranteed outcomes. Do not invent abilities, charges, safety, cooldowns or measured results from names, appearance or intent. Use Terraria blocks, blocks/s and seconds for player-facing distance, speed and time; runtime params retain their declared engine units. Prefer readable actions over internal ids, capability names or a parameter dump. No extra lore or report is required; string minLength=0, maxLength=4000 Unicode code points |
+| realization.playerExperience | optional advisory notes on practical use and trade-offs of the same emitted mechanics, not additional mechanics or promises; avoid repeating the description; string minLength=0, maxLength=3000 Unicode code points |
+
+| единицы / scope | shared model-facing guide |
+|---|---|
+| time | 60 world ticks = 1 second; describe world-tick durations/intervals as ticks / 60 seconds. Do not treat per-projectile-update counters or immunity.localCooldown raw engine counts as world ticks; read the card. |
+| distance | 1 Terraria block (tile) = 16 world pixels; describe world distance as pixels / 16 blocks. rangeTiles/radiusTiles are already blocks, including blink rangeTiles: do not divide again. |
+| speed | pixels/world tick * 60 / 16 = blocks/s. For initial projectile launch velocity, constantSpeedPxPerUpdate * 60 * updatesPerTick / 16 = nominal blocks/s, where updatesPerTick = extraUpdates + 1. Example: 4 px/update at 2 updates/tick is 30 blocks/s, not 15. Movement, acceleration, collisions and player modifiers can change actual speed; these are base contributions, not measured outcomes. Raw equipment/buff flat speed additions in pixels/world tick use * 60 / 16; percentages remain percentages, not absolute speed or jump height. |
+| scope | Conversions here are for player prose only. Keep runtime params in their declared engine units: pixels/world tick, pixels/projectile update, ticks or blocks as each card specifies. Never rescale authored mechanics, wire, raw parent facts or config to match prose. Pixel-art texture dimensions, UV coordinates and declared pixel hitbox fields remain pixels; sprite size is not gameplay reach. |
+| spread | radians; total span |
 
 ### Runtime opcodes
 

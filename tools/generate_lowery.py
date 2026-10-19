@@ -35,6 +35,9 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E
     ITEM_USE_STYLE_TMODLOADER_NAMES,
 )
 
+from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card  # noqa: E402
+from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
+
 OUTPUT = ROOT / "docs/reference/generated/LOWERY_RU.md"
 
 
@@ -56,12 +59,14 @@ def render() -> str:
         "> Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), "
         "[Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), "
         "[lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), "
-        "[tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py).",
+        "[tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), "
+        "[Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py), "
+        "[unit guide](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py).",
         "",
         f"Schemas: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
         "**Навигация:** [граница](#boundary) · [owners](#owners) · [Author → wire](#wire) · "
-        "[manifest](#lowering) · [технические отображения](#mappings) · [config/UI aliases](#config-aliases) · "
+        "[manifest](#lowering) · [технические отображения](#mappings) · [текст и единицы игрока](#player-text) · [config/UI aliases](#config-aliases) · "
         "[proxy runtime](#runtime) · [обновление и проверка](#refresh).",
         "",
         '<a id="boundary"></a>',
@@ -87,7 +92,7 @@ def render() -> str:
         ("Author JSON shape, primaryEntity fields, repair patch shape", "runtime_authoring/program_schema.py", "prompt schema, validator, Repair filter"),
         ("capabilities, entity/input/action/event facts and event producers", "runtime_authoring/capability_registry.py", "Author catalog, validator, Repair alternatives, docs"),
         ("lossless projections, exact outputs, receipts, repetition policy", "runtime_authoring/technical_lowering.py", "compiler, audits, this document"),
-        ("Author/Repair model-facing prose", "pipelines/author_item_contract.py", "Author and Repair system prompts"),
+        ("Author/Repair model-facing prose and unit explanation", "pipelines/author_item_contract.py + pipelines/llm_authoring_prompt.py", "serialized Author/Repair messages, this document"),
         ("validation truth", "runtime_authoring/validator.py", "Repair requirements and final acceptance"),
         ("Repair permissions/filter", "runtime_authoring/repair_scope.py", "conditional Repair dossier and merge report"),
         ("wire materialization", "runtime_authoring/compiler.py", "RuntimeProgram wire + finalWireReceipts"),
@@ -180,6 +185,30 @@ def render() -> str:
         "- `valueCopper` напрямую пишет `Item.value`; это base/shop value в copper, а не обещание конкретной суммы resale игроком.",
         "- Author `configure_tool.axePowerTooltipPercent` задаёт целое 0..500 с шагом 5 в видимых процентах tooltip; compiler точно пишет старое целое `gameplay.axePower = value / 5` в `Item.axe` 0..100. Старое имя `axePower` не принимается как Author alias.",
         "- Author `apply_generated_buff_on_use.lifeRegenHpPerSecond` задаёт вклад в HP/с (0..60, шаг 0.5); compiler точно пишет старое целое `gameplay.generatedBuff.lifeRegen = value × 2`. Это вклад в engine stat до остальных эффектов, не обещание итогового лечения.",
+        "",
+        '<a id="player-text"></a>',
+        "",
+        "### Описание игроку и engine units — разные представления",
+        "",
+        "Lowery — технический lowering, не lore и не автор дополнительной механики. "
+        "Перевод единиц в player-facing prose не меняет runtimeProgram, schema, wire или единицы параметров. "
+        "Описание остаётся optional advisory: оно не требует нового отчёта и не запускает validator/Repair. "
+        "Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.",
+        "",
+        "Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. "
+        "Author получает его в `requiredJsonShape.realization` и `runtimeCapabilityContract.technicalNotes`; "
+        "Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. "
+        "Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. "
+        "Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.",
+        "",
+    ]
+    realization = author_item_prompt_shape_card()["realization"]
+    lines += table(("optional prose", "shared guidance"), [
+        (f"realization.{name}", realization[name]) for name in ("description", "playerExperience")
+    ])
+    lines += [""]
+    lines += table(("единицы / scope", "shared model-facing guide"), list(concise_terraria_tick_guide_for_llm().items()))
+    lines += [
         "",
         "### Runtime opcodes",
         "",
