@@ -34,6 +34,25 @@ public sealed partial class InfiniDetachedVfxSystem
             + speed*duration + Math.Sqrt(ax*ax+ay*ay)*duration*(duration+1)*.5
             + Math.Sqrt(width*width+height*height)*.5;
 
+    // Broad phase for an inactive placement, before querying any native tiles.
+    // Already-active bindings still check every tile/frame offscreen, so an
+    // off/on cycle cannot revive a retired VFX generation. Keep light uncullable.
+    internal static bool MayNeedPlacedVfxFrame(Common.Systems.GeneratedPlacedBodyView view)
+    {
+        if (view.Vfx is null) return false;
+        Vector2 center = new(view.Footprint.X + view.Footprint.Width * .5f,
+            view.Footprint.Y + view.Footprint.Height * .5f);
+        foreach (VfxSlotSpec slot in view.Data.VfxManifest.Slots)
+        {
+            if (slot.PlacementBindingId != view.BindingId || slot.EntityId != view.EntityId
+                || slot.Event != RuntimeEventKind.Periodic) continue;
+            if (slot.RendererKind == "lightCue") return true;
+            if ((slot.Element is not null || slot.Particle is not null)
+                && PlacedVfxInView(center,PlacedVfxReachRadius(slot))) return true;
+        }
+        return false;
+    }
+
     private static bool PlacedVfxInView(Vector2 position,double radius)
     {
         if(!InfiniVfxClientOptions.EnableScreenCulling)return true;
