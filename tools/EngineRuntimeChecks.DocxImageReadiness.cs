@@ -67,7 +67,10 @@ internal static partial class EngineRuntimeChecks
             Equal(2, probe.Attempts, "one failed decode then shared inventory/world backoff");
             probe.FailDecode = false; probe.Cache.Invalidate(item.Data.Visual.SpritePath);
             probe.Draw(item); Equal(3, probe.Attempts, "explicit invalidation enables one real recovery decode");
-            item.Data.Visual.RenderSizePx = null;
+            // Exercise actual omission, not an explicit null sent through the
+            // strict DTO setter (which correctly rejects present-null metadata).
+            item.Data.Visual = new VisualSpec { SpritePath = item.Data.Visual.SpritePath,
+                SpriteStatus = item.Data.Visual.SpriteStatus };
             int count = probe.QueuedSprites; float rotation = 0, scale = 1;
             Equal(false, item.PreDrawInWorld(probe.Batch, Color.White, Color.White, ref rotation, ref scale, 0), "absent world metadata cannot expose proxy");
             Equal(count, probe.QueuedSprites, "absent metadata does not invent scale");
