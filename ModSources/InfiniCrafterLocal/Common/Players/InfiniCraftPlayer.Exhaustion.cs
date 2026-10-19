@@ -149,9 +149,11 @@ public sealed class GeneratedItemExhaustionLifecycleSystem : ModSystem
     {
         foreach (Player? player in Main.player)
         {
-            try { player?.GetModPlayer<InfiniCraftPlayer>().ClearGeneratedItemExhaustion(); }
-            catch (Exception error) when (error is IndexOutOfRangeException or InvalidOperationException or KeyNotFoundException)
-            { /* The native roster may already be retired; continue later owners. */ }
+            // Uninitialized/retired native slots have no ModPlayer. The native
+            // Try query checks the roster/index without throwing first-chance
+            // exceptions which tML logs even when our caller catches them.
+            if (player is not null && player.TryGetModPlayer<InfiniCraftPlayer>(out var craftPlayer))
+                craftPlayer.ClearGeneratedItemExhaustion();
         }
     }
     public override void OnWorldUnload() => ClearPlayers();

@@ -81,7 +81,7 @@ def test_aim_none_serialized_repair_offers_exact_axis_choices_and_freezes_siblin
     assert not audit["ok"] and apply_repair_patch(doc, filtered) == doc
     hostile_spawn = deepcopy(spawn)
     hostile_spawn["params"].update(aim=selected_aim, count=2,
-        velocity={"constantSpeedPxPerUpdate": 4})
+        velocity={'constantSpeedBlocksPerSecond': (4) * 60 / 16})
     hostile_movement = deepcopy(movement)
     hostile_movement["params"]["aimMode"] = "cursor"
     hostile_singleton = deepcopy(_call(doc, "set_projectile_concurrency"))
@@ -135,10 +135,10 @@ def test_missing_movement_does_not_offer_hand_against_frozen_owner_conflicts(con
         _call(doc, "configure_item_use")["params"]["channel"] = True
         doc["runtimeProgram"]["calls"].append({
             "id": "accepted_charge", "fn": "charge_then_release", "target": movement["target"],
-            "params": {"chargeTicks": 12, "powerMultiplier": 1}})
+            "params": {'chargeSeconds': (12) / 60, "powerMultiplier": 1}})
     else:
         _call(doc, "configure_spawn")["params"]["position"] = {
-            "above": "cursor", "heightTiles": 3, "activationDelayTicks": 0}
+            "above": "cursor", "heightTiles": 3, 'activationDelaySeconds': (0) / 60}
     expected_code = "missing_capability_group" if conflict == "controller" else "missing_movement_component"
     report = validate_runtime_program(doc)
     assert {row["code"] for row in report["errors"]} == {expected_code}
@@ -157,7 +157,7 @@ def test_missing_movement_does_not_offer_hand_against_frozen_owner_conflicts(con
     pytest.param("set_projectile_concurrency", "maxActive", True, False, id="bool-not-integer-one"),
     pytest.param("configure_spawn", "spreadRadians", False, False, id="bool-not-number-zero"),
     pytest.param("set_projectile_collision", "tileCollide", 0, False, id="integer-not-boolean-false"),
-    pytest.param("configure_spawn", "velocity", {"constantSpeedPxPerUpdate": False}, False, id="structured-bool-not-zero"),
+    pytest.param("configure_spawn", "velocity", {"constantSpeedBlocksPerSecond": False}, False, id="structured-bool-not-zero"),
     pytest.param("configure_item_use", "handPose", None, False, id="null-not-allowed-absence"),
     pytest.param("configure_spawn", "aim", "none", False, id="no-launch-axis"),
     pytest.param("configure_spawn", "aim", "facing", True, id="explicit-facing-axis"),
@@ -191,7 +191,7 @@ def test_candidate_cannot_use_dependency_from_another_exact_entity():
 
 
 @pytest.mark.parametrize("expected", [
-    {"constantSpeedPxPerUpdate": 0},
+    {"constantSpeedBlocksPerSecond": 0},
     [0, {"nested": [False, None, "literal"]}],
 ])
 def test_emitted_json_container_descriptor_keeps_exact_type(expected):
@@ -216,7 +216,7 @@ def test_scalar_constraint_legacy_types_are_unchanged(raw, expected):
 
 
 @pytest.mark.parametrize("raw", [
-    '{"constantSpeedPxPerUpdate":', '[0,]', '{"x":0,"x":1}', '[NaN]', '[1e999]',
+    '{"constantSpeedBlocksPerSecond":', '[0,]', '{"x":0,"x":1}', '[NaN]', '[1e999]',
 ])
 def test_malformed_container_constraint_stays_literal_not_partial_json(raw):
     from infini_local.core.runtime_authoring.repair_scope import _decode_constraint_value
@@ -225,13 +225,13 @@ def test_malformed_container_constraint_stays_literal_not_partial_json(raw):
 
 
 @pytest.mark.parametrize("velocity", [
-    '{"constantSpeedPxPerUpdate":0}', False, {"constantSpeedPxPerUpdate": False},
-    {"constantSpeedPxPerUpdate": "0"}, {"disk": {"maxSpeedPxPerUpdate": 0}},
+    '{"constantSpeedBlocksPerSecond":0}', False, {"constantSpeedBlocksPerSecond": False},
+    {"constantSpeedBlocksPerSecond": "0"}, {"disk": {"maxSpeedBlocksPerSecond": 0}},
 ])
 def test_zero_velocity_repair_refuses_wrong_types_and_other_projection(velocity):
     doc, _ = fixture()
     spawn = _call(doc, "configure_spawn")
-    spawn["params"]["velocity"] = {"constantSpeedPxPerUpdate": 3}
+    spawn["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (3) * 60 / 16}
     before = deepcopy(doc)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": spawn["id"], "paths": ["params.velocity"]}]
@@ -250,7 +250,7 @@ def test_structured_zero_velocity_dossier_and_frozen_repair_join():
     good, _ = fixture()
     doc = deepcopy(good)
     spawn = _call(doc, "configure_spawn")
-    spawn["params"]["velocity"] = {"constantSpeedPxPerUpdate": 3}
+    spawn["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (3) * 60 / 16}
     before = json.dumps(doc, sort_keys=True)
     report = validate_runtime_program(doc)
     assert {row["code"] for row in report["errors"]} == {"missing_item_capability_param"}
@@ -259,13 +259,13 @@ def test_structured_zero_velocity_dossier_and_frozen_repair_join():
     constraint = next(c for r in scope["repairRequirements"] for c in r["exactCapabilityParams"]
                       if c["param"] == "velocity")
     assert constraint == {"capability": "configure_spawn", "param": "velocity",
-                          "equals": {"constantSpeedPxPerUpdate": 0}}
+                          "equals": {"constantSpeedBlocksPerSecond": 0}}
     assert json.loads(json.dumps(dossier))["repairScope"] == scope
     assert scope["fieldPermissions"]["calls"] == [{"id": spawn["id"], "paths": ["params.velocity"]}]
     assert scope["create"]["calls"]["allowedFns"] == []
     assert dossier["acceptedItemContext"]["runtimeProgram"] == doc["runtimeProgram"]
     hostile = deepcopy(spawn)
-    hostile["params"].update(velocity={"constantSpeedPxPerUpdate": 0}, aim="facing", count=2)
+    hostile["params"].update(velocity={'constantSpeedBlocksPerSecond': (0) * 60 / 16}, aim="facing", count=2)
     singleton = deepcopy(_call(doc, "set_projectile_concurrency"))
     singleton["params"]["maxActive"] = 2
     filtered, audit = filter_repair_patch_scope(doc, {

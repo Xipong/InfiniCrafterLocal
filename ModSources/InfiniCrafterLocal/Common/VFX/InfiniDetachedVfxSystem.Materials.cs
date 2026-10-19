@@ -81,41 +81,90 @@ public sealed partial class InfiniDetachedVfxSystem
         internal ulong FirstTick,LastTick=ulong.MaxValue;
         internal int StartTick,RepeatEvery,InitialAge;
         internal bool Item;
+        internal int? BurstTotal;
+        internal double? PlacedReachRadius;
     }
-    private static readonly List<PeriodicElement> PeriodicElements=new();
-    internal static void RegisterPeriodicElements(GeneratedItemData data,string entityId,string sourceKey,VfxSourceBinding? binding,bool item=false)
+    // Generation is an identity token, not an authored ID or value-equality key.
+    private sealed class PeriodicKeyComparer : IEqualityComparer<(object Generation,string SlotId)>
+    {
+        public bool Equals((object Generation,string SlotId) x,(object Generation,string SlotId) y)
+            => ReferenceEquals(x.Generation,y.Generation) && StringComparer.Ordinal.Equals(x.SlotId,y.SlotId);
+        public int GetHashCode((object Generation,string SlotId) key)
+            => HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.Generation),
+                StringComparer.Ordinal.GetHashCode(key.SlotId));
+    }
+    private static readonly Dictionary<(object Generation,string SlotId),PeriodicElement> PeriodicElements=new(new PeriodicKeyComparer());
+    private static void PrunePeriodicElements()
+    {
+        // One bounded sweep per material tick, before admitting placed sources.
+        // Removing a distant registration does not retire the source or its live
+        // emissions; re-entry resumes the authored world cadence, without replay.
+        foreach (var key in PeriodicElements.Where(pair => !pair.Value.Binding.IsLive
+            || !PeriodicElementInView(pair.Value)).Select(pair => pair.Key).ToArray())
+            PeriodicElements.Remove(key);
+    }
+    private static bool PeriodicElementInView(PeriodicElement element)
+        => element.PlacedReachRadius is not double radius
+            || element.Binding.TryFrame(element.Anchor,out var frame) && PlacedVfxInView(frame.Position,radius);
+    internal static void RegisterPeriodicElements(GeneratedItemData data,string entityId,string sourceKey,VfxSourceBinding? binding,bool item=false,string? placementBindingId=null)
     {
         if(Main.dedServ||binding is null||!binding.IsLive)return;
-        // Moving the same Item keeps its generation but invalidates the old slot
-        // binding. Retire that registration before deduplication, so it cannot
-        // suppress the new producer on an authored due tick.
-        PeriodicElements.RemoveAll(e=>!e.Binding.IsLive);
+        VfxSourceFrame placedFrame = default;
+        if(placementBindingId is not null && !binding.TryFrame("self",out placedFrame))return;
         foreach(var slot in data.VfxManifest.Slots) {
-            if(slot.EntityId!=entityId||slot.Event!=RuntimeEventKind.Periodic||(slot.Element is null&&slot.Particle is null))continue;
-            if(PeriodicElements.Any(e=>ReferenceEquals(e.Binding.Generation,binding.Generation)&&e.SlotId==slot.Id))continue;
+            if(slot.PlacementBindingId!=placementBindingId||slot.EntityId!=entityId||slot.Event!=RuntimeEventKind.Periodic||(slot.Element is null&&slot.Particle is null))continue;
+            var key=(binding.Generation,slot.Id);
+            if(PeriodicElements.TryGetValue(key,out var prior)) {
+                if(prior.Binding.IsLive)continue;
+                // Moving the same Item invalidates its old slot even within this
+                // tick. Replace that exact registration, not a global sweep.
+                PeriodicElements.Remove(key);
+            }
+            double? placedReach=placementBindingId is null?null:PlacedVfxReachRadius(slot);
+            if(placedReach is double radius && !PlacedVfxInView(placedFrame.Position,radius))continue;
             if(PeriodicElements.Count>=MaxEmissions)return;
             if(slot.Particle is not null) {
-                PeriodicElements.Add(new PeriodicElement{Binding=binding,Library=new LibraryEmissionState(CopyLibrary(data,slot,item),0),SourceKey=sourceKey,
-                    SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=slot.RepeatEvery!.Value,Item=item});
+                PeriodicElements.Add(key,new PeriodicElement{Binding=binding,Library=new LibraryEmissionState(CopyLibrary(data,slot,item),0),SourceKey=sourceKey,
+                    SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=slot.RepeatEvery!.Value,Item=item,BurstTotal=placementBindingId is null?null:data.VfxManifest.Budget.MaxParticlesTotal,PlacedReachRadius=placedReach});
                 continue;
             }
             string texture=ResolveMaterialTexture(data,entityId,slot.Element!.Texture);
             if(string.IsNullOrEmpty(texture))continue;
-            PeriodicElements.Add(new PeriodicElement{Binding=binding,Design=CopyElement(data,slot,texture,item),SourceKey=sourceKey,
-                SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=Math.Max(1,slot.RepeatEvery!.Value),Item=item});
+            PeriodicElements.Add(key,new PeriodicElement{Binding=binding,Design=CopyElement(data,slot,texture,item),SourceKey=sourceKey,
+                SlotId=slot.Id,Anchor=slot.Anchor,FirstTick=Main.GameUpdateCount,InitialAge=binding.WorldAge,StartTick=slot.StartTick!.Value,RepeatEvery=Math.Max(1,slot.RepeatEvery!.Value),Item=item,BurstTotal=placementBindingId is null?null:data.VfxManifest.Budget.MaxParticlesTotal,PlacedReachRadius=placedReach});
         }
     }
+    private static void UpdatePlacedSources(ulong now)
+    {
+        foreach (var source in Common.Systems.GeneratedPlacementLedgerSystem.ActivePlacedVfxSources()) {
+            var view = source.View;
+            // Permanent placements have no terminal lifetime. Only this opt-in
+            // cohort consumes maxParticlesTotal afresh per due burst; the existing
+            // per-source tick/draw and global live-instance ceilings still apply.
+            RegisterPeriodicElements(view.Data,view.EntityId,source.SourceKey,source.Binding,item:true,placementBindingId:view.BindingId);
+            foreach (var slot in view.Data.VfxManifest.Slots) {
+                if (slot.PlacementBindingId != view.BindingId || slot.EntityId != view.EntityId
+                    || slot.RendererKind != "lightCue" || slot.Event != RuntimeEventKind.Periodic
+                    || (now+(ulong)Math.Abs((long)slot.SlotSeed))%(ulong)slot.RepeatEvery!.Value != 0
+                    || !source.Binding.TryFrame("self",out var frame)) continue;
+                float strength = Math.Clamp(slot.Scale!.Value*.2f,.04f,1.2f)*InfiniVfxClientOptions.PresentationLightMultiplier;
+                if (strength>0) Lighting.AddLight(frame.Position,slot.Color!.ToColor().ToVector3()*strength);
+            }
+        }
+    }
+
     private static ulong LastMaterialsTick=ulong.MaxValue;
     private static void UpdatePeriodicElements(ulong now)
     {
-        PeriodicElements.RemoveAll(e=>!e.Binding.IsLive);
-        foreach(var e in PeriodicElements) {
+        foreach(var e in PeriodicElements.Values) {
             if(e.LastTick==now)continue;e.LastTick=now;
             ulong age=e.Item?now:now-e.FirstTick+(ulong)Math.Max(0,e.InitialAge);
             if(age<(ulong)e.StartTick||(age-(ulong)e.StartTick)%(ulong)e.RepeatEvery!=0)continue;
-            if(e.Binding.TryFrame(e.Anchor,out var frame)) {
-                if(e.Library is {} library)EnqueueCopiedLibrary(library.Design,e.SourceKey,frame,0);
-                else EnqueueCopiedElement(e.Design!,e.SourceKey,frame,e.Binding,e.Anchor,0);
+            if(e.Binding.TryFrame(e.Anchor,out var frame)
+                && (e.PlacedReachRadius is not double radius || PlacedVfxInView(frame.Position,radius))) {
+                var allowance = e.BurstTotal is int total ? new MaterialEventAllowance(total) : null;
+                if(e.Library is {} library)EnqueueCopiedLibrary(library.Design,e.SourceKey,frame,0,allowance);
+                else EnqueueCopiedElement(e.Design!,e.SourceKey,frame,e.Binding,e.Anchor,0,allowance);
             }
         }
     }
@@ -189,6 +238,8 @@ public sealed partial class InfiniDetachedVfxSystem
     {
         ulong now=Main.GameUpdateCount;
         if(LastMaterialsTick==now)return;LastMaterialsTick=now;
+        PrunePeriodicElements();
+        UpdatePlacedSources(now);
         UpdateMaterialPaths(now);
         UpdatePeriodicElements(now);
         foreach(var e in MaterialEmissions) {

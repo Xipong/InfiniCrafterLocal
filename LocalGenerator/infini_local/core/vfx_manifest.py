@@ -107,6 +107,8 @@ for _renderer in _RENDERERS:
         _RENDERER_UNUSED_FIELDS[_renderer] = _RENDERER_UNUSED_FIELDS.get(_renderer, frozenset()) | {"textureRole"}
 _CADENCE_ONLY_RENDERERS = ("soundCue", "lightCue", "impactSprite")
 _COLORLESS_RENDERERS = ("soundCue", "screenShakeCue", "libraryParticle", *MATERIAL_RENDERERS)
+_PLACED_VFX_RULE = "Optional placementBindingId selects only an exact runtimeSurface.placementBindings entry of this item_body: periodic/self spriteElement/libraryParticle/lightCue. Omit selector for ordinary item/projectile effects; placed-selected slots never emit in hand/equipment. Bounds are read-only actual top-left native TileFrameY, not animation age. self is footprint center, forward=right, side=down, velocity=0. Offset separate flame ingredients with element.offsetForwardPx/offsetSidePx; reuse existing assets for live flames while root PNG stays stable physical furniture. Source attachment retires on off/removal; world particles finish bounded life. Only this placed-selected cohort uses maxParticlesTotal as a fresh allowance per due emission burst, not a cumulative lifetime cap; maxParticlesPerTick and global live-instance/draw caps remain. Light emits only on due world ticks: repeatEvery=1 means steady light; no automatic cadence rewrite. No new gameplay or automatic slot insertion."
+
 _READABILITY_RULE = (
     "Compose presentation readable at gameplay zoom for intended visible attacks and secondary effects; "
     "sound-only is not a visible gameplay cue. Consider the accepted delayed area action's event anchor, "
@@ -266,6 +268,27 @@ def _entity_texture_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _placement_bindings(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Read accepted placement wire; never compile or infer a source from prose."""
+    runtime = data.get("runtimeProgram")
+    if not isinstance(runtime, Mapping):
+        return []
+    item_ids = {e.get("id") for e in runtime.get("entities", [])
+                if isinstance(e, Mapping) and e.get("kind") == "item_body"}
+    rows = []
+    for binding in runtime.get("bindings", []):
+        if not isinstance(binding, Mapping):
+            continue
+        action = binding.get("usePolicy", {}).get("action", {})
+        placement = action.get("placement", {})
+        gate = placement.get("placedVfx") if isinstance(placement, Mapping) else None
+        if (action.get("kind") == "place_item" and action.get("targetId") in item_ids
+                and isinstance(gate, Mapping)):
+            rows.append({"id": binding["id"], "entityId": action["targetId"],
+                         "minFrameY": gate["minFrameY"], "maxFrameY": gate["maxFrameY"]})
+    return sorted(rows, key=lambda r: r["id"])
+
+
 def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     return {
@@ -300,6 +323,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
         "entityTextureSources": _entity_texture_sources(data),
         "maxSlots": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS))),
         "runtimePairs": _allowed_pairs(data),
+        "placementBindings": _placement_bindings(data),
         "runtimeVisualRoles": runtime_visual_roles(data),
     }
 
@@ -369,6 +393,8 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
         "properties": {
             "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
             "entityId": {"type": "string", "enum": entity_ids},
+            "placementBindingId": {"type": "string", "enum": [r["id"] for r in _placement_bindings(data)],
+                "description": "Optional exact accepted placement binding, not held/equipped item. Omit for unchanged item/projectile behavior. Only periodic/self spriteElement/libraryParticle/lightCue. Gate reads top-left native TileFrameY; footprint center is self, +forward right/+side down, velocity zero. Fresh activation after gate off; world particles may finish bounded lifetime."},
             "event": {"type": "string", "enum": events},
             "rendererKind": {
                 "type": "string", "enum": list(_RENDERERS),
@@ -416,6 +442,16 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
         }
         for renderer, required in _RENDERER_REQUIREMENTS.items()
     ]
+    slot["allOf"].append({
+        "if": {"required": ["placementBindingId"]},
+        "then": {"properties": {"event": {"const": "periodic"}, "anchor": {"const": "self"},
+            "rendererKind": {"enum": ["spriteElement", "libraryParticle", "lightCue"]},
+            "repeatEvery": {"minimum": 1}}},
+    })
+    slot["allOf"].extend({
+        "if": {"properties": {"placementBindingId": {"const": row["id"]}}, "required": ["placementBindingId"]},
+        "then": {"properties": {"entityId": {"const": row["entityId"]}}},
+    } for row in _placement_bindings(data))
     branch_fields = set().union(*_RENDERER_UNUSED_FIELDS.values())
     branch_fields.add("startTick")
     slot["allOf"].extend({
@@ -731,6 +767,8 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
         for field in ("spritePrompt", "spriteNegativePrompt", "spriteCanvasSize"):
             if field in slot:
                 clean[field] = copy.deepcopy(slot[field])
+        if "placementBindingId" in slot:
+            clean["placementBindingId"] = slot["placementBindingId"]
         if "color" in slot:
             clean["color"] = copy.deepcopy(slot["color"])
         if "element" in slot:
@@ -899,6 +937,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "Only rendererKind=impactSprite authors required spritePrompt/spriteNegativePrompt/spriteCanvasSize; spritePrompt describes one dedicated impact sprite and spriteCanvasSize explicitly chooses its PNG canvas, independent of hitbox. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot omits all three image request fields.",
             _impact_sprite_background_rule(),
             "Slots may be empty when presentation should be restrained.",
+            _PLACED_VFX_RULE,
             "assets is optional: request at most four isolated texture ingredients consistent with acceptedVisualKit, declare exact safe IDs once and reuse explicitly through element.texture or path.texture. No filesystem paths/URLs or execution metadata. Never request unused art. cutout fits soft-alpha subjects; strip preserves authored frame/UV through resize without crop/recenter/rotation. Either layout can serve either new renderer; no asset-name or weapon classifier.",
             "Return only one JSON object matching outputSchema.",
         ],
@@ -1355,6 +1394,7 @@ def _request(
                 "schema and note are required; omit unchanged edit fields as no-ops, including assetsUpsert/assetIdsDelete/assetIndicesDelete. Present arrays may not be null. Valid asset prompts, layout, canvas, references and optional absence are frozen. Repair a bad reference only; never create compensating artwork.",
                 "bind only exact runtimeSurfaceReadOnly.runtimePairs entityId+event pairs; runtimeVocabularyReadOnly owns the read-only enum values, numeric ranges, rendererRequirements, rendererSemantics and textureDependencyTuples",
                 "presentation only; gameplay is immutable",
+                _PLACED_VFX_RULE,
                 _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
                 _READABILITY_RULE,
             ],
@@ -1366,6 +1406,7 @@ def _request(
             user["rules"] = user["rules"][:4] + [
                 "outputSchema owns the exact editable numeric/domain limits and companion relations. Read-only source facts never open additional field permissions.",
                 "presentation only; gameplay is immutable",
+                _PLACED_VFX_RULE,
                 _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             ]
         user = {

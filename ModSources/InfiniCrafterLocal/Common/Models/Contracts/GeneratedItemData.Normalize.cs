@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
+using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.VFX;
 using System;
 using System.Collections.Generic;
@@ -243,20 +244,20 @@ public sealed partial class GeneratedItemData
         bool inertReference = SourceMode is "player_save_ref" or "corrupt_reference";
         if (!inertReference && SourceMode is not ("developer_fixture" or "test_fixture")
             && (string.IsNullOrWhiteSpace(Visual.SpritePath)
-                || Visual.SpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+                || !RuntimeEntityVisualSpec.HasCompletedPngProducer(Visual.SpriteStatus)))
             throw new InvalidDataException("Required generated item PNG is unavailable; placeholders are not accepted");
         if (Accessory.Enabled && Armor.Enabled)
             throw new InvalidDataException("A runtime item cannot enable both accessory and armor capabilities");
         if (!inertReference && (Accessory.Enabled || Armor.Enabled)
             && (string.IsNullOrWhiteSpace(Visual.EquipOverlayPath)
-                || Visual.EquipOverlayStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+                || !RuntimeEntityVisualSpec.HasCompletedPngProducer(Visual.EquipOverlayStatus)))
             throw new InvalidDataException("Required equipment overlay PNG is unavailable");
     }
 
     private void ValidateVfxEntityEventReferences()
     {
         foreach (VfxAssetSpec asset in VfxManifest.Assets ?? Array.Empty<VfxAssetSpec>())
-            if (string.IsNullOrWhiteSpace(asset.SpritePath) || !asset.SpritePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            if (GeneratedAssetSyncService.FileNameFromPath(asset.SpritePath).Length == 0
                 || asset.SpriteStatus is not ("generated" or "generated_warn_invalid"))
                 throw new InvalidDataException("Required individual VFX PNG unavailable: " + asset.Id);
         bool hasItemContactBinding = RuntimeProgram.Bindings.Any(x => x.UsePolicy.ContactDamage);
@@ -269,6 +270,13 @@ public sealed partial class GeneratedItemData
             RuntimeEntitySpec? entity = RuntimeProgram.TryGetEntity(slot.EntityId);
             if (entity is null)
                 throw new InvalidDataException($"VFX slot '{slot.Id}' references unknown entity '{slot.EntityId}'");
+            if (slot.PlacementBindingId is not null)
+            {
+                RuntimeBindingSpec? placedBinding = RuntimeProgram.Bindings.SingleOrDefault(b => b.Id == slot.PlacementBindingId);
+                if (entity.Kind != RuntimeEntityKind.ItemBody || placedBinding?.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem
+                    || placedBinding.UsePolicy.Action.TargetId != entity.Id || placedBinding.UsePolicy.Action.Placement?.PlacedVfx is null)
+                    throw new InvalidDataException("VFX placementBindingId requires same-item accepted place_item binding with placedVfx");
+            }
             try { RuntimeEventKind.ValidateProducer(entity, slot.Event, hasItemContactBinding, hasEmittingItemUse); }
             catch (InvalidDataException error)
             {
@@ -307,8 +315,8 @@ public sealed partial class GeneratedItemData
                 bool itemProducer = selected == "item" || entity.Visual.AssetMode == "reuse_item_icon";
                 string png = itemProducer ? Visual.SpritePath : entity.Visual.SpritePath;
                 string status = itemProducer ? Visual.SpriteStatus : entity.Visual.SpriteStatus;
-                if (string.IsNullOrWhiteSpace(png) || !png.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                    || status is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation"))
+                if (GeneratedAssetSyncService.FileNameFromPath(png).Length == 0
+                    || !RuntimeEntityVisualSpec.HasCompletedPngProducer(status))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires its selected producer's ready PNG");
             }
             if (selected == "impact") {
@@ -319,9 +327,8 @@ public sealed partial class GeneratedItemData
                 if (!(VfxManifest.Slots ?? Array.Empty<VfxSlotSpec>()).Any(s => s.EntityId == entity.Id && s.RendererKind == "impactSprite"))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires exact same-entity impactSprite producer");
                 if ((texture is not null || SourceMode is not ("developer_fixture" or "test_fixture"))
-                    && (string.IsNullOrWhiteSpace(entity.Visual.ImpactSpritePath)
-                        || !entity.Visual.ImpactSpritePath.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                        || entity.Visual.ImpactSpriteStatus is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation")))
+                    && (GeneratedAssetSyncService.FileNameFromPath(entity.Visual.ImpactSpritePath).Length == 0
+                        || !RuntimeEntityVisualSpec.HasCompletedPngProducer(entity.Visual.ImpactSpriteStatus)))
                     throw new InvalidDataException($"VFX slot '{slot.Id}' {selector} requires an authored impact PNG for '{entity.Id}'");
             }
         }

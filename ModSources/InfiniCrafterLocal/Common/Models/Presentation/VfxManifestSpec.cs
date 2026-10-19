@@ -132,6 +132,13 @@ public sealed class VfxSlotSpec
     [JsonRequired] public string EntityId { get; set; } = "";
     [JsonRequired] public string Event { get; set; } = "";
     [JsonRequired] public string RendererKind { get; set; } = "";
+    private string? _placementBindingId;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PlacementBindingId
+    {
+        get => _placementBindingId;
+        set => _placementBindingId = value ?? throw new InvalidDataException("placementBindingId cannot be null");
+    }
     private string? _textureRole;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? TextureRole { get => _textureRole; set => _textureRole = value ?? throw new InvalidDataException("TextureRole cannot be null"); }
@@ -205,6 +212,13 @@ public sealed class VfxSlotSpec
         if (rendererKind == InfiniVfxRendererKind.None)
             throw new InvalidDataException($"unknown VFX renderer '{RendererKind}'");
         RendererKind = VfxRendererRegistry.ToWireName(rendererKind);
+        if (PlacementBindingId is not null)
+        {
+            if (RuntimeId(PlacementBindingId,"placement binding id") != PlacementBindingId
+                || Event != RuntimeEventKind.Periodic || Anchor != "self" || RepeatEvery is null or < 1
+                || rendererKind is not (InfiniVfxRendererKind.SpriteElement or InfiniVfxRendererKind.LibraryParticle or InfiniVfxRendererKind.LightCue))
+                throw new InvalidDataException("placed VFX requires exact binding, periodic/self and spriteElement/libraryParticle/lightCue cadence");
+        }
         if (rendererKind == InfiniVfxRendererKind.SoundCue && (SoundId is null || Sound is null))
             throw new InvalidDataException("soundCue requires explicit soundId and sound playback controls");
         if (SoundId is not null) {

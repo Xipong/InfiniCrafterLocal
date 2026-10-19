@@ -62,19 +62,19 @@ def test_child_reference_requirements_do_not_expand_source_entity_dependency_sco
     ("event_target", "exclude_visited", False, "on_crit", 0),
 ])
 def test_representative_selection_choices_reach_exact_opcode_and_receipts(anchor, repeats, los, event_name, delay):
-    doc = _doc(selectionAnchor=anchor, repeatPolicy=repeats, requireLineOfSight=los, when=event_name, delayTicks=delay)
+    doc = _doc(selectionAnchor=anchor, repeatPolicy=repeats, requireLineOfSight=los, when=event_name, delaySeconds=delay / 60)
     original = deepcopy(doc)
     assert validate_runtime_program(doc)["ok"]
     wire = compile_runtime_program(doc)
     event = _event(wire)
     assert event == {"id": "witness_call", "action": FN, "actionCode": 8,
-                     **{CAP.params[k].wire_name or k: v for k, v in _call(doc)["params"].items()}}
+                     **{CAP.params[k].wire_name or k: CAP.params[k].to_wire(v) for k, v in _call(doc)["params"].items()}}
     receipts = [row for row in wire["runtimeContract"]["finalWireReceipts"]
                 if row.get("fn") == FN and ".params." in row["authoredPath"]]
     assert len(receipts) == len(CAP.params) == 9
     for name, spec in CAP.params.items():
         receipt = next(row for row in receipts if row["authoredPath"].endswith(".params." + name))
-        assert receipt["value"] == _call(doc)["params"][name]
+        assert receipt["value"] == spec.to_wire(_call(doc)["params"][name])
         assert receipt["finalPath"].endswith("." + (spec.wire_name or name))
         assert receipt["status"] == "delivered"
     assert validate_runtime_wire(wire)["ok"]
@@ -86,7 +86,7 @@ def test_real_author_packet_and_nullable_inverse_preserve_full_emission_choice(w
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     responses, requests = wire_transport
     doc = _doc(selectionAnchor="event_target", repeatPolicy="exclude_visited", requireLineOfSight=True,
-               stepCount=12, stepRangeTiles=59.99999999999999, initialIgnoreCountdownUpdates=0, delayTicks=1)
+               stepCount=12, stepRangeTiles=59.99999999999999, initialIgnoreCountdownUpdates=0, delaySeconds=1 / 60)
     payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if mode == "json_schema" else doc
     responses.append(payload)
     result = author.try_llm_plan({"name": "A"}, {"name": "B"}, "explicit links")
@@ -119,14 +119,14 @@ def test_required_choices_cannot_be_filled_by_provider_or_author_defaults(name):
     ("requireLineOfSight", 0), ("requireLineOfSight", None),
     ("initialIgnoreCountdownUpdates", None), ("initialIgnoreCountdownUpdates", -1),
     ("initialIgnoreCountdownUpdates", 601), ("initialIgnoreCountdownUpdates", 10.0),
-    ("delayTicks", True), ("delayTicks", 600.5), ("delayTicks", 601),
+    ("delaySeconds", True), ("delaySeconds", -0.5), ("delaySeconds", 601 / 60),
 ])
 def test_invalid_present_author_and_saved_wire_choices_remain_red(name, value):
     doc = _doc(**{name: value})
     assert not validate_runtime_program(doc)["ok"]
     wire = compile_runtime_program(_doc())
     wire.pop("runtimeContract")
-    _event(wire)[CAP.params[name].wire_name or name] = value
+    _event(wire)[CAP.params[name].wire_name or name] = (value * 60 if name == "delaySeconds" and type(value) in (int, float) else value)
     report = validate_runtime_wire(wire)
     assert not report["ok"], report
     assert any(row["path"].endswith("." + (CAP.params[name].wire_name or name)) for row in report["errors"])
@@ -142,7 +142,7 @@ def test_saved_wire_cannot_invent_any_missing_emission_parameter(name):
 
 @pytest.mark.parametrize("name,value", [
     ("aim", "cursor"), ("aim", "facing"), ("position", {"at": "owner_center"}),
-    ("position", {"at": "cursor"}), ("offsetPx", 1),
+    ("position", {"at": "cursor"}), ("offsetBlocks", 1 / 16),
 ])
 def test_reference_diagnoses_exact_exclusive_child_dependency_without_rewriting_it(name, value):
     doc = _doc(); spawn = _child_spawn(doc); spawn["params"][name] = value
@@ -156,7 +156,7 @@ def test_reference_diagnoses_exact_exclusive_child_dependency_without_rewriting_
     assert doc == before
     wire = compile_runtime_program(_doc()); wire.pop("runtimeContract")
     child = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == "witness_child")
-    child["spawn"][name] = value
+    child["spawn"][CAPABILITY_REGISTRY["configure_spawn"].params[name].wire_name or name] = value
     assert not validate_runtime_wire(wire)["ok"]
 
 
@@ -168,7 +168,7 @@ def _copy_child(doc, name):
         row["id"] = name + "_" + row["id"]
         row["target"] = name
         if row["fn"] == "configure_spawn":
-            row["params"].update(aim="velocity", position={"at": "activation_origin"}, offsetPx=0)
+            row["params"].update(aim="velocity", position={"at": "activation_origin"}, offsetBlocks=(0) / 16)
     return entity, calls
 
 
@@ -181,14 +181,14 @@ def test_production_repair_can_retarget_or_create_exact_child_and_freezes_existi
     # orphan caused by retargeting the only reference (negative case below).
     doc["runtimeProgram"]["calls"].append({"id": "keep_original", "target": "witness_entity", "fn": "spawn_entity_on_event",
         "params": {"entity": "witness_child", "when": "on_hit", "count": 1, "spreadRadians": 0.0,
-                   "damageMultiplier": 1.0, "delayTicks": 0,
+                   "damageMultiplier": 1.0, 'delaySeconds': (0) / 60,
                    "damageBasis": "authored_child", "knockbackBasis": "authored_child"}})
     child, calls = _copy_child(doc, "selected")
     if not create:
         doc["runtimeProgram"]["entities"].append(child); doc["runtimeProgram"]["calls"].extend(calls)
         doc["runtimeProgram"]["calls"].append({"id": "keep_selected", "target": "witness_entity", "fn": "spawn_entity_on_event",
             "params": {"entity": "selected", "when": "on_hit", "count": 1, "spreadRadians": 0.0,
-                       "damageMultiplier": 1.0, "delayTicks": 0,
+                       "damageMultiplier": 1.0, 'delaySeconds': (0) / 60,
                        "damageBasis": "authored_child", "knockbackBasis": "authored_child"}})
     before = deepcopy(doc)
     candidate = deepcopy(_call(doc)); candidate["params"].update(entity="selected", stepCount=12)
@@ -293,7 +293,9 @@ def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
     for entity in wire["runtimeProgram"]["entities"]:
         if "overTarget" in entity.get("spawn", {}):
             assert entity["spawn"].pop("overTarget") == {"heightTiles": 0, "delayTicks": 0}
-    fingerprint = hashlib.sha256(json.dumps(wire["runtimeProgram"], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    from captured_projectile_author import historical_returning_potion_program
+    historical = historical_returning_potion_program(wire["runtimeProgram"])
+    fingerprint = hashlib.sha256(json.dumps(historical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
     assert not any(key in json.dumps(wire["runtimeProgram"]) for key in ("stepCount", "selectionAnchor", "repeatPolicy"))
     # The current exact fresh alias keeps the old radial runtime discriminator.
@@ -315,7 +317,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     calls = doc["runtimeProgram"]["calls"]
     emission = _call(doc)
     child_spawn = _child_spawn(doc)
-    child_spawn["params"]["velocity"] = {"cone": {"minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7, "halfAngleRadians": 0.2}}
+    child_spawn["params"]["velocity"] = {"cone": {'minSpeedBlocksPerSecond': (4) * 60 / 16, 'maxSpeedBlocksPerSecond': (7) * 60 / 16, "halfAngleRadians": 0.2}}
     calls.append({"id": "combined_hit_target_geometry", "fn": "spawn_entity_from_hit_target",
                   "target": emission["target"],
                   "params": {**deepcopy(next(row["params"] for row in
@@ -323,7 +325,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
                       if row["fn"] == "spawn_entity_from_hit_target")), "entity": emission["params"]["entity"]}})
     calls.append({"id": "combined_parent_combat", "fn": "spawn_entity_on_event", "target": emission["target"],
                   "params": {"when": "on_hit", "entity": emission["params"]["entity"], "count": 1,
-                             "spreadRadians": 0.0, "damageMultiplier": 0.5, "delayTicks": 0,
+                             "spreadRadians": 0.0, "damageMultiplier": 0.5, 'delaySeconds': (0) / 60,
                              "damageBasis": "live_parent", "knockbackBasis": "authored_child"}})
     owner = next(row["target"] for row in calls if row["fn"] == "set_projectile_hitbox")
     for fn in ("set_projectile_hitbox_curve", "configure_weapon_ammo", "refresh_generated_effect_group_while_held"):
@@ -379,7 +381,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
     frozen["params"]["ammoCategory"] = "bullet"
     hostile_spawn = deepcopy(child_spawn)
-    hostile_spawn["params"]["velocity"]["cone"]["maxSpeedPxPerUpdate"] = 12
+    hostile_spawn["params"]["velocity"]["cone"]['maxSpeedBlocksPerSecond'] = (12) * 60 / 16
     hostile_emission = deepcopy(emission)
     hostile_emission["params"]["selectionAnchor"] = "event_target"
     hostile_geometry = deepcopy(next(row for row in calls if row["id"] == "combined_hit_target_geometry"))

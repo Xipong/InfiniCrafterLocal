@@ -423,7 +423,10 @@ def test_light_theme_and_accent_follow_current_navigation(browser_studio, viewpo
     assert colors['canvas'] == colors['canvasToken']
     assert colors['ink'] == colors['railInk'] == colors['inkToken']
     assert colors['rail'] == colors['railToken']
-    assert colors['activeHome'] == 'rgba(0, 0, 0, 0)'
+    # Fully transparent colors can retain the accent RGB during a transition;
+    # hidden RGB is not visible and must not fail the separate-marker contract.
+    assert colors['activeHome'].startswith('rgba(')
+    assert float(colors['activeHome'].rsplit(',', 1)[1].rstrip(') ')) == 0
     assert colors['activeInk'] == colors['accentInk']
     assert colors['marker'] == colors['primary'] == colors['accent']
     assert colors['station'] not in {colors['canvas'], 'rgba(0, 0, 0, 0)'}

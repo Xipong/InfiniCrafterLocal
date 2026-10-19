@@ -477,9 +477,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void ItemLightRespectsClientSetting()
     {
-        WithLighting((config, lights) =>
+        WithLighting((config, lights) => WithPlayer((player, _) =>
         {
-            var player = new Player { active = true, Center = new Vector2(160f, 320f) };
+            player.active = true; player.Center = new Vector2(160f, 320f);
             var data = GeneratedItemData.Placeholder();
             string entityId = data.RuntimeProgram.ItemEntityId;
             data.VfxManifest = LightManifest(entityId, RuntimeEventKind.Periodic);
@@ -497,18 +497,26 @@ internal static partial class EngineRuntimeChecks
             data.Accessory.Enabled = true;
             data.Accessory.LightStrength = 0.6f;
             data.Accessory.LightColorName = "red";
+            data.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec {
+                Id = "equip", Input = RuntimeInputKind.Equipped,
+                UsePolicy = new() { Action = new() { Kind = RuntimeBindingAction.EquipPassive, TargetId = entityId } }
+            } };
+            var equipment = AttachItem(new InfiniCrafterLocal.Content.Items.GeneratedItem(),
+                new Item { type = Terraria.ID.ItemID.Wood, stack = 1 }, data);
             config.PresentationLightMultiplier = 1f;
             lights.Clear();
             InfiniItemVfxRuntime.OnVisibleEquipment(player, data);
+            Equal(0, lights.Count, "visible vanity path remains cosmetic after PR117");
+            equipment.UpdateAccessory(player, false);
             Equal(1, lights.Count, "equipment light baseline");
             var field = lights[0]!.GetType().GetField("Color")!;
             var baseline = (Vector3)field.GetValue(lights[0])!;
             config.PresentationLightMultiplier = 0f;
             lights.Clear();
-            InfiniItemVfxRuntime.OnVisibleEquipment(player, data);
+            equipment.UpdateAccessory(player, false);
             Equal(1, lights.Count, "equipment light remains enabled");
             Equal(baseline, (Vector3)field.GetValue(lights[0])!, "equipment light unchanged by VFX setting");
-        });
+        }));
     }
 
     private static void ProjectileLightRespectsClientSetting()

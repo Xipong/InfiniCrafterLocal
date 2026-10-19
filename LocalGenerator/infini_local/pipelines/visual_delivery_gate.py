@@ -37,11 +37,9 @@ class VisualDeliveryBlocked(RuntimeError):
 
 def _sprite_status_is_usable(status: Any) -> bool:
     value = str(status or "").strip().lower()
-    return bool(value) and value not in {
-        "failed", "prompt_only", "placeholder", "backend_config_error",
-        "skipped", "skipped_disabled_by_settings", "not_required",
-        "invalid_or_missing_authored_asset_mode", "required_item_icon_missing",
-    }
+    # A retained file proves bytes, not completion of its selected producer.
+    # Unknown/pending statuses must not borrow readiness from a previous attempt.
+    return value in {"generated", "generated_warn_invalid", "fallback", "fallback_after_failed_generation"}
 
 
 def _item_sprite_status_is_usable(status: Any) -> bool:

@@ -1,6 +1,6 @@
 # Карта PR по аудиту — финальное техническое ревью
 
-Пакет #7–#27 в `Xipong/InfiniCrafterLocal`: ниже сначала финальные решения, затем исходный исторический proposal snapshot. Текущие canonical owners — [AGENT_INDEX_RU.md](../development/OWNERS_RU.md) и [PROJECT_MAP_RU.md](../development/CODE_MAP_RU.md). Исторические выводы сохранены в `HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md`.
+Пакет #7–#27 в `Xipong/InfiniCrafterLocal`: ниже сначала финальные решения, затем исходный исторический proposal snapshot. Текущие canonical owners — в [карте задач и исходников](../development/CODE_MAP_RU.md). Исторические выводы сохранены в `HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md`.
 
 ## Итог интеграции
 

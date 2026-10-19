@@ -44,7 +44,7 @@ def _call(item, call_id):
 def _broken_held_and_deployed():
     item = build_runtime_fixture("held_and_deployed")
     assert validate_runtime_program(item)["ok"]
-    _call(item, "held_lantern_pike_life")["params"]["lifetimeTicks"] = 0
+    _call(item, "held_lantern_pike_life")["params"]['lifetimeSeconds'] = (0) / 60
     return item
 
 
@@ -54,15 +54,15 @@ def test_changed_source_fact_changes_serialized_repair_not_permissions(monkeypat
     source = _broken_held_and_deployed()
     variant = copy.deepcopy(source)
     if changed_fact == "independent-runtime-interval":
-        assert _call(source, "deployed_targeter")["params"]["intervalTicks"] == 45
-        _call(variant, "deployed_targeter")["params"]["intervalTicks"] = 60
+        assert _call(source, "deployed_targeter")["params"]['intervalSeconds'] == 0.75
+        _call(variant, "deployed_targeter")["params"]['intervalSeconds'] = (60) / 60
         field = "runtimeProgram"
     else:
         variant["concept"]["plannedPlayerActions"][0]["intent"] = (
             "OFFLINE CONTROL: another initial intention, not a runtime choice.")
         field = "concept"
     valid_control = copy.deepcopy(variant)
-    _call(valid_control, "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
+    _call(valid_control, "held_lantern_pike_life")["params"]['lifetimeSeconds'] = (30) / 60
     assert validate_runtime_program(valid_control)["ok"]
     assert validate_runtime_program(variant) == validate_runtime_program(source)
     baseline, baseline_dossier = _capture_request(monkeypatch, source, format_mode)
@@ -131,7 +131,7 @@ def test_readonly_projection_preserves_exact_values_absences_and_is_detached(mon
         assert json.dumps(dossier["acceptedItemContext"][key], ensure_ascii=False) == json.dumps(item[key], ensure_ascii=False)
     projected = author.build_gameplay_repair_dossier(item, {}, {}, failure_report=validate_runtime_program(item))
     projected["acceptedItemContext"]["concept"]["plannedPlayerActions"][0]["intent"] = "only in detached view"
-    _call(projected["acceptedItemContext"], "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
+    _call(projected["acceptedItemContext"], "held_lantern_pike_life")["params"]['lifetimeSeconds'] = (30) / 60
     projected["immutableProgramIndex"]["bindings"][0]["action"]["targetId"] = "only in detached index"
     assert item == before
 
@@ -156,9 +156,9 @@ def test_readonly_source_never_invents_values_when_source_is_missing_or_malforme
 def _hostile_patch(item):
     """Handwritten offline response: one legal leaf plus unrelated hostile edits."""
     fixed = copy.deepcopy(_call(item, "held_lantern_pike_life"))
-    fixed["params"]["lifetimeTicks"] = 30
+    fixed["params"]['lifetimeSeconds'] = (30) / 60
     targeter = copy.deepcopy(_call(item, "deployed_targeter"))
-    targeter["params"]["intervalTicks"] = 90
+    targeter["params"]['intervalSeconds'] = (90) / 60
     stats = copy.deepcopy(_call(item, "item_stats"))
     stats["params"].update(damage=1999, manaCost=77, knockback=17.0)
     binding = copy.deepcopy(item["runtimeProgram"]["bindings"][0])
@@ -184,7 +184,7 @@ def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatc
     before = json.dumps(item, ensure_ascii=False)
     scope = build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
     assert scope["fieldPermissions"]["calls"] == [
-        {"id": "held_lantern_pike_life", "paths": ["params.lifetimeTicks"]}]
+        {"id": "held_lantern_pike_life", "paths": ['params.lifetimeSeconds']}]
     incoming = _hostile_patch(item)
     repaired, request = _repair_with_response(monkeypatch, item, incoming, format_mode, out_of_scope_response=True)
     dossier = request_dossier(request)
@@ -195,7 +195,7 @@ def test_visible_independent_facts_grant_no_edits_through_real_repair(monkeypatc
     assert audit["ok"] and audit["ignoredChanges"]
     assert any(row["reason"] == "independent_valid_node_frozen" for row in audit["ignoredChanges"])
     expected = copy.deepcopy(item)
-    _call(expected, "held_lantern_pike_life")["params"]["lifetimeTicks"] = 30
+    _call(expected, "held_lantern_pike_life")["params"]['lifetimeSeconds'] = (30) / 60
     expected["realization"] = copy.deepcopy(incoming["realizationReplacement"])
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)

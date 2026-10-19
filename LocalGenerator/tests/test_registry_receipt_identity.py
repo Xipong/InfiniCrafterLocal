@@ -43,7 +43,7 @@ def _receipt(rows, path):
                  "wrong capability output", id="equal-tool-outputs"),
     pytest.param("configure_tool", {"pickPower": 20, "axePowerTooltipPercent": 125}, "technical-swap", ("gameplay.pickPower", "gameplay.axePower"),
                  "wrong capability output", id="unequal-tool-status-bypass"),
-    pytest.param("apply_vanilla_buff_on_use", {"buffId": 20, "durationTicks": 20}, "swap", ("gameplay.extraBuffs[0].buffCode", "gameplay.extraBuffs[0].buffTime"),
+    pytest.param("apply_vanilla_buff_on_use", {"buffId": 20, "durationSeconds": 20 / 60}, "swap", ("gameplay.extraBuffs[0].buffCode", "gameplay.extraBuffs[0].buffTime"),
                  "wrong capability output", id="equal-buff-outputs"),
     pytest.param("configure_accessory", {"defensePoints": 1}, "class-swap", ("accessory.meleeDamage", "accessory.rangedDamage"),
                  "wrong equipment output", id="equal-equipment-class-outputs"),
@@ -137,7 +137,7 @@ def test_only_declared_authored_to_wire_paths_are_auditable(receipt, reason):
 @pytest.mark.parametrize("fn,params,bonus,expected", [
     pytest.param("configure_item_stats", None, None,
                  {"gameplay.useTime": 24, "runtimeProgram.itemUse.channel": False}, id="item-stat-renaming-and-channel"),
-    pytest.param("configure_accessory", {"defensePoints": 4, "genericCritChancePercentagePoints": 3, "maxRunSpeedBonusPxPerTick": 1.5,
+    pytest.param("configure_accessory", {"defensePoints": 4, "genericCritChancePercentagePoints": 3, "maxRunSpeedBonusBlocksPerSecond": 5.625,
                  "fallDamageImmune": True, "ammoSaveChancePercent": 25}, None,
                  {"accessory.defense": 4, "accessory.genericCrit": 3, "accessory.maxRunSpeed": 1.5, "accessory.fallDamageImmune": True,
                   "accessory.ammoSaveChance": 0.25}, id="accessory-exact-tml-fields"),
@@ -182,8 +182,8 @@ def test_item_and_equipment_projection_has_exact_fields_and_param_receipts(fn, p
     if fn == "configure_item_stats":
         index = source["runtimeProgram"]["calls"].index(call)
         row = _receipt(rows, "gameplay.useTime")
-        assert row["authoredPath"] == f"runtimeProgram.calls[{index}].params.useTimeTicks"
-        assert row["value"] == call["params"]["useTimeTicks"]
+        assert row["authoredPath"] == f"runtimeProgram.calls[{index}].params.useTimeSeconds"
+        assert row["value"] == CAPABILITY_REGISTRY[fn].params["useTimeSeconds"].to_wire(call["params"]["useTimeSeconds"])
         assert wire["runtimeProgram"]["itemUse"]["channel"] is False and "channelUse" not in wire["gameplay"]
 
 
@@ -292,13 +292,13 @@ def test_item_effects_require_their_executable_binding(fn):
         fn
         for fn, cap in CAPABILITY_REGISTRY.items()
         if cap.category == "event"
-        and "delayTicks" in cap.params and fn != "spawn_entity_on_event"
+        and "delaySeconds" in cap.params and fn != "spawn_entity_on_event"
     ],
 )
 def test_each_declared_event_delay_reaches_real_wire(fn):
     source = build_capability_witness(fn)
     call = _call(source, fn)
-    call["params"]["delayTicks"] = 30
+    call["params"]['delaySeconds'] = (30) / 60
     wire = compile_runtime_program(source)
     assert validate_runtime_wire(wire)["ok"]
     actions = [a for e in wire["runtimeProgram"]["entities"] for a in e.get("events", [])]
@@ -383,7 +383,7 @@ def test_equipment_dependencies_refuse_invalid_composition_before_projection(fn,
         ("configure_accessory", "defensePoints", 1, True),
         ("configure_tool", "axePowerTooltipPercent", 5, True),
         ("configure_accessory", "moveSpeedBonusPercent", 100, True),
-        ("configure_spawn", "velocity.constantSpeedPxPerUpdate", -0.0, 0.0),
+        ("configure_spawn", "velocity.constantSpeedBlocksPerSecond", -0.0, 0.0),
     ],
 )
 def test_source_receipt_projection_rejects_equal_numeric_representation_forgery(fn, param, source_value, forged):
@@ -501,7 +501,7 @@ def test_visual_global_receipts_bind_kind_identity_and_complete_outputs(mutation
         program["calls"].append({
             "id": "spawn_other", "fn": "spawn_entity_on_event", "target": "held_lantern_pike",
             "params": {"when": "on_hit", "entity": "other_held", "count": 1,
-                       "spreadRadians": 0, "damageMultiplier": 1, "delayTicks": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
+                       "spreadRadians": 0, "damageMultiplier": 1, 'delaySeconds': (0) / 60, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
         })
         assert validate_runtime_program(source)["ok"]
     wire = compile_runtime_program(source)

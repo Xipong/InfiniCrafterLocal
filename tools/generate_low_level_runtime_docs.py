@@ -30,6 +30,7 @@ from infini_local.qa.capability_library_audit import capability_library_audit  #
 EXTERNAL_REFERENCES = {
     "item": "tML ModItem: SetDefaults/CanUseItem/UseItem/AltFunctionUse",
     "item_combat": "tML ModItem: UseItemHitbox/OnHitNPC",
+    "item_inventory": "tML Player.HasItem(bool[]) native inventory witness; WorldGen seed lifecycle",
     "item_utility": "tML ModItem + Player hooks",
     "item_tool": "tML Item pick/axe/hammer fields",
     "item_placeable": "tML Item.createTile/createWall/placeStyle",
@@ -95,7 +96,9 @@ def event_input_cell(cap: Any) -> str:
         values.append("events: " + ", ".join(f"`{x}`" for x in cap.allowed_events))
     if cap.emitted_events:
         values.append("emits: " + ", ".join(f"`{x}`" for x in cap.emitted_events))
-    if cap.target_kinds == ("item_body",):
+    if cap.category == "item_inventory":
+        values.append("native inventory query; no binding required")
+    elif cap.target_kinds == ("item_body",):
         values.append("through authored item binding/equipment state")
     return "<br>".join(values) if values else "entity lifecycle/input binding"
 

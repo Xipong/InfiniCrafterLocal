@@ -7,6 +7,7 @@ from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope
 import pytest
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
@@ -22,7 +23,7 @@ def periodic_equipment_fixture(kind="accessory"):
     program["calls"].extend(deepcopy(row) for row in source["calls"] if row.get("target") == "witness_child")
     event = deepcopy(next(row for row in source["calls"] if row["fn"] == "spawn_entity_on_event"))
     event.update(id="periodic_spawn", target="item")
-    event["params"]["when"] = {"everyTicks": 6}
+    event["params"]["when"] = {'everySeconds': (6) / 60}
     program["calls"].append(event)
     next(row for row in program["calls"] if row["id"] == "child_configure_spawn")["params"]["aim"] = "facing"
     return doc
@@ -62,14 +63,16 @@ def test_equipped_only_periodic_spawn_reaches_strict_delivery(kind):
 
 @pytest.mark.parametrize("field,valid,invalid", [
     ("rocketBoots", [0, 1, 2, 3, 4, 5], [-1, 6, 1.5, True, None]),
-    ("accRunSpeedPxPerTick", [0, 3, 6.75, 20], [-1, 20.00001, True, None]),
+    ("accRunSpeedBlocksPerSecond", [0, 3, 6.75, 20], [-1, 20.00001, True, None]),
 ])
 def test_bounded_native_number(field, valid, invalid):
     for value in valid:
-        doc, _ = fixture({field: value, "defensePoints": 1})
+        spec = CAPABILITY_REGISTRY["configure_accessory"].params[field]
+        author_value = spec.from_wire(value) if spec.predecessor_names and type(value) in (int, float) else value
+        doc, _ = fixture({field: author_value, "defensePoints": 1})
         assert validate_runtime_program(doc)["ok"], "bounded native number must be authorable"
         wire = compile_runtime_program(doc)
-        wire_field = "accRunSpeed" if field == "accRunSpeedPxPerTick" else field
+        wire_field = spec.wire_name or field
         assert wire["accessory"][wire_field] == value
         assert validate_runtime_wire(wire)["ok"]
         delivered = deepcopy(wire)
@@ -84,7 +87,9 @@ def test_bounded_native_number(field, valid, invalid):
         corrupt["accessory"][wire_field] = invalid[0]
         assert not validate_runtime_wire(corrupt)["ok"]
     for value in invalid:
-        doc, _ = fixture({field: value, "defensePoints": 1})
+        spec = CAPABILITY_REGISTRY["configure_accessory"].params[field]
+        author_value = spec.from_wire(value) if spec.predecessor_names and type(value) in (int, float) else value
+        doc, _ = fixture({field: author_value, "defensePoints": 1})
         assert not validate_runtime_program(doc)["ok"]
         with pytest.raises(ValueError):
             compile_runtime_program(doc)
@@ -95,7 +100,7 @@ def test_serialized_author_and_frozen_leaf_repair(monkeypatch, mode):
     from test_source_unit_guidance import _author_request, _repair_request, _source, _offline
     getattr(_offline, "__wrapped__")(monkeypatch)
     params = {"wireVision": True, "iceSkate": True, "noKnockback": True, "fireWalk": True,
-              "rocketBoots": 3, "accRunSpeedPxPerTick": 6.75, "moveSpeedBonusPercent": 8,
+              "rocketBoots": 3, "accRunSpeedBlocksPerSecond": 25.3125, "moveSpeedBonusPercent": 8,
               "defensePoints": 2}
     doc, call = fixture(params)
     from jsonschema import Draft202012Validator

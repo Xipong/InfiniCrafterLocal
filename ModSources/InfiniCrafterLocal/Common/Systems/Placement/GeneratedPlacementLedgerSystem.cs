@@ -34,7 +34,7 @@ internal readonly record struct GeneratedPlacementKey(GeneratedPlacementLayer La
 public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
 {
     private const int PayloadVersion = 3;
-    private const int PlacementProtocolVersion = 5;
+    private const int PlacementProtocolVersion = 6;
     private const string SaveKey = "infiniGeneratedPlacementLedgerV2";
     private const string PendingSaveKey = "infiniGeneratedPlacementReturnsV2";
     private const string QuarantineSaveKey = "infiniGeneratedPlacementReturnQuarantineV1";
@@ -63,6 +63,15 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         // Legal NBT with a noncompound cosmetic value is retained literally,
         // never interpreted as presentation or a second material owner.
         public TagCompound? RawPlacedBodyEnvelope { get; init; }
+        public TagCompound? NativeChest { get; init; }
+        public Chest? BoundChest { get; set; }
+        public int BoundChestIndex { get; set; } = -1;
+        public NativeChestDefinitionCertificate? ChestDefinitionCertificate { get; set; }
+        public ulong ChestWorld { get; set; }
+        public TagCompound? RawNativeChestEnvelope { get; init; }
+        public bool NativeChestNeedsRebind { get; set; }
+        public bool NativeChestRemoved { get; set; }
+        public string NativeChestDiagnostic { get; set; } = "";
     }
 
     private sealed class PendingReturnRecord
@@ -117,6 +126,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         public int BeforeWallType { get; init; }
         public string PlacementBindingId { get; init; } = "";
         public RuntimePlacementSpec? ExactPlacement { get; init; }
+        public NativeChestAttempt? ChestAttempt { get; set; }
     }
 
     private sealed class ClientPlacementIntent
@@ -155,12 +165,15 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
     private static readonly List<QuarantinedReturnRecord> QuarantinedReturns = new();
     private static readonly List<TagCompound> RawQuarantineEnvelopes = new();
     private static readonly Dictionary<int, PlacementAuthorization> PendingAuthorizations = new();
-    private static readonly Dictionary<int, int> PlacementReceiptExpiryByPlayer = new();
+    private sealed record PlacementReceipt(Player Player,Item Item,GeneratedItemData Data,int ExpiresAtTick);
+    private static readonly Dictionary<int, PlacementReceipt> PlacementReceiptExpiryByPlayer = new();
 
     public override void OnWorldUnload() => ClearWorld();
 
     public override void ClearWorld()
     {
+        _nativeChestWorld++;
+        _nativeChestMaintenanceCursor=0;
         Placements.Clear();
         Groups.Clear();
         PendingReturns.Clear();
@@ -174,6 +187,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         _nextPlacementSequence = 0;
         _placedBodyRevision = 0;
         _bodyFootprintMaintenanceCursor = 0;
+        RetirePlacedVfxSources();
         PlacedBodyViews.Clear();
         ClearPlacedBodyMirrorState();
     }
@@ -234,6 +248,11 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
                 DefinitionJson = definitionJson,
                 NativePrefixEnvelope = ReadPlacementPrefixEnvelope(row),
                 Cells = cells,
+                NativeChest = row.ContainsKey("nativeChest") && row["nativeChest"] is TagCompound chest ? (TagCompound)chest.Clone() : null,
+                RawNativeChestEnvelope = row.ContainsKey("nativeChest") && row["nativeChest"] is not TagCompound
+                    ? new TagCompound { ["nativeChest"] = ((TagCompound)row.Clone())["nativeChest"] } : null,
+                NativeChestNeedsRebind = true,
+                NativeChestRemoved = row.ContainsKey("nativeChestRemoved") && row["nativeChestRemoved"] is int removed && removed==1,
                 PlacedBody = row.ContainsKey("placedBody") && row["placedBody"] is TagCompound rawBody
                     ? (TagCompound)rawBody.Clone() : null,
                 RawPlacedBodyEnvelope = row.ContainsKey("placedBody") && row["placedBody"] is not TagCompound
@@ -403,11 +422,12 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
 
         foreach (int playerIndex in ClientPlacementIntents.Where(p => p.Value.ExpiresAtTick < now).Select(p => p.Key).ToArray())
             ClientPlacementIntents.Remove(playerIndex);
-        foreach (int playerIndex in PlacementReceiptExpiryByPlayer.Where(x => x.Value < now).Select(x => x.Key).ToArray())
+        foreach (int playerIndex in PlacementReceiptExpiryByPlayer.Where(x => x.Value.ExpiresAtTick < now).Select(x => x.Key).ToArray())
             PlacementReceiptExpiryByPlayer.Remove(playerIndex);
 
         if (Main.netMode == NetmodeID.MultiplayerClient)
             return;
+        RetireNativeChests();
         RetireMissingPlacedBodyFootprints();
         int attempts = Math.Min(MaxPendingAttemptsPerTick, PendingReturns.Count);
         for (int index = attempts - 1; index >= 0; index--)
@@ -481,6 +501,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         if (!tile && !wall)
             return false;
         if (!AdmitPlacedBodyNativeBoundary(placement)) return false;
+        if (IsNativeChestPlacement(placement) && (Main.chest is not { Length: 8000 }
+            || Chest.FindEmptyChest(targetX,targetY-1,placement.TileId,placement.PlaceStyle,1,0)<0)) return false;
         bool replacesExistingAuthorization = PendingAuthorizations.ContainsKey(player.whoAmI);
         int reservedAuthorizationCount = PendingAuthorizations.Count + (replacesExistingAuthorization ? 0 : 1);
         if ((long)Groups.Count + PendingReturns.Count + QuarantinedReturns.Count(record => !record.Requeued)
@@ -510,7 +532,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         {
             RuntimeBindingSpec? exactBinding = data.RuntimeProgram.Bindings.SingleOrDefault(binding =>
                 ReferenceEquals(binding.UsePolicy.Action.Placement, placement));
-            if (placement.HasPlacedFootprint && (exactBinding is null || !SupportsPlacedBodyFootprint(placement)))
+            if ((placement.HasPlacedFootprint || IsNativeChestPlacement(placement))
+                && (exactBinding is null || !SupportsPlacedBodyFootprint(placement)))
                 return false;
             string definitionJson = data.ToNetworkJson();
             string definitionHash = PlacementDefinitionHash(definitionJson);
@@ -602,7 +625,9 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         if (!WithinPlacementReach(player, authorization.TargetX, authorization.TargetY))
             return false;
 
+        if (IsNativeChestPlacement(authorization.ExactPlacement) && !HasNativeChestOutcome(authorization)) return false;
         List<GeneratedPlacementKey> committedCells = authorization.ExactPlacement?.HasPlacedFootprint == true
+            || IsNativeChestPlacement(authorization.ExactPlacement)
             ? FindExactPlacedBodyCells(authorization) : FindCommittedCells(authorization);
         if (committedCells.Count == 0 || committedCells.Count > MaxCellsPerGroup)
             return false;
@@ -621,12 +646,16 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             NativePrefixEnvelope = authorization.NativePrefixEnvelope,
             Cells = committedCells,
             PlacedBody = CapturePlacedBodyWitness(authorization, committedCells),
+            NativeChest = CaptureNativeChestWitness(authorization),
+            BoundChest = authorization.ChestAttempt?.Actor,
+            BoundChestIndex = authorization.ChestAttempt?.Index ?? -1,
+            ChestWorld = _nativeChestWorld,
         };
         Groups[groupId] = group;
         foreach (GeneratedPlacementKey key in committedCells)
             Placements[key] = groupId;
         PendingAuthorizations.Remove(player.whoAmI);
-        RecordPlacementReceipt(player);
+        RecordPlacementReceipt(player,authorization);
         // Commit the sole material owner/receipt before optional registry or packet work.
         PublishPlacedBodyGroupChange(group, removed: false);
         if (Main.netMode == NetmodeID.MultiplayerClient)
@@ -837,6 +866,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         ulong sequence = reader.ReadUInt64(); bool accepted = reader.ReadBoolean();
         string definitionHash = accepted ? reader.ReadString() : "";
         string groupId = accepted ? reader.ReadString() : "";
+        if (NativeChestPacketRemaining(reader) > 0)
+        { HandleNativeChestOutcome(reader,sequence,accepted,definitionHash,groupId); return; }
         if (!ClientPlacementIntents.TryGetValue(Main.myPlayer, out ClientPlacementIntent? intent)
             || intent.Sequence != sequence || (int)Main.GameUpdateCount > intent.ExpiresAtTick) return;
         if (accepted && Guid.TryParseExact(groupId, "N", out _)
@@ -925,6 +956,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             || !PendingAuthorizations.TryGetValue(whoAmI, out PlacementAuthorization? authorization)
             || authorization.Sequence == 0 || authorization.Sequence != sequence
             || authorization.Layer != layer || authorization.TargetX != x || authorization.TargetY != y) return;
+        if (IsNativeChestPlacement(authorization.ExactPlacement))
+        { HandleNativeChestRequest(reader,player,authorization); return; }
         authorization.NotifyReceived = true;
         // A late notify can only finish an already server-owned before snapshot.
         // It can never synthesize a new authorization from an existing cell.
@@ -959,17 +992,22 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         y = (int)value;
     }
 
-    private static void RecordPlacementReceipt(Player player)
+    private static void RecordPlacementReceipt(Player player,PlacementAuthorization authorization)
     {
-        if (player.whoAmI >= 0 && player.whoAmI < Main.maxPlayers)
-            PlacementReceiptExpiryByPlayer[player.whoAmI] = (int)Main.GameUpdateCount + PlacementReceiptLifetimeTicks;
+        if (player.whoAmI >= 0 && player.whoAmI < Main.maxPlayers
+            && authorization.SourceItem is Item item && authorization.SourceData is GeneratedItemData data)
+            PlacementReceiptExpiryByPlayer[player.whoAmI] = new(player,item,data,(int)Main.GameUpdateCount + PlacementReceiptLifetimeTicks);
     }
 
     internal static bool TryConsumePlacementReceipt(Player player)
     {
-        if (player is null || !PlacementReceiptExpiryByPlayer.Remove(player.whoAmI, out int expiry))
-            return false;
-        return (int)Main.GameUpdateCount <= expiry;
+        if (player is null || player.whoAmI<0 || player.whoAmI>=Main.maxPlayers
+            || !PlacementReceiptExpiryByPlayer.TryGetValue(player.whoAmI,out PlacementReceipt? receipt)
+            || !ReferenceEquals(receipt.Player,player) || !ReferenceEquals(Main.player[player.whoAmI],player)
+            || !ReferenceEquals(receipt.Item,player.HeldItem)
+            || !ReferenceEquals((receipt.Item.ModItem as GeneratedItem)?.Data,receipt.Data)
+            || (int)Main.GameUpdateCount>receipt.ExpiresAtTick) return false;
+        return PlacementReceiptExpiryByPlayer.Remove(player.whoAmI);
     }
 
     internal static bool Contains(GeneratedPlacementLayer layer, int x, int y)
@@ -982,6 +1020,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             return false;
         if (Main.netMode == NetmodeID.MultiplayerClient)
             return true;
+        if (!CanReleaseNativeChest(group)) return true;
         foreach (GeneratedPlacementKey cell in group.Cells)
             Placements.Remove(cell);
         Groups.Remove(groupId);

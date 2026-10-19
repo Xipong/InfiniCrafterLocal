@@ -50,7 +50,7 @@ def test_gameplay_type_only_repair_survives_real_caller(monkeypatch, format_mode
 
 
 @pytest.mark.parametrize("fn,selector,value", [
-    pytest.param("pull_on_event", "when", {"everyTicks": 12}, id="periodic"),
+    pytest.param("pull_on_event", "when", {"everySeconds": 0.2}, id="periodic"),
     pytest.param("require_use_condition", "condition", {"lifeAtLeast": 100}, id="life-threshold"),
     pytest.param("require_use_condition", "condition", {"manaAtLeast": 100}, id="mana-threshold"),
 ])
@@ -68,7 +68,7 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     next(row for row in expected["runtimeProgram"]["calls"] if row["id"] == call["id"])["params"][selector] = copy.deepcopy(value)
     assert_delivery(expected)
     if selector == "when":
-        candidate["params"].update(strength=4, radiusTiles=60)
+        candidate["params"].update(impulseBlocksPerSecond=15, radiusTiles=60)
     stats = copy.deepcopy(next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
     stats["params"]["damage"] = 1999
     repaired, dossier = _offline_gameplay_repair(monkeypatch, doc, {
@@ -83,9 +83,9 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
 
 
 @pytest.mark.parametrize("fn,initial,chosen,hostile,fix_stats,paths,refuse", [
-    pytest.param("pull_on_event", {"when": {}}, {"when": {"everyTicks": 12}}, {"strength": 4}, False,
-                 ["params.when.everyTicks"], False, id="periodic-already-selected"),
-    pytest.param("pull_on_event", {"when": "on_use"}, {"when": "on_expire"}, {"strength": 4, "delayTicks": 12},
+    pytest.param("pull_on_event", {"when": {}}, {"when": {"everySeconds": 0.2}}, {"impulseBlocksPerSecond": 15}, False,
+                 ['params.when.everySeconds'], False, id="periodic-already-selected"),
+    pytest.param("pull_on_event", {"when": "on_use"}, {"when": "on_expire"}, {"impulseBlocksPerSecond": 15, "delaySeconds": 0.2},
                  False, ["params.when"], False, id="nonconditional-event"),
     pytest.param("require_use_condition", {"condition": "invalid"}, {"condition": "grounded"}, {}, False,
                  ["params.condition"], False, id="nonconditional-mode"),
@@ -142,7 +142,7 @@ def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypa
     fn = "require_use_condition" if owner == "item-condition" else "pull_on_event"
     root, old_leaf, new_leaf, literal = (("condition", "lifeAtLeast", "customLife", {"useConditionMode": "life_above"})
                                        if owner == "item-condition" else
-                                       ("when", "everyTicks", "customInterval", {"event": "periodic"}))
+                                       ("when", "everySeconds", "customInterval", {"event": "periodic"}))
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
     cap = CAPABILITY_REGISTRY[fn]
@@ -151,14 +151,14 @@ def test_gameplay_conditional_missing_permissions_follow_registry_owner(monkeypa
     registry = {**CAPABILITY_REGISTRY, fn: replace(cap, params={**cap.params, root: changed})}
     for consumer in (capability_registry, repair_scope, validator, compiler, technical_lowering):
         monkeypatch.setattr(consumer, "CAPABILITY_REGISTRY", registry)
-    call["params"][root] = {new_leaf: True if owner == "item-condition" else 5}
+    call["params"][root] = {new_leaf: True if owner == "item-condition" else 5 / 60}
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + root + "." + new_leaf]}]
     candidate = copy.deepcopy(call)
-    candidate["params"][root] = {new_leaf: 100}
+    candidate["params"][root] = {new_leaf: 100 if owner == "item-condition" else 100 / 60}
     expected = apply_repair_patch(doc, {"note": "registry-chosen conditional control", "callsUpsert": [candidate]})
     if owner == "projectile-trigger":
-        candidate["params"]["strength"] = 200
+        candidate["params"]["impulseBlocksPerSecond"] = 750
     filtered, audit = filter_repair_patch_scope(doc, {
         "note": "consume mutated canonical facts", "realizationReplacement": doc["realization"], "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
@@ -378,11 +378,11 @@ def test_gameplay_exact_leaf_repair(case):
                     node["params"].pop(name, None)
                 else:
                     node["params"][name] = spec.neutral
-        node["params"].update(durationTicks=60, lightColor="blue")
+        node["params"].update(durationSeconds=(60) / 60, lightColor="blue")
         good = copy.deepcopy(node)
         good["params"]["oreSenseEnabled"] = True
         candidate = copy.deepcopy(node)
-        candidate["params"].update(oreSenseEnabled=True, durationTicks=21600, lightColor="red")
+        candidate["params"].update(oreSenseEnabled=True, durationSeconds=(21600) / 60, lightColor="red")
         paths = None
     else:
         node["params"] = {}
@@ -400,7 +400,7 @@ def test_gameplay_exact_leaf_repair(case):
     if paths is not None:
         assert scope["fieldPermissions"][section] == [{"id": node["id"], "paths": paths}]
     if case.startswith("buff"):
-        assert not {"params.durationTicks", "params.lightColor"}.intersection(permissions)
+        assert not {'params.durationSeconds', "params.lightColor"}.intersection(permissions)
     patch = {"note": "repair diagnosed leaves", "realizationReplacement": copy.deepcopy(doc["realization"]), section + "Upsert": [candidate]}
     patch_before = json.dumps(patch)
     filtered, audit = filter_repair_patch_scope(doc, patch, scope)

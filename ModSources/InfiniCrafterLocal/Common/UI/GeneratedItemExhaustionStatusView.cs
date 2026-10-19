@@ -26,9 +26,7 @@ internal static class GeneratedItemExhaustionStatusView
         {
             if (entry.RemainingTicks <= 0) continue;
             string name = LiteralName(entry.ItemName);
-            decimal seconds = entry.RemainingTicks / 60m;
-            string display = seconds.ToString("0.###", culture);
-            if (decimal.Round(seconds, 3) != seconds) display = "≈" + display;
+            string display = GeneratedStatusTooltipView.CountdownSeconds(entry.RemainingTicks, culture);
             string time = Language.GetTextValue(Key + "Time", display);
             rows.Add(new(entry.ItemId, entry.DefinitionIdentity, name, entry.RemainingTicks,
                 IconPath, Language.GetTextValue(Key + "ExhaustionStatus", name),

@@ -50,21 +50,25 @@ def render() -> str:
             raise RuntimeError(f"primitive-loss audit failed: {label}: {result}")
         sections.append(f"- `{label}`: **PASS**.")
     sections.extend(["", '<a id="equipment"></a>', "", "## Equipment — значения, phase и authority", "",
-        "`additive_percent` — авторский процент прибавки к additive компоненте StatModifier (15 → +0.15), не итоговый множитель урона. `percentage_points` — сдвиг шанса в п.п.; `probability_percent` — вероятность/100. `defense_points`, `life_points`, `slots` и `pixels_per_tick` не масштабируются. Отрицательные значения разрешены только там, где указан отрицательный минимум. Ноль/false/пустая строка — нейтральны, если не оговорено иначе. Item.defense проектируется в `ApplyToItem`: Terraria сама применяет защиту, equip-hook не удваивает её.",
+        "`additive_percent` — авторский процент прибавки к additive компоненте StatModifier (15 → +0.15), не итоговый множитель урона. `percentage_points` — сдвиг шанса в п.п.; `probability_percent` — вероятность/100. `defense_points`, `life_points` и `slots` не масштабируются. Author-скорости в блоках/с переводятся в native pixels/world tick через ×16/60, регенерация HP/s — в lifeRegen через ×2. Отрицательные значения разрешены только там, где указан отрицательный минимум. Ноль/false/пустая строка — нейтральны, если не оговорено иначе. Item.defense проектируется в `ApplyToItem`: Terraria сама применяет защиту, equip-hook не удваивает её.",
         "", "Author schema ограничивает значения всех примитивов; C# Normalize применяет только объявленные **runtime safety clamps** из `runtime_minimum`/`runtime_maximum` registry и `GeneratedEquipmentBounds.g.cs`. В таблицах они обозначены `runtime clamp`; отсутствие пометки не разрешает подставлять новые ограничения. Это не разрешение Author выбирать значения вне своей схемы и не повод удалять действующие caps как устаревшие metadata.", ""])
     for cap_name in ("configure_accessory", "configure_armor"):
         cap = CAPABILITY_REGISTRY[cap_name]
         sections += [f"### `{cap_name}`", "", "| Author | Действие / engine semantics | Единица | Neutral | Author range | Wire DTO | Фаза |", "|---|---|---|---|---|---|---|"]
         for name, spec in cap.params.items():
             wire = spec.wire_name or name
-            conversion = f" /{spec.wire_divisor}" if spec.wire_divisor != 1 else ""
+            conversion = ((f" ×{spec.wire_multiplier}" if spec.wire_multiplier != 1 else "")
+                          + (f" /{spec.wire_divisor}" if spec.wire_divisor != 1 else ""))
+            wire_expression = f"{cap_name.removeprefix('configure_')}.{wire}"
+            if conversion:
+                wire_expression += f" = Author{conversion}"
             value_range = (f"{spec.minimum}…{spec.maximum}" if spec.minimum is not None else
                            "/".join(map(str, spec.enum)) if spec.enum else
                            spec.pattern if spec.pattern else spec.kind)
             if spec.runtime_minimum is not None or spec.runtime_maximum is not None:
                 value_range += f"<br>runtime clamp: {spec.runtime_minimum}…{spec.runtime_maximum}"
             row = [name, spec.description, spec.units or spec.semantic_type or spec.kind,
-                   spec.neutral, value_range, f"{cap_name.removeprefix('configure_')}.{wire}{conversion}",
+                   spec.neutral, value_range, wire_expression,
                    spec.execution_phase or "C# normalized item projection"]
             sections.append("| " + " | ".join(_cell(x) for x in row) + " |")
         sections += ["", f"Authority: `{cap.network_authority}`; техническая фаза/сетевая роль выбираются runtime, не LLM.", ""]
@@ -93,7 +97,7 @@ def render() -> str:
         "", '<a id="unsupported"></a>', "", "## Граница расширения executable surface", "",
         "Текущий AST audit проверяет текущих consumers, не историческую полноту или native/game acceptance. Новая поддержка требует explicit bounded primitive и полного vertical slice без whole-weapon macros. Исторический snapshot отдельно: [архивный аудит](../../archive/HISTORICAL_RUNTIME_AUDIT_2026_10_RU.md), не текущий capability catalog.",
         "", '<a id="units"></a>', "", "## Единицы при extraUpdates > 0", "",
-        "`set_projectile_collision.extraUpdates=n` даёт `n+1` AI/physics-обновлений снаряда за мировой тик. В Author-карточках исходная `Projectile.velocity`, гравитация, поворот, ускорение и скорость возврата обозначены **за projectile update**, а не как гарантированные пиксели за мировой тик. Длительности и event-периоды остаются в мировых тиках; C# переводит их через `AuthoredTicksToProjectileUpdates`. Это точное описание существующего wire/v5 поведения без смены старых рецептов и без приблизительного пересчёта нелинейного движения в px/сек.",
+        "Author явно задаёт `set_projectile_collision.updatesPerTick=N` — число AI/physics-обновлений снаряда за мировой тик; wire хранит `extraUpdates=N−1`. Игровые расстояния Author задаёт в блоках, длительности — в секундах, скорости — в блоках/с, физические ускорения — в блоках/с² и объявленные угловые скорости — в радианах/с. Registry-lowering учитывает N именно затронутой сущности: дочерний снаряд использует собственный clock. Длительности округляются до ближайшего world tick, половина тика вверх; C# сохраняет прежний перевод через `AuthoredTicksToProjectileUpdates`. Dimensionless retention/lerp/multiplier и технические update-счётчики сохраняют явно объявленный per-update смысл. Engine wire и сохранённые рецепты не пересчитываются; параметры не обещают конечную скорость нелинейного движения.",
         "", '<a id="limits"></a>', "", "## Границы проверки", "",
         "AST audit анализирует нынешние DTO и названные C# executor seams. Удалённое вместе с consumer поле исчезает из этого множества: текущий PASS не доказывает исторический паритет. Audit не заменяет полноценный compiler/semantic analysis всех tML API. Headless C# тесты покрывают projection/equip и cooldown, но не Terraria world loop, GPU или multiplayer. Live20 проверяет Author pipeline на внешней модели, а не выполнение в игре.",
         "", '<a id="refresh"></a>', "", "## Обновление и проверка", "",

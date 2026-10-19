@@ -22,9 +22,9 @@ def _stationary_periodic_shooter(pool=None):
     calls.remove(controller)
     root, child = controller["target"], controller["params"]["shotEntity"]
     calls.append({"id": "periodic_shot", "fn": "spawn_entity_on_event", "target": root, "params": {
-        "when": {"everyTicks": 30}, "entity": child, "count": 1, "spreadRadians": 0.0,
+        "when": {'everySeconds': (30) / 60}, "entity": child, "count": 1, "spreadRadians": 0.0,
         "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0,
-        "delayTicks": 0,
+        'delaySeconds': (0) / 60,
     }})
     if pool is not None:
         calls.append({"id": "descendant_pool", "fn": "set_descendant_concurrency", "target": root,

@@ -70,7 +70,7 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     for card in cards.values():
         for name, param in card["params"].items():
             assert param.get("optional", False) is not CAPABILITY_REGISTRY[card["fn"]].params[name].required
-    assert "everyTicks" in json.dumps(cards["spawn_entity_on_event"]["params"]["when"]["shape"])
+    assert "everySeconds" in json.dumps(cards["spawn_entity_on_event"]["params"]["when"]["shape"])
     assert "requires" in cards["spawn_entity_on_event"]
 
 
@@ -81,9 +81,9 @@ def test_use_hold_charge_equipment_and_topology_are_at_owners(monkeypatch) -> No
     inputs = {row["input"]: row for row in catalog["inputs"]}
     entities = {row["kind"]: row for row in catalog["entityKinds"]}
     use = cards["configure_item_use"]["constructionMeaning"]
-    assert all(term in use for term in ("useTimeTicks", "useAnimationTicks", "autoReuse", "channel"))
+    assert all(term in use for term in ("useTimeSeconds", "useAnimationSeconds", "autoReuse", "channel"))
     charge = cards["charge_then_release"]["constructionMeaning"]
-    assert all(term in charge for term in ("channel=true", "charged entity", "chargeTicks", "customHeldSprite", "presentation"))
+    assert all(term in charge for term in ("channel=true", "charged entity", "chargeSeconds", "customHeldSprite", "presentation"))
     assert "While-selected HoldItem" in inputs["hold"]["constructionMeaning"]
     assert all(term in inputs["equipped"]["constructionMeaning"].lower() for term in ("passive", "runtime uses the first", "head only", "head/body/legs"))
     assert "requiredComponents" in entities["item_body"] and "configure_item_stats" in entities["item_body"]["requiredComponents"]

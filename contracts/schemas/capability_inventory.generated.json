@@ -118,25 +118,25 @@
           "semanticType": "draw_scale",
           "units": ""
         },
-        "useAnimationTicks": {
+        "useAnimationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
-        "useTimeTicks": {
+        "useTimeSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "valueCopper": {
           "enum": [],
@@ -337,6 +337,32 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "collect_seeds_from_grass",
+      "componentSlot": "inventory_seed_collection",
+      "conflicts": [],
+      "csharpOwner": "Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "gameplay.collectSeedsFromGrass"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "native_worldgen",
+      "parameters": {},
+      "positionOwnership": "none",
+      "purpose": "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG, nearest-player selection and drop/MP lifecycle remain unchanged. Does not consume the item, choose ammo, change attack costs, or inherit automatically from a parent flag. No parameters.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "one bounded native inventory witness; no added spawns or RNG",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "configure_item_contact_hitbox",
       "componentSlot": "item_contact",
       "conflicts": [],
@@ -447,7 +473,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. Native inventory-only item flags are not inherited by this call. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -535,15 +561,15 @@
           "semanticType": "terraria_projectile_id",
           "units": ""
         },
-        "shootSpeedContributionPxPerUpdate": {
+        "shootSpeedContributionBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 80,
-          "minimum": -20,
+          "maximum": 300.0,
+          "minimum": -75.0,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update contribution"
+          "semanticType": "blocks/s (base native launch contribution, not final projectile speed)",
+          "units": "blocks/s (base native launch contribution, not final projectile speed)"
         }
       },
       "positionOwnership": "none",
@@ -684,15 +710,15 @@
           "semanticType": "terraria_buff_id",
           "units": ""
         },
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "effectGroupId": {
           "enum": [],
@@ -760,15 +786,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "effectGroupId": {
           "enum": [],
@@ -780,25 +806,25 @@
           "semanticType": "item_effect_group_identity",
           "units": ""
         },
-        "exhaustionTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 0,
-          "reference": null,
-          "required": false,
-          "semanticType": "ticks",
-          "units": "world ticks"
-        },
-        "jumpSpeedBonusPxPerTick": {
+        "exhaustionSeconds": {
           "enum": [],
           "kind": "number",
-          "maximum": 8,
+          "maximum": 360.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/world tick"
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "jumpSpeedBonusBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 30.0,
+          "minimum": 0.0,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "lifeRegenHpPerSecond": {
           "enum": [],
@@ -884,7 +910,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionTicks starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration. No recurring cost is implied.",
+      "purpose": "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionSeconds starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration. No recurring cost is implied.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -935,7 +961,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Attempt to refresh one named generated utility buff group each world tick while this exact item is held; its exhaustionTicks policy still applies. durationTicks controls lingering after release, independently of exhaustion. Only apply_generated_buff_on_use may populate the group; no healing, teleport, native buff or invisible projectile is inferred.",
+      "purpose": "Attempt to refresh one named generated utility buff group each world tick while this exact item is held; its exhaustionSeconds policy still applies. durationSeconds controls lingering after release, independently of exhaustion. Only apply_generated_buff_on_use may populate the group; no healing, teleport, native buff or invisible projectile is inferred.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1074,7 +1100,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Select one exact loaded tile and placement style for one referenced placement transaction.",
+      "purpose": "Select one exact loaded tile and placement style for one referenced placement transaction. Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1169,6 +1195,7 @@
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.renderSizePx",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.footprintAnchorY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.pivotSpace",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotX",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.imagePivotY",
         "runtimeProgram.bindings[].usePolicy.action.placement.placedBody.offsetXPx",
@@ -1260,6 +1287,19 @@
           "semanticType": "pixels",
           "units": "world pixels"
         },
+        "pivotSpace": {
+          "enum": [
+            "frame",
+            "alpha_bounds"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "placementCallId": {
           "enum": [],
           "kind": "string",
@@ -1299,7 +1339,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member.",
+      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this presentation call.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1403,7 +1443,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged.",
+      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this light call.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1431,6 +1471,106 @@
       ],
       "technicalLoweringOutputs": [
         "runtimeProgram.bindings[].usePolicy.action.placement.placedLight"
+      ]
+    },
+    {
+      "authorityByEffect": {
+        "placement": "owner_request_server_execute",
+        "vfx": "client_visual_only"
+      },
+      "capability": "enable_placed_vfx",
+      "componentSlot": "placed_vfx",
+      "conflicts": [],
+      "csharpOwner": "Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::TryGetPlacedVfxFrame",
+      "dependencies": [
+        "configure_tile_placement"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx.minFrameY",
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx.maxFrameY"
+      ],
+      "multiplicity": "per_placement_reference",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "maxFrameY": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 32767,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "native frame coordinate"
+        },
+        "minFrameY": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 32767,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "native frame coordinate"
+        },
+        "placementCallId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": {
+            "allowSelf": false,
+            "graphEdge": false,
+            "namespace": "call",
+            "targetKinds": [
+              "item_body"
+            ]
+          },
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Opt in to independent live placed VFX slots on one exact committed native tile footprint, not held-item effects. Bounds consume actual top-left native TileFrameY inclusively, not animation time/count: 0..32767 selects all nonnegative frames. Native state facts are read-only; never infer a gate from names. VFX Director later selects this placement binding for periodic self spriteElement/libraryParticle/lightCue. Same item root PNG remains stable physical art; existing independent VFX assets can animate separate flames without rotating/pulsing the whole root. No effects/defaults are inserted. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Does not change its native container behavior, material ownership or returns.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "ordered_params",
+          "message": "minFrameY must not exceed maxFrameY.",
+          "otherParam": "maxFrameY",
+          "param": "minFrameY",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "place_item"
+          ],
+          "capability": "configure_tile_placement",
+          "equals": null,
+          "kind": "executed_tile_placement_reference",
+          "message": "Reference an exact same-item tile-only placement used by an executable place_item binding, or explicitly delete this placed component call. No walls, inferred source, or unused reference.",
+          "param": "placementCallId",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "unique_call_reference",
+          "message": "Only one call of this operation may reference a placement call; independent placed sprite and light calls may compose.",
+          "param": "placementCallId",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "item_body"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.bindings[].usePolicy.action.placement.placedVfx"
       ]
     },
     {
@@ -1558,15 +1698,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "cooldownTicks": {
+        "cooldownSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 3600,
+          "kind": "number",
+          "maximum": 60.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "effectGroupId": {
           "enum": [],
@@ -1598,7 +1738,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "safeTileOnly": {
           "enum": [],
@@ -1656,15 +1796,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "cooldownTicks": {
+        "cooldownSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 3600,
+          "kind": "number",
+          "maximum": 60.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "effectGroupId": {
           "enum": [],
@@ -1743,15 +1883,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "accRunSpeedPxPerTick": {
+        "accRunSpeedBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 20,
-          "minimum": 0,
+          "maximum": 75.0,
+          "minimum": 0.0,
           "reference": null,
           "required": false,
-          "semanticType": "unitless_scalar",
-          "units": "pixels_per_tick"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "aggroPoints": {
           "enum": [],
@@ -1863,15 +2003,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "jumpSpeedBonusPxPerTick": {
+        "jumpSpeedBonusBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 20,
-          "minimum": -5,
+          "maximum": 75.0,
+          "minimum": -18.75,
           "reference": null,
           "required": false,
-          "semanticType": "pixels_per_tick",
-          "units": "pixels_per_tick"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "lavaImmune": {
           "enum": [],
@@ -1965,15 +2105,15 @@
           "semanticType": "mana_points",
           "units": "mana_points"
         },
-        "maxRunSpeedBonusPxPerTick": {
+        "maxRunSpeedBonusBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 20,
-          "minimum": -5,
+          "maximum": 75.0,
+          "minimum": -18.75,
           "reference": null,
           "required": false,
-          "semanticType": "pixels_per_tick",
-          "units": "pixels_per_tick"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "minionSlotsBonus": {
           "enum": [],
@@ -2083,8 +2223,8 @@
             "lifeRegenHpPerSecond",
             "manaRegenBonusPoints",
             "moveSpeedBonusPercent",
-            "maxRunSpeedBonusPxPerTick",
-            "jumpSpeedBonusPxPerTick",
+            "maxRunSpeedBonusBlocksPerSecond",
+            "jumpSpeedBonusBlocksPerSecond",
             "genericCritChancePercentagePoints",
             "genericAttackSpeedBonusPercent",
             "genericKnockbackBonusPercent",
@@ -2104,7 +2244,7 @@
             "iceSkate",
             "noKnockback",
             "fireWalk",
-            "accRunSpeedPxPerTick",
+            "accRunSpeedBlocksPerSecond",
             "rocketBoots",
             "wireVision"
           ],
@@ -2273,15 +2413,15 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
-        "jumpSpeedBonusPxPerTick": {
+        "jumpSpeedBonusBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 20,
-          "minimum": -5,
+          "maximum": 75.0,
+          "minimum": -18.75,
           "reference": null,
           "required": false,
-          "semanticType": "pixels_per_tick",
-          "units": "pixels_per_tick"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "lavaImmune": {
           "enum": [],
@@ -2375,15 +2515,15 @@
           "semanticType": "mana_points",
           "units": "mana_points"
         },
-        "maxRunSpeedBonusPxPerTick": {
+        "maxRunSpeedBonusBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 20,
-          "minimum": -5,
+          "maximum": 75.0,
+          "minimum": -18.75,
           "reference": null,
           "required": false,
-          "semanticType": "pixels_per_tick",
-          "units": "pixels_per_tick"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "minionSlotsBonus": {
           "enum": [],
@@ -2668,15 +2808,15 @@
           "semanticType": "spawn_or_target_count",
           "units": ""
         },
-        "offsetPx": {
+        "offsetBlocks": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 256,
-          "minimum": -128,
+          "kind": "number",
+          "maximum": 16.0,
+          "minimum": -8.0,
           "reference": null,
           "required": true,
-          "semanticType": "pixels",
-          "units": "pixels"
+          "semanticType": "blocks",
+          "units": "blocks"
         },
         "position": {
           "enum": [],
@@ -2765,24 +2905,24 @@
           "equals": null,
           "kind": "ordered_params",
           "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
-          "otherParam": "velocity.fanSpeed.maxSpeedPxPerUpdate",
-          "param": "velocity.fanSpeed.minSpeedPxPerUpdate",
+          "otherParam": "velocity.fanSpeed.maxSpeedBlocksPerSecond",
+          "param": "velocity.fanSpeed.minSpeedBlocksPerSecond",
           "target": "same_target"
         },
         {
           "equals": null,
           "kind": "ordered_params",
           "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
-          "otherParam": "velocity.radial.maxSpeedPxPerUpdate",
-          "param": "velocity.radial.minSpeedPxPerUpdate",
+          "otherParam": "velocity.radial.maxSpeedBlocksPerSecond",
+          "param": "velocity.radial.minSpeedBlocksPerSecond",
           "target": "same_target"
         },
         {
           "equals": null,
           "kind": "ordered_params",
           "message": "Minimum sampled speed must not exceed the explicitly authored maximum.",
-          "otherParam": "velocity.cone.maxSpeedPxPerUpdate",
-          "param": "velocity.cone.minSpeedPxPerUpdate",
+          "otherParam": "velocity.cone.maxSpeedBlocksPerSecond",
+          "param": "velocity.cone.minSpeedBlocksPerSecond",
           "target": "same_target"
         },
         {
@@ -3157,15 +3297,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "lifetimeTicks": {
+        "lifetimeSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 36000,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 600.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         }
       },
       "positionOwnership": "none",
@@ -3294,15 +3434,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "endScale": {
           "enum": [],
@@ -3324,15 +3464,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "startDelayTicks": {
+        "startDelaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
+          "kind": "number",
+          "maximum": 360.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "startScale": {
           "enum": [],
@@ -3405,35 +3545,35 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
-        "startDelayTicks": {
+        "startDelaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
+          "kind": "number",
+          "maximum": 360.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
-        "turnRadiansPerUpdate": {
+        "turnRadiansPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 0.5,
-          "minimum": -0.5,
+          "maximum": 180.0,
+          "minimum": -180.0,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "radians/projectile update"
+          "semanticType": "radians/s",
+          "units": "radians/s"
         }
       },
       "positionOwnership": "none",
@@ -3477,25 +3617,25 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
-        "maxSpeed": {
+        "durationSeconds": {
           "enum": [],
           "kind": "number",
-          "maximum": 80,
-          "minimum": 0.1,
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update"
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "maxSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.375,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "speedMultiplierPerUpdate": {
           "enum": [],
@@ -3507,15 +3647,15 @@
           "semanticType": "unitless_scalar",
           "units": "dimensionless multiplier/update"
         },
-        "startDelayTicks": {
+        "startDelaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
+          "kind": "number",
+          "maximum": 360.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         }
       },
       "positionOwnership": "none",
@@ -3560,25 +3700,25 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
-        "maxTurnRadiansPerUpdate": {
+        "durationSeconds": {
           "enum": [],
           "kind": "number",
-          "maximum": 3.2,
-          "minimum": 0.0001,
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "radians/projectile update"
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "maxTurnRadiansPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1152.0,
+          "minimum": 0.006,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians/s",
+          "units": "radians/s"
         },
         "rangeTiles": {
           "enum": [],
@@ -3588,7 +3728,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "requireLineOfSight": {
           "enum": [],
@@ -3600,15 +3740,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "startDelayTicks": {
+        "startDelaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
+          "kind": "number",
+          "maximum": 360.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         }
       },
       "positionOwnership": "none",
@@ -3654,15 +3794,25 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "server_execute",
       "parameters": {
-        "durationTicks": {
+        "accelerationBlocksPerSecondSquared": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 5400.0,
+          "minimum": 0.225,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "blocks/s² (NPC world-tick velocity)",
+          "units": "blocks/s² (NPC world-tick velocity)"
+        },
+        "durationSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "falloff": {
           "enum": [
@@ -3695,27 +3845,17 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
-        "startDelayTicks": {
+        "startDelaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
+          "kind": "number",
+          "maximum": 360.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
-        "strengthPerUpdate": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4,
-          "minimum": 0.001,
-          "reference": null,
-          "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "NPC velocity units/projectile update"
+          "semanticType": "seconds",
+          "units": "seconds"
         }
       },
       "positionOwnership": "none",
@@ -3766,15 +3906,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "endScale": {
           "enum": [],
@@ -3786,15 +3926,15 @@
           "semanticType": "unitless_scalar",
           "units": "dimensionless multiplier"
         },
-        "startDelayTicks": {
+        "startDelaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
+          "kind": "number",
+          "maximum": 360.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "startScale": {
           "enum": [],
@@ -4060,7 +4200,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4101,15 +4241,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "accelY": {
+        "accelerationYBlocksPerSecondSquared": {
           "enum": [],
           "kind": "number",
-          "maximum": 2,
-          "minimum": -2,
+          "maximum": 16200.0,
+          "minimum": -16200.0,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: vertical velocity increment per update"
+          "semanticType": "blocks/s²",
+          "units": "blocks/s²"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4207,7 +4347,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4249,25 +4389,25 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "returnAfterTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
-        "returnSpeed": {
+        "returnAfterSeconds": {
           "enum": [],
           "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
+          "maximum": 10.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update"
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "returnSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 3.75,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4328,7 +4468,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "waveVelocityCoefficient": {
           "enum": [],
@@ -4429,15 +4569,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "maxSpeed": {
+        "maxSpeedBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
+          "maximum": 1800.0,
+          "minimum": 3.75,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "speedMultiplierPerUpdate": {
           "enum": [],
@@ -4488,15 +4628,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "turnRadiansPerUpdate": {
+        "turnRadiansPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 0.5,
-          "minimum": -0.5,
+          "maximum": 180.0,
+          "minimum": -180.0,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "radians/update"
+          "semanticType": "radians/s",
+          "units": "radians/s"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4538,15 +4678,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "pullStrength": {
+        "accelerationBlocksPerSecondSquared": {
           "enum": [],
           "kind": "number",
-          "maximum": 4,
-          "minimum": 0,
+          "maximum": 5400.0,
+          "minimum": 0.0,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: NPC velocity impulse coefficient"
+          "semanticType": "blocks/s² (NPC world-tick velocity)",
+          "units": "blocks/s² (NPC world-tick velocity)"
         },
         "rangeTiles": {
           "enum": [],
@@ -4556,7 +4696,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4598,15 +4738,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "pullStrength": {
+        "accelerationBlocksPerSecondSquared": {
           "enum": [],
           "kind": "number",
-          "maximum": 4,
-          "minimum": 0,
+          "maximum": 5400.0,
+          "minimum": 0.0,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "engine units: NPC velocity impulse coefficient"
+          "semanticType": "blocks/s² (NPC world-tick velocity)",
+          "units": "blocks/s² (NPC world-tick velocity)"
         },
         "rangeTiles": {
           "enum": [],
@@ -4616,7 +4756,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4677,7 +4817,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "triggerRadiusTiles": {
           "enum": [],
@@ -4687,7 +4827,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4729,25 +4869,25 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "returnAfterTicks": {
-          "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": 1,
-          "reference": null,
-          "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
-        },
-        "returnSpeed": {
+        "returnAfterSeconds": {
           "enum": [],
           "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
+          "maximum": 10.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update"
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "returnSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 3.75,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4859,17 +4999,17 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
-        "returnSpeed": {
+        "returnSpeedBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
+          "maximum": 1800.0,
+          "minimum": 3.75,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -4929,21 +5069,21 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
-        "speed": {
+        "speedBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 80,
-          "minimum": 1,
+          "maximum": 1800.0,
+          "minimum": 3.75,
           "reference": null,
           "required": true,
-          "semanticType": "unitless_scalar",
-          "units": "pixels/projectile update"
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.",
+      "purpose": "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. This movement rotates the body by 0.35 radians per projectile update and does not turn the player toward the cursor; a child aiming by facing still uses the player's direction, not the rotating body. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4997,7 +5137,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "segments": {
           "enum": [],
@@ -5044,15 +5184,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 240,
-          "minimum": 2,
+          "kind": "number",
+          "maximum": 4.0,
+          "minimum": 0.025,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "rangeTiles": {
           "enum": [],
@@ -5062,7 +5202,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
@@ -5120,15 +5260,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 240,
-          "minimum": 2,
+          "kind": "number",
+          "maximum": 4.0,
+          "minimum": 0.025,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "active world ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "hitboxOffsetPx": {
           "enum": [],
@@ -5242,7 +5382,7 @@
         {
           "capability": "configure_spawn",
           "equals": {
-            "constantSpeedPxPerUpdate": 0
+            "constantSpeedBlocksPerSecond": 0
           },
           "kind": "item_capability_param",
           "message": "The hand owner requires constant zero translational launch speed, not a sampled distribution.",
@@ -5378,7 +5518,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "raycastTiles": {
           "enum": [],
@@ -5390,15 +5530,15 @@
           "semanticType": "tiles",
           "units": "tile clipping enabled"
         },
-        "warmupTicks": {
+        "warmupSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "widthPx": {
           "enum": [],
@@ -5459,15 +5599,15 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "chargeTicks": {
+        "chargeSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "powerMultiplier": {
           "enum": [],
@@ -5604,15 +5744,15 @@
           "semanticType": "bounded_text",
           "units": ""
         },
-        "intervalTicks": {
+        "intervalSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 3600,
-          "minimum": 6,
+          "kind": "number",
+          "maximum": 60.0,
+          "minimum": 0.09166666666666666,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "knockbackBasis": {
           "enum": [
@@ -5635,7 +5775,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "requireLineOfSight": {
           "enum": [],
@@ -5787,15 +5927,15 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "entity": {
           "enum": [],
@@ -5988,15 +6128,15 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "entity": {
           "enum": [],
@@ -6068,7 +6208,7 @@
           "capability": "configure_spawn",
           "equals": {
             "aim": "velocity",
-            "offsetPx": 0,
+            "offsetBlocks": 0,
             "position": {
               "at": "activation_origin"
             }
@@ -6119,15 +6259,15 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "world ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "entity": {
           "enum": [],
@@ -6211,7 +6351,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "when": {
           "enum": [
@@ -6242,13 +6382,13 @@
           "capability": "configure_spawn",
           "equals": {
             "aim": "velocity",
-            "offsetPx": 0,
+            "offsetBlocks": 0,
             "position": {
               "at": "activation_origin"
             }
           },
           "kind": "referenced_entity_capability_params",
-          "message": "The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; Repair permissions distinguish an exclusive dependency from an independently used child.",
+          "message": "The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetBlocks=0; Repair permissions distinguish an exclusive dependency from an independently used child.",
           "param": "entity",
           "target": "same_target"
         }
@@ -6299,25 +6439,25 @@
           "semanticType": "terraria_buff_id",
           "units": ""
         },
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
-        "durationTicks": {
+        "durationSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 21600,
-          "minimum": 1,
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "when": {
           "enum": [
@@ -6397,15 +6537,15 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "radiusTiles": {
           "enum": [],
@@ -6415,7 +6555,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "when": {
           "enum": [
@@ -6493,15 +6633,15 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "maxTargets": {
           "enum": [],
@@ -6521,7 +6661,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "when": {
           "enum": [
@@ -6593,15 +6733,25 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "server_execute",
       "parameters": {
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "impulseBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 15.0,
+          "minimum": 0.0375,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s (one-off velocity impulse)",
+          "units": "blocks/s (one-off velocity impulse)"
         },
         "mode": {
           "enum": [
@@ -6624,17 +6774,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
-        },
-        "strength": {
-          "enum": [],
-          "kind": "number",
-          "maximum": 4,
-          "minimum": 0.01,
-          "reference": null,
-          "required": true,
-          "semanticType": "effect_strength",
-          "units": "engine units: velocity impulse coefficient per event"
+          "units": "blocks (tiles)"
         },
         "when": {
           "enum": [],
@@ -6697,25 +6837,25 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
-        "strength": {
+        "impulseBlocksPerSecond": {
           "enum": [],
           "kind": "number",
-          "maximum": 4,
-          "minimum": 0.01,
+          "maximum": 15.0,
+          "minimum": 0.0375,
           "reference": null,
           "required": true,
-          "semanticType": "effect_strength",
-          "units": "engine units: velocity impulse coefficient per event"
+          "semanticType": "blocks/s (one-off velocity impulse)",
+          "units": "blocks/s (one-off velocity impulse)"
         },
         "when": {
           "enum": [],
@@ -6785,15 +6925,15 @@
           "semanticType": "unitless_scalar",
           "units": ""
         },
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "maxHeal": {
           "enum": [],
@@ -6870,25 +7010,25 @@
       "multiplicity": "many_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
-        "cooldownTicks": {
+        "cooldownSeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 3600,
+          "kind": "number",
+          "maximum": 60.0,
           "minimum": 0,
           "reference": null,
           "required": true,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
-        "delayTicks": {
+        "delaySeconds": {
           "enum": [],
-          "kind": "integer",
-          "maximum": 600,
+          "kind": "number",
+          "maximum": 10.0,
           "minimum": 0,
           "reference": null,
           "required": false,
-          "semanticType": "ticks",
-          "units": "ticks"
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "rangeTiles": {
           "enum": [],
@@ -6898,7 +7038,7 @@
           "reference": null,
           "required": true,
           "semanticType": "tiles",
-          "units": "tiles"
+          "units": "blocks (tiles)"
         },
         "safeTileOnly": {
           "enum": [],

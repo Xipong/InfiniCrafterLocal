@@ -19,6 +19,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_WIRE_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
     equipment_damage_wire_path,
+    target_updates_per_tick,
 )
 from infini_local.core.runtime_authoring.program_schema import authored_primary_entity_id
 from infini_local.core.runtime_authoring.technical_lowering import (
@@ -42,12 +43,14 @@ from infini_local.core.runtime_authoring.validator import (
 @dataclass(slots=True)
 class _CompileContext:
     receipts: list[dict[str, Any]]
+    calls: list[dict[str, Any]]
 
     def project_parameter(self, *, call: Mapping[str, Any], param: str, value: Any,
                           target: MutableMapping[str, Any], prefix: str) -> None:
         """Execute the registry's exact leaf/variant projection with provenance."""
         spec = CAPABILITY_REGISTRY[str(call["fn"])].params[param]
-        for row in spec.projected_fields(value, param):
+        for row in spec.projected_fields(value, param, updates_per_tick=(
+                target_updates_per_tick(self.calls, str(call["target"])) if spec.requires_update_context else None)):
             destination = target
             parts = row.wire_path.split(".")
             for part in parts[:-1]:
@@ -207,7 +210,7 @@ def _compile_item_call(
         return
     if fn == "apply_vanilla_buff_on_use":
         buffs = gameplay.setdefault("extraBuffs", [])
-        entry = {"buffCode": p["buffId"], "buffTime": p["durationTicks"]}
+        entry = {"buffCode": p["buffId"], "buffTime": cap.params["durationSeconds"].to_wire(p["durationSeconds"])}
         buffs.append(entry)
         base = len(buffs) - 1
         ctx.receipts.extend([
@@ -218,8 +221,8 @@ def _compile_item_call(
             },
             {
                 "callId": str(call.get("id") or ""), "fn": fn,
-                "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.durationTicks",
-                "finalPath": f"{effect_prefix}.extraBuffs[{base}].buffTime", "value": p["durationTicks"], "status": "technical_projection",
+                "authoredPath": f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].params.durationSeconds",
+                "finalPath": f"{effect_prefix}.extraBuffs[{base}].buffTime", "value": entry["buffTime"], "status": "technical_projection",
             },
         ])
         return
@@ -253,8 +256,9 @@ def _compile_item_call(
     if fn == "add_hold_light":
         project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})
         return
-    if fn == "recall_home_on_use":
-        ctx.project_parameter(call=call, param="cooldownTicks", value=p["cooldownTicks"], target=gameplay, prefix=effect_prefix)
+    if fn in {"recall_home_on_use", "collect_seeds_from_grass"}:
+        if fn == "recall_home_on_use":
+            ctx.project_parameter(call=call, param="cooldownSeconds", value=p["cooldownSeconds"], target=gameplay, prefix=effect_prefix)
         for key, value in CAPABILITY_REGISTRY[fn].fixed_wire_literals.items():
             ctx.write_derived(call=call, path=f"{effect_prefix}.{key}", value=value, target=gameplay, key=key,
                               source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
@@ -339,7 +343,7 @@ def _compile_entity_call(
         ctx.write_derived(call=call, path=f"{base}.damage.enabled", value=True, target=damage, key="enabled", source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
     if fn == "set_projectile_lifetime":
-        ctx.write(call=call, path=f"{base}.lifetimeTicks", value=p["lifetimeTicks"], target=entity, key="lifetimeTicks")
+        ctx.project_parameter(call=call, param="lifetimeSeconds", value=p["lifetimeSeconds"], target=entity, prefix=base)
         return
     if fn == "set_projectile_hitbox":
         project(component("hitbox"), f"{base}.hitbox", p)
@@ -375,8 +379,7 @@ def _compile_entity_call(
             project(component("targeting"), f"{base}.targeting", p)
         else:
             controller_params = controller.setdefault("params", {})
-            for key, value in p.items():
-                ctx.write(call=call, path=f"{base}.controller.params.{key}", value=value, target=controller_params, key=key)
+            project(controller_params, f"{base}.controller.params", p)
         return
     if fn == "emit_light_while_active":
         project(component("light"), f"{base}.light", p)
@@ -426,7 +429,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         if str(row.get("id") or "") == primary_entity_id
     )
     primary_owner = primary_owner_for_kind(str(primary_entity.get("kind") or ""))
-    ctx = _CompileContext(receipts=[])
+    ctx = _CompileContext(receipts=[], calls=calls)
     ctx.receipts.append(primary_owner_receipt(
         source_index=primary_entity_source_index,
         owner=primary_owner,
@@ -499,8 +502,8 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                 binding["usePolicy"]["action"]["placement"][component] = body
                 for key, value in presentation["params"].items():
                     if key != "placementCallId":
-                        ctx.write(call=presentation, path=f"{base}.{key}", value=value,
-                                  target=body, key=key)
+                        ctx.project_parameter(call=presentation, param=key, value=value,
+                                              target=body, prefix=base)
                 from infini_local.core.runtime_authoring.technical_lowering import _placement_source_paths  # pyright: ignore[reportPrivateUsage]
                 call_base = f"runtimeProgram.calls[{presentation['_sourceIndex']}]"
                 ctx.receipts.append({

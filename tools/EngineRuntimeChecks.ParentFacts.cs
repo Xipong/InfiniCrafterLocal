@@ -81,24 +81,24 @@ internal static partial class EngineRuntimeChecks
             JsonElement facts = root.GetProperty("runtimeFacts");
             JsonElement fingerprint = root.GetProperty("fingerprint");
             Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,channel,"
-                + "consumable,craftInput,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,"
+                + "consumable,craftInput,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
                 + "effectiveProjectileRaw,fingerprint,fishingPole,fullName,generatedData,hammerPower,headSlot,healLife,healMana,"
                 + "id,internalName,knockback,legSlot,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"
                 + "noUseGraphic,notAmmo,originalPrefix,pickPower,placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,"
                 + "reuseDelay,runtimeFacts,shoot,shootProjectileFullName,shootSpeed,sourceMod,stack,tags,tooltipLines,"
-                + "tooltipSource,useAmmo,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
+                + "tooltipSource,useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
                 string.Join(",", root.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact root keys");
             Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,buffTime,buffType,"
-                + "channel,consumable,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,"
+                + "channel,consumable,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
                 + "effectiveProjectileRaw,fishingPole,fullName,hammerPower,headSlot,healLife,healMana,internalName,isVanilla,"
                 + "knockback,legSlot,manaCost,maxStack,name,nameTokens,noMelee,noUseGraphic,notAmmo,originalPrefix,pickPower,"
                 + "placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,runtimeFacts,shoot,shootSpeed,sourceMod,type,"
-                + "useAmmo,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
+                + "useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
                 string.Join(",", fingerprint.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact fingerprint keys");
             Equal("accessory,ammo,ammoCategoryName,autoReuse,axePower,bait,bodySlot,buffTime,buffType,channel,consumable,"
-                + "createTile,createWall,crit,damage,damageClass,defense,fishingPole,hammerPower,headSlot,healLife,healMana,"
+                + "createTile,createWall,crit,damage,damageClass,defense,dropSeedsIfInInventory,fishingPole,hammerPower,headSlot,healLife,healMana,"
                 + "knockback,legSlot,manaCost,material,maxStack,noMelee,noUseGraphic,notAmmo,pickPower,placeStyle,potion,rare,"
-                + "rarityDetails,reuseDelay,shoot,shootProjectileFullName,shootSpeed,type,useAmmo,useAnimation,useStyle,"
+                + "rarityDetails,reuseDelay,shoot,shootProjectileFullName,shootSpeed,type,useAmmo,useAmmoCategoryName,useAnimation,useStyle,"
                 + "useStyleName,useTime,useTurn,value",
                 string.Join(",", facts.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact facts keys");
             Equal(CanonicalParentFactJson(facts), CanonicalParentFactJson(fingerprint.GetProperty("runtimeFacts")), label + " same nested native facts");
@@ -128,6 +128,35 @@ internal static partial class EngineRuntimeChecks
         string? output = Environment.GetEnvironmentVariable("INFINI_PARENT_FACT_SNAPSHOT");
         if (!string.IsNullOrWhiteSpace(output))
             File.WriteAllText(output, JsonSerializer.Serialize(snapshots, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void ParentAmmoFactsKeepNativeCategoryAndInventoryFlag()
+    {
+        using var state = new NativeActorState();
+        Terraria.Main.netMode = NetmodeID.SinglePlayer;
+        Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(31);
+        var owner = new Player { name = "parent_ammo_fact_probe" };
+        foreach (var (type, required, inventorySeedDrop) in new[] {
+            (ItemID.Musket, "bullet", false), (ItemID.Blowpipe, "dart", true),
+            (ItemID.Blowgun, "dart", true), (ItemID.WoodenBow, "arrow", false),
+            (ItemID.Seed, "", false), (ItemID.FallenStar, "", false),
+        })
+        {
+            var item = new Item(type);
+            using var request = JsonDocument.Parse(new GeneratorClient().Prepare(item, item, owner).PayloadJson);
+            foreach (string parent in new[] { "itemA", "itemB" })
+            {
+                JsonElement root = request.RootElement.GetProperty(parent);
+                foreach (JsonElement facts in new[] { root, root.GetProperty("runtimeFacts"), root.GetProperty("fingerprint") })
+                {
+                    Equal(required, facts.GetProperty("useAmmoCategoryName").GetString()!, type + " literal native required ammo category");
+                    Equal(item.useAmmo, facts.GetProperty("useAmmo").GetInt32(), type + " native useAmmo remains unchanged");
+                    Equal(inventorySeedDrop, facts.GetProperty("dropSeedsIfInInventory").GetBoolean(), type + " exact native inventory flag");
+                }
+                Equal(item.shoot, root.GetProperty("shoot").GetInt32(), type + " own shoot is not replaced by ammo");
+            }
+            Equal(type, item.type, "request leaves source identity unchanged");
+        }
     }
 
     private static string CanonicalParentFactJson(JsonElement element)

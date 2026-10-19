@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.UI;
 
 namespace InfiniCrafterLocal.Content.Items;
 
@@ -70,7 +71,7 @@ public partial class GeneratedItem
                     string exclusion = action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
                         ? RuntimeTooltipText("SecondaryDirectExcluded") : "";
                     add("SecondaryArea" + suffix, "SecondaryArea", new object[] { occurrence, delay,
-                        RuntimeTooltipNumber(action.RadiusPx), RuntimeTooltipNumber(damage), exclusion });
+                        RuntimeTooltipNumber(PlayerDisplayUnits.Blocks(action.RadiusPx)), RuntimeTooltipNumber(damage), exclusion });
                 }
                 else if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                 {
@@ -90,7 +91,7 @@ public partial class GeneratedItem
                     string details = "";
                     // Native velocity is applied on each projectile update; authored
                     // lifetime is world ticks, but extraUpdates multiplies launch speed.
-                    float nominalSpeed = child!.Spawn.SpeedPxPerTick * 60f * (child.Collision.ExtraUpdates + 1);
+                    float nominalSpeed = PlayerDisplayUnits.BlocksPerSecond(child!.Spawn.SpeedPxPerTick, child.Collision.ExtraUpdates + 1);
                     if (!child.IsStationary && child.Spawn.VelocityDistribution is null
                         && (child.Spawn.Aim != "none" || action.HitTargetSpawn is not null)
                         && RuntimeTooltipFinite(nominalSpeed, 0f, float.MaxValue))

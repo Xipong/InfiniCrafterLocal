@@ -19,6 +19,7 @@ from test_registry_receipt_identity import _call, _receipt
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
 
 DECLARED = {
+    "present_placed_item_sprite": {"pivotSpace": "frame"},
     "configure_spawn": {"count": 1, "spreadRadians": 0},
     "set_projectile_collision": {"bounceCount": 0},
     "channel_beam": {"manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,
@@ -31,7 +32,7 @@ DECLARED = {
         "miningSpeedMultiplier": 1,
         "oreSenseEnabled": False,
         "moveSpeedBonusPercent": 0,
-        "jumpSpeedBonusPxPerTick": 0,
+        "jumpSpeedBonusBlocksPerSecond": 0.0,
         "manaRegenBonusPoints": 0,
         "lifeRegenHpPerSecond": 0,
     },
@@ -211,7 +212,7 @@ def test_joint_buff_omissions_preserve_light_or_reject_inert(active):
             ("restore_resources_on_use", ("healLife", "healMana")),
             ("configure_tool", ("pickPower", "axePowerTooltipPercent", "hammerPower", "miningSpeedMultiplier")),
             ("set_projectile_collision", ("immunity", "updatesPerTick")),
-            ("move_boomerang", ("returnAfterTicks", "returnSpeed")),
+            ("move_boomerang", ("returnAfterSeconds", "returnSpeedBlocksPerSecond")),
         )
         for present in ([(False,) * len(names), (True,) * len(names)]
                         + [tuple(j != i for j in range(len(names))) for i in range(len(names))]

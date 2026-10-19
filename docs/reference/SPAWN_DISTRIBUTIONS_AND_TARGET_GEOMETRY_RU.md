@@ -8,17 +8,17 @@
 
 ## `configure_spawn.velocity`: один явный вариант
 
-Свежий Author заменяет скалярный `speedPxPerUpdate` обязательным `velocity`. Объекты закрыты; одновременно выбрать две ветки, пропустить обязательный предел или передать `null` нельзя.
+Свежий Author v6 выбирает обязательный `velocity` в блоках/с. Объекты закрыты; одновременно выбрать две ветки, пропустить обязательный предел или передать `null` нельзя. Старые pixel/update Author keys не являются aliases. Полная [таблица единиц](MODEL_FACING_UNITS_RU.md#authority) задаёт границу с неизменённым native wire.
 
 | Значение `velocity` | Начальная скорость |
 |---|---|
-| `{"constantSpeedPxPerUpdate":8.5}` | Прежний детерминированный веер с постоянной величиной скорости. |
-| `{"fanSpeed":{"minSpeedPxPerUpdate":4,"maxSpeedPxPerUpdate":8}}` | Сохраняет каждый луч authored веера; независимо выбирает его скорость равномерно между пределами. |
-| `{"radial":{"minSpeedPxPerUpdate":4,"maxSpeedPxPerUpdate":8}}` | Для каждого ребёнка выбирает направление по всей окружности и равномерную величину скорости. |
-| `{"disk":{"maxSpeedPxPerUpdate":8}}` | Выбирает вектор равномерно по площади диска скоростей: радиус `max * sqrt(U)`. |
-| `{"cone":{"minSpeedPxPerUpdate":4,"maxSpeedPxPerUpdate":8,"halfAngleRadians":0.2}}` | Добавляет независимое равномерное угловое отклонение к каждому лучу authored веера и независимо выбирает скорость. |
+| `{"constantSpeedBlocksPerSecond":40}` | Прежний детерминированный веер с постоянной величиной скорости. |
+| `{"fanSpeed":{"minSpeedBlocksPerSecond":20,"maxSpeedBlocksPerSecond":40}}` | Сохраняет каждый луч authored веера; независимо выбирает его скорость равномерно между пределами. |
+| `{"radial":{"minSpeedBlocksPerSecond":20,"maxSpeedBlocksPerSecond":40}}` | Для каждого ребёнка выбирает направление по всей окружности и равномерную величину скорости. |
+| `{"disk":{"maxSpeedBlocksPerSecond":40}}` | Выбирает вектор равномерно по площади диска скоростей: радиус `max * sqrt(U)`. |
+| `{"cone":{"minSpeedBlocksPerSecond":20,"maxSpeedBlocksPerSecond":40,"halfAngleRadians":0.2}}` | Добавляет независимое равномерное угловое отклонение к каждому лучу authored веера и независимо выбирает скорость. |
 
-Скорости ограничены `0..80` пикселей за **native projectile update**, а не за world tick. `min <= max`; равные пределы сохраняют точную постоянную величину. `halfAngleRadians` — половина угловой ширины, `0..π`. Native хранит скорости/углы как `float32`; нечисловые, бесконечные значения и потеря ненулевого значения в storage отвергаются каноническими проверками.
+Author speed domain зависит от N этого projectile: `0..300×N` блоков/с при N=1..6. Canonical lowering сохраняет прежний wire domain `0..80` пикселей за **native projectile update**; emitter N не используется вместо child N. `min <= max`; равные пределы сохраняют точную постоянную величину. `halfAngleRadians` — половина угловой ширины, `0..π`. Native хранит скорости/углы как `float32`; нечисловые, бесконечные значения и потеря ненулевого значения в storage отвергаются каноническими проверками.
 
 Случайные ветки допустимы для `owner_attached_projectile`, `free_projectile`, `child_projectile`. `stationary_projectile`, `field`, `temporary_helper` требуют constant-вариант: их consumer не исполняет такую начальную скорость. `channel_beam` и `charge_then_release` также требуют constant-вариант, поскольку сами владеют launch velocity. Это проверяется до compile, в strict wire и в C#.
 
@@ -42,12 +42,12 @@
     "damageBasis": "live_parent",
     "knockbackBasis": "authored_child",
     "damageMultiplier": 0.5,
-    "delayTicks": 2,
+    "delaySeconds": 0.1,
     "geometry": {
       "beforeProbability": 0.85,
       "hitboxMaxSideFactor": 0.6,
-      "clearancePx": 10,
-      "beforePositionJitterRadiusPx": 8,
+      "clearanceBlocks": 0.625,
+      "beforePositionJitterRadiusBlocks": 0.5,
       "beforeDirectionJitterRadians": 0.2,
       "afterFanSpreadRadians": 1.2,
       "initialIgnoreCountdownUpdates": 10
@@ -56,13 +56,13 @@
 }
 ```
 
-Все листья `geometry` обязательны. `beforeProbability` лежит в `0..1` и хранится как `double`; `hitboxMaxSideFactor` — в `0..2`; clearance и positional jitter — в `0..128` px; before direction jitter — в `0..π`; after fan spread — в `0..2π`; countdown — целое `0..600`. `count=1..12`, multiplier `0..4`, delay `0..600` world ticks. Damage и knockback независимо выбирают `authored_child|live_parent` по [контракту A9](CHILD_COMBAT_INHERITANCE_RU.md).
+Все листья `geometry` обязательны. `beforeProbability` лежит в `0..1` и хранится как `double`; `hitboxMaxSideFactor` — в `0..2`; clearance и positional jitter — в `0..8` блоков; before direction jitter — в `0..π`; after fan spread — в `0..2π`; countdown — целое `0..600`. `count=1..12`, multiplier `0..4`, delay `0..10` секунд, с объявленной world-tick quantization. Damage и knockback независимо выбирают `authored_child|live_parent` по [контракту A9](CHILD_COMBAT_INHERITANCE_RU.md).
 
-Ребёнок должен явно иметь `configure_spawn(position={at:activation_origin}, aim=velocity, offsetPx=0)` и не иметь `spawn_over_target`. Его velocity остаётся самостоятельным выбором. Эти reference requirements проверяют правильную entity, не дописывают ей новую конфигурацию. Missing или несовместимый reference даёт Repair право выбрать совместимую entity либо создать полный новый child, если исходная child имеет независимого consumer и остаётся frozen/reachable. Для sole-reference child без primary/binding использования открываются только конфликтующие registry-exact dependency leaves существующего spawn; остальные значения и reference frozen, замена не создаётся. Модель явно пишет поправку, compiler её не достраивает. C# проверяет исходные presence и exact значения **до** legacy normalization, поэтому отсутствующие поля, другой регистр, отрицательный over-target offset и `null` не становятся валидными за счёт defaults/clamp.
+Ребёнок должен явно иметь `configure_spawn(position={at:activation_origin}, aim=velocity, offsetBlocks=0)` и не иметь `spawn_over_target`. Его velocity остаётся самостоятельным выбором. Эти reference requirements проверяют правильную entity, не дописывают ей новую конфигурацию. Missing или несовместимый reference даёт Repair право выбрать совместимую entity либо создать полный новый child, если исходная child имеет независимого consumer и остаётся frozen/reachable. Для sole-reference child без primary/binding использования открываются только конфликтующие registry-exact dependency leaves существующего spawn; остальные значения и reference frozen, замена не создаётся. Модель явно пишет поправку, compiler её не достраивает. C# проверяет исходные presence и exact значения **до** legacy normalization, поэтому отсутствующие поля, другой регистр, отрицательный over-target offset и `null` не становятся валидными за счёт defaults/clamp.
 
 ### Точная формула
 
-На admission сохраняются центр `C`, `max(width,height)` поражённого NPC и ось события `D`. Ось события — нормализованная текущая velocity родителя; при её отсутствии используется сохранённая initial direction существующего event producer. Геометрический радиус равен `R = max(width,height) * hitboxMaxSideFactor + clearancePx`.
+Native формула ниже использует world pixels: lowerer заранее пишет `clearancePx = 16 × clearanceBlocks` и такой же scale для positional jitter. На admission сохраняются центр `C`, `max(width,height)` поражённого NPC и ось события `D`. Ось события — нормализованная текущая velocity родителя; при её отсутствии используется сохранённая initial direction существующего event producer. Геометрический радиус равен `R = max(width,height) * hitboxMaxSideFactor + clearancePx`.
 
 Для каждого ребёнка независимо выбирается before-ветка с вероятностью `beforeProbability`. При `0` она отключена, при `1` выбрана всегда:
 
@@ -87,13 +87,13 @@ Projectile ExtraAI **v4** добавляет к v3 presence-byte и выбран
 
 ## Lowering, provenance и сохранённые определения
 
-Класс compiler-преобразований — **Alias Lowering**. Constant-вариант точно пишет старый `spawn.speedPxPerTick`. Случайная ветка пишет зарегистрированные `spawn.velocityDistribution.*`, literal kind и inactive constant slot `0`. Target geometry пишет `hitTargetSpawn.*` и literal ordinary spread `0`, сохраняя wire action `spawn_entity_on_event` и opcode `1`. Runtime исполняет эти явные параметры; compiler не вычисляет trajectory, не выбирает branch и не изобретает child.
+Выбор структуры и literal kind — **Alias Lowering**; physical unit scales и явная секундная quantization принадлежат canonical `ParamSpec`. Constant-вариант точно пишет старый `spawn.speedPxPerTick`. Случайная ветка пишет зарегистрированные `spawn.velocityDistribution.*`, literal kind и inactive constant slot `0`. Target geometry пишет `hitTargetSpawn.*` и literal ordinary spread `0`, сохраняя wire action `spawn_entity_on_event` и opcode `1`. Runtime исполняет эти явные параметры; compiler не вычисляет trajectory, не выбирает branch и не изобретает child.
 
 Каждый leaf и literal имеет exact source/call ID/target receipt. Новый `wire_action` связывает fn alias с сохранённым opcode; fixed action/name receipts исходят от `.fn`. Strict audit требует единственного полного consistent variant и не позволяет подменить новый fn старым, скрестить radial/cone paths, удалить geometry вместе с receipts или приписать новому distribution старый speed receipt.
 
 `_wire_projection_witness` — внутренняя конечная проверка соответствия wire одному зарегистрированному варианту. Она возвращает только доказанные projection rows для audit; не выдаёт Author-документ, не кормит compiler/Repair и не становится production importer. `retained_receipt_params` сохраняет прежнюю scalar projection только для wire-only audit. С actual Author единственным источником истины остаётся текущая форма.
 
-У сохранённого wire без новых полей исполняемые значения, opcodes, IDs и старые receipts остаются читаемыми. Frozen JSON и хеши не перезаписываются. Fresh constant Author имеет новый source path `.params.velocity.constantSpeedPxPerUpdate`, а его диагностический `runtimeContract.validation.stats.registryDrivenChecks` отражает текущий registry. Полная byte identity свежего отчёта с историческим не заявляется. Archive replay сравнивается через явно ограниченный **test-only** adapter: exact scalar source rename и delta `23` requirements/`1` typed reference; production путь этот adapter не использует.
+У сохранённого wire без новых полей исполняемые значения, opcodes, IDs и старые receipts остаются читаемыми. Frozen JSON и хеши не перезаписываются. Fresh constant Author имеет новый source path `.params.velocity.constantSpeedBlocksPerSecond`, а его диагностический `runtimeContract.validation.stats.registryDrivenChecks` отражает текущий registry. Полная byte identity свежего отчёта с историческим не заявляется. Saved source-free receipts принимают только registry-declared predecessor paths этой unit-миграции; source-backed audit остаётся exact. Archive replay использует ограниченные **test-only** projections для текущих Author fixtures; production importer отсутствует, frozen wire не пересчитывается.
 
 ## Проверки и предел доказательства
 

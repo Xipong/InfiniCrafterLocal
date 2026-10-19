@@ -96,7 +96,7 @@ def test_placed_sprite_and_light_compose_without_overwriting_each_other():
     from test_placed_body_capability import placed, TRANSFORM
     document = placed(); document["runtimeProgram"]["calls"].append(lit()["runtimeProgram"]["calls"][-1])
     wire = compile_runtime_program(document)
-    assert placement(wire)["placedBody"] == TRANSFORM
+    assert placement(wire)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
     assert placement(wire)["placedLight"] == LIGHT
     assert validate_runtime_wire(wire)["ok"]
 

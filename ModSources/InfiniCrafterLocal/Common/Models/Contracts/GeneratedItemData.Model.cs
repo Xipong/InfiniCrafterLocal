@@ -200,6 +200,15 @@ public sealed class GameplaySpec : IItemEffectsSpec
     public string UseStyleName { get; set; } = "swing";
     public int UseStyle { get; set; } = ItemUseStyleID.Swing;
     public bool AutoReuse { get; set; } = true;
+    // Absence is inactive and must stay absent in old definition/network hashes.
+    // Explicit false is inert; only an authored fn emits true. Present null is invalid.
+    private bool? _collectSeedsFromGrass;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CollectSeedsFromGrass
+    {
+        get => _collectSeedsFromGrass;
+        set => _collectSeedsFromGrass = value ?? throw new InvalidDataException("collectSeedsFromGrass must be a boolean when present");
+    }
     public int HoldoutOffsetX { get; set; } = 0;
     public int HoldoutOffsetY { get; set; } = 0;
     public string HandPose { get; set; } = "";

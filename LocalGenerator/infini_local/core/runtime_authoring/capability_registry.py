@@ -30,7 +30,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
-RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v5"
+RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v6"
 RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v3"
 
 ENTITY_KINDS: Final[tuple[str, ...]] = (
@@ -91,6 +91,7 @@ NETWORK_AUTHORITIES: Final[tuple[str, ...]] = (
     "server_execute",
     "owner_execute_sync",
     "client_visual_only",
+    "native_worldgen",  # Existing WorldGen lifecycle/owner; inventory witness only.
 )
 
 
@@ -370,6 +371,134 @@ class ParamSpec:
     min_properties: int | None = None
     omission_condition: OmissionCondition | None = None
     wire_presence_requires_receipt: bool = False
+    # Explicit numeric wire contract. Predecessors are receipt paths only, never Author aliases.
+    predecessor_names: tuple[str, ...] = ()
+    wire_kind: str = ""
+    wire_minimum: float | int | None = None
+    wire_maximum: float | int | None = None
+    wire_updates_power: int = 0
+    wire_rounding: str = ""
+    predecessor_omission_wire_value: Any = None
+
+    def wire_projection_card(self) -> dict[str, Any]:
+        """Canonical introspection for source-wire readers and test-only fixture inverses.
+
+        Wire = Author * multiplier / (divisor * updatesPerTick**power), followed
+        only by the declared rounding. Context always belongs to the projectile
+        receiving this parameter (a child uses its own collision call).
+        """
+        return {"wireName": self.wire_name, "wireKind": self.projected_kind,
+                "multiplier": self.wire_multiplier, "divisor": self.wire_divisor, "offset": self.wire_offset,
+                "updatesPerTickPower": self.wire_updates_power,
+                "context": "same_target.set_projectile_collision.updatesPerTick" if self.wire_updates_power else None,
+                "rounding": self.wire_rounding or "exact",
+                "wireMinimum": self.wire_minimum, "wireMaximum": self.wire_maximum,
+                "predecessorNames": list(self.predecessor_names), "authorUnits": self.units,
+                "blockPixels": 16, "worldTicksPerSecond": 60,
+                "rejectNonzeroToZero": bool(self.wire_kind),
+                **({"authorBoundsByUpdatesPerTick": {str(n): self.contextual_author_bounds(updates_per_tick=n)
+                                                     for n in range(1, 7)}} if self.wire_updates_power else {})}
+
+    def author_projection_card(self) -> dict[str, Any]:
+        """Only human-unit constraints; historical paths/engine math stay introspection-only."""
+        out: dict[str, Any] = {"nonzeroMustRemainNonzero": True}
+        if self.wire_rounding:
+            out["secondsRounding"] = "nearest world tick (60/s); half-tick ties UP"
+        if self.wire_updates_power:
+            out["targetContext"] = "same target's unique set_projectile_collision.updatesPerTick"
+            out["boundsAtUpdatesPerTick1To6"] = [
+                list(self.contextual_author_bounds(updates_per_tick=n).values()) for n in range(1, 7)]
+        return out
+
+    def contextual_author_bounds(self, *, updates_per_tick: int | None = None) -> dict[str, Any]:
+        """Human bounds for one validated target clock; static schema covers their union."""
+        if not self.wire_kind or not self.wire_updates_power:
+            return {"minimum": self.minimum, "maximum": self.maximum}
+        factor = self._update_factor(updates_per_tick)
+        return {"minimum": self.wire_minimum * self.wire_divisor * factor / self.wire_multiplier
+                    if self.wire_minimum is not None else None,
+                "maximum": self.wire_maximum * self.wire_divisor * factor / self.wire_multiplier
+                    if self.wire_maximum is not None else None}
+
+    @property
+    def projected_kind(self) -> str:
+        return self.wire_kind or ("integer" if self.kind == "integer" or self.wire_multiplier != 1 or self.wire_boolean_true_value is not None else self.kind)
+
+    @property
+    def requires_update_context(self) -> bool:
+        return bool(self.wire_updates_power or any(spec.requires_update_context for spec in self.properties.values())
+                    or any(spec.requires_update_context for spec in self.alternatives))
+
+    def _update_factor(self, updates_per_tick: int | None) -> int:
+        if not self.wire_updates_power:
+            return 1
+        if type(updates_per_tick) is not int or not 1 <= updates_per_tick <= 6:
+            raise ValueError("projection requires the same target's unique validated updatesPerTick (1..6)")
+        return updates_per_tick ** self.wire_updates_power
+
+    def from_wire(self, value: Any, *, updates_per_tick: int | None = None) -> Any:
+        """Unit inverse for reading wire/QA fixtures, NOT an Author admission adapter."""
+        if self.wire_enum:
+            matches = [key for key, wire in self.wire_enum.items() if type(wire) is type(value) and wire == value]
+            if len(matches) != 1:
+                raise ValueError("wire enum has no unique inverse")
+            return matches[0]
+        if self.wire_boolean_true_value is not None:
+            if type(value) is not int or value not in (0, self.wire_boolean_true_value):
+                raise ValueError("invalid boolean wire projection")
+            return bool(value)
+        if self.wire_offset:
+            return value - self.wire_offset
+        factor = self._update_factor(updates_per_tick)
+        result = value * self.wire_divisor * factor / self.wire_multiplier
+        return int(result) if self.kind == "integer" and float(result).is_integer() else result
+
+    def canonical_receipt_leaf_path(self, suffix: str) -> str | None:
+        """Finite predecessor path admission for source-free receipts ONLY."""
+        if not suffix:
+            return ""
+        if self.alternatives:
+            matches = {path for variant in self.alternatives
+                       if (path := variant.canonical_receipt_leaf_path(suffix)) is not None}
+            return next(iter(matches)) if len(matches) == 1 else None
+        head, separator, tail = suffix.partition(".")
+        matches = [(name, spec) for name, spec in self.properties.items()
+                   if head == name or head in spec.predecessor_names]
+        if len(matches) != 1:
+            return None
+        name, spec = matches[0]
+        rest = spec.canonical_receipt_leaf_path(tail) if separator else ""
+        return name + ("." + rest if rest else "") if rest is not None else None
+
+    def wire_schema(self) -> dict[str, Any]:
+        """Engine-domain scalar schema; never reuse changed Author units for wire."""
+        if not self.wire_kind:
+            if self.structured:
+                raise ValueError("structured parameters have variant wire projections, not a scalar wire schema")
+            out = self.schema()
+            if self.wire_enum:
+                out["enum"] = list(self.wire_enum.values())
+            elif self.wire_boolean_true_value is not None:
+                out = {"type": "integer", "enum": [0, self.wire_boolean_true_value]}
+            elif self.wire_multiplier != 1 or self.wire_divisor != 1 or self.wire_offset:
+                out = {"type": self.projected_kind}
+                if self.minimum is not None:
+                    out["minimum"] = self.to_wire(self.minimum)
+                if self.maximum is not None:
+                    out["maximum"] = self.to_wire(self.maximum)
+            return out
+        out: dict[str, Any] = {"type": self.wire_kind}
+        for key, bound in (("minimum", self.wire_minimum), ("maximum", self.wire_maximum)):
+            if bound is None:
+                continue
+            # A native Single endpoint can lie just outside the original
+            # binary64 literal. Admit that exact storage image as well, not an
+            # epsilon or the next outside Single. Fresh Author bounds stay exact.
+            if self.wire_kind == "number" and self.consumer_storage == "float32":
+                stored = struct.unpack("!f", struct.pack("!f", bound))[0]
+                bound = min(bound, stored) if key == "minimum" else max(bound, stored)
+            out[key] = bound
+        return out
 
     @property
     def structured(self) -> bool:
@@ -403,7 +532,7 @@ class ParamSpec:
                          for leaf in spec.leaf_values(value[key], f"{name}.{key}"))
         return ((name, self, value),)
 
-    def projected_fields(self, value: Any, name: str) -> tuple[ParamProjection, ...]:
+    def projected_fields(self, value: Any, name: str, *, updates_per_tick: int | None = None) -> tuple[ParamProjection, ...]:
         """Project a validated value, retaining its exact nested source paths.
 
         Objects group Author decisions only. Wire names are relative to the
@@ -414,20 +543,20 @@ class ParamSpec:
         selected = self.selected_variant(value)
         if strict_schema_errors(value, self.schema()):
             raise ValueError("parameter does not satisfy its declared schema")
-        if any(spec.consumer_value_error(leaf) is not None
+        if any(spec.consumer_value_error(leaf, updates_per_tick=updates_per_tick) is not None
                for _, spec, leaf in self.leaf_values(value, name)):
             raise ValueError("parameter does not satisfy its declared consumer domain")
         if selected is not self:
-            return selected.projected_fields(value, name)
+            return selected.projected_fields(value, name, updates_per_tick=updates_per_tick)
         rows = [ParamProjection(name, key, item, True) for key, item in self.wire_literals.items()]
         if self.kind == "object":
             if not isinstance(value, Mapping):
                 raise ValueError("object parameter has no object value")
             for key, spec in self.properties.items():
                 if key in value:
-                    rows.extend(spec.projected_fields(value[key], f"{name}.{key}"))
+                    rows.extend(spec.projected_fields(value[key], f"{name}.{key}", updates_per_tick=updates_per_tick))
         elif not self.wire_literals or self.wire_name:
-            rows.append(ParamProjection(name, self.wire_name or name.rsplit(".", 1)[-1], self.to_wire(value)))
+            rows.append(ParamProjection(name, self.wire_name or name.rsplit(".", 1)[-1], self.to_wire(value, updates_per_tick=updates_per_tick)))
         destinations = [row.wire_path for row in rows]
         if len(destinations) != len(set(destinations)):
             raise ValueError("parameter projects multiple decisions into one wire field")
@@ -464,6 +593,9 @@ class ParamSpec:
         from infini_local.core.schema_validation import strict_schema_errors
         if self.structured:
             return False
+        if self.wire_kind:
+            return (not strict_schema_errors(value, self.wire_schema())
+                    and self.consumer_value_error(value, wire_value=True) is None)
         if self.wire_enum:
             return any(type(value) is type(v) and json.dumps(value) == json.dumps(v)
                        for v in self.wire_enum.values())
@@ -535,6 +667,10 @@ class ParamSpec:
         return not remaining
 
     def consumer_constraint(self) -> dict[str, Any]:
+        if self.wire_kind and self.consumer_storage == "float32":
+            return {"storage": "float32", "neutral": self.neutral,
+                    "rule": "nonneutral_must_remain_nonneutral",
+                    "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."}
         if self.consumer_storage == "float64":
             return {"storage": "float64", "rule": "finite_double_no_normalization",
                     "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."}
@@ -550,8 +686,23 @@ class ParamSpec:
             )
         return constraint
 
-    def consumer_value_error(self, value: Any, *, wire_value: bool = False) -> str | None:
+    def consumer_value_error(self, value: Any, *, wire_value: bool = False, updates_per_tick: int | None = None) -> str | None:
         """Check declared consumer storage without modifying Author or wire."""
+        if self.wire_kind:
+            try:
+                projected = value if wire_value else self.to_wire(value, updates_per_tick=updates_per_tick)
+                if type(projected) not in (int, float) or not math.isfinite(projected):
+                    return "wire projection must remain finite"
+                if not wire_value and value != 0 and projected == 0:
+                    return "nonzero value collapses to zero in declared wire projection"
+                bounds = self.wire_schema() if wire_value else {"minimum": self.wire_minimum, "maximum": self.wire_maximum}
+                lower, upper = bounds.get("minimum"), bounds.get("maximum")
+                if lower is not None and projected < lower:
+                    return f"projected engine value must be >= {lower}"
+                if upper is not None and projected > upper:
+                    return f"projected engine value must be <= {upper}"
+            except (ValueError, TypeError, OverflowError) as exc:
+                return str(exc)
         if not self.consumer_storage:
             return None
         if self.consumer_storage == "float64":
@@ -567,9 +718,10 @@ class ParamSpec:
         try:
             # Storage consumes the declared wire projection, not the Author unit.
             # Check both boundaries: /100 may already underflow in binary64.
-            projected = value if wire_value else self.to_wire(value)
-            neutral = self.to_wire(self.neutral)
-            source_neutral = neutral if wire_value else self.neutral
+            projected = value if wire_value else self.to_wire(value, updates_per_tick=updates_per_tick)
+            neutral = (0 if self.wire_kind and self.neutral in (None, 0)
+                       else self.to_wire(self.neutral, updates_per_tick=updates_per_tick))
+            source_neutral = neutral if wire_value else (0 if self.wire_kind and self.neutral is None else self.neutral)
             if value != source_neutral and projected == neutral:
                 return f"non-neutral value collapses to neutral {neutral} in declared wire projection"
             stored = struct.unpack("!f", struct.pack("!f", projected))[0]
@@ -581,7 +733,7 @@ class ParamSpec:
             return f"non-neutral value collapses to neutral {neutral} in float32 consumer storage after declared wire projection"
         return None
 
-    def to_wire(self, value: Any) -> Any:
+    def to_wire(self, value: Any, *, updates_per_tick: int | None = None) -> Any:
         # Declared unit conversion, not a choice of mechanic or a numeric clamp.
         if self.wire_enum:
             if value not in self.wire_enum:
@@ -593,6 +745,20 @@ class ParamSpec:
             return value + self.wire_offset
         if self.wire_boolean_true_value is not None:
             return self.wire_boolean_true_value if value else 0
+        if self.wire_kind:
+            factor = self._update_factor(updates_per_tick)
+            # One declared binary64 scale application; do not introduce an
+            # intermediate velocity/acceleration rounding before target scaling.
+            result = value * (self.wire_multiplier / (self.wire_divisor * factor))
+            if self.wire_rounding == "nearest_world_tick_half_up":
+                if result < 0 or not math.isfinite(result):
+                    raise ValueError("seconds must project to nonnegative finite world ticks")
+                return math.floor(result + 0.5)
+            if self.wire_kind == "integer":
+                if not math.isfinite(result) or not result.is_integer():
+                    raise ValueError("non-integral wire projection")
+                return int(result)
+            return result
         if self.wire_multiplier != 1:
             result = value * self.wire_multiplier
             if not isinstance(result, (int, float)) or not float(result).is_integer():
@@ -639,6 +805,8 @@ class ParamSpec:
             out["x-infini-neutral"] = self.neutral
         if self.consumer_storage:
             out["x-infini-consumerConstraint"] = self.consumer_constraint()
+        if self.wire_kind:
+            out["x-infini-authorProjection"] = self.author_projection_card()
         return out
 
 
@@ -672,6 +840,23 @@ class CapabilitySpec:
     wire_action: str = ""
     fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     wire_presence_path: str = ""  # Optional whole component selected only by this capability.
+
+    def canonical_receipt_param_path(self, path: str) -> str | None:
+        """Resolve a finite declared historical source path, never fresh Author input."""
+        head, separator, tail = path.partition(".")
+        matches = [(name, spec) for name, spec in self.params.items()
+                   if head == name or head in spec.predecessor_names]
+        if len(matches) != 1:
+            return None
+        name, spec = matches[0]
+        rest = spec.canonical_receipt_leaf_path(tail) if separator else ""
+        return name + ("." + rest if rest else "") if rest is not None else None
+
+    def flat_wire_params_schema(self) -> dict[str, Any]:
+        """Strict flat engine component schema derived only from declared projections."""
+        return {"type": "object", "additionalProperties": False,
+                "properties": {spec.wire_name or name: spec.wire_schema() for name, spec in self.params.items()},
+                "required": [spec.wire_name or name for name, spec in self.params.items() if spec.required]}
 
     def provider_variant_schema(self) -> dict[str, Any]:
         properties = {name: spec.schema() for name, spec in self.params.items()}
@@ -748,6 +933,8 @@ class CapabilitySpec:
                 row["consumerConstraint"] = spec.consumer_constraint()
             if spec.structured:
                 row["shape"] = spec.schema()
+            if spec.wire_kind:
+                row["projectionConstraints"] = spec.author_projection_card()
             if spec.omission_condition is not None:
                 row["omissionAllowedOnlyWhen"] = spec.omission_condition.card()
             params[name] = row
@@ -826,7 +1013,7 @@ class CapabilitySpec:
             # value or design decision; absence and the numeric bounds remain.
             if not spec.required and spec.neutral == 0:
                 row.pop("neutral", None)
-            for suffix, units in (("Ticks", "ticks"), ("Tiles", "tiles"),
+            for suffix, units in (("Seconds", "seconds"), ("Tiles", "blocks (tiles)"),
                                   ("Px", "pixels"), ("Radians", "radians")):
                 if name.endswith(suffix) and spec.units == units:
                     row.pop("units", None)
@@ -899,7 +1086,7 @@ def _p(
         maximum=maximum,
         enum=tuple(enum),
         pattern=pattern,
-        units=units,
+        units="blocks (tiles)" if units == "tiles" else units,
         semantic_type=semantic_type,
         reference=reference,
         default=default,
@@ -922,6 +1109,67 @@ def _p(
         omission_condition=omission_condition,
         wire_presence_requires_receipt=wire_presence_requires_receipt,
     )
+
+
+def target_updates_per_tick(calls: Iterable[object], target: str) -> int:
+    """Resolve only the same projectile's unique explicit collision declaration."""
+    matches = [call for call in calls if isinstance(call, Mapping)
+               and call.get("fn") == "set_projectile_collision" and call.get("target") == target]
+    if len(matches) != 1:
+        raise ValueError("projection requires the same target's unique set_projectile_collision updatesPerTick")
+    params = matches[0].get("params")
+    value = params.get("updatesPerTick") if isinstance(params, Mapping) else None
+    if type(value) is not int or not 1 <= value <= 6:
+        raise ValueError("projection requires validated updatesPerTick (1..6)")
+    return value
+
+
+def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int, divisor: int = 1,
+                 updates_power: int = 0, units: str, seconds: bool = False) -> ParamSpec:
+    """Declare changed Author units while freezing the pre-existing engine domain.
+
+    The provider range covers every N=1..6. Validation additionally checks the
+    projected engine range at the actual target's N; it never clamps or guesses N.
+    """
+    low = spec.to_wire(spec.minimum) if spec.minimum is not None else None
+    high = spec.to_wire(spec.maximum) if spec.maximum is not None else None
+    def inverse(value: Any) -> Any:
+        return value * divisor / multiplier if value is not None else None
+    author_low, author_high = inverse(low), inverse(high)
+    if updates_power:
+        if author_low is not None and author_low < 0:
+            author_low *= 6 ** updates_power
+        if author_high is not None and author_high > 0:
+            author_high *= 6 ** updates_power
+    if seconds:
+        author_low = max(0, (low - 0.5) / 60) if low is not None else None
+    geometry_lattice = spec.projected_kind == "integer" and not seconds
+    # Clock quantization, target-context bounds and nonzero/storage rules are
+    # shared in the field guide and author_projection_card. Do not repeat that
+    # identical engine primer for every leaf, or clip literal source facts to
+    # make room for it. Keep each consumer's distinct execution meaning here.
+    meaning = ("World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
+               if seconds else f"Author units: {units}. Native consumer: ")
+    return replace(spec, kind="number", description=meaning + spec.description,
+                   minimum=author_low, maximum=author_high, units=units, semantic_type=units,
+                   default=inverse(spec.default), neutral=inverse(spec.neutral),
+                   # Converted floating scalars are stored by native float32
+                   # fields; preserve an explicitly declared double consumer.
+                   consumer_storage=spec.consumer_storage or ("float32" if spec.projected_kind == "number" else ""),
+                   predecessor_omission_wire_value=(spec.to_wire(spec.default)
+                       if not spec.required and spec.default is not None
+                       and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral else None),
+                   wire_name=spec.wire_name or predecessor,
+                   wire_multiplier=multiplier, wire_divisor=divisor,
+                   wire_updates_power=updates_power,
+                   wire_kind=spec.projected_kind, wire_minimum=low, wire_maximum=high,
+                   wire_rounding="nearest_world_tick_half_up" if seconds else "",
+                   multiple_of=1 / multiplier if geometry_lattice else None,
+                   predecessor_names=(predecessor,))
+
+
+def _seconds(spec: ParamSpec, predecessor: str) -> ParamSpec:
+    return _world_units(spec, predecessor, multiplier=60, units="seconds", seconds=True)
 
 
 def _cap(
@@ -1063,8 +1311,8 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         "lifeRegenHpPerSecond": stat("lifeRegen", "Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing", -50, 100, "HP/s", wire_multiplier=2, multiple_of=0.5),
         "manaRegenBonusPoints": stat("manaRegen", "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s", -100, 200, "engine units: manaRegenBonus points", integer=True),
         "moveSpeedBonusPercent": stat("movementSpeed", "Add percent/100 to Player.moveSpeed", -90, 300, "additive_percent", percent=True),
-        "maxRunSpeedBonusPxPerTick": stat("maxRunSpeed", "Add to Player.maxRunSpeed, subject to other Terraria movement limits", -5, 20, "pixels_per_tick"),
-        "jumpSpeedBonusPxPerTick": stat("jumpSpeed", "Add to Player.jumpSpeedBoost (positive raises jump speed)", -5, 20, "pixels_per_tick"),
+        "maxRunSpeedBonusBlocksPerSecond": _world_units(stat("maxRunSpeed", "Add to Player.maxRunSpeed, subject to other Terraria movement limits", -5, 20, "pixels_per_tick"), "maxRunSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s'),
+        "jumpSpeedBonusBlocksPerSecond": _world_units(stat("jumpSpeed", "Add to Player.jumpSpeedBoost (positive raises jump speed)", -5, 20, "pixels_per_tick"), "jumpSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s'),
         "genericCritChancePercentagePoints": stat("genericCrit", "Add percentage points to generic critical chance", -100, 100, "percentage_points"),
         "genericAttackSpeedBonusPercent": stat("attackSpeed", "Add percent/100 to generic attack speed", -90, 300, "additive_percent", percent=True),
         "genericKnockbackBonusPercent": stat("knockback", "Add percent/100 to generic StatModifier knockback; not flat points", -90, 300, "additive_percent", percent=True),
@@ -1096,7 +1344,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         ):
             p[name] = _p("boolean", meaning, required=False, wire_name=name, neutral=False,
                          execution_phase=phase, wire_presence_requires_receipt=True)
-        p["accRunSpeedPxPerTick"] = _p("number", "Native sprint-speed floor in pixels/world tick: max(Player.accRunSpeed, value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus", required=False, minimum=0, maximum=20, units="pixels_per_tick", wire_name="accRunSpeed", neutral=0, consumer_storage="float32", execution_phase=phase, wire_presence_requires_receipt=True)
+        p["accRunSpeedBlocksPerSecond"] = _world_units(_p("number", "Native sprint-speed floor: max(Player.accRunSpeed, lowered value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus", required=False, minimum=0, maximum=20, units="pixels_per_tick", wire_name="accRunSpeed", neutral=0, consumer_storage="float32", execution_phase=phase, wire_presence_requires_receipt=True), "accRunSpeedPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s')
         p["rocketBoots"] = _p("integer", "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight", required=False, minimum=0, maximum=5, units="native rocket flight mode", wire_name="rocketBoots", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
         p["wireVision"] = _p("boolean", "Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation", required=False, wire_name="wireVision", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
     if armor:
@@ -1156,7 +1404,7 @@ _SPAWN_ANCHORS: Final[Mapping[str, str]] = MappingProxyType({
 
 def _spawn_position_param() -> ParamSpec:
     def anchor() -> ParamSpec:
-        return _p("string", "Exact spawn anchor; activation_origin is the invoking producer's origin. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
+        return _p("string", "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle",
                   enum=_SPAWN_ANCHORS, wire_enum=_SPAWN_ANCHORS, wire_name="placement")
     return _p("union", "Choose an anchor and optionally a literal vertical height above it; aim is computed after this shift",
               semantic_type="spawn_position", alternatives=(
@@ -1165,7 +1413,7 @@ def _spawn_position_param() -> ParamSpec:
         _p("object", "Above the explicit anchor", properties={
             "above": anchor(), "heightTiles": _p("number", "Vertical offset above the selected anchor", minimum=1,
                 maximum=80, units="tiles", wire_name="overTarget.heightTiles"),
-            "activationDelayTicks": _p("integer", "Delay activation of this already spawned projectile; occupies a live slot, and initial timeLeft includes both lifetime and this delay", minimum=0, maximum=600, units="ticks", wire_name="overTarget.delayTicks"),
+            "activationDelaySeconds": _seconds(_p("integer", "Delay activation of this already spawned projectile; occupies a live slot, and initial timeLeft includes both lifetime and this delay", minimum=0, maximum=600, units="ticks", wire_name="overTarget.delayTicks"), "activationDelayTicks"),
         }),
     ))
 
@@ -1175,9 +1423,9 @@ def _event_when_param(events: Iterable[str]) -> ParamSpec:
     ordinary = tuple(event for event in allowed if event != "periodic")
     variants = [_p("string", "Execute on this exact emitted event", enum=ordinary, wire_name="event")] if ordinary else []
     if "periodic" in allowed:
-        variants.append(_p("object", "Periodic execution with explicit world-tick interval; keep the call id because item phase uses its hash", properties={
-            "everyTicks": _p("integer", "World ticks between periodic executions; item and projectile clocks retain their own phase",
-                             minimum=6, maximum=3600, units="ticks", wire_name="periodTicks"),
+        variants.append(_p("object", "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash", properties={
+            "everySeconds": _seconds(_p("integer", "World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                             minimum=6, maximum=3600, units="ticks", wire_name="periodTicks"), "everyTicks"),
         }, wire_literals={"event": "periodic"}))
     return (_p("union", "Exact event or explicit periodic interval", alternatives=variants, semantic_type="runtime_event_trigger")
             if len(variants) > 1 else replace(variants[0], semantic_type="runtime_event_trigger"))
@@ -1196,7 +1444,7 @@ def _spawn_velocity() -> ParamSpec:
                   neutral=0, consumer_storage="float32", wire_name=wire)
 
     variants = [_p("object", "Exact constant-speed deterministic fan; preserves the established wire.", properties={
-        "constantSpeedPxPerUpdate": speed("Initial velocity magnitude; each extra update moves this many pixels before movement/collisions.", "speedPxPerTick"),
+        "constantSpeedBlocksPerSecond": _world_units(speed("Initial world-speed magnitude before subsequent movement and collisions.", "speedPxPerTick"), "constantSpeedPxPerUpdate", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
     })]
     for name, kind, description in (
         ("fanSpeed", "fan_speed", "Keep the authored deterministic fan directions; independently sample each speed uniformly between min and max."),
@@ -1204,9 +1452,9 @@ def _spawn_velocity() -> ParamSpec:
         ("disk", "disk", "Sample velocity uniformly by area in the zero-centred disk; radial speed is max*sqrt(U), not uniform radius."),
         ("cone", "cone", "Independently jitter each authored fan direction uniformly within the selected half-angle, and sample speed uniformly between min and max."),
     ):
-        fields = {"maxSpeedPxPerUpdate": speed("Upper sampled speed, inclusive at the degenerate min=max boundary.", "velocityDistribution.maxSpeedPxPerUpdate")}
+        fields = {"maxSpeedBlocksPerSecond": _world_units(speed("Upper sampled speed, inclusive at the degenerate min=max boundary.", "velocityDistribution.maxSpeedPxPerUpdate"), "maxSpeedPxPerUpdate", multiplier=16, divisor=60, updates_power=1, units='blocks/s')}
         if kind != "disk":
-            fields = {"minSpeedPxPerUpdate": speed("Lower sampled speed; must not exceed maxSpeedPxPerUpdate.", "velocityDistribution.minSpeedPxPerUpdate"), **fields}
+            fields = {"minSpeedBlocksPerSecond": _world_units(speed("Lower sampled speed; must not exceed maxSpeedBlocksPerSecond.", "velocityDistribution.minSpeedPxPerUpdate"), "minSpeedPxPerUpdate", multiplier=16, divisor=60, updates_power=1, units='blocks/s'), **fields}
         if kind == "cone":
             fields["halfAngleRadians"] = _p("number", "Uniform signed angular jitter around each existing fan direction.",
                 minimum=0, maximum=math.pi, units="radians", semantic_type="radians", neutral=0,
@@ -1219,18 +1467,19 @@ def _spawn_velocity() -> ParamSpec:
 
 def _hit_target_spawn_geometry() -> ParamSpec:
     fields = {}
-    for name, maximum, units, meaning in (
-        ("beforeProbability", 1, "probability", "Independent per-child probability of the before-target branch; this is geometry, not a promised re-hit chance."),
-        ("hitboxMaxSideFactor", 2, "hitbox max-side factor", "Clearance radius uses max(target.width,target.height) times this factor, plus clearancePx."),
-        ("clearancePx", 128, "pixels", "Additional target-centre clearance, explicitly added to the selected hitbox radius."),
-        ("beforePositionJitterRadiusPx", 128, "pixels", "Before-target origin gets uniform-area disk jitter of this radius; 0 disables positional jitter."),
-        ("beforeDirectionJitterRadians", math.pi, "radians", "Before-target direction gets uniform signed jitter within this half-angle around the event direction."),
-        ("afterFanSpreadRadians", math.tau, "radians", "After-target directions use the deterministic inclusive fan over all child indices; each origin lies on its own ray."),
+    for name, wire, maximum, units, meaning in (
+        ("beforeProbability", "beforeProbability", 1, "probability", "Independent per-child probability of the before-target branch; this is geometry, not a promised re-hit chance."),
+        ("hitboxMaxSideFactor", "hitboxMaxSideFactor", 2, "hitbox max-side factor", "Clearance radius uses max(target.width,target.height) times this factor, plus clearanceBlocks converted to pixels."),
+        ("clearanceBlocks", "clearancePx", 128, "blocks", "Additional target-centre clearance, explicitly added to the selected hitbox radius."),
+        ("beforePositionJitterRadiusBlocks", "beforePositionJitterRadiusPx", 128, "blocks", "Before-target origin gets uniform-area disk jitter of this radius; 0 disables positional jitter."),
+        ("beforeDirectionJitterRadians", "beforeDirectionJitterRadians", math.pi, "radians", "Before-target direction gets uniform signed jitter within this half-angle around the event direction."),
+        ("afterFanSpreadRadians", "afterFanSpreadRadians", math.tau, "radians", "After-target directions use the deterministic inclusive fan over all child indices; each origin lies on its own ray."),
     ):
-        fields[name] = _p("number", meaning, minimum=0, maximum=maximum, units=units,
+        spec = _p("number", meaning, minimum=0, maximum=maximum, units=units,
             semantic_type="spawn_geometry", consumer_storage="float64" if name == "beforeProbability" else "float32", neutral=0,
-            wire_name="hitTargetSpawn." + name)
-    fields["initialIgnoreCountdownUpdates"] = _p("integer", "Exact initial NPC exclusion counter, decremented before collision: 10 blocks before first AI and the next 9 post-AI collision opportunities; 1 only before first AI; 0 disables exclusion. Counts extra AI updates, not world ticks.",
+            wire_name="hitTargetSpawn." + wire)
+        fields[name] = (_world_units(spec, wire, multiplier=16, units="blocks") if units == "blocks" else spec)
+    fields["initialIgnoreCountdownUpdates"] = _p("integer", "Exact initial NPC exclusion counter, decremented before collision: 10 excludes the target before first AI and the next 9 post-AI collision opportunities; 1 only before first AI; 0 disables exclusion. Counts extra AI updates, not world ticks.",
         minimum=0, maximum=600, units="projectile AI countdown updates", semantic_type="initial_target_exclusion_countdown",
         wire_name="hitTargetSpawn.initialIgnoreCountdownUpdates")
     return _p("object", "Explicit hit-target-relative origin and direction sampling. Capture target geometry/event direction and owner seed at action admission, including delayed actions. Positive exclusion retains the exact NPC incarnation and refuses reused slots; zero disables exclusion and its incarnation cancellation guard.",
@@ -1248,9 +1497,9 @@ _CAPS: list[CapabilitySpec] = [
             "damageClass": _p("string", "Exact built-in token or loaded tModLoader DamageClass.FullName copied only from parent damageClass facts (not item FullName)", pattern=_DAMAGE_CLASS_PATTERN, semantic_type="terraria_damage_class"),
             "damage": _p("integer", "Base item damage", minimum=0, maximum=2000),
             "knockback": _p("number", "Item.knockBack engine strength, not pixels or damage", minimum=0, maximum=20, units="engine units: Item.knockBack"),
-            "useTimeTicks": _p("integer", "Terraria use/reuse interval (60 ticks/s), not the animation length", minimum=1, maximum=600, units="ticks", wire_name="useTime"),
-            "useAnimationTicks": _p("integer", "Duration of one use animation, independent of useTimeTicks; differing values can allow multiple uses during one animation, not necessarily one projectile per click", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"),
-            "manaCost": _p("integer", "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeTicks can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.", minimum=0, maximum=500, required=False, default=0, neutral=0),
+            "useTimeSeconds": _seconds(_p("integer", "Terraria use/reuse interval (60 ticks/s), not the animation length", minimum=1, maximum=600, units="ticks", wire_name="useTime"), "useTimeTicks"),
+            "useAnimationSeconds": _seconds(_p("integer", "Duration of one use animation, independent of useTimeSeconds; differing values can allow multiple uses during one animation, not necessarily one projectile per click", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"), "useAnimationTicks"),
+            "manaCost": _p("integer", "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeSeconds can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.", minimum=0, maximum=500, required=False, default=0, neutral=0),
             "rarity": _p("integer", "Exact loaded Item.rare ID; copy modded IDs from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_rarity_id"),
             "valueCopper": _p("integer", "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount", minimum=0, maximum=100000000, units="copper", wire_name="value"),
             "maxStack": _p("integer", "Maximum stack", minimum=1, maximum=9999),
@@ -1305,6 +1554,21 @@ _CAPS: list[CapabilitySpec] = [
         lowering=("gameplay.useStyle", "gameplay.autoReuse", "gameplay.useTurn", "runtimeProgram.itemUse.*"),
     ),
     _cap(
+        "collect_seeds_from_grass",
+        "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG, nearest-player selection and drop/MP lifecycle remain unchanged. Does not consume the item, choose ammo, change attack costs, or inherit automatically from a parent flag. No parameters.",
+        "item_inventory",
+        ("item_body",),
+        {},
+        component_slot="inventory_seed_collection",
+        authority="native_worldgen",
+        budget="one bounded native inventory witness; no added spawns or RNG",
+        py=_COMPILER_OWNER,
+        cs="Common/Systems/Utility/GeneratedInventorySeedSystem.cs::HasItem",
+        wire=("gameplay.collectSeedsFromGrass",),
+        fixed_wire_literals={"collectSeedsFromGrass": True},
+        wire_presence_path="gameplay.collectSeedsFromGrass",
+    ),
+    _cap(
         "configure_item_contact_hitbox",
         "Modify the current Terraria contact rectangle when a binding enables item-body contact; not a fixed PNG box. Keep its center; round each dimension times hitboxScale, add contactForgivenessPx on each side, minimum 1px. Omission leaves native geometry unchanged.",
         "item_combat",
@@ -1321,11 +1585,11 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "configure_weapon_ammo",
-        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+        "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. Native inventory-only item flags are not inherited by this call. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
         "item",
         ("item_body",),
         {
-            "ammoCategory": _p("string", "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks", enum=VANILLA_AMMO_CATEGORY_TOKENS),
+            "ammoCategory": _p("string", "Exact stable AmmoID category required by this weapon; Terraria chooses the inventory ammo and applies native saving hooks. Seeds share the dart category; the category does not select projectile appearance or copy the chosen ammo's AI", enum=VANILLA_AMMO_CATEGORY_TOKENS),
             "speedBasis": _p("string", "authored_spawn keeps configure_spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative", enum=("authored_spawn", "native_shot")),
         },
         requirements=(RequirementSpec(
@@ -1349,7 +1613,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "ammoCategory": _p("string", "Exact stable Terraria AmmoID category", enum=VANILLA_AMMO_CATEGORY_TOKENS),
             "projectileId": _p("integer", "Exact vanilla ProjectileID fired when this ammo is consumed; do not guess", minimum=1, maximum=VANILLA_PROJECTILE_TYPE_ID_MAX, wire_name="ammoProjectileId"),
-            "shootSpeedContributionPxPerUpdate": _p("number", "Exact Item.shootSpeed contribution of this ammo to vanilla PickAmmo", minimum=-20, maximum=80, units="pixels/projectile update contribution", wire_name="ammoShootSpeedPxPerTick"),
+            "shootSpeedContributionBlocksPerSecond": _world_units(_p("number", "Base/native launch contribution to Item.shootSpeed via vanilla PickAmmo, in blocks/s. No eventual projectile updatesPerTick is known here; this contribution is not a guaranteed final projectile speed", minimum=-20, maximum=80, units="pixels/projectile update contribution", wire_name="ammoShootSpeedPxPerTick"), "shootSpeedContributionPxPerUpdate", multiplier=16, divisor=60, updates_power=0, units='blocks/s (base native launch contribution, not final projectile speed)'),
             "notAmmo": _p("boolean", "Exact Item.notAmmo flag for special ammo-slot/tooltip behaviour"),
         },
         component_slot="ammo_item",
@@ -1383,7 +1647,7 @@ _CAPS: list[CapabilitySpec] = [
         ("item_body",),
         {
             "buffId": _p("integer", "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess", minimum=1, maximum=65535, semantic_type="loaded_buff_id", wire_name="buffCode"),
-            "durationTicks": _p("integer", "Buff duration", minimum=1, maximum=21600, units="ticks", wire_name="buffTime"),
+            "durationSeconds": _seconds(_p("integer", "Buff duration", minimum=1, maximum=21600, units="ticks", wire_name="buffTime"), "durationTicks"),
         },
         component_slot="use_buff",
         multiplicity="many_per_target",
@@ -1395,18 +1659,18 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "apply_generated_buff_on_use",
-        "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionTicks starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration. No recurring cost is implied.",
+        "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionSeconds starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration. No recurring cost is implied.",
         "item_utility",
         ("item_body",),
         {
-            "durationTicks": _p("integer", "Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration", minimum=1, maximum=21600, units="ticks"),
-            "exhaustionTicks": _p("integer", "Optional per-player/item-definition generated-buff lockout; copies/groups share it, including zero/omitted groups while active. Blocked attempts refresh neither timer. Omission stays absent; explicit zero stays zero; neither starts exhaustion. Policy only, not a buff stat or normal-attack cooldown.", minimum=0, maximum=21600, units="world ticks", required=False, wire_presence_requires_receipt=True),
+            "durationSeconds": _seconds(_p("integer", "Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+            "exhaustionSeconds": _seconds(_p("integer", "Optional per-player/item-definition generated-buff lockout; copies/groups share it, including zero/omitted groups while active. Blocked attempts refresh neither timer. Omission stays absent; explicit zero stays zero; neither starts exhaustion. Policy only, not a buff stat or normal-attack cooldown.", minimum=0, maximum=21600, units="world ticks", required=False, wire_presence_requires_receipt=True), "exhaustionTicks"),
             "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1, consumer_storage="float32"),
             "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0, consumer_storage="float32"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
             "oreSenseEnabled": _p("boolean", "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False),
             "moveSpeedBonusPercent": _p("number", "Add percent/100 to Player.moveSpeed; 20 adds 20% before other modifiers", minimum=-50, maximum=200, wire_name="movementSpeed", wire_divisor=100, units="additive_percent", semantic_type="additive_percent", required=False, default=0, neutral=0, consumer_storage="float32"),
-            "jumpSpeedBonusPxPerTick": _p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"),
+            "jumpSpeedBonusBlocksPerSecond": _world_units(_p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"), "jumpSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s'),
             "manaRegenBonusPoints": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0),
             "lifeRegenHpPerSecond": _p("number", "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)", minimum=0, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0),
         },
@@ -1430,7 +1694,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "refresh_generated_effect_group_while_held",
-        "Attempt to refresh one named generated utility buff group each world tick while this exact item is held; its exhaustionTicks policy still applies. durationTicks controls lingering after release, independently of exhaustion. Only apply_generated_buff_on_use may populate the group; no healing, teleport, native buff or invisible projectile is inferred.",
+        "Attempt to refresh one named generated utility buff group each world tick while this exact item is held; its exhaustionSeconds policy still applies. durationSeconds controls lingering after release, independently of exhaustion. Only apply_generated_buff_on_use may populate the group; no healing, teleport, native buff or invisible projectile is inferred.",
         "item_utility", ("item_body",),
         {"effectGroupId": _p("string", "Exact existing named generated-buff group", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="heldEffectGroupId", semantic_type="item_effect_group_reference")},
         component_slot="held_generated_buff",
@@ -1470,7 +1734,8 @@ _CAPS: list[CapabilitySpec] = [
     ),
     *(
         _cap(
-            "configure_" + layer + "_placement", "Select one exact loaded " + layer + " and placement style for one referenced placement transaction.",
+            "configure_" + layer + "_placement", "Select one exact loaded " + layer + " and placement style for one referenced placement transaction."
+            + (" Supported native containers keep Terraria inventory, opening and persistence; generated-item identity and return remain with this same placement. Unsupported custom callback families are refused." if layer == "tile" else ""),
             "item_placeable", ("item_body",),
             {layer + "Id": _p("integer", "Exact loaded " + layer + " ID; copy from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_" + layer + "_id"),
              "placeStyle": _p("integer", "Exact Item.placeStyle for the selected loaded placement", minimum=0, maximum=255)},
@@ -1484,7 +1749,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "present_placed_item_sprite",
-        "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member.",
+        "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this presentation call.",
         "item_placed_body",
         ("item_body",),
         {
@@ -1492,8 +1757,9 @@ _CAPS: list[CapabilitySpec] = [
             "renderSizePx": _p("integer", "Longest side of the final full PNG frame in world pixels; aspect preserved, independent of item scale, dropped worldScale and Visual renderSizePx", minimum=1, maximum=512, units="world pixels"),
             "footprintAnchorX": _p("number", "Normalized committed footprint rectangle X: 0 left, 1 right", minimum=0, maximum=1),
             "footprintAnchorY": _p("number", "Normalized committed footprint rectangle Y: 0 top, 1 bottom", minimum=0, maximum=1),
-            "imagePivotX": _p("number", "Normalized full delivered PNG frame pivot X, not alpha bounds or grip", minimum=0, maximum=1),
-            "imagePivotY": _p("number", "Normalized full delivered PNG frame pivot Y, not alpha bounds or grip", minimum=0, maximum=1),
+            "pivotSpace": _p("string", "Pivot basis only: frame (also omission) preserves full delivered PNG padding; alpha_bounds maps imagePivotX/Y inside the nonzero-alpha bounding rectangle of the final selected PNG, using pixel edges. For deliberate visible bottom contact choose alpha_bounds with imagePivotY=1; frame remains legal for intentional padding. Unknown or empty alpha bounds refuse the custom body draw. Whole PNG stays uncropped and renderSizePx/rotation/flips/offsets are unchanged; never infer this choice from names or parents", enum=("frame", "alpha_bounds"), required=False, default="frame", neutral="frame"),
+            "imagePivotX": _p("number", "Normalized X inside the selected pivotSpace rectangle, not held grip", minimum=0, maximum=1),
+            "imagePivotY": _p("number", "Normalized Y inside the selected pivotSpace rectangle: 0 top pixel edge, 1 bottom pixel edge", minimum=0, maximum=1),
             "offsetXPx": _p("integer", "World-axis offset; positive right", minimum=-512, maximum=512, units="world pixels"),
             "offsetYPx": _p("integer", "World-axis offset; positive down", minimum=-512, maximum=512, units="world pixels"),
             "rotationDegrees": _p("number", "Clockwise bitmap rotation in y-down world axes; no inferred forward-axis correction", minimum=-180, maximum=180, units="degrees"),
@@ -1513,7 +1779,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "add_placed_light",
-        "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged.",
+        "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this light call.",
         "item_placed_body", ("item_body",),
         {
             "placementCallId": _p("string", "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedLight"),
@@ -1525,6 +1791,25 @@ _CAPS: list[CapabilitySpec] = [
         multiplicity="per_placement_reference", py=_COMPILER_OWNER,
         cs="Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedLight.cs::TryGetPlacedLight",
         lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedLight",),
+        lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
+                         "runtimeProgram.calls[].params.placementCallId", "runtimeProgram.bindings[].action.kind",
+                         "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].action.placementCallId"),
+    ),
+    _cap(
+        "enable_placed_vfx",
+        "Opt in to independent live placed VFX slots on one exact committed native tile footprint, not held-item effects. Bounds consume actual top-left native TileFrameY inclusively, not animation time/count: 0..32767 selects all nonnegative frames. Native state facts are read-only; never infer a gate from names. VFX Director later selects this placement binding for periodic self spriteElement/libraryParticle/lightCue. Same item root PNG remains stable physical art; existing independent VFX assets can animate separate flames without rotating/pulsing the whole root. No effects/defaults are inserted. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Does not change its native container behavior, material ownership or returns.",
+        "item_placed_body", ("item_body",),
+        {
+            "placementCallId": _p("string", "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement", pattern=r"^[a-z][a-z0-9_]{0,47}$", reference=ReferenceSpec("call", ("item_body",)), wire_name="placedVfx"),
+            "minFrameY": _p("integer", "Inclusive actual top-left native TileFrameY lower bound, not animation age", minimum=0, maximum=32767, units="native frame coordinate", execution_phase="PostUpdateEverything: authenticated placed source gate"),
+            "maxFrameY": _p("integer", "Inclusive actual top-left native TileFrameY upper bound", minimum=0, maximum=32767, units="native frame coordinate", execution_phase="PostUpdateEverything: authenticated placed source gate"),
+        },
+        component_slot="placed_vfx",
+        requirements=(RequirementSpec("ordered_params", param="minFrameY", other_param="maxFrameY", message="minFrameY must not exceed maxFrameY."),),
+        authority_by_effect={"placement": "owner_request_server_execute", "vfx": "client_visual_only"},
+        multiplicity="per_placement_reference", py=_COMPILER_OWNER,
+        cs="Common/Systems/Placement/GeneratedPlacementLedgerSystem.PlacedVfx.cs::TryGetPlacedVfxFrame",
+        lowering=("runtimeProgram.bindings[].usePolicy.action.placement.placedVfx",),
         lowering_inputs=("runtimeProgram.calls[].fn", "runtimeProgram.calls[].target",
                          "runtimeProgram.calls[].params.placementCallId", "runtimeProgram.bindings[].action.kind",
                          "runtimeProgram.bindings[].action.targetId", "runtimeProgram.bindings[].action.placementCallId"),
@@ -1572,7 +1857,7 @@ _CAPS: list[CapabilitySpec] = [
         {
             "mode": _p("string", "Mobility executor", enum=("blink_to_cursor",), wire_name="mobilityMode"),
             "rangeTiles": _p("integer", "Maximum blink range", minimum=0, maximum=120, units="tiles", wire_name="mobilityRangeTiles"),
-            "cooldownTicks": _p("integer", "Cooldown", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks"),
+            "cooldownSeconds": _seconds(_p("integer", "Cooldown", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks"), "cooldownTicks"),
             "safeTileOnly": _p("boolean", "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; ignored for recall_home; not a general hazard check", wire_name="mobilitySafeTileOnly"),
         },
         component_slot="item_mobility",
@@ -1592,7 +1877,7 @@ _CAPS: list[CapabilitySpec] = [
     _cap(
         "recall_home_on_use", "Recall the owner home after a successful apply_item_effects use. The player mobility cooldown is shared with blink actions.",
         "item_utility", ("item_body",),
-        {"cooldownTicks": _p("integer", "Shared player mobility cooldown after success", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks")},
+        {"cooldownSeconds": _seconds(_p("integer", "Shared player mobility cooldown after success", minimum=0, maximum=3600, units="ticks", wire_name="mobilityCooldownTicks"), "cooldownTicks")},
         component_slot="item_mobility",
         authority="owner_execute_sync",
         exclusive_group="item_mobility",
@@ -1677,8 +1962,8 @@ _CAPS: list[CapabilitySpec] = [
             "velocity": _spawn_velocity(),
             "count": _p("integer", "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it", minimum=1, maximum=12, required=False, default=1, neutral=1, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
             "spreadRadians": _p("number", "Total angular spread. May be omitted only for child_projectile, whose producers override it", minimum=0, maximum=6.283185307179586, units="radians", required=False, default=0, neutral=0, omission_condition=OmissionCondition(target_kinds=("child_projectile",))),
-            "offsetPx": _p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"),
-            "aim": _p("string", "Initial aim axis and forward offset; radial/disk sample their own directions. none is zero velocity for constant speed.", enum=("cursor", "facing", "velocity", "none")),
+            "offsetBlocks": _world_units(_p("integer", "Forward spawn offset", minimum=-128, maximum=256, units="pixels"), "offsetPx", multiplier=16, divisor=1, updates_power=0, units='blocks'),
+            "aim": _p("string", "Initial aim axis and forward offset: facing uses current owner.direction on the horizontal axis; velocity uses the producer-supplied gameplay axis; cursor uses MouseWorld minus the shifted spawn position. These are not the visible sprite's rotation. radial/disk sample their own directions. none is zero velocity for constant speed.", enum=("cursor", "facing", "velocity", "none")),
             "position": _spawn_position_param(),
         },
         component_slot="spawn",
@@ -1748,7 +2033,7 @@ _CAPS: list[CapabilitySpec] = [
         "Set exact bounded entity lifetime.",
         "entity_lifecycle",
         PROJECTILE_ENTITY_KINDS,
-        {"lifetimeTicks": _p("integer", "Lifetime", minimum=1, maximum=36000, units="ticks")},
+        {"lifetimeSeconds": _seconds(_p("integer", "Lifetime", minimum=1, maximum=36000, units="ticks"), "lifetimeTicks")},
         component_slot="lifetime",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER,
@@ -1778,8 +2063,8 @@ _CAPS: list[CapabilitySpec] = [
         {
             "startScale": _p("number", "Damage-rectangle multiplier before/start of the curve", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
             "endScale": _p("number", "Damage-rectangle multiplier at/after curve completion", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
-            "startDelayTicks": _p("integer", "Active world ticks to hold startScale before interpolation", minimum=0, maximum=21600, units="ticks"),
-            "durationTicks": _p("integer", "Active world ticks from startScale to endScale", minimum=1, maximum=21600, units="ticks"),
+            "startDelaySeconds": _seconds(_p("integer", "Active world-time delay holding startScale before interpolation", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "World-time duration from startScale to endScale", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
             "curve": _p("string", "linear: start+(end-start)*t; exponential: start*(end/start)^t; t clamps to 0..1", enum=("linear", "exponential")),
             "mirrorToSprite": _p("boolean", "True multiplies the authored base sprite scale by this same curve; false leaves visual growth independent. Never reads VFX scale for gameplay. Cannot combine true with move_expanding_wave, which independently owns dynamic sprite scale."),
         },
@@ -1798,9 +2083,9 @@ _CAPS: list[CapabilitySpec] = [
         "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
-            "turnRadiansPerUpdate": _p("number", "Signed velocity rotation on each active projectile AI update", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0),
-            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
-            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+            "turnRadiansPerSecond": _world_units(_p("number", "Signed world-time velocity rotation rate during the active phase", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0), "turnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
+            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="turnModifier",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -1812,9 +2097,9 @@ _CAPS: list[CapabilitySpec] = [
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "speedMultiplierPerUpdate": _p("number", "Velocity multiplier per active projectile update", minimum=0.8, maximum=1.2, units="dimensionless multiplier/update", consumer_storage="float32", neutral=1),
-            "maxSpeed": _p("number", "Inclusive magnitude cap applied after the multiplication", minimum=0.1, maximum=80, units="pixels/projectile update", consumer_storage="float32"),
-            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
-            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+            "maxSpeedBlocksPerSecond": _world_units(_p("number", "Inclusive magnitude cap applied after the multiplication", minimum=0.1, maximum=80, units="pixels/projectile update", consumer_storage="float32"), "maxSpeed", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
+            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="speedModifier",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -1826,10 +2111,10 @@ _CAPS: list[CapabilitySpec] = [
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "rangeTiles": _p("number", "Hard target radius from this projectile center", minimum=1, maximum=120, units="tiles", consumer_storage="float32"),
-            "maxTurnRadiansPerUpdate": _p("number", "Maximum absolute rotation toward the target each active projectile update; values at least pi can fully turn toward the target", minimum=0.0001, maximum=3.2, units="radians/projectile update", consumer_storage="float32"),
+            "maxTurnRadiansPerSecond": _world_units(_p("number", "Maximum angular turn rate toward the target; each update integrates its elapsed world time and stops at full alignment", minimum=0.0001, maximum=3.2, units="radians/projectile update", consumer_storage="float32"), "maxTurnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
             "requireLineOfSight": _p("boolean", "Require native CanHitLine from projectile box to candidate box before selecting it"),
-            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
-            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="homingModifier",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
@@ -1842,11 +2127,11 @@ _CAPS: list[CapabilitySpec] = [
         "active_effect", PROJECTILE_ENTITY_KINDS,
         {
             "rangeTiles": _p("number", "Hard pull radius from projectile center", minimum=1, maximum=80, units="tiles", consumer_storage="float32"),
-            "strengthPerUpdate": _p("number", "Additive NPC velocity impulse coefficient per projectile AI update before falloff and resistance", minimum=0.001, maximum=4, units="NPC velocity units/projectile update", consumer_storage="float32"),
+            "accelerationBlocksPerSecondSquared": _world_units(_p("number", "World acceleration of NPC velocity before falloff and resistance, integrated over the active projectile clock", minimum=0.001, maximum=4, units="NPC velocity units/projectile update", consumer_storage="float32"), "strengthPerUpdate", multiplier=16, divisor=3600, updates_power=1, units='blocks/s² (NPC world-tick velocity)'),
             "falloff": _p("string", "constant=1; linear=max(0,1-distance/radius), including zero at radius", enum=("constant", "linear")),
             "maxTargets": _p("integer", "Maximum accepted NPC slots per projectile update", minimum=1, maximum=16),
-            "startDelayTicks": _p("integer", "Begin phase after this many active world ticks; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"),
-            "durationTicks": _p("integer", "Phase length in active world ticks; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"),
+            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="npcAttraction",
         authority="server_execute",
         meaningful_for_stationary=True,
@@ -1861,8 +2146,8 @@ _CAPS: list[CapabilitySpec] = [
         {
             "startScale": _p("number", "Visual multiplier before/start of the curve", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
             "endScale": _p("number", "Visual multiplier at/after curve completion", minimum=0.25, maximum=8, units="dimensionless multiplier", consumer_storage="float32"),
-            "startDelayTicks": _p("integer", "Active world ticks to hold startScale", minimum=0, maximum=21600, units="ticks"),
-            "durationTicks": _p("integer", "Active world ticks from startScale to endScale", minimum=1, maximum=21600, units="ticks"),
+            "startDelaySeconds": _seconds(_p("integer", "Active world-time delay holding startScale", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "World-time duration from startScale to endScale", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
             "curve": _p("string", "linear=start+(end-start)*t; exponential=start*(end/start)^t; t clamped 0..1", enum=("linear", "exponential")),
         }, requirements=(RequirementSpec("capability_absent", any_of=("move_expanding_wave", "channel_beam", "move_whip_lash"), message="A visual scale curve excludes another scale owner and special beam/whip line geometry that does not consume sprite scale."),),
            component_slot="visualScaleCurve",
@@ -1938,7 +2223,7 @@ _CAPS.extend([
         "homingStrength": _p("number", "Per movement-update linear interpolation fraction toward target velocity", minimum=0.001, maximum=1, units="engine units: velocity lerp fraction"),
     }),
     _movement("move_gravity_arc", "Movement adds gravity as signed vertical acceleration per projectile update after activation, with no horizontal friction: negative accelerates upward, positive downward, zero preserves vertical velocity. Tile collision uses the separate bounceCount. No terminal-speed cap, rolling, resting or explosion is implied.", 2, {
-        "accelY": _p("number", "Signed vertical acceleration: increment of vertical velocity per projectile update after activation; Terraria Y increases downward. With updatesPerTick=N, one world tick adds N times this value after activation. Explicit zero adds no acceleration; missing is invalid. This is not displacement or a speed cap", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"),
+        "accelerationYBlocksPerSecondSquared": _world_units(_p("number", "Signed world vertical acceleration after activation; Terraria Y increases downward. Lowered over the explicitly authored target clock. Explicit zero adds no acceleration; missing is invalid. Not displacement or a speed cap", minimum=-2, maximum=2, units="engine units: vertical velocity increment per update", wire_name="gravityPerTick", neutral=0, consumer_storage="float32"), "accelY", multiplier=16, divisor=3600, updates_power=2, units='blocks/s²'),
     }),
     _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
         "velocityRetention": _p("number", "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
@@ -1947,8 +2232,8 @@ _CAPS.extend([
         "radiusTiles": _p("number", "Fixed orbit radius around the owner", minimum=1, maximum=80, units="tiles", wire_name="rangeTiles"),
     }),
     _movement("move_boomerang", "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.", 5, {
-        "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
+        "returnAfterSeconds": _seconds(_p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"), "returnAfterTicks"),
+        "returnSpeedBlocksPerSecond": _world_units(_p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"), "returnSpeed", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
     }),
     _movement("move_sine_homing", "Combine sinusoidal drift with bounded homing.", 7, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
@@ -1960,17 +2245,17 @@ _CAPS.extend([
     }),
     _movement("move_accelerate", "Multiply speed up to an explicit cap.", 9, {
         "speedMultiplierPerUpdate": _p("number", "Velocity multiplier per projectile update until maxSpeed cap; 1 unchanged", minimum=1.0, maximum=1.2, wire_name="acceleration", units="engine units: velocity multiplier per update"),
-        "maxSpeed": _p("number", "Speed cap", minimum=1, maximum=80, units="pixels/projectile update"),
+        "maxSpeedBlocksPerSecond": _world_units(_p("number", "Speed cap", minimum=1, maximum=80, units="pixels/projectile update"), "maxSpeed", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
     }),
     _movement("move_spiral", "Rotate velocity by an authored angle per projectile update.", 10, {
-        "turnRadiansPerUpdate": _p("number", "Angular velocity turn per projectile update", minimum=-0.5, maximum=0.5, units="radians/update", wire_name="turnRadiansPerTick"),
+        "turnRadiansPerSecond": _world_units(_p("number", "World-time angular velocity turn rate", minimum=-0.5, maximum=0.5, units="radians/update", wire_name="turnRadiansPerTick"), "turnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
     }),
     _movement("move_vortex_orb", "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.99 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.", 11, {
-        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
+        "accelerationBlocksPerSecondSquared": _world_units(_p("number", "World acceleration toward the center, scaled by clamped NPC knockBackResist", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"), "pullStrength", multiplier=16, divisor=3600, updates_power=1, units='blocks/s² (NPC world-tick velocity)'),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }),
     _movement("move_blackhole_pull", "Pull nearby chaseable NPCs toward the projectile and multiply projectile velocity by 0.985 per projectile update. Pull respects knockback resistance and affects at most 16 NPCs per update.", 12, {
-        "pullStrength": _p("number", "Add NPC velocity impulse of strength × clamped knockBackResist toward center per projectile update", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"),
+        "accelerationBlocksPerSecondSquared": _world_units(_p("number", "World acceleration toward the center, scaled by clamped NPC knockBackResist", minimum=0, maximum=4, units="engine units: NPC velocity impulse coefficient"), "pullStrength", multiplier=16, divisor=3600, updates_power=1, units='blocks/s² (NPC world-tick velocity)'),
         "rangeTiles": _p("number", "Pull radius", minimum=1, maximum=80, units="tiles"),
     }),
     _movement("move_proximity_missile", "Home; proximity inside triggerRadiusTiles triggers on_expire then on_kill and kills the missile. on_hit requires an actual hit, not mere proximity.", 13, {
@@ -1979,8 +2264,8 @@ _CAPS.extend([
         "triggerRadiusTiles": _p("number", "Trigger radius on the exact 1/16-tile pixel lattice", minimum=0.25, maximum=32, multiple_of=1 / 16, wire_multiplier=16, wire_name="proximityRadiusPx", units="tiles"),
     }),
     _movement("move_returning_glaive", "Fly, spin and return to the owner.", 14, {
-        "returnAfterTicks": _p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
+        "returnAfterSeconds": _seconds(_p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"), "returnAfterTicks"),
+        "returnSpeedBlocksPerSecond": _world_units(_p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"), "returnSpeed", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
     }),
     _movement("move_expanding_wave", "Add to the projectile's visual scale, then clamp it to the authored cap. Collision size and damage do not grow with this scale; use an independent hitbox curve for growing contact geometry.", 15, {
         "scaleGrowthPerUpdate": _p("number", "Additive Projectile.scale delta per projectile update, capped by maxScale", minimum=0.001, maximum=0.5, wire_name="scalePerTick", units="engine units: scale increment per update"),
@@ -1988,15 +2273,15 @@ _CAPS.extend([
     }),
     _movement("move_flail_tether", "Tether to owner; outbound flight ends at the leash or when owner.channel becomes false, then return is latched. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return begins on the first AI. Passive/event-driven copies only observe the owner channel established by another active source; this controller does not start channeling.", 16, {
         "rangeTiles": _p("number", "Maximum tether length", minimum=2, maximum=60, units="tiles"),
-        "returnSpeed": _p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"),
+        "returnSpeedBlocksPerSecond": _world_units(_p("number", "Return speed", minimum=1, maximum=80, units="pixels/projectile update"), "returnSpeed", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
     }, requirements=(RequirementSpec(
         "item_capability_param", target="item_body", capability="configure_item_use", param="channel", equals=True,
         when_spawned_by_inputs=("primary_use", "alternate_use"),
         message="An active flail spawn requires explicit item channel=true so native StartChanneling(Item) supplies owner.channel; release or reaching the leash latches return. Passive/event producers only observe existing owner channel.",
     ),), targets=("owner_attached_projectile",)),
-    _movement("move_yoyo_hover", "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.", 17, {
+    _movement("move_yoyo_hover", "Follow the owner's cursor inside a leash and return on release. The same authored speed controls both cursor tracking and return, with velocity smoothing. This movement rotates the body by 0.35 radians per projectile update and does not turn the player toward the cursor; a child aiming by facing still uses the player's direction, not the rotating body. An active spawn root requires configure_item_use.channel=true: native StartChanneling(Item) otherwise leaves an idle owner unchannelled and return is latched on the first AI. Passive/event-driven copies observe existing owner channel; this movement does not start channeling.", 17, {
         "rangeTiles": _p("number", "Cursor leash", minimum=2, maximum=60, units="tiles"),
-        "speed": _p("number", "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update", minimum=1, maximum=80, units="pixels/projectile update", wire_name="returnSpeed"),
+        "speedBlocksPerSecond": _world_units(_p("number", "Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update", minimum=1, maximum=80, units="pixels/projectile update", wire_name="returnSpeed"), "speed", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
     }, requirements=(RequirementSpec(
         "item_capability_param", target="item_body", capability="configure_item_use", param="channel", equals=True,
         when_spawned_by_inputs=("primary_use", "alternate_use"),
@@ -2008,13 +2293,13 @@ _CAPS.extend([
     }, targets=("owner_attached_projectile",)),
     _movement("move_forward_then_retract", "Move the body center from owner center + aimed axis * (18px + triangular range displacement), extending then retracting during the cycle. The axis follows the live owner cursor (bounded synced aim for remote owners) every AI update, rotating both body and hitbox; not a fixed initial launch axis. configure_spawn.aim controls launch only, not this ongoing aim. This is not hand-attached: no native arm control, grip consumption or PNG stretching. It remains an independent legal movement choice.", 19, {
         "rangeTiles": _p("number", "Peak triangular displacement beyond the 18px owner-center baseline; not distance from the hand", minimum=1, maximum=20, units="tiles"),
-        "durationTicks": _p("integer", "Full forward/retract cycle", minimum=2, maximum=240, units="ticks"),
+        "durationSeconds": _seconds(_p("integer", "Full forward/retract cycle", minimum=2, maximum=240, units="ticks"), "durationTicks"),
     }, targets=("owner_attached_projectile",)),
     _movement("move_front_hand", "Attach this explicit body's pose and collision center to the native front hand. Initial aim keeps the spawn axis; cursor aim follows synced live owner aim. No damage, lifecycle, visibility, asset or item-use choice is inserted. Collision center = native hand + aimed axis * hitboxOffsetPx, independent of PNG metadata; the existing axis-aligned rectangle is not pixel-matched blade collision. none-to-full stretch moves the hand only 6px; hitboxOffsetPx is a fixed center offset, not thrust reach or an extra sprite shift. Compare source use/collision geometry and resulting hand-to-damage coverage before deliberately choosing a short jab; sprite length alone adds no reach.", 20, {
         "aimMode": _p("string", "initial keeps the configured spawn axis; cursor explicitly follows bounded synced owner aim", enum=("initial", "cursor"), wire_presence_requires_receipt=True),
-        "durationTicks": _p("integer", "One extension/retraction pose cycle in completed active world ticks: activeTicks=floor(activeAIUpdates/(extraUpdates+1)). Subupdates retain that tick's stretch. After completion hold startStretch; lifetime and item animation remain independent", minimum=2, maximum=240, units="active world ticks", wire_presence_requires_receipt=True),
+        "durationSeconds": _seconds(_p("integer", "One extension/retraction pose cycle in world seconds, lowered to whole active ticks. Native activeTicks=floor(activeAIUpdates/(extraUpdates+1)). Subupdates retain that tick's stretch. After completion hold startStretch; lifetime and item animation remain independent", minimum=2, maximum=240, units="active world ticks", wire_presence_requires_receipt=True), "durationTicks"),
         "startStretch": _p("string", "Native front-arm starting/ending stretch; none/quarter/three_quarters/full correspond to hand lengths 4/6/8/10px. Must not exceed peakStretch", enum=_NATIVE_ARM_STRETCH, wire_presence_requires_receipt=True),
-        "peakStretch": _p("string", "Native peak stretch. q=1-abs(2*clamp(activeTicks/durationTicks,0,1)-1); interpolate native lengths and select nearest, ties shorter. Equal endpoints keep a fixed stretch", enum=_NATIVE_ARM_STRETCH, wire_presence_requires_receipt=True),
+        "peakStretch": _p("string", "Native peak stretch. Over the lowered whole-tick duration, use triangular extension/retraction progress; interpolate native lengths and select nearest, ties shorter. Equal endpoints keep a fixed stretch", enum=_NATIVE_ARM_STRETCH, wire_presence_requires_receipt=True),
         "hitboxOffsetPx": _p("number", "Signed collision-center offset from native hand along the aimed world axis. Explicit zero is valid; not inferred from art, scale or grip", minimum=-192, maximum=192, units="pixels", consumer_storage="float32", wire_presence_requires_receipt=True),
     }, requirements=(
             RequirementSpec("ordered_params", param="startStretch", other_param="peakStretch",
@@ -2030,7 +2315,7 @@ _CAPS.extend([
                 message="The hand owner requires explicit spawn count=1."),
             RequirementSpec("item_capability_param", capability="configure_spawn", param="spreadRadians", equals=0,
                 message="The hand owner requires explicit zero spawn fan spread."),
-            RequirementSpec("item_capability_param", capability="configure_spawn", param="velocity", equals={"constantSpeedPxPerUpdate": 0},
+            RequirementSpec("item_capability_param", capability="configure_spawn", param="velocity", equals={"constantSpeedBlocksPerSecond": 0},
                 message="The hand owner requires constant zero translational launch speed, not a sampled distribution."),
             RequirementSpec("item_capability_param", capability="set_projectile_collision", param="tileCollide", equals=False,
                 message="The hand-driven body requires explicit tileCollide=false."),
@@ -2053,7 +2338,7 @@ _CAPS.extend([
         {
             "rangeTiles": _p("number", "Beam length", minimum=1, maximum=120, units="tiles"),
             "widthPx": _p("number", "Beam collision width", minimum=2, maximum=128, units="pixels"),
-            "warmupTicks": _p("integer", "Warmup ramp duration in world ticks; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.", minimum=0, maximum=600, units="ticks"),
+            "warmupSeconds": _seconds(_p("integer", "Warmup ramp duration in world seconds; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.", minimum=0, maximum=600, units="ticks"), "warmupTicks"),
             "manaPayment": _p("string", "initial_use_only retains native initial item-use payment. each_use_time additionally makes each physical beam call owner.CheckMana(HeldItem, amount=-1, pay=true, blockQuickMana=false) every current HeldItem.useTime world ticks after first active update; uses native GetManaCost and missing-mana effects, and terminates the beam when payment fails. Owner peer only; extraUpdates never duplicates payment.", required=False, enum=("initial_use_only", "each_use_time"), default="initial_use_only", neutral="initial_use_only", units="native mana payment cadence", execution_phase="owner channel sustain"),
             "initialDamageMultiplier": _p("number", "NPC source-damage multiplier at warmup progress zero, interpolated linearly to 1. Applied in ModifyHitNPC to the live projectile damage; does not overwrite Projectile.damage or redefine child inheritance. Native defense/crit/rounding follow the hit modifier.", required=False, minimum=0.01, maximum=1, default=1.0, neutral=1.0, units="source damage multiplier", consumer_storage="float32", execution_phase="NPC hit"),
             "initialWidthMultiplier": _p("number", "Multiplier of widthPx at warmup progress zero, interpolated linearly to 1 for collision and runtime_geometry width, including subpixel widths. VFX uses the shared segment with its separately authored textured-path width; PNG size is independent.", required=False, minimum=0.01, maximum=1, default=1.0, neutral=1.0, units="beam width multiplier", consumer_storage="float32", execution_phase="beam geometry"),
@@ -2074,7 +2359,7 @@ _CAPS.extend([
         "controller",
         ("owner_attached_projectile", "free_projectile"),
         {
-            "chargeTicks": _p("integer", "Full charge duration", minimum=1, maximum=600, units="ticks"),
+            "chargeSeconds": _seconds(_p("integer", "Full charge duration", minimum=1, maximum=600, units="ticks"), "chargeTicks"),
             "powerMultiplier": _p("number", "Full-charge damage/knockback and release velocity multiplier; partial charge interpolates from 1; 1 unchanged", minimum=1, maximum=4),
         },
         component_slot="controller",
@@ -2092,7 +2377,7 @@ _CAPS.extend([
         ("stationary_projectile", "temporary_helper"),
         {
             "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
-            "intervalTicks": _p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"),
+            "intervalSeconds": _seconds(_p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"), "intervalTicks"),
             "rangeTiles": _p("number", "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
             "sameTargetBias": _p("number", "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below rangeTiles × 16; with hardRange=false the previous target may therefore lie outside that physical radius. With hardRange=true the geometric range is checked before discounting. This is a distance discount, not a hit probability", minimum=0, maximum=0.9, units="engine units: distance-score discount"),
             "damageBasis": _p("string", "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
@@ -2125,7 +2410,7 @@ _CAPS.extend([
             "damageBasis": _p("string", "Child damage source: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "knockbackBasis": _p("string", "Child knockback source: its authored knockback, or this event-owning projectile's actual knockBack at event time; live_parent requires a projectile source", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
-            "delayTicks": _p("integer", "Delay after event", minimum=0, maximum=600, units="ticks"),
+            "delaySeconds": _seconds(_p("integer", "Delay after event", minimum=0, maximum=600, units="ticks"), "delayTicks"),
         },
         component_slot="event_action",
         authority="owner_execute_sync",
@@ -2144,13 +2429,13 @@ _CAPS.extend([
         PROJECTILE_ENTITY_KINDS,
         {
             "when": _event_when_param(("on_hit", "on_crit")),
-            "entity": _p("string", "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetPx 0, with no above-position transform", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
+            "entity": _p("string", "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetBlocks 0, with no above-position transform", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Number of independently placed children", minimum=1, maximum=12),
             "geometry": _hit_target_spawn_geometry(),
             "damageBasis": _p("string", "Child damage source, selected independently of its velocity and knockback", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "knockbackBasis": _p("string", "Child knockback source, selected independently of damage", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "damageMultiplier": _p("number", "Multiply the selected damage exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
-            "delayTicks": _p("integer", "World-tick delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted", minimum=0, maximum=600, units="ticks"),
+            "delaySeconds": _seconds(_p("integer", "World-time delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted", minimum=0, maximum=600, units="ticks"), "delayTicks"),
         },
         component_slot="event_action",
         authority="owner_execute_sync",
@@ -2181,13 +2466,13 @@ _CAPS.extend([
             "repeatPolicy": _p("string", "The current anchor is always excluded. allow_revisits permits earlier NPCs again; exclude_visited excludes source and every previously selected NPC", enum=("allow_revisits", "exclude_visited")),
             "requireLineOfSight": _p("boolean", "Require native Collision.CanHit from the current anchor hitbox to each candidate; independent of child tileCollide/ownerHitCheck"),
             "initialIgnoreCountdownUpdates": _p("integer", "Exclude the exact emission-anchor NPC while this native AI countdown is positive; decremented before collision, so 10 means pre-AI plus nine post-AI collision opportunities; 0 disables", minimum=0, maximum=600, units="native projectile AI updates"),
-            "delayTicks": _p("integer", "Dispatch delay in world ticks; delayed source NPC must retain its active exact incarnation", minimum=0, maximum=600, units="world ticks"),
+            "delaySeconds": _seconds(_p("integer", "Dispatch delay in world seconds; delayed source NPC must retain its active exact incarnation", minimum=0, maximum=600, units="world ticks"), "delayTicks"),
         },
         requirements=(
             RequirementSpec("event_available", param="when", message="The source entity must actually emit the selected hit event."),
             RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
-                equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
-                message="The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetPx=0; Repair permissions distinguish an exclusive dependency from an independently used child."),
+                equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetBlocks": 0},
+                message="The emission reference requires configure_spawn position={at:activation_origin}, aim=velocity, offsetBlocks=0; Repair permissions distinguish an exclusive dependency from an independently used child."),
         ),
         component_slot="event_action",
         authority="owner_execute_sync",
@@ -2207,7 +2492,7 @@ _CAPS.extend([
         {
             "when": _event_when_param(("on_hit", "on_crit")),
             "buffId": _p("integer", "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess", minimum=1, maximum=65535, semantic_type="loaded_buff_id"),
-            "durationTicks": _p("integer", "Status duration", minimum=1, maximum=21600, units="ticks"),
+            "durationSeconds": _seconds(_p("integer", "Status duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         },
         component_slot="event_action",
         authority="owner_execute_sync",
@@ -2266,7 +2551,7 @@ _CAPS.extend([
         {
             "when": _event_when_param(("on_hit", "periodic", "on_expire")),
             "mode": _p("string", "Pull direction", enum=("target_to_owner", "target_to_entity")),
-            "strength": _p("number", "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement", minimum=0.01, maximum=4, units="engine units: velocity impulse coefficient per event"),
+            "impulseBlocksPerSecond": _world_units(_p("number", "Add velocity impulse toward selected endpoint on each event (NPC impulse also multiplies knockBackResist); not displacement", minimum=0.01, maximum=4, units="engine units: velocity impulse coefficient per event"), "strength", multiplier=16, divisor=60, units="blocks/s (one-off velocity impulse)"),
             "radiusTiles": _p("number", "NPC search radius with no active direct target; also used by on_hit if its target became inactive", minimum=1, maximum=60, units="tiles"),
         },
         component_slot="event_action",
@@ -2285,8 +2570,8 @@ _CAPS.extend([
         PROJECTILE_ENTITY_KINDS,
         {
             "when": _event_when_param(("on_hit", "periodic", "on_expire")),
-            "strength": _p("number", "Player velocity impulse toward the event's active direct target", minimum=0.01,
-                           maximum=4, units="engine units: velocity impulse coefficient per event"),
+            "impulseBlocksPerSecond": _world_units(_p("number", "Player velocity impulse toward the event's active direct target", minimum=0.01,
+                           maximum=4, units="engine units: velocity impulse coefficient per event"), "strength", multiplier=16, divisor=60, units="blocks/s (one-off velocity impulse)"),
         },
         component_slot="event_action",
         authority="owner_execute_sync",
@@ -2324,7 +2609,7 @@ _CAPS.extend([
         {
             "when": _event_when_param(("on_hit", "on_tile_collision", "on_expire")),
             "rangeTiles": _p("integer", "Maximum movement range", minimum=1, maximum=120, units="tiles"),
-            "cooldownTicks": _p("integer", "Shared owner mobility cooldown", minimum=0, maximum=3600, units="ticks"),
+            "cooldownSeconds": _seconds(_p("integer", "Shared owner mobility cooldown", minimum=0, maximum=3600, units="ticks"), "cooldownTicks"),
             "safeTileOnly": _p("boolean", "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check"),
         },
         component_slot="event_action",
@@ -2512,7 +2797,7 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     ),
     "periodic": EventKindSpec(
         "periodic", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER), (),
-        "Bounded periodic event; each action must select when={everyTicks:n} with n >= 6. Item-body gameplay runs while held or functionally equipped through equip_passive; inventory or vanity alone does not produce it.",
+        "Bounded periodic event; each action selects when={everySeconds:n}, nominally 0.1..60 seconds before declared nearest-tick lowering. Item-body gameplay runs while held or functionally equipped through equip_passive; inventory or vanity alone does not produce it.",
     ),
     "on_release": EventKindSpec(
         "on_release", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",),
@@ -2672,15 +2957,15 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
     if cap.name == "set_projectile_hitbox":
         return tuple(f"runtimeProgram.entities[].hitbox.{name}" for name in cap.params)
     if cap.name == "set_projectile_hitbox_curve":
-        return tuple(f"runtimeProgram.entities[].hitboxCurve.{name}" for name in cap.params)
+        return tuple(f"runtimeProgram.entities[].hitboxCurve.{name}" for name in param_fields)
     if cap.name in PROJECTILE_MODIFIER_COMPONENTS:
-        return tuple(f"runtimeProgram.entities[].{PROJECTILE_MODIFIER_COMPONENTS[cap.name]}.{name}" for name in cap.params)
+        return tuple(f"runtimeProgram.entities[].{PROJECTILE_MODIFIER_COMPONENTS[cap.name]}.{name}" for name in param_fields)
     if cap.name == "set_projectile_collision":
         return tuple(f"runtimeProgram.entities[].collision.{name}" for name in param_fields)
     if cap.category == "movement":
         return tuple(["runtimeProgram.entities[].movement.name", "runtimeProgram.entities[].movement.code", *[f"runtimeProgram.entities[].movement.params.{name}" for name in param_fields]])
     if cap.name in {"channel_beam", "charge_then_release"}:
-        return tuple(["runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code", *[f"runtimeProgram.entities[].controller.params.{name}" for name in cap.params]])
+        return tuple(["runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code", *[f"runtimeProgram.entities[].controller.params.{name}" for name in param_fields]])
     if cap.name == "target_and_fire":
         return tuple([
             "runtimeProgram.entities[].controller.name", "runtimeProgram.entities[].controller.code",
@@ -2714,8 +2999,8 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         rows = [RequirementSpec("present_param_requires_target_kind", param=f"velocity.{variant}", any_of=moving,
             message="Sampled initial velocity requires an entity whose initial velocity is executed; stationary/field entities require the constant-speed variant.")
             for variant in ("fanSpeed", "radial", "disk", "cone")]
-        rows.extend(RequirementSpec("ordered_params", param=f"velocity.{variant}.minSpeedPxPerUpdate",
-            other_param=f"velocity.{variant}.maxSpeedPxPerUpdate",
+        rows.extend(RequirementSpec("ordered_params", param=f"velocity.{variant}.minSpeedBlocksPerSecond",
+            other_param=f"velocity.{variant}.maxSpeedBlocksPerSecond",
             message="Minimum sampled speed must not exceed the explicitly authored maximum.")
             for variant in ("fanSpeed", "radial", "cone"))
         rows.extend(RequirementSpec("present_param_requires_param_value", param=f"velocity.{variant}", other_param="aim",
@@ -2785,7 +3070,7 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         if cap.name == "spawn_entity_from_hit_target":
             requirements.extend((
                 RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
-                    equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetPx": 0},
+                    equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetBlocks": 0},
                     message="Exact hit-target geometry requires a child configured for event origin/direction without another position transform."),
             ))
         if cap.name == "spawn_entity_on_event":
@@ -2891,8 +3176,8 @@ def _semantic_param(cap: CapabilitySpec, name: str, spec: ParamSpec) -> ParamSpe
         semantic_type = "runtime_color"
     elif name == "event":
         semantic_type = "runtime_event_kind"
-    elif name.endswith("Ticks") or name in {"useTimeTicks", "useAnimationTicks"}:
-        semantic_type = "ticks"
+    elif name.endswith("Seconds"):
+        semantic_type = "seconds"
     elif name.endswith("Px") or name in {"widthPx", "heightPx", "offsetPx", "radiusPx", "proximityRadiusPx"}:
         semantic_type = "pixels"
     elif name.endswith("Tiles") or name in {"rangeTiles", "radiusTiles", "heightTiles", "oreSenseRadiusTiles"}:
@@ -2943,12 +3228,12 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         cap = replace(cap, fixed_wire_literals=MappingProxyType({
             **cap.fixed_wire_literals, "action": wire_action, "actionCode": EVENT_ACTION_OPCODE[wire_action],
         }))
-    if cap.category == "event" and "delayTicks" not in cap.params:
+    if cap.category == "event" and "delaySeconds" not in cap.params:
         cap = replace(cap, params=MappingProxyType({
             **cap.params,
-            "delayTicks": _p("integer", "Delay this exact action after the chosen event; 0 executes immediately", required=False,
+            "delaySeconds": _seconds(_p("integer", "Delay this exact action after the chosen event; 0 executes immediately", required=False,
                              minimum=0, maximum=600, units="ticks", neutral=0,
-                             execution_phase="bounded delayed action scheduler"),
+                             execution_phase="bounded delayed action scheduler"), "delayTicks"),
         }))
     exact = _exact_wire_paths(cap)
     technical = (cap.technical_lowering_outputs if cap.technical_lowering_inputs else
@@ -3034,7 +3319,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
     return {
         "handRelativeMovement": (
             "move_front_hand is an explicit native front hand attachment choice, not a short-weapon/name selector; no weapon preset. "
-            "Choose initial/cursor aim, active world-tick cycle, ordered native start/peak stretch and signed hitboxOffsetPx independently. "
+            "Choose initial/cursor aim, active durationSeconds cycle, ordered native start/peak stretch and signed hitboxOffsetPx independently. "
             "The native hand drives visible pose and collision center together; hitboxOffsetPx locates the existing axis-aligned rectangle, "
             "not exact blade pixels. Selected PNG grip/axis/size belong to Visual and never derive gameplay reach. "
             "Author explicitly provides the primary entity, active spawn binding, same-item/entity maxActive=1, count=1, zero spread, "
@@ -3052,10 +3337,12 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "All requires/conditional dependencies still apply to the combined params; optional fields "
             "cannot leave a selected effect incomplete or inert. "
             "Other optional zero-neutral params make no authored nonzero effect when absent. "
-            "Suffix units: Ticks=ticks (60/s), Tiles=tiles (16 px), Px=pixels, Radians=radians. "
-            "Projectile movement/velocity is per projectile update (updatesPerTick updates per world tick); "
-            "authored durations and event intervals "
-            "ending Ticks remain world ticks; immunity.localCooldown is raw engine counts (see card). "
+            "World distances use blocks; existing Tiles suffixes also mean blocks (tiles). 1 block = 16 pixels. "
+            "Times use Seconds, speeds BlocksPerSecond, true angular rates RadiansPerSecond. "
+            "Seconds lower to the nearest world tick at 60 ticks/s, half-tick ties UP; nonzero-to-zero collapse is rejected. "
+            "Projectile velocity/rates use that target projectile’s unique explicit updatesPerTick for deterministic subupdate conversion; children use their own N. "
+            "Px hitbox/sprite/hand/beam geometry stays pixels; UV coordinates stay normalized. "
+            "updatesPerTick, immunity.localCooldown and initialIgnoreCountdownUpdates are algorithm counters, not seconds. "
             "Percent/percentage-point/chance cards use percent-scale values (15 means 15%, not 0.15): "
             "bonusPercent=15 adds +0.15 to a damage modifier; CritChancePercentagePoints=15 adds "
             "15 raw crit-chance points; manaCostReductionPercentagePoints=15 subtracts 0.15 from "
@@ -3069,11 +3356,11 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "speedMultiplierPerUpdate=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
             "has no fan; pierce=-1 is infinite. configure_tile_placement selects tileId>=0; configure_wall_placement selects wallId>=0. The inactive -1 placement field exists only in wire. "
             "Use each card's own bounds/units; no universal zero neutral."
-            " Item timing/cost: useTimeTicks is the base native activation interval; useAnimationTicks is "
+            " Item timing/cost: useTimeSeconds is the base native activation interval; useAnimationSeconds is "
             "the base animation duration. Native manaCost payment is attempted at animation start, not "
             "at every activation inside it; spawn count is a batch count, not a payment count. "
             "Extra recurring payment requires an explicit capability. Player/prefix timing and mana "
-            "modifiers can change effective values; do not report base ticks or mana as measured totals."
+            "modifiers can change effective values; do not report base seconds or mana as measured totals."
         ),
         "stackCost": STACK_COST_RULE,
         "armorParamInheritance": "configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply.",

@@ -9,7 +9,7 @@ import pytest
 
 from infini_local.core.vfx_manifest import _compile_manifest
 from infini_local.pipelines import combine_pipeline, visual_delivery_gate
-from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
 from infini_local.services.combine_endpoint import handle_combine_request
 from infini_local.storage import world_recipe_runtime, world_storage
 from infini_local.web.vfx_debug_routes import _sample_data
@@ -23,8 +23,10 @@ def cache_record(tmp_path, monkeypatch):
     monkeypatch.setattr(visual_delivery_gate, "SPRITE_DIR", tmp_path / "sprites")
     data = _sample_data()
     data["visual"] = {"preferredCanvasSize": 32}
-    hydrate_no_image_fixture_assets(data, write_no_image_fixture_png(tmp_path / "sprites" / "offline.png"))
+    fixture = write_no_image_fixture_png(tmp_path / "sprites" / "offline.png")
+    hydrate_no_image_fixture_assets(data, fixture)
     data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "offline-cache-admission")
+    data = synthetic_no_image_execution_control(data, fixture)
     assert world_storage.is_deliverable_recipe_payload(data)
     assert combine_pipeline._cached_payload_report(data)["ok"]
     request = {

@@ -18,7 +18,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 FN = "move_gravity_arc"
-PARAM = "accelY"
+PARAM = "accelerationYBlocksPerSecondSquared"
 
 
 def selected(document, fn=FN):
@@ -30,7 +30,7 @@ def selected(document, fn=FN):
 def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     document = build_capability_witness(FN)
     call = selected(document)
-    call["params"][PARAM] = value
+    call["params"][PARAM] = CAPABILITY_REGISTRY[FN].params[PARAM].from_wire(value, updates_per_tick=updates)
     selected(document, "set_projectile_collision")["params"]["updatesPerTick"] = updates
     assert validate_runtime_program(document)["ok"]
     wire = compile_runtime_program(document)
@@ -52,7 +52,7 @@ def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     assert not validate_runtime_wire(damaged)["ok"]
 
 
-@pytest.mark.parametrize("value", [-2.00001, 2.00001, True, None, "-1", [], {}, float("inf"), float("nan"), -1e-300, 1e-300])
+@pytest.mark.parametrize("value", [-16200.00001, 16200.00001, True, None, "-1", [], {}, float("inf"), float("nan"), -1e-300, 1e-300])
 def test_bad_present_acceleration_is_rejected_without_rounding_or_clamping(value):
     document = build_capability_witness(FN)
     selected(document)["params"][PARAM] = value
@@ -63,18 +63,22 @@ def test_bad_present_acceleration_is_rejected_without_rounding_or_clamping(value
 
 def test_zero_is_explicit_and_schema_prompt_advertise_the_same_signed_domain():
     spec = CAPABILITY_REGISTRY[FN].params[PARAM]
-    assert spec.minimum == -2 and spec.maximum == 2
+    assert spec.minimum == -16200 and spec.maximum == 16200
+    assert (spec.wire_minimum, spec.wire_maximum) == (-2, 2)
     assert spec.neutral == 0 and spec.default is None and spec.required
     variant = next(row for row in capability_provider_union() if row["properties"]["fn"]["const"] == FN)
     shape = variant["properties"]["params"]
     assert PARAM in shape["required"]
-    assert shape["properties"][PARAM]["minimum"] == -2
-    assert shape["properties"][PARAM]["maximum"] == 2
+    assert shape["properties"][PARAM]["minimum"] == spec.minimum
+    assert shape["properties"][PARAM]["maximum"] == spec.maximum
     assert shape["properties"][PARAM]["x-infini-consumerConstraint"]["storage"] == "float32"
     card = next(row for row in compact_capability_catalog() if row["fn"] == FN)
-    assert card["params"][PARAM]["min"] == -2 and card["params"][PARAM]["max"] == 2
+    assert card["params"][PARAM]["min"] == spec.minimum and card["params"][PARAM]["max"] == spec.maximum
     assert "negative accelerates upward" in card["does"]
-    assert "updatesPerTick=N" in card["params"][PARAM]["meaning"]
+    assert "target clock" in card["params"][PARAM]["meaning"]
+    assert card["params"][PARAM]["projectionConstraints"]["targetContext"] == (
+        "same target's unique set_projectile_collision.updatesPerTick")
+    assert card["params"][PARAM]["units"] == "blocks/s²"
     document = build_capability_witness(FN)
     del selected(document)["params"][PARAM]
     assert not validate_runtime_program(document)["ok"]
@@ -85,16 +89,16 @@ def test_zero_is_explicit_and_schema_prompt_advertise_the_same_signed_domain():
 def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     document = build_capability_witness(FN)
     call = selected(document)
-    call["params"][PARAM] = -3
+    call["params"][PARAM] = CAPABILITY_REGISTRY[FN].params[PARAM].minimum - 1
     scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
     assert next(row["paths"] for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"]) == ["params." + PARAM]
     candidate = deepcopy(call)
     candidate["target"] = "other_entity"
-    candidate["params"][PARAM] = -0.1875
+    candidate["params"][PARAM] = -42.1875
     filtered, audit = filter_repair_patch_scope(document, {"note": "repair signed leaf", "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
     fixed = apply_repair_patch(document, filtered)
-    assert selected(fixed)["params"][PARAM] == -0.1875
+    assert selected(fixed)["params"][PARAM] == -42.1875
     assert selected(fixed)["target"] == call["target"]
     assert validate_runtime_program(fixed)["ok"]
     # A later unrelated invalid collision leaf cannot rewrite accepted acceleration.
@@ -108,7 +112,7 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     filtered, audit = filter_repair_patch_scope(fixed, {"note": "keep accepted motion", "callsUpsert": [hostile, corrected]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(fixed, filtered)
-    assert selected(repaired)["params"][PARAM] == -0.1875
+    assert selected(repaired)["params"][PARAM] == -42.1875
     assert selected(repaired, "set_projectile_collision")["params"]["pierce"] == 3
     assert validate_runtime_program(repaired)["ok"]
 
@@ -117,7 +121,7 @@ def test_only_gravity_arc_domain_expands_and_obsolete_bounce_is_retired():
     assert "move_bounce" not in CAPABILITY_REGISTRY
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["scaleGrowthPerUpdate"].minimum == 0.001
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["maxScale"].maximum == 4
-    for fn, speed in (("move_boomerang", "returnSpeed"), ("move_returning_glaive", "returnSpeed"),
-                      ("move_flail_tether", "returnSpeed"), ("move_yoyo_hover", "speed")):
-        assert CAPABILITY_REGISTRY[fn].params[speed].minimum == 1
-        assert CAPABILITY_REGISTRY[fn].params[speed].maximum == 80
+    for fn, speed in (("move_boomerang", "returnSpeedBlocksPerSecond"), ("move_returning_glaive", "returnSpeedBlocksPerSecond"),
+                      ("move_flail_tether", "returnSpeedBlocksPerSecond"), ("move_yoyo_hover", "speedBlocksPerSecond")):
+        assert CAPABILITY_REGISTRY[fn].params[speed].wire_minimum == 1
+        assert CAPABILITY_REGISTRY[fn].params[speed].wire_maximum == 80

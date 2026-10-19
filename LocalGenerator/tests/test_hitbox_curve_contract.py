@@ -1,5 +1,7 @@
 """A12 curve choices reach exact wire/receipts and preserve frozen Repair."""
 from copy import deepcopy
+from repair_test_helpers import projected_params
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 import json
 
 import pytest
@@ -17,7 +19,7 @@ from infini_local.qa.capability_library_audit import capability_library_audit
 
 
 FN = "set_projectile_hitbox_curve"
-PARAMS = {"startScale": .5, "endScale": 4, "startDelayTicks": 5, "durationTicks": 60, "curve": "exponential", "mirrorToSprite": False}
+PARAMS = {"startScale": .5, "endScale": 4, 'startDelaySeconds': (5) / 60, 'durationSeconds': (60) / 60, "curve": "exponential", "mirrorToSprite": False}
 
 
 def _call(doc, fn=FN):
@@ -42,7 +44,7 @@ def test_explicit_curve_projection_and_provenance(curve, mirror):
     _call(doc)["params"].update(curve=curve, mirrorToSprite=mirror)
     frozen = deepcopy(doc)
     wire = compile_runtime_program(doc)
-    assert _entity(wire)["hitboxCurve"] == _call(doc)["params"]
+    assert _entity(wire)["hitboxCurve"] == projected_params(FN, _call(doc)["params"])
     assert doc == frozen and validate_runtime_wire(wire)["ok"]
     rows = wire["runtimeContract"]["finalWireReceipts"]
     assert len([row for row in rows if row.get("fn") == FN]) == len(PARAMS)
@@ -53,8 +55,8 @@ def test_explicit_curve_projection_and_provenance(curve, mirror):
 @pytest.mark.parametrize("name,value", [
     ("startScale", None), ("startScale", True), ("startScale", "1"), ("startScale", .249), ("startScale", 8.001),
     ("endScale", None), ("endScale", 0), ("endScale", 9), ("endScale", float("inf")), ("endScale", float("nan")),
-    ("startDelayTicks", -1), ("startDelayTicks", 21601), ("startDelayTicks", .5), ("startDelayTicks", False),
-    ("durationTicks", 0), ("durationTicks", 21601), ("durationTicks", 1.5), ("durationTicks", True),
+    ("startDelaySeconds", -1 / 60), ("startDelaySeconds", 21601 / 60), ("startDelaySeconds", -0.5 / 60), ("startDelaySeconds", False),
+    ("durationSeconds", 0), ("durationSeconds", 21601 / 60), ("durationSeconds", 0.001), ("durationSeconds", True),
     ("curve", "smooth"), ("curve", None), ("curve", []), ("mirrorToSprite", 0), ("mirrorToSprite", None),
 ])
 def test_present_invalid_authored_and_wire_values_are_rejected(name, value):
@@ -64,7 +66,8 @@ def test_present_invalid_authored_and_wire_values_are_rejected(name, value):
     assert not validate_runtime_program(doc)["ok"]
     with pytest.raises(ValueError):
         compile_runtime_program(doc)
-    _entity(wire)["hitboxCurve"][name] = value
+    wire_name = CAPABILITY_REGISTRY[FN].params[name].wire_name or name
+    _entity(wire)["hitboxCurve"][wire_name] = value
     wire.pop("runtimeContract")
     assert not validate_runtime_wire(wire)["ok"]
 
@@ -75,7 +78,7 @@ def test_every_present_curve_requires_all_six_explicit_choices(name):
     wire = compile_runtime_program(doc)
     del _call(doc)["params"][name]
     assert not validate_runtime_program(doc)["ok"]
-    del _entity(wire)["hitboxCurve"][name]
+    del _entity(wire)["hitboxCurve"][CAPABILITY_REGISTRY[FN].params[name].wire_name or name]
     assert not validate_runtime_wire(wire)["ok"]
 
 
@@ -105,7 +108,7 @@ def test_no_ambiguous_container_or_provenance_gap(mutation):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("name,valid", [("startScale", 1.5), ("endScale", 3), ("startDelayTicks", 0), ("durationTicks", 100)])
+@pytest.mark.parametrize("name,valid", [("startScale", 1.5), ("endScale", 3), ("startDelaySeconds", 0), ("durationSeconds", 100 / 60)])
 def test_repair_changes_only_the_invalid_curve_leaf(name, valid):
     doc = _source()
     _call(doc)["params"][name] = -1
@@ -155,5 +158,5 @@ def test_full_request_and_numeric_native_range_audit_cover_the_new_owner():
     audit = capability_library_audit()
     assert audit["ok"]
     rows = [row for row in audit["rangeParity"] if row["capability"] == FN]
-    assert {row["param"] for row in rows} == {"startScale", "endScale", "startDelayTicks", "durationTicks"}
+    assert {row["param"] for row in rows} == {"startScale", "endScale", "startDelaySeconds", "durationSeconds"}
     assert all(row["preserved"] for row in rows)

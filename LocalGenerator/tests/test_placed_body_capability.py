@@ -41,14 +41,14 @@ def test_explicit_capability_has_required_schema_and_exact_compiler_projection()
     cap = CAPABILITY_REGISTRY[FN]
     schema = cap.provider_variant_schema()["properties"]["params"]
     assert set(schema["required"]) == {"placementCallId", *TRANSFORM}
-    assert set(cap.prompt_card()["params"]) == {"placementCallId", *TRANSFORM}
+    assert set(cap.prompt_card()["params"]) == {"placementCallId", "pivotSpace", *TRANSFORM}
     wire = compile_runtime_program(document)
-    assert placement(wire) == {"tileId":19, "wallId":-1, "placeStyle":0, "placedBody":TRANSFORM}
+    assert placement(wire) == {"tileId":19, "wallId":-1, "placeStyle":0, "placedBody":{**TRANSFORM, "pivotSpace":"frame"}}
     assert wire["runtimeContract"]["technicalLoweringAudit"]["ok"]
     assert validate_runtime_wire(wire)["ok"], validate_runtime_wire(wire)
     receipts = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("fn") == FN]
-    assert len(receipts) == len(TRANSFORM) + 1
-    assert {r["authoredPath"].rsplit(".",1)[-1] for r in receipts} == {"placementCallId", *TRANSFORM}
+    assert len(receipts) == len(TRANSFORM) + 2
+    assert {r["authoredPath"].rsplit(".",1)[-1] for r in receipts} == {"placementCallId", "pivotSpace", *TRANSFORM}
     association = next(r for r in receipts if r["authoredPath"].endswith(".placementCallId"))
     assert any(p.endswith(".kind") and ".entities[" in p for p in association["authoredPaths"])
     assert any(p.endswith(".action.placementCallId") for p in association["authoredPaths"])
@@ -88,11 +88,15 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     payload = request_dossier(requests[-1])
     cards = payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(c for c in cards if c["fn"] == FN)
-    assert set(card["params"]) == {"placementCallId", *TRANSFORM}
+    assert set(card["params"]) == {"placementCallId", "pivotSpace", *TRANSFORM}
     reference = card["params"]["placementCallId"]
     assert reference["reference"]["namespace"] == "call"
     assert "Exact same-item configure_tile_placement call" in reference["meaning"]
     assert "native" in card["does"]
+    # Static whole-body replacement also removes native flame/state pictures;
+    # mechanical wiring/light retention must not imply visual animation survives.
+    for fact in ("native animation", "on/off", "baked flames", "omit this call"):
+        assert fact in card["does"].lower()
     assert all(term in card["constructionMeaning"].lower() for term in ("certified", "16x16", "256 cells", "callbacks", "before mutation"))
     wire = compile_runtime_program(document)
     before = json.dumps(wire, sort_keys=True)
@@ -104,15 +108,17 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
         assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == wire["runtimeProgram"]["bindings"]
         guidance = packet["spritePresentationReadOnly"]["placedBody"]
         assert guidance["operation"] == FN
-        assert set(guidance["params"]) == {"placementCallId", *TRANSFORM}
+        assert set(guidance["params"]) == {"placementCallId", "pivotSpace", *TRANSFORM}
         assert "existing" in guidance["meaning"] and "light" in guidance["meaning"]
+        for fact in ("native animation", "on/off", "baked flames", "omit this call"):
+            assert fact in guidance["meaning"].lower()
         packet["acceptedPresentationMechanicsReadOnly"]["bindings"].clear()
     assert json.dumps(wire, sort_keys=True) == before
     with_body = visual._apply_kit(wire, kit)
     without_body = copy.deepcopy(with_body)
     placement(without_body).pop("placedBody")
     assert build_visual_asset_plan(with_body) == build_visual_asset_plan(without_body)
-    assert placement(with_body)["placedBody"] == TRANSFORM
+    assert placement(with_body)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
 
 
 def test_explicit_placed_png_is_required_even_with_legacy_optional_policy(monkeypatch):
@@ -227,11 +233,13 @@ def test_new_reference_requirements_and_bounds_are_in_canonical_audit():
     assert not placed_body_surface_audit(dto.replace(b"RenderSizePx is < 1 or > 512", b"RenderSizePx is < 1 or > 64"))["ok"]
 
 
-def test_observed_parent_dto_classification_detects_float_storage_mutant():
+def test_current_dto_classification_detects_float_storage_mutant():
     from infini_local.qa import primitive_loss_audit as audit
     check = getattr(audit, "placed_body_surface_audit", None)
     assert callable(check), "new nested placed DTO requires canonical surface/storage classification"
-    dto = (Path(__file__).parent / "fixtures/placed_body_parent_dto_observed.txt").read_bytes()
+    archived = (Path(__file__).parent / "fixtures/placed_body_parent_dto_observed.txt").read_bytes()
+    assert check(archived)["missingDtoFields"] == ["PivotSpace"]  # immutable old observation, not rewritten evidence
+    dto = (Path(__file__).resolve().parents[2] / "ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
     report = check(dto)
     assert report["ok"], report
     assert report["storageByField"]["ImagePivotX"] == "double"
@@ -291,7 +299,7 @@ def test_real_gameplay_repair_request_retains_frozen_transform_and_native_call(w
     assert permission["paths"] == ["params.placementCallId"]
     assert dossier["repairScope"]["create"]["calls"]["allowedFns"] == []
     wire = compile_runtime_program(result)
-    assert placement(wire)["placedBody"] == TRANSFORM
+    assert placement(wire)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
     assert placement(wire)["tileId"] == 19
     assert len(requests) == 1
 
@@ -322,13 +330,13 @@ def test_healthy_existing_root_png_delivers_and_bad_body_is_not_admitted(tmp_pat
     assert validate_vfx_manifest_wire(wire)["ok"], validate_vfx_manifest_wire(wire)
     assert is_deliverable_recipe_payload(wire)
     sanitized = sanitize_recipe_for_delivery(wire)
-    assert placement(sanitized)["placedBody"] == TRANSFORM
+    assert placement(sanitized)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
     for mutate in (lambda p:p.update(placedBody=None), lambda p:p["placedBody"].update(offsetXPx=513)):
         bad = copy.deepcopy(wire); mutate(placement(bad))
         assert not is_deliverable_recipe_payload(bad)
     missing = copy.deepcopy(wire); missing["visual"]["spritePath"] = ""
     assert not is_deliverable_recipe_payload(missing)
-    assert placement(missing)["placedBody"] == TRANSFORM
+    assert placement(missing)["placedBody"] == {**TRANSFORM, "pivotSpace":"frame"}
 
 
 def test_absent_placed_member_preserves_current_wire_without_migrating_archive():

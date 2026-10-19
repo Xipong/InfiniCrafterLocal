@@ -81,10 +81,13 @@ class OwnedProcess:
 
 
 def deliverable_recipe(tmp_path, monkeypatch, *, manifest_key):
-    """A real deliverable cache witness, not a generated-status placeholder."""
+    """Real cache/delivery consumers with an explicitly synthetic image control."""
     from infini_local.core.vfx_manifest import _compile_manifest
     from infini_local.pipelines import combine_pipeline as pipeline, visual_delivery_gate as visual
-    from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png
+    from infini_local.qa.live_no_image_fixture import (
+        hydrate_no_image_fixture_assets, synthetic_no_image_execution_control,
+        write_no_image_fixture_png,
+    )
     from infini_local.storage import world_recipe_runtime as recipes
     from infini_local.web.vfx_debug_routes import _sample_data
 
@@ -93,8 +96,10 @@ def deliverable_recipe(tmp_path, monkeypatch, *, manifest_key):
     monkeypatch.setattr(visual, "SPRITE_DIR", tmp_path / "sprites")
     good = _sample_data()
     good["visual"] = {"preferredCanvasSize": 32}
-    hydrate_no_image_fixture_assets(good, write_no_image_fixture_png(tmp_path / "sprites" / "test.png"))
+    fixture = write_no_image_fixture_png(tmp_path / "sprites" / "test.png")
+    hydrate_no_image_fixture_assets(good, fixture)
     good["vfxManifest"] = _compile_manifest(good, {"slots": []}, manifest_key)
+    good = synthetic_no_image_execution_control(good, fixture)
     assert pipeline._cached_payload_report(good)["ok"]
     return good
 

@@ -139,6 +139,7 @@ internal static partial class EngineRuntimeChecks
                     var vr = c.Distinct ? er["visual"]!.AsObject() : root["visual"]!.AsObject();
                     er["visual"]!["assetMode"] = c.Distinct ? "baked_sprite" : "reuse_item_icon";
                     vr["spritePath"] = path; vr["renderSizePx"] = c.Distinct ? 48 : 32;
+                    vr["spriteStatus"] = "generated"; // declared synthetic ready texture below, not a pending producer
                     vr["forwardAngleDegrees"] = c.Distinct ? -37 : 23;
                     vr["grip"] = JsonNode.Parse(c.Distinct
                         ? "{\"normalizedX\":0.71875,\"normalizedY\":0.25}"

@@ -20,10 +20,10 @@ def test_author_packet_names_real_fields_without_harness_instructions(monkeypatc
     cards = {row['fn']: row for row in payload['runtimeCapabilityContract']['catalog']['capabilities']}
     # Cadence belongs to stats, not use: the packet must not imply an absent param.
     use_meaning = cards['configure_item_use']['constructionMeaning']
-    assert 'configure_item_stats.useTimeTicks' in use_meaning
-    assert 'configure_item_stats.useAnimationTicks' in use_meaning
-    assert 'useTimeTicks' not in cards['configure_item_use']['params']
-    assert {'useTimeTicks', 'useAnimationTicks'} <= cards['configure_item_stats']['params'].keys()
+    assert 'configure_item_stats.useTimeSeconds' in use_meaning
+    assert 'configure_item_stats.useAnimationSeconds' in use_meaning
+    assert 'useTimeSeconds' not in cards['configure_item_use']['params']
+    assert {'useTimeSeconds', 'useAnimationSeconds'} <= cards['configure_item_stats']['params'].keys()
 
 
 def test_author_declares_only_static_app_contract_as_instruction_prefix(monkeypatch):
@@ -127,7 +127,7 @@ def test_immunity_is_one_required_typed_choice(monkeypatch):
 @pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
 @pytest.mark.parametrize('fn,leaf,bad_value', [
     ('configure_item_stats', 'damage', True),
-    ('set_projectile_lifetime', 'lifetimeTicks', 0),
+    ('set_projectile_lifetime', 'lifetimeSeconds', 0),
     ('move_straight', None, 'missing_entity'),
 ])
 def test_actual_repair_call_guide_has_only_the_scoped_canonical_forms(monkeypatch, mode, fn, leaf, bad_value):
@@ -332,17 +332,17 @@ def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_sco
     card = cards['apply_generated_buff_on_use']
     for meaning in ('identical effect', 'maximum remaining duration', 'distinct effects', 'indefinite uptime'):
         assert meaning in card['does']
-    duration = card['params']['durationTicks']['meaning']
+    duration = card['params']['durationSeconds']['meaning']
     assert 'one application' in duration and 'not a reuse cooldown' in duration
     sense = card['params']['oreSenseEnabled']['meaning']
     assert 'Spelunker' in sense and 'chests' in sense and 'life crystals' in sense and 'not a radius' in sense
     source = build_capability_witness('apply_generated_buff_on_use')
     buff = next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use')
-    del buff['params']['durationTicks']
+    del buff['params']['durationSeconds']
     dossier = author.build_gameplay_repair_dossier(source, {}, {}, failure_report=validate_runtime_program(source))
     repair_card = next(c for c in dossier['existingBrokenCapabilityCards'] if c['fn'] == 'apply_generated_buff_on_use')
     assert repair_card['does'] == card['does']
-    for leaf in ('durationTicks', 'oreSenseEnabled'):
+    for leaf in ('durationSeconds', 'oreSenseEnabled'):
         assert repair_card['params'][leaf]['meaning'] == card['params'][leaf]['meaning']
 
 
@@ -363,7 +363,7 @@ def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair(
     repaired_stats = deepcopy(stats)
     repaired_stats['params']['damage'] = next(c for c in original['runtimeProgram']['calls'] if c['fn'] == 'configure_item_stats')['params']['damage']
     effects = deepcopy(next(c for c in source['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use'))
-    effects['params']['durationTicks'] = 1
+    effects['params']['durationSeconds'] = (1) / 60
     filtered, audit = filter_repair_patch_scope(source, {'callsUpsert': [repaired_stats, effects], 'note': 'Only actual invalid leaf'}, scope)
     assert audit['ok'] and audit['ignoredChanges']
     result = apply_repair_patch(source, filtered)

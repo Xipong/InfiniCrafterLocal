@@ -7,18 +7,24 @@ Gameplay параметры, descriptions, domains, units и exact wire mapping 
 
 Путь изменения: registry → actual provider schema/prompt → validator/Repair → compiler receipt → strict wire → C# DTO/executor → regression. Исторический rename не становится Author alias; C# wire сохраняет объявленные старые leaves. Category/name/prose не выбирают единицу, sentinel, механическую композицию или default.
 
-Четыре обязательных scalar поля имеют уточнённые канонические имена. Преобразование каждого значения остаётся identity через существующий `wire_name`; единицы, диапазоны, opcodes и requiredness не меняются.
+Свежий Gameplay Author использует `infini.runtime-program.authoring.v6`; runtime API остаётся `infini.runtime-program.v5`, persisted wire — `infini.runtime-program.wire.v3`. Author/Repair выбирают игровые расстояния в **блоках**, длительности в **секундах**, скорости в **блоках/с**. Смысл и диапазон каждого конкретного поля по-прежнему задаёт registry, а не suffix-эвристика.
 
-| Capability | Author | Сохранённый wire | Смысл |
-|---|---|---|---|
-| `move_gravity_arc` | `accelY` | `movement.params.gravityPerTick` | Знаковое ускорение по Y на projectile update; это не world-tick duration или скорость. |
-| `move_orbit` | `radiusTiles` | `movement.params.rangeTiles` | Фиксированный радиус орбиты вокруг владельца. |
-| `move_yoyo_hover` | `speed` | `movement.params.returnSpeed` | Желаемая скорость и при слежении за курсором, и при возврате; velocity приближается к ней через lerp. |
-| `configure_tool` | `miningSpeedMultiplier` | `gameplay.miningSpeedScale` | Делитель Player.pickSpeed; >1 ускоряет добычу, с прежней проверкой tool power и порогом 0.001. |
+| Семейство | Author | Canonical lowering в прежний wire |
+|---|---|---|
+| World distance | `*Blocks`; существующие `rangeTiles`/`radiusTiles` уже означают блоки | ×16, если consumer хранит world pixels; already-block values не конвертируются повторно |
+| World duration | `*Seconds` | ×60, ближайший целый world tick, половина тика вверх |
+| Projectile velocity | `*BlocksPerSecond` | ×16/(60×N), N принадлежит этому target |
+| Projectile gravity acceleration | `accelerationYBlocksPerSecondSquared` | ×16/(3600×N²) |
+| Continuous NPC acceleration | `*BlocksPerSecondSquared` | ×16/(3600×N), по частоте вызывающего projectile |
+| One-off impulse / player bonus / ammo contribution | `*BlocksPerSecond` | ×16/60; не использовать N projectile как множитель бонуса Player/Item |
+| True angular rate | `*RadiansPerSecond` | /(60×N) |
+| Technical counters, ratios, percent | Declared count/coefficient/percent | Их прежний контракт; это не duration/rate по одному названию |
 
-Прежние Author parameter receipts больше не поддерживаются ни source-free, ни source-aware audit. Current Author/Repair используют только canonical names; текущие exact projections и native safety envelopes сохраняются. Архивные JSON/hashes не меняются, saved data не удаляется и не мигрируется.
+N = explicit `set_projectile_collision.updatesPerTick` **того же target**; у ребёнка собственный N, а не N emitter-а. Missing, malformed и ambiguous clocks не заменяются единицей. Полный прежний engine domain доступен для каждого N=1..6 через registry-derived contextual Author bounds; engine bounds и native clamps не пересматриваются.
 
-`test_registry_author_units.py` сохраняет current numeric representation/consumer/projection и exact Repair checks, а прежние receipts проверяет как refusal evidence без мутации входов. Исторический полный diagnostic hash не является current admission contract.
+Секундная проекция — объявленная quantization, не обещание точного восстановления исходного decimal: половина тика округляется вверх. Ненулевой эффект не может исчезнуть при lowering/storage. Для integer world-pixel wire, например `offsetBlocks`, сохраняется точная пиксельная решётка; произвольная дробь блока не округляется скрыто.
+
+Current Author/Repair принимают только v6 keys, не старые `*Ticks`/`*PxPerUpdate` как fresh aliases. Saved wire не переписывается. Source-free audit принимает только конечные predecessor paths, **явно объявленные для этой миграции** в `ParamSpec`; это не возврат всех ранее retired aliases и не importer. Source-backed audit требует exact current Author source. Архивные JSON/hashes остаются неизменными. Проверки: `test_author_world_unit_projection.py` плюс существующие numeric/Repair/receipt controls; historical diagnostic hash не становится current admission contract.
 
 <a id="clocks"></a>
 ## World ticks, updates, pixels
@@ -35,25 +41,27 @@ Terraria nominal world clock — 60 ticks/s, tile — 16 px. Это не гар�
 | 120 | 2.00 |
 | 180 | 3.00 |
 
-Projectile `extraUpdates=N` даёт N+1 AI/movement updates/world tick. `speedPxPerUpdate`, gravity velocity increment, velocity retention/multiplier, turn/scale growth и engine local NPC cooldown относятся к **update/engine units**, не автоматически к секундам. `lifetimeTicks`, charge/warmup/return-after, scheduler `delayTicks` остаются world ticks и преобразуются consumers в updates. VFX material simulation использует world ticks, не extraUpdates/Draw.
+Native `extraUpdates` даёт `N=extraUpdates+1` AI/movement updates/world tick. Wire velocities/gravity и engine local NPC cooldown сохраняют прежние engine units, но Author задаёт перечисленные физические world rates: lowerer учитывает N детерминированно. `velocityRetention`/`speedMultiplierPerUpdate` и другие явно объявленные per-update coefficients остаются коэффициентами алгоритма; `immunity.localCooldown` и `initialIgnoreCountdownUpdates` — counts. Native `lifetimeTicks`, charge/warmup/return-after и scheduler `delayTicks` остаются world ticks; их Author counterparts теперь Seconds. VFX material simulation сохраняет свой world-tick контракт и этой миграцией не меняется.
 
-При отсутствии steering/collision грубая дальность projectile в tiles: `speedPxPerUpdate × (1+extraUpdates) × lifetimeTicks / 16`; controller может полностью изменить оценку. Минимальный event period берётся из registry, не из этой формулы.
+**16 world pixels = 1 блок**. Texture texels/canvas resolution и normalized UV — отдельные пространства; UV нельзя делить на16. Явные `*Px` hitbox/sprite/hand/beam geometry сохраняют пиксели. Standing unmounted collider обычного игрока — 20×42 world px (1,25×2,625 блока); базовый бег — 11,25 блока/с; начальная скорость обычного прыжка — примерно 18,79 блока/с вверх. Это сравнения для normal gravity без modifiers, не balance presets: initial jump velocity не задаёт высоту/дальность без hold duration, gravity и движения.
 
-Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `velocity={"constantSpeedPxPerUpdate":9}`, `count=1`, `spreadRadians=0`, `offsetPx=8`, `aim=cursor`, `position={"at":"owner_center"}`; `move_gravity_arc` — `accelY=.12`; `set_projectile_lifetime` — `lifetimeTicks=90`. Это нынешние Author keys; старые `speedPxPerTick/gravityPerTick` здесь невалидны.
+Только для прямолинейного движения с постоянной скоростью без столкновений дальность в блоках равна `speedBlocksPerSecond × lifetimeSeconds`. Movement/controller может полностью изменить эту оценку. Минимальный event period берётся из registry, не из формулы дальности.
+
+Пример **частичных capability params**, не полный Author response: `configure_spawn` задаёт `velocity={"constantSpeedBlocksPerSecond":120}`, `count=1`, `spreadRadians=0`, `offsetBlocks=0.5`, `aim=cursor`, `position={"at":"owner_center"}`; `move_gravity_arc` — `accelerationYBlocksPerSecondSquared=900`; `set_projectile_lifetime` — `lifetimeSeconds=2.5`. Отдельный collision call явно задаёт N. При N=2 исполняемые wire speed=16 px/update, gravity increment=1 px/update², offset=8 px, lifetime=150 world ticks. Эти значения проверяет production compiler tracer; старые Author `constantSpeedPxPerUpdate/accelY/lifetimeTicks` не являются текущими keys.
 
 <a id="gameplay"></a>
 ## Важные отличия единиц от обещаний
 
 | Группа / поле | Буквальный смысл |
 |---|---|
-| Item use/animation | `useTimeTicks` — use/reuse interval, `useAnimationTicks` — независимая длина animation; отличия могут дать несколько uses, не обязательно один projectile/click. |
+| Item use/animation | `useTimeSeconds` — базовый native use/reuse interval, `useAnimationSeconds` — независимая длина animation; отличия могут дать несколько uses, не обязательно один projectile/click. |
 | Item facts | `manaCost` — базовая Item.mana до player modifiers; `valueCopper` — exact Item.value, не inferred resale; `craftYield` — запрос, фактическая stack выдача capped maxStack. Loaded rarity/ProjectileID/BuffID/DamageClass копируются из соответствующих source facts, не угадываются из имени. |
 | Display/collision | Item scale, projectile `drawScale`, entity Visual scale — multipliers, не collision hitbox/radius. World pixels, tile radii и canvas pixels различны. |
 | Knockback/light/aggro/mana regen | Item/Projectile.knockBack — engine strength; Lighting strength — RGB coefficient, не radius; aggro — raw Player.aggro (может быть отрицательным), не probability; manaRegenBonusPoints — raw Player.manaRegenBonus, не mana/s. |
-| Ammo | `shootSpeedContributionPxPerUpdate` — signed Item.shootSpeed вклад в vanilla PickAmmo, не финальная скорость projectile. `usesPotionRules` — Item.potion/use eligibility/sickness gating flag, не duration. |
+| Ammo | `shootSpeedContributionBlocksPerSecond` — signed базовый Item.shootSpeed вклад в vanilla PickAmmo, не финальная скорость projectile. `usesPotionRules` — Item.potion/use eligibility/sickness gating flag, не duration. |
 | Equipment percentages | Уже объявленный /100 adapter; additive modifier, chance, percentage points и source-damage percent различны. Armor set требует полного matching set и head phase; equipment phase/damageClass — explicit selector, не router. Итог зависит от других Terraria modifiers/clamps. |
 | Mining / ore sense | Mining speed multiplier делит Player.pickSpeed: больший divisor даёт меньший pickSpeed и более быстрое копание. `oreSenseEnabled` включает Player.findTreasure; это bool→0/1, не произвольный исторический oreSenseRadiusTiles. |
-| Buff movement | `moveSpeedBonusPercent` — additive percent [−50,200]; `movementSpeed = percent/100`, как у equipment. `20` добавляет `0.2` к Player.moveSpeed до остальных modifiers. `jumpSpeedBonusPxPerTick` — Player.jumpSpeedBoost pixels/world tick. |
+| Buff movement | `moveSpeedBonusPercent` — additive percent [−50,200]; `movementSpeed = percent/100`, как у equipment. `20` добавляет `0.2` к Player.moveSpeed до остальных modifiers. `jumpSpeedBonusBlocksPerSecond` — базовый вклад в Player.jumpSpeedBoost, не обещание итоговой высоты прыжка. |
 | Projectile sentinels | `pierce=-1` — unlimited; `localNpcHitCooldownEngineUnits=-1` — one-hit-per-NPC только local immunity; 0..600 raw cooldown counts, не world-tick duration. Owner immunity использует отдельный shared путь. |
 | Movement/controller coefficients | Boomerang returnSpeed — target after lerp; phaseStrength одновременно rotation/alpha, не collision phasing; waveVelocityCoefficient нормализуется при расчёте direction, не displacement. sameTargetBias насыщается на .9; target_and_fire range — soft score, не strict геометрическая граница. Charge powerMultiplier меняет и release velocity, не только damage/knockback. |
 | Event effects | Spawn count — children; chain count — max дополнительных NPC. damageMultiplier берёт authored **base damage источника**, rounded/minimum 1 до defense, не damageDone и не additive percent. heal damageFraction — доля фактического damageDone; maxHeal — HP/event. |
@@ -67,13 +75,13 @@ Terminal owners: [GeneratedItemData.Apply](../../ModSources/InfiniCrafterLocal/C
 
 Regen `lifeRegenHpPerSecond` у accessory/armor и `setBonusLifeRegenHpPerSecond`: authored [−50,100] с шагом .5, integer engine wire [−100,200], `wire=2×HP/s`, inverse `HP/s=wire/2`; сохраняются знак, 0 и endpoints. Generated buff regen имеет собственный registry domain [0,60] с тем же half-HP lattice; не расширять его до signed equipment domain.
 
-Existing /100 или bool→0/1 projection доказана только на своём declared image. Процентный /100 — объявленный scale adapter с обычной IEEE-754 точностью, **не биекция всех JSON/binary64 представлений**: соседние обычные doubles могут дать один результат деления; условие `x/100*100==x` не вводится как новый фильтр обычных значений. Такая точность не разрешает молча превращать ненулевой эффект в нейтраль. Она также не гарантирует exact binary32 round-trip произвольного JSON decimal или восстановление каждого старого DTO. Например bool ore sense не восстанавливает старые radius 2..60. Тики/радианы/вещественные тайловые радиусы не переводятся в секунды/градусы/пиксели по удобству prose без сквозной биекции, включая sign/zero/sentinels.
+Existing /100 или bool→0/1 projection доказана только на своём declared image. Процентный /100 — объявленный scale adapter с обычной IEEE-754 точностью, **не биекция всех JSON/binary64 представлений**: соседние обычные doubles могут дать один результат деления; условие `x/100*100==x` не вводится как новый фильтр обычных значений. Такая точность не разрешает молча превращать ненулевой эффект в нейтраль. Она также не гарантирует exact binary32 round-trip произвольного JSON decimal или восстановление каждого старого DTO. Например bool ore sense не восстанавливает старые radius 2..60. Физические единицы меняются только объявленной canonical проекцией с их sign/zero/sentinels и engine domains; duration quantization описана отдельно выше. Ни prose, ни category не дают права вводить другую проекцию.
 
 Buff movement использует тот же percent adapter и guard `nonneutral_must_remain_nonneutral`, что equipment. Float32 factors остаются выразимы: significand содержит не более 24 bits, умножение на `100 = 25×4` требует не более 29 significant bits и точно помещается в binary64; деление такого percent на 100 возвращает factor. Это доказательство о C# consumer values, не о произвольном historical JSON double. Archived wire не пересчитывается; retired `moveSpeedBonusFactor` receipts больше не принимаются, включая old-neutral omissions. Current signed-zero/underflow/source/Repair checks сохранены.
 
 `false`, `0`, `0.0`, absent и `null` не взаимозаменяемы; frozen equality type-aware (true ≠ 1 ≠ 1.0). Только optional params с одинаковыми declared default/neutral допускают Author omission с отдельным receipt после всей composition validation. Missing dependency/invalid present value/empty required effect остаются RED. Repair omission — no-change; accepted absence не заполняется вне exact permissions. Правила — [declared neutrals](DECLARED_NEUTRAL_OMISSIONS_RU.md) и [targeted Repair](../development/TARGETED_REPAIR_PROTOCOL_RU.md).
 
-Структурные `entity/binding/call` IDs, schema version, primary selection и diagnostic paths — не физические units. `bindings[].usePolicy.stackCost` — точно 0 или 1 экземпляр generated item/accepted use; contactDamage — независимый bool. `*IndicesDelete` — zero-based array position, не tick. Author array maxima/Repair bounds — schema transport limits; compiler-owned runtime maxEntityCount/maxChildDepth/maxEventSpawnsPerActivation — bounded graph/ledger, не model-authored размеры.
+Структурные `entity/binding/call` IDs, schema version, primary selection и diagnostic paths — не физические units. `bindings[].stackCost` (saved wire: `usePolicy.stackCost`) — точно 0 или 1 экземпляр generated item/accepted use; contactDamage — независимый bool. `*IndicesDelete` — zero-based array position, не tick. Author array maxima/Repair bounds — schema transport limits; compiler-owned runtime maxEntityCount/maxChildDepth/maxEventSpawnsPerActivation — bounded graph/ledger, не model-authored размеры.
 
 <a id="visual"></a>
 ## Visual числа и schema transport

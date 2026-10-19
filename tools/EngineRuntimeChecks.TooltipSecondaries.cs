@@ -27,7 +27,7 @@ internal static partial class EngineRuntimeChecks
         return lines;
     }
 
-    public static void PlayedTooltipSpeedsAreDisplayOnlyPixelsPerSecond()
+    public static void PlayedTooltipSpeedsAreDisplayOnlyBlocksPerSecond()
     {
         WithForgePresentationLanguages(locale => WithPlayer((_, owner) =>
         {
@@ -37,16 +37,17 @@ internal static partial class EngineRuntimeChecks
             // AttachItem installs its own definition; mutate only the actual consumer.
             data = host.Data;
             string before = JsonSerializer.Serialize(data);
-            string unit = locale == "en-US" ? " px/s" : " пикс./с";
+            string unit = locale == "en-US" ? " blocks/s" : " блоков/с";
             var lines = TooltipSecondaryLines(host);
             string Line(string name) => lines.SingleOrDefault(x => x.Name == name)?.Text ?? "";
-            Equal(true, Line("InfiniJumpPrimary").Contains("120" + unit), "utility jump 2 engine units displays 120px/s");
+            Equal(true, Line("InfiniJumpPrimary").Contains((locale == "en-US" ? "7.5" : "7,5") + unit), "utility jump 2 engine units displays 7.5 blocks/s");
             Equal(before, JsonSerializer.Serialize(data), "utility tooltip conversion never changes authoritative values");
+            Equal(false, lines.Any(x => x.Text.Contains("px") || x.Text.Contains("пикс")), "player tooltip excludes pixel units");
             Equal(true, owner.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 90, JumpBoost = 2f }), "real utility buff admission");
             var snapshot = owner.CaptureGeneratedUtilityBuffPresentation();
             var statuses = GeneratedUtilityBuffStatusView.Build(snapshot, CultureInfo.GetCultureInfo(locale));
             var jump = statuses.Single(x => x.Field == GeneratedUtilityBuffField.JumpBoost);
-            Equal(true, jump.Tooltip.Contains("+120" + unit), "HUD aggregate and contributions use converted speed");
+            Equal(true, jump.Tooltip.Contains((locale == "en-US" ? "+7.5" : "+7,5") + unit), "HUD aggregate and contributions use converted speed");
             Equal(false, jump.Tooltip.Contains("world tick") || jump.Tooltip.Contains("пикс./тик"), "HUD exposes no engine speed unit");
             Equal(2f, owner.CaptureGeneratedUtilityBuffPresentation().Current.JumpBoost, "HUD conversion never changes canonical aggregate");
             data.Gameplay.GeneratedBuff = new GeneratedBuffSpec();
@@ -56,16 +57,25 @@ internal static partial class EngineRuntimeChecks
                 UsePolicy = new() { Action = new() { Kind = RuntimeBindingAction.EquipPassive, TargetId = data.RuntimeProgram.ItemEntityId } } } };
             before = JsonSerializer.Serialize(data);
             lines = TooltipSecondaryLines(host);
-            Equal(true, Line("InfiniEquipmentMaxRunSpeed").Contains("+30" + unit), "run contribution converts by 60");
-            Equal(true, Line("InfiniEquipmentJump").Contains("+75" + unit), "jump contribution converts by 60");
-            Equal(true, Line("InfiniEquipmentSprintFloor").Contains("360" + unit), "sprint floor converts by 60");
+            Equal(true, Line("InfiniEquipmentMaxRunSpeed").Contains((locale == "en-US" ? "+1.875" : "+1,875") + unit), "run contribution converts world ticks and world pixels");
+            // Item tooltips use the shared compact display format: conversion
+            // stays exact in the definition, while ordinary fractions show 3 places.
+            Equal(true, Line("InfiniEquipmentJump").Contains((locale == "en-US" ? "+4.688" : "+4,688") + unit), "jump contribution converts units before compact display rounding");
+            Equal(true, Line("InfiniEquipmentSprintFloor").Contains((locale == "en-US" ? "22.5" : "22,5") + unit), "sprint floor converts world ticks and world pixels");
             Equal(before, JsonSerializer.Serialize(data), "equipment tooltip conversion is display-only");
+            Equal(false, lines.Any(x => x.Text.Contains("px") || x.Text.Contains("пикс")), "equipment tooltip excludes pixel units");
             data.Accessory.Enabled = false;
             Equal(false, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniEquipment")), "disabled speed contributions absent");
             data.Armor.Enabled = true; data.Armor.MaxRunSpeed = -.125f; data.Armor.JumpSpeed = .125f;
             lines = TooltipSecondaryLines(host);
-            Equal(true, Line("InfiniEquipmentMaxRunSpeed").Contains((locale == "en-US" ? "-7.5" : "-7,5") + unit), "signed armor run contribution converted with UI decimal culture");
-            Equal(true, Line("InfiniEquipmentJump").Contains((locale == "en-US" ? "+7.5" : "+7,5") + unit), "armor jump contribution converted with UI decimal culture");
+            Equal(true, Line("InfiniEquipmentMaxRunSpeed").Contains((locale == "en-US" ? "-0.469" : "-0,469") + unit), "signed armor run contribution keeps sign and localized compact fraction");
+            Equal(true, Line("InfiniEquipmentJump").Contains((locale == "en-US" ? "+0.469" : "+0,469") + unit), "armor jump contribution keeps localized compact fraction");
+            data.Armor.MaxRunSpeed = -.0001f; data.Armor.JumpSpeed = .0001f;
+            before = JsonSerializer.Serialize(data);
+            lines = TooltipSecondaryLines(host);
+            Equal(true, Line("InfiniEquipmentMaxRunSpeed").Contains((locale == "en-US" ? "-0.000375" : "-0,000375") + unit), "tiny negative speed preserves significant digits instead of zero");
+            Equal(true, Line("InfiniEquipmentJump").Contains((locale == "en-US" ? "+0.000375" : "+0,000375") + unit), "tiny positive speed preserves significant digits instead of zero");
+            Equal(before, JsonSerializer.Serialize(data), "tiny signed display never rounds authoritative equipment values");
             data.RuntimeProgram.Bindings = Array.Empty<RuntimeBindingSpec>();
             Equal(false, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniEquipment")), "inactive equipment data is not advertised");
         }));
@@ -91,20 +101,25 @@ internal static partial class EngineRuntimeChecks
                 if (action.ActionCode == RuntimeEventActionCode.DamageArea)
                 {
                     Equal(true, text.Contains(locale == "en-US" ? "≈0.167 s" : "≈0,167 с"), "Stonegel exact ten-world-tick delay shown as rounded seconds");
-                    Equal(true, text.Contains(locale == "en-US" ? "radius 24 px" : "радиус 24 пикс."), "Stonegel exact center-distance coverage");
+                    Equal(true, text.Contains(locale == "en-US" ? "radius 1.5 blocks" : "радиус 1,5 блоков"), "Stonegel exact center-distance coverage");
                     Equal(true, text.Contains(locale == "en-US" ? "base damage 5" : "базовый урон 5"), "Stonegel authored source10 times .5, not live damageDone");
                     Equal(true, text.Contains(locale == "en-US" ? "directly hit target excluded" : "прямая цель попадания исключена"), "native contact target exclusion disclosed");
+                    int radius = action.RadiusPx; action.RadiusPx = 1;
+                    string subBlock = string.Join("\n", TooltipSecondaryLines(host).Where(x => x.Name.StartsWith("InfiniSecondary")).Select(x => x.Text));
+                    Equal(true, subBlock.Contains(locale == "en-US" ? "radius 0.063 blocks" : "радиус 0,063 блоков"), "sub-block radius uses compact localized rounding instead of integer truncation");
+                    Equal(1, action.RadiusPx, "rounded block display keeps exact authored pixel radius");
+                    action.RadiusPx = radius;
                 }
                 else
                 {
                     Equal(true, text.Contains(locale == "en-US" ? "up to 3" : "до 3"), "Ebongel real bounded child count");
                     Equal(true, text.Contains(locale == "en-US" ? "base damage 3 each" : "базовый урон 3 у каждого"), "literal authored child damage, not guaranteed DPS");
-                    Equal(true, text.Contains(locale == "en-US" ? "240 px/s" : "240 пикс./с"), "real child launch speed converted");
+                    Equal(true, text.Contains(locale == "en-US" ? "15 blocks/s" : "15 блоков/с"), "real child launch speed converted");
                     var speedChild = data.RuntimeProgram.TryGetEntity(action.EntityId)!;
                     int updates = speedChild.Collision.ExtraUpdates;
                     speedChild.Collision.ExtraUpdates = 2;
                     string faster = string.Join("\n", TooltipSecondaryLines(host).Where(x => x.Name.StartsWith("InfiniSecondary")).Select(x => x.Text));
-                    Equal(true, faster.Contains(locale == "en-US" ? "720 px/s" : "720 пикс./с"), "per-update launch speed includes extraUpdates in nominal seconds");
+                    Equal(true, faster.Contains(locale == "en-US" ? "45 blocks/s" : "45 блоков/с"), "per-update launch speed includes extraUpdates in nominal seconds");
                     speedChild.Collision.ExtraUpdates = updates;
                     Equal(true, text.Contains(locale == "en-US" ? "≈0.667 s" : "≈0,667 с"), "real child lifetime seconds");
                     Equal(true, text.Contains(locale == "en-US" ? "initially ignored" : "вначале игнорируется"), "actual target-relative initial contact exclusion shown without claiming permanent immunity");
@@ -141,7 +156,7 @@ internal static partial class EngineRuntimeChecks
                         DamageBasis = action.DamageBasis, KnockbackBasis = action.KnockbackBasis } };
                     child.Spawn.Aim = "none";
                     string still = string.Join("\n", TooltipSecondaryLines(host).Where(x => x.Name.StartsWith("InfiniSecondary")).Select(x => x.Text));
-                    Equal(false, still.Contains(locale == "en-US" ? "240 px/s" : "240 пикс./с"), "none aim cannot advertise inactive scalar launch speed");
+                    Equal(false, still.Contains(locale == "en-US" ? "15 blocks/s" : "15 блоков/с"), "none aim cannot advertise inactive scalar launch speed");
                     child.Spawn.Aim = aim; source.Events = new[] { action };
                     child.Events = new[] { new RuntimeEventActionSpec { Id = "child_periodic", Event = RuntimeEventKind.Periodic,
                         Action = "damage_area_on_event", ActionCode = RuntimeEventActionCode.DamageArea,

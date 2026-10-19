@@ -6,6 +6,7 @@ from typing import Any, Iterable, Mapping
 
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
+    target_updates_per_tick,
     CONTROLLER_OPCODE,
     MOVEMENT_OPCODE,
     ENTITY_KIND_REGISTRY,
@@ -406,9 +407,14 @@ def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = No
     ))
 
 
-def _valid_source_projection(spec: Any, source: Any, projected: Any) -> bool:
+def _source_updates(spec: ParamSpec, call: Mapping[str, Any], calls: list[Any]) -> int | None:
+    return target_updates_per_tick(calls, str(call.get("target") or "")) if spec.requires_update_context else None
+
+
+def _valid_source_projection(spec: Any, source: Any, projected: Any, *,
+                             call: Mapping[str, Any], calls: list[Any]) -> bool:
     try:
-        rows = spec.projected_fields(source, "parameter")
+        rows = spec.projected_fields(source, "parameter", updates_per_tick=_source_updates(spec, call, calls))
         return len(rows) == 1 and _same_receipt_value(rows[0].value, projected)
     except (ValueError, TypeError, OverflowError):
         return False
@@ -866,6 +872,7 @@ def audit_compiler_receipts(
     source_calls = source_calls if isinstance(source_calls, list) else []
     violations: list[dict[str, Any]] = []
     receipt_rows: list[Mapping[str, Any]] = []
+    predecessor_receipt_indices: set[int] = set()
     for receipt_index, receipt in enumerate(receipts):
         row_path = f"$.runtimeContract.finalWireReceipts[{receipt_index}]"
         malformed: list[str] = []
@@ -897,6 +904,16 @@ def audit_compiler_receipts(
                                "reason": "malformed compiler receipt row or field"}
                               for key in malformed)
             continue
+        # Saved receipts retain their literal bytes. A local audit view may
+        # resolve ONLY finite registry-declared predecessor source paths; a
+        # source-backed current Author never enters this admission lane.
+        if authored_document is None and (cap := CAPABILITY_REGISTRY.get(str(receipt.get("fn") or ""))) is not None:
+            match = re.fullmatch(r"(runtimeProgram\.calls\[\d+\]\.params\.)([A-Za-z][A-Za-z0-9_.]*)", receipt.get("authoredPath", ""))
+            if match and (canonical := cap.canonical_receipt_param_path(match.group(2))) is not None:
+                canonical_path = match.group(1) + canonical
+                if canonical_path != receipt.get("authoredPath"):
+                    predecessor_receipt_indices.add(len(receipt_rows))
+                receipt = {**receipt, "authoredPath": canonical_path}
         # Only structurally valid rows can participate in source coverage.
         receipt_rows.append(receipt)
     if literal_source is not None and final_document is not None:
@@ -910,7 +927,7 @@ def audit_compiler_receipts(
             violations.append({"reason": "current source lane receipt coverage differs from original source"})
     delivered_equipment: dict[str, int] = {}
     structured_groups: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
-    for receipt in receipt_rows:
+    for receipt_index, receipt in enumerate(receipt_rows):
         fn = str(receipt.get("fn") or "")
         lowerer_id = str(receipt.get("lowererId") or "")
         path = str(receipt.get("finalPath") or "")
@@ -1058,7 +1075,7 @@ def audit_compiler_receipts(
                     and source_call.get("id") == receipt.get("callId")
                     and isinstance(source_params, Mapping) and root_name in source_params):
                     try:
-                        expected_rows = spec.projected_fields(source_params[root_name], root_name)
+                        expected_rows = spec.projected_fields(source_params[root_name], root_name, updates_per_tick=_source_updates(spec, source_call, source_calls))
                     except (ValueError, TypeError, KeyError):
                         pass
                 matching = [row for row in expected_rows if row.authored_path == source_name
@@ -1112,10 +1129,16 @@ def audit_compiler_receipts(
             if match is not None and cap is not None and match.group(2) in cap.params and is_omission:
                 name = match.group(2)
                 spec = cap.params[name]
-                if (spec.required or spec.default is None
-                    or type(spec.default) is not type(spec.neutral)
-                    or spec.default != spec.neutral
-                    or not _same_receipt_value(receipt.get("value"), spec.to_wire(spec.default))):
+                # A source-free predecessor path authenticates its original
+                # typed omission value, not today's converted float default.
+                # Current/source-backed paths never receive that admission.
+                declared_omission = (not spec.required and spec.default is not None
+                    and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
+                predecessor_omission = receipt_index in predecessor_receipt_indices
+                omission_value = ((spec.predecessor_omission_wire_value if predecessor_omission
+                                   else spec.to_wire(spec.default)) if declared_omission else None)
+                if (not declared_omission or omission_value is None
+                    or not _same_receipt_value(receipt.get("value"), omission_value)):
                     violations.append({
                         "callId": str(receipt.get("callId") or ""), "fn": fn,
                         "authoredPath": authored_path, "finalPath": path,
@@ -1163,7 +1186,7 @@ def audit_compiler_receipts(
                         "authoredPath": authored_path, "finalPath": path,
                         "reason": "authored parameter absent from originating call",
                     })
-                elif not _valid_source_projection(cap.params[match.group(2)], source_params[match.group(2)], receipt.get("value")):
+                elif not _valid_source_projection(cap.params[match.group(2)], source_params[match.group(2)], receipt.get("value"), call=source_call, calls=source_calls):
                     violations.append({
                         "callId": str(receipt.get("callId") or ""),
                         "fn": fn,
@@ -1466,7 +1489,7 @@ def audit_compiler_receipts(
                 cap = CAPABILITY_REGISTRY.get(str(source_call.get("fn") or ""))
                 if cap is not None and name in cap.params and cap.params[name].structured:
                     try:
-                        projections = cap.params[name].projected_fields(source_params[name], name)
+                        projections = cap.params[name].projected_fields(source_params[name], name, updates_per_tick=_source_updates(cap.params[name], source_call, source_calls))
                     except (ValueError, TypeError, KeyError):
                         projections = ()
                     if not projections:
@@ -1518,8 +1541,9 @@ def audit_compiler_receipts(
         for presence_fn, presence_cap in CAPABILITY_REGISTRY.items():
             if not presence_cap.wire_presence_path:
                 continue
-            for index, _ in enumerate(entities if isinstance(entities, list) else []):
-                base = presence_cap.wire_presence_path.replace("[]", f"[{index}]", 1)
+            indices = (range(len(entities)) if isinstance(entities, list) else ()) if "[]" in presence_cap.wire_presence_path else (None,)
+            for index in indices:
+                base = presence_cap.wire_presence_path.replace("[]", f"[{index}]", 1) if index is not None else presence_cap.wire_presence_path
                 if _final_value(final_document, base) is _MISSING:
                     continue
                 matching = [row for row in receipt_rows if row.get("fn") == presence_fn
@@ -1576,13 +1600,20 @@ def audit_compiler_receipts(
                     continue
                 association = associations[0]
                 source_base = association["authoredPath"].rsplit(".", 1)[0]
-                for name in component_cap.params:
+                for name, spec in component_cap.params.items():
                     if name == "placementCallId":
                         continue
+                    # Additive optional leaves may be absent in accepted historical
+                    # wire. Fresh neutral materialization still needs its own receipt.
+                    if not spec.required and isinstance(placement[component], Mapping) and name not in placement[component]:
+                        continue
+                    statuses = {"delivered"}
+                    if name in declared_neutral_omissions(component_cap.name, {}):
+                        statuses.add("declared_neutral_omission")
                     matching = [r for r in receipt_rows if r.get("fn") == component_cap.name
                                 and r.get("callId") == association.get("callId")
                                 and r.get("authoredPath") == f"{source_base}.{name}"
-                                and r.get("finalPath") == f"{base}.{name}" and r.get("status") == "delivered"]
+                                and r.get("finalPath") == f"{base}.{name}" and r.get("status") in statuses]
                     if len(matching) != 1:
                         violations.append({"finalPath": f"{base}.{name}", "reason": "placed transform has no unique originating receipt"})
         # Wire-only auditing has no Author call list: require coverage of each

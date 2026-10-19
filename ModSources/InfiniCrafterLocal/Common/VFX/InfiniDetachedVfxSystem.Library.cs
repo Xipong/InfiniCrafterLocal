@@ -234,6 +234,16 @@ public sealed partial class InfiniDetachedVfxSystem
         lock(LibraryResourceGate){LibraryUnloaded=false;LibraryInitAttempted=false;LibraryResourceEpoch++;}
     }
 
+    private static void ApplyWorldSpaceLibraryEffect(InstancedParticleEffect effect)
+    {
+        // PL's shared one-shot flag can outlive an empty BeforeWater callback.
+        // Our before/after-projectile buffers always use the world camera, and
+        // must neither consume nor overwrite another renderer's pending context.
+        bool waterContext = effect.UseOffScreenRange;
+        try { effect.UseOffScreenRange = false; effect.Apply(); }
+        finally { effect.UseOffScreenRange = waterContext; }
+    }
+
     private sealed class LibraryBuffer : GeometryBuffer<VertexPositionTexture,ParticleInstance>,IDisposable
     {
         internal readonly ParticleInstance[] Instances;
@@ -271,7 +281,7 @@ public sealed partial class InfiniDetachedVfxSystem
                 InstanceBuffer.SetData(Instances,0,count,SetDataOptions.Discard);
                 device.BlendState=blend;device.DepthStencilState=DepthStencilState.None;device.RasterizerState=Main.Rasterizer;
                 device.SamplerStates[0]=SamplerState.PointClamp;device.SetVertexBuffers(Bindings);device.Indices=Indices;device.Textures[0]=texture;
-                ParticleManagerV3.InstancedParticleEffect.Apply();device.DrawInstancedPrimitives(PrimitiveType.TriangleList,0,0,4,0,2,count);
+                ApplyWorldSpaceLibraryEffect(ParticleManagerV3.InstancedParticleEffect);device.DrawInstancedPrimitives(PrimitiveType.TriangleList,0,0,4,0,2,count);
             }finally {
                 device.SetVertexBuffers(oldVertices);device.Indices=oldIndices;device.Textures[0]=oldTexture;device.SamplerStates[0]=oldSampler;
                 device.BlendState=oldBlend;device.DepthStencilState=oldDepth;device.RasterizerState=oldRaster;

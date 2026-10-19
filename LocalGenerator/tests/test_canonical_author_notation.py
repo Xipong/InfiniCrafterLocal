@@ -27,7 +27,7 @@ def _explicit_calls(source):
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn", ["configure_accessory", "set_projectile_lifetime", "move_straight"])
+@pytest.mark.parametrize("fn", ["configure_accessory", "set_projectile_lifetime", "move_straight", "collect_seeds_from_grass"])
 def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monkeypatch, mode, fn):
     import json
     from jsonschema import Draft202012Validator
@@ -36,7 +36,9 @@ def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monk
     from test_codex_subscription_contract import _encode_nullable_fixture
     # Heavy serialized observers cover each distinct branch, not the registry x format product.
     shapes = {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in CAPABILITY_REGISTRY.values()}
-    assert shapes == {(True, True), (False, True), (False, False)}
+    witnesses = [CAPABILITY_REGISTRY[name] for name in (
+        "configure_accessory", "set_projectile_lifetime", "move_straight", "collect_seeds_from_grass")]
+    assert shapes == {(cap.target_kinds == ("item_body",), bool(cap.params)) for cap in witnesses}
     monkeypatch.setattr("infini_local.pipelines.llm_transport.LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = build_initial_author_request({}, {}, "call-envelope", model_name="offline")
     packet = json.loads(user)
@@ -302,7 +304,7 @@ def test_source_provenance_rejects_equal_value_call_target_swap(explicit):
 
 def test_noarg_call_accepts_empty_params_and_exact_omission_without_old_author_admission():
     source = build_runtime_fixture("workbench_blade")
-    source["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v5"
+    source["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v6"
     noarg = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "move_straight")
     noarg.pop("params", None)
     before = deepcopy(source)
@@ -454,7 +456,7 @@ def test_actual_initial_format_and_scoped_repair_builders_share_current_grammar(
         request, user, _ = pipeline.build_initial_author_request({}, {}, "canonical-offline", model_name="offline")
         card = json.loads(user)["runtimeCapabilityContract"]["shape"] if "shape" in json.loads(user)["runtimeCapabilityContract"] else json.loads(user)["requiredJsonShape"]
         assert "usePolicy" not in json.dumps(card)
-        assert "authoring.v5" in json.dumps(card)
+        assert "authoring.v6" in json.dumps(card)
         broken = deepcopy(source)
         stats = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
         stats["params"]["damage"] = True

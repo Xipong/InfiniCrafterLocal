@@ -22,6 +22,16 @@ from test_codex_subscription_contract import _encode_nullable_fixture
 DELETE = object()
 
 
+def projected_params(fn, params, *, updates_per_tick=1):
+    """Expected native leaves from canonical metadata, never a source adapter."""
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
+    return {row.wire_path: row.value
+            for name, value in params.items()
+            for row in CAPABILITY_REGISTRY[fn].params[name].projected_fields(
+                value, name, updates_per_tick=updates_per_tick)}
+
+
 def edit_fields(row, edits):
     """Apply explicit case data; omission is never a synthesized default."""
     for path, value in edits.items():

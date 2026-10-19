@@ -255,7 +255,7 @@ def test_fn_literal_provenance_requires_value_source_and_complete_coverage(monke
 def test_policy_absence_preserves_buff_and_receipts_but_not_obsolete_audit_roster():
     document = build_capability_witness("apply_generated_buff_on_use")
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    call["params"].pop("exhaustionTicks", None)
+    call["params"].pop("exhaustionSeconds", None)
     wire = compiler.compile_runtime_program(document)
     assert "exhaustionTicks" not in wire["gameplay"]["generatedBuff"]
     assert not any(r.get("authoredPath", "").endswith(".exhaustionTicks") for r in wire["runtimeContract"]["finalWireReceipts"])
@@ -263,7 +263,7 @@ def test_policy_absence_preserves_buff_and_receipts_but_not_obsolete_audit_roste
     assert "gameplay.generatedBuff.exhaustionTicks" in lowerer["outputs"]
 
 
-@pytest.mark.parametrize("key,value", [("shotEntity", "shot"), ("intervalTicks", 60), ("sameTargetBias", 0.5)])
+@pytest.mark.parametrize("key,value", [("shotEntity", "shot"), ("intervalSeconds", 1), ("sameTargetBias", 0.5)])
 def test_obsolete_controller_bag_fields_are_refused_without_provenance(key, value):
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     wire = compiler.compile_runtime_program(build_capability_witness("target_and_fire"))
