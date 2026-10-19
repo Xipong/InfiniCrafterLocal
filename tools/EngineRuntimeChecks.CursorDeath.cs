@@ -75,9 +75,9 @@ internal static partial class EngineRuntimeChecks
             Equal(0, Render(dead: true, enabled: false), "dead generated cached preview must be absent");
             for (int frame = 0; frame < 3; frame++)
                 Equal(0, Render(dead: true, enabled: false, seed: false), "stationary dead cache remains suppressed without reseeding");
-            Equal(1, Render(dead: false, enabled: false, seed: false), "respawn resumes native cached preview without reseeding");
+            Equal(delivered ? 0 : 1, Render(dead: false, enabled: false, seed: false), "respawn preserves diagnostic cache but not stale generated proxy without reseeding");
             Equal(0, Render(dead: true, enabled: true), "death retires active generated preview too");
-            Equal(1, Render(dead: false, enabled: false), "live cached-preview behavior unchanged");
+            Equal(delivered ? 0 : 1, Render(dead: false, enabled: false), "live disabled preview keeps diagnostic ownership, not generated cross");
             Equal(1, Render(dead: false, enabled: true), "live selected preview unchanged");
             if (delivered) {
                 Equal(true, ReferenceEquals(item, draws.Single()), "missing image keeps exact selected instance instead of cross sample");
@@ -89,6 +89,8 @@ internal static partial class EngineRuntimeChecks
             data.Visual.SpritePath = System.IO.Path.Combine(Terraria.Program.SavePath, "cursor_death_fixture.png");
             cache.Textures.Add(data.Visual.SpritePath, Activator.CreateInstance(cache.Record, CpuTexture(32, 32), 0f, 0L)!);
             Equal(1, Render(dead: false, enabled: true), "ready live selected preview submitted");
+            if (delivered) Equal(0, Render(dead: false, enabled: false), "ready image cannot turn disabled cached proxy into instance authority");
+            Equal(1, Render(dead: false, enabled: true), "active ready preview resumes");
             Equal(true, ReferenceEquals(item, draws.Single()), "ready live preview retains exact generated instance");
             item.color = new Color(80, 100, 120);
             Equal(0, Render(dead: true, enabled: false), "dead tinted cache cannot reach static tint tail");
