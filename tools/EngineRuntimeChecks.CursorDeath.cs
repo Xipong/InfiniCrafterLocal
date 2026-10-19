@@ -18,7 +18,9 @@ internal static partial class EngineRuntimeChecks
 {
     // Execute the real native cursor owner, intercepting only its final ItemSlot
     // output. No GPU, game loop, user cache or saved item is involved.
-    private static void CursorDeathRetiresGeneratedPreviewOnly()
+    private static void CursorDeathRetiresGeneratedPreviewOnly() => CursorDeathRetiresGeneratedPreviewOnly(false);
+
+    private static void CursorDeathRetiresGeneratedPreviewOnly(bool delivered)
     {
         using var actors = new NativeActorState();
         using var cache = new BorrowedSpriteCache();
@@ -35,6 +37,11 @@ internal static partial class EngineRuntimeChecks
         GC.SuppressFinalize(main);
         var item = new Item(); item.SetDefaults(ItemID.WoodenSword);
         var data = GeneratedItemData.Placeholder();
+        if (delivered) {
+            data.SourceMode = "generated"; data.Visual.SpriteStatus = "generated";
+            data.Visual.SpritePath = System.IO.Path.Combine(Terraria.Program.SavePath, "cursor_missing.png");
+            data.Visual.RenderSizePx = 32; data.Visual.ForwardAngleDegrees = 0;
+        }
         AttachItem(new GeneratedItem(), item, data);
         var player = new Player { active = true, selectedItem = 0 };
         player.inventory[0] = item;
@@ -72,6 +79,13 @@ internal static partial class EngineRuntimeChecks
             Equal(0, Render(dead: true, enabled: true), "death retires active generated preview too");
             Equal(1, Render(dead: false, enabled: false), "live cached-preview behavior unchanged");
             Equal(1, Render(dead: false, enabled: true), "live selected preview unchanged");
+            if (delivered) {
+                Equal(true, ReferenceEquals(item, draws.Single()), "missing image keeps exact selected instance instead of cross sample");
+                Equal(false, item.ModItem!.PreDrawInInventory(null!, Vector2.Zero, new Rectangle(0,0,32,32), Color.White, Color.White, Vector2.Zero, 1), "actual selected inventory hook suppresses missing image proxy");
+                item.color = new Color(80,100,120);
+                Equal(1, Render(dead: false, enabled: true), "missing generated tint does not reach native cross tail");
+                item.color = Color.Transparent;
+            }
             data.Visual.SpritePath = System.IO.Path.Combine(Terraria.Program.SavePath, "cursor_death_fixture.png");
             cache.Textures.Add(data.Visual.SpritePath, Activator.CreateInstance(cache.Record, CpuTexture(32, 32), 0f, 0L)!);
             Equal(1, Render(dead: false, enabled: true), "ready live selected preview submitted");
