@@ -65,7 +65,10 @@ def test_mana_tooltip_has_visible_percentage_units(locale):
     assert match is not None
     template = match.group(1)
     assert "{1}%" in template
-    assert "+5%" in template.format("Equipped", "+5")
+    assert "-5%" in template.format("Equipped", "-5")
+    assert "+5%" not in template.format("Equipped", "-5")
+    equipment = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.Tooltips.Equipment.cs").read_text(encoding="utf-8")
+    assert 'if (manaReduction > 0f) Percent("ManaCost", "EquipmentManaCost", -manaReduction);' in equipment
     assert "native minimum" not in template and "минимума движка" not in template
     assert "PlacementUnsupported:" in source
 
