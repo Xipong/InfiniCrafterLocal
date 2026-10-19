@@ -168,6 +168,7 @@ internal static partial class EngineRuntimeChecks
 
     private static void PlacedVfxContinuousBurstBudgets()
     {
+        PlacedVfxRegistrationAndViewportRegressions();
         WithPlacedLedger((player,ledger)=>WithLighting((config,_)=>{
             ulong tick=Terraria.Main.GameUpdateCount;var system=new InfiniDetachedVfxSystem();
             try {
@@ -192,6 +193,95 @@ internal static partial class EngineRuntimeChecks
                     }
                 }
             } finally {system.OnWorldUnload();MaterialClock(tick);}
+        }));
+    }
+
+    // Only the source boundary is instrumented. Admission, deduplication,
+    // cadence, source replacement and actual emission queues are production code.
+    private sealed class CountingPlacedVfxSource(object generation,Vector2 position) : VfxSourceBinding
+    {
+        internal int Checks;
+        internal bool Live=true;
+        internal override object Generation=>generation;
+        internal override bool IsLive { get { Checks++;return Live; } }
+        internal override bool TryFrame(string anchor,out VfxSourceFrame frame)
+        {
+            frame=new(position,Vector2.UnitX,Vector2.Zero) {SourceCenter=position};
+            return anchor=="self"&&IsLive;
+        }
+    }
+
+    private static void PlacedVfxRegistrationAndViewportRegressions()
+    {
+        WithPlacedLedger((_,ledger)=>WithLighting((config,_)=>{
+            var system=new InfiniDetachedVfxSystem();ulong tick=Terraria.Main.GameUpdateCount;
+            Vector2 camera=Terraria.Main.screenPosition;
+            int width=Terraria.Main.screenWidth,height=Terraria.Main.screenHeight;
+            var matrix=Terraria.Main.GameViewMatrix;Vector2 zoom=matrix?.Zoom??Vector2.One;
+            bool culling=config.EnableScreenCulling;
+            try {
+                system.OnWorldUnload();config.ParticleSpawnMultiplier=1;config.EnableScreenCulling=true;
+                Terraria.Main.screenPosition=new Vector2(500,500);Terraria.Main.screenWidth=320;Terraria.Main.screenHeight=240;
+                if(matrix is not null)matrix.Zoom=Vector2.One;
+                var data=ParseMaterialElement(PlacedVfxWire());
+                data.VfxManifest.Slots[0].RepeatEvery=1;
+                string before=data.ToNetworkJson();
+                int Registrations()=>(int)typeof(InfiniDetachedVfxSystem).GetField("PeriodicElements",PersistenceStatic)!
+                    .GetValue(null)!.GetType().GetProperty("Count")!.GetValue(
+                        typeof(InfiniDetachedVfxSystem).GetField("PeriodicElements",PersistenceStatic)!.GetValue(null))!;
+                void Register(CountingPlacedVfxSource source)=>InfiniDetachedVfxSystem.RegisterPeriodicElements(
+                    data,data.RuntimeProgram.ItemEntityId,"review-source",source,item:true,placementBindingId:"place");
+                void Update(ulong at){MaterialClock(at);system.PostUpdateEverything();}
+
+                for(int i=0;i<600;i++)Register(new(new object(),new Vector2(100000,100000)));
+                Equal(0,Registrations(),"distant sources cannot occupy periodic registration capacity");
+                var nearby=new CountingPlacedVfxSource(new object(),new Vector2(648,648));Register(nearby);
+                Equal(1,Registrations(),"one nearby source admitted after 600 distant ones");
+                Update(tick+1);Equal(1,OwnedMaterialQueue().Count,"nearby source reaches actual emission queue");
+                Terraria.Main.screenPosition=new Vector2(100000,100000);Update(tick+2);
+                Equal(0,Registrations(),"camera departure frees registration, not the material claim");
+                Equal(true,nearby.Live,"viewport culling does not retire source generation");
+                Equal(1,OwnedMaterialQueue().Count,"existing bounded emission is not killed by camera departure");
+                Terraria.Main.screenPosition=new Vector2(500,500);Register(nearby);Update(tick+3);
+                Equal(2,OwnedMaterialQueue().Count,"reentry resumes world cadence with no missed-tick replay");
+
+                system.OnWorldUnload();
+                var sources=Enumerable.Range(0,96).Select(_=>new CountingPlacedVfxSource(new object(),new Vector2(648,648))).ToArray();
+                foreach(var source in sources)Register(source);
+                foreach(var source in sources)source.Checks=0;
+                for(int pass=0;pass<8;pass++)foreach(var source in sources)Register(source);
+                Equal(96,Registrations(),"repeated source visits are deduplicated");
+                Equal(true,sources.Sum(source=>source.Checks)<=96*8*4,"linear liveness visits, not a full sweep per source");
+
+                system.OnWorldUnload();object sameGeneration=new();
+                var retired=new CountingPlacedVfxSource(sameGeneration,new Vector2(648,648));Register(retired);
+                retired.Live=false;
+                var replacement=new CountingPlacedVfxSource(sameGeneration,new Vector2(648,648));Register(replacement);
+                Equal(1,Registrations(),"same-tick slot rebinding replaces only the stale same-generation registration");
+                Update(tick+4);
+                object emitted=OwnedMaterialQueue()[0]!;
+                Equal(true,ReferenceEquals(replacement,emitted.GetType().GetField("Binding",PersistenceInstance)!.GetValue(emitted)),
+                    "real emission binds the replacement, never stale pose");
+                system.OnWorldUnload();config.EnableScreenCulling=false;
+                Register(new(new object(),new Vector2(100000,100000)));
+                Equal(1,Registrations(),"explicit client culling opt-out remains authoritative");
+                Equal(before,data.ToNetworkJson(),"scheduling does not rewrite authored data or transport identity");
+                Equal(0,PlacedLedgerGroups(ledger).Count,"scheduler probe acquires no material ownership");
+
+                var intersects=typeof(InfiniDetachedVfxSystem).GetMethod("PlacedVfxIntersectsViewport",PersistenceStatic)
+                    ??throw new InvalidOperationException("placed VFX needs conservative viewport admission");
+                bool Visible(Vector2 point,double radius,int w,int h,Vector2 z)=>(bool)intersects.Invoke(null,
+                    new object[]{point,radius,new Vector2(500,500),w,h,z})!;
+                Equal(false,Visible(new Vector2(100000,100000),0,320,240,Vector2.One),"distant static emitter is outside view");
+                Equal(true,Visible(new Vector2(100000,100000),200000,320,240,Vector2.One),"authored travel radius can reach the view");
+                Equal(true,Visible(new Vector2(100000,100000),0,0,0,Vector2.One),"unknown headless viewport is not evidence for culling");
+                Equal(false,Visible(new Vector2(150,620),0,320,240,Vector2.One),"source outside unzoomed view plus margin");
+                Equal(true,Visible(new Vector2(150,620),0,320,240,new Vector2(.5f)),"zoom-out expands the world viewport");
+            } finally {
+                system.OnWorldUnload();MaterialClock(tick);config.EnableScreenCulling=culling;
+                Terraria.Main.screenPosition=camera;Terraria.Main.screenWidth=width;Terraria.Main.screenHeight=height;
+                if(matrix is not null)matrix.Zoom=zoom;
+            }
         }));
     }
 
