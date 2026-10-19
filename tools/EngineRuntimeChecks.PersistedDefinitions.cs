@@ -104,191 +104,117 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
-    private static void PersistedV15NonemptyEffectsKeepColorsAndPayloads()
+    private static void PersistedV15ExecutableSlotsRefuseWithoutReconstruction()
     {
-        var source = NamedItemEffectsFixture(); source.SourceMode = "test_fixture"; source.RuntimeProgram.Entities[0].Visual.ImpactCanvasSize = 32;
-        var old = PersistedV15Fixture(source); string entity = source.RuntimeProgram.ItemEntityId;
-        old["vfxManifest"]!["slots"] = new JsonArray(PersistedV15Slot("soundCue", entity, "on_use"), PersistedV15Slot("impactRing", entity, "on_use"), PersistedV15Slot("impactSprite", entity, "on_use"), PersistedV15Slot("libraryParticle", entity, "on_use"));
-        var loaded = ReadPersistedDefinition(old.ToJsonString()) ?? throw new InvalidOperationException("saved nonempty v15 presentation refused");
-        Equal(4, loaded.VfxManifest.Slots.Length, "no effect is silently dropped");
-        var rows = JsonNode.Parse(loaded.ToLocalCacheJson())!["vfxManifest"]!["slots"]!.AsArray();
-        for (int i = 0; i < rows.Count; i++) {
-            var before = old["vfxManifest"]!["slots"]![i]!; var after = rows[i]!;
-            foreach (string field in new[] { "id", "entityId", "event", "anchor", "slotSeed", "phaseOffset" }) Equal(before[field]!.ToJsonString(), after[field]!.ToJsonString(), "exact effect identity " + field);
+        // A saved v15 effect is not a request to re-run old semantic color
+        // selection, even when its historical tokens happen to be familiar.
+        foreach (string renderer in new[] {
+            "soundCue", "impactRing", "impactSprite", "libraryParticle",
+            "projectileAfterimage", "actorAfterimage", "spriteElement", "texturedPath"
+        }) {
+            var saved = PersistedV15Fixture();
+            var slot = PersistedV15Slot(renderer, "unavailable_item", "on_use");
+            if (renderer == "impactRing") slot["color"] = RgbWire(255, 155, 70);
+            saved["vfxManifest"]!["slots"] = new JsonArray(slot);
+            string original = saved.ToJsonString();
+            Equal(true, ReadPersistedDefinition(original) is null,
+                "v15 executable " + renderer + " cannot be historically reinterpreted");
+            Equal(true, ContractJsonDiagnostics.TryGet("GeneratedItemData.FromLocalCacheJson", out var error)
+                && error?.Path == "$.vfxManifest.slots",
+                "nonempty v15 refuses at its executable slot boundary");
+            Equal(original, saved.ToJsonString(), "rejecting v15 does not mutate saved bytes");
         }
-        Equal(old["vfxManifest"]!["slots"]![0]!["sound"]!.ToJsonString(), rows[0]!["sound"]!.ToJsonString(), "exact sound playback choices");
-        Equal("Item1", (string)rows[0]!["soundId"]!, "exact sound selector");
-        foreach (int i in new[] { 1, 2 }) Equal(RgbWire(255,155,70).ToJsonString(), rows[i]!["color"]!.ToJsonString(), "visual.effectColor wins over motif ice");
-        Equal(RgbWire(255,205,70).ToJsonString(), rows[3]!["particle"]!["colorStart"]!.ToJsonString(), "independent named gold ramp start");
-        Equal(RgbWire(255,155,70).ToJsonString(), rows[3]!["particle"]!["colorEnd"]!.ToJsonString(), "effect ramp end uses saved effectColor");
-        foreach (string field in old["vfxManifest"]!["slots"]![3]!["particle"]!.AsObject().Select(p => p.Key).Where(k => k is not ("colorStart" or "colorEnd")))
-            Equal(old["vfxManifest"]!["slots"]![3]!["particle"]![field]!.ToJsonString(), rows[3]!["particle"]![field]!.ToJsonString(), "literal particle payload " + field);
-        Equal(10, (int)rows[3]!["startTick"]!, "delayed library timing preserved");
-        Equal(true, GeneratedItemData.FromJson(loaded.ToNetworkJson()) is not null, "projected definition uses existing strict network DTO");
     }
 
-    private static void PersistedV15NamedColorSemanticsAreFrozen()
+    private static void PersistedV15EmptyMotifAndEffectColorAreOpaque()
     {
-        var historical = new (string Token, int R, int G, int B)[] {
-            ("white",235,235,235),("gray",170,170,180),("silver",192,192,192),("brown",150,100,65),
-            ("tan",225,190,120),("red",255,85,85),("orange",255,155,70),("yellow",255,235,90),
-            ("gold",255,205,70),("green",110,255,145),("cyan",90,235,255),("blue",120,190,255),
-            ("purple",190,110,255),("pink",255,145,215),("black",25,25,30)
+        // Even malformed old metadata must be irrelevant when no VFX slots
+        // execute. Nobody should ever consult motif.element at load time.
+        foreach (JsonNode? motif in new JsonNode?[] {
+            null, JsonValue.Create("not even an object"), JsonValue.Create(123),
+            new JsonArray("arbitrary", "prose"),
+            new JsonObject { ["element"] = "fire", ["futureUnknown"] = new JsonArray(1, 2) }
+        }) {
+            var saved = PersistedV15Fixture();
+            saved["vfxManifest"]!["motif"] = motif?.DeepClone();
+            saved["visual"]!["effectColor"] = new JsonObject { ["notAColor"] = true };
+            saved["vfxManifest"]!["debug"] = new JsonObject { ["arbitrary"] = new JsonArray("debug") };
+            string input = saved.ToJsonString();
+            var restored = ReadPersistedDefinition(input)
+                ?? throw new InvalidOperationException("empty saved VFX unexpectedly depends on motif or effectColor");
+            var serialized = JsonNode.Parse(restored.ToLocalCacheJson())!;
+            Equal(0, restored.VfxManifest.Slots.Length, "empty VFX remains empty");
+            Equal(false, serialized["vfxManifest"]!.AsObject().ContainsKey("motif"), "motif not persisted as authority");
+            Equal(false, serialized["visual"]!.AsObject().ContainsKey("effectColor"), "retired effectColor never resolved");
+            Equal(true, restored.LocalCacheReadReceipt.Any(x => x.Contains("motif")), "opaque omission documented");
+            Equal(input, saved.ToJsonString(), "no rewrite of original historical cache");
+        }
+    }
+
+    private static void PersistedV16BakedColorsStayAuthoritative()
+    {
+        var source = ParseMaterialElement(MaterialElementWire());
+        string canonical = source.ToLocalCacheJson();
+        var saved = JsonNode.Parse(canonical)!.AsObject();
+        // This is NOT an invitation to recalculate already-baked RGB.
+        saved["vfxManifest"]!["motif"] = new JsonObject {
+            ["element"] = "fire", ["futureLegacyAdvisory"] = new JsonArray("no interpreter")
         };
-        foreach (var color in historical) {
-            var old = PersistedV15Fixture(); old["visual"]!["effectColor"] = color.Token;
-            old["vfxManifest"]!["slots"] = new JsonArray(PersistedV15Slot("libraryParticle", "unavailable_item", "on_use"));
-            var particle = old["vfxManifest"]!["slots"]![0]!["particle"]!;
-            particle["colorStart"] = "white"; particle["colorEnd"] = "effect";
-            var loaded = ReadPersistedDefinition(old.ToJsonString()) ?? throw new InvalidOperationException("saved color refused: " + color.Token);
-            var row = JsonNode.Parse(loaded.ToLocalCacheJson())!["vfxManifest"]!["slots"]![0]!["particle"]!;
-            Equal(RgbWire(255,255,255).ToJsonString(), row["colorStart"]!.ToJsonString(), "nested white historically means full white, not effect white");
-            Equal(RgbWire(color.R,color.G,color.B).ToJsonString(), row["colorEnd"]!.ToJsonString(), "frozen named effect RGB " + color.Token);
-        }
-    }
-
-    private static void PersistedV15ColorSourcesAndMaterialProfilesStayLocal()
-    {
-        var source = NamedItemEffectsFixture(); source.SourceMode = "test_fixture";
-        source.RuntimeProgram.Entities[0].Visual.ImpactCanvasSize = 32;
-        var old = PersistedV15Fixture(source); old["visual"]!.AsObject().Remove("effectColor");
-        old["visual"]!["palette"] = new JsonArray("red");
-        old["vfxManifest"]!["slots"] = new JsonArray(PersistedV15Slot("impactRing", "unavailable_item", "on_use"), PersistedV15Slot("impactSprite", "unavailable_item", "on_use"));
-        var loaded = ReadPersistedDefinition(old.ToJsonString()) ?? throw new InvalidOperationException("saved item/motif color sources refused");
-        var slots = JsonNode.Parse(loaded.ToLocalCacheJson())!["vfxManifest"]!["slots"]!;
-        Equal(RgbWire(255,85,85).ToJsonString(), slots[0]!["color"]!.ToJsonString(), "historical item primitive takes saved palette token, not motif");
-        Equal(RgbWire(0,255,255).ToJsonString(), slots[1]!["color"]!.ToJsonString(), "historical dedicated impact takes saved motif ice, not item palette");
-
-        var materialSource = ParseMaterialElement(MaterialElementWire());
-        var material = PersistedV15Fixture(materialSource);
-        var row = PersistedV15Slot("spriteElement", "unavailable_item", "periodic");
-        row["element"] = material["vfxManifest"]!["slots"]![0]!["element"]!.DeepClone();
-        row["startTick"] = 0; row["repeatEvery"] = 1; row["scale"] = 1; row["density"] = 0; row["visualCost"] = 0;
-        var profile = row["element"]!["colorProfile"]!; profile["start"] = "white"; profile["middle"] = "effect"; profile["end"] = "gold";
-        material["vfxManifest"]!["slots"] = new JsonArray(row);
-        var materialLoaded = ReadPersistedDefinition(material.ToJsonString()) ?? throw new InvalidOperationException("saved independent material color profile refused");
-        var current = JsonNode.Parse(materialLoaded.ToLocalCacheJson())!["vfxManifest"]!;
-        Equal(material["vfxManifest"]!["assets"]!.ToJsonString(), current["assets"]!.ToJsonString(), "authored material asset identity/prompt retained");
-        var result = current["slots"]![0]!["element"]!["colorProfile"]!;
-        Equal(RgbWire(255,255,255).ToJsonString(), result["start"]!.ToJsonString(), "material white stays full white");
-        Equal(RgbWire(255,155,70).ToJsonString(), result["middle"]!.ToJsonString(), "material effect uses saved explicit effectColor");
-        Equal(RgbWire(255,205,70).ToJsonString(), result["end"]!.ToJsonString(), "material independent gold end retained");
-        foreach (string field in row["element"]!.AsObject().Select(p => p.Key).Where(k => k != "colorProfile"))
-            Equal(row["element"]![field]!.ToJsonString(), current["slots"]![0]!["element"]![field]!.ToJsonString(), "material payload retained: " + field);
-
-        foreach (var selector in new[] { ("dust","GemDiamond"), ("pl:glow","TintableDustLighted"), ("pl:shard","Glass"), ("pl:smoke","Smoke"), ("pl:spark","Electric"), ("none","none") }) {
-            var saved = PersistedV15Fixture(); var ring = PersistedV15Slot("impactRing", "unavailable_item", "on_use");
-            ring["particleSystemId"] = selector.Item1; saved["vfxManifest"]!["slots"] = new JsonArray(ring);
-            var accepted = ReadPersistedDefinition(saved.ToJsonString()) ?? throw new InvalidOperationException("historical dust identity refused: " + selector.Item1);
-            Equal(selector.Item2, accepted.VfxManifest.Slots[0].ParticleSystemId!, "exact historical native DustID lowering");
-        }
-        foreach (string alias in new[] { "projectileAfterimage", "actorAfterimage" }) {
-            var spriteSource = SentryTargetingFixture(); spriteSource.SourceMode = "test_fixture";
-            spriteSource.Visual.RenderSizePx = 32; spriteSource.Visual.ForwardAngleDegrees = 0;
-            spriteSource.RuntimeProgram.TryGetEntity("root")!.Visual.AssetMode = "reuse_item_icon";
-            spriteSource.RuntimeProgram.TryGetEntity("root")!.Damage.Enabled = true;
-            spriteSource.RuntimeProgram.TryGetEntity("root")!.Damage.Damage = 8;
-            var saved = PersistedV15Fixture(spriteSource); var sprite = PersistedV15Slot(alias, "root", "on_hit");
-            sprite["textureRole"] = "entity"; saved["vfxManifest"]!["slots"] = new JsonArray(sprite);
-            var accepted = ReadPersistedDefinition(saved.ToJsonString()) ?? throw new InvalidOperationException("lossless historical sprite alias refused: " + alias);
-            Equal("spriteStampTrail", accepted.VfxManifest.Slots[0].RendererKind, "identical historical renderer branch lowers to existing primitive");
-            Equal("entity", accepted.VfxManifest.Slots[0].TextureRole!, "sprite alias keeps exact asset owner");
-            Equal(true, GeneratedItemData.FromJson(saved.ToJsonString()) is null, "historical alias stays out of fresh/network grammar");
-        }
-        foreach (string role in new[] { "projectile", "field" })
-        foreach (string renderer in new[] { "spriteStampTrail", "projectileAfterimage" })
-        foreach (string assetMode in new[] { "reuse_item_icon", "baked_sprite" }) {
-            var spriteSource = RootSpawnFixture(0, 1); spriteSource.SourceMode = "offline_contract_fixture";
-            spriteSource.Visual.SpritePath = "saved_item.png"; spriteSource.Visual.SpriteStatus = "generated";
-            spriteSource.Visual.RenderSizePx = 32; spriteSource.Visual.ForwardAngleDegrees = 0;
-            var entity = spriteSource.RuntimeProgram.TryGetEntity("root")!;
-            entity.Kind = role == "field" ? RuntimeEntityKind.Field : RuntimeEntityKind.FreeProjectile;
-            entity.VisualRole = entity.Visual.Role = role; entity.Visual.AssetMode = assetMode;
-            entity.Damage.Enabled = true; entity.Damage.Damage = 8;
-            entity.Movement = new RuntimeMovementSpec { Name = "move_straight", Code = 0 };
-            if (assetMode == "baked_sprite") {
-                entity.Visual.SpritePath = "saved_entity.png"; entity.Visual.SpriteStatus = "generated";
-                entity.Visual.RenderSizePx = 48; entity.Visual.ForwardAngleDegrees = 90;
-            }
-            var saved = PersistedV15Fixture(spriteSource); var sprite = PersistedV15Slot(renderer, "root", "on_hit");
-            sprite["textureRole"] = role; saved["vfxManifest"]!["slots"] = new JsonArray(sprite);
-            string before = saved.ToJsonString();
-            var accepted = ReadPersistedDefinition(before) ?? throw new InvalidOperationException("lossless historical texture role refused: " + role + "/" + renderer + "/" + assetMode);
-            Equal("entity", accepted.VfxManifest.Slots[0].TextureRole!, "exact saved role lowers to canonical entity selector");
-            var selected = SpritePresentation.Resolve(accepted, "root", accepted.VfxManifest.Slots[0].TextureRole!);
-            Equal(assetMode == "reuse_item_icon" ? "saved_item.png" : "saved_entity.png", selected.Path, "alias keeps exact selected PNG producer");
-            Equal(assetMode == "reuse_item_icon" ? 32 : 48, selected.RenderSizePx!.Value, "alias keeps selected producer size");
-            Equal(assetMode == "reuse_item_icon" ? 0f : 90f, selected.ForwardAngleDegrees!.Value, "alias keeps selected producer axis");
-            Equal(true, accepted.LocalCacheReadReceipt.Any(s => s == "persisted:v15:texture-role-alias $.vfxManifest.slots[0].textureRole " + role + " -> entity"), "texture role lowering has exact receipt");
-            Equal(before, saved.ToJsonString(), "saved alias input remains unchanged");
-            var currentAlias = JsonNode.Parse(accepted.ToLocalCacheJson())!;
-            currentAlias["vfxManifest"]!["slots"]![0]!["textureRole"] = role;
-            Equal(true, ReadPersistedDefinition(currentAlias.ToJsonString()) is null, "texture alias is v15-only, not current persisted grammar");
-            Equal(true, GeneratedItemData.FromJson(currentAlias.ToJsonString()) is null, "texture alias stays out of fresh/network grammar");
-            foreach (string wrongRole in new[] { role == "field" ? "projectile" : "field", "invented_role" }) {
-                var bad = saved.DeepClone(); bad["vfxManifest"]!["slots"]![0]!["textureRole"] = wrongRole;
-                Equal(true, ReadPersistedDefinition(bad.ToJsonString()) is null, "mismatched/unknown saved role cannot select another PNG");
-                if (wrongRole != "invented_role")
-                    Equal(true, ContractJsonDiagnostics.TryGet("GeneratedItemData.FromLocalCacheJson", out var roleError) && roleError?.Path == "$.vfxManifest.slots[0].textureRole", "role mismatch has exact boundary diagnostic");
-            }
-            var noProducer = saved.DeepClone();
-            var bound = noProducer["runtimeProgram"]!["entities"]!.AsArray().Single(e => (string?)e!["id"] == "root")!;
-            bound["visual"]!["assetMode"] = "no_asset";
-            Equal(true, ReadPersistedDefinition(noProducer.ToJsonString()) is null, "matching role without exact PNG producer still refuses");
-            Equal(true, ContractJsonDiagnostics.TryGet("GeneratedItemData.FromLocalCacheJson", out var producerError) && producerError?.Path == "$.vfxManifest.slots[0].textureRole", "missing producer has exact alias diagnostic");
-            var noPng = saved.DeepClone();
-            var pngOwner = assetMode == "reuse_item_icon" ? noPng["visual"]! : noPng["runtimeProgram"]!["entities"]!.AsArray().Single(e => (string?)e!["id"] == "root")!["visual"]!;
-            pngOwner["spritePath"] = "";
-            Equal(true, ReadPersistedDefinition(noPng.ToJsonString()) is null, "lowering never bypasses selected producer PNG readiness");
-        }
-        var dynamicDraw = PersistedV15Fixture(SentryTargetingFixture()); dynamicDraw["visual"]!.AsObject().Remove("effectColor");
-        var dynamicRoot = dynamicDraw["runtimeProgram"]!["entities"]!.AsArray().Single(e => (string?)e!["id"] == "root")!;
-        dynamicRoot["damage"]!["enabled"] = true; dynamicRoot["damage"]!["damage"] = 8;
-        dynamicDraw["vfxManifest"]!["motif"]!["element"] = "unrecognized saved prose";
-        dynamicDraw["vfxManifest"]!["slots"] = new JsonArray(PersistedV15Slot("impactRing", "root", "on_hit"));
-        Equal(true, ReadPersistedDefinition(dynamicDraw.ToJsonString()) is not null, "historical nonperiodic projectile white is deterministic");
-        dynamicDraw["vfxManifest"]!["slots"]![0]!["event"] = "periodic";
-        Equal(true, ReadPersistedDefinition(dynamicDraw.ToJsonString()) is null, "caller-light-dependent live color cannot become invented constant");
-        Equal(true, ContractJsonDiagnostics.TryGet("GeneratedItemData.FromLocalCacheJson", out var error) && error?.Path == "$.vfxManifest.slots[0].color", "unrepresentable live color refusal has exact path");
-        dynamicDraw["visual"]!["effectColor"] = "cyan";
-        Equal(true, ReadPersistedDefinition(dynamicDraw.ToJsonString()) is not null, "explicit saved color removes live ambiguity");
+        saved["visual"]!["effectColor"] = "not-a-supported-color-token";
+        string savedBytes = saved.ToJsonString();
+        var restored = ReadPersistedDefinition(savedBytes)
+            ?? throw new InvalidOperationException("current baked-RGB VFX refused because of dead metadata");
+        var actual = JsonNode.Parse(restored.ToLocalCacheJson())!;
+        var expected = JsonNode.Parse(canonical)!;
+        foreach (string field in new[] { "slots", "assets", "budget" })
+            Equal(expected["vfxManifest"]![field]!.ToJsonString(), actual["vfxManifest"]![field]!.ToJsonString(),
+                "persisted current VFX " + field + " stays byte-semantically unchanged");
+        Equal(expected["runtimeProgram"]!.ToJsonString(), actual["runtimeProgram"]!.ToJsonString(),
+            "loading inert presentation metadata cannot alter executable runtime");
+        Equal(true, GeneratedItemData.FromJson(savedBytes) is null, "fresh/network grammar remains strict");
+        Equal(savedBytes, saved.ToJsonString(), "local normalization never edits original cache");
     }
 
     private static void PersistedV5UnknownExecutableFieldsStillRefuse()
     {
+        var source = JsonNode.Parse(GeneratedItemData.Placeholder().ToLocalCacheJson())!.AsObject();
         Action<JsonObject>[] corruptions = {
             w => w["futureGameplay"] = new JsonObject(),
             w => w["runtimeProgram"]!["futureMechanic"] = 1,
-            w => { w["runtimeProgram"]!["entities"]![0]!["movement"]!["name"] = "unsupported_move"; w["runtimeProgram"]!["entities"]![0]!["movement"]!["code"] = 987654; },
+            w => { w["runtimeProgram"]!["entities"]![0]!["movement"]!["name"] = "unsupported_move";
+                   w["runtimeProgram"]!["entities"]![0]!["movement"]!["code"] = 987654; },
             w => w["gameplay"]!["futureDamage"] = 1,
             w => w["visual"]!["futureColor"] = "red",
             w => w["vfxManifest"]!["futureRenderer"] = 1,
             w => w["vfxManifest"]!["budget"]!["futureBudget"] = 1,
-            w => w["vfxManifest"]!["motif"]!["futureMotion"] = 1,
-            w => w["vfxManifest"]!["slots"]![0]!["futureBehavior"] = 1,
-            w => w["vfxManifest"]!["slots"]![0]!["rendererKind"] = "unsupportedRealPrimitive",
-            w => w["vfxManifest"]!["slots"]![0]!["sound"]!.AsObject().Remove("volume"),
             w => w["schemaVersion"] = 4,
             w => w["runtimeApiVersion"] = "infini.runtime-program.v4",
             w => w["vfxManifest"]!["schema"] = "infini.vfx.runtime-events.v999"
         };
         foreach (var mutate in corruptions) {
-            var bad = PersistedV15Fixture(); bad["vfxManifest"]!["slots"] = new JsonArray(PersistedV15Slot("soundCue", "unavailable_item", "on_use")); mutate(bad);
-            Equal(true, ReadPersistedDefinition(bad.ToJsonString()) is null, "persisted projection is not a general unknown-field skip");
-            Equal(true, ContractJsonDiagnostics.TryGet("GeneratedItemData.FromLocalCacheJson", out var error) && !string.IsNullOrWhiteSpace(error?.Message), "failure keeps precise persisted-boundary diagnostic");
+            var bad = JsonNode.Parse(source.ToJsonString())!.AsObject();
+            mutate(bad);
+            Equal(true, ReadPersistedDefinition(bad.ToJsonString()) is null,
+                "unknown actual executable/contract fields fail closed");
+            Equal(true, ContractJsonDiagnostics.TryGet("GeneratedItemData.FromLocalCacheJson", out var error)
+                && !string.IsNullOrWhiteSpace(error?.Message), "refusal has persisted-boundary diagnostic");
         }
+        var unknownSlot = MaterialElementWire();
+        unknownSlot["vfxManifest"]!["slots"]![0]!["futureBehavior"] = 1;
+        Equal(true, ReadPersistedDefinition(unknownSlot.ToJsonString()) is null,
+            "current executable renderer fields remain strict");
+        var historicalColor = MaterialElementWire();
+        historicalColor["vfxManifest"]!["slots"]![0]!["element"]!["colorProfile"]!["start"] = "effect";
+        Equal(true, ReadPersistedDefinition(historicalColor.ToJsonString()) is null,
+            "named semantic color tokens never enter current color profiles");
         var unsupportedRuntime = PersistedV15Fixture(SentryTargetingFixture());
         unsupportedRuntime["runtimeProgram"]!["entities"]!.AsArray().Single(e => (string?)e!["id"] == "root")!["movement"]!["code"] = 987654;
-        Equal(true, ReadPersistedDefinition(unsupportedRuntime.ToJsonString()) is null, "actual projectile unknown opcode remains fail-closed");
-        var unsupported = PersistedV15Fixture(); unsupported["visual"]!["effectColor"] = "invented prose";
-        Equal(true, ReadPersistedDefinition(unsupported.ToJsonString()) is null, "invalid saved authored color cannot choose replacement");
+        Equal(true, ReadPersistedDefinition(unsupportedRuntime.ToJsonString()) is null,
+            "actual old projectile unknown opcode stays refused");
         string ambiguous = PersistedV15Fixture().ToJsonString();
         ambiguous = ambiguous.Insert(1, "\"Canonical\":{},");
-        Equal(true, ReadPersistedDefinition(ambiguous) is null, "case-insensitive duplicate historical owner cannot bypass projection");
-        var unknownParticle = PersistedV15Fixture();
-        unknownParticle["vfxManifest"]!["slots"] = new JsonArray(PersistedV15Slot("libraryParticle", "unavailable_item", "on_use"));
-        unknownParticle["vfxManifest"]!["slots"]![0]!["particle"]!["futureMotion"] = 1;
-        Equal(true, ReadPersistedDefinition(unknownParticle.ToJsonString()) is null, "nested particle is not an opaque metadata blob");
+        Equal(true, ReadPersistedDefinition(ambiguous) is null,
+            "case-insensitive duplicate metadata owner cannot bypass projection");
     }
 
     private static void PersistedV5CurrentFormatIsExactPassThrough()
