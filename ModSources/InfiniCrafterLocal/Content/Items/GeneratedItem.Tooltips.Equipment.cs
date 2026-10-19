@@ -52,7 +52,7 @@ public partial class GeneratedItem
         Stat("Sentries", "EquipmentSentries", a?.SentrySlots ?? armor!.SentrySlots);
         // These executors only admit a positive reduction; do not claim a negative one.
         float manaReduction = a?.ManaCostReduction ?? armor!.ManaCostReduction;
-        if (manaReduction > 0f) Percent("ManaCost", "EquipmentManaCost", manaReduction);
+        if (manaReduction > 0f) Percent("ManaCost", "EquipmentManaCost", -manaReduction);
         float ammoSaving = a?.AmmoSaveChance ?? armor!.AmmoSaveChance;
         if (ammoSaving > 0f) Percent("AmmoSave", "EquipmentAmmoSave", Math.Clamp(ammoSaving, 0f, 0.9999f));
         Stat("Aggro", "EquipmentAggro", a?.Aggro ?? armor!.Aggro);
