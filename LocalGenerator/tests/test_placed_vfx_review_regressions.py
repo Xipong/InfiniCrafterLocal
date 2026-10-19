@@ -69,6 +69,10 @@ def test_mana_tooltip_has_visible_percentage_units(locale):
     assert "+5%" not in template.format("Equipped", "-5")
     equipment = (ROOT / "ModSources/InfiniCrafterLocal/Content/Items/GeneratedItem.Tooltips.Equipment.cs").read_text(encoding="utf-8")
     assert 'if (manaReduction > 0f) Percent("ManaCost", "EquipmentManaCost", -manaReduction);' in equipment
+    native = (ROOT / "tools/EngineRuntimeChecks.VideoUiBuffs.cs").read_text(encoding="utf-8")
+    crystal_test = native.split("VFUI14CapturedCrystalUsesMultiplierNotFiveFlatMana()", 1)[1].split("VFUI17DistinctBuffsAggregateAndExpireInEitherOrder()", 1)[0]
+    assert "host.ModifyTooltips(lines);" in crystal_test
+    assert 'rendered.Contains("-5%",StringComparison.Ordinal)' in crystal_test
     assert "native minimum" not in template and "минимума движка" not in template
     assert "PlacementUnsupported:" in source
 
@@ -96,3 +100,20 @@ def test_placement_feedback_is_local_bounded_and_does_not_relax_guard():
     assert "PlacementUnsupported" in feedback
     assert "HookPostPlaceMyPlayer.hook is null" in source
     assert "HookPostPlaceEveryone.hook is null" in source
+
+
+def test_inactive_placed_source_broad_phase_precedes_tile_walk_and_keeps_existing_retirement():
+    placement = (ROOT / "ModSources/InfiniCrafterLocal/Common/Systems/Placement/"
+                 "GeneratedPlacementLedgerSystem.PlacedVfx.cs").read_text(encoding="utf-8")
+    update = placement.split("internal static IEnumerable<", 1)[1].split("internal static void RetirePlacedVfxSources", 1)[0]
+    assert update.index("projection.Vfx is {} prior && !prior.IsLive") < update.index("MayNeedPlacedVfxFrame(candidate)")
+    assert update.index("MayNeedPlacedVfxFrame(candidate)") < update.index("TryGetPlacedVfxFrame(projection,out _)")
+    visibility = (VFX / "InfiniDetachedVfxSystem.PlacedVisibility.cs").read_text(encoding="utf-8")
+    predicate = visibility.split("internal static bool MayNeedPlacedVfxFrame", 1)[1].split("private static bool PlacedVfxInView", 1)[0]
+    assert 'slot.RendererKind == "lightCue"' in predicate  # unchanged, uncullable light consumer
+    assert "slot.PlacementBindingId != view.BindingId" in predicate
+    assert "slot.EntityId != view.EntityId" in predicate
+    assert "PlacedVfxInView(center,PlacedVfxReachRadius(slot))" in predicate
+    native = (ROOT / "tools/EngineRuntimeChecks.PlacedVfx.cs").read_text(encoding="utf-8")
+    assert "PlacedVfxInactiveLedgerBroadPhaseRetainsRetirement();" in native
+    assert 'Equal(false,active.Binding.IsLive' in native
