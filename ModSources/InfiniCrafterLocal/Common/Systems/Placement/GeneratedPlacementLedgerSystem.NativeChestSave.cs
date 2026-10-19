@@ -1,9 +1,7 @@
 #nullable enable
 using System;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Security.Cryptography;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
@@ -18,11 +16,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private static ILHook? _nativeChestCreateAllocationGuard;
     private static void InstallNativeChestSaveGuard()
     {
-        // Chest callbacks/save semantics are certified for this actual source
-        // profile only, separately from the more general sprite adapter profiles.
-        using var native=File.OpenRead(typeof(Chest).Assembly.Location);
-        if(Convert.ToHexString(SHA256.HashData(native))!="FCC6A9624B12191BE4A15D714A3675440911FEB8C1D374642AB1FD686F0DA0A5")
-            throw new InvalidOperationException("unsupported native chest source profile");
+        // Guard the exact native mutation seam below, not unrelated DLL bytes.
         _nativeChestSaveGuard=new ILHook(typeof(Terraria.IO.WorldFile).GetMethod("SaveChests",BindingFlags.Static|BindingFlags.NonPublic|BindingFlags.Public)!,il=>{
             var instructions=il.Body.Instructions;
             int[] sites=Enumerable.Range(0,Math.Max(0,instructions.Count-5)).Where(i=>instructions[i].MatchLdloc(3)

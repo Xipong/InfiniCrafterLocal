@@ -35,7 +35,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     private static bool AdmitPlacedBodyNativeBoundary(RuntimePlacementSpec placement)
     {
-        if (IsNativeWaterChest(placement)) return AdmitNativeChestMetadata(placement);
+        if (IsNativeChestPlacement(placement)) return AdmitNativeChestMetadata(placement);
         if (placement.TileId < 0) return !placement.HasPlacedFootprint;
         if (placement.PlacedBody is not null
             && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out string reason))

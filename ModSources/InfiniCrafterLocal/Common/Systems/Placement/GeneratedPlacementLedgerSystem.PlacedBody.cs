@@ -125,7 +125,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private static List<GeneratedPlacementKey> FindExactPlacedBodyCells(PlacementAuthorization authorization)
     {
         RuntimePlacementSpec? placement = authorization.ExactPlacement;
-        if (placement is null || (!placement.HasPlacedFootprint && !IsNativeWaterChest(placement)) || authorization.Layer != GeneratedPlacementLayer.Tile)
+        if (placement is null || (!placement.HasPlacedFootprint && !IsNativeChestPlacement(placement)) || authorization.Layer != GeneratedPlacementLayer.Tile)
             return new();
         if (!TryResolveMaterialFootprint(authorization.TargetX, authorization.TargetY,
             authorization.ExpectedType, placement.PlaceStyle, out int x, out int y,

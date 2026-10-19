@@ -43,10 +43,11 @@ internal static partial class EngineRuntimeChecks
    factories.Clear();foreach(var row in factoryRows)factories.Add(row);
   }
  }
- private static void NativeChestNativeSaveLoadAndOpen(){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
+ private static void NativeChestNativeSaveLoadAndOpen(){NativeChestSaveLoadScenario(TileID.Containers,0);NativeChestSaveLoadScenario(TileID.Containers2,16);}
+ private static void NativeChestSaveLoadScenario(int tileType,int style){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
   using var peers=new ReviewPeers();peers.Mode(NetmodeID.SinglePlayer,0);Terraria.Main.player[0]=player;Terraria.Main.dedServ=true;
   for(int i=0;i<3;i++)Terraria.Main.chest[i]=new Chest{x=10+i*3,y=10};
-  var source=NativeChestItem(player,"chest-save");var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;peers.Register(source.Data);
+  var source=NativeChestItem(player,"chest-save",tileType:tileType,style:style);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;peers.Register(source.Data);
   Equal(true,GeneratedPlacementLedgerSystem.AuthorizePlacement(player,source.Data,placement,40,40),"native save intent");NativeChestPlayerPlace(player);
   int original=Chest.FindChest(40,39);Equal(3,original,"source actor deliberately not packed index zero");
   var chest=Terraria.Main.chest[original];chest.name="literal native chest name";chest.item[0]=new Item(ItemID.Wood,7);
@@ -79,17 +80,28 @@ internal static partial class EngineRuntimeChecks
   for(int x=40;x<42;x++)for(int y=39;y<41;y++){var cell=Terraria.Main.tile[x,y];cell.HasTile=false;}
   ledger.PostUpdateWorld();Equal(0,PlacedLedgerGroups(ledger).Count,"rebound actor removal releases only original material claim");
  }));}
- private static void NativeChestExactReturnUsesOnlyExistingPendingOwner(){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
+ private static void NativeChestExactReturnUsesOnlyExistingPendingOwner()=>NativeChestExactReturnScenario(false);
+ private static void NativeChestPostLoadBreakBeforeMaintenance(){foreach(var tuple in new[]{(TileID.Containers,0),(TileID.Containers,51),(TileID.Containers2,0),(TileID.Containers2,16)})NativeChestExactReturnScenario(true,tuple.Item1,tuple.Item2);}
+ private static void NativeChestExactReturnScenario(bool reload,int tileType=TileID.Containers,int style=17){WithNativeChestWorld((player,ledger)=>WithNativeChestRegisteredItem(type=>{
   using var pool=new NativeItemPoolState();var random=Terraria.Main.rand;Terraria.Main.rand=new Terraria.Utilities.UnifiedRandom(17);bool gen=WorldGen.gen;WorldGen.gen=false;
   var dropField=typeof(ItemLoader).Assembly.GetType("Terraria.ModLoader.TileLoader",true)!.GetField("HookCanDrop",PersistenceStatic)!;object? oldDrop=dropField.GetValue(null);dropField.SetValue(null,new Func<int,int,int,bool>[] {new GeneratedPlacementLedgerTile().CanDrop});
   try{
    Terraria.Main.item=Enumerable.Range(0,Terraria.Main.maxItems+1).Select(_=>new Item(ItemID.Wood,3){active=true}).ToArray();Terraria.Main.timeItemSlotCannotBeReusedFor=new int[Terraria.Main.maxItems+1];Item[] before=(Item[])Terraria.Main.item.Clone();
-   var data=PlacementPrefixData();data.Id="native-chest-exact-prefix-return";var placement=data.RuntimeProgram.Bindings[1].UsePolicy.Action.Placement!;placement.WallId=-1;placement.TileId=21;placement.PlaceStyle=17;
+   var data=PlacementPrefixData();data.Id="native-chest-exact-prefix-return";var placement=data.RuntimeProgram.Bindings[1].UsePolicy.Action.Placement!;placement.WallId=-1;placement.TileId=tileType;placement.PlaceStyle=style;
+   if(reload){placement=new(){TileId=tileType,WallId=-1,PlaceStyle=style};data.RuntimeProgram.Bindings[1].UsePolicy.Action.Placement=placement;}
    var item=new Item(type);var source=(GeneratedItem)item.ModItem;GeneratedPrefixSetData(source,data);player.inventory[0]=item;
    Equal(true,item.Prefix(PrefixID.Legendary),"native placed material prefix accepted");string exact=data.ToNetworkJson();player.altFunctionUse=2;
    Equal(true,source.CanUseItem(player),"actual alternate native chest placement consumer");NativeChestPlayerPlace(player);Equal(true,ItemLoader.ConsumeItem(item,player),"one native SP material debit receipt");
    item.stack--; // native caller's stack debit, after the real ConsumeItem dispatch
-   WorldGen.KillTile(40,40);ledger.PostUpdateWorld();Equal(-1,Chest.FindChest(40,39),"real empty native chest break");
+   if(reload){
+    var save=PersistenceNbtRoundtrip(PlacedLedgerSaved(ledger));
+    using var memory=new MemoryStream();using(var writer=new BinaryWriter(memory,System.Text.Encoding.UTF8,true))typeof(Terraria.IO.WorldFile).GetMethod("SaveChests",PersistenceStatic)!.Invoke(null,new object[]{writer});
+    Terraria.Main.chest=new Chest[8000];memory.Position=0;using(var reader=new BinaryReader(memory,System.Text.Encoding.UTF8,true))typeof(Terraria.IO.WorldFile).GetMethod("LoadChests",PersistenceStatic)!.Invoke(null,new object[]{reader});
+    ledger.LoadWorldData(save);
+    Equal(true,PlacedIdentityMap("Groups").Values.Cast<object>().All(g=>g.GetType().GetProperty("BoundChest")!.GetValue(g) is null),"loaded claim is unbound before any maintenance/presentation visit");
+   }
+   WorldGen.KillTile(40,40);Equal(-1,Chest.FindChest(40,39),"real empty native chest break");ledger.PostUpdateWorld();
+   Equal(0,PlacedLedgerGroups(ledger).Count,"native break before first maintenance retires the material group");
    for(int retry=0;retry<3;retry++){
     var save=PlacedLedgerSaved(ledger);var claim=save.GetList<TagCompound>("infiniGeneratedPlacementReturnsV2").Single();
     Equal(exact,claim.GetString("definitionJson"),"pending keeps exact complete authored definition");Equal((int)PrefixID.Legendary,claim.GetCompound("nativePrefix").GetInt("infiniNativePrefix"),"pending keeps exact source prefix");

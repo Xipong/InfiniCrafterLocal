@@ -29,7 +29,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         packet.Write(Common.InfiniNetPacketIds.NotifyGeneratedPlacement);
         packet.Write(PlacementProtocolVersion);packet.Write(authorization.Sequence);packet.Write((byte)authorization.Layer);
         packet.Write(authorization.TargetX);packet.Write(authorization.TargetY);
-        packet.Write(NativeChestOutcomeMarker);packet.Write((byte)0); // native place-chest action
+        packet.Write(NativeChestOutcomeMarker);packet.Write((byte)NativeChestPlaceAction(authorization.ExactPlacement!.TileId)); // native place-chest action
         packet.Write(data.xCoord);packet.Write(data.yCoord+1);packet.Write(data.style);
         packet.Send();authorization.NotifyReceived=true;
     }
@@ -48,13 +48,13 @@ public sealed partial class GeneratedPlacementLedgerSystem
     {
         // Consume and validate the complete native tuple before any state change.
         if(authorization.NotifyReceived || NativeChestPacketRemaining(reader)!=14
-            || reader.ReadByte()!=NativeChestOutcomeMarker || reader.ReadByte()!=0) return;
+            || reader.ReadByte()!=NativeChestOutcomeMarker || reader.ReadByte()!=NativeChestPlaceAction(authorization.ExactPlacement!.TileId)) return;
         int x=reader.ReadInt32(),y=reader.ReadInt32(),style=reader.ReadInt32();
-        if(style!=17 || x!=authorization.TargetX || y!=authorization.TargetY) return;
+        if(style!=authorization.ExactPlacement!.PlaceStyle || x!=authorization.TargetX || y!=authorization.TargetY) return;
         authorization.NotifyReceived=true;
         int slot=Array.FindIndex(player.inventory,item=>ReferenceEquals(item,authorization.SourceItem));
         NativeChestAttempt? attempt=slot>=0 ? BeginNativeChestAttempt(authorization,new TileObject{
-            xCoord=x,yCoord=y-1,type=21,style=style,alternate=0 }) : null;
+            xCoord=x,yCoord=y-1,type=authorization.ExactPlacement.TileId,style=style,alternate=0 }) : null;
         int index=-1;
         if(attempt is not null)
         {
@@ -63,7 +63,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             {
                 // Same native operation as the vanilla message-34 server branch;
                 // its native 40-slot inventory stays the only contents authority.
-                int native=WorldGen.PlaceChest(x,y,21,false,17);
+                int native=WorldGen.PlaceChest(x,y,(ushort)authorization.ExactPlacement.TileId,false,style);
                 attempt.Succeeded=native>=0 && native==attempt.Index;
                 if(HasNativeChestOutcome(authorization) && TryCommitAuthorizedPlacement(player))
                 {
@@ -83,7 +83,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             // Preserve the native message-34 result for ordinary remote clients,
             // and native inventory synchronization. A bare failure is NOT sent:
             // this request never predicted cells and must never get a vanilla refund.
-            try{NetMessage.SendData(MessageID.ChestUpdates,-1,-1,null,0,x,y,17,index);}catch{}
+            try{NetMessage.SendData(MessageID.ChestUpdates,-1,-1,null,NativeChestPlaceAction(authorization.ExactPlacement!.TileId),x,y,style,index);}catch{}
             try{NetMessage.SendData(MessageID.SyncEquipment,-1,-1,null,player.whoAmI,slot);}catch{}
         }
         ModPacket? packet=global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.GetPacket();
@@ -101,7 +101,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         int index=reader.ReadInt32(),slot=reader.ReadInt32(),remaining=reader.ReadInt32(),x=reader.ReadInt32(),y=reader.ReadInt32();
         if(!accepted || !ClientPlacementIntents.TryGetValue(Main.myPlayer,out ClientPlacementIntent? intent)
             || intent.Sequence!=sequence || !intent.Ready || intent.GroupId!=groupId || intent.DefinitionHash!=hash
-            || !IsNativeWaterChest(intent.Placement) || intent.X!=x || intent.Y!=y
+            || !IsNativeChestPlacement(intent.Placement) || intent.X!=x || intent.Y!=y
             || !ReferenceEquals(Main.player[Main.myPlayer],intent.Player)
             || !PendingAuthorizations.TryGetValue(Main.myPlayer,out PlacementAuthorization? authorization)
             || !authorization.NotifyReceived || authorization.Sequence!=sequence || authorization.GroupId!=groupId
@@ -122,10 +122,10 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private static void NativeChestGetData(NativeChestGetDataOrig orig,MessageBuffer self,int start,int length,out int messageType)
     {
         if(Main.netMode==NetmodeID.Server && start>=0 && start<self.readBuffer.Length && length>=8 && length<=self.readBuffer.Length-start
-            && self.readBuffer[start]==MessageID.ChestUpdates && self.readBuffer[start+1]==0
+            && self.readBuffer[start]==MessageID.ChestUpdates && self.readBuffer[start+1] is 0 or 4
             && self.whoAmI>=0 && self.whoAmI<Main.maxPlayers
             && Main.player[self.whoAmI]?.HeldItem.ModItem is GeneratedItem held
-            && held.Data.RuntimeProgram.Bindings.Any(binding=>IsNativeWaterChest(binding.UsePolicy.Action.Placement)))
+            && held.Data.RuntimeProgram.Bindings.Any(binding=>IsNativeChestPlacement(binding.UsePolicy.Action.Placement)))
         {
             // Generated traffic must use the authenticated envelope above. Raw
             // message-34 replays cannot bypass intent/debit or mint vanilla refunds.

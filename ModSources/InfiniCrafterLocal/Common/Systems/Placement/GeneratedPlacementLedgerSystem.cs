@@ -501,8 +501,8 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         if (!tile && !wall)
             return false;
         if (!AdmitPlacedBodyNativeBoundary(placement)) return false;
-        if (IsNativeWaterChest(placement) && (Main.chest is not { Length: 8000 }
-            || Chest.FindEmptyChest(targetX,targetY-1,21,17,1,0)<0)) return false;
+        if (IsNativeChestPlacement(placement) && (Main.chest is not { Length: 8000 }
+            || Chest.FindEmptyChest(targetX,targetY-1,placement.TileId,placement.PlaceStyle,1,0)<0)) return false;
         bool replacesExistingAuthorization = PendingAuthorizations.ContainsKey(player.whoAmI);
         int reservedAuthorizationCount = PendingAuthorizations.Count + (replacesExistingAuthorization ? 0 : 1);
         if ((long)Groups.Count + PendingReturns.Count + QuarantinedReturns.Count(record => !record.Requeued)
@@ -532,7 +532,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         {
             RuntimeBindingSpec? exactBinding = data.RuntimeProgram.Bindings.SingleOrDefault(binding =>
                 ReferenceEquals(binding.UsePolicy.Action.Placement, placement));
-            if ((placement.HasPlacedFootprint || IsNativeWaterChest(placement))
+            if ((placement.HasPlacedFootprint || IsNativeChestPlacement(placement))
                 && (exactBinding is null || !SupportsPlacedBodyFootprint(placement)))
                 return false;
             string definitionJson = data.ToNetworkJson();
@@ -625,9 +625,9 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         if (!WithinPlacementReach(player, authorization.TargetX, authorization.TargetY))
             return false;
 
-        if (IsNativeWaterChest(authorization.ExactPlacement) && !HasNativeChestOutcome(authorization)) return false;
+        if (IsNativeChestPlacement(authorization.ExactPlacement) && !HasNativeChestOutcome(authorization)) return false;
         List<GeneratedPlacementKey> committedCells = authorization.ExactPlacement?.HasPlacedFootprint == true
-            || IsNativeWaterChest(authorization.ExactPlacement)
+            || IsNativeChestPlacement(authorization.ExactPlacement)
             ? FindExactPlacedBodyCells(authorization) : FindCommittedCells(authorization);
         if (committedCells.Count == 0 || committedCells.Count > MaxCellsPerGroup)
             return false;
@@ -956,7 +956,7 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
             || !PendingAuthorizations.TryGetValue(whoAmI, out PlacementAuthorization? authorization)
             || authorization.Sequence == 0 || authorization.Sequence != sequence
             || authorization.Layer != layer || authorization.TargetX != x || authorization.TargetY != y) return;
-        if (IsNativeWaterChest(authorization.ExactPlacement))
+        if (IsNativeChestPlacement(authorization.ExactPlacement))
         { HandleNativeChestRequest(reader,player,authorization); return; }
         authorization.NotifyReceived = true;
         // A late notify can only finish an already server-owned before snapshot.

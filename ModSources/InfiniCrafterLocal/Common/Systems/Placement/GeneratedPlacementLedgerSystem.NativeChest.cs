@@ -17,7 +17,7 @@ namespace InfiniCrafterLocal.Common.Systems;
 
 public sealed partial class GeneratedPlacementLedgerSystem
 {
-    private sealed record NativeChestDefinitionCertificate(string Json,string Binding,string Hash,bool Valid);
+    private sealed record NativeChestDefinitionCertificate(string Json,string Binding,string Hash,int TileType,int Style,bool Valid);
     private sealed class NativeChestAttempt
     {
         public PlacementAuthorization Authorization { get; init; } = null!;
@@ -101,28 +101,29 @@ public sealed partial class GeneratedPlacementLedgerSystem
     {
         if (_nativeChestAttempt is not null || !AdmitNativeChestMetadata(authorization.ExactPlacement!)
             || authorization.SourcePlayer is not Player player || !NativeChestSourceCurrent(authorization,player)
-            || data.type!=21 || data.style!=17 || data.alternate!=0
+            || data.type!=authorization.ExactPlacement!.TileId || data.style!=authorization.ExactPlacement.PlaceStyle || data.alternate!=0
+            || !TileLoader.CanPlace(authorization.TargetX,authorization.TargetY,data.type)
             || authorization.TargetX<data.xCoord || authorization.TargetX>data.xCoord+1
             || authorization.TargetY<data.yCoord || authorization.TargetY>data.yCoord+1
             || !WorldGen.InWorld(data.xCoord,data.yCoord,2) || !WorldGen.InWorld(data.xCoord+1,data.yCoord+2,2)
-            || Main.chest is not { Length: 8000 } || Chest.FindEmptyChest(data.xCoord,data.yCoord,21,17,1,0)<0)
+            || Main.chest is not { Length: 8000 } || Chest.FindEmptyChest(data.xCoord,data.yCoord,data.type,data.style,1,0)<0)
             return null;
         for(int x=data.xCoord;x<data.xCoord+2;x++) for(int y=data.yCoord;y<data.yCoord+2;y++)
             if(Main.tile[x,y].HasTile || Placements.ContainsKey(new(GeneratedPlacementLayer.Tile,x,y))
                 || TileEntity.ByPosition.ContainsKey(new Point16(x,y))) return null;
-        if(!TileObject.CanPlace(authorization.TargetX,authorization.TargetY,21,17,player.direction,
+        if(!TileObject.CanPlace(authorization.TargetX,authorization.TargetY,data.type,data.style,player.direction,
             out TileObject native,false,null) || native.xCoord!=data.xCoord || native.yCoord!=data.yCoord
-            || native.type!=21 || native.style!=17 || native.alternate!=0) return null;
+            || native.type!=data.type || native.style!=data.style || native.alternate!=0) return null;
         return new NativeChestAttempt { Authorization=authorization,X=data.xCoord,Y=data.yCoord,
             World=_nativeChestWorld,BeforeActors=(Chest?[])Main.chest.Clone() };
     }
     private static TileObject NativeChestPlayerPlace(NativePlayerPlaceOrig orig,Player player,bool newObject,TileObject data,int tileType)
     {
         if(!PendingAuthorizations.TryGetValue(player.whoAmI,out PlacementAuthorization? authorization)
-            || !IsNativeWaterChest(authorization.ExactPlacement))
-            return player.HeldItem.ModItem is Content.Items.GeneratedItem && (tileType==21 || data.type==21)
+            || !IsNativeChestPlacement(authorization.ExactPlacement))
+            return player.HeldItem.ModItem is Content.Items.GeneratedItem && (NativeChestPlaceAction(tileType)>=0 || NativeChestPlaceAction(data.type)>=0)
                 ? data : orig(player,newObject,data,tileType);
-        if(!newObject || tileType!=21) return data;
+        if(!newObject || tileType!=authorization.ExactPlacement!.TileId) return data;
         if(Main.netMode==NetmodeID.MultiplayerClient){SendNativeChestRequest(authorization,data);return data;}
         if(Main.netMode!=NetmodeID.SinglePlayer) return data;
         NativeChestAttempt? attempt=BeginNativeChestAttempt(authorization,data);
@@ -144,7 +145,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     {
         NativeChestAttempt? attempt=_nativeChestAttempt;
         bool result=orig(data);
-        if(attempt is not null && data.type==21 && data.style==17 && data.xCoord==attempt.X && data.yCoord==attempt.Y)
+        if(attempt is not null && data.type==attempt.Authorization.ExactPlacement!.TileId && data.style==attempt.Authorization.ExactPlacement.PlaceStyle && data.xCoord==attempt.X && data.yCoord==attempt.Y)
             attempt.TilesWritten=result;
         return result;
     }
@@ -152,7 +153,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
     {
         NativeChestAttempt? attempt=_nativeChestAttempt;
         if(attempt is null) return orig(x,y,type,style,direction,alternate);
-        if(type!=21 || style!=17 || x!=attempt.X || y!=attempt.Y+1 || alternate!=0) return -1;
+        if(type!=attempt.Authorization.ExactPlacement!.TileId || style!=attempt.Authorization.ExactPlacement.PlaceStyle || x!=attempt.X || y!=attempt.Y+1 || alternate!=0) return -1;
         attempt.CallbackCount++;
         int index=orig(x,y,type,style,direction,alternate);
         attempt.NativeResult=index;attempt.CallbackReturned=true;
@@ -189,15 +190,15 @@ public sealed partial class GeneratedPlacementLedgerSystem
         for(int x=attempt.X;x<attempt.X+2;x++) for(int y=attempt.Y;y<attempt.Y+2;y++)
         {
             Tile cell=Main.tile[x,y];
-            if(cell.HasTile && cell.TileType==TileID.Containers && cell.TileFrameX==17*36+(x-attempt.X)*18
-                && cell.TileFrameY==(y-attempt.Y)*18) cell.HasTile=false;
+            if(TryResolveMaterialFootprint(x,y,attempt.Authorization.ExactPlacement!.TileId,attempt.Authorization.ExactPlacement.PlaceStyle,
+                out int ox,out int oy,out int width,out int height) && ox==attempt.X && oy==attempt.Y && width==2 && height==2) cell.HasTile=false;
         }
     }
     private static TagCompound? CaptureNativeChestWitness(PlacementAuthorization authorization)
     {
-        if(!IsNativeWaterChest(authorization.ExactPlacement) || !HasNativeChestOutcome(authorization)) return null;
+        if(!IsNativeChestPlacement(authorization.ExactPlacement) || !HasNativeChestOutcome(authorization)) return null;
         NativeChestAttempt attempt=authorization.ChestAttempt!;
-        return new TagCompound { ["version"]=1,["x"]=attempt.X,["y"]=attempt.Y,["tileType"]=21,["nativeStyle"]=17,
+        return new TagCompound { ["version"]=1,["x"]=attempt.X,["y"]=attempt.Y,["tileType"]=authorization.ExactPlacement!.TileId,["nativeStyle"]=authorization.ExactPlacement.PlaceStyle,
             ["bindingId"]=authorization.PlacementBindingId,["definitionHash"]=authorization.DefinitionHash };
     }
 
@@ -205,13 +206,22 @@ public sealed partial class GeneratedPlacementLedgerSystem
     private delegate bool NativeChestDestroyOrig(int x,int y);
     private static bool NativeChestDestroy(NativeChestDestroyOrig orig,int x,int y)
     {
-        PlacementGroup[] owners=Groups.Values.Where(group=>group.NativeChest is not null
-            && group.ChestWorld==_nativeChestWorld && group.BoundChest is Chest actor && actor.x==x && actor.y==y
-            && Main.chest.Any(current=>ReferenceEquals(current,actor))).ToArray();
+        // Destruction can precede the first bounded maintenance/presentation visit
+        // after load. Resolve only the claim at this native origin while the actor
+        // and footprint still exist; never rebind a live (already observed) claim.
+        PlacementGroup? owner=null;
+        if(Placements.TryGetValue(new(GeneratedPlacementLayer.Tile,x,y),out string? id)
+            && Groups.TryGetValue(id,out PlacementGroup? group) && group.NativeChest is not null)
+        {
+            if(group.NativeChestNeedsRebind && ReadNativeChestWitness(group,out int px,out int py) && px==x && py==y)
+                NativeChestHealthy(group);
+            if(group.ChestWorld==_nativeChestWorld && group.BoundChest is Chest actor && actor.x==x && actor.y==y
+                && group.BoundChestIndex>=0 && group.BoundChestIndex<Main.chest.Length
+                && ReferenceEquals(Main.chest[group.BoundChestIndex],actor)) owner=group;
+        }
         bool result=orig(x,y);
-        if(result)
-            foreach(PlacementGroup group in owners)
-                if(!Main.chest.Any(actor=>ReferenceEquals(actor,group.BoundChest))) group.NativeChestRemoved=true;
+        if(result && owner is not null && !Main.chest.Any(actor=>ReferenceEquals(actor,owner.BoundChest)))
+            owner.NativeChestRemoved=true;
         return result;
     }
     private static bool IsNativeChestGroup(PlacementGroup group)
@@ -224,18 +234,19 @@ public sealed partial class GeneratedPlacementLedgerSystem
         {
             if(witness is null || !HasPlacedBodyInt(witness,"version") || witness.GetInt("version")!=1
                 || !HasPlacedBodyInt(witness,"x") || !HasPlacedBodyInt(witness,"y")
-                || !HasPlacedBodyInt(witness,"tileType") || witness.GetInt("tileType")!=21
-                || !HasPlacedBodyInt(witness,"nativeStyle") || witness.GetInt("nativeStyle")!=17
+                || !HasPlacedBodyInt(witness,"tileType") || !HasPlacedBodyInt(witness,"nativeStyle")
                 || witness["definitionHash"] is not string hash
                 || witness["bindingId"] is not string binding) return false;
             NativeChestDefinitionCertificate? certificate=group.ChestDefinitionCertificate;
-            if(certificate is null || certificate.Json!=group.DefinitionJson || certificate.Binding!=binding || certificate.Hash!=hash)
+            if(certificate is null || certificate.Json!=group.DefinitionJson || certificate.Binding!=binding || certificate.Hash!=hash
+                || certificate.TileType!=witness.GetInt("tileType") || certificate.Style!=witness.GetInt("nativeStyle"))
             {
                 GeneratedItemData? data=GeneratedItemData.FromJson(group.DefinitionJson);
                 bool valid=data is not null && data.Id==group.GeneratedItemId
                     && GeneratedItemRegistryService.DefinitionIdentity(data)==hash
-                    && IsNativeWaterChest(data.RuntimeProgram.Bindings.SingleOrDefault(b=>b.Id==binding)?.UsePolicy.Action.Placement);
-                certificate=group.ChestDefinitionCertificate=new(group.DefinitionJson,binding,hash,valid);
+                    && data.RuntimeProgram.Bindings.SingleOrDefault(b=>b.Id==binding)?.UsePolicy.Action.Placement is RuntimePlacementSpec placement
+                    && IsNativeChestPlacement(placement) && placement.TileId==witness.GetInt("tileType") && placement.PlaceStyle==witness.GetInt("nativeStyle");
+                certificate=group.ChestDefinitionCertificate=new(group.DefinitionJson,binding,hash,witness.GetInt("tileType"),witness.GetInt("nativeStyle"),valid);
             }
             if(!certificate.Valid) return false;
             x=witness.GetInt("x");y=witness.GetInt("y");
@@ -245,7 +256,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
         catch{return false;}
     }
     private static bool NativeChestFootprint(PlacementGroup group,int x,int y)
-        => group.Cells.All(cell=>TryResolveMaterialFootprint(cell.X,cell.Y,21,17,out int ox,out int oy,out int w,out int h)
+        => group.Cells.All(cell=>TryResolveMaterialFootprint(cell.X,cell.Y,group.NativeChest!.GetInt("tileType"),group.NativeChest.GetInt("nativeStyle"),out int ox,out int oy,out int w,out int h)
             && ox==x && oy==y && w==2 && h==2);
     private static void DiagnoseNativeChest(PlacementGroup group,string reason)
     {
@@ -263,7 +274,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             // Native save/load repacks indices; no cached index or recreated contents.
             group.NativeChestNeedsRebind=false;group.ChestWorld=_nativeChestWorld;
             int index=Chest.FindChest(x,y);
-            if(index>=0 && NativeChestInventory(Main.chest[index])) { group.BoundChest=Main.chest[index];group.BoundChestIndex=index; }
+            if(index>=0 && NativeChestInventory(Main.chest[index]) && NativeChestFootprint(group,x,y)) { group.BoundChest=Main.chest[index];group.BoundChestIndex=index; }
         }
         Chest? actor=group.BoundChest;
         if(group.ChestWorld!=_nativeChestWorld || actor is null || actor.x!=x || actor.y!=y
@@ -308,21 +319,27 @@ public sealed partial class GeneratedPlacementLedgerSystem
         }
     }
 
-    // An execution certificate, not a design selector. No names/parents or new
-    // authored field participate; every other callback family remains fail closed.
-    private static bool IsNativeWaterChest(RuntimePlacementSpec? placement)
-        => placement is { TileId: 21, WallId: < 0, PlaceStyle: 17 };
+    // Native message-34 operation translation, not a generated-item preset.
+    // Both vanilla BasicChest tiles use the same native inventory/callback family.
+    // Dressers and modded callback families are not certified by this 2x2 bridge.
+    private static int NativeChestPlaceAction(int tileType)
+        => tileType==TileID.Containers ? 0 : tileType==TileID.Containers2 ? 4 : -1;
+    private static bool IsNativeChestPlacement(RuntimePlacementSpec? placement)
+        => placement is { WallId: < 0, PlaceStyle: >= 0 } && NativeChestPlaceAction(placement.TileId)>=0
+            && TileID.Sets.BasicChest[placement.TileId]
+            && placement.PlaceStyle < (placement.TileId==TileID.Containers ? Chest.chestItemSpawn.Length : Chest.chestItemSpawn2.Length);
 
     private static bool AdmitNativeChestMetadata(RuntimePlacementSpec placement)
     {
-        if (!IsNativeWaterChest(placement) || NativeChestHooks.Count != 6 || _nativeChestSaveGuard is null || _nativeChestPostAllocationGuard is null || _nativeChestCreateAllocationGuard is null || !GeneratedPlacedBodyNativeAdapter.FeatureAvailable
-            || placement.PlacedBody is not null && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(21,null,false,out _)) return false;
+        if (!IsNativeChestPlacement(placement) || NativeChestHooks.Count != 6 || _nativeChestSaveGuard is null || _nativeChestPostAllocationGuard is null || _nativeChestCreateAllocationGuard is null || !GeneratedPlacedBodyNativeAdapter.FeatureAvailable
+            || placement.PlacedBody is not null && !GeneratedPlacedBodyNativeAdapter.TryAdmitNative(placement.TileId,null,false,out _)) return false;
         try
         {
-            foreach(string name in new[]{"HookCanPlace","HookPlaceInWorld"})
-                if(typeof(TileLoader).GetField(name,BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)?.GetValue(null)
-                    is not Array { Length: 0 }) return false;
-            var data = TileObjectData.GetTileData(21,17);
+            // A native veto is executed before mutation. Unknown post-place hooks,
+            // unlike vetoes, can introduce another actor/contents owner.
+            if(typeof(TileLoader).GetField("HookPlaceInWorld",BindingFlags.Static|BindingFlags.Public|BindingFlags.NonPublic)?.GetValue(null)
+                is not Array { Length: 0 }) return false;
+            var data = TileObjectData.GetTileData(placement.TileId,placement.PlaceStyle);
             if (data is null) return false;
             var alternates = typeof(TileObjectData).GetProperty("Alternates",BindingFlags.Instance|BindingFlags.NonPublic);
             if (alternates is null) return false;
@@ -345,7 +362,7 @@ public sealed partial class GeneratedPlacementLedgerSystem
             => row.Width==2 && row.Height==2 && row.Origin.X==0 && row.Origin.Y==1
                 && row.CoordinateWidth==16 && row.CoordinatePadding==2
                 && row.CoordinateHeights.SequenceEqual(new[]{16,18}) && row.StyleHorizontal
-                && row.CoordinateFullWidth==36 && row.CoordinateFullHeight==38
+                && row.CoordinateFullWidth==36 && row.CoordinateFullHeight==38 && row.StyleWrapLimit==0 && row.StyleMultiplier==1
                 && (int)row.AnchorBottom.type==11 && row.AnchorBottom.tileCount==2 && row.AnchorBottom.checkStart==0
                 && row.AnchorTop.tileCount==0 && row.AnchorLeft.tileCount==0 && row.AnchorRight.tileCount==0
                 && row.HookPlaceOverride.hook is null && row.HookPostPlaceEveryone.hook is null

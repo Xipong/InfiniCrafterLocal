@@ -69,18 +69,19 @@ internal static partial class EngineRuntimeChecks
   network.Receive(1,MessageID.TileManipulation,w=>{w.Write((byte)0);w.Write((short)40);w.Write((short)40);w.Write((short)0);w.Write((byte)0);});ledger.PostUpdateWorld();
   Equal(-1,Chest.FindChest(40,39),"actual native MP empty mining removes actor");Equal(0,PlacedLedgerGroups(ledger).Count,"MP native complete removal retires exact material group");Equal(1,PlacedLedgerSaved(ledger).GetList<Terraria.ModLoader.IO.TagCompound>("infiniGeneratedPlacementReturnsV2").Count,"MP native removal joins one existing durable generated return");
  }));}
- private static void NativeChestRawMessage34CannotRefundGeneratedSource(){WithNativeChestWorld((player,ledger)=>{
+ private static void NativeChestRawMessage34CannotRefundGeneratedSource(){NativeChestRawMessageScenario(TileID.Containers,0);NativeChestRawMessageScenario(TileID.Containers2,4);}
+ private static void NativeChestRawMessageScenario(int tileType,byte action){WithNativeChestWorld((player,ledger)=>{
   using var pool=new NativeItemPoolState();using var network=new NativeChestNetworkScope();
   Terraria.Main.item=Enumerable.Range(0,Terraria.Main.maxItems+1).Select(_=>new Item()).ToArray();Terraria.Main.timeItemSlotCannotBeReusedFor=new int[Terraria.Main.maxItems+1];
   var random=Terraria.Main.rand;Terraria.Main.rand=new Terraria.Utilities.UnifiedRandom(17);bool gen=WorldGen.gen;WorldGen.gen=false;
   try{
-   typeof(Chest).GetMethod("Initialize",PersistenceStatic)!.Invoke(null,null);
-   var generated=NativeChestItem(player,"chest-raw-message");Terraria.Main.netMode=NetmodeID.Server;Terraria.Main.myPlayer=255;
+   typeof(Chest).GetMethod("Initialize",PersistenceStatic)!.Invoke(null,null);int vanillaItem=(tileType==TileID.Containers?Chest.chestItemSpawn:Chest.chestItemSpawn2)[0];
+   var generated=NativeChestItem(player,"chest-raw-message",tileType:tileType,style:0);Terraria.Main.netMode=NetmodeID.Server;Terraria.Main.myPlayer=255;
    for(int i=0;i<8000;i++)Terraria.Main.chest[i]=new Chest{x=10,y=10};
-   void FailedRequest()=>network.Receive(0,MessageID.ChestUpdates,w=>{w.Write((byte)0);w.Write((short)40);w.Write((short)40);w.Write((short)17);w.Write((short)-1);});
-   FailedRequest();Equal(0,Terraria.Main.item.Count(item=>item.active&&item.type==ItemID.WaterChest),"raw generated request cannot mint direct vanilla compensation");
-   player.inventory[0]=new Item(ItemID.WaterChest,3);FailedRequest();
-   Equal(1,Terraria.Main.item.Count(item=>item.active&&item.type==ItemID.WaterChest),"unrelated vanilla message-34 failure retains actual native WaterChest compensation");
+   void FailedRequest()=>network.Receive(0,MessageID.ChestUpdates,w=>{w.Write(action);w.Write((short)40);w.Write((short)40);w.Write((short)0);w.Write((short)-1);});
+   FailedRequest();Equal(0,Terraria.Main.item.Count(item=>item.active&&item.type==vanillaItem),"raw generated request cannot mint direct vanilla compensation");
+   player.inventory[0]=new Item(vanillaItem,3);FailedRequest();
+   Equal(1,Terraria.Main.item.Count(item=>item.active&&item.type==vanillaItem),"unrelated vanilla message-34 failure retains actual native family compensation");
    Equal(true,network.Sockets[0].Sent.Any(bytes=>bytes[2]==MessageID.ChestUpdates),"vanilla failure keeps native message-34 result");
   }finally{Terraria.Main.rand=random;WorldGen.gen=gen;}
  });}
