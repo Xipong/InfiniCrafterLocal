@@ -12,8 +12,9 @@ namespace InfiniCrafterLocal.Common.Services;
 
 // AGENT MAP: client runtime PNG loader/cache.
 // This is a presentation layer: validate path/size/dimensions, cache hits and
-// failures, and fall back to placeholders. It must not decide gameplay success
-// or repair generated item contracts.
+// failures, and report misses as null. Consumers own diagnostic presentation;
+// a missing mandatory generated PNG is never a successful replacement asset.
+// This cache must not decide gameplay success or repair generated contracts.
 public sealed class RuntimeSpriteCacheDebugSnapshot
 {
     public int TextureCount { get; init; }
@@ -38,7 +39,7 @@ public sealed class RuntimeSpriteCacheDebugSnapshot
 /// <summary>
 /// Experimental runtime PNG loader for generated sprites.
 /// tModLoader's normal ModItem.Texture is static, so this cache is only used by optional draw hooks.
-/// If a sprite path is missing or invalid, the normal placeholder texture is used.
+/// A missing or invalid sprite path is a cache miss; it never authorizes proxy art.
 /// </summary>
 public sealed class RuntimeSpriteCache : IDisposable
 {
@@ -132,12 +133,14 @@ public sealed class RuntimeSpriteCache : IDisposable
             try
             {
                 path = Environment.ExpandEnvironmentVariables(path).Trim();
-                if (path.Length > 320 || !path.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                key = ResolveSelectedKey(path);
+                // Check the selected local file, not its transport alias. A ready
+                // URL may contain query/fragment data but still names this exact PNG.
+                if (key.Length > 320 || !key.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 {
                     _missCount++;
                     return null;
                 }
-                key = ResolveSelectedKey(path);
                 if (_textures.TryGetValue(key, out var cached))
                 {
                     _hitCount++;
@@ -229,14 +232,12 @@ public sealed class RuntimeSpriteCache : IDisposable
     private static string ResolveSelectedKey(string path)
     {
         string? certified = InfiniCrafterLocalMod.AssetSync?.ResolveCertifiedLocalPath(path);
-        string key = Path.GetFullPath(certified ?? path);
-        if (!File.Exists(key))
-        {
-            string? synced = InfiniCrafterLocalMod.AssetSync?.ResolveLocalPath(path);
-            if (!string.IsNullOrWhiteSpace(synced) && File.Exists(synced))
-                key = Path.GetFullPath(synced);
-        }
-        return key;
+        if (certified is not null) return Path.GetFullPath(certified);
+        // URI/foreign-platform aliases need not be valid local paths. Resolve
+        // the existing sync owner's basename before attempting GetFullPath.
+        if (File.Exists(path)) return Path.GetFullPath(path);
+        string? synced = InfiniCrafterLocalMod.AssetSync?.ResolveLocalPath(path);
+        return Path.GetFullPath(!string.IsNullOrWhiteSpace(synced) && File.Exists(synced) ? synced : path);
     }
 
     private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture, out Rectangle alphaBounds)

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import copy
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 import hashlib
 import json
 import os
@@ -163,12 +166,12 @@ def maybe_generate_sprite(data: dict[str, Any]) -> dict[str, Any]:
     result = _execute_image_request(data, request)
     visual["finalItemPrompt"] = result.final_prompt
     visual["spriteStatus"] = result.status
-    if result.status == "prompt_only":
-        return data
+    # Revoke the previous attempt even when generation is disabled. Readiness
+    # belongs to this attempt, not to a stale path left on the mutable DTO.
     visual.update(spritePath=result.public_path, spriteUrl=result.url, spriteRawPath=result.raw_path if result.public_path else "")
-    if result.status == "backend_config_error":
-        return data
     visual["spriteTechnicalScore"] = round(result.technical_score, 3)
+    if result.status in {"prompt_only", "backend_config_error"}:
+        return data
     visual.pop("visualJudgeScore", None)
     if result.public_path:
         if result.status != "fallback_after_failed_generation":
@@ -574,6 +577,44 @@ def _runtime_entities(data: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
 
 
+def _generate_independent_vfx_assets(data: dict[str, Any], plan: list[dict[str, Any]]) -> dict[str, tuple[str, str, float, str]]:
+    """Overlap only declared ingredient jobs within the existing provider gate.
+
+    These jobs take authored text/canvas only, not another job's image. Item
+    generation/hydration remains a barrier; entity/reuse/impact scheduling is
+    unchanged. Do not expand this roster to jobs with image-reference edges.
+    """
+    slots = [slot for slot in plan if str(slot.get("role") or "").startswith("vfx:")]
+    workers = min(len(slots), getattr(IMAGE_GENERATION_GATE, "capacity", 1))
+    if workers < 2:
+        return {}  # Preserve the default single-slot execution order exactly.
+    snapshot = copy.deepcopy(data)
+    before = snapshot.get("debug", {})
+
+    def generate(slot: dict[str, Any]):
+        local = copy.deepcopy(snapshot)
+        result = generate_visual_asset(local, slot["role"], slot["prompt"], slot["negativePrompt"],
+            slot["assetId"], slot["canvas"], processing_role=slot["processingRole"])
+        after = local.get("debug", {})
+        # Merge only this job's delta: a stale sibling receipt in the input must
+        # never overwrite a just-completed sibling's evidence.
+        changes = {key: value for key, value in after.items() if key not in before or value != before[key]}
+        removed = set(before) - set(after)
+        return result, changes, removed
+
+    results: dict[str, tuple[str, str, float, str]] = {}
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="infini-image") as pool:
+        futures = [pool.submit(copy_context().run, generate, slot) for slot in slots]
+        for slot, future in zip(slots, futures):
+            result, changes, removed = future.result()
+            debug = data.setdefault("debug", {})
+            for key in removed:
+                debug.pop(key, None)
+            debug.update(changes)
+            results[slot["role"]] = result
+    return results
+
+
 def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
     """Generate exactly the assets authored for accepted runtime entities.
 
@@ -598,6 +639,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
     raw_item_kit = visual_kit.get("item")
     item_kit: dict[str, Any] = raw_item_kit if isinstance(raw_item_kit, dict) else {}
     director_negative = str(item_kit.get("negativePrompt") or "").strip()
+    parallel_vfx = _generate_independent_vfx_assets(data, plan)
 
     for slot in plan:
         if not isinstance(slot, dict):
@@ -605,7 +647,7 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         role = str(slot.get("role") or "")
         if role.startswith("vfx:"):
             asset = next(row for row in data["vfxManifest"]["assets"] if row["id"] == slot["vfxAssetId"])
-            path, url, score, status = generate_visual_asset(
+            path, url, score, status = parallel_vfx[role] if role in parallel_vfx else generate_visual_asset(
                 data, role, slot["prompt"], slot["negativePrompt"], slot["assetId"], slot["canvas"],
                 processing_role=slot["processingRole"],
             )

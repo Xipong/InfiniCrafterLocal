@@ -243,7 +243,7 @@ public sealed partial class GeneratedItemData
         bool inertReference = SourceMode is "player_save_ref" or "corrupt_reference";
         if (!inertReference && SourceMode is not ("developer_fixture" or "test_fixture")
             && (string.IsNullOrWhiteSpace(Visual.SpritePath)
-                || Visual.SpriteStatus is "" or "failed" or "prompt_only" or "placeholder" or "backend_config_error"))
+                || Visual.SpriteStatus is not ("generated" or "generated_warn_invalid" or "fallback" or "fallback_after_failed_generation")))
             throw new InvalidDataException("Required generated item PNG is unavailable; placeholders are not accepted");
         if (Accessory.Enabled && Armor.Enabled)
             throw new InvalidDataException("A runtime item cannot enable both accessory and armor capabilities");
