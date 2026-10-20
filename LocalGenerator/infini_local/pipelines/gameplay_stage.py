@@ -18,6 +18,7 @@ from infini_local.core.runtime_authoring.program_schema import ITEM_NAME_MAX_LEN
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.pipelines.llm_authoring_pipeline import repair_author_item_after_failure
+from infini_local.pipelines.result_identity_policy import bad_result_name
 
 
 class _RepairableGameplayRejection(PlannerUnavailable):
@@ -37,12 +38,14 @@ def _identity_errors(data: Mapping[str, Any], a: Mapping[str, Any] | None, b: Ma
         errors.append({"path": "$.name", "code": "required_nonempty_string", "message": "Result name is required."})
     elif len(name) > ITEM_NAME_MAX_LENGTH:
         errors.append({"path": "$.name", "code": "string_too_long", "message": f"Result name must be at most {ITEM_NAME_MAX_LENGTH} characters."})
-    parent_names = {value.casefold() for value in (_name_of(a), _name_of(b)) if value}
-    if len(parent_names) == 2 and name.casefold() in parent_names:
+    # Use the same name policy as final_normalize BEFORE Visual/VFX/PNG work.
+    # The existing metadata-only Gameplay Repair can change only this invalid name.
+    elif bad_result_name(name, {"name": _name_of(a)}, {"name": _name_of(b)}):
         errors.append({
             "path": "$.name",
             "code": "uncombined_identity",
-            "message": "Result name exactly repeats one parent despite two distinct parents; provide an authored combined identity.",
+            "message": "Result name must have at least 3 characters, avoid reserved prefixes/placeholders, "
+                       "and differ from either parent; provide an authored combined identity.",
         })
     return errors
 
