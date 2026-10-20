@@ -16,7 +16,7 @@ namespace InfiniCrafterLocal.Content.Items;
 public partial class GeneratedItem
 {
     private const string RuntimeTooltipKey = "Mods.InfiniCrafterLocal.RuntimeTooltip.";
-    private const int MaxRuntimeTooltipFacts = 64;
+    private const int MaxRuntimeTooltipLines = 64;
     private const int MaxRuntimeTooltipWidth = 720;
 
     /// <summary>
@@ -29,19 +29,21 @@ public partial class GeneratedItem
         GeneratedItemData data = PresentationData();
         if (GeneratedItemData.IsPlayerSaveReferenceOnly(data)) return;
         RuntimeProgramSpec program = data.RuntimeProgram;
-        int added = 0;
+        int addedLines = 0;
         void Add(string name, string key, params object[] args)
         {
-            if (added >= MaxRuntimeTooltipFacts) return;
+            if (addedLines >= MaxRuntimeTooltipLines) return;
             string text = RuntimeTooltipText(key, args);
             IReadOnlyList<string> rows = Main.dedServ || FontAssets.MouseText?.IsLoaded != true
                 ? new[] { text }
                 : WrapRuntimeTooltipLines(text, RuntimeTooltipWidthLimit(Main.screenWidth, Main.UIScale),
                     value => FontAssets.MouseText.Value.MeasureString(value).X);
-            for (int i = 0; i < rows.Count; i++)
+            // A wrapped fact occupies several native TooltipLine rows.
+            int admitted = RuntimeTooltipRowsToAdd(addedLines, rows.Count);
+            for (int i = 0; i < admitted; i++)
                 tooltips.Add(new TooltipLine(Mod, "Infini" + name
                     + (i == 0 ? "" : "Wrap" + i.ToString(CultureInfo.InvariantCulture)), rows[i]));
-            added++;
+            addedLines += admitted;
         }
         // Exact live player table + existing registry definition identity. Never
         // infer a global block from any other item, slot, name or buff texture.
@@ -148,6 +150,9 @@ public partial class GeneratedItem
     // Terraria lays out TooltipLine rows independently. Split overwide localized
     // facts into real rows BEFORE native tooltip box measurement; no custom
     // drawer/tooltip facade and no mutation of authored gameplay or source text.
+    internal static int RuntimeTooltipRowsToAdd(int emittedRows, int wrappedRows)
+        => Math.Min(Math.Max(0, MaxRuntimeTooltipLines - emittedRows), Math.Max(0, wrappedRows));
+
     internal static int RuntimeTooltipWidthLimit(int screenWidth, float uiScale)
     {
         float scale = float.IsFinite(uiScale) && uiScale > 0f ? uiScale : 1f;

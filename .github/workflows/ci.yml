@@ -69,6 +69,30 @@ jobs:
         run: |
           python tools/validate_release.py --group build
           exit $LASTEXITCODE
+      - name: Native verification coverage
+        if: always()
+        shell: pwsh
+        run: |
+          $path = 'artifacts/validation/validation_report.json'
+          $report = if (Test-Path $path) { Get-Content $path -Raw | ConvertFrom-Json } else { $null }
+          $names = @('tml_build', 'native_checks', 'tml_runtime_selftest')
+          Add-Content $env:GITHUB_STEP_SUMMARY '### Native verification coverage'
+          Add-Content $env:GITHUB_STEP_SUMMARY '| Check | Actual status |'
+          Add-Content $env:GITHUB_STEP_SUMMARY '| --- | --- |'
+          $incomplete = @()
+          foreach ($name in $names) {
+            $row = @($report.checks | Where-Object { $_.name -eq $name }) | Select-Object -First 1
+            $status = if ($null -eq $row) { 'missing' } else { [string]$row.status }
+            Add-Content $env:GITHUB_STEP_SUMMARY "| $name | $status |"
+            if ($status -ne 'passed') { $incomplete += "$name=$status" }
+          }
+          if ($incomplete.Count -gt 0) {
+            $details = $incomplete -join ', '
+            Write-Host "::warning title=Incomplete native verification::$details. Green Python/static checks do not establish a native PASS."
+            Add-Content $env:GITHUB_STEP_SUMMARY ""
+            Add-Content $env:GITHUB_STEP_SUMMARY "**Native verification incomplete.** Missing DLLs or a live tModLoader self-test must not be interpreted as a passing native build/test."
+          }
+
       - name: Upload tML build logs
         if: always()
         uses: actions/upload-artifact@v4
