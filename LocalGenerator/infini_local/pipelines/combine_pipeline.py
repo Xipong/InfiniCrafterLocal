@@ -43,6 +43,7 @@ from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import world_storage
 from infini_local.storage.world_storage import is_deliverable_recipe_payload, sanitize_recipe_for_delivery
+from infini_local.core.item_identity_tools import item_identity
 from infini_local.storage.world_recipe_runtime import (
     cache_get,
     cache_put,
@@ -204,6 +205,7 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             "recipeKey": key,
             "parentA": str(data.get("parentA") or ""),
             "parentB": str(data.get("parentB") or ""),
+            "parentIdentities": [item_identity(a), item_identity(b)],
         })
         data["contractVersions"] = contract_versions_payload()
         debug = data.setdefault("debug", {})

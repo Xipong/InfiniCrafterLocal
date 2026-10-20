@@ -44,6 +44,9 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("journal world history favorites and responsive bounds", RecipeJournalKeepsWorldIdentityAndFavorites),
+            ("input-local independent conditions", InputLocalConditionsStayIndependent),
+            ("reactive equipment delayed admission authority and cooldown", EquipmentReactionsUseFunctionalHooksAndSharedCooldown),
             ("equipment periodic gameplay native spawn", EquipmentPeriodicGameplayReachesNativeSpawn),
             ("equipment periodic gameplay authority and delay", EquipmentPeriodicGameplayKeepsAuthorityAndDelay),
             ("equipment presentation carrier native frame bounds", EquipmentCarrierSheetsCoverNativeFrames),

@@ -191,6 +191,16 @@ public sealed partial class GeneratedItemData
         Gameplay.UseConditionMode = SafeText(Gameplay.UseConditionMode, 32).ToLowerInvariant();
         if (Gameplay.UseConditionMode is not ("" or "none" or "grounded" or "not_wet" or "life_above" or "mana_above"))
             throw new InvalidDataException($"Unsupported use condition '{Gameplay.UseConditionMode}'");
+        if (Gameplay.UseConditions?.Length > 2)
+            throw new InvalidDataException("useConditions requires at most two explicit input gates");
+        var conditionInputs = new HashSet<string>(StringComparer.Ordinal);
+        foreach (RuntimeUseConditionSpec condition in Gameplay.UseConditions ?? Array.Empty<RuntimeUseConditionSpec>())
+        {
+            if (condition is null) throw new InvalidDataException("null use condition");
+            condition.Validate();
+            if (!conditionInputs.Add(condition.Input) || RuntimeProgram.BindingForInput(condition.Input) is null)
+                throw new InvalidDataException("use condition requires one unique existing active input");
+        }
         Gameplay.UseConditionMinLife = ClampInt(Gameplay.UseConditionMinLife, 0, 10000);
         Gameplay.UseConditionMinMana = ClampInt(Gameplay.UseConditionMinMana, 0, 10000);
     }
@@ -277,7 +287,7 @@ public sealed partial class GeneratedItemData
                     || placedBinding.UsePolicy.Action.TargetId != entity.Id || placedBinding.UsePolicy.Action.Placement?.PlacedVfx is null)
                     throw new InvalidDataException("VFX placementBindingId requires same-item accepted place_item binding with placedVfx");
             }
-            try { RuntimeEventKind.ValidateProducer(entity, slot.Event, hasItemContactBinding, hasEmittingItemUse); }
+            try { RuntimeEventKind.ValidateProducer(entity, slot.Event, hasItemContactBinding, hasEmittingItemUse, RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped) is not null); }
             catch (InvalidDataException error)
             {
                 throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}': {error.Message}", error);

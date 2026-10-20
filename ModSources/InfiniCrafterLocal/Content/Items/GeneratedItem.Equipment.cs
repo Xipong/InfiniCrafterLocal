@@ -18,6 +18,7 @@ public partial class GeneratedItem
         EnsureRuntimeHydration(player);
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Accessory.Enabled) return;
+        player.GetModPlayer<InfiniCraftPlayer>().RegisterReactiveEquipment(this);
         ApplyEquipmentEffects(player, Data.Accessory);
         RunPeriodicItemEvents(player, Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);
@@ -28,6 +29,7 @@ public partial class GeneratedItem
         EnsureRuntimeHydration(player);
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Armor.Enabled) return;
+        player.GetModPlayer<InfiniCraftPlayer>().RegisterReactiveEquipment(this);
         ApplyEquipmentEffects(player, Data.Armor);
         RunPeriodicItemEvents(player, Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);

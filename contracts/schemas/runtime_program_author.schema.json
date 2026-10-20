@@ -2467,7 +2467,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "condition": {
-                    "description": "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.",
+                    "description": "One condition; thresholds include equality.",
                     "oneOf": [
                       {
                         "description": "Player is grounded",
@@ -2517,9 +2517,19 @@
                       }
                     ],
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "input": {
+                    "description": "Existing active input",
+                    "enum": [
+                      "primary_use",
+                      "alternate_use"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
                   }
                 },
                 "required": [
+                  "input",
                   "condition"
                 ],
                 "type": "object"
@@ -7758,10 +7768,10 @@
                     "x-infini-units": "radians"
                   },
                   "when": {
-                    "description": "Exact event or explicit periodic interval",
+                    "description": "Explicit event trigger",
                     "oneOf": [
                       {
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "enum": [
                           "on_use",
                           "on_spawn",
@@ -7777,10 +7787,10 @@
                       },
                       {
                         "additionalProperties": false,
-                        "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash",
+                        "description": "Periodic event; call ID fixes the item phase",
                         "properties": {
                           "everySeconds": {
-                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time interval; producer clocks retain their phase",
                             "maximum": 60.0,
                             "minimum": 0.09166666666666666,
                             "type": "number",
@@ -7794,6 +7804,37 @@
                         },
                         "required": [
                           "everySeconds"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Functional equipment reaction; identical copies share cooldown.",
+                        "properties": {
+                          "cooldownSeconds": {
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared interval reserved before dispatch",
+                            "maximum": 60.0,
+                            "minimum": 0.09166666666666666,
+                            "type": "number",
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                            },
+                            "x-infini-semanticType": "seconds",
+                            "x-infini-units": "seconds"
+                          },
+                          "on": {
+                            "description": "Equipment event",
+                            "enum": [
+                              "on_hurt",
+                              "on_enemy_kill"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "on",
+                          "cooldownSeconds"
                         ],
                         "type": "object"
                       }
@@ -8035,7 +8076,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "when": {
-                    "description": "Execute on this exact emitted event",
+                    "description": "Exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_crit"
@@ -8172,7 +8213,7 @@
                     "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
-                    "description": "Execute on this exact emitted event",
+                    "description": "Exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_crit"
@@ -8269,7 +8310,7 @@
                     "x-infini-units": "seconds"
                   },
                   "when": {
-                    "description": "Execute on this exact emitted event",
+                    "description": "Exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_crit"
@@ -8357,15 +8398,51 @@
                     "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
-                    "description": "Execute on this exact emitted event",
-                    "enum": [
-                      "on_hit",
-                      "on_crit",
-                      "on_tile_collision",
-                      "on_expire",
-                      "on_kill"
+                    "description": "Explicit event trigger",
+                    "oneOf": [
+                      {
+                        "description": "Exact emitted event",
+                        "enum": [
+                          "on_hit",
+                          "on_crit",
+                          "on_tile_collision",
+                          "on_expire",
+                          "on_kill"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Functional equipment reaction; identical copies share cooldown.",
+                        "properties": {
+                          "cooldownSeconds": {
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared interval reserved before dispatch",
+                            "maximum": 60.0,
+                            "minimum": 0.09166666666666666,
+                            "type": "number",
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                            },
+                            "x-infini-semanticType": "seconds",
+                            "x-infini-units": "seconds"
+                          },
+                          "on": {
+                            "description": "Equipment event",
+                            "enum": [
+                              "on_hurt",
+                              "on_enemy_kill"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "on",
+                          "cooldownSeconds"
+                        ],
+                        "type": "object"
+                      }
                     ],
-                    "type": "string",
                     "x-infini-semanticType": "runtime_event_trigger"
                   }
                 },
@@ -8454,7 +8531,7 @@
                     "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
-                    "description": "Execute on this exact emitted event",
+                    "description": "Exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_crit"
@@ -8561,10 +8638,10 @@
                     "x-infini-units": "blocks (tiles)"
                   },
                   "when": {
-                    "description": "Exact event or explicit periodic interval",
+                    "description": "Explicit event trigger",
                     "oneOf": [
                       {
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "enum": [
                           "on_hit",
                           "on_expire"
@@ -8573,10 +8650,10 @@
                       },
                       {
                         "additionalProperties": false,
-                        "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash",
+                        "description": "Periodic event; call ID fixes the item phase",
                         "properties": {
                           "everySeconds": {
-                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time interval; producer clocks retain their phase",
                             "maximum": 60.0,
                             "minimum": 0.09166666666666666,
                             "type": "number",
@@ -8677,10 +8754,10 @@
                     "x-infini-units": "blocks/s (one-off velocity impulse)"
                   },
                   "when": {
-                    "description": "Exact event or explicit periodic interval",
+                    "description": "Explicit event trigger",
                     "oneOf": [
                       {
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "enum": [
                           "on_hit",
                           "on_expire"
@@ -8689,10 +8766,10 @@
                       },
                       {
                         "additionalProperties": false,
-                        "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash",
+                        "description": "Periodic event; call ID fixes the item phase",
                         "properties": {
                           "everySeconds": {
-                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time interval; producer clocks retain their phase",
                             "maximum": 60.0,
                             "minimum": 0.09166666666666666,
                             "type": "number",
@@ -8789,7 +8866,7 @@
                     "x-infini-units": "HP"
                   },
                   "when": {
-                    "description": "Execute on this exact emitted event",
+                    "description": "Exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_crit"
@@ -8886,7 +8963,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "when": {
-                    "description": "Execute on this exact emitted event",
+                    "description": "Exact emitted event",
                     "enum": [
                       "on_hit",
                       "on_tile_collision",

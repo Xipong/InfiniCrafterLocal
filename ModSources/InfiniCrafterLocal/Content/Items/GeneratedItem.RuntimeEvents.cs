@@ -27,6 +27,11 @@ public partial class GeneratedItem
         return hash;
     }
 
+    internal void ExecuteEquipmentReaction(Player player, RuntimeEntitySpec body, RuntimeEventActionSpec action,
+        Vector2 position, RuntimeSpawnBudget budget)
+        => QueueOrExecuteItemAction(player, body, action, null, position, new Vector2(player.direction, 0f),
+            0, budget, player.GetSource_Misc("InfiniRuntimeEquipmentReaction"));
+
     private void RunPeriodicItemEvents(Player player, RuntimeEntitySpec entity)
     {
         // Native held/equipment hooks can visit the same instance in one tick.

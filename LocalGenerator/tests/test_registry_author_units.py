@@ -393,14 +393,19 @@ def test_periodic_requires_explicit_period_ticks_and_repair_leaf(fn):
         assert next(row for row in schema["properties"]["when"]["oneOf"] if row.get("type") == "object")["required"] == ["everySeconds"]
         missing = {key: value for key, value in params.items() if key != "count"}
         paths = [row["path"] for row in strict_schema_errors(missing, schema) if row["kind"] == "required"]
-        assert paths.count("$.count") == paths.count("$.when.everySeconds") == 1
+        assert paths.count("$.count") == 1
+        # Empty when no longer identifies periodic uniquely: equipment reactions
+        # have their own object forms. Repair must let the Author choose a trigger.
+        assert any(row["path"] == "$.when" and row["kind"] == "one_of" for row in strict_schema_errors(missing, schema))
     assert not strict_author_shape_report(doc)["ok"]
     report = validate_runtime_program(doc)
     assert not report["ok"]
-    assert any(r["path"].endswith('.params.when.everySeconds') for r in report["errors"])
+    trigger_path = 'params.when' if fn == "spawn_entity_on_event" else 'params.when.everySeconds'
+    assert any(r["path"].endswith('.' + trigger_path) for r in report["errors"])
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.when.everySeconds']}]
-    assert "everySeconds" in json.dumps(scope)
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": [trigger_path]}]
+    if fn != "spawn_entity_on_event":
+        assert "everySeconds" in json.dumps(scope)
     with pytest.raises(ValueError):
         compile_runtime_program(doc)
     params["when"] = {"everySeconds": 0.1}

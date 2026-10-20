@@ -23,7 +23,7 @@ internal static class RuntimeProgramExecutor
     // Player.ApplyDamageToNPC sync their own changes; server-side replay of
     // these authored actions would duplicate damage/status on other events.
     internal static bool ShouldRunNpcEvent(RuntimeEventActionSpec action, Player owner)
-        => action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
+        => action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit or RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill
             ? InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)
             : InfiniRuntimeAuthority.ShouldRunNpcGameplay();
 

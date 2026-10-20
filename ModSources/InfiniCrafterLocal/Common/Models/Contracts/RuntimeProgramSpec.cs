@@ -250,7 +250,8 @@ public sealed class RuntimeProgramSpec
             graph[entity.Id] = new HashSet<string>(StringComparer.Ordinal);
             foreach (RuntimeEventActionSpec action in entity.Events)
             {
-                RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasEmittingItemUse);
+                RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasEmittingItemUse,
+                    Bindings.Any(b => b.Input == RuntimeInputKind.Equipped && b.UsePolicy.Action.Kind == RuntimeBindingAction.EquipPassive));
                 if (action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                 {
                     if (!entity.IsProjectileEntity
@@ -427,19 +428,21 @@ public static class RuntimeEventKind
     public const string Periodic = "periodic";
     public const string OnRelease = "on_release";
     public const string ChannelComplete = "channel_complete";
+    public const string OnHurt = "on_hurt";
+    public const string OnEnemyKill = "on_enemy_kill";
     private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
     {
         OnUse, OnSpawn, OnHit, OnCrit, OnTileCollision, OnExpire, OnKill,
-        Periodic, OnRelease, ChannelComplete,
+        Periodic, OnRelease, ChannelComplete, OnHurt, OnEnemyKill,
     };
     public static bool IsKnown(string? value) => value is not null && Known.Contains(value);
 
-    public static void ValidateProducer(RuntimeEntitySpec entity, string eventName, bool itemContactEnabled, bool hasActiveItemUse)
+    public static void ValidateProducer(RuntimeEntitySpec entity, string eventName, bool itemContactEnabled, bool hasActiveItemUse, bool hasEquipment = false)
     {
         bool projectile = entity.IsProjectileEntity;
         bool sourceCompatible = eventName switch
         {
-            OnUse => entity.Kind == RuntimeEntityKind.ItemBody,
+            OnUse or OnHurt or OnEnemyKill => entity.Kind == RuntimeEntityKind.ItemBody,
             OnSpawn or OnTileCollision or OnExpire or OnKill or OnRelease or ChannelComplete => projectile,
             OnHit or OnCrit or Periodic => true,
             _ => false,
@@ -450,6 +453,7 @@ public static class RuntimeEventKind
         bool available = eventName switch
         {
             OnUse => hasActiveItemUse,
+            OnHurt or OnEnemyKill => hasEquipment,
             OnHit or OnCrit => entity.Kind == RuntimeEntityKind.ItemBody ? itemContactEnabled : entity.Damage.Enabled,
             OnTileCollision => entity.Collision.TileCollide,
             OnRelease or ChannelComplete => entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease,
@@ -1842,6 +1846,8 @@ public sealed class RuntimeEventActionSpec
     public float RadiusTiles { get; set; }
     public float DamageFraction { get; set; }
     public int MaxHeal { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public int ReactionCooldownTicks { get; set; }
     public int CooldownTicks { get; set; }
     public bool SafeTileOnly { get; set; } = true;
 
@@ -1986,6 +1992,11 @@ public sealed class RuntimeEventActionSpec
         DamageFraction = Math.Clamp(DamageFraction, 0f, 1f);
         MaxHeal = Math.Clamp(MaxHeal, 0, 500);
         CooldownTicks = Math.Clamp(CooldownTicks, 0, 36000);
+        bool reactive = Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill;
+        if (reactive && (ReactionCooldownTicks is < 6 or > 3600
+            || ActionCode is not (RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.DamageArea))
+            || !reactive && ReactionCooldownTicks != 0)
+            throw new InvalidDataException("Reactive equipment requires an explicit 6..3600 tick cooldown and supported action");
         if (Event == RuntimeEventKind.Periodic && PeriodTicks < 6)
             throw new InvalidDataException($"periodic event action '{Id}' requires periodTicks >= 6");
         if (ActionCode is (RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit) && string.IsNullOrWhiteSpace(EntityId))

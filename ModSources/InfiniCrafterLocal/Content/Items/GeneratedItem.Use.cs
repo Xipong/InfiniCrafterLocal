@@ -93,18 +93,24 @@ public partial class GeneratedItem
     public override bool AltFunctionUse(Player player)
         => Data?.RuntimeProgram?.BindingForInput(RuntimeInputKind.AlternateUse) is not null;
 
-    internal static string UseBlockedReason(Player player, GameplaySpec? gameplay)
+    internal static string UseBlockedReason(Player player, GameplaySpec? gameplay, string? input = null)
     {
         if (player is null || gameplay is null) return "";
-        return gameplay.UseConditionMode switch
+        RuntimeUseConditionSpec? selected = input is null ? null : Array.Find(gameplay.UseConditions ?? Array.Empty<RuntimeUseConditionSpec>(), c => c.Input == input);
+        string common = ConditionBlockedReason(player, gameplay.UseConditionMode, gameplay.UseConditionMinLife, gameplay.UseConditionMinMana);
+        return common.Length != 0 || selected is null ? common
+            : ConditionBlockedReason(player, selected.UseConditionMode, selected.UseConditionMinLife, selected.UseConditionMinMana);
+    }
+
+    private static string ConditionBlockedReason(Player player, string mode, int minLife, int minMana)
+        => mode switch
         {
             "grounded" when !HasNativeGroundSupport(player) => "Requires solid ground",
             "not_wet" when player.wet => "Cannot be used while wet",
-            "life_above" when player.statLife < gameplay.UseConditionMinLife => $"Requires {gameplay.UseConditionMinLife} life",
-            "mana_above" when player.statMana < gameplay.UseConditionMinMana => $"Requires {gameplay.UseConditionMinMana} mana",
+            "life_above" when player.statLife < minLife => $"Requires {minLife} life",
+            "mana_above" when player.statMana < minMana => $"Requires {minMana} mana",
             _ => "",
         };
-    }
 
     private static bool HasNativeGroundSupport(Player player)
     {
@@ -146,7 +152,7 @@ public partial class GeneratedItem
         RuntimeBindingSpec? binding = ActiveUseBinding(player);
         if (binding is null || !GeneratedQuickUseSystem.AcceptsBinding(player, binding, Data.EffectsForBinding(binding))) return false;
         ApplyActiveUseProjection(binding);
-        string blocked = UseBlockedReason(player, Data.Gameplay);
+        string blocked = UseBlockedReason(player, Data.Gameplay, binding.Input);
         if (!string.IsNullOrWhiteSpace(blocked))
         {
             if (player.whoAmI == Main.myPlayer && (int)Main.GameUpdateCount - _lastBlockedNoticeTick > 30)

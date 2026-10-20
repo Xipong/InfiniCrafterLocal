@@ -823,6 +823,10 @@ def _capability_receipt_owner_error(
                 or (final_document is not None and not _same_receipt_value(
                     _final_value(final_document, "runtimeProgram.itemEntityId"), identity))):
                 return "capability receipt item owner differs from the unique declared body and final item identity"
+    if final_document is not None and source_call is not None and receipt.get("fn") == "require_use_condition":
+        gate = re.match(r"(gameplay\.useConditions\[\d+\])\.", receipt["finalPath"])
+        if gate is None or _final_value(final_document, gate.group(1) + ".input") != source_call.get("params", {}).get("input"):
+            return "use condition receipt differs from its exact authored input"
     if final_document is None:
         return ""
     match = re.match(r"(runtimeProgram\.entities\[\d+\])(?:\.events\[\d+\])?\.", receipt["finalPath"])

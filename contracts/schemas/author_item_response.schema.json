@@ -2631,6 +2631,15 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
+                      "input": {
+                        "type": "string",
+                        "enum": [
+                          "primary_use",
+                          "alternate_use"
+                        ],
+                        "description": "Existing active input",
+                        "x-infini-semanticType": "bounded_text"
+                      },
                       "condition": {
                         "oneOf": [
                           {
@@ -2680,11 +2689,12 @@
                             "description": "Player.statMana >= the authored mana threshold"
                           }
                         ],
-                        "description": "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.",
+                        "description": "One condition; thresholds include equality.",
                         "x-infini-semanticType": "bounded_text"
                       }
                     },
                     "required": [
+                      "input",
                       "condition"
                     ]
                   }
@@ -7872,7 +7882,7 @@
                               "on_release",
                               "channel_complete"
                             ],
-                            "description": "Execute on this exact emitted event"
+                            "description": "Exact emitted event"
                           },
                           {
                             "type": "object",
@@ -7881,7 +7891,7 @@
                                 "type": "number",
                                 "minimum": 0.09166666666666666,
                                 "maximum": 60.0,
-                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time interval; producer clocks retain their phase",
                                 "x-infini-units": "seconds",
                                 "x-infini-semanticType": "seconds",
                                 "x-infini-authorProjection": {
@@ -7894,10 +7904,41 @@
                               "everySeconds"
                             ],
                             "additionalProperties": false,
-                            "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash"
+                            "description": "Periodic event; call ID fixes the item phase"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "on": {
+                                "type": "string",
+                                "enum": [
+                                  "on_hurt",
+                                  "on_enemy_kill"
+                                ],
+                                "description": "Equipment event"
+                              },
+                              "cooldownSeconds": {
+                                "type": "number",
+                                "minimum": 0.09166666666666666,
+                                "maximum": 60.0,
+                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared interval reserved before dispatch",
+                                "x-infini-units": "seconds",
+                                "x-infini-semanticType": "seconds",
+                                "x-infini-authorProjection": {
+                                  "nonzeroMustRemainNonzero": true,
+                                  "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                                }
+                              }
+                            },
+                            "required": [
+                              "on",
+                              "cooldownSeconds"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Functional equipment reaction; identical copies share cooldown."
                           }
                         ],
-                        "description": "Exact event or explicit periodic interval",
+                        "description": "Explicit event trigger",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "entity": {
@@ -8031,7 +8072,7 @@
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "entity": {
@@ -8274,7 +8315,7 @@
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "entity": {
@@ -8413,7 +8454,7 @@
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "buffId": {
@@ -8499,15 +8540,51 @@
                     "additionalProperties": false,
                     "properties": {
                       "when": {
-                        "type": "string",
-                        "enum": [
-                          "on_hit",
-                          "on_crit",
-                          "on_tile_collision",
-                          "on_expire",
-                          "on_kill"
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "on_hit",
+                              "on_crit",
+                              "on_tile_collision",
+                              "on_expire",
+                              "on_kill"
+                            ],
+                            "description": "Exact emitted event"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "on": {
+                                "type": "string",
+                                "enum": [
+                                  "on_hurt",
+                                  "on_enemy_kill"
+                                ],
+                                "description": "Equipment event"
+                              },
+                              "cooldownSeconds": {
+                                "type": "number",
+                                "minimum": 0.09166666666666666,
+                                "maximum": 60.0,
+                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared interval reserved before dispatch",
+                                "x-infini-units": "seconds",
+                                "x-infini-semanticType": "seconds",
+                                "x-infini-authorProjection": {
+                                  "nonzeroMustRemainNonzero": true,
+                                  "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                                }
+                              }
+                            },
+                            "required": [
+                              "on",
+                              "cooldownSeconds"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Functional equipment reaction; identical copies share cooldown."
+                          }
                         ],
-                        "description": "Execute on this exact emitted event",
+                        "description": "Explicit event trigger",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "radiusTiles": {
@@ -8595,7 +8672,7 @@
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "maxTargets": {
@@ -8691,7 +8768,7 @@
                               "on_hit",
                               "on_expire"
                             ],
-                            "description": "Execute on this exact emitted event"
+                            "description": "Exact emitted event"
                           },
                           {
                             "type": "object",
@@ -8700,7 +8777,7 @@
                                 "type": "number",
                                 "minimum": 0.09166666666666666,
                                 "maximum": 60.0,
-                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time interval; producer clocks retain their phase",
                                 "x-infini-units": "seconds",
                                 "x-infini-semanticType": "seconds",
                                 "x-infini-authorProjection": {
@@ -8713,10 +8790,10 @@
                               "everySeconds"
                             ],
                             "additionalProperties": false,
-                            "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash"
+                            "description": "Periodic event; call ID fixes the item phase"
                           }
                         ],
-                        "description": "Exact event or explicit periodic interval",
+                        "description": "Explicit event trigger",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "mode": {
@@ -8824,7 +8901,7 @@
                               "on_hit",
                               "on_expire"
                             ],
-                            "description": "Execute on this exact emitted event"
+                            "description": "Exact emitted event"
                           },
                           {
                             "type": "object",
@@ -8833,7 +8910,7 @@
                                 "type": "number",
                                 "minimum": 0.09166666666666666,
                                 "maximum": 60.0,
-                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+                                "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World-time interval; producer clocks retain their phase",
                                 "x-infini-units": "seconds",
                                 "x-infini-semanticType": "seconds",
                                 "x-infini-authorProjection": {
@@ -8846,10 +8923,10 @@
                               "everySeconds"
                             ],
                             "additionalProperties": false,
-                            "description": "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash"
+                            "description": "Periodic event; call ID fixes the item phase"
                           }
                         ],
-                        "description": "Exact event or explicit periodic interval",
+                        "description": "Explicit event trigger",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "impulseBlocksPerSecond": {
@@ -8937,7 +9014,7 @@
                           "on_hit",
                           "on_crit"
                         ],
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "damageFraction": {
@@ -9024,7 +9101,7 @@
                           "on_tile_collision",
                           "on_expire"
                         ],
-                        "description": "Execute on this exact emitted event",
+                        "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
                       "rangeTiles": {

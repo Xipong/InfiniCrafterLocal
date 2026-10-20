@@ -251,7 +251,12 @@ def _compile_item_call(
         return
 
     if fn == "require_use_condition":
-        ctx.project_parameter(call=call, param="condition", value=p["condition"], target=gameplay, prefix="gameplay")
+        conditions = gameplay.setdefault("useConditions", [])
+        condition: dict[str, Any] = {}
+        prefix = f"gameplay.useConditions[{len(conditions)}]"
+        conditions.append(condition)
+        for param in ("input", "condition"):
+            ctx.project_parameter(call=call, param=param, value=p[param], target=condition, prefix=prefix)
         return
     if fn == "add_hold_light":
         project(gameplay, "gameplay", {"strength": "holdLightStrength", "color": "holdLightColorName"})

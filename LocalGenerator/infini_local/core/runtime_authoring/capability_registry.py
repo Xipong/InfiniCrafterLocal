@@ -85,6 +85,8 @@ EVENT_KINDS: Final[tuple[str, ...]] = (
     "periodic",
     "on_release",
     "channel_complete",
+    "on_hurt",
+    "on_enemy_kill",
 )
 NETWORK_AUTHORITIES: Final[tuple[str, ...]] = (
     "owner_request_server_execute",
@@ -1420,14 +1422,20 @@ def _spawn_position_param() -> ParamSpec:
 
 def _event_when_param(events: Iterable[str]) -> ParamSpec:
     allowed = tuple(events)
-    ordinary = tuple(event for event in allowed if event != "periodic")
-    variants = [_p("string", "Execute on this exact emitted event", enum=ordinary, wire_name="event")] if ordinary else []
+    ordinary = tuple(event for event in allowed if event not in {"periodic", "on_hurt", "on_enemy_kill"})
+    variants = [_p("string", "Exact emitted event", enum=ordinary, wire_name="event")] if ordinary else []
     if "periodic" in allowed:
-        variants.append(_p("object", "Periodic execution with an explicit seconds interval; keep the call id because item phase uses its hash", properties={
-            "everySeconds": _seconds(_p("integer", "World-time seconds between periodic executions; item and projectile clocks retain their own phase",
+        variants.append(_p("object", "Periodic event; call ID fixes the item phase", properties={
+            "everySeconds": _seconds(_p("integer", "World-time interval; producer clocks retain their phase",
                              minimum=6, maximum=3600, units="ticks", wire_name="periodTicks"), "everyTicks"),
         }, wire_literals={"event": "periodic"}))
-    return (_p("union", "Exact event or explicit periodic interval", alternatives=variants, semantic_type="runtime_event_trigger")
+    reactions = tuple(event for event in allowed if event in {"on_hurt", "on_enemy_kill"})
+    if reactions:
+        variants.append(_p("object", "Functional equipment reaction; identical copies share cooldown.", properties={
+            "on": _p("string", "Equipment event", enum=reactions, wire_name="event"),
+            "cooldownSeconds": _seconds(_p("integer", "Shared interval reserved before dispatch", minimum=6, maximum=3600, units="ticks", wire_name="reactionCooldownTicks"), "reactionCooldownTicks"),
+        }))
+    return (_p("union", "Explicit event trigger", alternatives=variants, semantic_type="runtime_event_trigger")
             if len(variants) > 1 else replace(variants[0], semantic_type="runtime_event_trigger"))
 
 
@@ -1436,7 +1444,10 @@ def authored_event(params: Mapping[str, Any]) -> str:
     when = params.get("when")
     if isinstance(when, str):
         return when
-    return "periodic" if isinstance(when, Mapping) else ""
+    if isinstance(when, Mapping):
+        if when.get("on") in ("on_hurt", "on_enemy_kill"): return str(when["on"])
+        return "periodic"
+    return ""
 def _spawn_velocity() -> ParamSpec:
     def speed(description: str, wire: str) -> ParamSpec:
         return _p("number", description, minimum=0, maximum=80,
@@ -1816,11 +1827,12 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "require_use_condition",
-        "Gate use on one explicit runtime condition.",
+        "Gate one active input; one condition per input. Omit for unrestricted use.",
         "item",
         ("item_body",),
         {
-            "condition": _p("union", "One exact use condition; resource thresholds include equality. No implicit AND or per-binding scope.", alternatives=(
+            "input": _p("string", "Existing active input", enum=("primary_use", "alternate_use")),
+            "condition": _p("union", "One condition; thresholds include equality.", alternatives=(
                 _p("string", "Player is grounded", enum=("grounded",), wire_literals={"useConditionMode": "grounded"}),
                 _p("string", "Player is not wet", enum=("not_wet",), wire_literals={"useConditionMode": "not_wet"}),
                 _p("object", "Player.statLife >= the authored life threshold", properties={"lifeAtLeast": _p("integer", "Inclusive life threshold", minimum=0, maximum=1000, wire_name="useConditionMinLife")}, wire_literals={"useConditionMode": "life_above"}),
@@ -1828,10 +1840,11 @@ _CAPS: list[CapabilitySpec] = [
             )),
         },
         component_slot="use_condition",
+        multiplicity="many_per_target",
         py=_COMPILER_OWNER,
         cs="Content/Items/GeneratedItem.Use.cs::UseBlockedReason",
-        wire=("gameplay.useConditionMode", "gameplay.useConditionMinLife", "gameplay.useConditionMinMana"),
-        lowering=("gameplay.useConditionMode", "gameplay.useConditionMinLife", "gameplay.useConditionMinMana"),
+        wire=("gameplay.useConditions[].input", "gameplay.useConditions[].useConditionMode", "gameplay.useConditions[].useConditionMinLife", "gameplay.useConditions[].useConditionMinMana"),
+        lowering=("gameplay.useConditions[].input", "gameplay.useConditions[].useConditionMode", "gameplay.useConditions[].useConditionMinLife", "gameplay.useConditions[].useConditionMinMana"),
     ),
     _cap(
         "add_hold_light",
@@ -2510,18 +2523,18 @@ _CAPS.extend([
         "event",
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
-            "when": _event_when_param(("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill")),
+            "when": _event_when_param(("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill", "on_hurt", "on_enemy_kill")),
             "radiusTiles": _p("number", "Damage radius on the exact 1/16-tile pixel lattice", minimum=0.5, maximum=48, multiple_of=1 / 16, wire_multiplier=16, wire_name="radiusPx", units="tiles"),
             "damageMultiplier": _p("number", "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone", minimum=0.05, maximum=4),
         },
         component_slot="event_action",
         authority="server_execute",
-        authority_by_effect={"on_hit": "owner_execute_sync", "on_crit": "owner_execute_sync"},
+        authority_by_effect={"on_hit": "owner_execute_sync", "on_crit": "owner_execute_sync", "on_hurt": "owner_execute_sync", "on_enemy_kill": "owner_execute_sync"},
         meaningful_for_stationary=True,
         multiplicity="many_per_target",
         py=_COMPILER_OWNER,
         cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
-        events=("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill"),
+        events=("on_hit", "on_crit", "on_tile_collision", "on_expire", "on_kill", "on_hurt", "on_enemy_kill"),
     ),
     _cap(
         "damage_nearest_on_event",
@@ -2806,6 +2819,16 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
     "channel_complete": EventKindSpec(
         "channel_complete", PROJECTILE_ENTITY_KIND_ORDER, ("charge_then_release",),
         "Emitted by charge_then_release after a full authored charge.",
+    ),
+    "on_hurt": EventKindSpec(
+        "on_hurt", ("item_body",), (),
+        "Owner survives positive damage. Functional equipment only; no NPC target or damageDone.",
+        producer_binding_inputs=("equipped",), producer_binding_actions=("equip_passive",), producer_binding_kinds=("item_body",),
+    ),
+    "on_enemy_kill": EventKindSpec(
+        "on_enemy_kill", ("item_body",), (),
+        "Server-confirmed hostile NPC death credited by lastInteraction. Functional equipment only; excludes critters/segments. Position=enemy center; no live target. Not projectile on_kill.",
+        producer_binding_inputs=("equipped",), producer_binding_actions=("equip_passive",), producer_binding_kinds=("item_body",),
     ),
 })
 

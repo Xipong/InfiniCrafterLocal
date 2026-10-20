@@ -852,6 +852,14 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         if kind not in cap.target_kinds:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].target", "wrong_target_kind", f"{fn} cannot target {kind}.", cap.target_kinds, (call_id, target_id)))
         key = (target_id, fn, params.get("effectGroupId") if cap.effect_groupable and isinstance(params.get("effectGroupId"), str) else None)
+        if fn == "require_use_condition":
+            selector = params.get("input")
+            matching = [row for row in calls[:index] if row.get("fn") == fn
+                        and isinstance(row.get("params"), Mapping) and row["params"].get("input") == selector]
+            if matching:
+                issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}]", "duplicate_single_component", "Each active input may have only one use condition.", related_ids=(call_id,)))
+            if isinstance(selector, str) and selector in {"primary_use", "alternate_use"} and not any(row.get("input") == selector for row in bindings):
+                issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.input", "incompatible_param_variant", "Use condition must select an existing active input.", related_ids=(call_id,)))
         if cap.multiplicity == "single_per_target" and key in seen_single:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}]", "duplicate_single_component", f"{fn} may appear only once on '{target_id}'.", ("merge into one call", "delete duplicate"), (target_id, call_id)))
         seen_single.add(key)

@@ -119,9 +119,10 @@ internal static class RuntimeDelayedActionScheduler
         }
         else if (source is EntitySource_Misc
                  && source.GetType() == typeof(EntitySource_Misc)
-                 && source.Context == "InfiniRuntimePeriodic"
                  && sourceEntity.Kind == RuntimeEntityKind.ItemBody
-                 && action.Event == RuntimeEventKind.Periodic)
+                 && (source.Context == "InfiniRuntimePeriodic" && action.Event == RuntimeEventKind.Periodic
+                     || source.Context == "InfiniRuntimeEquipmentReaction"
+                        && action.Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill))
         {
             // Item-body periodic events have no item-use parent. Preserve their
             // declared Misc source; do not invent an item or another mechanic.

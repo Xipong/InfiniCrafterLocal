@@ -89,6 +89,11 @@ public static partial class InfiniItemVfxRuntime
         return true;
     }
 
+    private static GeneratedItem? EventSourceItem(Player player, string itemId, string eventName)
+        => eventName is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill
+            ? player.GetModPlayer<global::InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>().FindReactiveEquipment(itemId)
+            : player.HeldItem?.ModItem is GeneratedItem held && held.Data.Id == itemId ? held : null;
+
     public static void EmitAndSyncEvent(Player player, GeneratedItemData? data, string entityId, string eventName, Vector2? eventPosition = null)
     {
         if (player is null || !player.active || data is null || !HasExactSlot(data, entityId, eventName)) return;
@@ -139,7 +144,7 @@ public static partial class InfiniItemVfxRuntime
                 Vector2 point = new(reader.ReadSingle(), reader.ReadSingle());
                 if (!Finite(point) || whoAmI < 0 || whoAmI >= Main.maxPlayers) return;
                 Player player = Main.player[whoAmI];
-                if (player?.active != true || player.HeldItem?.ModItem is not GeneratedItem item || !string.Equals(item.Data.Id, itemId, StringComparison.Ordinal) || !HasExactSlot(item.Data, entityId, eventName)) return;
+                if (player?.active != true || EventSourceItem(player, itemId, eventName) is not GeneratedItem item || !HasExactSlot(item.Data, entityId, eventName)) return;
                 if (!AcceptRemoteEvent(player, itemId, entityId, eventName)) return;
                 var relay = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.GetPacket();
                 if (relay is null) return;
@@ -155,12 +160,12 @@ public static partial class InfiniItemVfxRuntime
             Vector2 remotePoint = new(reader.ReadSingle(), reader.ReadSingle());
             if (!Finite(remotePoint) || playerId < 0 || playerId >= Main.maxPlayers) return;
             Player remote = Main.player[playerId];
-            GeneratedItemData? data = remote?.HeldItem?.ModItem is GeneratedItem held && string.Equals(held.Data.Id, remoteItemId, StringComparison.Ordinal) ? held.Data : null;
+            GeneratedItemData? data = remote is not null && EventSourceItem(remote, remoteItemId, remoteEvent) is GeneratedItem held ? held.Data : null;
             if (data is null && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.TryGet(remoteItemId, out GeneratedItemData registered) == true) data = registered;
             if (remote?.active == true && data is not null && HasExactSlot(data, remoteEntityId, remoteEvent) &&
                 AcceptRemoteEvent(remote, remoteItemId, remoteEntityId, remoteEvent))
                 EmitLocal(remote, data, remoteEntityId, remoteEvent,
-                    eventPosition: remoteEvent is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit ? remotePoint : null,includeMaterials:false);
+                    eventPosition: remoteEvent is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit or RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill ? remotePoint : null,includeMaterials:false);
         }
         catch { }
     }
@@ -183,7 +188,7 @@ public static partial class InfiniItemVfxRuntime
             if (slot.PlacementBindingId is not null || !string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
             if(InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
-                    VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,null,data),itemBudget:true,allowance:eventAllowance);
+                    VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);
                 continue;
             }
             int repeat = cadence && slot.RepeatEvery!.Value > 0 ? slot.RepeatEvery!.Value : 10;
