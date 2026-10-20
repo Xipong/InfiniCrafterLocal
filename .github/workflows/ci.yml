@@ -63,11 +63,37 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      # Match ParticleLibrary's declared modReferences version (3.2.1.0).
+      # Luminance recommends using its latest GitHub release DLL for project references.
+      - name: Download tML mod reference DLLs
+        shell: pwsh
+        run: |
+          $depsRoot = Join-Path $env:RUNNER_TEMP "infinicrafter-compile-deps"
+          $particleLibraryDll = Join-Path $depsRoot "ParticleLibrary\ParticleLibrary.dll"
+          $luminanceDll = Join-Path $depsRoot "Luminance\bin\Debug\net8.0\Luminance.dll"
+          New-Item -ItemType Directory -Force -Path (Split-Path $particleLibraryDll), (Split-Path $luminanceDll) | Out-Null
+
+          $particleLibraryUrl = "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/ParticleLibrary.dll"
+          $luminanceUrl = "https://github.com/LucilleKarma/Luminance/releases/latest/download/Luminance.dll"
+
+          & curl.exe --fail --location --retry 3 --silent --show-error --output $particleLibraryDll $particleLibraryUrl
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download ParticleLibrary.dll (curl exit $LASTEXITCODE)." }
+          & curl.exe --fail --location --retry 3 --silent --show-error --output $luminanceDll $luminanceUrl
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download Luminance.dll (curl exit $LASTEXITCODE)." }
+
+          foreach ($dll in @($particleLibraryDll, $luminanceDll)) {
+            $header = [System.IO.File]::ReadAllBytes($dll)
+            if ($header.Length -lt 2 -or $header[0] -ne 0x4D -or $header[1] -ne 0x5A) {
+              throw "Downloaded dependency is not a Windows DLL: $dll"
+            }
+          }
+
+          "INFINI_TML_DEPS_SRC=$depsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Attempt tML project build
         id: tml
         shell: pwsh
         run: |
-          python tools/validate_release.py --group build
+          python tools/validate_release.py --group build --require-build
           exit $LASTEXITCODE
       - name: Upload tML build logs
         if: always()
