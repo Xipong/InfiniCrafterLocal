@@ -83,7 +83,7 @@ jobs:
           foreach ($name in $names) {
             $row = @($report.checks | Where-Object { $_.name -eq $name }) | Select-Object -First 1
             $status = if ($null -eq $row) { 'missing' } else { [string]$row.status }
-            Add-Content $env:GITHUB_STEP_SUMMARY "| \`$name\` | \`$status\` |"
+            Add-Content $env:GITHUB_STEP_SUMMARY "| $name | $status |"
             if ($status -ne 'passed') { $incomplete += "$name=$status" }
           }
           if ($incomplete.Count -gt 0) {
