@@ -34,6 +34,12 @@ internal static partial class EngineRuntimeChecks
         Equal(720, GeneratedItem.RuntimeTooltipWidthLimit(2048, 1f), "wide monitor still caps huge tooltip widths");
         Equal(304, GeneratedItem.RuntimeTooltipWidthLimit(800, 2f), "UI scale reduces available logical width");
         Equal(224, GeneratedItem.RuntimeTooltipWidthLimit(480, 1.5f), "narrow viewport uses available screen width");
+        Equal(64, GeneratedItem.RuntimeTooltipRowsToAdd(0, 80),
+            "one heavily wrapped fact may not exceed the total native tooltip row budget");
+        Equal(4, GeneratedItem.RuntimeTooltipRowsToAdd(60, 12),
+            "remaining native tooltip budget counts real wrapped rows, not facts");
+        Equal(0, GeneratedItem.RuntimeTooltipRowsToAdd(64, 1),
+            "later facts must not append hidden unbounded tooltip rows");
 
         // One long unspaced token must wrap without dropping data or slicing
         // Unicode grapheme clusters in half.
