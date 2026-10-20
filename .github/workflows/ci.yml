@@ -160,9 +160,12 @@ jobs:
         run: |
           dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity normal
           exit $LASTEXITCODE
+      # CI validates compilation; the SDK packaging target requires a local Steam install.
       - name: Attempt tML project build
         id: tml
         shell: pwsh
+        env:
+          TmlBuildMod: 'false'
         run: |
           python tools/validate_release.py --group build --require-build
           exit $LASTEXITCODE
