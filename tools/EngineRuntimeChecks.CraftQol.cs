@@ -398,6 +398,7 @@ internal static partial class EngineRuntimeChecks
             owner.PostUpdate();
             Equal((int)ItemID.WoodenSword, Terraria.Main.item[2].type, "actual native free-slot delivery receives exact refund");
             Equal((byte)PrefixID.Legendary, Terraria.Main.item[2].prefix, "actual native free-slot delivery retains exact prefix");
+            Equal(2, Terraria.Main.item[2].whoAmI, "world refund retains native-allocated item identity");
             var delivered = new TagCompound(); owner.SaveData(delivered);
             Equal(0, delivered.GetList<TagCompound>("infiniDeferredCraftRefundsV1").Count, "world delivery retires sole claim");
             Equal(true, ReferenceEquals(before[7], Terraria.Main.item[7]), "free slot retry preserves older occupied drop");

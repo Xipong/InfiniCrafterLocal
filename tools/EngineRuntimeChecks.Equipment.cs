@@ -36,7 +36,7 @@ internal static partial class EngineRuntimeChecks
     {
         var action = generated.Data.RuntimeProgram.TryGetEntity(generated.Data.RuntimeProgram.ItemEntityId)!.Events.Single();
         uint due = 120;
-        while ((due + (ulong)action.Id.GetHashCode()) % (ulong)action.PeriodTicks != 0) due++;
+        while ((due + GeneratedItem.PeriodicActionOffset(action.Id)) % (ulong)action.PeriodTicks != 0) due++;
         return due;
     }
 

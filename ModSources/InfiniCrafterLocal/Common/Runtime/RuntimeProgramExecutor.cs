@@ -281,8 +281,9 @@ internal static class RuntimeProgramExecutor
             return;
         }
         int granted = reservedSpawnBudget > 0 ? reservedSpawnBudget : budget.Reserve(action.Count);
-        int requested = Math.Min(action.Count, granted);
-        int spawned = requested > 0 ? GeneratedProjectile.SpawnRuntimeEntity(
+        // Never turn an authored volley into a smaller, differently behaving shot.
+        int requested = action.Count;
+        int spawned = granted == requested ? GeneratedProjectile.SpawnRuntimeEntity(
             data,
             target.Id,
             owner,
@@ -327,9 +328,10 @@ internal static class RuntimeProgramExecutor
         int unattempted = granted;
         try
         {
-            int count = Math.Min(Math.Min(action.Count, granted), InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
-                - GeneratedProjectile.CountActiveGeneratedProjectiles(owner.whoAmI));
-            if (count <= 0 || !GeneratedProjectile.CanAdmitEntityBatch(data, child, owner.whoAmI, count))
+            int count = action.Count;
+            if (granted != count || count > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner
+                    - GeneratedProjectile.CountActiveGeneratedProjectiles(owner.whoAmI)
+                || !GeneratedProjectile.CanAdmitEntityBatch(data, child, owner.whoAmI, count))
                 return;
             if (admittedSnapshot is null)
                 snapshot = snapshot with { Seed = Main.rand.Next() };

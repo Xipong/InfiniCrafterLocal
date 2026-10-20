@@ -276,11 +276,10 @@ public sealed partial class InfiniCraftPlayer
             if (slot.ModItem is not null || refund.ModItem is not null)
                 continue;
 
-            int move = Math.Min(refund.stack, slot.maxStack - slot.stack);
-            if (move <= 0)
+            // Native hooks own prefix/global-item compatibility and OnStack.
+            // Type equality alone is not enough even for non-ModItem vanilla shells.
+            if (!ItemLoader.TryStackItems(slot, refund, out int moved) || moved <= 0)
                 continue;
-            slot.stack += move;
-            refund.stack -= move;
             SyncRefundedInventorySlot(i);
             if (refund.stack <= 0)
                 return true;
@@ -299,12 +298,13 @@ public sealed partial class InfiniCraftPlayer
         // Never let the native allocator replace an occupied drop (or use its dummy).
         if (Main.netMode == NetmodeID.MultiplayerClient || !HasReusableWorldItemSlot())
             return false;
-        int index = Item.NewItem(Player.GetSource_Misc("InfiniCraftRefund"), Player.Hitbox, refund.type, refund.stack);
-        if (index >= 0 && index < Main.maxItems)
+        // Let Terraria allocate and initialize its own world slot. The Item
+        // overload preserves prefix and ModItem/GlobalItem data without replacing
+        // Main.item[index] with a detached clone (stale whoAmI and net state).
+        int index = Item.NewItem(Player.GetSource_Misc("InfiniCraftRefund"), Player.Hitbox, refund,
+            noBroadcast: true);
+        if (index >= 0 && index < Main.maxItems && Main.item[index] is { active: true } spawned)
         {
-            Main.item[index] = refund;
-            Main.item[index].position = Player.Center;
-            Main.item[index].active = true;
             if (Main.netMode != NetmodeID.SinglePlayer)
                 NetMessage.SendData(MessageID.SyncItem, -1, -1, null, index);
             return true;
