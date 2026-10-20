@@ -45,7 +45,7 @@ public static partial class InfiniItemVfxRuntime
     private static bool TrySendMaterialItemEvent(Player player,GeneratedItemData data,string entityId,string ev,Vector2 point)
     {
         if(!data.VfxManifest.Slots.Any(s=>s.PlacementBindingId is null&&s.EntityId==entityId&&s.Event==ev&&InfiniDetachedVfxSystem.HasSnapshotVfx(s)))return false;
-        if(player.HeldItem?.ModItem is not GeneratedItem gi||gi.Data.Id!=data.Id)return true;
+        if(EventSourceItem(player,data.Id,ev) is not GeneratedItem gi)return true;
         var payload=new MaterialItemEvent(player.whoAmI,gi.PresentationToken,MaterialItemEventStream.NewOwnerOccurrence(),data.Id,entityId,ev,point,InfiniItemVfxSnapshot.Capture(player));
         if(!payload.Snapshot.Valid||InfiniCrafterLocalMod.Instance is null)return true;
         var packet=InfiniCrafterLocalMod.Instance.GetPacket();packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);WriteMaterialItemEvent(packet,payload);packet.Send();return true;
@@ -60,23 +60,24 @@ public static partial class InfiniItemVfxRuntime
         MaterialItemEvent p;try{p=ReadMaterialItemEvent(reader);}catch{return;}
         var player=Main.player[p.Owner];
         if(Main.netMode==NetmodeID.Server) {
-            if(sender!=p.Owner||player is not{active:true}||player.HeldItem?.ModItem is not GeneratedItem gi
-                ||gi.Data.Id!=p.ItemId||gi.PresentationToken!=p.Token||!HasExactSlot(gi.Data,p.EntityId,p.Event))return;
+            if(sender!=p.Owner||player is not{active:true}||EventSourceItem(player,p.ItemId,p.Event) is not GeneratedItem gi
+                ||gi.PresentationToken!=p.Token||!HasExactSlot(gi.Data,p.EntityId,p.Event))return;
             var entity=gi.Data.RuntimeProgram.TryGetEntity(p.EntityId);if(entity is null||!GeneratedItemRegistryService.IsCurrentWorldData(gi.Data))return;
             try{RuntimeEventKind.ValidateProducer(entity,p.Event,gi.Data.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.ContactDamage),
-                gi.Data.RuntimeProgram.Bindings.Any(b=>b.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse&&b.UsePolicy.Action.Kind!=RuntimeBindingAction.PlaceItem));}catch{return;}
+                gi.Data.RuntimeProgram.Bindings.Any(b=>b.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse&&b.UsePolicy.Action.Kind!=RuntimeBindingAction.PlaceItem),
+                gi.Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped) is not null);}catch{return;}
             if(!AcceptMaterialItemEvent(p))return;
             var packet=InfiniCrafterLocalMod.Instance?.GetPacket();if(packet is null)return;
             packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);WriteMaterialItemEvent(packet,p with { Occurrence=MaterialItemEventStream.NewRelayOccurrence() });packet.Send(-1,p.Owner);return;
         }
         if(p.Owner==Main.myPlayer)return;
-        GeneratedItemData? data=player?.HeldItem?.ModItem is GeneratedItem held&&held.Data.Id==p.ItemId?held.Data:null;
+        GeneratedItemData? data=player is not null&&EventSourceItem(player,p.ItemId,p.Event) is GeneratedItem held?held.Data:null;
         if(data is null&&InfiniCrafterLocalMod.GeneratedItems?.TryGet(p.ItemId,out var registered)==true)data=registered;
         if(data is null||!GeneratedItemRegistryService.IsCurrentWorldData(data)||!HasExactSlot(data,p.EntityId,p.Event)||!AcceptMaterialItemEvent(p))return;
-        VfxSourceBinding? binding=player?.HeldItem?.ModItem is GeneratedItem live&&live.PresentationToken==p.Token?VfxSourceBinding.Capture(player,player.HeldItem,data):null;
+        VfxSourceBinding? binding=player is not null&&EventSourceItem(player,p.ItemId,p.Event) is GeneratedItem live&&live.PresentationToken==p.Token?VfxSourceBinding.Capture(player,live.Item,data):null;
         var allowance=new MaterialEventAllowance(data.VfxManifest.Budget.MaxParticlesTotal);
         EmitMaterialItemSnapshot(data,p,binding,allowance);
         // Simple renderers retain their live-player anchors and event cadence.
-        if(player is{active:true}&&AcceptRemoteEvent(player,p.ItemId,p.EntityId,p.Event))EmitLocal(player,data,p.EntityId,p.Event,eventPosition:p.Event is "on_hit" or "on_crit"?p.Point:null,includeMaterials:false,sharedAllowance:allowance);
+        if(player is{active:true}&&AcceptRemoteEvent(player,p.ItemId,p.EntityId,p.Event))EmitLocal(player,data,p.EntityId,p.Event,eventPosition:p.Event is "on_hit" or "on_crit" or "on_hurt" or "on_enemy_kill"?p.Point:null,includeMaterials:false,sharedAllowance:allowance);
     }
 }

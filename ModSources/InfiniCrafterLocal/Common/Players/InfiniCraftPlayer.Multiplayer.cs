@@ -313,8 +313,7 @@ public sealed partial class InfiniCraftPlayer
         // Two unrelated modded items both used to produce empty generated ids,
         // so an unrelated cursor item could absorb a rejected escrow unit.
         // Let the installed Item/GlobalItem stacking hooks prove exact compatibility.
-        return Main.mouseItem.IsTheSameAs(restored)
-            && ItemLoader.CanStack(Main.mouseItem, restored);
+        return ItemLoader.CanStack(Main.mouseItem, restored);
     }
 
     private void ClearPendingStationEscrowOperation()

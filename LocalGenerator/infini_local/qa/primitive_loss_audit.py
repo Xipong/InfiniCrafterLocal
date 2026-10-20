@@ -203,6 +203,9 @@ def event_surface_audit(
         "scheduler": _member_reads(scheduler, (0, len(scheduler)), b"action"),
         "item": _member_reads(item_events, (0, len(item_events)), b"action"),
         "projectile": _member_reads(projectile_events, (0, len(projectile_events)), b"action"),
+        "equipment_reactions": _member_reads(
+            (_MODEL_ROOT / "Common/Players/InfiniCraftPlayer.Reactions.cs").read_bytes(),
+            (0, len((_MODEL_ROOT / "Common/Players/InfiniCraftPlayer.Reactions.cs").read_bytes())), b"action"),
     }
     if not {"DamageMultiplier", "CooldownTicks"} <= reads_by_seam["executor"] or not (
         {"DelayTicks"} <= reads_by_seam["scheduler"]
@@ -281,6 +284,7 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     groups = {
         "GameplaySpec": "gameplay.",
+        "RuntimeUseConditionSpec": "gameplay.useConditions[].",
         "GeneratedBuffSpec": "gameplay.generatedBuff.",
         "BuffEntrySpec": "gameplay.extraBuffs[].",
     }
@@ -290,6 +294,10 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
             "UseStyle": "Resolved Terraria ItemUseStyleID from authored useStyleName.",
             "ExtraBuffs": "Nested list of authored BuffEntrySpec fields.",
             "GeneratedBuff": "Nested authored GeneratedBuffSpec fields.",
+            "UseConditions": "Nested authored RuntimeUseConditionSpec input-local gates.",
+            "UseConditionMode": "Existing persisted item-wide gate, executed by UseBlockedReason before an input-local gate; fresh Author expresses it with two explicit input calls.",
+            "UseConditionMinLife": "Inclusive life threshold of the existing persisted item-wide gate.",
+            "UseConditionMinMana": "Inclusive mana threshold of the existing persisted item-wide gate.",
         },
     }
     unclassified: dict[str, list[str]] = {}

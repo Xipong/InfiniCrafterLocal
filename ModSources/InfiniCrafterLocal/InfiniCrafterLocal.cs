@@ -35,6 +35,11 @@ public sealed class InfiniCrafterLocalMod : Mod
     public override void HandlePacket(System.IO.BinaryReader reader, int whoAmI)
     {
         byte packetType = reader.ReadByte();
+        if (packetType == InfiniNetPacketIds.EquipmentEnemyKill)
+        {
+            InfiniCraftPlayer.HandleEquipmentKillPacket(reader);
+            return;
+        }
         if (packetType == InfiniNetPacketIds.GeneratedHitNpcPull)
         {
             RuntimeHitPullBridge.HandlePacket(reader, whoAmI);

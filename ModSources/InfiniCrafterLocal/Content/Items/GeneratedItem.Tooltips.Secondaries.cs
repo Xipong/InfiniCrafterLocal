@@ -56,8 +56,10 @@ public partial class GeneratedItem
             for (int i = 0; i < Math.Min(events.Length, InfiniRuntimeLimits.MaxRuntimeEventsPerEntity); i++)
             {
                 RuntimeEventActionSpec? action = events[i];
-                if (action is null || !SecondaryEventIsReachable(source, action, itemContact, activeUse)) continue;
+                if (action is null || !SecondaryEventIsReachable(source, action, itemContact, activeUse, program.BindingForInput(RuntimeInputKind.Equipped) is not null)) continue;
                 string occurrence = SecondaryOccurrence(source, action);
+                if (action.Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill)
+                    add("ReactionCooldown" + action.Id, "ReactionCooldown", new object[] { occurrence, RuntimeTooltipTime(action.ReactionCooldownTicks) });
                 string delay = action.DelayTicks == 0 ? RuntimeTooltipText("SecondaryImmediate") : RuntimeTooltipTime(action.DelayTicks);
                 string suffix = (index++).ToString(CultureInfo.InvariantCulture);
                 if (action.ActionCode == RuntimeEventActionCode.DamageArea && action.RadiusPx is > 0 and <= 1024
@@ -116,13 +118,13 @@ public partial class GeneratedItem
         }
     }
 
-    private static bool SecondaryEventIsReachable(RuntimeEntitySpec source, RuntimeEventActionSpec action, bool itemContact, bool activeUse)
+    private static bool SecondaryEventIsReachable(RuntimeEntitySpec source, RuntimeEventActionSpec action, bool itemContact, bool activeUse, bool equipped)
     {
         if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.SpawnEntity)
             || action.Action != RuntimeOpcodeNames.EventActionName(action.ActionCode)
             || (action.Event == RuntimeEventKind.Periodic
                 && (action.PeriodTicks < 6 || !SecondaryPeriodCanOccur(source, action.PeriodTicks)))) return false;
-        try { RuntimeEventKind.ValidateProducer(source, action.Event, itemContact, activeUse); }
+        try { RuntimeEventKind.ValidateProducer(source, action.Event, itemContact, activeUse, equipped); }
         catch (InvalidDataException) { return false; }
         return true;
     }
@@ -162,6 +164,8 @@ public partial class GeneratedItem
         string key = action.Event switch
         {
             RuntimeEventKind.OnUse => "SecondaryUse",
+            RuntimeEventKind.OnHurt => "SecondaryOwnerHurt",
+            RuntimeEventKind.OnEnemyKill => "SecondaryEnemyKilled",
             RuntimeEventKind.OnHit => source.IsProjectileEntity ? "SecondaryProjectileHit" : "SecondaryItemHit",
             RuntimeEventKind.OnCrit => source.IsProjectileEntity ? "SecondaryProjectileCrit" : "SecondaryItemCrit",
             RuntimeEventKind.OnSpawn => "SecondarySpawn",

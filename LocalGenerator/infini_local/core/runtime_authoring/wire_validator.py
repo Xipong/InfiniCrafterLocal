@@ -94,7 +94,7 @@ _LIGHT_KEYS = frozenset({"strength", "color"})
 _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
-    "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly",
+    "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
     "damageBasis", "knockbackBasis", "hitTargetSpawn",
 }) | _TARGET_EMISSION_FIELDS
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
@@ -580,6 +580,25 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     elif item_contact_raw is not None:
         errors.append({"path": "$.runtimeProgram.itemContact", "code": "required_object", "message": "itemContact must be an object."})
 
+    gameplay = data.get("gameplay")
+    conditions = gameplay.get("useConditions", []) if isinstance(gameplay, Mapping) else []
+    condition_bindings = runtime.get("bindings") if isinstance(runtime.get("bindings"), list) else []
+    if not isinstance(conditions, list) or len(conditions) > 2:
+        errors.append({"path": "$.gameplay.useConditions", "code": "invalid_use_conditions", "message": "At most two explicit input conditions are allowed."})
+    else:
+        seen_conditions: set[str] = set()
+        cap = CAPABILITY_REGISTRY["require_use_condition"]
+        for ci, condition in enumerate(conditions):
+            path = f"$.gameplay.useConditions[{ci}]"
+            if not isinstance(condition, Mapping) or not _wire_projection_witness(cap.params["condition"], "condition", "gate", {"gate": condition}):
+                errors.append({"path": path, "code": "invalid_use_condition", "message": "Expected one exact registered condition projection."})
+                continue
+            _reject_unknown(condition, frozenset({"input", "useConditionMode", "useConditionMinLife", "useConditionMinMana"}), path, errors)
+            inp = condition.get("input")
+            if not isinstance(inp, str) or inp not in {"primary_use", "alternate_use"} or inp in seen_conditions or not any(isinstance(row, Mapping) and row.get("input") == inp for row in condition_bindings):
+                errors.append({"path": path + ".input", "code": "invalid_use_condition_input", "message": "Gate must select one unique existing active input."})
+            if isinstance(inp, str): seen_conditions.add(inp)
+
     entities_raw = runtime.get("entities")
     entities = [row for row in entities_raw if isinstance(row, Mapping)] if isinstance(entities_raw, list) else []
     if not isinstance(entities_raw, list) or not entities:
@@ -593,6 +612,13 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         entity_id = str(entity.get("id") or "")
         kind = str(entity.get("kind") or "")
         _reject_unknown(entity, _ENTITY_KEYS, entity_path, errors)
+        for event_index, event in enumerate(entity.get("events", []) if isinstance(entity.get("events"), list) else []):
+            if not isinstance(event, Mapping): continue
+            reactive = event.get("event") in ("on_hurt", "on_enemy_kill")
+            timer = event.get("reactionCooldownTicks", 0)
+            if (reactive and (type(timer) is not int or not 6 <= timer <= 3600 or event.get("actionCode") not in (1, 3))
+                    or not reactive and "reactionCooldownTicks" in event):
+                errors.append({"path": f"{entity_path}.events[{event_index}].reactionCooldownTicks", "code": "invalid_reaction_cooldown", "message": "Equipment reactions require an explicit supported action and bounded cooldown."})
         movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
         controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
         for modifier_fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():

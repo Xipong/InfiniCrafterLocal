@@ -9,6 +9,7 @@ using Terraria.ObjectData;
 internal static partial class EngineRuntimeChecks {
  private static void NativeChestAdmission(){
  WithNativeChestWorld((player,ledger)=>{
+  const int tileType = TileID.Containers;
   var source=NativeChestItem(player,"native-admission",tileType:tileType,style:0);var placement=source.Data.RuntimeProgram.Bindings[0].UsePolicy.Action.Placement!;
   var row=TileObjectData.GetTileData(tileType,0);Equal(true,TileID.Sets.BasicChest[tileType],"native BasicChest metadata family");
   Equal(nameof(Chest.FindEmptyChest),row.HookCheckIfCanPlace.hook.Method.Name,"native capacity callback");Equal(nameof(Chest.AfterPlacement_Hook),row.HookPostPlaceMyPlayer.hook.Method.Name,"native inventory callback");

@@ -215,12 +215,21 @@ public partial class GeneratedItem
 
     private static void AddRuntimeUseCondition(GameplaySpec gp, string suffix, string input, Action<string, string, object[]> add)
     {
-        switch (gp.UseConditionMode)
+        string token = suffix == "Alternate" ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse;
+        RuntimeUseConditionSpec? local = Array.Find(gp.UseConditions ?? Array.Empty<RuntimeUseConditionSpec>(), row => row.Input == token);
+        if (local is not null)
+            AddRuntimeCondition(local.UseConditionMode, local.UseConditionMinLife, local.UseConditionMinMana, suffix + "Local", input, add);
+        AddRuntimeCondition(gp.UseConditionMode, gp.UseConditionMinLife, gp.UseConditionMinMana, suffix, input, add);
+    }
+
+    private static void AddRuntimeCondition(string mode, int minLife, int minMana, string suffix, string input, Action<string, string, object[]> add)
+    {
+        switch (mode)
         {
             case "grounded": add("Condition" + suffix, "Grounded", new object[] { input }); break;
             case "not_wet": add("Condition" + suffix, "NotWet", new object[] { input }); break;
-            case "life_above": add("Condition" + suffix, "MinimumLife", new object[] { input, RuntimeTooltipNumber(gp.UseConditionMinLife) }); break;
-            case "mana_above": add("Condition" + suffix, "MinimumMana", new object[] { input, RuntimeTooltipNumber(gp.UseConditionMinMana) }); break;
+            case "life_above": add("Condition" + suffix, "MinimumLife", new object[] { input, RuntimeTooltipNumber(minLife) }); break;
+            case "mana_above": add("Condition" + suffix, "MinimumMana", new object[] { input, RuntimeTooltipNumber(minMana) }); break;
         }
     }
 

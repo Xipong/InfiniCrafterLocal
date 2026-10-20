@@ -60,7 +60,7 @@ def test_gameplay_conditional_choice_accepts_only_exact_missing_dependency(monke
     if selector == "when":
         call["params"][selector] = "on_use"
     else:
-        call["params"] = {selector: "invalid"}
+        call["params"] = {"input": "primary_use", selector: "invalid"}
     before = json.dumps(doc, sort_keys=True)
     candidate = copy.deepcopy(call)
     candidate["params"][selector] = value
@@ -106,7 +106,7 @@ def test_gameplay_conditional_dependency_keeps_frozen_controls(
     if fn == "pull_on_event":
         call["params"].update(initial)
     else:
-        call["params"] = copy.deepcopy(initial)
+        call["params"] = {"input": "primary_use", **copy.deepcopy(initial)}
     stats = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
     if fix_stats:
         stats["params"]["damage"] = True

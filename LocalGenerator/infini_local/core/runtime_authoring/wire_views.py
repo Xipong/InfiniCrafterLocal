@@ -67,6 +67,12 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         if EVENT_KIND_REGISTRY[event_name].producer_binding_contact_damage is None and item_entity_id:
             for binding in producers:
                 rows.append({"entityId": item_entity_id, "event": event_name, "input": str(binding.get("input") or "")})
+    declared_reactions = {(str(entity.get("id")), str(action.get("event")))
+                          for entity in runtime.get("entities", []) if isinstance(entity, Mapping)
+                          for action in entity.get("events", []) if isinstance(action, Mapping)
+                          and action.get("event") in {"on_hurt", "on_enemy_kill"}}
+    rows = [row for row in rows if row["event"] not in {"on_hurt", "on_enemy_kill"}
+            or (row["entityId"], row["event"]) in declared_reactions]
     unique: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in rows:
         key = (str(row.get("entityId") or ""), str(row.get("event") or ""), str(row.get("input") or ""))

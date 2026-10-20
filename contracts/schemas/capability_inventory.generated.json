@@ -1584,11 +1584,12 @@
       "events": [],
       "exclusiveGroup": "",
       "finalWirePaths": [
-        "gameplay.useConditionMode",
-        "gameplay.useConditionMinLife",
-        "gameplay.useConditionMinMana"
+        "gameplay.useConditions[].input",
+        "gameplay.useConditions[].useConditionMode",
+        "gameplay.useConditions[].useConditionMinLife",
+        "gameplay.useConditions[].useConditionMinMana"
       ],
-      "multiplicity": "single_per_target",
+      "multiplicity": "many_per_target",
       "networkAuthority": "owner_request_server_execute",
       "parameters": {
         "condition": {
@@ -1600,10 +1601,23 @@
           "required": true,
           "semanticType": "bounded_text",
           "units": ""
+        },
+        "input": {
+          "enum": [
+            "primary_use",
+            "alternate_use"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
         }
       },
       "positionOwnership": "none",
-      "purpose": "Gate use on one explicit runtime condition.",
+      "purpose": "Gate one active input; one condition per input. Omit for unrestricted use.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5875,7 +5889,9 @@
         "on_kill",
         "periodic",
         "on_release",
-        "channel_complete"
+        "channel_complete",
+        "on_hurt",
+        "on_enemy_kill"
       ],
       "exclusiveGroup": "",
       "finalWirePaths": [
@@ -5883,6 +5899,7 @@
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
         "runtimeProgram.entities[].events[].periodTicks",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
         "runtimeProgram.entities[].events[].entityId",
         "runtimeProgram.entities[].events[].count",
         "runtimeProgram.entities[].events[].spreadRadians",
@@ -6500,7 +6517,9 @@
     {
       "authorityByEffect": {
         "on_crit": "owner_execute_sync",
-        "on_hit": "owner_execute_sync"
+        "on_enemy_kill": "owner_execute_sync",
+        "on_hit": "owner_execute_sync",
+        "on_hurt": "owner_execute_sync"
       },
       "capability": "damage_area_on_event",
       "componentSlot": "event_action",
@@ -6513,13 +6532,16 @@
         "on_crit",
         "on_tile_collision",
         "on_expire",
-        "on_kill"
+        "on_kill",
+        "on_hurt",
+        "on_enemy_kill"
       ],
       "exclusiveGroup": "",
       "finalWirePaths": [
         "runtimeProgram.entities[].events[].event",
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
         "runtimeProgram.entities[].events[].radiusPx",
         "runtimeProgram.entities[].events[].damageMultiplier",
         "runtimeProgram.entities[].events[].delayTicks"
@@ -6558,14 +6580,8 @@
           "units": "blocks (tiles)"
         },
         "when": {
-          "enum": [
-            "on_hit",
-            "on_crit",
-            "on_tile_collision",
-            "on_expire",
-            "on_kill"
-          ],
-          "kind": "string",
+          "enum": [],
+          "kind": "union",
           "maximum": null,
           "minimum": null,
           "reference": null,

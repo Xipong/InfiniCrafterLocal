@@ -78,6 +78,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         if (!Main.playerInventory || Main.LocalPlayer is null || !Main.LocalPlayer.active)
             return;
 
+        if (RecipeJournalUISystem.IsOpen) return;
         var craftPlayer = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
         bool hasCore = PlayerHasCore(Main.LocalPlayer);
         if (!hasCore && !craftPlayer.HasStationState)
@@ -102,10 +103,16 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             cancelButtons[lane] = StationCancelBounds(panel, lane);
         }
 
+        var bookButton = new Rectangle(clearButton.X - 88, clearButton.Y, 80, 28);
+        if (Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface && bookButton.Contains(Main.mouseX, Main.mouseY))
+        {
+            RecipeJournalUISystem.Open(); Main.mouseLeftRelease = false;
+        }
         HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
         DrawPanel(spriteBatch, panel);
         DrawFittedText(spriteBatch, ForgeText("Title"), new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan,
-            clearButton.X - panel.X - 24, 0.92f);
+            bookButton.X - panel.X - 24, 0.92f);
+        DrawButton(spriteBatch, bookButton, true, RecipeJournalUISystem.Text("Button"));
         DrawButton(spriteBatch, clearButton, !craftPlayer.HasAnyCraftLanePending && craftPlayer.HasAnyInput, ForgeText("Retrieve"));
 
         for (int lane = 0; lane < laneCount; lane++)

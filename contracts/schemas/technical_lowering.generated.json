@@ -280,9 +280,10 @@
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Items/GeneratedItem.Use.cs::UseBlockedReason",
       "outputs": [
-        "gameplay.useConditionMode",
-        "gameplay.useConditionMinLife",
-        "gameplay.useConditionMinMana"
+        "gameplay.useConditions[].input",
+        "gameplay.useConditions[].useConditionMode",
+        "gameplay.useConditions[].useConditionMinLife",
+        "gameplay.useConditions[].useConditionMinMana"
       ]
     },
     {
@@ -977,6 +978,7 @@
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
         "runtimeProgram.entities[].events[].periodTicks",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
         "runtimeProgram.entities[].events[].entityId",
         "runtimeProgram.entities[].events[].count",
         "runtimeProgram.entities[].events[].spreadRadians",
@@ -1057,6 +1059,7 @@
         "runtimeProgram.entities[].events[].event",
         "runtimeProgram.entities[].events[].action",
         "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
         "runtimeProgram.entities[].events[].radiusPx",
         "runtimeProgram.entities[].events[].damageMultiplier",
         "runtimeProgram.entities[].events[].delayTicks"
@@ -1380,9 +1383,10 @@
         "gameplay.axePower",
         "gameplay.hammerPower",
         "gameplay.miningSpeedScale",
-        "gameplay.useConditionMode",
-        "gameplay.useConditionMinLife",
-        "gameplay.useConditionMinMana",
+        "gameplay.useConditions[].input",
+        "gameplay.useConditions[].useConditionMode",
+        "gameplay.useConditions[].useConditionMinLife",
+        "gameplay.useConditions[].useConditionMinMana",
         "gameplay.holdLightStrength",
         "gameplay.holdLightColorName",
         "gameplay.mobilityMode",

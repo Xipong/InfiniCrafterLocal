@@ -159,16 +159,16 @@ def test_grouped_set_bonuses_keep_head_and_set_key_requirements(slot, key, bonus
 ])
 def test_condition_variants_keep_inclusive_resource_thresholds(condition, expected):
     source, call = _source("require_use_condition")
-    call["params"] = {"condition": condition}
+    call["params"] = {"input": "primary_use", "condition": condition}
     wire = compile_runtime_program(source)
-    assert {key: value for key, value in wire["gameplay"].items() if key.startswith("useCondition")} == expected
+    assert wire["gameplay"]["useConditions"] == [{"input": "primary_use", **expected}]
     assert validate_runtime_wire(wire)["ok"]
 
 
 @pytest.mark.parametrize("condition", [{}, {"lifeAtLeast": 1, "manaAtLeast": 1}, {"lifeAtLeast": True}, {"manaAtLeast": -1}, "life_above", ["grounded", "not_wet"]])
 def test_condition_never_infers_threshold_or_combines_two_conditions(condition):
     source, call = _source("require_use_condition")
-    call["params"] = {"condition": condition}
+    call["params"] = {"input": "primary_use", "condition": condition}
     assert not validate_runtime_program(source)["ok"]
 
 
@@ -195,28 +195,28 @@ def test_armor_repair_preserves_the_other_valid_nested_set_bonus():
 ])
 def test_condition_repair_requires_an_explicit_complete_variant(params, path):
     source, call = _source("require_use_condition")
-    call["params"] = params
+    call["params"] = {"input": "primary_use", **params}
     scope = build_runtime_repair_scope(source, validate_runtime_program(source)["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": [path]}]
     fixed = deepcopy(call)
-    fixed["params"] = {"condition": {"lifeAtLeast": 50}}
+    fixed["params"] = {"input": "primary_use", "condition": {"lifeAtLeast": 50}}
     patch, audit = filter_repair_patch_scope(source, {"note": "explicit threshold", "callsUpsert": [fixed]}, scope)
     repaired = apply_repair_patch(source, patch)
     assert audit["ok"] and validate_runtime_wire(compile_runtime_program(repaired))["ok"]
     incomplete = deepcopy(call)
-    incomplete["params"] = {"condition": {}}
+    incomplete["params"] = {"input": "primary_use", "condition": {}}
     patch, _ = filter_repair_patch_scope(source, {"note": "no threshold selected", "callsUpsert": [incomplete]}, scope)
     assert not validate_runtime_program(apply_repair_patch(source, patch))["ok"]
 
 
 def test_unrelated_repair_cannot_change_a_valid_condition_or_threshold():
     source, call = _source("require_use_condition")
-    call["params"] = {"condition": {"lifeAtLeast": 50}}
+    call["params"] = {"input": "primary_use", "condition": {"lifeAtLeast": 50}}
     stats = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
     stats["params"]["damage"] = True
     scope = build_runtime_repair_scope(source, validate_runtime_program(source)["errors"])
     altered = deepcopy(call)
-    altered["params"] = {"condition": {"manaAtLeast": 1}}
+    altered["params"] = {"input": "primary_use", "condition": {"manaAtLeast": 1}}
     fixed_stats = deepcopy(stats)
     fixed_stats["params"]["damage"] = 10
     patch, audit = filter_repair_patch_scope(source, {"note": "fix damage", "callsUpsert": [fixed_stats, altered]}, scope)

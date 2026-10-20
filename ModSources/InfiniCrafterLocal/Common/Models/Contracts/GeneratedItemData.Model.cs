@@ -247,6 +247,13 @@ public sealed class GameplaySpec : IItemEffectsSpec
 
     public float HoldLightStrength { get; set; } = 0f;
     public string HoldLightColorName { get; set; } = "";
+    private RuntimeUseConditionSpec[]? _useConditions;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeUseConditionSpec[]? UseConditions
+    {
+        get => _useConditions;
+        set => _useConditions = value ?? throw new InvalidDataException("useConditions cannot be null");
+    }
     public string UseConditionMode { get; set; } = ""; // none|grounded|not_wet|life_above|mana_above
     public int UseConditionMinLife { get; set; } = 0;
     public int UseConditionMinMana { get; set; } = 0;
@@ -456,4 +463,22 @@ public sealed class VisualSpec
     public float WorldScale { get; set; } = 1f;
     public int DrawOffsetX { get; set; } = 0;
     public int DrawOffsetY { get; set; } = 0;
+}
+
+// Explicit input-local gates. Existing item-wide fields remain readable on saved v5 definitions.
+public sealed class RuntimeUseConditionSpec
+{
+    public string Input { get; set; } = "";
+    public string UseConditionMode { get; set; } = "";
+    public int UseConditionMinLife { get; set; }
+    public int UseConditionMinMana { get; set; }
+    public void Validate()
+    {
+        if (Input is not ("primary_use" or "alternate_use")
+            || UseConditionMode is not ("grounded" or "not_wet" or "life_above" or "mana_above")
+            || UseConditionMinLife is < 0 or > 1000 || UseConditionMinMana is < 0 or > 1000
+            || (UseConditionMode != "life_above" && UseConditionMinLife != 0)
+            || (UseConditionMode != "mana_above" && UseConditionMinMana != 0))
+            throw new InvalidDataException("Invalid input-local use condition");
+    }
 }
