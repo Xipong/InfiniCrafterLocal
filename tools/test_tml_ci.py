@@ -99,9 +99,12 @@ class TmlWorkflowTests(unittest.TestCase):
         self.assertIn("TML_BUILD_FAILED=true", flags)
         self.assertNotIn("TML_BUILD_SKIPPED=true", flags)
 
-    def test_missing_dependencies_are_explicit_not_run(self) -> None:
+    def test_missing_dependencies_fail_required_build_gate_but_remain_not_run(self) -> None:
         code, flags, output = self.run_workflow(deps=False)
-        self.assertEqual(code, 0, output)
+        # The workflow now uses --require-build: a missing dependency must make CI red
+        # while retaining the accurate notRun/skip classification (not a C# failure).
+        self.assertEqual(code, 1, output)
+        self.assertIn("[notRun] tml_build", output)
         self.assertIn("TML_BUILD_SKIPPED=true", flags)
         self.assertNotIn("TML_BUILD_FAILED=true", flags)
         self.assertIn("Exit code 77 = intentional skip", output)

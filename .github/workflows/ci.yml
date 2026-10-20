@@ -63,11 +63,111 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      # Match ParticleLibrary's declared modReferences version (3.2.1.0).
+      # Luminance recommends using its latest GitHub release DLL for project references.
+      - name: Download tML mod reference DLLs
+        shell: pwsh
+        run: |
+          $depsRoot = Join-Path $env:RUNNER_TEMP "infinicrafter-compile-deps"
+          $particleLibraryDll = Join-Path $depsRoot "ParticleLibrary\ParticleLibrary.dll"
+          $luminanceDll = Join-Path $depsRoot "Luminance\bin\Debug\net8.0\Luminance.dll"
+          New-Item -ItemType Directory -Force -Path (Split-Path $particleLibraryDll), (Split-Path $luminanceDll) | Out-Null
+
+          $particleLibraryUrl = "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/ParticleLibrary.dll"
+          $luminanceUrl = "https://github.com/LucilleKarma/Luminance/releases/latest/download/Luminance.dll"
+
+          & curl.exe --fail --location --retry 3 --silent --show-error --output $particleLibraryDll $particleLibraryUrl
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download ParticleLibrary.dll (curl exit $LASTEXITCODE)." }
+          & curl.exe --fail --location --retry 3 --silent --show-error --output $luminanceDll $luminanceUrl
+          if ($LASTEXITCODE -ne 0) { throw "Failed to download Luminance.dll (curl exit $LASTEXITCODE)." }
+
+          foreach ($dll in @($particleLibraryDll, $luminanceDll)) {
+            $header = [System.IO.File]::ReadAllBytes($dll)
+            if ($header.Length -lt 2 -or $header[0] -ne 0x4D -or $header[1] -ne 0x5A) {
+              throw "Downloaded dependency is not a Windows DLL: $dll"
+            }
+          }
+
+          "INFINI_TML_DEPS_SRC=$depsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      # tml-build currently queries the unauthenticated GitHub API to resolve version aliases.
+      # Seed its expected cache with the workflow token so CI does not depend on the shared anonymous rate limit.
+      - name: Seed tML SDK release cache
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{
+            Accept = "application/vnd.github+json"
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $apiReleases = Invoke-RestMethod -Uri "https://api.github.com/repos/tModLoader/tModLoader/releases?per_page=100" -Headers $headers
+          $apiReleases = @($apiReleases | Sort-Object { [DateTimeOffset]::Parse($_.published_at) } -Descending)
+
+          $entries = @()
+          foreach ($release in $apiReleases) {
+            $version = $null
+            $versionText = ([string]$release.tag_name) -replace "^v", ""
+            if (-not [Version]::TryParse($versionText, [ref]$version)) { continue }
+
+            $asset = @($release.assets | Where-Object { $_.name -eq "tModLoader.zip" } | Select-Object -First 1)
+            if ($asset.Count -eq 0) { continue }
+
+            $entries += [pscustomobject]@{
+              Version = $version
+              DownloadUrl = [string]$asset[0].browser_download_url
+              PreRelease = [bool]$release.prerelease
+            }
+          }
+
+          $stable = $entries | Where-Object { -not $_.PreRelease } | Select-Object -First 1
+          $preview = $entries | Where-Object { $_.PreRelease } | Select-Object -First 1
+          if ($null -eq $stable -or $null -eq $preview) {
+            throw "Could not find stable and preview tModLoader releases with tModLoader.zip assets."
+          }
+
+          $cacheRoot = Join-Path $env:APPDATA "tml-build"
+          New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
+          $cachePath = Join-Path $cacheRoot "cached_versions"
+          $stream = [System.IO.File]::Create($cachePath)
+          $writer = [System.IO.BinaryWriter]::new($stream, [System.Text.Encoding]::UTF8)
+          try {
+            $writer.Write([DateTime]::Now.ToBinary())
+            $writer.Write([Int32]$entries.Count)
+            foreach ($entry in $entries) {
+              $version = $entry.Version
+              $writer.Write([Int32]$version.Major)
+              $writer.Write([Int32]$version.Minor)
+              $writer.Write([Int32]$version.Build)
+              $writer.Write([Int32]$version.Revision)
+              $writer.Write([string]$entry.DownloadUrl)
+            }
+            foreach ($version in @($stable.Version, $preview.Version)) {
+              $writer.Write([Int32]$version.Major)
+              $writer.Write([Int32]$version.Minor)
+              $writer.Write([Int32]$version.Build)
+              $writer.Write([Int32]$version.Revision)
+            }
+          }
+          finally {
+            $writer.Dispose()
+          }
+
+      # The tML SDK fills its local package feed/alias cache during restore.
+      # Resolve that first so the subsequent build sees tModLoader reference assemblies.
+      - name: Restore tML SDK references
+        shell: pwsh
+        run: |
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity normal
+          exit $LASTEXITCODE
+      # CI validates compilation; the SDK packaging target requires a local Steam install.
       - name: Attempt tML project build
         id: tml
         shell: pwsh
+        env:
+          TmlBuildMod: 'false'
         run: |
-          python tools/validate_release.py --group build
+          python tools/validate_release.py --group build --require-build
           exit $LASTEXITCODE
       - name: Native verification coverage
         if: always()
