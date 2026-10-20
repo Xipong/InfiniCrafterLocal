@@ -89,6 +89,70 @@ jobs:
           }
 
           "INFINI_TML_DEPS_SRC=$depsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      # tml-build currently queries the unauthenticated GitHub API to resolve version aliases.
+      # Seed its expected cache with the workflow token so CI does not depend on the shared anonymous rate limit.
+      - name: Seed tML SDK release cache
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          $headers = @{
+            Accept = "application/vnd.github+json"
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          $apiReleases = Invoke-RestMethod -Uri "https://api.github.com/repos/tModLoader/tModLoader/releases?per_page=100" -Headers $headers
+          $apiReleases = @($apiReleases | Sort-Object { [DateTimeOffset]::Parse($_.published_at) } -Descending)
+
+          $entries = @()
+          foreach ($release in $apiReleases) {
+            $version = $null
+            $versionText = ([string]$release.tag_name) -replace "^v", ""
+            if (-not [Version]::TryParse($versionText, [ref]$version)) { continue }
+
+            $asset = @($release.assets | Where-Object { $_.name -eq "tModLoader.zip" } | Select-Object -First 1)
+            if ($asset.Count -eq 0) { continue }
+
+            $entries += [pscustomobject]@{
+              Version = $version
+              DownloadUrl = [string]$asset[0].browser_download_url
+              PreRelease = [bool]$release.prerelease
+            }
+          }
+
+          $stable = $entries | Where-Object { -not $_.PreRelease } | Select-Object -First 1
+          $preview = $entries | Where-Object { $_.PreRelease } | Select-Object -First 1
+          if ($null -eq $stable -or $null -eq $preview) {
+            throw "Could not find stable and preview tModLoader releases with tModLoader.zip assets."
+          }
+
+          $cacheRoot = Join-Path $env:APPDATA "tml-build"
+          New-Item -ItemType Directory -Force -Path $cacheRoot | Out-Null
+          $cachePath = Join-Path $cacheRoot "cached_versions"
+          $stream = [System.IO.File]::Create($cachePath)
+          $writer = [System.IO.BinaryWriter]::new($stream, [System.Text.Encoding]::UTF8)
+          try {
+            $writer.Write([DateTime]::Now.ToBinary())
+            $writer.Write([Int32]$entries.Count)
+            foreach ($entry in $entries) {
+              $version = $entry.Version
+              $writer.Write([Int32]$version.Major)
+              $writer.Write([Int32]$version.Minor)
+              $writer.Write([Int32]$version.Build)
+              $writer.Write([Int32]$version.Revision)
+              $writer.Write([string]$entry.DownloadUrl)
+            }
+            foreach ($version in @($stable.Version, $preview.Version)) {
+              $writer.Write([Int32]$version.Major)
+              $writer.Write([Int32]$version.Minor)
+              $writer.Write([Int32]$version.Build)
+              $writer.Write([Int32]$version.Revision)
+            }
+          }
+          finally {
+            $writer.Dispose()
+          }
+
       # The tML SDK fills its local package feed/alias cache during restore.
       # Resolve that first so the subsequent build sees tModLoader reference assemblies.
       - name: Restore tML SDK references
