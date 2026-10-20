@@ -89,6 +89,13 @@ jobs:
           }
 
           "INFINI_TML_DEPS_SRC=$depsRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      # The tML SDK fills its local package feed/alias cache during restore.
+      # Resolve that first so the subsequent build sees tModLoader reference assemblies.
+      - name: Restore tML SDK references
+        shell: pwsh
+        run: |
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity normal
+          exit $LASTEXITCODE
       - name: Attempt tML project build
         id: tml
         shell: pwsh
