@@ -59,6 +59,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "binding_dependency",
     "missing_effect_group",
     "invalid_held_effect_group",
+    "invalid_reaction_effect_group",
     "capability_event_incompatible",
     "child_depth_budget",
     "consumer_representability",
@@ -568,7 +569,7 @@ def _validate_requirement(
         required_target = item_id if requirement.target == "item_body" else target_id
         group_id = params.get("effectGroupId") if cap.effect_groupable else None
         held = (cap.name == "apply_generated_buff_on_use" and isinstance(group_id, str)
-                and any(row.get("fn") == "refresh_generated_effect_group_while_held"
+                and any(row.get("fn") in {"refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"}
                         and isinstance(row.get("params"), Mapping)
                         and row["params"].get("effectGroupId") == group_id for row in target_calls))
         if not any(
@@ -1047,12 +1048,13 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     valid_held_groups = tuple(group_id for group_id, rows in effect_groups.items()
                              if len(rows) == 1 and rows[0].get("fn") == "apply_generated_buff_on_use")
     for row in item_calls:
-        if row.get("fn") == "refresh_generated_effect_group_while_held":
+        if row.get("fn") in {"refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"}:
             group_id = row.get("params", {}).get("effectGroupId") if isinstance(row.get("params"), Mapping) else None
             if isinstance(group_id, str) and group_id not in valid_held_groups:
                 issues.append(ValidationIssue(
-                    f"$.runtimeProgram.calls[{calls.index(row)}].params.effectGroupId", "invalid_held_effect_group",
-                    "Held refresh requires exactly one named generated utility buff and no heal/native buff/mobility components.",
+                    f"$.runtimeProgram.calls[{calls.index(row)}].params.effectGroupId",
+                    "invalid_reaction_effect_group" if row.get("fn") == "apply_generated_buff_on_event" else "invalid_held_effect_group",
+                    "This consumer requires exactly one named generated utility buff and no heal/native buff/mobility components.",
                     valid_held_groups, (str(row.get("id") or ""),),
                 ))
     for index, binding in enumerate(bindings):

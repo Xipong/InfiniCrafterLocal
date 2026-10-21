@@ -35,6 +35,7 @@ internal static class RuntimeProgramExecutor
         {
             RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
+            RuntimeEventActionCode.ApplyGeneratedBuff => InfiniRuntimeAuthority.ShouldRunPlayerGameplay(owner),
             RuntimeEventActionCode.SelectTargetsAndEmit => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage
                 => ShouldRunNpcEvent(action, owner),
@@ -122,6 +123,13 @@ internal static class RuntimeProgramExecutor
                 break;
             case RuntimeEventActionCode.Pull:
                 Pull(action, owner, eventPosition, directTarget);
+                break;
+            case RuntimeEventActionCode.ApplyGeneratedBuff:
+                if (sourceEntity.Kind == RuntimeEntityKind.ItemBody
+                    && action.Event is (RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill)
+                    && data.RuntimeProgram.TryGetEffectGroup(action.EffectGroupId ?? "") is { IsGeneratedBuffOnly: true } group)
+                    owner.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(group.GeneratedBuff,
+                        syncNetwork: Main.netMode != Terraria.ID.NetmodeID.SinglePlayer, source: data);
                 break;
             case RuntimeEventActionCode.HealOwner:
                 HealOwner(action, owner, damageDone);

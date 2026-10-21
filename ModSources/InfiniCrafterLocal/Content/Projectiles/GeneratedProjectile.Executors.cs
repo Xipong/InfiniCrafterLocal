@@ -203,15 +203,17 @@ public sealed partial class GeneratedProjectile
             }
             _released = true;
             float ratio = Math.Clamp(_chargeTicks / (float)chargeDuration, 0f, 1f);
-            float multiplier = MathHelper.Lerp(1f, Math.Max(1f, p.PowerMultiplier), ratio);
+            float damageMultiplier = MathHelper.Lerp(1f, p.ChargeDamageMultiplier ?? Math.Max(1f, p.PowerMultiplier), ratio);
+            float knockbackMultiplier = MathHelper.Lerp(1f, p.KnockbackMultiplier ?? Math.Max(1f, p.PowerMultiplier), ratio);
+            float speedMultiplier = MathHelper.Lerp(1f, p.SpeedMultiplier ?? Math.Max(1f, p.PowerMultiplier), ratio);
             // NewProjectileDirect/live state already includes the event-spawn
             // multiplier and any combat modifications. _released makes this one
             // application per generation; received released ExtraAI never scales
             // a peer's already-scaled combat state a second time.
-            Projectile.damage = Math.Max(0, (int)MathF.Round(Projectile.damage * multiplier));
-            Projectile.knockBack *= multiplier;
+            Projectile.damage = Math.Max(0, (int)MathF.Round(Projectile.damage * damageMultiplier));
+            Projectile.knockBack *= knockbackMultiplier;
             Projectile.friendly = _entity.Damage.Enabled && Projectile.damage > 0;
-            Projectile.velocity = direction * _entity.Spawn.SpeedPxPerTick * multiplier;
+            Projectile.velocity = direction * _entity.Spawn.SpeedPxPerTick * speedMultiplier;
             Projectile.tileCollide = _entity.Collision.TileCollide;
             RunRuntimeEvent(RuntimeEventKind.OnRelease, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnRelease, Projectile.Center);
@@ -409,7 +411,7 @@ public sealed partial class GeneratedProjectile
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
         float radius = Math.Max(16f, rangeTiles * 16f);
-        float angle = _age * 0.055f + Projectile.identity * 0.31f;
+        float angle = _age * (_entity!.Movement.Params.OrbitRadiansPerUpdate ?? 0.055f) + Projectile.identity * 0.31f;
         Vector2 target = owner.MountedCenter + angle.ToRotationVector2() * radius;
         Projectile.velocity = target - Projectile.Center;
         Projectile.tileCollide = false;

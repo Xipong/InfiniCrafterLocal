@@ -117,8 +117,14 @@ def test_spawn_alias_keeps_historical_runtime_values_and_concurrency_absence():
     compiled = compile_runtime_program(document)
     assert document == before
     from captured_projectile_author import historical_returning_potion_program
+    for entity in compiled["runtimeProgram"]["entities"]:
+        if "collision" in entity:
+            # Authenticate the fresh neutral before the historical projection removes it.
+            assert entity["collision"]["bounceSpeedRetention"] == 1
     historical = historical_returning_potion_program(compiled["runtimeProgram"])
     for entity in historical["entities"]:
+        if "collision" in entity:
+            assert "bounceSpeedRetention" not in entity["collision"]
         if "spawn" in entity:
             # Fresh `position.at` now writes these two old zero DTO defaults.
             # The captured hash remains unchanged; compare every other byte.
@@ -298,7 +304,7 @@ def _assert_contact_facts(card):
     assert all(term in facts for term in (
         "pierce=1", "first damaging NPC contact", "native kill", "pierce=-1",
         "does not kill from NPC contact", "on_hit", "no implicit explosion", "on_kill", "separate",
-        "N tile contacts", "0.78", "collided-axis velocity", "next contact kills",
+        "N tile contacts", "bounceSpeedRetention", "collided-axis velocity", "next contact kills",
         "move_boomerang", "move_returning_glaive", "move_flail_tether", "before bounce/kill handling",
     ))
 

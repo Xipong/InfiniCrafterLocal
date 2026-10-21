@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework;
 
@@ -10,6 +11,24 @@ namespace InfiniCrafterLocal.Common.UI;
 // Display-only copies: never edit source definitions, aggregate entries or clocks.
 internal static class GeneratedStatusTooltipView
 {
+    // A display-only bound in Unicode scalars. Names cannot inject Terraria chat
+    // markup, control characters or a second status label; owner prose is untouched.
+    internal static string LiteralName(string value)
+    {
+        var result = new StringBuilder(96);
+        int count = 0;
+        foreach (Rune rune in (value ?? "").EnumerateRunes())
+        {
+            UnicodeCategory category = Rune.GetUnicodeCategory(rune);
+            if (rune.Value is '[' or ']' || category is UnicodeCategory.Control
+                or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+                continue;
+            if (count++ >= 96) break;
+            result.Append(rune.ToString());
+        }
+        return result.ToString();
+    }
+
     internal static string CountdownSeconds(int ticks, CultureInfo culture)
         // Ceiling prevents an active last tick from reading "0 s". Use long to
         // avoid overflow even for a malformed diagnostic input, without clamping it.

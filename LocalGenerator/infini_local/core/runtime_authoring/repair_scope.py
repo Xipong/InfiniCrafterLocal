@@ -82,6 +82,7 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "binding_dependency": {"strategy": "synthesize_exact_dependency_or_delete_exact_binding", "llmRepairable": True, "allowNodeDelete": True},
     "missing_effect_group": {"strategy": "retarget_exact_effect_group", "llmRepairable": True, "allowNodeDelete": False},
     "invalid_held_effect_group": {"strategy": "retarget_exact_effect_group", "llmRepairable": True, "allowNodeDelete": False},
+    "invalid_reaction_effect_group": {"strategy": "retarget_exact_effect_group", "llmRepairable": True, "allowNodeDelete": False},
     "capability_event_incompatible": {"strategy": "patch_exact_event", "llmRepairable": True, "allowNodeDelete": False},
     "child_depth_budget": {"strategy": "patch_graph_edge_or_count", "llmRepairable": True, "allowNodeDelete": True},
     "dual_use_placeable_input_contract": {"strategy": "replace_complete_use_transaction", "llmRepairable": True, "allowNodeDelete": False},
@@ -1743,8 +1744,8 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if json_path_relative(path, f"$.{field}") is not None:
                 metadata_fields.add(field)
 
-        if code in {"missing_effect_group", "invalid_held_effect_group"}:
-            if (code == "invalid_held_effect_group" and not allowed
+        if code in {"missing_effect_group", "invalid_held_effect_group", "invalid_reaction_effect_group"}:
+            if (code in {"invalid_held_effect_group", "invalid_reaction_effect_group"} and not allowed
                     and node_namespace == "calls" and node_id):
                 # No existing utility group can satisfy this optional selector.
                 # Only the model may remove the diagnosed call; never invent a buff.
@@ -2153,7 +2154,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             if isinstance(effect_group_id, str):
                 for selector_error in error_rows:
                     selector_code = str(selector_error.get("code") or "")
-                    if selector_code not in {"missing_effect_group", "invalid_held_effect_group"}:
+                    if selector_code not in {"missing_effect_group", "invalid_held_effect_group", "invalid_reaction_effect_group"}:
                         continue
                     if effect_group_id not in _values(selector_error.get("allowed")):
                         continue
@@ -2162,7 +2163,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         continue
                     selector_namespace, selector_index, _ = selector_node
                     selector = _mapping(indexed_rows[selector_namespace][selector_index])
-                    if (selector_code == "invalid_held_effect_group" and capability is not None
+                    if (selector_code in {"invalid_held_effect_group", "invalid_reaction_effect_group"} and capability is not None
                             and capability.name == "apply_generated_buff_on_use"
                             and str(selector.get("target") or "") == node_target_id):
                         held_selector_covers_group = True

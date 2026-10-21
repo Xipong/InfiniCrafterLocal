@@ -1763,7 +1763,7 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
@@ -1831,7 +1831,7 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
@@ -2019,7 +2019,7 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
@@ -2838,7 +2838,7 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
@@ -2900,7 +2900,7 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
@@ -5803,10 +5803,25 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 32,
-                        "description": "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
+                        "description": "bounceCount=N reflects N tile contacts using bounceSpeedRetention on collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
                         "x-infini-semanticType": "bounce_count",
                         "default": 0,
                         "x-infini-neutral": 0
+                      },
+                      "bounceSpeedRetention": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1,
+                        "description": "Multiply only each collided velocity axis after reflection; 1 preserves it, 0 stops that axis. Tangential speed is unchanged. No friction between contacts. Only used when tileCollide=true and bounceCount>0; return-on-wall drivers keep their separate return behavior",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 1,
+                        "x-infini-neutral": 1,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 1,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
                       },
                       "pierce": {
                         "type": "integer",
@@ -6171,10 +6186,55 @@
                         "description": "Fixed orbit radius around the owner",
                         "x-infini-units": "blocks (tiles)",
                         "x-infini-semanticType": "tiles"
+                      },
+                      "turnRadiansPerSecond": {
+                        "type": "number",
+                        "minimum": -180.0,
+                        "maximum": 180.0,
+                        "description": "Author units: radians/s. Native consumer: Signed orbit angular increment; positive clockwise, negative counterclockwise, zero fixed-angle owner following",
+                        "x-infini-units": "radians/s",
+                        "x-infini-semanticType": "radians/s",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                        },
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "boundsAtUpdatesPerTick1To6": [
+                            [
+                              -30.0,
+                              30.0
+                            ],
+                            [
+                              -60.0,
+                              60.0
+                            ],
+                            [
+                              -90.0,
+                              90.0
+                            ],
+                            [
+                              -120.0,
+                              120.0
+                            ],
+                            [
+                              -150.0,
+                              150.0
+                            ],
+                            [
+                              -180.0,
+                              180.0
+                            ]
+                          ]
+                        }
                       }
                     },
                     "required": [
-                      "radiusTiles"
+                      "radiusTiles",
+                      "turnRadiansPerSecond"
                     ]
                   }
                 },
@@ -7639,17 +7699,54 @@
                           "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                         }
                       },
-                      "powerMultiplier": {
+                      "damageMultiplier": {
                         "type": "number",
                         "minimum": 1,
                         "maximum": 4,
-                        "description": "Full-charge damage/knockback and release velocity multiplier; partial charge interpolates from 1; 1 unchanged",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "description": "Full-charge multiplier of current native damage only, applied once at release; partial charge interpolates from 1. 1 preserves damage",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 1,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 1,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "knockbackMultiplier": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 4,
+                        "description": "Independent full-charge knockback multiplier; partial charge interpolates from 1. 1 preserves knockback",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 1,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 1,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "speedMultiplier": {
+                        "type": "number",
+                        "minimum": 0.1,
+                        "maximum": 4,
+                        "description": "Independent full-charge release-speed multiplier; partial charge interpolates from 1. 1 preserves launch speed; values below 1 make a slower charged shot",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 1,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 1,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
                       }
                     },
                     "required": [
                       "chargeSeconds",
-                      "powerMultiplier"
+                      "damageMultiplier",
+                      "knockbackMultiplier",
+                      "speedMultiplier"
                     ]
                   }
                 },
@@ -8410,6 +8507,99 @@
                   "id",
                   "fn",
                   "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
+                    "const": "apply_generated_buff_on_event"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "type": "object",
+                        "properties": {
+                          "on": {
+                            "type": "string",
+                            "enum": [
+                              "on_hurt",
+                              "on_enemy_kill"
+                            ],
+                            "description": "Equipment event"
+                          },
+                          "cooldownSeconds": {
+                            "type": "number",
+                            "minimum": 0.09166666666666666,
+                            "maximum": 60.0,
+                            "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared interval reserved before dispatch",
+                            "x-infini-units": "seconds",
+                            "x-infini-semanticType": "seconds",
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                            }
+                          }
+                        },
+                        "required": [
+                          "on",
+                          "cooldownSeconds"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Functional equipment reaction; identical copies share cooldown.",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "effectGroupId": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                        "description": "Exact named generated-buff-only group on this item",
+                        "x-infini-semanticType": "item_effect_group_reference"
+                      },
+                      "delaySeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 10.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-neutral": 0.0,
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "effectGroupId"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
                   "params"
                 ]
               },

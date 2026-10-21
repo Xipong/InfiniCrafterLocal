@@ -201,14 +201,22 @@ def test_condition_card_describes_its_existing_union_and_placement_guide_matches
     condition = cards['require_use_condition']['params']['condition']
     spec = CAPABILITY_REGISTRY['require_use_condition'].params['condition']
     assert condition['type'] == 'union'
-    assert condition['shape'] == spec.schema() == replace(spec, kind='string').schema()
+    original_shape = spec.schema()
+    assert original_shape == replace(spec, kind='string').schema()
+    # Author shares an identical root description with the visible meaning;
+    # every union branch and its constraints must remain byte-for-byte intact.
+    assert original_shape.pop('description') == condition['meaning'] == spec.description
+    assert condition['shape'] == original_shape
     assert {branch['type'] for branch in condition['shape']['oneOf']} == {'string', 'object'}
     doc = build_capability_witness('require_use_condition')
     next(row for row in doc['runtimeProgram']['calls'] if row['fn'] == 'require_use_condition')['params']['condition'] = 3
     dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
     repair_card = next(row for row in dossier['existingBrokenCapabilityCards'] if row['fn'] == 'require_use_condition')
     assert repair_card['params']['condition']['type'] == 'union'
-    assert repair_card['params']['condition']['shape'] == condition['shape']
+    repair_condition = repair_card['params']['condition']
+    assert repair_condition['shape'] == spec.schema()
+    assert repair_condition['shape']['description'] == repair_condition['meaning'] == condition['meaning']
+    assert {key: value for key, value in repair_condition['shape'].items() if key != 'description'} == condition['shape']
     notation = catalog['fieldGuide']['paramNotation']
     assert 'tileId/wallId=-1 disables placement' not in notation
     for fn, key in [('configure_tile_placement', 'tileId'), ('configure_wall_placement', 'wallId')]:
@@ -330,7 +338,8 @@ def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_sco
 
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'utility-refresh', model_name='test-model')
-    cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
+    catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
+    cards = {row['fn']: row for row in catalog['capabilities']}
     card = cards['apply_generated_buff_on_use']
     for meaning in ('identical effect', 'maximum remaining duration', 'distinct effects', 'indefinite uptime'):
         assert meaning in card['does']
@@ -344,8 +353,13 @@ def test_generated_utility_card_explains_real_refresh_stacking_and_spelunker_sco
     dossier = author.build_gameplay_repair_dossier(source, {}, {}, failure_report=validate_runtime_program(source))
     repair_card = next(c for c in dossier['existingBrokenCapabilityCards'] if c['fn'] == 'apply_generated_buff_on_use')
     assert repair_card['does'] == card['does']
-    for leaf in ('durationSeconds', 'oreSenseEnabled'):
-        assert repair_card['params'][leaf]['meaning'] == card['params'][leaf]['meaning']
+    seconds_primer = 'World duration (seconds); shared nearest-tick rounding applies. Native consumer: '
+    assert repair_card['params']['durationSeconds']['meaning'] == seconds_primer + duration
+    assert repair_card['params']['oreSenseEnabled']['meaning'] == sense
+    notation = catalog['fieldGuide']['paramNotation']
+    for rule in ('Times use Seconds', 'nearest world tick at 60 ticks/s', 'half-tick ties UP'):
+        assert rule in notation
+    assert dossier['runtimeExecutionTruth']['units']['paramNotation'] == notation
 
 
 def test_future_economy_guidance_does_not_thaw_valid_existing_effects_in_repair():

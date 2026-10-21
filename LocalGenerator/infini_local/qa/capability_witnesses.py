@@ -167,6 +167,18 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
         doc["concept"]["coreMechanic"] = f"Execute {fn} through its public typed contract."
         doc["realization"]["description"] = f"A minimal runtime witness executing {fn}."
         return doc
+    if fn == "apply_generated_buff_on_event":
+        doc = build_capability_witness("configure_accessory")
+        group = _params("apply_generated_buff_on_use")
+        group["effectGroupId"] = "reaction_buff"
+        doc["runtimeProgram"]["calls"].extend([
+            _call("reaction_effect", "apply_generated_buff_on_use", "item", group),
+            _call("witness_reaction", fn, "item", {"when": {"on": "on_hurt", "cooldownSeconds": 1}, "effectGroupId": "reaction_buff"}),
+        ])
+        next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")["id"] = "base_equipment"
+        doc["runtimeProgram"]["calls"][-1]["id"] = "witness_call"
+        doc["name"] = f"Capability Witness {fn}"
+        return doc
     cap = CAPABILITY_REGISTRY[fn]
     entities: list[dict[str, Any]] = [{"id": "item", "kind": "item_body"}]
     bindings: list[dict[str, Any]] = []

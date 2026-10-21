@@ -4037,7 +4037,7 @@
       "capability": "set_projectile_collision",
       "componentSlot": "collision",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
       "dependencies": [],
       "emittedEvents": [],
       "events": [],
@@ -4046,6 +4046,7 @@
         "runtimeProgram.entities[].collision.tileCollide",
         "runtimeProgram.entities[].collision.ignoreWater",
         "runtimeProgram.entities[].collision.bounceCount",
+        "runtimeProgram.entities[].collision.bounceSpeedRetention",
         "runtimeProgram.entities[].collision.pierce",
         "runtimeProgram.entities[].collision.extraUpdates",
         "runtimeProgram.entities[].collision.npcImmunityMode",
@@ -4062,6 +4063,16 @@
           "reference": null,
           "required": false,
           "semanticType": "bounce_count",
+          "units": ""
+        },
+        "bounceSpeedRetention": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
           "units": ""
         },
         "ignoreWater": {
@@ -4348,7 +4359,8 @@
       "finalWirePaths": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles"
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.orbitRadiansPerUpdate"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -4362,10 +4374,20 @@
           "required": true,
           "semanticType": "tiles",
           "units": "blocks (tiles)"
+        },
+        "turnRadiansPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 180.0,
+          "minimum": -180.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians/s",
+          "units": "radians/s"
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Orbit the owner at the authored radius. The angle advances by a fixed 0.055 radians per projectile update, with an identity-based starting offset; launch speed does not set the orbit rate. This controller forces tileCollide=false.",
+      "purpose": "Orbit the owner at the authored radius and signed world-time angular rate, with an identity-based starting offset. Positive rotates clockwise on screen; negative counterclockwise; zero keeps the angle fixed while following the owner. Launch speed does not set orbit rate. This controller forces tileCollide=false.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5608,7 +5630,9 @@
         "runtimeProgram.entities[].controller.name",
         "runtimeProgram.entities[].controller.code",
         "runtimeProgram.entities[].controller.params.chargeTicks",
-        "runtimeProgram.entities[].controller.params.powerMultiplier"
+        "runtimeProgram.entities[].controller.params.chargeDamageMultiplier",
+        "runtimeProgram.entities[].controller.params.knockbackMultiplier",
+        "runtimeProgram.entities[].controller.params.speedMultiplier"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
@@ -5623,11 +5647,31 @@
           "semanticType": "seconds",
           "units": "seconds"
         },
-        "powerMultiplier": {
+        "damageMultiplier": {
           "enum": [],
           "kind": "number",
           "maximum": 4,
           "minimum": 1,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "knockbackMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "speedMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.1,
           "reference": null,
           "required": true,
           "semanticType": "unitless_scalar",
@@ -6419,6 +6463,79 @@
         "temporary_helper",
         "field",
         "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "apply_generated_buff_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hurt",
+        "on_enemy_kill"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
+        "runtimeProgram.entities[].events[].effectGroupId",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "server_execute",
+      "parameters": {
+        "delaySeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "effectGroupId": {
+          "enum": [],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "item_effect_group_reference",
+          "units": ""
+        },
+        "when": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Apply one exact named generated-utility-buff group to the owner after a functional equipment reaction. Populate it with apply_generated_buff_on_use using the same effectGroupId; no active-use binding is needed for that group. The group must contain only this generated buff, never healing, native buffs or teleport. Identical effects refresh remaining duration without stacking strength; existing item exhaustion and shared per-action reaction cooldowns still apply. In multiplayer the owner predicts the effect, while native server hurt/death occurrences build the authoritative utility snapshot; client stat claims cannot commit it.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "item_body"
       ],
       "technicalLoweringOutputs": []
     },

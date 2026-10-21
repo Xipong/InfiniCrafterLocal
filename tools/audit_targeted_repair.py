@@ -155,11 +155,19 @@ def _emitted_validator_codes() -> set[str]:
     path = ROOT / "LocalGenerator/infini_local/core/runtime_authoring/validator.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     out: set[str] = set()
+    def literal_codes(expression: ast.expr) -> set[str]:
+        if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+            return {expression.value}
+        if isinstance(expression, ast.IfExp):
+            # Inspect the emitted alternatives, never string literals in the
+            # condition (which may contain capability names rather than codes).
+            return literal_codes(expression.body) | literal_codes(expression.orelse)
+        return set()
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "ValidationIssue":
             continue
-        if len(node.args) >= 2 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str):
-            out.add(node.args[1].value)
+        if len(node.args) >= 2:
+            out.update(literal_codes(node.args[1]))
     return out
 
 

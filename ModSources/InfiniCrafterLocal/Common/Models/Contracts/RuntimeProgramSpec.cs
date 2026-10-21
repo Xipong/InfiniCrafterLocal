@@ -201,8 +201,17 @@ public sealed class RuntimeProgramSpec
                 throw new InvalidDataException("heldEffectGroupId must select a generated-buff-only group");
             usedGroups.Add(heldId);
         }
+        foreach (RuntimeEntitySpec source in Entities)
+        foreach (RuntimeEventActionSpec action in source.Events)
+        {
+            if (action.ActionCode != RuntimeEventActionCode.ApplyGeneratedBuff) continue;
+            if (source.Kind != RuntimeEntityKind.ItemBody || action.EffectGroupId is not string groupId
+                || TryGetEffectGroup(groupId)?.IsGeneratedBuffOnly != true)
+                throw new InvalidDataException("generated-buff reaction requires an item-body source and exact generated-buff-only group");
+            usedGroups.Add(groupId);
+        }
         if (!groupIds.SetEquals(usedGroups))
-            throw new InvalidDataException("every named effect group requires an exact active binding or held consumer");
+            throw new InvalidDataException("every named effect group requires an exact active binding, held or equipment-reaction consumer");
 
         bool hasPlaceUse = Bindings.Any(x =>
             x is not null
@@ -1350,6 +1359,20 @@ public sealed class RuntimeCollisionSpec
     public bool TileCollide { get; set; } = true;
     public bool IgnoreWater { get; set; }
     public int BounceCount { get; set; }
+    private float? _bounceSpeedRetention;
+    public sealed class BounceSpeedRetentionJsonConverter : RawJsonNullableFloatDomainConverter {
+        public BounceSpeedRetentionJsonConverter() : base("0", "1", "1") { }
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(BounceSpeedRetentionJsonConverter))]
+    public float? BounceSpeedRetention {
+        get => _bounceSpeedRetention;
+        set {
+            if (value is not float retention || !float.IsFinite(retention) || retention < 0f || retention > 1f)
+                throw new InvalidDataException("bounceSpeedRetention must be finite 0..1");
+            _bounceSpeedRetention = retention;
+        }
+    }
     public int Pierce { get; set; } = 1;
     public int ExtraUpdates { get; set; }
     public string NpcImmunityMode { get; set; } = "owner";
@@ -1387,6 +1410,10 @@ public sealed class RuntimeMovementSpec
         Params.Normalize();
         if (Params.HasBeamExtensions)
             throw new InvalidDataException("beam extension params require the channel_beam controller");
+        if (Params.HasIndependentCharge)
+            throw new InvalidDataException("independent charge params require the charge controller");
+        if (Params.OrbitRadiansPerUpdate.HasValue && (Code != 4 || Name != "move_orbit"))
+            throw new InvalidDataException("orbit rate requires the exact orbit movement");
         // Omitted movement is meaningful for stationary/field/helper entities. Code 0
         // is also the explicit move_straight opcode, so Name is the presence bit.
         if (Code < 0 || Code > InfiniRuntimeLimits.MaxSupportedMovementCode)
@@ -1418,9 +1445,16 @@ public sealed class RuntimeControllerSpec
     {
         Name = RuntimeText.Safe(Name, 64);
         Params ??= new RuntimeParamsSpec();
+        // Current independent controls must be admitted before retained-v5 clamping.
+        if (Params.HasIndependentCharge && (Code != RuntimeControllerCode.ChargeThenRelease
+            || !Params.ChargeDamageMultiplier.HasValue || !Params.KnockbackMultiplier.HasValue || !Params.SpeedMultiplier.HasValue
+            || Params.ChargeTicks is < 1 or > 600 || Params.PowerMultiplier != 0f))
+            throw new InvalidDataException("independent charge requires three exact multipliers and bounded duration on its controller");
         Params.Normalize();
         if (Params.HasFrontHandParams)
             throw new InvalidDataException("front-hand params cannot be owned by a controller");
+        if (Params.OrbitRadiansPerUpdate.HasValue)
+            throw new InvalidDataException("orbit rate cannot belong to a controller");
         if (Code != RuntimeControllerCode.ChannelBeam && Params.HasBeamExtensions)
             throw new InvalidDataException("beam extension params require the channel_beam controller");
         if (Code < 0 || Code > InfiniRuntimeLimits.MaxSupportedControllerCode)
@@ -1553,7 +1587,63 @@ public sealed class RuntimeParamsSpec
     }
     [JsonIgnore] public bool HasBeamExtensions => ManaPayment is not null || InitialDamageMultiplier is not null
         || InitialWidthMultiplier is not null || DamageStartProgress is not null || RaycastTiles is not null;
+    // Missing retained-v5 params preserve the already-authored historical behavior.
+    private float? _orbitRadiansPerUpdate, _chargeDamageMultiplier, _knockbackMultiplier, _speedMultiplier;
+    public sealed class OrbitRateJsonConverter : RawJsonNullableFloatDomainConverter {
+        public OrbitRateJsonConverter() : base("-0.5", "0.5", "0") { }
+    }
+    public sealed class ChargeDamageJsonConverter : RawJsonNullableFloatDomainConverter {
+        public ChargeDamageJsonConverter() : base("1", "4", "1") { }
+    }
+    public sealed class ChargeKnockbackJsonConverter : RawJsonNullableFloatDomainConverter {
+        public ChargeKnockbackJsonConverter() : base("0", "4", "1") { }
+    }
+    public sealed class ChargeSpeedJsonConverter : RawJsonNullableFloatDomainConverter {
+        public ChargeSpeedJsonConverter() : base("0.1", "4", "1") { }
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(OrbitRateJsonConverter))]
+    public float? OrbitRadiansPerUpdate {
+        get => _orbitRadiansPerUpdate;
+        set {
+            if (value is not float rate || !float.IsFinite(rate) || rate < -0.5f || rate > 0.5f)
+                throw new InvalidDataException("orbitRadiansPerUpdate must be finite -0.5..0.5");
+            _orbitRadiansPerUpdate = rate;
+        }
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(ChargeDamageJsonConverter))]
+    public float? ChargeDamageMultiplier {
+        get => _chargeDamageMultiplier;
+        set {
+            if (value is not float multiplier || !float.IsFinite(multiplier) || multiplier < 1f || multiplier > 4f)
+                throw new InvalidDataException("chargeDamageMultiplier must be finite 1..4");
+            _chargeDamageMultiplier = multiplier;
+        }
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(ChargeKnockbackJsonConverter))]
+    public float? KnockbackMultiplier {
+        get => _knockbackMultiplier;
+        set {
+            if (value is not float multiplier || !float.IsFinite(multiplier) || multiplier < 0f || multiplier > 4f)
+                throw new InvalidDataException("charge knockbackMultiplier must be finite 0..4");
+            _knockbackMultiplier = multiplier;
+        }
+    }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(ChargeSpeedJsonConverter))]
+    public float? SpeedMultiplier {
+        get => _speedMultiplier;
+        set {
+            if (value is not float multiplier || !float.IsFinite(multiplier) || multiplier < 0.1f || multiplier > 4f)
+                throw new InvalidDataException("charge speedMultiplier must be finite 0.1..4");
+            _speedMultiplier = multiplier;
+        }
+    }
+    [JsonIgnore] public bool HasIndependentCharge => ChargeDamageMultiplier.HasValue || KnockbackMultiplier.HasValue || SpeedMultiplier.HasValue;
     public int ChargeTicks { get; set; }
+    // Retained-v5 coupled charge only; current independent charge keeps this at the bag neutral zero.
     public float PowerMultiplier { get; set; }
 
     public void Normalize()
@@ -1704,6 +1794,7 @@ public static class RuntimeEventActionCode
     public const int HealOwner = 6;
     public const int MoveOwner = 7;
     public const int SelectTargetsAndEmit = 8;
+    public const int ApplyGeneratedBuff = 9;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -1848,6 +1939,13 @@ public sealed class RuntimeEventActionSpec
     public int MaxHeal { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int ReactionCooldownTicks { get; set; }
+    private string? _effectGroupId;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? EffectGroupId
+    {
+        get => _effectGroupId;
+        set => _effectGroupId = RuntimeItemEffectGroupSpec.RequireId(value);
+    }
     public int CooldownTicks { get; set; }
     public bool SafeTileOnly { get; set; } = true;
 
@@ -1950,10 +2048,22 @@ public sealed class RuntimeEventActionSpec
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.SelectTargetsAndEmit)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyGeneratedBuff)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
+        if (ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff)
+        {
+            if (Event is not (RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill) || EffectGroupId is null)
+                throw new InvalidDataException("generated-buff reaction requires an exact group and equipment event");
+            if (EntityId != "" || Count != 1 || SpreadRadians != 0f || DamageMultiplier != 1f || PeriodTicks != 0
+                || BuffId != -1 || DurationTicks != 0 || RadiusPx != 0 || RangeTiles != 0f || Mode != ""
+                || Strength != 0f || RadiusTiles != 0f || DamageFraction != 0f || MaxHeal != 0
+                || CooldownTicks != 0 || !SafeTileOnly || DelayTicks is < 0 or > 600)
+                throw new InvalidDataException("generated-buff reaction cannot consume non-neutral fields owned by another event opcode");
+        }
+        else if (EffectGroupId is not null)
+            throw new InvalidDataException("event effectGroupId requires the generated-buff reaction opcode");
         if (ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit)
         {
             if (Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
@@ -1994,7 +2104,7 @@ public sealed class RuntimeEventActionSpec
         CooldownTicks = Math.Clamp(CooldownTicks, 0, 36000);
         bool reactive = Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill;
         if (reactive && (ReactionCooldownTicks is < 6 or > 3600
-            || ActionCode is not (RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.DamageArea))
+            || ActionCode is not (RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ApplyGeneratedBuff))
             || !reactive && ReactionCooldownTicks != 0)
             throw new InvalidDataException("Reactive equipment requires an explicit 6..3600 tick cooldown and supported action");
         if (Event == RuntimeEventKind.Periodic && PeriodTicks < 6)
@@ -2058,7 +2168,7 @@ internal static class RuntimeOpcodeNames
     {
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
-        "select_targets_and_emit_on_event",
+        "select_targets_and_emit_on_event", "apply_generated_buff_on_event",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";

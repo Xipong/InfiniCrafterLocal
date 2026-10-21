@@ -29,6 +29,12 @@ Cooldown резервируется перед действием и общ дл
 
 VFX выбираются директором для фактически объявленных реакций и испускаются вместе с принятым срабатыванием через существующий item-event transport; source разрешается по функционально надетому предмету. Gameplay не выбирается по названию/категории. Новых обязательных LLM-проходов нет.
 
+## Игровой индикатор перезарядки реакций
+
+HUD и страница усилений инвентаря показывают действующие перезарядки реакций функционально надетых предметов. Иконка — настоящий PNG предмета, вписанный в слот 32×32; подсказка различает получение урона и убийство врага и показывает оставшееся время. Каждая action ID сохраняет собственный таймер; одинаковые копии не дублируют строки. Отсутствующая текстура ждёт штатной загрузки, без выдуманного рисунка.
+
+Представление читает существующую `_reactionCooldowns` и текущий roster native equip hooks. Оно не создаёт vanilla buff, не продлевает и не удаляет таймеры. Снятие предмета скрывает его строку, но не сбрасывает cooldown; повторное надевание показывает остаток. Inventory/vanity, мёртвый игрок и чужой мир не создают активных строк.
+
 ## Проверки
 
 Python: независимые условия, дубликаты, exact input receipts, frozen repair, bounded reactive triggers, отсутствие equipped producer и final-wire отказ без cooldown.
@@ -36,3 +42,25 @@ Python: независимые условия, дубликаты, exact input r
 Native CPU: source-linked C# compilation; независимые gates; world-only журнал, точные parent links, сохранение избранного и геометрия; functional equip callbacks, owner/server roles, delay, cooldown копий, unequip и NPC death producer через настоящий delayed scheduler. Аллокация снаряда в игре и live peer transport не запускались.
 
 CPU checks и compile не являются visual/game-loop или настоящей host-client socket приёмкой. Игра не запускалась.
+
+## Временный generated-баф от реакции экипировки
+
+`apply_generated_buff_on_event` — независимое действие item-body с серверным подтверждением в multiplayer для `on_hurt` и `on_enemy_kill`. Модель явно указывает `when:{on,cooldownSeconds}` и `effectGroupId`. Группу создаёт существующий `apply_generated_buff_on_use` с тем же `effectGroupId`; отдельная активная кнопка для такой группы не требуется. Можно использовать одну группу также через явно выбранную активную кнопку или held refresh. Реакция принимает **только** generated-buff-only группу: положительную длительность и хотя бы один действующий utility-эффект, без мгновенного лечения/маны, native buffs или teleport. Ссылки не разрешаются по названию предмета.
+
+Пример связи (остальные обязательные параметры бафа задаются по его карточке):
+
+```json
+{"id":"escape_trigger","fn":"apply_generated_buff_on_event","params":{"when":{"on":"on_hurt","cooldownSeconds":8},"effectGroupId":"escape"}}
+```
+
+Эффект исполняется через прежний `ApplyGeneratedUtilityBuff`: одинаковые эффекты продлевают максимум оставшегося времени без складывания силы; разные эффекты остаются в существующем ограниченном агрегате. `durationSeconds`, `exhaustionSeconds` группы и cooldown реакции независимы. Cooldown реакции резервируется перед попыткой: отказ из-за предметной усталости не даёт повторять попытку каждый кадр. Копии и перестановка слотов используют прежний общий ключ player + item ID + action ID. `delaySeconds`, если выбран явно, использует существующий delayed scheduler; длительность бафа начинается при исполнении отложенного действия.
+
+Compiler не придумывает группу: exact reference и opcode 9 проходят lossless техническую проекцию с receipts. Author/Repair карточки и schemas берутся из registry. Неверная ссылка может быть исправлена только на уже объявленную generated-buff-only группу; её валидные эффекты frozen. Если таких групп нет, Repair может удалить только ошибочный selector-call. Strict wire и C# DTO отвергают неподдерживаемые trigger/action/reference, смешанные группы и не принадлежащие действию ненейтральные поля. Старые определения без нового действия и selector-поля не изменяются.
+
+Регрессии: `test_reactive_generated_buffs.py` проверяет compile/wire/receipts, source-free wire, frozen Repair и actual offline Author/Repair packets; native checks `reactive utility buffs ...` проходят настоящие functional equipment hooks, authority, delayed scheduler, копии, aggregation и exhaustion. Это CPU-проверки, не запуск игры или реальный peer transport.
+
+### Multiplayer authority временного бафа
+
+Owner сохраняет локальное предсказание и прежний cooldown для HUD. Сервер независимо применяет **только** generated-buff action при фактическом native `PostHurt` выжившего игрока и при серверном `GlobalNPC.OnKill`; остальные реакции по-прежнему исполняет owner. У установленного tML server receive vanilla player-hurt вызывает `Player.Hurt(info, quiet:true)`, затем `PlayerLoader.PostHurt`, поэтому дополнительный client→server claim не нужен. Это обычная native player-hurt trust boundary, не доказательство серверной симуляции столкновения. Сервер выбирает buff исключительно из своего функционально надетого generated-предмета и exact effect group, резервирует свой cooldown/exhaustion и рассылает существующий utility snapshot. Присланные клиентом числа по-прежнему отбрасываются. Kill notification остаётся прежним server→owner событием для предсказания и owner-only spawn/damage; она не выдаёт клиенту право записать серверный баф.
+
+Native packet regression проходит server hurt/kill callback → настоящий `ModPacket` utility snapshot → owner decoder, затем forged client prediction → server discard/correction → owner decoder. Проверяется, что canonical баф сохраняется, лишняя client contribution исчезает, а повторный callback внутри cooldown не продлевает баф.

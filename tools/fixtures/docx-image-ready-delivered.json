@@ -114,7 +114,8 @@
           "pierce": -1,
           "extraUpdates": 0,
           "npcImmunityMode": "local",
-          "localNpcHitCooldownTicks": 10
+          "localNpcHitCooldownTicks": 10,
+          "bounceSpeedRetention": 1
         },
         "movement": {
           "name": "move_forward_then_retract",
@@ -176,7 +177,8 @@
           "pierce": 1,
           "extraUpdates": 0,
           "npcImmunityMode": "local",
-          "localNpcHitCooldownTicks": 10
+          "localNpcHitCooldownTicks": 10,
+          "bounceSpeedRetention": 1
         },
         "movement": {
           "name": "move_straight",

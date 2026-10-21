@@ -1,5 +1,11 @@
+ChargeUI: {
+	Progress: "Charge: {0}%"
+	Ready: "Ready"
+}
+
 Mods: {
 	InfiniCrafterLocal: {
+
 		RecipeJournal: {
 			Button: "Journal"
 			Eyebrow: "INFINICRAFT • DISCOVERIES IN THIS WORLD"
@@ -165,6 +171,7 @@ RuntimeTooltip: {
 	SecondaryOwnerHurt: "When the owner takes damage"
 	SecondaryEnemyKilled: "When an enemy is killed"
 	ReactionCooldown: "{0}: reaction cooldown {1}"
+	ReactionDelay: "{0}: effect after {1}"
 
 	InventorySeedCollection: "While in inventory: allows grass to drop Seeds"
 	PlacementUnsupported: "Cannot place this generated item: its native tile behavior or geometry is not supported. The item was not consumed; details are in the client log."
@@ -191,6 +198,10 @@ RuntimeTooltip: {
 	SecondaryProjectilePeriodic: "While projectile is active, every {0}"
 	SecondaryItemPeriodic: "While selected or equipped, every {0}"
 
+	ReactionHurt: "On taking damage"
+	ReactionKill: "On enemy kill"
+	ReactionCooldownStatus: "{0}: {1}"
+	ReactionCooldownRemaining: "{0} reaction ready in {1}. Copies of this item share this reaction timer; other reactions and ordinary attacks are unaffected."
 	MobilityCooldownStatus: "Mobility cooldown"
 	MobilityCooldownRemaining: "Mobility cooldown remaining: {0}. Shared by generated mobility actions; only mobility is unavailable. Attacks, mining and generated buffs are unaffected. Failed attempts do not extend this timer."
 	EquipmentMaxLife: "{0}: maximum life contribution {1}"

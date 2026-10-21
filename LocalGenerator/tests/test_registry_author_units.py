@@ -428,6 +428,9 @@ def _scalar_name_current_source(case):
         # The archived capture and its scalar receipt remain byte-for-byte intact.
         next(row for row in source["runtimeProgram"]["calls"]
              if row["fn"] == "configure_item_use")["params"]["channel"] = True
+    if case["fn"] == "move_orbit":
+        # Supplement the current explicit-rate contract without editing the archived capture.
+        params["turnRadiansPerSecond"] = 3.3
     from captured_projectile_author import project_captured_world_units
     return project_captured_world_units(source)
 

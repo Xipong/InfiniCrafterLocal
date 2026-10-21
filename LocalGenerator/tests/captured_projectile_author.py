@@ -246,6 +246,10 @@ def historical_returning_potion_program(program: dict[str, Any]) -> dict[str, An
     assert type(entity["movement"]["params"]["returnSpeed"]) is float and entity["movement"]["params"]["returnSpeed"] == 15
     entity["spawn"]["speedPxPerTick"] = 12
     entity["movement"]["params"]["returnSpeed"] = 15
+    # This returning driver never uses bounce retention. Keep the immutable old
+    # oracle's absence only after authenticating the exact newly emitted neutral.
+    assert entity["movement"]["code"] == 5 and entity["collision"]["bounceCount"] == 0
+    assert entity["collision"].pop("bounceSpeedRetention") == 1
     return result
 
 

@@ -71,30 +71,44 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         if (mobility is not null)
             DrawStatus(player, TextureAssets.Buff[mobility.IconBuffType], mobility.Label,
                 mobility.Tooltip, mobility.RemainingTicks, append++, inventoryOffset);
+        foreach (GeneratedReactionCooldownStatusRow status in GeneratedReactionCooldownStatusView.Build(
+            owner.CaptureGeneratedReactionCooldowns(), Language.ActiveCulture.CultureInfo))
+        {
+            Texture2D? sprite = InfiniCrafterLocalMod.Sprites?.TryGet(status.SpritePath);
+            // Only the accepted item's real PNG; asset hydration remains with the
+            // existing cache. Missing artwork never fabricates an equipment icon.
+            if (sprite is not null)
+                DrawStatus(player, null, status.Label, status.Tooltip, status.RemainingTicks,
+                    append++, inventoryOffset, sprite);
+        }
         return true;
     }
 
     // Shared native loading/drawing boundary: preserve the original utility rows,
     // alpha, duration/hover and native HUD/equipment geometry for appended rows.
     private static void DrawStatus(Player player, Asset<Texture2D>? asset, string label,
-        string tooltip, int remainingTicks, int index, int inventoryOffset)
+        string tooltip, int remainingTicks, int index, int inventoryOffset, Texture2D? itemSprite = null)
     {
-        if (asset is null || !asset.IsLoaded) return;
-        Texture2D texture = asset.Value;
+        if (itemSprite is null && (asset is null || !asset.IsLoaded)) return;
+        Texture2D texture = itemSprite ?? asset!.Value;
         Point point = GeneratedUtilityBuffStatusView.IconPosition(index, Main.playerInventory,
             Main.screenWidth, Main.screenHeight, inventoryOffset, Main.mapStyle);
-        var bounds = new Rectangle(point.X, point.Y, texture.Width, texture.Height);
+        int width = itemSprite is null ? texture.Width : 32;
+        int height = itemSprite is null ? texture.Height : 32;
+        var bounds = new Rectangle(point.X, point.Y, width, height);
+        float scale = itemSprite is null ? 1f : Math.Min(32f / texture.Width, 32f / texture.Height);
+        Vector2 imagePoint = point.ToVector2() + new Vector2((width - texture.Width * scale) / 2f, (height - texture.Height * scale) / 2f);
         bool hovered = !PlayerInput.IgnoreMouseInterface && bounds.Contains(Main.mouseX, Main.mouseY);
         Color color = Color.White * (hovered ? 1f : (Main.playerInventory ? 0.65f : 0.4f));
         // GameInterfaceLayer owns Begin/End and UIScaleMatrix. No gameplay slots,
         // DrawBuffIcon, HasBuff gate, timer advancement or click-to-remove behavior.
-        Main.spriteBatch.Draw(texture, point.ToVector2(), color);
+        Main.spriteBatch.Draw(texture, imagePoint, null, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         if (remainingTicks > 2)
         {
-            string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, remainingTicks / 60),
+            string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, itemSprite is null ? remainingTicks / 60 : (remainingTicks + 59) / 60),
                 abbreviated: true, showAllAvailableUnits: false);
             Utils.DrawBorderString(Main.spriteBatch, duration,
-                new Vector2(point.X, point.Y + texture.Height), color, 0.8f);
+                new Vector2(point.X, point.Y + height), color, 0.8f);
         }
         if (!hovered) return;
         player.mouseInterface = true;

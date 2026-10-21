@@ -19,6 +19,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     PROJECTILE_MODIFIER_COMPONENTS,
+    PROJECTILE_ENTITY_KINDS,
     ENTITY_KINDS,
     EVENT_ACTION_OPCODE,
     INPUT_KIND_REGISTRY,
@@ -78,14 +79,14 @@ _SPAWN_KEYS = frozenset({"enabled", "speedPxPerTick", "count", "spreadRadians", 
 _OVER_TARGET_KEYS = frozenset({"heightTiles", "delayTicks"})
 _DAMAGE_KEYS = frozenset({"enabled", "damageClass", "damage", "knockback", "ownerHitCheck"})
 _HITBOX_KEYS = frozenset({"widthPx", "heightPx", "drawScale", "hitboxScale"})
-_COLLISION_KEYS = frozenset({"tileCollide", "ignoreWater", "bounceCount", "pierce", "extraUpdates", "npcImmunityMode", "localNpcHitCooldownTicks"})
+_COLLISION_KEYS = frozenset(field for name, spec in CAPABILITY_REGISTRY["set_projectile_collision"].params.items() for field in spec.wire_field_names(name))
 _DRIVER_KEYS = frozenset({"name", "code", "params"})
 _PARAMS_KEYS = frozenset({
     "rangeTiles", "homingStrength", "gravityPerTick", "velocityRetention", "returnAfterTicks", "returnSpeed",
     "waveAmplitude", "phaseStrength", "acceleration", "maxSpeed", "turnRadiansPerTick", "pullStrength",
     "proximityRadiusPx", "scalePerTick", "maxScale", "segments", "durationTicks", "widthPx", "warmupTicks",
     "chargeTicks", "powerMultiplier",
-}) | frozenset(field for name, spec in CAPABILITY_REGISTRY["channel_beam"].params.items() for field in spec.wire_field_names(name)) | frozenset(
+}) | frozenset(field for fn in ("channel_beam", "charge_then_release") for name, spec in CAPABILITY_REGISTRY[fn].params.items() for field in spec.wire_field_names(name)) | frozenset(
     field for cap in CAPABILITY_REGISTRY.values() if cap.category == "movement"
     for name, spec in cap.params.items() for field in spec.wire_field_names(name)
 )
@@ -95,7 +96,7 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
-    "damageBasis", "knockbackBasis", "hitTargetSpawn",
+    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId",
 }) | _TARGET_EMISSION_FIELDS
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
@@ -616,7 +617,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(event, Mapping): continue
             reactive = event.get("event") in ("on_hurt", "on_enemy_kill")
             timer = event.get("reactionCooldownTicks", 0)
-            if (reactive and (type(timer) is not int or not 6 <= timer <= 3600 or event.get("actionCode") not in (1, 3))
+            if (reactive and (type(timer) is not int or not 6 <= timer <= 3600 or event.get("actionCode") not in (1, 3, EVENT_ACTION_OPCODE["apply_generated_buff_on_event"]))
                     or not reactive and "reactionCooldownTicks" in event):
                 errors.append({"path": f"{entity_path}.events[{event_index}].reactionCooldownTicks", "code": "invalid_reaction_cooldown", "message": "Equipment reactions require an explicit supported action and bounded cooldown."})
         movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
@@ -682,6 +683,10 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 if "overTarget" in component:
                     _validate_component_shape(component.get("overTarget"), _OVER_TARGET_KEYS, f"{entity_path}.spawn.overTarget", errors)
                 _validate_spawn_velocity(component, entity, f"{entity_path}.spawn", errors)
+            if component_name == "collision" and component is not None and "bounceSpeedRetention" in component:
+                spec = CAPABILITY_REGISTRY["set_projectile_collision"].params["bounceSpeedRetention"]
+                if kind not in PROJECTILE_ENTITY_KINDS or not spec.matches_scalar_projection(component["bounceSpeedRetention"]):
+                    errors.append({"path": f"{entity_path}.collision.bounceSpeedRetention", "code": "invalid_bounce_retention", "message": "Present bounce retention requires a projectile and finite 0..1 multiplier."})
             if component_name in {"movement", "controller"} and component is not None:
                 params = (_validate_component_shape(component.get("params"), _PARAMS_KEYS, f"{entity_path}.{component_name}.params", errors)
                           if "params" in component else None)
@@ -712,6 +717,28 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                         for name in foreign.intersection(params):
                             errors.append({"path": f"{entity_path}.{component_name}.params.{name}", "code": "inactive_movement_param",
                                            "message": "This present parameter belongs only to its exact registered movement."})
+                if params is not None:
+                    charge_fields = {"chargeDamageMultiplier", "knockbackMultiplier", "speedMultiplier"}
+                    present_charge = charge_fields.intersection(params)
+                    selected_charge = (component_name == "controller" and component.get("name") == "charge_then_release"
+                                       and type(component.get("code")) is int and component["code"] == 2
+                                       and kind in CAPABILITY_REGISTRY["charge_then_release"].target_kinds)
+                    if present_charge:
+                        if params.get("powerMultiplier", 0) != 0:
+                            errors.append({"path": f"{entity_path}.{component_name}.params.powerMultiplier", "code": "invalid_charge_multiplier", "message": "Independent charge cannot also carry the retained coupled multiplier."})
+                        if not CAPABILITY_REGISTRY["charge_then_release"].params["chargeSeconds"].matches_scalar_projection(params.get("chargeTicks")):
+                            errors.append({"path": f"{entity_path}.{component_name}.params.chargeTicks", "code": "invalid_charge_multiplier", "message": "Independent charge requires a complete bounded charge duration."})
+                        for source, field in (("damageMultiplier", "chargeDamageMultiplier"), ("knockbackMultiplier", "knockbackMultiplier"), ("speedMultiplier", "speedMultiplier")):
+                            spec = CAPABILITY_REGISTRY["charge_then_release"].params[source]
+                            if not selected_charge or field not in params or not spec.matches_scalar_projection(params[field]):
+                                errors.append({"path": f"{entity_path}.{component_name}.params.{field}", "code": "invalid_charge_multiplier", "message": "Independent charge requires both exact multipliers on its charge controller."})
+                    if "orbitRadiansPerUpdate" in params:
+                        spec = CAPABILITY_REGISTRY["move_orbit"].params["turnRadiansPerSecond"]
+                        if (component_name != "movement" or component.get("name") != "move_orbit"
+                                or type(component.get("code")) is not int or component["code"] != 4
+                                or kind not in CAPABILITY_REGISTRY["move_orbit"].target_kinds
+                                or not spec.matches_scalar_projection(params["orbitRadiansPerUpdate"])):
+                            errors.append({"path": f"{entity_path}.{component_name}.params.orbitRadiansPerUpdate", "code": "invalid_orbit_rate", "message": "Present orbit rate requires its exact driver and finite bounded radians/update."})
                 beam = CAPABILITY_REGISTRY["channel_beam"]
                 for name, spec in beam.params.items():
                     if spec.default is None or params is None or name not in params:
@@ -1121,8 +1148,41 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             errors.append({"path": "$.runtimeProgram.heldEffectGroupId", "code": "invalid_held_effect_group", "message": "Held refresh must select exactly a generated-buff-only named group."})
         else:
             used_effect_groups.add(held_id)
+    for ei, entity in enumerate(entities):
+        for ai, event in enumerate(entity.get("events", []) if isinstance(entity.get("events"), list) else []):
+            if not isinstance(event, Mapping): continue
+            path = f"$.runtimeProgram.entities[{ei}].events[{ai}]"
+            is_buff = event.get("actionCode") == EVENT_ACTION_OPCODE["apply_generated_buff_on_event"]
+            if not is_buff:
+                if "effectGroupId" in event or event.get("action") == "apply_generated_buff_on_event":
+                    errors.append({"path": path + ".effectGroupId", "code": "invalid_effect_group_reference", "message": "Event effect-group references belong only to generated-buff reactions."})
+                continue
+            for key, neutral in {**_EMISSION_UNUSED_EVENT_DEFAULTS, "entityId": ""}.items():
+                if key not in event: continue
+                value = event[key]
+                same_type = type(value) is type(neutral) or type(value) in (int, float) and type(neutral) in (int, float)
+                if not same_type or value != neutral:
+                    errors.append({"path": path + "." + key, "code": "wrong_event_parameter_owner", "message": "Generated-buff reactions cannot carry another action's non-neutral fields."})
+            if "delayTicks" in event and (type(event["delayTicks"]) is not int or not 0 <= event["delayTicks"] <= 600):
+                errors.append({"path": path + ".delayTicks", "code": "invalid_reaction_delay", "message": "Reaction delay must be an integer in 0..600."})
+            group_id = event.get("effectGroupId")
+            group = effect_groups.get(group_id) if isinstance(group_id, str) else None
+            cap = CAPABILITY_REGISTRY["apply_generated_buff_on_event"]
+            if (not has_equipment or not any(isinstance(binding, Mapping)
+                    and binding.get("input") == "equipped" and action_kind(binding) == "equip_passive"
+                    and binding_target_id(binding) == entity.get("id") for binding in bindings)
+                    or entity.get("kind") != "item_body" or event.get("action") != cap.name
+                    or event.get("event") not in cap.allowed_events or group is None
+                    or not isinstance(group.get("generatedBuff"), Mapping)
+                    or not _generated_buff_has_effect(group["generatedBuff"])
+                    or any(group.get(key, 0) != 0 for key in ("healLife", "healMana", "mobilityRangeTiles", "mobilityCooldownTicks"))
+                    or group.get("potion", False) is not False or group.get("extraBuffs", []) != []
+                    or group.get("mobilityMode", "") != ""):
+                errors.append({"path": path + ".effectGroupId", "code": "invalid_reaction_effect_group", "message": "Equipment reaction must select an exact generated-buff-only group."})
+            else:
+                used_effect_groups.add(group_id)
     for group_id in effect_groups.keys() - used_effect_groups:
-        errors.append({"path": "$.runtimeProgram.effectGroups", "code": "orphan_effect_group", "message": f"Effect group {group_id!r} has no exact binding or held consumer."})
+        errors.append({"path": "$.runtimeProgram.effectGroups", "code": "orphan_effect_group", "message": f"Effect group {group_id!r} has no exact binding, held or equipment-reaction consumer."})
     for index, binding in enumerate(bindings):
         if not isinstance(binding, Mapping):
             continue

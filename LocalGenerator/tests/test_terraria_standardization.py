@@ -56,6 +56,7 @@ def test_projectile_collision_exposes_terraria_liquid_and_immunity_semantics() -
         "tileCollide",
         "ignoreWater",
         "bounceCount",
+        "bounceSpeedRetention",
         "pierce",
         "updatesPerTick",
         "immunity",

@@ -21,7 +21,7 @@ from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_r
 DECLARED = {
     "present_placed_item_sprite": {"pivotSpace": "frame"},
     "configure_spawn": {"count": 1, "spreadRadians": 0},
-    "set_projectile_collision": {"bounceCount": 0},
+    "set_projectile_collision": {"bounceCount": 0, "bounceSpeedRetention": 1},
     "channel_beam": {"manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,
                      "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False},
     "configure_item_stats": {"manaCost": 0},

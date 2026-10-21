@@ -643,11 +643,12 @@
       "authoredDecisionsPreserved": true,
       "capability": "set_projectile_collision",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
       "outputs": [
         "runtimeProgram.entities[].collision.tileCollide",
         "runtimeProgram.entities[].collision.ignoreWater",
         "runtimeProgram.entities[].collision.bounceCount",
+        "runtimeProgram.entities[].collision.bounceSpeedRetention",
         "runtimeProgram.entities[].collision.pierce",
         "runtimeProgram.entities[].collision.extraUpdates",
         "runtimeProgram.entities[].collision.npcImmunityMode",
@@ -711,7 +712,8 @@
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
-        "runtimeProgram.entities[].movement.params.rangeTiles"
+        "runtimeProgram.entities[].movement.params.rangeTiles",
+        "runtimeProgram.entities[].movement.params.orbitRadiansPerUpdate"
       ]
     },
     {
@@ -941,7 +943,9 @@
         "runtimeProgram.entities[].controller.name",
         "runtimeProgram.entities[].controller.code",
         "runtimeProgram.entities[].controller.params.chargeTicks",
-        "runtimeProgram.entities[].controller.params.powerMultiplier"
+        "runtimeProgram.entities[].controller.params.chargeDamageMultiplier",
+        "runtimeProgram.entities[].controller.params.knockbackMultiplier",
+        "runtimeProgram.entities[].controller.params.speedMultiplier"
       ]
     },
     {
@@ -1031,6 +1035,21 @@
         "runtimeProgram.entities[].events[].repeatPolicy",
         "runtimeProgram.entities[].events[].requireLineOfSight",
         "runtimeProgram.entities[].events[].initialIgnoreCountdownUpdates",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "apply_generated_buff_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
+        "runtimeProgram.entities[].events[].effectGroupId",
         "runtimeProgram.entities[].events[].delayTicks"
       ]
     },

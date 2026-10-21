@@ -1575,7 +1575,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "effectGroupId": {
-                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-semanticType": "item_effect_group_identity"
@@ -1664,7 +1664,7 @@
                     "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
-                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-semanticType": "item_effect_group_identity"
@@ -1724,7 +1724,7 @@
                     "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
-                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-semanticType": "item_effect_group_identity"
@@ -2650,7 +2650,7 @@
                     "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
-                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-semanticType": "item_effect_group_identity"
@@ -2733,7 +2733,7 @@
                     "x-infini-units": "seconds"
                   },
                   "effectGroupId": {
-                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+                    "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                     "pattern": "^[a-z][a-z0-9_]{0,47}$",
                     "type": "string",
                     "x-infini-semanticType": "item_effect_group_identity"
@@ -5621,12 +5621,27 @@
                 "properties": {
                   "bounceCount": {
                     "default": 0,
-                    "description": "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
+                    "description": "bounceCount=N reflects N tile contacts using bounceSpeedRetention on collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts",
                     "maximum": 32,
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "bounce_count"
+                  },
+                  "bounceSpeedRetention": {
+                    "default": 1,
+                    "description": "Multiply only each collided velocity axis after reflection; 1 preserves it, 0 stops that axis. Tangential speed is unchanged. No friction between contacts. Only used when tileCollide=true and bounceCount>0; return-on-wall drivers keep their separate return behavior",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar"
                   },
                   "ignoreWater": {
                     "description": "Ignore Terraria liquid drag; false keeps vanilla water interaction",
@@ -6001,10 +6016,55 @@
                     "type": "number",
                     "x-infini-semanticType": "tiles",
                     "x-infini-units": "blocks (tiles)"
+                  },
+                  "turnRadiansPerSecond": {
+                    "description": "Author units: radians/s. Native consumer: Signed orbit angular increment; positive clockwise, negative counterclockwise, zero fixed-angle owner following",
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -30.0,
+                          30.0
+                        ],
+                        [
+                          -60.0,
+                          60.0
+                        ],
+                        [
+                          -90.0,
+                          90.0
+                        ],
+                        [
+                          -120.0,
+                          120.0
+                        ],
+                        [
+                          -150.0,
+                          150.0
+                        ],
+                        [
+                          -180.0,
+                          180.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians/s",
+                    "x-infini-units": "radians/s"
                   }
                 },
                 "required": [
-                  "radiusTiles"
+                  "radiusTiles",
+                  "turnRadiansPerSecond"
                 ],
                 "type": "object"
               },
@@ -7473,17 +7533,54 @@
                     "x-infini-semanticType": "seconds",
                     "x-infini-units": "seconds"
                   },
-                  "powerMultiplier": {
-                    "description": "Full-charge damage/knockback and release velocity multiplier; partial charge interpolates from 1; 1 unchanged",
+                  "damageMultiplier": {
+                    "description": "Full-charge multiplier of current native damage only, applied once at release; partial charge interpolates from 1. 1 preserves damage",
                     "maximum": 4,
                     "minimum": 1,
                     "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "knockbackMultiplier": {
+                    "description": "Independent full-charge knockback multiplier; partial charge interpolates from 1. 1 preserves knockback",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "speedMultiplier": {
+                    "description": "Independent full-charge release-speed multiplier; partial charge interpolates from 1. 1 preserves launch speed; values below 1 make a slower charged shot",
+                    "maximum": 4,
+                    "minimum": 0.1,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1,
                     "x-infini-semanticType": "unitless_scalar"
                   }
                 },
                 "required": [
                   "chargeSeconds",
-                  "powerMultiplier"
+                  "damageMultiplier",
+                  "knockbackMultiplier",
+                  "speedMultiplier"
                 ],
                 "type": "object"
               },
@@ -8259,6 +8356,99 @@
               "id",
               "fn",
               "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "apply_generated_buff_on_event"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "effectGroupId": {
+                    "description": "Exact named generated-buff-only group on this item",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "type": "string",
+                    "x-infini-semanticType": "item_effect_group_reference"
+                  },
+                  "when": {
+                    "additionalProperties": false,
+                    "description": "Functional equipment reaction; identical copies share cooldown.",
+                    "properties": {
+                      "cooldownSeconds": {
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Shared interval reserved before dispatch",
+                        "maximum": 60.0,
+                        "minimum": 0.09166666666666666,
+                        "type": "number",
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        },
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-units": "seconds"
+                      },
+                      "on": {
+                        "description": "Equipment event",
+                        "enum": [
+                          "on_hurt",
+                          "on_enemy_kill"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "on",
+                      "cooldownSeconds"
+                    ],
+                    "type": "object",
+                    "x-infini-semanticType": "runtime_event_trigger"
+                  }
+                },
+                "required": [
+                  "when",
+                  "effectGroupId"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
               "params"
             ],
             "type": "object"
