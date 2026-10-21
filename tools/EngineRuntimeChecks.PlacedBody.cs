@@ -63,10 +63,9 @@ internal static partial class EngineRuntimeChecks
             ledger.LoadWorldData(PersistenceNbtRoundtrip(saved));
             var reloaded = new TagCompound(); ledger.SaveWorldData(reloaded);
             Equal("place", reloaded.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2")[0].GetCompound("placedBody").GetString("bindingId"), "native NBT reload keeps presentation ownership");
-            using var stream = new MemoryStream();
-            using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) ledger.NetSend(writer);
-            stream.Position = 0; ledger.ClearWorld(); Terraria.Main.netMode = NetmodeID.MultiplayerClient;
-            using (var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, true)) ledger.NetReceive(reader);
+            byte[] snapshot = PlacedLedgerSnapshot(ledger);
+            ledger.ClearWorld(); Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+            PlacedLedgerReceiveSnapshot(ledger, snapshot);
             var mirrored = new TagCompound(); ledger.SaveWorldData(mirrored);
             var mirror = mirrored.GetList<TagCompound>("infiniGeneratedPlacementLedgerV2")[0];
             Equal(data.Id, mirror.GetString("generatedItemId"), "initial network snapshot exact id");
@@ -85,7 +84,6 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, exactMirror.GetString("definitionJson").Length > 0, "existing registry hydrates exact hash-bound placed definition");
             }
             finally { registryProperty.SetValue(null,oldRegistry); }
-            Equal(stream.Length, stream.Position, "complete versioned snapshot consumed");
             // Restore the authoritative NBT claim and remove native occupancy without
             // CanDrop (support loss/replacement paths can bypass that material hook).
             Terraria.Main.netMode = NetmodeID.SinglePlayer;

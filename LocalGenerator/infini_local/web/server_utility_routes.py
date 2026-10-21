@@ -80,10 +80,6 @@ class ServerUtilityRoutes:
     def handle_get(self, handler: Any, path: str) -> bool:
         request_path = urlparse(path).path
 
-        # path.startswith("/shutdown") intentionally avoided for exact route matching + query support.
-        if request_path == "/shutdown":
-            self.shutdown(handler, path)
-            return True
         if request_path == "/health":
             handler.json(self.health_payload())
             return True
@@ -95,9 +91,6 @@ class ServerUtilityRoutes:
             return True
         if request_path == "/trace.json":
             handler.json(self.trace_snapshot())
-            return True
-        if request_path == "/trace_clear":
-            self.trace_clear(handler)
             return True
         if request_path == "/trace":
             self.write_html(handler, self.trace_snapshot_html())
@@ -139,6 +132,16 @@ class ServerUtilityRoutes:
             return True
         if request_path.startswith("/sprite/"):
             self.sprite_file(handler, path)
+            return True
+        return False
+
+    def handle_post(self, handler: Any, path: str, payload: dict[str, Any]) -> bool:
+        request_path = urlparse(path).path
+        if request_path == "/shutdown":
+            self.shutdown(handler, path)
+            return True
+        if request_path == "/trace_clear":
+            self.trace_clear(handler)
             return True
         return False
 

@@ -160,6 +160,22 @@ jobs:
         run: |
           dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity normal
           exit $LASTEXITCODE
+      - name: Locate restored references for native CPU regressions
+        shell: pwsh
+        run: |
+          # The first SDK restore creates the version-alias props; reevaluate
+          # the graph so the exact tML package appears in project.assets.json.
+          dotnet restore ModSources/InfiniCrafterLocal/InfiniCrafterLocal.csproj --verbosity minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $assets = Get-Content ModSources/InfiniCrafterLocal/obj/project.assets.json -Raw | ConvertFrom-Json
+          $tml = @($assets.libraries.PSObject.Properties | Where-Object { $_.Name -like 'tModLoader/*' })
+          if ($tml.Count -ne 1) { throw 'Expected one resolved tModLoader package for native checks.' }
+          $references = @($assets.packageFolders.PSObject.Properties.Name | ForEach-Object {
+            $candidate = Join-Path $_ ($tml[0].Value.path + '/lib/net8.0')
+            if (Test-Path (Join-Path $candidate 'tModLoader.dll')) { $candidate }
+          })
+          if ($references.Count -ne 1) { throw 'Could not locate the resolved native tModLoader references.' }
+          "INFINI_TML_REFERENCE_DIR=$($references[0])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       # CI validates compilation; the SDK packaging target requires a local Steam install.
       - name: Attempt tML project build
         id: tml

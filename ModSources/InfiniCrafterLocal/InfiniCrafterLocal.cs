@@ -120,6 +120,11 @@ public sealed class InfiniCrafterLocalMod : Mod
             Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacementIntentPacket(reader, whoAmI);
             return;
         }
+        if (packetType == InfiniNetPacketIds.GeneratedPlacedBodySnapshot)
+        {
+            Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacedBodySnapshotPacket(reader, whoAmI);
+            return;
+        }
         if (packetType == InfiniNetPacketIds.SyncGeneratedPlacedBodyLedger)
         {
             Common.Systems.GeneratedPlacementLedgerSystem.HandlePlacedBodyLedgerPacket(reader, whoAmI);

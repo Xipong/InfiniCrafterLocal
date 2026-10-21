@@ -78,7 +78,7 @@ public partial class GeneratedItem
             && GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI,
                 RootBindingSpawnCapacity(entity));
 
-    private RootCombatTriple RootCombatBase(RuntimeEntitySpec entity)
+    internal RootCombatTriple RootCombatBase(RuntimeEntitySpec entity)
         => PrefixAppliedRootCombatBase(new RootCombatTriple(entity.Damage.Enabled ? entity.Damage.Damage : 0,
             entity.Damage.Knockback, TerrariaRuntimeVocabulary.ResolveDamageClass(entity.Damage.DamageClass)));
 

@@ -51,13 +51,85 @@ internal static partial class EngineRuntimeChecks
     private static byte[] PlacedLedgerSnapshot(GeneratedPlacementLedgerSystem ledger)
     {
         using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
-        ledger.NetSend(writer); return stream.ToArray();
+        // The fixture stores the actual independently framed ModPacket payloads,
+        // not a synthetic monolithic WorldData payload.
+        foreach (byte[] packet in GeneratedPlacementLedgerSystem.PlacedBodySnapshotPackets())
+        { writer.Write(packet.Length); writer.Write(packet); }
+        return stream.ToArray();
     }
 
     private static void PlacedLedgerReceiveSnapshot(GeneratedPlacementLedgerSystem ledger, byte[] bytes)
     {
-        using var reader = new BinaryReader(new MemoryStream(bytes)); ledger.NetReceive(reader);
-        Equal(reader.BaseStream.Length, reader.BaseStream.Position, "initial snapshot completely consumed");
+        using var reader = new BinaryReader(new MemoryStream(bytes));
+        while (reader.BaseStream.Position < reader.BaseStream.Length)
+        {
+            int length = reader.ReadInt32(); byte[] packet = reader.ReadBytes(length);
+            Equal(length, packet.Length, "complete snapshot packet fixture");
+            using var frame = new BinaryReader(new MemoryStream(packet));
+            GeneratedPlacementLedgerSystem.HandlePlacedBodySnapshotPacket(frame, 256);
+            Equal(frame.BaseStream.Length, frame.BaseStream.Position, "initial snapshot frame completely consumed");
+        }
+    }
+
+    private static void PlacedBodySnapshotUsesBoundedPacketsWithoutTruncatingLedger()
+    {
+        WithPlacedLedger((_, ledger) => {
+            using var peers = new ReviewPeers();
+            Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            var data = PlacedLedgerData("large-ledger");
+            var rows = Enumerable.Range(1, 1100).Select(i => {
+                var row = PlacedLedgerRow(data, i); row.Remove("placedBody"); return row;
+            }).ToList();
+            byte[] opaque = new byte[60 * 1024]; new Random(1729).NextBytes(opaque);
+            rows[0]["placedBody"] = new TagCompound { ["opaqueCosmetic"] = opaque };
+            PlacedLedgerLoadRows(ledger, rows);
+            using var world = new MemoryStream(); using (var writer = new BinaryWriter(world, Encoding.UTF8, true)) ledger.NetSend(writer);
+            Equal(12L, world.Length, "WorldData contains only constant-size version/revision marker");
+            // Exercise actual WorldData receive -> request -> server router ->
+            // targeted ModPacket response, not just the serializer iterator.
+            peers.Mode(NetmodeID.MultiplayerClient, 0); world.Position = 0;
+            ledger.NetReceive(new BinaryReader(world, Encoding.UTF8, true));
+            byte[] request = peers.Sent.Single(); peers.Sent.Clear();
+            peers.Mode(NetmodeID.Server, 255); peers.Receive(request, 0);
+            byte[][] frames = peers.Sent.Where(p => p[0] == InfiniCrafterLocal.Common.InfiniNetPacketIds.GeneratedPlacedBodySnapshot)
+                .Select(p => p[1..]).ToArray();
+            Equal(true, frames.Length > 0, "WorldData marker requests routed server snapshot");
+            Equal(true, frames.Sum(f => (long)f.Length) > ushort.MaxValue, "fixture exceeds TOTAL native packet capacity");
+            Equal(true, frames.All(f => f.Length + 6 < ushort.MaxValue), "each snapshot frame including native/mod header fits ushort packet length");
+            Equal(true, frames.Length > rows.Count + 2, "large individual witness is fragmented, not truncated");
+            ledger.ClearWorld(); Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+            void Receive(byte[] packet, int sender = 256) {
+                using var reader = new BinaryReader(new MemoryStream(packet));
+                GeneratedPlacementLedgerSystem.HandlePlacedBodySnapshotPacket(reader, sender);
+            }
+            foreach (byte[] frame in frames.Take(frames.Length - 1)) Receive(frame);
+            Equal(0, PlacedLedgerGroups(ledger).Count, "partial snapshot never publishes partial material mirror");
+            Receive(frames[^1], 0);
+            Equal(0, PlacedLedgerGroups(ledger).Count, "non-server cannot complete snapshot");
+            Receive(frames[^1]);
+            var mirrored = PlacedLedgerGroups(ledger);
+            Equal(rows.Count, mirrored.Count, "all 1100 material identities survive initial sync");
+            Equal(true, opaque.SequenceEqual(mirrored[0].GetCompound("placedBody").Get<byte[]>("opaqueCosmetic")), "fragmented witness reassembles exactly");
+            // A later authoritative delta must not be undone by an old join snapshot.
+            using (var delta = new MemoryStream())
+            {
+                using (var writer = new BinaryWriter(delta, Encoding.UTF8, true)) {
+                    writer.Write((int)typeof(GeneratedPlacementLedgerSystem).GetField("PayloadVersion", PersistenceStatic)!.GetRawConstantValue()!);
+                    writer.Write(1UL); writer.Write(true); writer.Write(rows[0].GetString("groupId"));
+                }
+                delta.Position = 0;
+                GeneratedPlacementLedgerSystem.HandlePlacedBodyLedgerPacket(new BinaryReader(delta), 256);
+            }
+            foreach (byte[] frame in frames) Receive(frame);
+            Equal(rows.Count - 1, PlacedLedgerGroups(ledger).Count, "old snapshot cannot undo newer removal delta");
+            // A malformed restart must not erase the last complete mirror.
+            Receive(frames[0]); Receive(frames[1]); Receive(frames[1]); Receive(frames[^1]);
+            Equal(rows.Count - 1, PlacedLedgerGroups(ledger).Count, "duplicate fragment/incomplete end leaves last complete mirror intact");
+            ledger.ClearWorld(); Terraria.Main.netMode = NetmodeID.SinglePlayer;
+            byte[] empty = PlacedLedgerSnapshot(ledger); Terraria.Main.netMode = NetmodeID.MultiplayerClient;
+            PlacedLedgerReceiveSnapshot(ledger, empty);
+            Equal(0, PlacedLedgerGroups(ledger).Count, "empty ledger is a complete snapshot too");
+        });
     }
 
     private static TagCompound PlacedLedgerRow(GeneratedItemData data, int index, object? body = null)

@@ -167,71 +167,73 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
         identity_version = str(payload.get("recipeIdentityVersion") or RECIPE_IDENTITY_VERSION)
         profile_id = _multi_dev_profile_id(payload)
         key = recipe_key(a, b, world_id, identity_version, profile_id)
-        cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
-        if isinstance(cached, dict):
-            generation_debug.clear_combine_failure("cache_hit_delivered")
-            return sanitize_recipe_for_delivery(cached)
-        if USE_LLM:
-            lease, token = step("00_llm_lease", begin_llm_item_lease, key, preferred_profile_id=profile_id)
-            data = step("01_gameplay_author", try_llm_plan, a, b, key)
-        if data is None:
-            if not ALLOW_DETERMINISTIC_DEV_FALLBACK:
-                raise PlannerUnavailable("Gameplay Author unavailable; craft failed and ingredients must be refunded")
-            data = step("01_dev_only_low_level_fixture", dev_fallback.deterministic_low_level_plan, a, b, key)
+        # Recheck inside singleflight: a waiter delivers the committed winner.
+        with world_storage.recipe_generation_lock(world_recipe_dir(world_id), key):
+            cached = cache_get(key, world_id, world_name, validate_payload=_cached_payload_report)
+            if isinstance(cached, dict):
+                generation_debug.clear_combine_failure("cache_hit_delivered")
+                return sanitize_recipe_for_delivery(cached)
+            if USE_LLM:
+                lease, token = step("00_llm_lease", begin_llm_item_lease, key, preferred_profile_id=profile_id)
+                data = step("01_gameplay_author", try_llm_plan, a, b, key)
+            if data is None:
+                if not ALLOW_DETERMINISTIC_DEV_FALLBACK:
+                    raise PlannerUnavailable("Gameplay Author unavailable; craft failed and ingredients must be refunded")
+                data = step("01_dev_only_low_level_fixture", dev_fallback.deterministic_low_level_plan, a, b, key)
 
-        data = compile_and_validate_authored_runtime(data, a, b, key, run_stage=step)
-        data = step("04_visual_technical_init", attach_visual, data)
-        data = step("05_visual_director", apply_visual_director, data, a, b)
-        data = step("06_vfx_director", attach_vfx_manifest, data, key, a, b, call_llm_vfx_director if USE_LLM else None)
-        data = step("07_visual_asset_runtime_gates", finalize_visual_asset_runtime_gates, data)
-        data = step("08_visual_asset_generation", maybe_generate_visual_assets, data)
-        data = step("09_visual_delivery_gate", assert_visual_delivery_ready, data)
-        data = step("10_generated_parent_summary", attach_generated_parent_summary, data)
-        data = step("11_final_normalize", final_normalize, data)
-        # validate_final_runtime_wire_boundary returns a report dict (or
-        # raises); it never returns the payload, so do not rebind `data` here.
-        step("12_final_runtime_wire_gate", validate_final_runtime_wire_boundary, data)
-        assert data is not None  # stage 11 always yields a payload dict
-        vfx_report = validate_vfx_manifest_wire(data)
-        if not vfx_report["ok"]:
-            raise PlannerUnavailable("final VFX wire rejected: " + json.dumps(vfx_report["errors"][:12], ensure_ascii=False))
-        data = step("13_stage_accounting", _assert_stage_topology, data)
+            data = compile_and_validate_authored_runtime(data, a, b, key, run_stage=step)
+            data = step("04_visual_technical_init", attach_visual, data)
+            data = step("05_visual_director", apply_visual_director, data, a, b)
+            data = step("06_vfx_director", attach_vfx_manifest, data, key, a, b, call_llm_vfx_director if USE_LLM else None)
+            data = step("07_visual_asset_runtime_gates", finalize_visual_asset_runtime_gates, data)
+            data = step("08_visual_asset_generation", maybe_generate_visual_assets, data)
+            data = step("09_visual_delivery_gate", assert_visual_delivery_ready, data)
+            data = step("10_generated_parent_summary", attach_generated_parent_summary, data)
+            data = step("11_final_normalize", final_normalize, data)
+            # validate_final_runtime_wire_boundary returns a report dict (or
+            # raises); it never returns the payload, so do not rebind `data` here.
+            step("12_final_runtime_wire_gate", validate_final_runtime_wire_boundary, data)
+            assert data is not None  # stage 11 always yields a payload dict
+            vfx_report = validate_vfx_manifest_wire(data)
+            if not vfx_report["ok"]:
+                raise PlannerUnavailable("final VFX wire rejected: " + json.dumps(vfx_report["errors"][:12], ensure_ascii=False))
+            data = step("13_stage_accounting", _assert_stage_topology, data)
 
-        recipe_meta = data.setdefault("recipeMeta", {})
-        recipe_meta.update({
-            "worldScoped": True,
-            "worldId": world_id,
-            "worldName": world_name,
-            "recipeKey": key,
-            "parentA": str(data.get("parentA") or ""),
-            "parentB": str(data.get("parentB") or ""),
-            "parentIdentities": [item_identity(a), item_identity(b)],
-        })
-        data["contractVersions"] = contract_versions_payload()
-        debug = data.setdefault("debug", {})
-        debug.update({
-            "cacheScope": "world",
-            "recipeIdentityVersion": identity_version,
-            "multiDevProfileId": profile_id,
-            "worldId": world_id,
-            "worldRecipesDir": str(world_recipe_dir(world_id)),
-            "pipelineProfile": VISUAL_PIPELINE_PROFILE,
-            "pipelineLog": pipeline_log,
-        })
-        data = asset_sync_service.attach_asset_sync_meta(data, asset_public_base_url=ASSET_PUBLIC_BASE_URL)
-        data = world_storage.attach_recipe_health(
-            data,
-            app_version=APP_VERSION,
-            contract_versions=data.get("contractVersions") if isinstance(data.get("contractVersions"), dict) else {},
-            visual_report=visual_delivery_report(data),
-        )
-        data = sanitize_recipe_for_delivery(data)
-        final_report = _cached_payload_report(data)
-        if not final_report["ok"]:
-            raise PlannerUnavailable("delivery payload failed low-level runtime boundary: " + json.dumps(final_report["errors"][:12], ensure_ascii=False))
-        cache_put(key, a, b, data, world_id, world_name)
-        generation_debug.clear_combine_failure("fresh_combine_success")
-        return data
+            recipe_meta = data.setdefault("recipeMeta", {})
+            recipe_meta.update({
+                "worldScoped": True,
+                "worldId": world_id,
+                "worldName": world_name,
+                "recipeKey": key,
+                "parentA": str(data.get("parentA") or ""),
+                "parentB": str(data.get("parentB") or ""),
+                "parentIdentities": [item_identity(a), item_identity(b)],
+            })
+            data["contractVersions"] = contract_versions_payload()
+            debug = data.setdefault("debug", {})
+            debug.update({
+                "cacheScope": "world",
+                "recipeIdentityVersion": identity_version,
+                "multiDevProfileId": profile_id,
+                "worldId": world_id,
+                "worldRecipesDir": str(world_recipe_dir(world_id)),
+                "pipelineProfile": VISUAL_PIPELINE_PROFILE,
+                "pipelineLog": pipeline_log,
+            })
+            data = asset_sync_service.attach_asset_sync_meta(data, asset_public_base_url=ASSET_PUBLIC_BASE_URL)
+            data = world_storage.attach_recipe_health(
+                data,
+                app_version=APP_VERSION,
+                contract_versions=data.get("contractVersions") if isinstance(data.get("contractVersions"), dict) else {},
+                visual_report=visual_delivery_report(data),
+            )
+            data = sanitize_recipe_for_delivery(data)
+            final_report = _cached_payload_report(data)
+            if not final_report["ok"]:
+                raise PlannerUnavailable("delivery payload failed low-level runtime boundary: " + json.dumps(final_report["errors"][:12], ensure_ascii=False))
+            cache_put(key, a, b, data, world_id, world_name)
+            generation_debug.clear_combine_failure("fresh_combine_success")
+            return data
     except Exception as exc:
         if not isinstance(getattr(exc, "_infini_failure_snapshot", None), dict):
             generation_debug.record_combine_failure("unknown", exc, payload, failure_data(), pipeline_log)

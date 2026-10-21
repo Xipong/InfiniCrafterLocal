@@ -33,7 +33,7 @@ internal readonly record struct GeneratedPlacementKey(GeneratedPlacementLayer La
 /// </summary>
 public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
 {
-    private const int PayloadVersion = 3;
+    private const int PayloadVersion = 4;
     private const int PlacementProtocolVersion = 6;
     private const string SaveKey = "infiniGeneratedPlacementLedgerV2";
     private const string PendingSaveKey = "infiniGeneratedPlacementReturnsV2";
@@ -362,14 +362,12 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         return true;
     }
 
+    // WorldData has a ushort TOTAL packet length shared by every ModSystem.
+    // Only a fixed-size revision marker belongs here, never the placement ledger.
     public override void NetSend(BinaryWriter writer)
     {
-        RestorePlacedBodyDefinitions(publish: true);
         writer.Write(PayloadVersion);
         writer.Write(_placedBodyRevision);
-        writer.Write(Groups.Count);
-        foreach (PlacementGroup group in Groups.Values.OrderBy(x => x.GroupId, StringComparer.Ordinal))
-            WriteMirrorGroup(writer, group);
     }
 
     public override void NetReceive(BinaryReader reader)
@@ -380,28 +378,9 @@ public sealed partial class GeneratedPlacementLedgerSystem : ModSystem
         if (version != PayloadVersion)
             throw new InvalidDataException($"Unsupported generated placement ledger payload {version}");
         ulong revision = reader.ReadUInt64();
-        int count = reader.ReadInt32();
-        if (count < 0 || count > MaxGroups) throw new InvalidDataException("placement snapshot group capacity");
-        var incoming = new Dictionary<string, PlacementGroup>(StringComparer.Ordinal);
-        var occupied = new HashSet<GeneratedPlacementKey>();
-        for (int index = 0; index < count; index++)
-        {
-            PlacementGroup group = ReadMirrorGroup(reader);
-            if (!incoming.TryAdd(group.GroupId, group) || group.Cells.Any(cell => !occupied.Add(cell)) || occupied.Count > MaxCells)
-                throw new InvalidDataException("placement snapshot identity/overlap/capacity");
-        }
         EnsurePlacedBodyMirrorSender();
-        if (revision < _placedBodyRevision || (_bodySnapshotReceived && revision == _placedBodyRevision)) return;
-        Groups.Clear(); Placements.Clear();
-        BodyHydrationQueue.Clear(); BodyHydrationNodes.Clear();
-        foreach (PlacementGroup group in incoming.Values)
-        {
-            Groups[group.GroupId] = group;
-            foreach (GeneratedPlacementKey cell in group.Cells) Placements[cell] = group.GroupId;
-            EnqueuePlacedBodyHydration(group);
-        }
-        _placedBodyRevision = revision;
-        _bodySnapshotReceived = true;
+        if (_bodySnapshotReceived && revision <= _placedBodyRevision || _bodySnapshotRequested) return;
+        RequestPlacedBodySnapshot();
     }
 
     public override void PostUpdateWorld()

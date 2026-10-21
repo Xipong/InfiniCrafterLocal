@@ -27,6 +27,8 @@ public sealed partial class GeneratedPlacementLedgerSystem
 
     private static void ClearPlacedBodyMirrorState()
     {
+        ClearPlacedBodySnapshot();
+        _bodySnapshotRequested = false;
         BodyHydrationQueue.Clear(); BodyHydrationNodes.Clear();
         _bodyHydrationTick = null; _bodyHydrationVisits = 0;
         _bodyMirrorSocket = null; _bodyMirrorSenderBound = _bodySnapshotReceived = false;

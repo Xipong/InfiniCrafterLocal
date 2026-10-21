@@ -325,7 +325,7 @@ public sealed partial class InfiniCraftPlayer
         if (slotIndex < 0 || slotIndex >= Player.inventory.Length)
             return;
         Player.inventory[slotIndex].NetStateChanged();
-        if (Main.netMode == NetmodeID.Server)
+        if (Main.netMode != NetmodeID.SinglePlayer)
             NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Player.whoAmI, slotIndex);
     }
 

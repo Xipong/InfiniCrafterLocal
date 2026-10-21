@@ -30,7 +30,8 @@ _GET_LOOPBACK_REQUIRED_PREFIX_ROUTES = (
     "/debug/",
     "/visual_doctor",
 )
-_POST_LOOPBACK_REQUIRED_EXACT_ROUTES = {"/combine"}
+_CONTROL_ROUTES = {"/shutdown", "/trace_clear"}
+_POST_LOOPBACK_REQUIRED_EXACT_ROUTES = {"/combine", *_CONTROL_ROUTES}
 _POST_LOOPBACK_REQUIRED_PREFIX_ROUTES = ("/debug/vfx",)
 
 
@@ -85,6 +86,10 @@ def build_handler(
                     self.json_error(403, "loopback_only", "This endpoint is only available on loopback")
                     return
 
+                if request_path in _CONTROL_ROUTES:
+                    self.json_error(405, "method_not_allowed", "Use POST for control endpoints")
+                    return
+
                 if utility_routes().handle_get(self, self.path):
                     return
                 if request_path.startswith("/debug/vfx"):
@@ -105,13 +110,20 @@ def build_handler(
                     self.json_error(403, "loopback_only", "This endpoint is only available on loopback")
                     return
 
-                if request_path != "/combine" and not request_path.startswith("/debug/vfx"):
+                if request_path in _CONTROL_ROUTES and not self._is_trusted_control_request():
+                    self.json_error(403, "untrusted_control_origin", "Control requests require a local host and same origin")
+                    return
+
+                if request_path not in {"/combine", *_CONTROL_ROUTES} and not request_path.startswith("/debug/vfx"):
                     self.send_error(404)
                     return
 
                 length = self._content_length_bytes()
                 payload = self._read_json_payload(length)
 
+                if request_path in _CONTROL_ROUTES:
+                    utility_routes().handle_post(self, self.path, payload)
+                    return
                 if request_path.startswith("/debug/vfx"):
                     if vfx_debug_routes().handle_post(self, self.path, payload):
                         return
@@ -161,6 +173,26 @@ def build_handler(
                     return
                 log_event("error", "request failed", {"path": self.path, "error": repr(e), "trace": traceback.format_exc()})
                 self.json_error(500, "internal_error", repr(e))
+
+        def _is_trusted_control_request(self) -> bool:
+            # Peer loopback alone cannot distinguish native clients from a hostile
+            # web page. Reject rebinding Hosts and cross-origin browser requests.
+            host = self.headers.get("Host", "")
+            try:
+                authority = urlparse("http://" + host)
+                if (not _is_loopback_host(authority.hostname or "")
+                        or authority.username is not None or authority.password is not None
+                        or authority.path or authority.query or authority.fragment
+                        or (authority.port or 80) != self.server.server_port):
+                    return False
+            except ValueError:
+                return False
+            origin = self.headers.get("Origin")
+            if origin is not None and origin != "http://" + host:
+                return False
+            if self.headers.get("Sec-Fetch-Site", "") not in {"", "same-origin", "none"}:
+                return False
+            return True
 
         def _route_requires_loopback(self, request_path: str, *, is_post: bool) -> bool:
             if is_post:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 import os
 import tempfile
 import threading
@@ -60,6 +61,30 @@ def _storage_lock(path: Path) -> threading.RLock:
             return _GLOBAL_STORAGE_LOCK
         _STORAGE_LOCKS[key] = threading.RLock()
         return _STORAGE_LOCKS[key]
+
+
+# Only active/waiting generations retain entries. Unlike storage-lock fallback,
+# independent recipes never share a generation lock, even in very large worlds.
+_GENERATION_LOCKS_GUARD = threading.Lock()
+_GENERATION_LOCKS: dict[tuple[str, str], tuple[threading.Lock, int]] = {}
+
+
+@contextmanager
+def recipe_generation_lock(world_dir: Path, recipe_key: str):
+    key = (str(world_dir.resolve()), recipe_key)
+    with _GENERATION_LOCKS_GUARD:
+        lock, users = _GENERATION_LOCKS.get(key, (threading.Lock(), 0))
+        _GENERATION_LOCKS[key] = (lock, users + 1)
+    try:
+        with lock:
+            yield
+    finally:
+        with _GENERATION_LOCKS_GUARD:
+            _, users = _GENERATION_LOCKS[key]
+            if users == 1:
+                del _GENERATION_LOCKS[key]
+            else:
+                _GENERATION_LOCKS[key] = (lock, users - 1)
 
 
 def _fsync_parent_directory(path: Path) -> None:

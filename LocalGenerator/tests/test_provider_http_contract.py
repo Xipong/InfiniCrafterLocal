@@ -105,13 +105,13 @@ class PlannerUnavailable(Exception):
     pass
 
 
-def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0.0.1", internal_error=False):
+def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0.0.1", internal_error=False, utility=None):
     capture = Capture()
     endpoint = SimpleNamespace(handle_combine_request=(
         lambda *_args, **_kw: (_ for _ in ()).throw(ValueError("internal invariant failed"))
         if internal_error else _kw["json"]({"ok": True, "route": "combine"})))
     handler_class = build_handler(
-        app_version="test", utility_routes=UtilityProbe,
+        app_version="test", utility_routes=(lambda: utility) if utility is not None else UtilityProbe,
         vfx_debug_routes=lambda: SimpleNamespace(handle_get=lambda *_: False, handle_post=lambda *_: False),
         combine_endpoint=endpoint, combine_cache_lookup=lambda *_a, **_k: None,
         sanitize_recipe_for_delivery=lambda *_a, **_k: None, combine=lambda *_a, **_k: None,
@@ -151,6 +151,7 @@ def utility_routes(root):
 @pytest.mark.parametrize("method,path,address,status,payload,reads", [
     pytest.param("GET", "/get_asset?name=foo.png", "198.51.100.20", 200, {"ok": True, "route": "get_asset"}, 0, id="remote-asset"),
     pytest.param("GET", "/shutdown", "198.51.100.20", 403, "loopback_only", 0, id="remote-control"),
+    pytest.param("POST", "/shutdown?force=1", "198.51.100.20", 403, "loopback_only", 0, id="remote-post-control"),
     pytest.param("POST", "/combine", "203.0.113.10", 403, "loopback_only", 0, id="remote-post-no-read"),
     pytest.param("POST", "/missing", "127.0.0.1", 404, None, 0, id="unknown-post-no-read"),
     pytest.param("POST", "/combine", "::ffff:127.0.0.1", 200, {"ok": True, "route": "combine"}, 1, id="mapped-loopback"),
@@ -190,7 +191,7 @@ def test_post_body_validation_has_bounded_exact_failure(body, length, status, er
 
 
 @pytest.mark.parametrize("owner,method,path,accepted", [
-    ("utility", "get", "/shutdown?force=1", True), ("utility", "get", "/shutdownAnything", False),
+    ("utility", "post", "/shutdown?force=1", True), ("utility", "get", "/shutdownAnything", False),
     ("vfx", "get", "/debug/vfx_matrix?verbose=1", True), ("vfx", "get", "/debug/vfx_matrix_extra", False),
     ("vfx", "post", "/debug/vfx_select?dryRun=1", True), ("vfx", "post", "/debug/vfx_select_extra", False),
 ])
@@ -309,7 +310,7 @@ def test_shutdown_admission_and_activity_are_atomic(tmp_path, monkeypatch, phase
     worker.start()
     try:
         assert entered.wait(5)
-        utility_routes(tmp_path).handle_get(shutdown, "/shutdown?force=1" if forced else "/shutdown")
+        utility_routes(tmp_path).handle_post(shutdown, "/shutdown?force=1" if forced else "/shutdown", {})
         assert shutdown.code == (200 if forced else 409)
         if forced:
             assert shutdown.payload["forced"] is True
@@ -346,7 +347,7 @@ def test_safe_shutdown_closes_admission_before_acknowledging(tmp_path, monkeypat
     stopped = threading.Event()
     shutdown.server = SimpleNamespace(shutdown=stopped.set)
     routes = utility_routes(tmp_path)
-    routes.handle_get(shutdown, "/shutdown")
+    routes.handle_post(shutdown, "/shutdown", {})
     assert shutdown.code == 200
     endpoint.handle_combine_request(
         {}, **endpoint_options(
@@ -790,3 +791,47 @@ def test_actual_serialized_http_preserves_provider_pin(loopback_transport, mode,
         else:
             assert "provider" not in body
     assert "provider" not in payload  # No mutation of author-owned input.
+
+
+
+@pytest.mark.parametrize("path", ["/trace_clear", "/shutdown?force=1"])
+@pytest.mark.parametrize("method,headers,status", [
+    ("GET", {}, 405),
+    ("POST", {"Origin": "https://untrusted.example", "Sec-Fetch-Site": "cross-site"}, 403),
+    ("POST", {"Origin": "null"}, 403),
+    ("POST", {"Sec-Fetch-Site": "cross-site"}, 403),
+    ("POST", {"Sec-Fetch-Site": "same-site"}, 403),
+    ("POST", {"Host": "rebound.example:5055"}, 403),
+    ("POST", {"Host": "127.0.0.1:5056"}, 403),
+    ("POST", {"Host": "127.0.0.1:bad"}, 403),
+    ("POST", {"Host": ""}, 403),
+    ("POST", {"Host": "user@127.0.0.1:5055"}, 403),
+    ("POST", {"Origin": "http://localhost:5055"}, 403),
+    ("POST", {}, 200),
+    ("POST", {"Origin": "http://127.0.0.1:5055", "Sec-Fetch-Site": "same-origin"}, 200),
+    ("POST", {"Host": "[::1]:5055", "Origin": "http://[::1]:5055"}, 200),
+])
+def test_control_requests_reject_browser_csrf_and_rebinding_before_mutation(tmp_path, monkeypatch, path, method, headers, status):
+    from infini_local.services import combine_endpoint
+
+    monkeypatch.setattr(combine_endpoint, "_GENERATION_ACCEPTING", True)
+    routes = utility_routes(tmp_path)
+    trace = tmp_path / "events.ndjson"
+    trace.write_text("retain diagnostic history\n")
+    routes.trace_files = (trace,)
+    handler, capture = boundary_handler(path=path, utility=routes)
+    handler.headers.update({"Host": "127.0.0.1:5055", **headers})
+    stopped = threading.Event()
+    handler.server = SimpleNamespace(server_port=5055, shutdown=stopped.set)
+    getattr(handler, "do_" + method)()
+    assert capture.code == status
+    if status != 200:
+        assert trace.read_text() == "retain diagnostic history\n"
+        assert combine_endpoint._GENERATION_ACCEPTING is True
+        assert handler.rfile.read_calls == 0
+    elif path == "/trace_clear":
+        assert trace.read_bytes() == b""
+    else:
+        assert combine_endpoint._GENERATION_ACCEPTING is False
+        assert capture.payload["forced"] is True
+        assert stopped.wait(2)

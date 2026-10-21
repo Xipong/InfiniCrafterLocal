@@ -109,12 +109,22 @@ def _gui_loopback_http(responses):
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
+            assert urlsplit(self.path).path not in {"/shutdown", "/trace_clear"}
+            self.reply()
+
+        def reply(self):
             requests.append(self.path)
             response = responses.get(urlsplit(self.path).path, (404, {"ok": False}))
             if callable(response):
                 response = response(self.path)
             code, value = response
             write_json_response(self, value, status=code)
+
+        def do_POST(self):
+            assert urlsplit(self.path).path in {"/shutdown", "/trace_clear"}
+            assert self.headers["Content-Type"] == "application/json"
+            assert self.rfile.read(int(self.headers.get("Content-Length", "0"))) == b"{}"
+            self.reply()
 
         def log_message(self, *_args):
             pass
@@ -272,6 +282,7 @@ def test_open_and_clear_use_selected_cache_and_preserve_recipes_pngs_and_other_r
 
     def read_gui_json(url, **kwargs):
         assert online and "/trace_clear" in str(url)
+        assert kwargs["method"] == "POST"
         for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"):
             controls.trace_tools.clear_ndjson(selected / name)
         return {"ok": True, "cleared": [str(selected / name) for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")]}

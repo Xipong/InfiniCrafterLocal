@@ -340,6 +340,9 @@ internal static partial class EngineRuntimeChecks
 
     }
 
+    private delegate void CraftQolItemSpawnOriginal(Item item, Terraria.DataStructures.IEntitySource source);
+    private delegate void CraftQolItemSpawnObserver(CraftQolItemSpawnOriginal original, Item item, Terraria.DataStructures.IEntitySource source);
+
     private static void CraftQolRefundFullPoolRetainsExactSavedClaim()
     {
         using var itemPoolState = new NativeItemPoolState();
@@ -395,10 +398,21 @@ internal static partial class EngineRuntimeChecks
             owner.InputA = new Item(ItemID.WoodenSword, 1); owner.InputA.prefix = PrefixID.Legendary;
             owner.TryClearInputToInventory(0);
             Terraria.Main.item[2].active = false; Terraria.Main.timeItemSlotCannotBeReusedFor[2] = 0;
-            owner.PostUpdate();
+            Item? nativeAllocated = null; int nativeIdentity = -1, nativeSpawnCount = 0;
+            CraftQolItemSpawnObserver observeSpawn = (original, item, source) => {
+                original(item, source);
+                nativeAllocated = item; nativeIdentity = item.whoAmI; nativeSpawnCount++;
+            };
+            // Observe, never replace, native allocation. Item.NewItem's Item overload
+            // clones the source, so immediate whoAmI is not the returned pool index.
+            using (var spawnHook = new MonoMod.RuntimeDetour.Hook(
+                typeof(Terraria.ModLoader.ItemLoader).GetMethod("OnSpawn", BindingFlags.NonPublic | BindingFlags.Static)!, observeSpawn))
+                owner.PostUpdate();
+            Equal(1, nativeSpawnCount, "refund performs one actual native world allocation");
+            Equal(true, ReferenceEquals(nativeAllocated, Terraria.Main.item[2]), "world refund retains exact native-allocated object");
             Equal((int)ItemID.WoodenSword, Terraria.Main.item[2].type, "actual native free-slot delivery receives exact refund");
             Equal((byte)PrefixID.Legendary, Terraria.Main.item[2].prefix, "actual native free-slot delivery retains exact prefix");
-            Equal(2, Terraria.Main.item[2].whoAmI, "world refund retains native-allocated item identity");
+            Equal(nativeIdentity, Terraria.Main.item[2].whoAmI, "world refund retains native-allocated item identity");
             var delivered = new TagCompound(); owner.SaveData(delivered);
             Equal(0, delivered.GetList<TagCompound>("infiniDeferredCraftRefundsV1").Count, "world delivery retires sole claim");
             Equal(true, ReferenceEquals(before[7], Terraria.Main.item[7]), "free slot retry preserves older occupied drop");
