@@ -176,7 +176,7 @@ jobs:
           })
           if ($references.Count -ne 1) { throw 'Could not locate the resolved native tModLoader references.' }
           "INFINI_TML_REFERENCE_DIR=$($references[0])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      # CI validates compilation; the SDK packaging target requires a local Steam install.
+      # Compile/native gates run separately from official release packaging.
       - name: Attempt tML project build
         id: tml
         shell: pwsh
@@ -217,3 +217,25 @@ jobs:
           path: |
             artifacts/validation/
           if-no-files-found: warn
+
+      - name: Package Release mod with official tModLoader
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python tools/test_tmod_package.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tools/package_tmod.ps1
+      - name: Upload verified playable mod package
+        uses: actions/upload-artifact@v4
+        with:
+          name: InfiniCrafterLocal-tmod
+          path: artifacts/package/
+          if-no-files-found: error
+      - name: Upload packaging diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmod-packaging-diagnostics
+          path: artifacts/package/*.log
+          if-no-files-found: ignore
