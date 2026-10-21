@@ -151,7 +151,7 @@ Strict player-save references — [`GeneratedItemData.cs`](../../ModSources/Infi
 <a id="saved-v5"></a>
 ### Стабильное чтение сохранённых v5-определений
 
-Это контракт рабочего дерева, не свидетельство установленной миграции или нового опубликованного релиза. Generated-item `schemaVersion=5`, runtime API `infini.runtime-program.v5`, runtime wire schema и VFX manifest — разные версии; одинаковый номер приложения `0.5.04` не доказывает их совместимость.
+Это контракт исходников, не свидетельство установленной миграции. Generated-item `schemaVersion=5`, runtime API `infini.runtime-program.v5`, runtime wire schema и VFX manifest — разные версии; одинаковый номер приложения не доказывает их совместимость.
 
 Канонический локальный reader — [`GeneratedItemData.FromLocalCacheJson`](../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Persistence.cs); локальный registry cache вызывает его из `GeneratedItemRegistryService.LoadLocalCache`. Не расширяй `FromJson`/network admission или свежий Author/Repair ради старого дискового envelope. Reference-only player saves остаются ссылками с обязательными markers: reader локальной definition не синтезирует им gameplay и не отменяет world/ID fences.
 

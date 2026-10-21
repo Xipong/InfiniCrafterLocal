@@ -1,6 +1,6 @@
 # VFX material elements — текущий контракт
 
-Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures. Явный `ownerLink` и persisted-v5 readback ниже описывают рабочее дерево; наличие их в установленной/опубликованной сборке проверяется отдельно, номер проекта остаётся `0.5.04`.
+Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures. Явный `ownerLink` и persisted-v5 readback ниже входят в исходники 0.5.1; наличие их в установленной сборке проверяется по фактической паре мод + генератор, commit и release notes.
 
 <a id="owners"></a>
 ## Владельцы и handoff
