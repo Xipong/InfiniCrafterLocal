@@ -128,7 +128,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         bool preserveSyncedState = false,
         RuntimeSpawnBudget? activationBudget = null,
         bool ownsSpawnReservation = false,
-        Vector2? nativeShotInitialVelocity = null)
+        Vector2? nativeShotInitialVelocity = null,
+        int? originalDamageOverride = null)
     {
         int syncedTimeLeft = Projectile.timeLeft;
         int syncedBounces = _remainingBounces;
@@ -206,7 +207,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _pendingHydrationTicks = 0;
         ApplyEntityStats();
         if (!preserveSyncedState)
-            Projectile.originalDamage = Projectile.damage;
+            Projectile.originalDamage = originalDamageOverride ?? Projectile.damage;
         if (preserveSyncedState)
         {
             Projectile.timeLeft = Math.Max(1, syncedTimeLeft);
@@ -402,7 +403,15 @@ public sealed partial class GeneratedProjectile : ModProjectile
                     generated.Configure(data, entity, childDepth, activationBudget.Remaining, initialDirection,
                         activationBudget: activationBudget, ownsSpawnReservation: childDepth > 0,
                         nativeShotInitialVelocity: rootSpeedOverride.HasValue && entity.Spawn.OverTarget.DelayTicks > 0
-                            ? projectile.velocity : null);
+                            ? projectile.velocity : null,
+                        // Native sentries reapply owner damage modifiers each update.
+                        // Keep the selected entity's prefix-applied Item base, not the
+                        // final GetWeaponDamage result or the restored item's body base.
+                        originalDamageOverride: entity.NativeSentry == true && childDepth == 0
+                            && source is EntitySource_ItemUse itemSource
+                            && itemSource.Item.ModItem is global::InfiniCrafterLocal.Content.Items.GeneratedItem sourceItem
+                            && ReferenceEquals(sourceItem.Data, data)
+                                ? sourceItem.RootCombatBase(entity).Damage : null);
                     generated.SetInitialNpcExclusion(initialNpcExclusion ?? RuntimeInitialNpcExclusion.None);
                 }
                 catch

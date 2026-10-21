@@ -30,4 +30,5 @@ public static class InfiniNetPacketIds
     public const byte SyncGeneratedPlacedBodyLedger = 24;
     public const byte GeneratedQuickUtilityActivation = 25;
     public const byte EquipmentEnemyKill = 26;
+    public const byte GeneratedPlacedBodySnapshot = 27;
 }

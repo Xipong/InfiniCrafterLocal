@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("audit escrow take acknowledgement preserves changed cursor", EscrowTakeAcknowledgementPreservesChangedCursor),
+            ("audit sentry original damage selected prefixed base", SentryOriginalDamageUsesSelectedPrefixedBase),
             ("charge presentation actual clock ExtraAI and once-only ready cue", ChargePresentationReadsActualClockAndSignalsOnce),
             ("charge presentation localized caption and viewport bounds", ChargePresentationBoundsAndLocalization),
             ("projectile controls independent charge channels and hydration", IndependentChargeScalesThreeChannelsOnce),
@@ -393,6 +395,7 @@ internal static partial class EngineRuntimeChecks
             ("generated periodic stable action phase", GeneratedPeriodicActionPhaseIsStable),
             ("native chest admission", NativeChestAdmission),
             ("native chest bare tiles are not storage", NativeChestBareTilesCannotCommit),
+            ("placed body snapshot bounded packets preserve large ledger", PlacedBodySnapshotUsesBoundedPacketsWithoutTruncatingLedger),
             ("placed body ledger selected identity save and network", PlacedBodyLedgerKeepsExplicitIdentityAcrossSaveAndNetwork),
             ("placed body cosmetic decoder cannot erase material", PlacedBodyCosmeticDecodeCannotEraseMaterial),
             ("placed body restore registry exact conflict refusal", PlacedBodyRestoreUsesExistingRegistryWithoutReplacingConflicts),

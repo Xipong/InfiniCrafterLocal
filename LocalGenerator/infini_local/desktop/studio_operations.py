@@ -264,14 +264,15 @@ class StudioOperations:
 
 
     @staticmethod
-    def _read_gui_json(url: str, timeout: float, max_bytes: int | None = 16 * 1024 * 1024) -> dict:
+    def _read_gui_json(url: str, timeout: float, max_bytes: int | None = 16 * 1024 * 1024, *, method: str = "GET") -> dict:
         # Reuse the transport-owned monotonic/redirect/body boundary. A trickled
         # body must not retain a GUI task forever through idle-timeout resets.
         deadline = time.monotonic() + timeout
         # Windows system proxies need not bypass loopback. Local helper control
         # must reach the helper directly; provider/LAN requests retain proxies.
         loopback = urlsplit(url).hostname in {"127.0.0.1", "localhost", "::1"}
-        with http_io.urlopen_no_redirect(urllib.request.Request(url), deadline=deadline, use_proxy=not loopback) as response:
+        with http_io.urlopen_no_redirect(urllib.request.Request(url, method=method, data=b"{}" if method == "POST" else None,
+                headers={"Content-Type": "application/json"} if method == "POST" else {}), deadline=deadline, use_proxy=not loopback) as response:
             body = http_io.read_with_deadline(response, deadline=deadline, max_bytes=max_bytes)
         value = json.loads(body.decode("utf-8", "replace"))
         if not isinstance(value, dict):
@@ -287,7 +288,7 @@ class StudioOperations:
         base_url = base_url if base_url is not None else self._server_base_url()
         url = base_url + ("/shutdown?force=1" if force else "/shutdown")
         try:
-            reply = self._read_gui_json(url, timeout=timeout, max_bytes=64 * 1024)
+            reply = self._read_gui_json(url, timeout=timeout, max_bytes=64 * 1024, method="POST")
             if reply.get("ok") is True:
                 return True, ""
             return False, "Shutdown refused or not acknowledged."
@@ -875,7 +876,7 @@ class StudioOperations:
                 live_cache = live_cache or health.get("cacheDir")
                 if not isinstance(live_cache, str) or self._norm_path_for_compare(live_cache) != self._norm_path_for_compare(cache):
                     return "Trace clear refused: live cache differs from launch cache or is unverified. Check applied config / restart."
-                reply = self._read_gui_json(base_url + "/trace_clear", timeout=4, max_bytes=64 * 1024)
+                reply = self._read_gui_json(base_url + "/trace_clear", timeout=4, max_bytes=64 * 1024, method="POST")
                 cleared = reply.get("cleared")
                 expected = {self._norm_path_for_compare(cache / name) for name in ("events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson")}
                 acknowledged = set()

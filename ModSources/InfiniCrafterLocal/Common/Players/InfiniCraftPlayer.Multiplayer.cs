@@ -345,10 +345,20 @@ public sealed partial class InfiniCraftPlayer
         if (action == StationEscrowAction.TakeToMouse && index is >= 0 and <= 5)
         {
             ref Item slot = ref InputSlot(index);
-            Main.mouseItem = slot.Clone();
+            // The empty-cursor precondition was checked before the round trip.
+            // The player may now own a different item there: never overwrite it.
+            if (Main.mouseItem is null || Main.mouseItem.IsAir)
+            {
+                Main.mouseItem = slot.Clone();
+                if (Player.inventory.Length > 58)
+                {
+                    Player.inventory[58] = Main.mouseItem.Clone();
+                    SyncRefundedInventorySlot(58);
+                }
+            }
+            else
+                RefundOne(slot); // exact inventory delivery or durable deferred claim
             slot.TurnToAir();
-            if (Player.inventory.Length > 58)
-                Player.inventory[58] = Main.mouseItem.Clone();
         }
         else if (action == StationEscrowAction.ReturnOne && index is >= 0 and <= 5)
         {
