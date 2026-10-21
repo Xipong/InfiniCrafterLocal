@@ -7,9 +7,15 @@ Mods: {
 	InfiniCrafterLocal: {
 
 		RecipeJournal: {
+			Result: "Результат"
+			SpaceHint: "Уменьши масштаб интерфейса или увеличь окно, чтобы открыть страницы книги."
+			ReadOnly: "Только открытые рецепты"
+			Notes: "Описание"
+			Close: "Закрыть"
+
 			Button: "Книга"
 			Eyebrow: "INFINICRAFT • ОТКРЫТИЯ ЭТОГО МИРА"
-			Title: "Книга рецептов"
+			Title: "Атлас слияний"
 			Search: "Поиск открытий…"
 			All: "Все"
 			Favorites: "Избранное"
@@ -22,10 +28,10 @@ Mods: {
 			Back: "‹ Назад"
 			Saved: "★ Сохранено"
 			Save: "☆ Сохранить"
-			Generation: "ПОКОЛЕНИЕ {0}"
-			Ingredients: "ИЗ ЧЕГО ПОЛУЧИЛОСЬ"
+			Generation: "Поколение {0}"
+			Ingredients: "Ингредиенты"
 			Ingredient: "Ингредиент"
-			OpenParent: "Открыть происхождение →"
+			OpenParent: "К рецепту →"
 		}
 
 		Items: {

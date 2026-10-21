@@ -32,19 +32,33 @@ internal static class RecipeJournalView
             && !GeneratedItemData.IsPlayerSaveReferenceOnly(d) && d.RecipeMeta.WorldId == child.RecipeMeta.WorldId);
     }
 
-    internal readonly record struct Layout(Rectangle Book, Rectangle List, Rectangle Detail, int Rows);
+    internal readonly record struct Layout(Rectangle Book, Rectangle List, Rectangle Detail, int Rows, int Columns);
     internal static Layout Bounds(int width, int height)
     {
-        int w = Math.Max(240, Math.Min(1040, width - 32));
-        int h = Math.Max(240, Math.Min(650, height - 32));
-        var book = new Rectangle(Math.Max(0, (width - w) / 2), Math.Max(0, (height - h) / 2), w, h);
+        // These coordinates are UI-space pixels: Terraria has already applied UI scale.
+        // Never enforce a minimum book size larger than the actual viewport.
+        width = Math.Max(0, width);
+        height = Math.Max(0, height);
+        int margin = Math.Min(16, Math.Min(width, height) / 16);
+        int w = Math.Min(920, width - margin * 2);
+        int h = Math.Min(560, height - margin * 2);
+        var book = new Rectangle((width - w) / 2, (height - h) / 2, w, h);
+        int inset = Math.Min(12, w / 8);
+        int pageWidth = Math.Max(0, w - inset * 2);
+        int footer = Math.Min(32, h / 6);
+        int top = Math.Min(88, Math.Max(0, h - footer));
+        int contentHeight = Math.Max(0, h - top - footer);
         bool narrow = w < 700;
-        int listWidth = narrow ? w - 40 : Math.Clamp(w / 3, 230, 330);
-        int listHeight = narrow ? Math.Min(160, (h - 142) / 2) : h - 148;
-        var list = new Rectangle(book.X + 20, book.Y + 98, listWidth, listHeight);
+        int gutter = Math.Min(12, narrow ? contentHeight : pageWidth);
+        int listWidth = narrow ? pageWidth : pageWidth * 42 / 100 / 52 * 52;
+        // A short viewport must not paint a partial row over the detail page.
+        int listHeight = narrow
+            ? Math.Min(104, Math.Max(contentHeight >= 116 ? 52 : 0, contentHeight / 3 / 52 * 52))
+            : contentHeight;
+        var list = new Rectangle(book.X + inset, book.Y + top, listWidth, listHeight);
         var detail = narrow
-            ? new Rectangle(book.X + 20, list.Bottom + 12, w - 40, Math.Max(60, book.Bottom - list.Bottom - 62))
-            : new Rectangle(list.Right + 24, list.Y, book.Right - list.Right - 44, list.Height);
-        return new(book, list, detail, Math.Max(1, list.Height / 58));
+            ? new Rectangle(list.X, list.Bottom + gutter, pageWidth, Math.Max(0, contentHeight - listHeight - gutter))
+            : new Rectangle(list.Right + gutter, list.Y, Math.Max(0, pageWidth - listWidth - gutter), contentHeight);
+        return new(book, list, detail, list.Height / 52, list.Width / 52);
     }
 }

@@ -28,18 +28,28 @@ public sealed class RecipeJournalUISystem : ModSystem
     private static GeneratedItemData[] _known = Array.Empty<GeneratedItemData>();
     private static uint _snapshotTick;
     private static readonly Stack<string> History = new();
-    private static readonly Color Ink = new(45, 53, 59), Muted = new(104, 108, 105), Gold = new(180, 137, 65);
+    // InfiniCore identity: cold forged metal, a warm fusion heart, quiet navigable blue.
+    private static readonly Color Ink = new(243, 231, 209), Muted = new(161, 174, 193), Gold = new(241, 170, 77);
+    private static readonly Color Panel = new(20, 24, 34), Inset = new(11, 16, 25);
+    private static readonly Color Metal = new(65, 72, 84), Bronze = new(128, 98, 62), Link = new(139, 204, 212);
+    private static string _hoverText = "";
     internal static string Text(string key, params object[] args)
         => Language.GetTextValue("Mods.InfiniCrafterLocal.RecipeJournal." + key, args);
 
     public static void Open()
     {
-        IsOpen = true; _searchFocus = false; _snapshotTick = uint.MaxValue;
+        IsOpen = true; SetSearchFocus(false); _snapshotTick = uint.MaxValue;
         Main.playerInventory = true;
         if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
             InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
     }
-    private static void Close() { IsOpen = false; Main.blockInput = false; _searchFocus = false; }
+    private static void SetSearchFocus(bool focused)
+    {
+        if (_searchFocus && !focused) PlayerInput.WritingText = false;
+        _searchFocus = focused;
+        Main.blockInput = focused;
+    }
+    private static void Close() { IsOpen = false; SetSearchFocus(false); }
     public override void OnWorldUnload()
     {
         Close(); _query = _selected = ""; _page = 0; _favoritesOnly = false;
@@ -57,16 +67,18 @@ public sealed class RecipeJournalUISystem : ModSystem
             if (History.Count >= 32) History.Clear();
             History.Push(_selected);
         }
-        _selected = id; _detailScroll = 0;
+        _selected = id; _detailScroll = 0; SetSearchFocus(false); Main.blockInput = false;
     }
     private static bool Draw()
     {
         if (!IsOpen) return true;
         if (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead) { Close(); return true; }
         if (Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape)) { Close(); return true; }
-        if (Main.hideUI) return true;
+        if (Main.hideUI) { SetSearchFocus(false); return true; }
+        _hoverText = "";
         var player = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
         Main.LocalPlayer.mouseInterface = true;
+        PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Recipe Journal");
         // Snapshot is refreshed outside per-entry drawing, never through generator HTTP.
         if (_snapshotTick == uint.MaxValue || unchecked(Main.GameUpdateCount - _snapshotTick) >= 60)
         {
@@ -81,106 +93,203 @@ public sealed class RecipeJournalUISystem : ModSystem
             query = query[..Math.Min(query.Length, 80)];
             if (query != _query) { _query = query; _page = 0; }
         }
-        var entries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly);
-        if (_selected.Length == 0 && entries.Length > 0) Select(entries[0].Id, false);
+        var discoveries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), "", player.IsJournalFavorite, false);
+        var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly);
+        if (_selected.Length == 0 && entries.Length > 0)
+        {
+            // Hydration may finish while the player is typing; auto-selection must not steal focus.
+            _selected = entries[0].Id; _detailScroll = 0;
+        }
         // InterfaceScaleType.UI already applies PlayerInput.SetZoom_UI to screen and mouse.
         int width = Main.screenWidth, height = Main.screenHeight;
         var layout = RecipeJournalView.Bounds(width, height);
         Rectangle book = layout.Book;
         Vector2 cursor = new Vector2(Main.mouseX, Main.mouseY);
         bool click = Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface;
-        if (click && !book.Contains(cursor.ToPoint())) { _searchFocus = false; Main.mouseLeftRelease = false; }
+        if (click && !book.Contains(cursor.ToPoint())) { SetSearchFocus(false); Main.mouseLeftRelease = false; }
         var sb = Main.spriteBatch;
-        Fill(sb, new Rectangle(0, 0, width, height), new Color(9, 17, 25, 190));
-        Fill(sb, new Rectangle(book.X + 7, book.Y + 9, book.Width, book.Height), new Color(0, 0, 0, 100));
-        Fill(sb, book, new Color(234, 227, 209));
-        Fill(sb, new Rectangle(book.X, book.Y, book.Width, 78), new Color(25, 48, 56));
-        Fill(sb, new Rectangle(book.X, book.Y + 77, book.Width, 2), Gold);
-        Label(sb, Text("Eyebrow"), new Vector2(book.X + 24, book.Y + 12), new Color(202, 176, 123), 0.52f, book.Width - 100);
-        Label(sb, Text("Title"), new Vector2(book.X + 22, book.Y + 29), new Color(247, 239, 217), 1.05f, book.Width - 100);
-        if (Button(sb, new Rectangle(book.Right - 48, book.Y + 20, 28, 30), "×", click, cursor, dark: true)) Close();
-        Rectangle search = new(book.X + 20, book.Y + 82, Math.Max(105, layout.List.Width - 92), 24);
-        Fill(sb, search, _searchFocus ? new Color(255, 252, 239) : new Color(218, 210, 190));
-        Label(sb, _query.Length == 0 ? Text("Search") : _query + (_searchFocus && Main.GameUpdateCount % 60 < 30 ? "|" : ""), search.TopLeft() + new Vector2(7, 2), _query.Length == 0 ? Muted : Ink, 0.56f, search.Width - 12);
-        if (click && search.Contains(cursor.ToPoint())) { _searchFocus = true; Main.mouseLeftRelease = false; }
-        Rectangle favorites = new(search.Right + 6, search.Y, 86, 24);
-        if (Button(sb, favorites, _favoritesOnly ? Text("All") : Text("Favorites"), click, cursor)) { _favoritesOnly = !_favoritesOnly; _page = 0; _searchFocus = false; }
-        // Search occupies the first row above the list contents.
-        Rectangle list = layout.List; list.Y += 16; list.Height -= 16;
-        int rows = Math.Max(1, list.Height / 58), pages = Math.Max(1, (entries.Length + rows - 1) / rows);
-        _page = Math.Clamp(_page, 0, pages - 1);
-        for (int i = 0; i < rows && _page * rows + i < entries.Length; i++)
+        Fill(sb, new Rectangle(0, 0, width, height), new Color(0, 0, 0, 75));
+        if (book.Width < 40 || book.Height < 80) { SetSearchFocus(false); if (click) Main.mouseLeftRelease = false; return true; }
+        Chassis(sb, book, Panel);
+        CornerClamps(sb, new Rectangle(book.X + 3, book.Y + 3, book.Width - 6, book.Height - 6), Bronze);
+        if (book.Width < 260 || book.Height < 240 || layout.Rows == 0 || layout.Columns == 0)
         {
-            GeneratedItemData entry = entries[_page * rows + i];
-            var row = new Rectangle(list.X, list.Y + i * 58, list.Width, 52);
-            bool active = entry.Id == _selected;
-            Fill(sb, row, active ? new Color(38, 69, 75) : new Color(224, 215, 195));
-            if (active) Fill(sb, new Rectangle(row.X, row.Y, 3, row.Height), Gold);
-            Sprite(sb, entry, new Rectangle(row.X + 9, row.Y + 8, 36, 36));
-            Label(sb, (player.IsJournalFavorite(entry.Id) ? "★ " : "") + entry.Name, new Vector2(row.X + 54, row.Y + 7), active ? new Color(250, 243, 222) : Ink, 0.66f, row.Width - 64);
-            Label(sb, entry.ParentA + " + " + entry.ParentB, new Vector2(row.X + 54, row.Y + 29), active ? new Color(180, 200, 195) : Muted, 0.48f, row.Width - 64);
-            if (click && row.Contains(cursor.ToPoint())) { Select(entry.Id); _searchFocus = false; Main.mouseLeftRelease = false; }
+            SetSearchFocus(false);
+            Label(sb, Text("Title"), book.TopLeft() + new Vector2(12, 12), Ink, 0.75f, book.Width - 24);
+            if (Button(sb, new Rectangle(book.X + 12, book.Y + 42, Math.Max(0, book.Width - 24), 28), Text("Close"), click, cursor)) Close();
+            if (book.Height >= 140) Paragraph(sb, Text("SpaceHint"), new Rectangle(book.X + 12, book.Y + 82, book.Width - 24, book.Height - 96), Muted, 0.65f);
+            if (click) Main.mouseLeftRelease = false;
+            return true;
+        }
+        DrawCoreBadge(sb, new Rectangle(book.X + 13, book.Y + 5, 30, 30));
+        Label(sb, Text("Title"), new Vector2(book.X + 50, book.Y + 9), Ink, 0.85f, book.Width - 102);
+        Fill(sb, new Rectangle(book.X + 14, book.Y + 36, book.Width - 28, 1), Metal);
+        if (Button(sb, new Rectangle(book.Right - 38, book.Y + 8, 26, 26), "×", click, cursor)) { Close(); return true; }
+        Rectangle search = new(book.X + 12, book.Y + 44, Math.Max(60, layout.List.Width - 110), 30);
+        Chassis(sb, search, _searchFocus ? new Color(32, 45, 53) : Inset);
+        Label(sb, _query.Length == 0 ? Text("Search") : _query + (_searchFocus && Main.GameUpdateCount % 60 < 30 ? "|" : ""), search.TopLeft() + new Vector2(8, 5), _query.Length == 0 ? Muted : Ink, 0.65f, search.Width - 16);
+        if (click && search.Contains(cursor.ToPoint())) { SetSearchFocus(true); Main.mouseLeftRelease = false; }
+        else if (click) SetSearchFocus(false);
+        if (_searchFocus && Main.keyState.IsKeyDown(Keys.Enter)) SetSearchFocus(false);
+        Rectangle favorites = new(search.Right + 6, search.Y, 104, 30);
+        if (Button(sb, favorites, _favoritesOnly ? Text("All") : Text("Favorites"), click, cursor, selected: _favoritesOnly)) { _favoritesOnly = !_favoritesOnly; _page = 0; }
+        if (layout.Detail.X > layout.List.Right)
+            Label(sb, Text("Count", discoveries.Length), new Vector2(layout.Detail.X + 12, search.Y + 5), Muted, 0.65f, layout.Detail.Width - 24);
+        Rectangle list = layout.List;
+        int capacity = Math.Max(1, layout.Rows * layout.Columns);
+        int pages = Math.Max(1, (entries.Length + capacity - 1) / capacity);
+        _page = Math.Clamp(_page, 0, pages - 1);
+        for (int i = 0; i < layout.Rows * layout.Columns; i++)
+        {
+            var slot = new Rectangle(list.X + i % layout.Columns * 52, list.Y + i / layout.Columns * 52, 48, 48);
+            int entryIndex = _page * capacity + i;
+            GeneratedItemData? entry = entryIndex < entries.Length ? entries[entryIndex] : null;
+            bool active = entry is not null && entry.Id == _selected;
+            bool hover = entry is not null && slot.Contains(cursor.ToPoint());
+            ItemSlotBackground(sb, slot, active, hover);
+            if (entry is null) continue;
+            Sprite(sb, entry, new Rectangle(slot.X + 6, slot.Y + 6, 36, 36));
+            if (player.IsJournalFavorite(entry.Id)) Label(sb, "★", new Vector2(slot.Right - 14, slot.Y + 1), Gold, 0.5f, 14);
+            if (hover) _hoverText = entry.Name + "\n" + entry.ParentA + " + " + entry.ParentB;
+            if (click && hover) { Select(entry.Id); Main.mouseLeftRelease = false; }
         }
         int wheel = PlayerInput.ScrollWheelDeltaForUI;
         if (wheel != 0 && list.Contains(cursor.ToPoint())) _page = Math.Clamp(_page + (wheel < 0 ? 1 : -1), 0, pages - 1);
         if (wheel != 0 && layout.Detail.Contains(cursor.ToPoint())) _detailScroll = Math.Max(0, _detailScroll + (wheel < 0 ? 2 : -2));
-        if (entries.Length == 0) Paragraph(sb, Text(_favoritesOnly ? "NoFavorites" : _query.Length == 0 ? "Empty" : "NoMatches"), list, Muted, 0.62f);
-        GeneratedItemData? selected = _known.FirstOrDefault(d => d.Id == _selected);
+        if (entries.Length == 0)
+        {
+            Chassis(sb, list, Inset);
+            Paragraph(sb, Text(_favoritesOnly ? "NoFavorites" : _query.Length == 0 ? "Empty" : "NoMatches"), new Rectangle(list.X + 10, list.Y + 10, list.Width - 20, list.Height - 20), Muted, 0.65f);
+        }
+        GeneratedItemData? selected = discoveries.FirstOrDefault(d => d.Id == _selected);
         if (selected is not null) DrawDetail(sb, selected, layout.Detail, player, click, cursor);
-        else Paragraph(sb, Text("Welcome"), layout.Detail, Muted, 0.7f);
-        int bottom = book.Bottom - 35;
-        if (Button(sb, new Rectangle(book.X + 20, bottom, 32, 24), "‹", click, cursor) && _page > 0) _page--;
-        Label(sb, Text("Page", _page + 1, pages), new Vector2(book.X + 64, bottom + 3), Muted, 0.55f, 140);
-        if (Button(sb, new Rectangle(book.X + 200, bottom, 32, 24), "›", click, cursor) && _page + 1 < pages) _page++;
-        if (book.Width > 700) Label(sb, Text("Count", _known.Length), new Vector2(book.Right - 250, bottom + 3), Muted, 0.55f, 226);
+        else
+        {
+            Chassis(sb, layout.Detail, Inset);
+            Paragraph(sb, Text("Welcome"), new Rectangle(layout.Detail.X + 16, layout.Detail.Y + 16, layout.Detail.Width - 32, layout.Detail.Height - 32), Muted, 0.7f);
+        }
+        int bottom = book.Bottom - 29;
+        if (Button(sb, new Rectangle(list.X, bottom, 30, 24), "‹", click, cursor, enabled: _page > 0)) _page--;
+        CenterLabel(sb, Text("Page", _page + 1, pages), new Rectangle(list.X + 34, bottom + 3, list.Width - 68, 20), Ink, 0.6f);
+        if (Button(sb, new Rectangle(list.Right - 30, bottom, 30, 24), "›", click, cursor, enabled: _page + 1 < pages)) _page++;
+        if (layout.Detail.X > layout.List.Right) Label(sb, Text("ReadOnly"), new Vector2(layout.Detail.X + 12, bottom + 3), Muted, 0.55f, layout.Detail.Width - 24);
         if (click && book.Contains(cursor.ToPoint())) Main.mouseLeftRelease = false;
+        if (_hoverText.Length > 0) Main.instance.MouseText(_hoverText);
         return true;
     }
     private static void DrawDetail(SpriteBatch sb, GeneratedItemData data, Rectangle area, InfiniCraftPlayer player, bool click, Vector2 cursor)
     {
-        Fill(sb, area, new Color(248, 241, 222));
-        Fill(sb, new Rectangle(area.X, area.Y, 1, area.Height), new Color(205, 189, 154));
-        int x = area.X + 18, y = area.Y + 14, w = area.Width - 36;
-        if (area.Height < 180)
+        if (area.Width < 60 || area.Height < 40) return;
+        Chassis(sb, area, Inset);
+        int x = area.X + 12, y = area.Y + 10, w = area.Width - 24;
+        if (area.Height < 200)
         {
-            Label(sb, data.Name, new Vector2(x, y), Ink, 0.8f, w);
-            Paragraph(sb, data.ParentA + " + " + data.ParentB, new Rectangle(x, y + 32, w, area.Height - 50), Muted, 0.6f);
+            Label(sb, data.Name, new Vector2(x, y), Ink, 0.7f, w);
+            Paragraph(sb, data.ParentA + " + " + data.ParentB, new Rectangle(x, y + 25, w, area.Height - 45), Muted, 0.6f);
             return;
         }
-        if (History.Count > 0 && Button(sb, new Rectangle(x, y, 80, 23), Text("Back"), click, cursor)) Select(History.Pop(), false);
-        Rectangle star = new(area.Right - 130, y, 112, 23);
-        if (Button(sb, star, player.IsJournalFavorite(data.Id) ? Text("Saved") : Text("Save"), click, cursor)) player.ToggleJournalFavorite(data.Id);
+        int saveWidth = Math.Min(118, w / 2);
+        if (History.Count > 0 && Button(sb, new Rectangle(x, y, Math.Min(88, w - saveWidth - 6), 26), Text("Back"), click, cursor)) { Select(History.Pop(), false); return; }
+        if (Button(sb, new Rectangle(area.Right - 12 - saveWidth, y, saveWidth, 26), player.IsJournalFavorite(data.Id) ? Text("Saved") : Text("Save"), click, cursor, selected: player.IsJournalFavorite(data.Id))) player.ToggleJournalFavorite(data.Id);
         y += 36;
-        // A quiet geometric seal frames the actual generated sprite.
-        Rectangle seal = new(x + (w - 94) / 2, y, 94, 94);
-        Fill(sb, seal, new Color(233, 221, 191));
-        Fill(sb, new Rectangle(seal.X + 3, seal.Y + 3, 88, 88), new Color(242, 233, 211));
-        Sprite(sb, data, new Rectangle(seal.X + 12, seal.Y + 12, 70, 70));
-        y += 106;
-        Label(sb, data.Name, new Vector2(x, y), Ink, 0.9f, w); y += 31;
-        Label(sb, Text("Generation", data.RecipeMeta.GenerationDepth), new Vector2(x, y), Gold, 0.56f, w); y += 29;
-        Label(sb, Text("Ingredients"), new Vector2(x, y), Muted, 0.53f, w); y += 22;
-        int cardWidth = (w - 24) / 2;
+        Label(sb, data.Name, new Vector2(x, y), Ink, 0.85f, w);
+        if (new Rectangle(x, y, w, 25).Contains(cursor.ToPoint())) _hoverText = data.Name;
+        y += 26;
+        bool compact = area.Height < 300 || area.Width < 360;
+        if (!compact)
+        {
+            Label(sb, Text("Generation", data.RecipeMeta.GenerationDepth), new Vector2(x, y), Muted, 0.58f, w);
+            y += 28;
+        }
+        int inputSize = compact ? 36 : 44, outputSize = compact ? 48 : 72;
+        int diagramHeight = compact ? 66 : 148;
+        int inputX = x + 10, outputX = x + w - outputSize - 20;
+        var result = new Rectangle(outputX, compact ? y + 3 : y + (diagramHeight - outputSize) / 2, outputSize, outputSize);
+        Rectangle inputA = new(inputX, compact ? y + 9 : y + 10, inputSize, inputSize);
+        Rectangle inputB = compact
+            ? new Rectangle(inputX + inputSize + 18, inputA.Y, inputSize, inputSize)
+            : new Rectangle(inputX, y + diagramHeight - inputSize - 14, inputSize, inputSize);
+        // Two inputs converge into the core cradle: this is a read-only provenance diagram.
+        int joinX = result.X - (compact ? 22 : 34);
+        if (compact)
+        {
+            int railY = y + 3;
+            Trace(sb, new Vector2(inputA.Center.X, inputA.Y), new Vector2(inputA.Center.X, railY), Link);
+            Trace(sb, new Vector2(inputA.Center.X, railY), new Vector2(joinX, railY), Link);
+            Trace(sb, new Vector2(joinX, railY), new Vector2(joinX, result.Center.Y), Link);
+            Trace(sb, new Vector2(inputB.Right, inputB.Center.Y), new Vector2(joinX, result.Center.Y), Link);
+        }
+        else
+        {
+            int routeX = Math.Max(inputA.Right + 12, joinX - 22);
+            Trace(sb, new Vector2(inputA.Right, inputA.Center.Y), new Vector2(routeX, inputA.Center.Y), Metal);
+            Trace(sb, new Vector2(inputB.Right, inputB.Center.Y), new Vector2(routeX, inputB.Center.Y), Metal);
+            Trace(sb, new Vector2(routeX, inputA.Center.Y), new Vector2(joinX, result.Center.Y), Link);
+            Trace(sb, new Vector2(routeX, inputB.Center.Y), new Vector2(joinX, result.Center.Y), Link);
+        }
+        Trace(sb, new Vector2(joinX, result.Center.Y), new Vector2(result.X, result.Center.Y), Gold);
+        // One slow travelling point; no particles, additive bloom, or shader state changes.
+        float phase = (Main.GlobalTimeWrappedHourly % 3f) / 3f;
+        int sparkX = joinX + (int)((result.X - joinX) * phase);
+        Fill(sb, new Rectangle(sparkX, result.Center.Y - 1, 3, 3), new Color(255, 227, 160));
         for (int p = 0; p < 2; p++)
         {
-            var card = new Rectangle(x + p * (cardWidth + 24), y, cardWidth, 48);
+            Rectangle slot = p == 0 ? inputA : inputB;
             GeneratedItemData? parent = RecipeJournalView.Parent(data, p, _known);
-            Fill(sb, card, new Color(231, 222, 200));
-            Label(sb, p == 0 ? data.ParentA : data.ParentB, card.TopLeft() + new Vector2(8, 7), Ink, 0.62f, card.Width - 16);
-            Label(sb, Text(parent is null ? "Ingredient" : "OpenParent"), card.TopLeft() + new Vector2(8, 28), parent is null ? Muted : Gold, 0.46f, card.Width - 16);
-            if (parent is not null && click && card.Contains(cursor.ToPoint())) Select(parent.Id);
+            bool hover = slot.Contains(cursor.ToPoint());
+            ItemSlotBackground(sb, slot, false, hover && parent is not null);
+            if (parent is not null) Sprite(sb, parent, new Rectangle(slot.X + 5, slot.Y + 5, slot.Width - 10, slot.Height - 10));
+            else CenterLabel(sb, (p + 1).ToString(), new Rectangle(slot.X + 4, slot.Y + 8, slot.Width - 8, 20), Muted, 0.7f);
+            if (!compact)
+            {
+                string name = p == 0 ? data.ParentA : data.ParentB;
+                int nameWidth = Math.Max(0, joinX - slot.Right - 28);
+                Label(sb, name, new Vector2(slot.Right + 10, slot.Y + 2), parent is null ? Muted : Link, 0.6f, nameWidth);
+            }
+            if (hover) _hoverText = (p == 0 ? data.ParentA : data.ParentB) + (parent is null ? "" : "\n" + Text("OpenParent"));
+            if (parent is not null && click && hover) { Select(parent.Id); return; }
         }
-        Label(sb, "+", new Vector2(x + cardWidth + 7, y + 13), Gold, 0.7f, 18); y += 62;
-        Fill(sb, new Rectangle(x, y, w, 1), new Color(210, 194, 160)); y += 13;
+        // Bracketed result cradle echoes the horns and ember heart of the real InfiniCore.
+        Rectangle cradle = new(result.X - 6, result.Y - 6, result.Width + 12, result.Height + 12);
+        CornerClamps(sb, cradle, Bronze);
+        if (!compact)
+        {
+            // Original forked metal silhouette, echoing the mod's InfiniCore horns.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                float edge = side < 0 ? result.Left - 8 : result.Right + 8;
+                Trace(sb, new Vector2(edge, result.Center.Y - 6), new Vector2(edge + side * 7, result.Y - 8), Bronze);
+                Trace(sb, new Vector2(edge + side * 7, result.Y - 8), new Vector2(edge - side * 7, result.Y - 20), Bronze);
+                Trace(sb, new Vector2(edge, result.Center.Y + 6), new Vector2(edge + side * 7, result.Bottom + 8), Bronze);
+                Trace(sb, new Vector2(edge + side * 7, result.Bottom + 8), new Vector2(edge - side * 7, result.Bottom + 16), Bronze);
+            }
+        }
+        ItemSlotBackground(sb, result, true, result.Contains(cursor.ToPoint()));
+        Sprite(sb, data, new Rectangle(result.X + 7, result.Y + 7, result.Width - 14, result.Height - 14));
+        if (result.Contains(cursor.ToPoint())) _hoverText = data.Name;
+        Label(sb, Text("Ingredients"), new Vector2(inputX, y + diagramHeight - 7), Muted, 0.55f, result.X - inputX - 12);
+        CenterLabel(sb, Text("Result"), new Rectangle(result.X - 28, y + diagramHeight - 7, result.Width + 40, 20), Gold, 0.55f);
+        y += diagramHeight + 18;
+        // Names remain readable outside the tiny wells; only exact generated parents are clickable.
+        string parents = data.ParentA + " + " + data.ParentB;
+        if (compact && y + 22 <= area.Bottom - 10)
+        {
+            Label(sb, parents, new Vector2(x, y), Link, 0.62f, w);
+            if (new Rectangle(x, y, w, 23).Contains(cursor.ToPoint())) _hoverText = parents;
+            y += 30;
+        }
+        if (y + 58 > area.Bottom - 10) return;
+        Fill(sb, new Rectangle(x, y, w, 1), Metal); y += 12;
+        Label(sb, Text("Notes"), new Vector2(x, y), Ink, 0.62f, w); y += 23;
         string description = data.GeneratedParentSummary.PlayerExperience;
         if (string.IsNullOrWhiteSpace(description)) description = data.GeneratedParentSummary.Description;
-        Paragraph(sb, description, new Rectangle(x, y, w, Math.Max(0, area.Bottom - y - 16)), Ink, 0.63f, true);
+        Paragraph(sb, description, new Rectangle(x, y, w, Math.Max(0, area.Bottom - y - 12)), Muted, 0.65f, true);
     }
     private static void Sprite(SpriteBatch sb, GeneratedItemData data, Rectangle bounds)
     {
         Texture2D? texture = InfiniCrafterLocalMod.Sprites?.TryGet(data.Visual.SpritePath);
         if (texture is null) return; // Assets hydrate through the existing registry, never a fake item.
-        float scale = Math.Min(bounds.Width / (float)texture.Width, bounds.Height / (float)texture.Height);
+        float scale = Math.Min(1f, Math.Min(bounds.Width / (float)texture.Width, bounds.Height / (float)texture.Height));
         sb.Draw(texture, bounds.Center.ToVector2(), null, Color.White, 0f, texture.Size() * 0.5f, scale, SpriteEffects.None, 0f);
     }
     private static void Fill(SpriteBatch sb, Rectangle rect, Color color)
@@ -190,15 +299,29 @@ public sealed class RecipeJournalUISystem : ModSystem
         text = (text ?? "").Replace('\n', ' ').Replace('\r', ' ');
         var font = FontAssets.MouseText.Value;
         if (width <= 0) return;
-        while (text.Length > 1 && font.MeasureString(text).X * scale > width) text = text[..^1];
-        sb.DrawString(font, text, at, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
+        if (font.MeasureString(text).X * scale > width)
+        {
+            while (text.Length > 0 && font.MeasureString(text + "…").X * scale > width) text = text[..^1];
+            text = text.Length == 0 ? "" : text + "…";
+        }
+        Utils.DrawBorderStringFourWay(sb, font, text, at.X, at.Y, color, Color.Black, Vector2.Zero, scale);
     }
     private static void Paragraph(SpriteBatch sb, string text, Rectangle rect, Color color, float scale, bool scroll = false)
     {
         if (rect.Height < 20 || rect.Width <= 0) return;
+        if (scroll) rect.Width -= 9; // Reserve the track before wrapping, never truncate wrapped words.
+        if (rect.Width <= 0) return;
         var rows = GeneratedItem.WrapRuntimeTooltipLines(text ?? "", rect.Width / scale, value => FontAssets.MouseText.Value.MeasureString(value).X);
         int start = scroll ? Math.Clamp(_detailScroll, 0, Math.Max(0, rows.Count - Math.Max(1, rect.Height / 23))) : 0;
         if (scroll) _detailScroll = start;
+        if (scroll && rows.Count > Math.Max(1, rect.Height / 23))
+        {
+            int visible = Math.Max(1, rect.Height / 23);
+            int track = rect.Height;
+            Fill(sb, new Rectangle(rect.Right + 7, rect.Y, 2, track), new Color(38, 47, 61));
+            int thumb = Math.Max(8, track * visible / rows.Count);
+            Fill(sb, new Rectangle(rect.Right + 7, rect.Y + (track - thumb) * start / Math.Max(1, rows.Count - visible), 2, thumb), Muted);
+        }
         int line = 0;
         foreach (string row in rows.Skip(start))
         {
@@ -206,11 +329,73 @@ public sealed class RecipeJournalUISystem : ModSystem
             Label(sb, row, rect.TopLeft() + new Vector2(0, line++ * 23), color, scale, rect.Width);
         }
     }
-    private static bool Button(SpriteBatch sb, Rectangle rect, string text, bool click, Vector2 cursor, bool dark = false)
+    private static void CutFill(SpriteBatch sb, Rectangle rect, int cut, Color color)
     {
-        bool hover = rect.Contains(cursor.ToPoint());
-        Fill(sb, rect, dark ? new Color(42, 67, 73) : hover ? new Color(212, 193, 153) : new Color(222, 211, 186));
-        Label(sb, text, rect.TopLeft() + new Vector2(6, 2), dark ? new Color(247, 238, 215) : Ink, 0.59f, rect.Width - 12);
+        cut = Math.Min(cut, Math.Min(rect.Width, rect.Height) / 2);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        Fill(sb, new Rectangle(rect.X, rect.Y + cut, rect.Width, rect.Height - cut * 2), color);
+        for (int i = 0; i < cut; i++)
+        {
+            int inset = cut - i;
+            Fill(sb, new Rectangle(rect.X + inset, rect.Y + i, rect.Width - inset * 2, 1), color);
+            Fill(sb, new Rectangle(rect.X + inset, rect.Bottom - i - 1, rect.Width - inset * 2, 1), color);
+        }
+    }
+    private static void Chassis(SpriteBatch sb, Rectangle rect, Color color)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        int cut = rect.Height > 50 ? 7 : 4;
+        CutFill(sb, rect, cut, new Color(3, 6, 11));
+        CutFill(sb, new Rectangle(rect.X + 1, rect.Y + 1, rect.Width - 2, rect.Height - 2), cut, Metal);
+        CutFill(sb, new Rectangle(rect.X + 3, rect.Y + 3, rect.Width - 6, rect.Height - 6), Math.Max(1, cut - 1), color);
+        Fill(sb, new Rectangle(rect.X + cut + 2, rect.Y + 3, Math.Max(0, rect.Width - cut * 2 - 4), 1), new Color(48, 56, 68));
+    }
+    private static void CornerClamps(SpriteBatch sb, Rectangle rect, Color color)
+    {
+        if (rect.Width < 24 || rect.Height < 24) return;
+        const int arm = 10;
+        for (int side = 0; side < 2; side++)
+        for (int end = 0; end < 2; end++)
+        {
+            int x = side == 0 ? rect.X : rect.Right - 2;
+            int y = end == 0 ? rect.Y + 5 : rect.Bottom - arm - 5;
+            Fill(sb, new Rectangle(x, y, 2, arm), color);
+            int hx = side == 0 ? rect.X + 5 : rect.Right - arm - 5;
+            int hy = end == 0 ? rect.Y : rect.Bottom - 2;
+            Fill(sb, new Rectangle(hx, hy, arm, 2), color);
+        }
+    }
+    private static void ItemSlotBackground(SpriteBatch sb, Rectangle rect, bool selected, bool hover)
+    {
+        Chassis(sb, rect, selected ? new Color(39, 31, 27) : Inset);
+        Fill(sb, new Rectangle(rect.X + 8, rect.Bottom - 6, Math.Max(0, rect.Width - 16), 1), selected ? Bronze : Metal);
+        if (selected || hover) CornerClamps(sb, rect, selected ? Gold : Link);
+    }
+    private static void Trace(SpriteBatch sb, Vector2 from, Vector2 to, Color color)
+    {
+        Vector2 delta = to - from;
+        sb.Draw(TextureAssets.MagicPixel.Value, from, null, color, MathF.Atan2(delta.Y, delta.X), Vector2.Zero, new Vector2(delta.Length(), 1), SpriteEffects.None, 0f);
+    }
+    private static void DrawCoreBadge(SpriteBatch sb, Rectangle rect)
+    {
+        int type = ModContent.ItemType<InfiniCore>();
+        Main.instance.LoadItem(type);
+        Texture2D texture = TextureAssets.Item[type].Value;
+        Rectangle frame = Main.itemAnimations[type]?.GetFrame(texture) ?? texture.Bounds;
+        float scale = Math.Min(rect.Width / (float)frame.Width, rect.Height / (float)frame.Height);
+        sb.Draw(texture, rect.Center.ToVector2(), frame, Color.White, 0f, frame.Size() * 0.5f, scale, SpriteEffects.None, 0f);
+    }
+    private static void CenterLabel(SpriteBatch sb, string text, Rectangle rect, Color color, float scale)
+    {
+        float textWidth = FontAssets.MouseText.Value.MeasureString(text).X * scale;
+        Label(sb, text, new Vector2(rect.X + Math.Max(0, (rect.Width - textWidth) / 2), rect.Y), color, scale, rect.Width);
+    }
+    private static bool Button(SpriteBatch sb, Rectangle rect, string text, bool click, Vector2 cursor, bool enabled = true, bool selected = false)
+    {
+        bool hover = enabled && rect.Contains(cursor.ToPoint());
+        Chassis(sb, rect, hover ? new Color(43, 51, 61) : selected ? new Color(49, 38, 28) : new Color(26, 32, 43));
+        CenterLabel(sb, text, new Rectangle(rect.X + 5, rect.Y + 4, rect.Width - 10, rect.Height - 8), enabled ? selected ? Gold : Ink : new Color(105, 113, 128), 0.6f);
+        if (hover) _hoverText = text;
         return click && hover;
     }
 }

@@ -7,9 +7,15 @@ Mods: {
 	InfiniCrafterLocal: {
 
 		RecipeJournal: {
+			Result: "Result"
+			SpaceHint: "Reduce UI scale or enlarge the window to read the recipe pages."
+			ReadOnly: "Discovered recipes only"
+			Notes: "Description"
+			Close: "Close"
+
 			Button: "Journal"
 			Eyebrow: "INFINICRAFT • DISCOVERIES IN THIS WORLD"
-			Title: "Recipe journal"
+			Title: "Fusion atlas"
 			Search: "Search discoveries…"
 			All: "All"
 			Favorites: "Favorites"
@@ -22,10 +28,10 @@ Mods: {
 			Back: "‹ Back"
 			Saved: "★ Saved"
 			Save: "☆ Save"
-			Generation: "GENERATION {0}"
-			Ingredients: "MADE FROM"
+			Generation: "Generation {0}"
+			Ingredients: "Ingredients"
 			Ingredient: "Ingredient"
-			OpenParent: "Explore its origins →"
+			OpenParent: "View recipe →"
 		}
 
 		Items: {

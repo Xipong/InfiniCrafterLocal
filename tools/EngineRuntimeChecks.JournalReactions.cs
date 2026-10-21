@@ -48,13 +48,28 @@ internal static partial class EngineRuntimeChecks
         Equal("a", RecipeJournalView.Parent(b, 0, records)!.Id, "history follows exact generated parent identity");
         b.RecipeMeta.ParentIdentities[0] = "generated:missing";
         Equal(true, RecipeJournalView.Parent(b, 0, records) is null, "matching name cannot invent a parent link");
-        foreach (int width in new[] { 400, 700, 1280, 1920 })
+        // Effective UI-space sizes include small displays and high UI-scale settings.
+        foreach (int width in new[] { 0, 160, 240, 320, 400, 640, 700, 792, 1024, 1280, 1920 })
+        foreach (int height in new[] { 0, 120, 240, 360, 480, 600, 720, 1080 })
         {
-            var layout = RecipeJournalView.Bounds(width, 720);
-            Equal(true, new Rectangle(0, 0, width, 720).Contains(layout.Book), "book fits viewport");
+            var layout = RecipeJournalView.Bounds(width, height);
+            Equal(true, new Rectangle(0, 0, width, height).Contains(layout.Book), "book fits viewport");
             Equal(true, layout.Book.Contains(layout.List) && layout.Book.Contains(layout.Detail), "both pages stay inside book");
             Equal(false, layout.List.Intersects(layout.Detail), "list and detail do not overlap");
+            Equal(true, layout.List.Width >= 0 && layout.List.Height >= 0 && layout.Detail.Width >= 0 && layout.Detail.Height >= 0, "page extents never negative");
+            Equal(true, layout.Rows >= 0 && layout.Rows * 52 <= layout.List.Height, "only complete list rows are drawn");
+            Equal(true, layout.Columns >= 0 && layout.Columns * 52 <= layout.List.Width, "only complete grid columns are drawn");
+            Equal(true, layout.Book.Width <= 920 && layout.Book.Height <= 560, "recipe browser remains bounded on large screens");
         }
+        var narrowBook = RecipeJournalView.Bounds(640, 600);
+        Equal(true, narrowBook.Detail.Height >= 160 && narrowBook.Rows >= 1, "compact book retains readable details and a selectable recipe");
+        var shortBook = RecipeJournalView.Bounds(640, 360);
+        Equal(true, shortBook.Rows >= 1 && shortBook.Detail.Height >= 52, "short compact viewport keeps selection reachable");
+        var wideBook = RecipeJournalView.Bounds(1280, 720);
+        Equal(true, wideBook.Detail.Width > wideBook.List.Width && wideBook.Detail.Y == wideBook.List.Y, "wide browser keeps a larger recipe detail pane");
+        Equal(7, wideBook.Columns, "wide grid offers seven inventory columns");
+        Equal(true, wideBook.Detail.Width >= 320, "wide detail keeps usable ingredient space");
+        Equal(true, narrowBook.Columns >= 1 && narrowBook.Rows <= 2, "compact grid leaves room for detail");
         WithPlayer((player, _) => {
             var owner = player.GetModPlayer<InfiniCraftPlayer>();
             owner.ToggleJournalFavorite("favorite");
