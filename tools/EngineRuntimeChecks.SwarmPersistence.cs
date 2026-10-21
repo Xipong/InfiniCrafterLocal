@@ -332,12 +332,20 @@ internal static partial class EngineRuntimeChecks
                     }
                     wire.Position = 0; using var reader = new BinaryReader(wire); InfiniCraftPlayer.HandleStationEscrowResultPacket(reader, 0);
                 }
+                int equipmentSends = 0;
+                using var network = PersistenceObserveNetworkSend((message, slot) => {
+                    Equal((int)MessageID.SyncEquipment, message, "attested return synchronizes native inventory");
+                    Equal(0, slot, "attested return synchronizes exact delivered slot");
+                    equipmentSends++;
+                });
                 Response(new string('e', 32));
+                Equal(0, equipmentSends, "foreign origin cannot synchronize inventory");
                 Equal(true, modPlayer.HasPendingStationEscrowOperation, "foreign origin cannot settle pending operation");
                 Equal(0, player.inventory.Sum(i => i.type == ItemID.CopperShortsword ? i.stack : 0), "foreign authority cannot mint material");
                 Response(scope); Response(scope);
                 Equal(false, modPlayer.HasPendingStationEscrowOperation, "matching response settles once");
                 Equal(1, player.inventory.Sum(i => i.type == ItemID.CopperShortsword ? i.stack : 0), "matching attested return applies once, replay rejected");
+                Equal(1, equipmentSends, "matching return synchronizes once, replay rejected");
             });
         }
         finally { world.ClearWorld(); Terraria.Main.netMode = mode; Terraria.Main.myPlayer = mine; Terraria.Main.player = players; }

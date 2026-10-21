@@ -1,1 +1,4 @@
 START_HERE.html linguist-generated=true
+
+# Frozen byte-hash fixture must remain identical on Windows checkouts.
+tools/fixtures/placed-body-pre-alpha-delivered.json text eol=lf

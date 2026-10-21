@@ -245,6 +245,7 @@ internal static partial class EngineRuntimeChecks
     private static void WithGeneratedPrefixScope(Action check)
     {
         int mode = Terraria.Main.netMode; var random = Terraria.Main.rand;
+        var projectiles = Terraria.Main.projectile;
         var registry = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
         object? savedRegistry = registry.GetValue(null);
         try
@@ -253,9 +254,17 @@ internal static partial class EngineRuntimeChecks
             // request, registration, files/assets or network delivery is performed.
             Terraria.Main.netMode = NetmodeID.SinglePlayer;
             Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(17);
+            // Ranged/magic CanUseItem performs the real projectile-cap admission.
+            // Supply native inactive actors, as a loaded world does, without spawning.
+            Terraria.Main.projectile = new Projectile[Terraria.Main.maxProjectiles];
+            for (int i = 0; i < Terraria.Main.projectile.Length; i++)
+                Terraria.Main.projectile[i] = new Projectile { whoAmI = i, active = false };
             registry.SetValue(null, null);
             check();
         }
-        finally { registry.SetValue(null, savedRegistry); Terraria.Main.netMode = mode; Terraria.Main.rand = random; }
+        finally {
+            registry.SetValue(null, savedRegistry); Terraria.Main.netMode = mode; Terraria.Main.rand = random;
+            Terraria.Main.projectile = projectiles;
+        }
     }
 }
