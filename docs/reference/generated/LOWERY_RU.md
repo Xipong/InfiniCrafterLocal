@@ -227,6 +227,7 @@ Event actions:
 | heal_owner_on_event | 6 |
 | move_owner_on_event | 7 |
 | select_targets_and_emit_on_event | 8 |
+| apply_generated_buff_on_event | 9 |
 
 ### Entity kind → visual role
 

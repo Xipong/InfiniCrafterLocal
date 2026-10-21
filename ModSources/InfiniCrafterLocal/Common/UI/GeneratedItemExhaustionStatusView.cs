@@ -1,7 +1,6 @@
 #nullable enable
 using System.Collections.Generic;
 using System.Globalization;
-using System.Text;
 using InfiniCrafterLocal.Common.Players;
 using Terraria.Localization;
 
@@ -25,7 +24,7 @@ internal static class GeneratedItemExhaustionStatusView
         foreach (GeneratedItemExhaustionStatus entry in snapshot)
         {
             if (entry.RemainingTicks <= 0) continue;
-            string name = LiteralName(entry.ItemName);
+            string name = GeneratedStatusTooltipView.LiteralName(entry.ItemName);
             string display = GeneratedStatusTooltipView.CountdownSeconds(entry.RemainingTicks, culture);
             string time = Language.GetTextValue(Key + "Time", display);
             rows.Add(new(entry.ItemId, entry.DefinitionIdentity, name, entry.RemainingTicks,
@@ -35,22 +34,4 @@ internal static class GeneratedItemExhaustionStatusView
         return rows.AsReadOnly();
     }
 
-    // A display-only bound in Unicode scalars; never edit the record or Data.Name.
-    // Removing brackets prevents Terraria chat tags; control/format/separator
-    // characters cannot inject a second label or hide the mechanical explanation.
-    private static string LiteralName(string value)
-    {
-        var result = new StringBuilder(96);
-        int count = 0;
-        foreach (Rune rune in (value ?? "").EnumerateRunes())
-        {
-            UnicodeCategory category = Rune.GetUnicodeCategory(rune);
-            if (rune.Value is '[' or ']' || category is UnicodeCategory.Control
-                or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
-                continue;
-            if (count++ >= 96) break;
-            result.Append(rune.ToString());
-        }
-        return result.ToString();
-    }
 }

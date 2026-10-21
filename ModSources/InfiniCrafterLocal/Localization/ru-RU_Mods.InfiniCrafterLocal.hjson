@@ -1,5 +1,11 @@
+ChargeUI: {
+	Progress: "Заряд: {0}%"
+	Ready: "Готово"
+}
+
 Mods: {
 	InfiniCrafterLocal: {
+
 		RecipeJournal: {
 			Button: "Книга"
 			Eyebrow: "INFINICRAFT • ОТКРЫТИЯ ЭТОГО МИРА"
@@ -165,6 +171,7 @@ RuntimeTooltip: {
 	SecondaryOwnerHurt: "При получении урона"
 	SecondaryEnemyKilled: "При убийстве противника"
 	ReactionCooldown: "{0}: перезарядка реакции {1}"
+	ReactionDelay: "{0}: эффект через {1}"
 
 	InventorySeedCollection: "В инвентаре: позволяет получать семена при срезании травы"
 	PlacementUnsupported: "Этот сгенерированный предмет нельзя разместить: поведение или геометрия его плитки пока не поддерживается. Предмет не потрачен; подробности — в журнале клиента."
@@ -191,6 +198,10 @@ RuntimeTooltip: {
 	SecondaryProjectilePeriodic: "Пока снаряд активен, каждые {0}"
 	SecondaryItemPeriodic: "Пока выбран или экипирован, каждые {0}"
 
+	ReactionHurt: "При получении урона"
+	ReactionKill: "При убийстве врага"
+	ReactionCooldownStatus: "{0}: {1}"
+	ReactionCooldownRemaining: "Реакция «{0}» будет готова через {1}. Копии этого предмета делят таймер этой реакции; другие реакции и обычные атаки не меняются."
 	MobilityCooldownStatus: "Перезарядка перемещения"
 	MobilityCooldownRemaining: "До готовности перемещения: {0}. Общий таймер сгенерированных действий перемещения; недоступно только перемещение. Атаки, добыча и сгенерированные усиления не меняются. Неудачные попытки не продлевают таймер."
 	EquipmentMaxLife: "{0}: вклад в максимум здоровья: {1}"

@@ -4,6 +4,8 @@
 
 [Точное имя `damage_nearest_on_event` и текущий диапазон `sameTargetBias`](AUTHOR_EVENT_DOMAINS_RU.md) используют прежние runtime consumers без поддержки retired receipt owners/domains.
 
+[Независимая зарядка, мировая скорость орбиты и collided-axis отскоки](PROJECTILE_CHARGE_ORBIT_BOUNCE_RU.md) расширяют те же драйверы и collision hook; старые сохранённые определения сохраняют прежние значения при отсутствии новых полей.
+
 ## Lifetime и независимые пределы
 
 `set_projectile_lifetime.lifetimeTicks` принимает **1…36000 world ticks**.

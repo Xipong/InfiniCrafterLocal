@@ -258,6 +258,9 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeItemContactSpec": ("runtimeProgram.itemContact.",),
     }
     hidden: dict[str, dict[str, str]] = {
+        "RuntimeParamsSpec": {
+            "PowerMultiplier": "Retained-v5 coupled charge scalar only; fresh Author independently projects chargeDamageMultiplier, knockbackMultiplier and speedMultiplier. Absent all three preserves the old saved runtime, and current controls require this old bag field to stay zero.",
+        },
         "RuntimeSpawnSpec": {
             "OverTarget": "Nested object with its own fully inventoried RuntimeOverTargetSpec fields.",
             "VelocityDistribution": "Nested exact authored union with fully inventoried RuntimeSpawnVelocitySpec fields; absence preserves old constant wire.",

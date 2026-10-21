@@ -123,7 +123,7 @@ def test_front_hand_declared_dependencies_reject_only_conflicting_composition(mu
     if mutation == "handPose": p("configure_item_use")["handPose"] = "one_handed"
     if mutation == "controller":
         p("configure_item_use")["channel"] = True
-        calls.append({"id": "charge", "fn": "charge_then_release", "target": "witness_entity", "params": {'chargeSeconds': (12) / 60, "powerMultiplier": 1}})
+        calls.append({"id": "charge", "fn": "charge_then_release", "target": "witness_entity", "params": {'chargeSeconds': (12) / 60, "damageMultiplier": 1, "knockbackMultiplier": 1, "speedMultiplier": 1}})
     if mutation == "over_target": p("configure_spawn")["position"] = {"above": "cursor", "heightTiles": 3, "activationDelaySeconds": 0}
     if mutation == "secondary": doc["runtimeProgram"]["primaryEntityId"] = "item"
     if mutation == "hold": doc["runtimeProgram"]["bindings"][0]["input"] = "hold"

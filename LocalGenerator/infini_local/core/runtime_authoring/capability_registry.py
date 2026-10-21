@@ -959,7 +959,7 @@ class CapabilitySpec:
         if self.multiplicity != "single_per_target":
             card["multiplicity"] = self.multiplicity
         if self.effect_groupable:
-            card["effectGroups"] = "Optional params.effectGroupId partitions this component's multiplicity and exclusive group ownership; an apply_item_effects binding selects the same exact ID. Omit both selectors for the existing default group. Mobility cooldown remains shared per player."
+            card["effectGroups"] = "Optional params.effectGroupId partitions this component's multiplicity and exclusive group ownership; an apply_item_effects binding, held refresh or generated-buff equipment reaction selects the same exact ID. Omit both selectors for the existing default group. Mobility cooldown remains shared per player."
         if self.performance_budget != "bounded by runtime program limits":
             card["budget"] = self.performance_budget
         return card
@@ -994,7 +994,27 @@ class CapabilitySpec:
         types, enums, patterns, references and dependencies stay in this card.
         """
         card = self.prompt_card()
+        # Seconds, nearest-tick rounding and subupdate conversion are already
+        # stated once in fieldGuide.paramNotation. Retain each consumer's own
+        # meaning and all units/bounds/projection metadata, including nested shapes.
+        seconds_primer = "World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
+        def compact_meanings(value: Any) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key in {"meaning", "description"} and isinstance(child, str):
+                        value[key] = child.removeprefix(seconds_primer)
+                    else:
+                        compact_meanings(child)
+            elif isinstance(value, list):
+                for child in value:
+                    compact_meanings(child)
+        compact_meanings(card)
         for name, row in card["params"].items():
+            # Structured params already carry the identical root description as
+            # their meaning. Nested branch/leaf descriptions remain complete.
+            shape = row.get("shape")
+            if isinstance(shape, dict) and shape.get("description") == row.get("meaning"):
+                shape.pop("description", None)
             spec = self.params[name]
             if self.name == "configure_armor":
                 if name.startswith("setBonus"):
@@ -2189,7 +2209,8 @@ _CAPS: list[CapabilitySpec] = [
         {
             "tileCollide": _p("boolean", "Collide with solid tiles"),
             "ignoreWater": _p("boolean", "Ignore Terraria liquid drag; false keeps vanilla water interaction"),
-            "bounceCount": _p("integer", "bounceCount=N reflects N tile contacts with 0.78 retained collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts", minimum=0, maximum=32, required=False, default=0, neutral=0, omission_condition=OmissionCondition(param_equals=(("tileCollide", False),), target_capabilities=("move_boomerang", "move_returning_glaive", "move_flail_tether"))),
+            "bounceCount": _p("integer", "bounceCount=N reflects N tile contacts using bounceSpeedRetention on collided-axis velocity (each collided axis reverses); the next contact kills. move_boomerang, move_returning_glaive and move_flail_tether instead start returning and disable tile collision before bounce/kill handling. Otherwise 0 kills on the first tile contact; this does not add horizontal friction between contacts", minimum=0, maximum=32, required=False, default=0, neutral=0, omission_condition=OmissionCondition(param_equals=(("tileCollide", False),), target_capabilities=("move_boomerang", "move_returning_glaive", "move_flail_tether"))),
+            "bounceSpeedRetention": _p("number", "Multiply only each collided velocity axis after reflection; 1 preserves it, 0 stops that axis. Tangential speed is unchanged. No friction between contacts. Only used when tileCollide=true and bounceCount>0; return-on-wall drivers keep their separate return behavior", minimum=0, maximum=1, required=False, default=1, neutral=1, consumer_storage="float32"),
             "pierce": _p("integer", "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name", minimum=-1, maximum=100),
             "updatesPerTick": _p("integer", "Total Projectile AI/movement updates per world tick; does not rescale any per-update parameter", minimum=1, maximum=6, wire_offset=-1, wire_name="extraUpdates"),
             "immunity": _immunity_param(),
@@ -2197,7 +2218,7 @@ _CAPS: list[CapabilitySpec] = [
         component_slot="collision",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER,
-        cs="Content/Projectiles/GeneratedProjectile.cs::Configure",
+        cs="Content/Projectiles/GeneratedProjectile.cs::Configure|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
     ),
 ]
 
@@ -2241,8 +2262,9 @@ _CAPS.extend([
     _movement("move_drift", "Multiply velocity by authored retention per projectile update.", 3, {
         "velocityRetention": _p("number", "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s", minimum=0.8, maximum=1.05, units="engine units: velocity multiplier per update"),
     }),
-    _movement("move_orbit", "Orbit the owner at the authored radius. The angle advances by a fixed 0.055 radians per projectile update, with an identity-based starting offset; launch speed does not set the orbit rate. This controller forces tileCollide=false.", 4, {
+    _movement("move_orbit", "Orbit the owner at the authored radius and signed world-time angular rate, with an identity-based starting offset. Positive rotates clockwise on screen; negative counterclockwise; zero keeps the angle fixed while following the owner. Launch speed does not set orbit rate. This controller forces tileCollide=false.", 4, {
         "radiusTiles": _p("number", "Fixed orbit radius around the owner", minimum=1, maximum=80, units="tiles", wire_name="rangeTiles"),
+        "turnRadiansPerSecond": _world_units(_p("number", "Signed orbit angular increment; positive clockwise, negative counterclockwise, zero fixed-angle owner following", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", wire_name="orbitRadiansPerUpdate"), "orbitRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units="radians/s"),
     }),
     _movement("move_boomerang", "Fly out, then return to owner. A wall collision starts return and disables tileCollide; does not kill or spend tile bounces. NPC penetration is authored separately.", 5, {
         "returnAfterSeconds": _seconds(_p("integer", "Outbound duration", minimum=1, maximum=600, units="ticks"), "returnAfterTicks"),
@@ -2373,7 +2395,9 @@ _CAPS.extend([
         ("owner_attached_projectile", "free_projectile"),
         {
             "chargeSeconds": _seconds(_p("integer", "Full charge duration", minimum=1, maximum=600, units="ticks"), "chargeTicks"),
-            "powerMultiplier": _p("number", "Full-charge damage/knockback and release velocity multiplier; partial charge interpolates from 1; 1 unchanged", minimum=1, maximum=4),
+            "damageMultiplier": _p("number", "Full-charge multiplier of current native damage only, applied once at release; partial charge interpolates from 1. 1 preserves damage", minimum=1, maximum=4, wire_name="chargeDamageMultiplier", neutral=1, consumer_storage="float32"),
+            "knockbackMultiplier": _p("number", "Independent full-charge knockback multiplier; partial charge interpolates from 1. 1 preserves knockback", minimum=0, maximum=4, neutral=1, consumer_storage="float32"),
+            "speedMultiplier": _p("number", "Independent full-charge release-speed multiplier; partial charge interpolates from 1. 1 preserves launch speed; values below 1 make a slower charged shot", minimum=0.1, maximum=4, neutral=1, consumer_storage="float32"),
         },
         component_slot="controller",
         authority="owner_execute_sync",
@@ -2496,6 +2520,19 @@ _CAPS.extend([
         cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction/PlanTargetEmissions/SelectTargetsAndEmit",
         events=("on_hit", "on_crit"),
         budget="at most 12 planned physical children; one shared activation reservation each; acyclic entity graph, depth <= 3 and aggregate event spawn count <= 32",
+    ),
+    _cap(
+        "apply_generated_buff_on_event",
+        "Apply one exact named generated-utility-buff group to the owner after a functional equipment reaction. Populate it with apply_generated_buff_on_use using the same effectGroupId; no active-use binding is needed for that group. The group must contain only this generated buff, never healing, native buffs or teleport. Identical effects refresh remaining duration without stacking strength; existing item exhaustion and shared per-action reaction cooldowns still apply. In multiplayer the owner predicts the effect, while native server hurt/death occurrences build the authoritative utility snapshot; client stat claims cannot commit it.",
+        "event", ("item_body",),
+        {
+            "when": _event_when_param(("on_hurt", "on_enemy_kill")),
+            "effectGroupId": _p("string", "Exact named generated-buff-only group on this item", pattern=r"^[a-z][a-z0-9_]{0,47}$", semantic_type="item_effect_group_reference", wire_presence_requires_receipt=True),
+        },
+        component_slot="event_action", authority="server_execute",
+        multiplicity="many_per_target", py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        events=("on_hurt", "on_enemy_kill"),
     ),
     _cap(
         "apply_status_on_event",
@@ -3235,6 +3272,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "heal_owner_on_event": 6,
     "move_owner_on_event": 7,
     "select_targets_and_emit_on_event": 8,
+    "apply_generated_buff_on_event": 9,
 })
 
 
@@ -3243,7 +3281,7 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
     if cap.effect_groupable:
         cap = replace(cap, params=MappingProxyType({
             **cap.params,
-            "effectGroupId": _p("string", "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh capability.",
+            "effectGroupId": _p("string", "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
                 required=False, pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="id", semantic_type="item_effect_group_identity"),
         }))
     if cap.category == "event":
@@ -3376,7 +3414,7 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
             "may override inheritance. By contrast damageMultiplier=1 multiplies authored base by 1 "
             "(AoE/nearest-event damage floor at 1), damageFraction=0.15 heals 15% of damageDone, and homingStrength=0.15 "
             "lerps velocity per update. Neutral examples (not inserted defaults): velocityRetention=1, "
-            "speedMultiplierPerUpdate=1, powerMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
+            "speedMultiplierPerUpdate=1, damageMultiplier/knockbackMultiplier/speedMultiplier=1, hitboxScale/drawScale/scale=1; spreadRadians=0 "
             "has no fan; pierce=-1 is infinite. configure_tile_placement selects tileId>=0; configure_wall_placement selects wallId>=0. The inactive -1 placement field exists only in wire. "
             "Use each card's own bounds/units; no universal zero neutral."
             " Item timing/cost: useTimeSeconds is the base native activation interval; useAnimationSeconds is "

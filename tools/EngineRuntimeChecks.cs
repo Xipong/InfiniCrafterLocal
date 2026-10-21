@@ -44,9 +44,21 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("charge presentation actual clock ExtraAI and once-only ready cue", ChargePresentationReadsActualClockAndSignalsOnce),
+            ("charge presentation localized caption and viewport bounds", ChargePresentationBoundsAndLocalization),
+            ("projectile controls independent charge channels and hydration", IndependentChargeScalesThreeChannelsOnce),
+            ("projectile controls signed world orbit and extra updates", OrbitWorldRateIsIndependentOfExtraUpdates),
+            ("projectile controls collided-axis bounce retention", BounceRetentionChangesOnlyCollidedAxes),
+            ("projectile controls strict DTO and retained absence", ProjectileControlDtoRejectsInvalidPresentAndKeepsOldAbsence),
             ("journal world history favorites and responsive bounds", RecipeJournalKeepsWorldIdentityAndFavorites),
             ("input-local independent conditions", InputLocalConditionsStayIndependent),
             ("reactive equipment delayed admission authority and cooldown", EquipmentReactionsUseFunctionalHooksAndSharedCooldown),
+            ("reaction cooldown presentation functional identity and read-only timers", ReactionCooldownPresentationKeepsFunctionalIdentityAndTimers),
+            ("reaction cooldown presentation actual HUD fitted item sprite", ReactionCooldownPresentationReachesActualHudWithFittedSprite),
+            ("reactive utility buffs authority aggregation cooldown and exhaustion", ReactiveUtilityBuffUsesEquipmentAuthorityAndCooldown),
+            ("reactive utility buffs exact DTO group ownership", ReactiveUtilityBuffDtoKeepsExactGroupOwnership),
+            ("reactive utility buffs localized exact tooltip effects", ReactiveBuffTooltipShowsAcceptedEffectsAndCooldown),
+            ("reactive utility buffs canonical server snapshot owner correction", ReactiveUtilityCanonicalServerSnapshotSurvivesOwnerCorrection),
             ("equipment periodic gameplay native spawn", EquipmentPeriodicGameplayReachesNativeSpawn),
             ("equipment periodic gameplay authority and delay", EquipmentPeriodicGameplayKeepsAuthorityAndDelay),
             ("equipment presentation carrier native frame bounds", EquipmentCarrierSheetsCoverNativeFrames),

@@ -43,7 +43,7 @@ def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, 
     call["params"].update(immunity=immunity, updatesPerTick=updates, pierce=-1)
     wire, entity = compiled_entity(document, call)
     assert entity["collision"] == {
-        "tileCollide": True, "ignoreWater": False, "bounceCount": 0, "pierce": -1,
+        "tileCollide": True, "ignoreWater": False, "bounceCount": 0, "bounceSpeedRetention": 1, "pierce": -1,
         "extraUpdates": updates - 1, "npcImmunityMode": mode, "localNpcHitCooldownTicks": cooldown,
     }
     assert entity["spawn"]["speedPxPerTick"] == pytest.approx(8 / updates)  # world speed is lowered at the same-target update rate

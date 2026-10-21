@@ -287,3 +287,75 @@ def test_source_units_keep_zero_null_and_exact_namespaces_without_selecting_capa
     assert prompt.source_wire_units_for_llm([])["scopes"] == []
     assert packets == before
     assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == {name for name, cap in CAPABILITY_REGISTRY.items() }
+
+
+def test_author_card_compaction_keeps_every_constraint_and_consumer_description():
+    """Only duplicated documentation may disappear; schema/operation facts stay exact."""
+    seconds_primer = "World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
+    checked_descriptions = []
+    omitted_root_copies = []
+
+    def compare_shape(source, sent, path, root_meaning=None):
+        if isinstance(source, dict):
+            assert isinstance(sent, dict), path
+            removed = set(source) - set(sent)
+            assert not set(sent) - set(source), path
+            if removed:
+                # A missing schema-root description is legal only when the same
+                # full consumer text is still the parameter's visible meaning.
+                assert removed == {"description"} and root_meaning is not None, path
+                assert source["description"].removeprefix(seconds_primer) == root_meaning, path
+                omitted_root_copies.append(path)
+            for key in set(source) & set(sent):
+                if key == "description" and isinstance(source[key], str):
+                    assert sent[key] == source[key].removeprefix(seconds_primer), path
+                    checked_descriptions.append(path)
+                else:
+                    compare_shape(source[key], sent[key], path + "." + key)
+        elif isinstance(source, list):
+            assert isinstance(sent, list) and len(sent) == len(source), path
+            for index, (before, after) in enumerate(zip(source, sent)):
+                compare_shape(before, after, path + f"[{index}]")
+        else:
+            assert sent == source, path
+
+    for name, cap in CAPABILITY_REGISTRY.items():
+        raw = cap.prompt_card()
+        sent = cap.author_prompt_card()
+        assert {k: v for k, v in raw.items() if k != "params"} == {
+            k: v for k, v in sent.items() if k != "params"}
+        assert set(raw["params"]) == set(sent["params"])
+        for param, source in raw["params"].items():
+            target = sent["params"][param]
+            # Previously documented card notation controls these presentation
+            # columns; all actual domain/reference/storage/projection rules remain.
+            for key in source.keys() - {"meaning", "required", "semanticType", "neutral", "units", "shape"}:
+                assert target[key] == source[key], (name, param, key)
+            if source["meaning"].startswith(seconds_primer):
+                assert target["meaning"] == source["meaning"][len(seconds_primer):], (name, param)
+                checked_descriptions.append(name + "." + param)
+            if "shape" in source:
+                compare_shape(source["shape"], target["shape"], name + "." + param,
+                              root_meaning=target.get("meaning"))
+    assert checked_descriptions and omitted_root_copies
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_actual_author_and_scoped_repair_keep_shared_clock_semantics(monkeypatch, mode):
+    from infini_local.core import llm_config
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    _, serialized, _ = author.build_initial_author_request({}, {}, "clock-semantics", model_name="offline")
+    guide = json.loads(serialized)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["paramNotation"]
+    # These are the time semantics formerly repeated before every duration's
+    # distinct description. They must remain explicit in the actual model packet.
+    for rule in ("Times use Seconds", "nearest world tick at 60 ticks/s", "half-tick ties UP",
+                 "nonzero-to-zero collapse is rejected", "target projectile’s unique explicit updatesPerTick",
+                 "children use their own N", "algorithm counters, not seconds"):
+        assert rule in guide
+    doc = build_capability_witness("charge_then_release")
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "charge_then_release")
+    call["params"]["chargeSeconds"] = -1
+    repair = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
+    assert repair["runtimeExecutionTruth"]["units"]["paramNotation"] == guide
+    broken = next(row for row in repair["existingBrokenCapabilityCards"] if row["fn"] == "charge_then_release")
+    assert broken == CAPABILITY_REGISTRY["charge_then_release"].prompt_card()

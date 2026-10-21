@@ -36,7 +36,12 @@ public sealed partial class InfiniCraftPlayer
 
     internal void RunEquipmentReaction(string eventName, Vector2 position)
     {
-        if (!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(Player) || Player.dead || !Player.active
+        // Native Player.Hurt (including server receipt of vanilla player-hurt)
+        // and NPC.OnKill produce the authoritative utility occurrence. The owner
+        // still predicts its utility and records the existing local HUD cooldown;
+        // only server-built utility snapshots can survive a later correction.
+        bool server = Main.netMode == NetmodeID.Server;
+        if ((!server && !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(Player)) || Player.dead || !Player.active
             || _dispatchingEquipmentReaction || !float.IsFinite(position.X) || !float.IsFinite(position.Y)
             || eventName is not (RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill)) return;
         uint now = Main.GameUpdateCount;
@@ -55,6 +60,9 @@ public sealed partial class InfiniCraftPlayer
                 bool emitted = false;
                 foreach (RuntimeEventActionSpec action in body.ActionsFor(eventName))
                 {
+                    // Projectile/damage reactions keep their owner-only execution.
+                    // Only this accepted utility-group action has a server replica.
+                    if (server && action.ActionCode != RuntimeEventActionCode.ApplyGeneratedBuff) continue;
                     // Identity survives copy/slot replacement; bounded table never evicts a live timer.
                     var key = (data.Id, action.Id);
                     if (action.ReactionCooldownTicks is < 6 or > 3600 || _reactionCooldowns.ContainsKey(key)

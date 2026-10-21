@@ -135,7 +135,7 @@ def test_missing_movement_does_not_offer_hand_against_frozen_owner_conflicts(con
         _call(doc, "configure_item_use")["params"]["channel"] = True
         doc["runtimeProgram"]["calls"].append({
             "id": "accepted_charge", "fn": "charge_then_release", "target": movement["target"],
-            "params": {'chargeSeconds': (12) / 60, "powerMultiplier": 1}})
+            "params": {'chargeSeconds': (12) / 60, "damageMultiplier": 1, "knockbackMultiplier": 1, "speedMultiplier": 1}})
     else:
         _call(doc, "configure_spawn")["params"]["position"] = {
             "above": "cursor", "heightTiles": 3, 'activationDelaySeconds': (0) / 60}

@@ -140,7 +140,7 @@ def report() -> dict[str, Any]:
     check("item_value_semantics", bool(stats and "Item.value" in stats.params["valueCopper"].description and "resale" in stats.params["valueCopper"].description), "valueCopper must describe the exact Item.value field rather than pretending to be direct player resale value")
 
     collision = CAPABILITY_REGISTRY.get("set_projectile_collision")
-    expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "pierce", "updatesPerTick", "immunity")
+    expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "bounceSpeedRetention", "pierce", "updatesPerTick", "immunity")
     check("explicit_projectile_collision", collision is not None and tuple(collision.params) == expected_collision, "projectile liquid and immunity semantics must be explicit")
     check("vanilla_projectile_defaults", "Projectile.ignoreWater = false;" in projectile and "Projectile.netImportant = false;" in projectile, "proxy SetDefaults must retain Terraria defaults until authored entity configuration")
     check("explicit_liquid_projection", "Projectile.ignoreWater = entity.Collision.IgnoreWater;" in projectile, "ignoreWater must come from authored collision data")

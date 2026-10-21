@@ -202,8 +202,9 @@ public sealed partial class GeneratedProjectile
         }
         if (_remainingBounces <= 0) return true;
         _remainingBounces--;
-        if (Math.Abs(Projectile.velocity.X - oldVelocity.X) > 0.01f) Projectile.velocity.X = -oldVelocity.X * 0.78f;
-        if (Math.Abs(Projectile.velocity.Y - oldVelocity.Y) > 0.01f) Projectile.velocity.Y = -oldVelocity.Y * 0.78f;
+        float retention = _entity.Collision.BounceSpeedRetention ?? 0.78f;
+        if (Math.Abs(Projectile.velocity.X - oldVelocity.X) > 0.01f) Projectile.velocity.X = -oldVelocity.X * retention;
+        if (Math.Abs(Projectile.velocity.Y - oldVelocity.Y) > 0.01f) Projectile.velocity.Y = -oldVelocity.Y * retention;
         Projectile.netUpdate = true;
         return false;
     }

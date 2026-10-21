@@ -62,7 +62,15 @@ public partial class GeneratedItem
                     add("ReactionCooldown" + action.Id, "ReactionCooldown", new object[] { occurrence, RuntimeTooltipTime(action.ReactionCooldownTicks) });
                 string delay = action.DelayTicks == 0 ? RuntimeTooltipText("SecondaryImmediate") : RuntimeTooltipTime(action.DelayTicks);
                 string suffix = (index++).ToString(CultureInfo.InvariantCulture);
-                if (action.ActionCode == RuntimeEventActionCode.DamageArea && action.RadiusPx is > 0 and <= 1024
+                if (action.ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff
+                    && source.Kind == RuntimeEntityKind.ItemBody
+                    && program.TryGetEffectGroup(action.EffectGroupId ?? "") is { IsGeneratedBuffOnly: true } group)
+                {
+                    if (action.DelayTicks > 0)
+                        add("ReactionDelay" + suffix, "ReactionDelay", new object[] { occurrence, delay });
+                    AddRuntimeUseEffects(group, "Reaction" + suffix, occurrence, add);
+                }
+                else if (action.ActionCode == RuntimeEventActionCode.DamageArea && action.RadiusPx is > 0 and <= 1024
                     && RuntimeTooltipFinite(action.DamageMultiplier, 0f, 10f))
                 {
                     // RuntimeProgramExecutor.AuthoredEventDamage/DamageArea:
@@ -120,7 +128,7 @@ public partial class GeneratedItem
 
     private static bool SecondaryEventIsReachable(RuntimeEntitySpec source, RuntimeEventActionSpec action, bool itemContact, bool activeUse, bool equipped)
     {
-        if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.SpawnEntity)
+        if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.ApplyGeneratedBuff)
             || action.Action != RuntimeOpcodeNames.EventActionName(action.ActionCode)
             || (action.Event == RuntimeEventKind.Periodic
                 && (action.PeriodTicks < 6 || !SecondaryPeriodCanOccur(source, action.PeriodTicks)))) return false;

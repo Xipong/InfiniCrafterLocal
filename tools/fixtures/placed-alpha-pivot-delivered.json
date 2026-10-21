@@ -126,6 +126,7 @@
       {
         "collision": {
           "bounceCount": 0,
+          "bounceSpeedRetention": 1,
           "extraUpdates": 0,
           "ignoreWater": false,
           "localNpcHitCooldownTicks": 10,
@@ -202,6 +203,7 @@
       {
         "collision": {
           "bounceCount": 0,
+          "bounceSpeedRetention": 1,
           "extraUpdates": 0,
           "ignoreWater": false,
           "localNpcHitCooldownTicks": 10,

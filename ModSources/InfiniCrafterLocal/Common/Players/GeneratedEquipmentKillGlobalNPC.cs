@@ -17,9 +17,10 @@ public sealed class GeneratedEquipmentKillGlobalNPC : GlobalNPC
             || npc.lastInteraction < 0 || npc.lastInteraction >= Main.maxPlayers) return;
         Player owner = Main.player[npc.lastInteraction];
         if (!owner.active || owner.dead) return;
-        if (Main.netMode == NetmodeID.SinglePlayer)
-            owner.GetModPlayer<InfiniCraftPlayer>().RunEquipmentReaction(RuntimeEventKind.OnEnemyKill, npc.Center);
-        else
+        // The server applies only canonical utility-group actions; owner-only
+        // projectile/damage reactions remain behind the existing notification.
+        owner.GetModPlayer<InfiniCraftPlayer>().RunEquipmentReaction(RuntimeEventKind.OnEnemyKill, npc.Center);
+        if (Main.netMode != NetmodeID.SinglePlayer)
         {
             var packet = InfiniCrafterLocalMod.Instance.GetPacket();
             packet.Write(InfiniNetPacketIds.EquipmentEnemyKill);
