@@ -115,7 +115,8 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         controller = module.StudioController(app, server)
         before = controller.snapshot()
         assert before['configPath'] == str(config)
-        assert len(before['fields']) == 128
+        assert len(before['fields']) == 129
+        assert 'INFINI_IMAGE_PARALLEL' in {field['key'] for field in before['fields']}
         assert 'INFINI_BALANCE_MODE' not in {field['key'] for field in before['fields']}
         assert {field['page'] for field in before['fields']} == {'configure','providers','images','sprites','models','multiplayer','diagnostics'}
         assert next(field for field in before['fields'] if field['key'] == 'INFINI_OPENAI_COMPAT_API_KEY')['secret'] is True
@@ -125,6 +126,7 @@ def test_real_controller_metadata_and_save_preserve_full_setting_surface(tmp_pat
         assert saved['INFINI_OPENAI_COMPAT_API_KEY'] == 'keep-me'
         assert saved['INFINI_LLM_MAX_TOKENS'] == '12345'
         assert saved['INFINI_PROMPT_STYLE'] == 'Terraria Like'
+        assert saved['INFINI_IMAGE_PARALLEL'] == '1'
         assert controller.last_action['ok'] is True
         controller.apply({'id':'unknown-edit','action':'save','values':{'INFINI_PRIVATE_UNKNOWN':'edited-explicitly'},'extra':{}})
         assert parse_env(config)['INFINI_PRIVATE_UNKNOWN'] == 'edited-explicitly'
