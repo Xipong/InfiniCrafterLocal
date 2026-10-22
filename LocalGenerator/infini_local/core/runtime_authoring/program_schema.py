@@ -196,7 +196,7 @@ def author_item_response_schema() -> dict[str, Any]:
                 "additionalProperties": False,
                 "properties": {
                     "literalSynthesis": _strict_string(min_len=1, max_len=500),
-                    "coreMechanic": _strict_string(min_len=1, max_len=500),
+                    "coreMechanic": _strict_string(min_len=1, max_len=2000),
                     "parentAContribution": _strict_string(min_len=1, max_len=1000),
                     "parentBContribution": _strict_string(min_len=1, max_len=1000),
                     "playerExperience": _strict_string(min_len=1, max_len=500),

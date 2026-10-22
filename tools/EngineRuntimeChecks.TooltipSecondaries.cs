@@ -23,7 +23,7 @@ internal static partial class EngineRuntimeChecks
     private static List<TooltipLine> TooltipSecondaryLines(GeneratedItem host)
     {
         var lines = new List<TooltipLine>();
-        host.ModifyTooltips(lines);
+        host.ModifyRuntimeTooltips(lines, expanded: true);
         return lines;
     }
 

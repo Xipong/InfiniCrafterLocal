@@ -21,11 +21,11 @@ internal static partial class EngineRuntimeChecks
         var gameplay = new GameplaySpec { UseConditions = new[] {
             new RuntimeUseConditionSpec { Input = RuntimeInputKind.PrimaryUse, UseConditionMode = "not_wet" },
             new RuntimeUseConditionSpec { Input = RuntimeInputKind.AlternateUse, UseConditionMode = "life_above", UseConditionMinLife = 50 } } };
-        Equal("Cannot be used while wet", GeneratedItem.UseBlockedReason(player, gameplay, RuntimeInputKind.PrimaryUse), "primary reads its own gate");
+        Equal(InfiniCraftPlayer.GeneratedUseFeedbackText("Wet"), GeneratedItem.UseBlockedReason(player, gameplay, RuntimeInputKind.PrimaryUse), "primary reads its own gate");
         Equal("", GeneratedItem.UseBlockedReason(player, gameplay, RuntimeInputKind.AlternateUse), "alternate ignores primary wet gate and threshold is inclusive");
         player.statLife = 49; player.wet = false;
         Equal("", GeneratedItem.UseBlockedReason(player, gameplay, RuntimeInputKind.PrimaryUse), "primary ignores alternate life gate");
-        Equal("Requires 50 life", GeneratedItem.UseBlockedReason(player, gameplay, RuntimeInputKind.AlternateUse), "alternate checks its own threshold");
+        Equal(InfiniCraftPlayer.GeneratedUseFeedbackText("LifeRequired", 50), GeneratedItem.UseBlockedReason(player, gameplay, RuntimeInputKind.AlternateUse), "alternate checks its own threshold");
         var invalid = new RuntimeUseConditionSpec { Input = RuntimeInputKind.Hold, UseConditionMode = "not_wet" };
         bool refused = false; try { invalid.Validate(); } catch (InvalidDataException) { refused = true; }
         Equal(true, refused, "passive condition rejected before execution");

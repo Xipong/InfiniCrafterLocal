@@ -105,10 +105,10 @@ public partial class GeneratedItem
     private static string ConditionBlockedReason(Player player, string mode, int minLife, int minMana)
         => mode switch
         {
-            "grounded" when !HasNativeGroundSupport(player) => "Requires solid ground",
-            "not_wet" when player.wet => "Cannot be used while wet",
-            "life_above" when player.statLife < minLife => $"Requires {minLife} life",
-            "mana_above" when player.statMana < minMana => $"Requires {minMana} mana",
+            "grounded" when !HasNativeGroundSupport(player) => InfiniCraftPlayer.GeneratedUseFeedbackText("GroundRequired"),
+            "not_wet" when player.wet => InfiniCraftPlayer.GeneratedUseFeedbackText("Wet"),
+            "life_above" when player.statLife < minLife => InfiniCraftPlayer.GeneratedUseFeedbackText("LifeRequired", minLife),
+            "mana_above" when player.statMana < minMana => InfiniCraftPlayer.GeneratedUseFeedbackText("ManaRequired", minMana),
             _ => "",
         };
 
@@ -155,26 +155,18 @@ public partial class GeneratedItem
         string blocked = UseBlockedReason(player, Data.Gameplay, binding.Input);
         if (!string.IsNullOrWhiteSpace(blocked))
         {
-            if (player.whoAmI == Main.myPlayer && (int)Main.GameUpdateCount - _lastBlockedNoticeTick > 30)
-            {
-                _lastBlockedNoticeTick = (int)Main.GameUpdateCount;
-                Main.NewText(blocked, Color.OrangeRed);
-            }
+            player.GetModPlayer<InfiniCraftPlayer>().NotifyGeneratedUseRefusal(blocked);
             return false;
         }
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.SpawnEntity)
         {
             RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
-            if (entity is null || GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI)
-                    > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner - RootBindingSpawnCapacity(entity)
-                || !GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI,
-                    RootBindingSpawnCapacity(entity)))
-                return false;
-            if (entity?.IsOwnerAttached == true)
+            if (entity is null) return false;
+            string spawnRefusal = RootSpawnBlockedReason(player, entity);
+            if (spawnRefusal.Length != 0)
             {
-                foreach (Projectile projectile in Main.ActiveProjectiles)
-                    if (projectile.owner == player.whoAmI && projectile.ModProjectile is GeneratedProjectile generated && generated.Matches(Data.Id, entity.Id))
-                        return false;
+                player.GetModPlayer<InfiniCraftPlayer>().NotifyGeneratedUseRefusal(spawnRefusal);
+                return false;
             }
         }
         if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem)
@@ -185,6 +177,24 @@ public partial class GeneratedItem
         }
         _itemEventBudget = new RuntimeSpawnBudget(Data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation);
         return true;
+    }
+
+    // Read the exact native admission facts; this does not reserve or alter a budget.
+    internal string RootSpawnBlockedReason(Player player, RuntimeEntitySpec entity)
+    {
+        int count = RootBindingSpawnCapacity(entity);
+        if (GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI)
+            > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner - count)
+            return InfiniCraftPlayer.GeneratedUseFeedbackText("OwnerProjectileLimit",
+                InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner);
+        if (!GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI, count))
+            return InfiniCraftPlayer.GeneratedUseFeedbackText("EntityBatchLimit", count, entity.Spawn.MaxActive!);
+        if (entity.IsOwnerAttached)
+            foreach (Projectile projectile in Main.ActiveProjectiles)
+                if (projectile.owner == player.whoAmI && projectile.ModProjectile is GeneratedProjectile generated
+                    && generated.Matches(Data.Id, entity.Id))
+                    return InfiniCraftPlayer.GeneratedUseFeedbackText("OwnerAttachedActive");
+        return "";
     }
 
     public override void PickAmmo(Item weapon, Player player, ref int type, ref float speed, ref StatModifier damage, ref float knockback)
@@ -312,8 +322,11 @@ public partial class GeneratedItem
                 player.AddBuff(buff.BuffCode, buff.BuffTime);
         if (gp.GeneratedBuff?.HasAnyEffect == true)
             player.GetModPlayer<InfiniCraftPlayer>().ApplyGeneratedUtilityBuff(gp.GeneratedBuff, syncNetwork: Main.netMode != NetmodeID.SinglePlayer, source: Data);
-        return !string.IsNullOrWhiteSpace(gp.MobilityMode)
-            && player.GetModPlayer<InfiniCraftPlayer>().TryRunGeneratedMobility(gp);
+        if (string.IsNullOrWhiteSpace(gp.MobilityMode)) return false;
+        var owner = player.GetModPlayer<InfiniCraftPlayer>();
+        bool succeeded = owner.TryRunGeneratedMobility(gp);
+        if (!succeeded) owner.NotifyGeneratedUseRefusal(owner.LastGeneratedMobilityFailureMessage);
+        return succeeded;
     }
 
     // Root binding shots are not event actions: their immediate capacity is the

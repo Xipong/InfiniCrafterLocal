@@ -34,7 +34,7 @@
         "coreMechanic": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 500
+          "maxLength": 2000
         },
         "parentAContribution": {
           "type": "string",

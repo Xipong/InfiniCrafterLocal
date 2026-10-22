@@ -9461,7 +9461,7 @@
           "additionalProperties": false,
           "properties": {
             "coreMechanic": {
-              "maxLength": 500,
+              "maxLength": 2000,
               "minLength": 1,
               "type": "string"
             },

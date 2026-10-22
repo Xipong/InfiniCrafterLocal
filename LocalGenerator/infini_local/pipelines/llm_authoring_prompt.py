@@ -215,13 +215,13 @@ def descendant_spawn_budget_for_llm() -> str:
     )
 
 
-def runtime_units_for_llm() -> dict[str, Any]:
+def runtime_units_for_llm(*, include_source_units: bool = True) -> dict[str, Any]:
     """The same registry-owned unit and binding reading guide for Author/Repair."""
     guide = runtime_authoring_prompt_field_guide()
     return {
         "paramNotation": guide["paramNotation"],
         "playerFacingUnits": concise_terraria_tick_guide_for_llm(),
-        "sourceWireUnits": source_wire_units_for_llm(),
+        **({"sourceWireUnits": source_wire_units_for_llm()} if include_source_units else {}),
         "bindingTarget": guide["bindingTarget"],
         "descendantSpawnBudget": descendant_spawn_budget_for_llm(),
     }

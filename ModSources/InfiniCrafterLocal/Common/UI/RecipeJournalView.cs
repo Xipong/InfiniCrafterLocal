@@ -32,6 +32,15 @@ internal static class RecipeJournalView
             && !GeneratedItemData.IsPlayerSaveReferenceOnly(d) && d.RecipeMeta.WorldId == child.RecipeMeta.WorldId);
     }
 
+    internal static (Rectangle Back, Rectangle Save) DetailControls(Rectangle area)
+    {
+        int x = area.X + 12, width = Math.Max(0, area.Width - 24);
+        int saveWidth = Math.Min(118, Math.Max(0, (width - 6) / 2));
+        int height = Math.Min(26, Math.Max(0, area.Height - 20));
+        return (new Rectangle(x, area.Y + 10, Math.Min(88, Math.Max(0, width - saveWidth - 6)), height),
+            new Rectangle(area.Right - 12 - saveWidth, area.Y + 10, saveWidth, height));
+    }
+
     internal readonly record struct Layout(Rectangle Book, Rectangle List, Rectangle Detail, int Rows, int Columns);
     internal static Layout Bounds(int width, int height)
     {

@@ -60,7 +60,7 @@ public sealed partial class InfiniCraftPlayer
         _lastGeneratedMobilityFailureMessage = "";
         if (_generatedMobilityCooldownTicks > 0)
         {
-            _lastGeneratedMobilityFailureMessage = $"Mobility cooldown: {GeneratedMobilityCooldownSeconds}s";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityCooldown", GeneratedMobilityCooldownSeconds);
             return false;
         }
         StartGeneratedMobilityCooldown(cooldownTicks);
@@ -175,18 +175,18 @@ public sealed partial class InfiniCraftPlayer
         _lastGeneratedMobilityFailureMessage = "";
         if (gameplay is null)
         {
-            _lastGeneratedMobilityFailureMessage = "Missing generated mobility data";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityDataMissing");
             return false;
         }
         string mode = (gameplay.MobilityMode ?? "").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(mode))
         {
-            _lastGeneratedMobilityFailureMessage = "No generated mobility mode";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityModeMissing");
             return false;
         }
         if (_generatedMobilityCooldownTicks > 0)
         {
-            _lastGeneratedMobilityFailureMessage = $"Mobility cooldown: {GeneratedMobilityCooldownSeconds}s";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityCooldown", GeneratedMobilityCooldownSeconds);
             return false;
         }
 
@@ -207,8 +207,8 @@ public sealed partial class InfiniCraftPlayer
     private bool UnsupportedGeneratedMobility(string mode)
     {
         _lastGeneratedMobilityFailureMessage = string.IsNullOrWhiteSpace(mode)
-            ? "No generated mobility mode"
-            : $"Unsupported mobility: {mode}";
+            ? GeneratedUseFeedbackText("MobilityModeMissing")
+            : GeneratedUseFeedbackText("MobilityUnsupported", mode);
         return false;
     }
 
@@ -216,19 +216,19 @@ public sealed partial class InfiniCraftPlayer
     {
         if (Player.dead)
         {
-            _lastGeneratedMobilityFailureMessage = "Cannot use mobility while dead";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityDead");
             return false;
         }
         if (!InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
         {
-            _lastGeneratedMobilityFailureMessage = "Mobility is waiting for gameplay authority";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityAuthority");
             return false;
         }
         int sx = Player.SpawnX >= 0 ? Player.SpawnX : Main.spawnTileX;
         int sy = Player.SpawnY >= 0 ? Player.SpawnY : Main.spawnTileY;
         if (sx <= 0 || sy <= 0)
         {
-            _lastGeneratedMobilityFailureMessage = "No valid spawn point";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilitySpawnMissing");
             return false;
         }
         Vector2 destination = new(sx * 16f + 8f - Player.width / 2f, sy * 16f - Player.height);
@@ -241,7 +241,7 @@ public sealed partial class InfiniCraftPlayer
     {
         if (!InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(Player))
         {
-            _lastGeneratedMobilityFailureMessage = "Mobility is waiting for local control";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityLocalControl");
             return false;
         }
         return TryBlinkToTarget(gameplay, Main.MouseWorld);
@@ -251,17 +251,17 @@ public sealed partial class InfiniCraftPlayer
     {
         if (Player.dead)
         {
-            _lastGeneratedMobilityFailureMessage = "Cannot use mobility while dead";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityDead");
             return false;
         }
         if (!InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
         {
-            _lastGeneratedMobilityFailureMessage = "Mobility is waiting for gameplay authority";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityAuthority");
             return false;
         }
         if (gameplay.MobilityRangeTiles <= 0)
         {
-            _lastGeneratedMobilityFailureMessage = "Missing authored blink range";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityRangeMissing");
             return false;
         }
         int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 120);
@@ -272,7 +272,7 @@ public sealed partial class InfiniCraftPlayer
         Vector2 destination = new(target.X - Player.width / 2f, target.Y - Player.height / 2f);
         if (gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
         {
-            _lastGeneratedMobilityFailureMessage = "Unsafe blink destination";
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
             return false;
         }
         Player.Teleport(destination, 0);

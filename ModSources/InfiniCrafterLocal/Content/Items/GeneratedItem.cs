@@ -29,7 +29,6 @@ public partial class GeneratedItem : ModItem
     public GeneratedItemData Data { get; private set; } = GeneratedItemData.Placeholder();
     private static int _warningCount;
     private int _lastHydrationTick = -9999;
-    private int _lastBlockedNoticeTick = -9999;
     private bool _nativeToolPowersSuppressed;
     private RuntimeSpawnBudget _itemEventBudget = new(0);
     // Only pure apply_item_effects mobility needs an outcome-gated stack debit.

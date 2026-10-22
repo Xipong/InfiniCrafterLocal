@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text.Json;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Runtime;
 using Microsoft.Xna.Framework;
 using Terraria;
@@ -108,7 +109,7 @@ internal static partial class EngineRuntimeChecks
                         Equal(false, generated.TryRunGeneratedMobility(gameplay), reason + " rejected");
                         Equal(start, player.Center, reason + " leaves position unchanged");
                         Equal(0, generated.GeneratedMobilityCooldownTicks, reason + " does not consume cooldown");
-                        if (reason == "unsafe") Equal("Unsafe blink destination", generated.LastGeneratedMobilityFailureMessage, "world edge reason");
+                        if (reason == "unsafe") Equal(InfiniCraftPlayer.GeneratedUseFeedbackText("MobilityUnsafe"), generated.LastGeneratedMobilityFailureMessage, "world edge reason");
                     });
                 }
                 catch (Exception error) { failures.Add(reason + ": " + error.Message); }

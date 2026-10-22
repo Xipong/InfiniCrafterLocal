@@ -161,7 +161,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         string footer = craftPlayer.HasPendingCraftRefunds ? ForgeText("RefundPending")
             : ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
         DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 28, 0.56f);
-        if (panel.Contains(new Point(Main.mouseX, Main.mouseY)))
+        if (!PlayerInput.IgnoreMouseInterface && panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
     }
 
@@ -173,6 +173,9 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         Rectangle[] cancelButtons,
         Rectangle clearButton)
     {
+        // Respect engine-owned UI suppression without consuming gameplay input.
+        // In particular, do not set blockInput/controlUseItem outside this panel.
+        if (PlayerInput.IgnoreMouseInterface) return;
         var mouse = new Point(Main.mouseX, Main.mouseY);
         if (Main.mouseRight && Main.mouseRightRelease)
         {
