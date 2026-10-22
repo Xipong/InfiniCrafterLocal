@@ -151,8 +151,13 @@ def valid_cached_recipe(tmp_path, monkeypatch):
     return target, good
 
 
-@pytest.mark.parametrize("cache_only", [False, True])
-@pytest.mark.parametrize("error_type", [PermissionError, OSError])
+# Cover both request modes plus the OSError subclass on the ordinary path,
+# where cacheOnly cannot independently hide a broken I/O-error guard.
+@pytest.mark.parametrize("cache_only,error_type", [
+    pytest.param(False, OSError, id="normal-io-error"),
+    pytest.param(True, OSError, id="cache-only-io-error"),
+    pytest.param(False, PermissionError, id="normal-permission-error"),
+])
 def test_recipe_read_io_failure_keeps_active_bytes_and_recovers(monkeypatch, real_route, tmp_path, cache_only, error_type):
     target, good = valid_cached_recipe(tmp_path, monkeypatch)
     original = target.read_bytes()

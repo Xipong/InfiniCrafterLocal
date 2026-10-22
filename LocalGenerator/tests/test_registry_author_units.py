@@ -627,23 +627,19 @@ WIRE_VALUES = (
     ("current", "delivered", .007 / 100, True, "decimal-collision"),
     ("current", "delivered", 2**-149, True, "float32-subnormal"),
     ("current", "delivered", math.nextafter(2**-150, math.inf), True, "above-half"),
-    *(("prior", status, value, accepted, label) for status in ("delivered", "declared_neutral_omission")
-      for value, accepted, label in (
-          (None, False, "null"), (False, False, "bool"), ("0", False, "string"),
-          (-.6, False, "below-minimum"), (2.1, False, "above-maximum"), (1e-50, False, "collapse"),
-          (0, True, "int-zero"), (0.0, status == "delivered", "float-zero"),
-          (-0.0, status == "delivered", "signed-zero"), (.2, status == "delivered", "ordinary"))),
-    *(('prior', 'delivered', value, True, label) for value, label in (
-        (1.770282212988338, "binary64-no-reprojection"),
-        (math.nextafter(2**-150, math.inf), "positive-half"),
-        (math.nextafter(-2**-150, -math.inf), "negative-half"))),
+    # Retired parameter names are rejected before any numeric-domain admission.
+    # Keep both receipt statuses and both owner slots, with malformed, neutral
+    # and ordinary representations; old floating-point boundary grids no longer
+    # exercise a distinct contract. Current-name numeric boundaries stay above.
+    *(("prior", status, value, False, label) for status in ("delivered", "declared_neutral_omission")
+      for value, label in ((None, "null"), (0, "int-zero"), (.2, "ordinary"))),
 )
 
 
 @pytest.mark.parametrize("scope,version,status,value,accepted", [
     pytest.param(scope, version, status, value, accepted, id=f"{scope}-{version}-{status}-{label}")
     for version, status, value, accepted, label in WIRE_VALUES
-    for scope in (("global", "effect_group") if label in {"int-zero", "ordinary", "float32-subnormal", "binary64-no-reprojection", "positive-half", "negative-half"} else ("global",))])
+    for scope in (("global", "effect_group") if version == "prior" or label in {"int-zero", "float32-subnormal"} else ("global",))])
 def test_buff_wire_domain_authenticates_representation_without_redividing(scope, version, status, value, accepted):
     document, source_before = {}, b""
     if version == "current":

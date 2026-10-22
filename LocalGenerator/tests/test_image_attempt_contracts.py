@@ -396,7 +396,10 @@ IO_CASES = (
     + [(kind, "master", "processing") for kind in ("item", "entity", "vfx_cutout")]
     + [("item", "attempt_mkdir", "processing"), ("item", "metrics", "projection")]
     + [(kind, "trace", "projection") for kind in ("item", "entity")]
-    + [(kind, fault, "publication") for kind in IMAGE_ROLES for fault in ("replace", "fsync", "mkstemp")]
+    # All roles share the atomic publisher. Exercise each filesystem failure on
+    # item, plus publication failure/ownership projection through every role.
+    + [("item", fault, "publication") for fault in ("replace", "fsync", "mkstemp")]
+    + [(kind, "replace", "publication") for kind in IMAGE_ROLES if kind != "item"]
     + [("item", "procedural_mkdir", "backend")]
 )
 
