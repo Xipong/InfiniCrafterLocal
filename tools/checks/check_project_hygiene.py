@@ -1,0 +1,432 @@
+from __future__ import annotations
+
+"""Repository hygiene guard for release archives.
+
+This is intentionally static: it checks packaging/documentation invariants that are
+easy to regress while refactoring architecture, without executing tModLoader.
+"""
+
+from pathlib import Path
+import ast
+import json
+import re
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+WORKSPACE_METADATA_DIRS = {".git", ".gitnexus", ".hermes", ".codex", ".agents"}
+IGNORED_DOC_DIRS = WORKSPACE_METADATA_DIRS | {"agent_reports", ".tml-build-cache", ".nuget", "build_logs", "Runtime_dumps", "obj", "bin", ".ruff_cache", ".hypothesis", "artifacts"}
+RUNTIME_JUNK_NAMES = {"__pycache__", ".pytest_cache", ".ruff_cache", ".hypothesis", ".venv", "venv", "artifacts", "build_logs"}
+PACKAGED_METADATA_DIRS = WORKSPACE_METADATA_DIRS
+FORBIDDEN_RELEASE_FILE_NAMES = {"Zone.Identifier", ".DS_Store", "Thumbs.db"}
+FORBIDDEN_RELEASE_SUFFIXES = (":Zone.Identifier",)
+PYTHON_BROAD_EXCEPTION_BASELINE = 227
+PYTHON_BARE_EXCEPT_BASELINE = 0
+
+
+def fail(msg: str) -> None:
+    print(f"[FAIL] {msg}")
+    raise SystemExit(1)
+
+
+def iter_project_dirs() -> list[Path]:
+    dirs: list[Path] = []
+    for p in ROOT.rglob("*"):
+        if not p.is_dir():
+            continue
+        rel = p.relative_to(ROOT)
+        if any(part in IGNORED_DOC_DIRS for part in rel.parts):
+            continue
+        if any(part in RUNTIME_JUNK_NAMES for part in rel.parts):
+            continue
+        if _is_forbidden_release_metadata(rel, p):
+            continue
+        if rel.parts[:2] == ("LocalGenerator", "cache"):
+            continue
+        dirs.append(p)
+    return [ROOT] + dirs
+
+
+def check_documentation_layout() -> None:
+    """Require reader entrypoints, not a duplicate note in every source folder."""
+    required = ("README.md", "START_HERE.html", "docs/user/START_RU.md",
+                "docs/development/README_RU.md", "docs/development/MODULES_RU.md",
+                "docs/reference/README_RU.md", "docs/archive/README_RU.md")
+    missing = [name for name in required if not (ROOT / name).is_file()]
+    if missing:
+        fail("missing documentation entrypoints: " + ", ".join(missing))
+
+
+def _is_runtime_junk(rel: Path, p: Path) -> bool:
+    if any(part in PACKAGED_METADATA_DIRS for part in rel.parts):
+        return True
+    if any(part == "cache" and rel.parts[:1] == ("LocalGenerator",) for part in rel.parts):
+        return True
+    return any(part in RUNTIME_JUNK_NAMES for part in rel.parts) or p.suffix == ".pyc"
+
+
+def _is_forbidden_release_metadata(rel: Path, p: Path) -> bool:
+    name = p.name
+    if name in FORBIDDEN_RELEASE_FILE_NAMES:
+        return True
+    if any(name.endswith(suffix) for suffix in FORBIDDEN_RELEASE_SUFFIXES):
+        return True
+    # On Windows downloaded archives often unpack to ADS metadata that tools may
+    # expose as literal files named `anything:Zone.Identifier`.  Those files should
+    # never enter release zips or folder-doc coverage.
+    if any(part in FORBIDDEN_RELEASE_FILE_NAMES for part in rel.parts):
+        return True
+    return False
+
+
+def check_no_packaged_runtime_junk(strict_archive: bool = False) -> None:
+    """Check release junk without making local test runs fight the checker.
+
+    Pytest/compileall legitimately create __pycache__, .pytest_cache and
+    LocalGenerator/cache during local checks. Default mode ignores those
+    auto-generated artifacts so `pytest && python tools/checks/check_project_hygiene.py`
+    stays green. Use `--strict-archive` before zipping a release if you want
+    this script to fail on those files being physically present in the tree.
+
+    Platform metadata such as Zone.Identifier, .DS_Store and Thumbs.db is
+    also strict-archive-only in this workspace because imported Windows trees
+    can contain many ADS marker files that are not source/runtime state.
+    """
+    metadata = []
+    junk = []
+    for p in ROOT.rglob("*"):
+        rel = p.relative_to(ROOT)
+        if strict_archive and _is_forbidden_release_metadata(rel, p):
+            metadata.append(str(rel))
+        elif strict_archive and _is_runtime_junk(rel, p):
+            junk.append(str(rel))
+    if metadata:
+        fail("forbidden release metadata present: " + ", ".join(metadata[:30]))
+    if junk:
+        fail("runtime junk present in archive tree: " + ", ".join(junk[:30]))
+
+
+
+
+def _count_python_exception_handlers(root: Path | None = None) -> dict[str, int]:
+    """Return broad-exception counts for source hygiene checks.
+
+    Broad `except Exception` is tolerated in the generator because many paths are
+    diagnostic/recovery boundaries around LLM, image, filesystem and debug
+    tooling.  The release guard does not pretend to fix that debt; it makes the
+    current debt visible and prevents accidental growth.
+    """
+    source_root = root or (ROOT / "LocalGenerator" / "infini_local")
+    broad = 0
+    bare = 0
+    for py in sorted(source_root.rglob("*.py")):
+        text = py.read_text(encoding="utf-8", errors="ignore")
+        for line in text.splitlines():
+            stripped = line.strip()
+            if re.match(r"^except\s+Exception\b", stripped):
+                broad += 1
+            if re.match(r"^except\s*:\s*(#.*)?$", stripped):
+                bare += 1
+    return {"broad_exception": broad, "bare_except": bare}
+
+
+def check_python_exception_hygiene() -> None:
+    stats = _count_python_exception_handlers()
+    if stats["bare_except"] > PYTHON_BARE_EXCEPT_BASELINE:
+        fail(f"bare except handlers increased: {stats['bare_except']} > {PYTHON_BARE_EXCEPT_BASELINE}")
+    if stats["broad_exception"] > PYTHON_BROAD_EXCEPTION_BASELINE:
+        fail(f"broad except Exception handlers increased: {stats['broad_exception']} > {PYTHON_BROAD_EXCEPTION_BASELINE}")
+
+def read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def _version_literal(path: str, pattern: str, label: str) -> str:
+    match = re.search(pattern, read(path))
+    if not match:
+        fail(f"could not read {label} version from {path}")
+    return match.group(1)
+
+
+def check_version_sync() -> None:
+    versions = {
+        "config_bootstrap.py APP_VERSION": _version_literal("LocalGenerator/infini_local/core/config_bootstrap.py", r'APP_VERSION = "([^"]+)"', "bootstrap APP_VERSION"),
+        "InfiniCrafterLocal.cs Version": _version_literal("ModSources/InfiniCrafterLocal/InfiniCrafterLocal.cs", r'Version = "([^"]+)"', "C# mod Version"),
+        "build.txt version": _version_literal("ModSources/InfiniCrafterLocal/build.txt", r'version = ([^\s]+)', "tModLoader build.txt"),
+    }
+    if len(set(versions.values())) != 1:
+        detail = "; ".join(f"{label}={value}" for label, value in versions.items())
+        fail("version mismatch: " + detail)
+
+
+
+
+
+
+def check_runtime_api_sync() -> None:
+    py_runtime_api = _version_literal(
+        "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
+        r'RUNTIME_PROGRAM_API_VERSION: Final\[str\] = "([^"]+)"',
+        "Python runtime program API",
+    )
+    cs_runtime_api = _version_literal(
+        "ModSources/InfiniCrafterLocal/Common/InfiniRuntimeLimits.cs",
+        r'RuntimeApiCurrent = "([^"]+)"',
+        "C# runtime API",
+    )
+    if py_runtime_api != cs_runtime_api:
+        fail(f"runtime API mismatch: Python RUNTIME_PROGRAM_API_VERSION={py_runtime_api}; C# RuntimeApiCurrent={cs_runtime_api}")
+
+
+def check_no_flat_helper_shims() -> None:
+    flat_py = sorted(p.name for p in (ROOT / "LocalGenerator").glob("*.py"))
+    allowed = ["server.py", "settings_gui.py"]
+    if flat_py != allowed:
+        fail("flat LocalGenerator helper shims still present: " + ", ".join(flat_py))
+
+
+def check_internal_import_boundaries() -> None:
+    local = ROOT / "LocalGenerator"
+    production = local / "infini_local"
+    legacy_support = production / "pipelines" / "pipeline_support.py"
+    if legacy_support.exists():
+        fail("retired pipeline_support.py barrel was restored")
+
+    for path in local.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError as exc:
+            fail(f"cannot parse Python source {path.relative_to(ROOT)}: {exc}")
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module == "infini_local.pipelines.pipeline_support":
+                    fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                if any(alias.name == "infini_local.pipelines.pipeline_support" for alias in node.names):
+                    fail(f"retired pipeline_support import in {path.relative_to(ROOT)}:{node.lineno}")
+
+
+
+def python_source_issues(sources: dict[str, str]) -> list[str]:
+    """AST lint with one parser/owner for literal, import and environment contracts.
+
+    Pure source inputs let the gate's tests inject mistakes without modifying the
+    checkout or importing potentially side-effectful application modules.
+    """
+    issues: list[str] = []
+    trees = {path: ast.parse(text, filename=path) for path, text in sources.items()}
+    package = "LocalGenerator/infini_local/"
+    modules = {path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", "."): path
+               for path in trees if path.startswith(package)}
+    edges: dict[str, set[str]] = {name: set() for name in modules}
+    owners: list[str] = []
+    for path, tree in trees.items():
+        module = path.removeprefix("LocalGenerator/").removesuffix(".py").replace("/", ".")
+        os_names, environ_names, getenv_names = {"os"}, set(), set()
+        for node in ast.walk(tree):
+            if path.startswith(package) and isinstance(node, (ast.Import, ast.ImportFrom)):
+                imported = ([alias.name for alias in node.names] if isinstance(node, ast.Import)
+                            else [node.module or ""])
+                if any(name.split(".")[0] in {"tools", "mutation_contract_gate"} for name in imported):
+                    issues.append(f"tooling_import:{path}:{node.lineno}")
+            if (path == package + "core/runtime_authoring/__init__.py"
+                    and isinstance(node, (ast.Import, ast.ImportFrom))
+                    and not (isinstance(node, ast.ImportFrom) and node.module == "__future__")):
+                issues.append(f"runtime_barrel_import:{path}:{node.lineno}")
+            if isinstance(node, ast.Import):
+                os_names.update(alias.asname or alias.name for alias in node.names if alias.name == "os")
+                if module in edges:
+                    edges[module].update(alias.name for alias in node.names if alias.name in modules)
+            elif isinstance(node, ast.ImportFrom):
+                if node.module == "infini_local.core.runtime_authoring":
+                    issues.append(f"runtime_barrel_consumer:{path}:{node.lineno}")
+                if node.module == "os":
+                    environ_names.update(alias.asname or alias.name for alias in node.names if alias.name == "environ")
+                    getenv_names.update(alias.asname or alias.name for alias in node.names if alias.name == "getenv")
+                if module in edges and node.module in modules:
+                    edges[module].add(node.module)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Dict):
+                seen: set[object] = set()
+                for key in node.keys:
+                    if isinstance(key, ast.Constant):
+                        if key.value in seen:
+                            issues.append(f"duplicate_dict_key:{path}:{key.lineno}:{key.value!r}")
+                        seen.add(key.value)
+            # All statement blocks, including else/finally, not only `.body`.
+            for _, statements in ast.iter_fields(node):
+                if isinstance(statements, list):
+                    for previous, current in zip(statements, statements[1:]):
+                        if isinstance(current, (ast.Assign, ast.AnnAssign)) and isinstance(previous, type(current)):
+                            if ast.dump(previous) == ast.dump(current):
+                                issues.append(f"duplicate_assignment:{path}:{current.lineno}")
+            if not path.startswith(package) or path == package + "core/env_utils.py":
+                continue
+            def is_environment(value: ast.AST) -> bool:
+                return (isinstance(value, ast.Name) and value.id in environ_names) or (
+                    isinstance(value, ast.Attribute) and value.attr == "environ"
+                    and isinstance(value.value, ast.Name) and value.value.id in os_names)
+            raw = isinstance(node, ast.Subscript) and is_environment(node.value)
+            if isinstance(node, ast.Call):
+                func = node.func
+                raw = (isinstance(func, ast.Name) and func.id in getenv_names) or (
+                    isinstance(func, ast.Attribute) and (
+                        isinstance(func.value, ast.Name) and func.value.id in os_names and func.attr == "getenv"
+                        or is_environment(func.value) and func.attr not in {"copy", "setdefault"}))
+            if raw:
+                issues.append(f"raw_environment_read:{path}:{node.lineno}")
+        for node in tree.body:
+            if not path.startswith(package) or not isinstance(node, (ast.Assign, ast.AnnAssign)):
+                continue
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            names = {target.id for target in targets if isinstance(target, ast.Name)}
+            if "BAD_NAME_PATTERNS" in names:
+                owners.append(path)
+            if "__all__" in names and any(isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+                                         and child.func.id == "globals" for child in ast.walk(node)):
+                issues.append(f"dynamic_exports:{path}:{node.lineno}")
+    if modules and owners != [package + "pipelines/pipeline_runtime_constants.py"]:
+        issues.append(f"constant_owner:BAD_NAME_PATTERNS:{sorted(owners)}")
+    visiting: set[str] = set()
+    visited: set[str] = set()
+    def visit(module: str) -> None:
+        if module in visiting:
+            issues.append(f"import_cycle:{module}")
+            return
+        if module in visited:
+            return
+        visiting.add(module)
+        for dependency in sorted(edges[module]):
+            visit(dependency)
+        visiting.remove(module)
+        visited.add(module)
+    for module in sorted(modules):
+        visit(module)
+    return issues
+
+
+def check_python_source_integrity() -> None:
+    sources = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8-sig")
+               for directory in (ROOT / "LocalGenerator", ROOT / "tools")
+               for path in sorted(directory.rglob("*.py"))}
+    issues = python_source_issues(sources)
+    if issues:
+        fail("Python source integrity:\n" + "\n".join(issues))
+
+
+# These are forbidden authored-language fields, not implementation snapshots.
+AUTHOR_TEXT_POLICY = {
+    "runtime_program_author.schema.json": ({"tooltip", "setBonusText"}, set()),
+    "author_item_response.schema.json": ({"tooltip", "setBonusText"}, set()),
+    "author_item_repair.schema.json": ({"tooltip", "setBonusText"}, set()),
+    "capability_inventory.generated.json": ({"tooltip", "setBonusText"}, set()),
+    "technical_lowering.generated.json": ({"tooltip", "setBonusText"}, set()),
+    "visual_runtime_entities.schema.json": ({"impactPrompt", "impactNegativePrompt"}, set()),
+    "visual_repair_patch.schema.json": ({"impactPrompt", "impactNegativePrompt"}, set()),
+    "vfx_runtime_events.schema.json": (set(), {"spritePrompt", "spriteNegativePrompt"}),
+    "vfx_repair_patch.schema.json": (set(), {"spritePrompt", "spriteNegativePrompt"}),
+}
+
+
+def authored_contract_issues(sources: dict[str, str]) -> list[str]:
+    issues: list[str] = []
+    def strings(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | set().union(*(strings(child) for child in value.values()))
+        if isinstance(value, list):
+            return set().union(*(strings(child) for child in value))
+        return {value} if isinstance(value, str) else set()
+    for path, source in sources.items():
+        name = Path(path).name
+        if name in AUTHOR_TEXT_POLICY:
+            forbidden, required = AUTHOR_TEXT_POLICY[name]
+            tokens = strings(json.loads(source))
+            for token in sorted(tokens & forbidden):
+                code = "foreign_visual_prompt" if token.startswith("impact") else "forbidden_author_field"
+                issues.append(f"{code}:{path}:{token}")
+            for token in sorted(required - tokens):
+                issues.append(f"missing_vfx_prompt:{path}:{token}")
+        elif path == "LocalGenerator/infini_local/core/runtime_authoring/compiler.py":
+            if any(isinstance(node, ast.Constant) and node.value == "setBonusText" for node in ast.walk(ast.parse(source))):
+                issues.append(f"forbidden_author_field:{path}:setBonusText")
+    return issues
+
+
+def check_authored_contract_policy() -> None:
+    paths = ["contracts/schemas/" + name for name in AUTHOR_TEXT_POLICY]
+    paths.append("LocalGenerator/infini_local/core/runtime_authoring/compiler.py")
+    issues = authored_contract_issues({path: read(path) for path in paths})
+    if issues:
+        fail("Authored language policy:\n" + "\n".join(issues))
+
+
+def check_agent_metadata() -> None:
+    manifest_path = ROOT / ".agent" / "manifest.json"
+    rules_path = ROOT / ".agent" / "impact_rules.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        rules = json.loads(rules_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        fail(f"invalid .agent metadata: {exc}")
+        return
+    checks = manifest.get("checks") if isinstance(manifest.get("checks"), dict) else {}
+    missing_owners = [
+        f"{name}={path}"
+        for name, path in (manifest.get("canonicalOwners") or {}).items()
+        if not isinstance(path, str) or not (ROOT / path).exists()
+    ]
+    if missing_owners:
+        fail(".agent canonicalOwners reference missing paths: " + ", ".join(missing_owners[:20]))
+    unknown_full = [name for name in manifest.get("fullChecks") or [] if name not in checks]
+    if unknown_full:
+        fail(".agent fullChecks reference unknown checks: " + ", ".join(unknown_full))
+    for rule in rules.get("rules") or []:
+        if not isinstance(rule, dict):
+            fail(".agent impact rule must be an object")
+        unknown = [name for name in rule.get("checks") or [] if name not in checks]
+        if unknown:
+            fail(f".agent impact rule {rule.get('id')!r} references unknown checks: {', '.join(unknown)}")
+        missing_context = [path for path in rule.get("context") or [] if not (ROOT / str(path)).exists()]
+        if missing_context:
+            fail(f".agent impact rule {rule.get('id')!r} references missing context: {', '.join(missing_context[:20])}")
+
+
+def check_release_docs_version() -> None:
+    version = re.search(r'APP_VERSION = "([^"]+)"', read("LocalGenerator/infini_local/core/config_bootstrap.py"))
+    if not version:
+        fail("could not read canonical APP_VERSION for docs check")
+    current = version.group(1)
+    docs = [
+        "README.md",
+        "docs/user/START_RU.md",
+        "ModSources/InfiniCrafterLocal/description.txt",
+    ]
+    stale = []
+    for doc in docs:
+        text = read(doc)
+        head = "\n".join(text.splitlines()[:16])
+        if current not in head:
+            stale.append(doc)
+    if stale:
+        fail("release docs missing current version in header: " + ", ".join(stale))
+
+
+def main() -> int:
+    strict_archive = "--strict-archive" in sys.argv[1:]
+    check_documentation_layout()
+    check_no_packaged_runtime_junk(strict_archive=strict_archive)
+    check_version_sync()
+    check_runtime_api_sync()
+    check_python_exception_hygiene()
+    check_no_flat_helper_shims()
+    check_internal_import_boundaries()
+    check_python_source_integrity()
+    check_authored_contract_policy()
+    check_agent_metadata()
+    check_release_docs_version()
+    print("[OK] project hygiene checks passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

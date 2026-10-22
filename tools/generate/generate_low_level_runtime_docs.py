@@ -1,0 +1,420 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import Any
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "LocalGenerator"))
+
+from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
+    BINDING_ACTION_REGISTRY,
+    CAPABILITY_REGISTRY,
+    ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
+    INPUT_KIND_REGISTRY,
+    RUNTIME_PROGRAM_API_VERSION,
+    RUNTIME_PROGRAM_SCHEMA,
+    RUNTIME_WIRE_SCHEMA,
+)
+from infini_local.core.runtime_authoring.technical_lowering import (  # noqa: E402
+    GLOBAL_TECHNICAL_LOWERINGS,
+    technical_lowering_manifest,
+)
+from infini_local.qa.capability_library_audit import capability_library_audit  # noqa: E402
+
+
+EXTERNAL_REFERENCES = {
+    "item": "tML ModItem: SetDefaults/CanUseItem/UseItem/AltFunctionUse",
+    "item_combat": "tML ModItem: UseItemHitbox/OnHitNPC",
+    "item_inventory": "tML Player.HasItem(bool[]) native inventory witness; WorldGen seed lifecycle",
+    "item_utility": "tML ModItem + Player hooks",
+    "item_tool": "tML Item pick/axe/hammer fields",
+    "item_placeable": "tML Item.createTile/createWall/placeStyle",
+    "equipment": "tML ModItem.UpdateAccessory/UpdateEquip/UpdateArmorSet",
+    "entity_spawn": "ExampleMod projectile spawning + owner authority",
+    "entity_combat": "tML ModProjectile damage/ownerHitCheck",
+    "entity_lifecycle": "tML Projectile.timeLeft/Kill",
+    "entity_collision": "tML ModProjectile.Colliding/OnTileCollide",
+    "movement": "ExampleMod flail/yoyo/whip and project custom AI",
+    "controller": "ExampleMod held projectile/Last Prism; Calamity holdout/beam",
+    "event": "tML ModProjectile hooks + SendExtraAI/ReceiveExtraAI",
+    "entity_utility": "tML Lighting.AddLight",
+}
+
+
+def esc(value: Any) -> str:
+    return (str(value).replace("\r\n", "\n").replace("\r", "\n")
+            .replace("|", "\\|").replace("\n", "<br>"))
+
+
+def param_shape(spec: Any) -> str:
+    if spec.alternatives:
+        shape = "oneOf(" + " | ".join(param_shape(variant) for variant in spec.alternatives) + ")"
+    elif spec.kind == "object":
+        shape = "closed object{" + ", ".join(
+            f"{name}{'' if child.required else '?'}: {param_shape(child)}"
+            for name, child in spec.properties.items()
+        ) + "}"
+    else:
+        shape = spec.kind
+        if spec.enum:
+            shape += "{" + ",".join(json.dumps(value) for value in spec.enum) + "}"
+        elif spec.minimum is not None or spec.maximum is not None:
+            shape += f"[{spec.minimum}..{spec.maximum}]"
+    if spec.units:
+        shape += f" {spec.units}"
+    if spec.default is not None:
+        shape += f"; optional, omitted = {json.dumps(spec.default)}"
+    if spec.omission_condition is not None:
+        shape += "; omissionAllowedOnlyWhen=" + json.dumps(spec.omission_condition.card(), sort_keys=True)
+    if spec.reference is not None:
+        shape += " -> entity:" + ",".join(spec.reference.target_kinds)
+    if not spec.required and spec.default is None:
+        shape += "; required=false"
+    if spec.min_properties is not None:
+        shape += f"; minProperties={spec.min_properties}"
+    if spec.multiple_of is not None:
+        shape += f"; multipleOf={spec.multiple_of}"
+    if spec.pattern:
+        shape += f"; pattern=`{spec.pattern}`"
+    if spec.consumer_storage:
+        shape += f"; consumer={spec.consumer_storage}, neutral={json.dumps(spec.neutral)}"
+    return shape
+
+
+def params_cell(cap: Any) -> str:
+    return "<br>".join(f"`{name}`: {param_shape(spec)}" for name, spec in cap.params.items()) or "—"
+
+
+def event_input_cell(cap: Any) -> str:
+    values: list[str] = []
+    if cap.allowed_events:
+        values.append("events: " + ", ".join(f"`{x}`" for x in cap.allowed_events))
+    if cap.emitted_events:
+        values.append("emits: " + ", ".join(f"`{x}`" for x in cap.emitted_events))
+    if cap.category == "item_inventory":
+        values.append("native inventory query; no binding required")
+    elif cap.target_kinds == ("item_body",):
+        values.append("through authored item binding/equipment state")
+    return "<br>".join(values) if values else "entity lifecycle/input binding"
+
+
+def inventory_markdown(audit: dict[str, Any]) -> str:
+    lines = [
+        "# Низкоуровневый capability inventory InfiniCrafterLocal",
+        "",
+        "> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).",
+        "> Sources: [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[capability_library_audit.py](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). "
+        "[Lowery](LOWERY_RU.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — текущее Author ↔ C# сопоставление, единицы и исключения.",
+        "",
+        f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
+        "",
+        f"Inventory: **{len(CAPABILITY_REGISTRY)} public capabilities**, "
+        f"**{len(ENTITY_KIND_REGISTRY)} entity kinds**, "
+        f"**{len(INPUT_KIND_REGISTRY)} inputs**, **{len(BINDING_ACTION_REGISTRY)} binding actions**, "
+        f"**{len(EVENT_KIND_REGISTRY)} events**. Machine audit: **{audit['score']}/{audit['scoreMax']}**, "
+        f"errors={audit['errorCount']}, warnings={audit['warningCount']}.",
+        "",
+        "**Навигация:** [каталог](#classification) · [entities](#entities) · [inputs/actions](#bindings) · "
+        "[events](#events) · [capabilities](#capabilities) · [полнота](#coverage) · [обновление](#refresh).",
+        "",
+        '<a id="classification"></a>',
+        "",
+        "## Текущий каталог",
+        "",
+        "Все записи registry — публичные исполняемые capabilities. Каталог описывает current params, refs, units, consumers и safety bounds, не audit-only статусы/решения или историю экспозиции. Technical opcode/DTO projection не является скрытой gameplay capability.",
+        "",
+        '<a id="entities"></a>',
+        "",
+        "## Entity kinds",
+        "",
+        "| kind | назначение | spawn binding | позиция | обязательные компоненты | базовые события | visual role |",
+        "|---|---|---:|---|---|---|---|",
+    ]
+    for row in ENTITY_KIND_REGISTRY.values():
+        lines.append(
+            f"| `{row.name}` | {esc(row.summary)} | {'да' if row.spawnable_by_binding else 'нет'} | "
+            f"{esc(row.position_requirement)} | {esc(', '.join(row.required_components) or '—')} | "
+            f"{esc(', '.join(row.base_events) or '—')} | `{row.visual_role}` |"
+        )
+    lines += [
+        "",
+        '<a id="bindings"></a>',
+        "",
+        "## Inputs и binding actions",
+        "",
+        "| input | exclusive | actions | requires item capability any of | смысл |",
+        "|---|---:|---|---|---|",
+    ]
+    for row in INPUT_KIND_REGISTRY.values():
+        lines.append(f"| `{row.name}` | {'да' if row.exclusive else 'нет'} | {esc(', '.join(row.allowed_actions))} | {esc(', '.join(row.required_item_capabilities_any_of) or '—')} | {esc(row.summary)} |")
+    lines += ["", "| action | target kinds | inputs | requires item capability any of | смысл |", "|---|---|---|---|---|"]
+    for row in BINDING_ACTION_REGISTRY.values():
+        lines.append(f"| `{row.name}` | {esc(', '.join(row.target_kinds))} | {esc(', '.join(row.allowed_inputs))} | {esc(', '.join(row.required_item_capabilities_any_of) or '—')} | {esc(row.summary)} |")
+    lines += [
+        "",
+        '<a id="events"></a>',
+        "",
+        "## Events",
+        "",
+        "| event | source kinds | producer calls | producer binding inputs | producer-free base kinds | exact producer params | смысл |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for row in EVENT_KIND_REGISTRY.values():
+        base_kinds = [
+            kind.name
+            for kind in ENTITY_KIND_REGISTRY.values()
+            if row.name in kind.base_events
+        ]
+        exact_params = json.dumps(
+            {
+                capability: dict(params)
+                for capability, params in row.producer_exact_params.items()
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        lines.append(
+            f"| `{row.name}` | {esc(', '.join(row.source_kinds))} | "
+            f"{esc(', '.join(row.producer_capabilities) or '—')} | "
+            f"{esc(', '.join(row.producer_binding_inputs) or '—')} | "
+            f"{esc(', '.join(base_kinds) or '—')} | {esc(exact_params if exact_params != '{}' else '—')} | "
+            f"{esc(row.summary)} |"
+        )
+    lines += [
+        "",
+        '<a id="capabilities"></a>',
+        "",
+        "## Capability catalog",
+        "",
+        "Параметры: `type{enum}` или `type[min..max]`, затем units; `optional, omitted = value` — объявленный default. "
+        "`required=false` само по себе не объявляет omission default; `multipleOf` — точный шаг, `pattern` — schema regex. `consumer=float32, neutral=value` требует, чтобы конечное ненейтральное число оставалось ненейтральным после хранения в float32; validation не округляет и не заменяет значение. "
+        "Пропуски полного Author и Repair различаются: [boundary](LOWERY_RU.md#boundary). "
+        "`omissionAllowedOnlyWhen` задаёт точные ветви, где пропуск не выбирает механику. "
+        "Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](../projectiles/PROJECTILE_AUTHOR_API_RU.md).",
+        "",
+        "| capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | external reference |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for cap in CAPABILITY_REGISTRY.values():
+        safety = f"{cap.multiplicity}; {cap.performance_budget}; slot={cap.component_slot}"
+        if cap.exclusive_group:
+            safety += f"; exclusive={cap.exclusive_group}"
+        lines.append(
+            "| " + " | ".join([
+                f"`{esc(cap.name)}`",
+                esc(cap.summary),
+                esc(params_cell(cap)),
+                esc(", ".join(cap.target_kinds)),
+                esc(event_input_cell(cap)),
+                f"`{esc(cap.csharp_owner)}`",
+                f"`{esc(cap.compiler_owner)}`",
+                f"`{esc(cap.network_authority)}`",
+                esc(safety),
+                esc(EXTERNAL_REFERENCES.get(cap.category, "InfiniCrafterLocal source")),
+            ]) + " |"
+        )
+    lines += [
+        "",
+        "## Техническая граница",
+        "",
+        "Whole-weapon macros, family route tables, `AttackSpec`, `runtimeFamily`, hidden repair API и cache migration не входят в current API. "
+        "Technical owners исполняют numeric opcode dispatch, DTO field projection, entity-kind → visual-role и точные tModLoader adapters.",
+        "Они не выбирают movement, attachment, delivery, input, lifecycle или topology.",
+        "",
+        '<a id="coverage"></a>',
+        "",
+        "## Полнота",
+        "",
+        "Каждая public capability имеет Python compiler callable, конкретные C# method symbols, exact final-wire paths и автоматически исполняемый vertical witness. "
+        "Структурная полнота registry не означает поддержку всего Terraria API: каталог намеренно конечный и включает только реализованные bounded executors.",
+        "",
+        '<a id="refresh"></a>',
+        "",
+        "## Обновление и проверка",
+        "",
+        "Из корня репозитория, с Python окружения проекта:",
+        "",
+        "```bash",
+        "PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py",
+        "PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py --check",
+        "```",
+        "",
+        "Без `--check` generator записывает ровно три Markdown-файла: этот inventory, "
+        "[machine-readability audit](CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md) и "
+        "[technical lowering audit](TECHNICAL_LOWERING_AUDIT_RU.md). Он не обновляет JSON/schema/registry. "
+        "`--check` сравнивает все три projections без записи; [Lowery](LOWERY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) имеют отдельные generators.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def audit_markdown(audit: dict[str, Any]) -> str:
+    m = audit["metrics"]
+    lines = [
+        "# Аудит машиночитаемости библиотеки компонентов",
+        "",
+        "> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py) из "
+        "[registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и "
+        "[audit-кода](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; "
+        "[refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
+        "> Architecture/owners: [Lowery](LOWERY_RU.md). Полный каталог: [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).",
+        "",
+        "**Навигация:** [вердикт/критерии](#verdict) · [измерения](#metrics) · [проверяемость](#proof) · "
+        "[ограничения](#limits) · [практическая оценка](#assessment).",
+        "",
+        '<a id="verdict"></a>',
+        "",
+        f"## Вердикт: {audit['score']}/{audit['scoreMax']}",
+        "",
+        "Это **структурная оценка контракта**, а не заявление, что реализован весь Terraria runtime.",
+        "",
+        "| критерий | вес | результат |",
+        "|---|---:|---:|",
+    ]
+    weights = {
+        "registryIdentity": 10, "typedParameters": 15, "compositionMetadata": 15, "exactDelivery": 15,
+        "runtimeOwnership": 15, "rangeParity": 10, "projectionParity": 10, "verticalSlices": 10,
+    }
+    for key, weight in weights.items():
+        lines.append(f"| `{key}` | {weight} | {'PASS' if audit['criteria'][key] else 'FAIL'} |")
+    lines += [
+        "",
+        '<a id="metrics"></a>',
+        "",
+        "## Измеренные свойства",
+        "",
+        f"- capabilities: **{m['capabilities']}**; parameters: **{m['parameters']}**; numeric: **{m['numericParameters']}/{m['boundedNumericParameters']} bounded**;",
+        f"- entity kinds: **{m['entityKinds']}**; inputs: **{m['inputs']}**; actions: **{m['bindingActions']}**; events: **{m['events']}**;",
+        f"- typed entity references: **{m['typedEntityReferences']}**; requirements: **{m['requirements']}**; binding dependency edges: **{m['bindingDependencyEdges']}**;",
+        f"- exact wire paths: **{m['exactWirePaths']}**; global technical lowerer outputs: **{m['globalTechnicalLowererOutputs']}**;",
+        f"- Python↔C# range parity rows: **{m['rangeParityRows']}**; vertical witnesses: **{m['verticalSliceCount']}**;",
+        f"- errors: **{audit['errorCount']}**; warnings: **{audit['warningCount']}**.",
+        "",
+        '<a id="proof"></a>',
+        "",
+        "## Почему библиотека действительно машиночитаема",
+        "",
+        "1. `CAPABILITY_REGISTRY` — единый явный immutable registry; schema, prompt cards, manifest и compiler dispatch выводятся из него.",
+        "2. Каждый parameter объявляет JSON type, semantic type, description, enum/range/units; entity references имеют namespace и допустимые target kinds.",
+        "3. Entity kinds, inputs, binding actions и events имеют отдельные registries, а validator использует их, а не дублирующий набор `if`-маршрутов.",
+        "4. Capability указывает component slot, exclusivity, position ownership, requirements, emitted/accepted events и authority.",
+        "5. Delivery перечисляет точные wire-path; wildcard-output запрещён audit-gate.",
+        "6. Owner — не просто имя файла: audit импортирует Python callable и ищет конкретные C# method symbols.",
+        "7. Для каждой capability исполняется author→validate→compile→strict-wire witness; неизвестные поля/refs/opcodes fail closed.",
+        "",
+        '<a id="limits"></a>',
+        "",
+        "## Честные ограничения",
+        "",
+        "- На entity допускается один movement slot и один controller slot. Это намеренная bounded-композиция, не arbitrary ECS/VM.",
+        "- Cross-entity references доступны только там, где runtime реально их исполняет (`target_and_fire`, event child spawn).",
+        "- Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.",
+        "- Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.",
+        "- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. "
+        "Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет "
+        "[`tools/checks/check_planner_prompt_usability.py`](../../../tools/checks/check_planner_prompt_usability.py); catalog-only size — другая величина.",
+        f"- Публичный каталог покрывает реализованные {len(CAPABILITY_REGISTRY)} primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.",
+        "",
+        '<a id="assessment"></a>',
+        "",
+        "## Практическая оценка",
+        "",
+        "- **Структура и проверяемость: 10/10** — все объявленные проекции замкнуты и проверяются машиной.",
+        "- **Однозначность для LLM: 9/10** — API не содержит weapon families и semantic defaults; некоторые item-body calls длинные из-за широких typed DTO.",
+        "- **Выразительность текущего runtime: 8/10** — странные multi-entity композиции поддерживаются, но controller layering и произвольная world interaction намеренно ограничены.",
+        "- **Доказанность в игре: неполная** до C# build/tModLoader singleplayer/host-client smoke.",
+        "",
+    ]
+    if audit["issues"]:
+        lines += ["## Issues", "", "```json", json.dumps(audit["issues"], ensure_ascii=False, indent=2), "```", ""]
+    return "\n".join(lines)
+
+
+def lowering_markdown() -> str:
+    manifest = technical_lowering_manifest()
+    compression = manifest["exactRepetitionCompressionPolicy"]
+    lines = [
+        "# TECHNICAL LOWERING AUDIT",
+        "",
+        "> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py) из "
+        "[technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; "
+        "[refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).",
+        "> Policy/owners: [Lowery](LOWERY_RU.md). Полные wire outputs каждого lowerer: [manifest](LOWERY_RU.md#lowering).",
+        "",
+        f"Schema: `{manifest['schema']}`.",
+        "",
+        "Lowering разрешён только как семантически без потерь технический перевод. Ни один lowerer не выбирает entity kind, movement, attachment, delivery, input, lifecycle, targeting или visual topology.",
+        "",
+        f"Authoring compression: только `{compression['kind']}`, минимум `{compression['minimumRepeatedPlacements']}` literally equal placements, requiresLiteralEquality=`{str(compression['requiresLiteralEquality']).lower()}`, mayAddDesignChoice=`{str(compression['mayAddDesignChoice']).lower()}`. Mandatory wire projection уже authored identity не является compression.",
+        "",
+        "**Навигация:** [lowerers](#lowerers) · [receipts/proof](#receipts) · [удалённый lowering](#retired).",
+        "",
+        '<a id="lowerers"></a>',
+        "",
+        "## Global lowerers",
+        "",
+        "| id | inputs | exact outputs | equivalence | preserves |",
+        "|---|---|---:|---|---|",
+    ]
+    for row in GLOBAL_TECHNICAL_LOWERINGS:
+        lines.append(
+            f"| `{row['id']}` | {esc(', '.join(row['inputs']))} | {len(row['outputs'])} | {esc(row['equivalence'])} | {esc(', '.join(row['preserves']))} |"
+        )
+    lines += [
+        "",
+        "`item_fields_to_tml_projection` имеет конечный автоматически выведенный список output-path; broad `gameplay.*`/`accessory.*`/`armor.*` запрещены.",
+        "",
+        '<a id="receipts"></a>',
+        "",
+        "## Capability-level proof",
+        "",
+        "- **Receipt shape.** Capability receipts содержат `callId`, `fn`, `authoredPath`, `finalPath`; class-damage selector дополнительно привязывает `phase`, `damageClass` и `bonusPercent` через `authoredPaths`. Global projection receipts содержат `lowererId`, `authoredPaths`, `finalPath`.",
+        "- **Exact delivery.** `audit_compiler_receipts` требует receipt для каждого authored параметра и сверяет заявленный output с фактическим final wire. Для equipment и item stats проверяется точная пара вход→выход из registry, включая случай двух равных значений; простой whitelist путей не доказывал эту связь. Delivery wire без `runtimeContract` проверяется отдельно, но не заявляет provenance. Global primary/visual-role receipts дополнительно связываются с exact source identity/kind и final identity, включая отсортированные bindings; требуется уникальное полное покрытие. Source→declared projection→receipt сравнивается с учётом JSON-типа и представления (включая signed zero). Для optional whole components registry wirePresencePath требует единственного call/source owner и полного набора receipts даже при удалении всех строк; проверка provenance принадлежит одному audit_compiler_receipts, не отдельному feature checker. Wire-only audit явно возвращает `authoredSourceChecked=false`: согласованный wire не удостоверяет отсутствующий Author. Mutation tests должны отклонять подмену пути, значения и пропуск receipt.",
+        "- **Declared omission.** Для optional params с явно объявленным default=neutral статус `declared_neutral_omission` отдельно фиксирует материализацию отсутствия в полном Author. Это не `delivered` присутствующего authored значения. Audit проверяет registry default, точный wire path/value, отсутствие параметра в исходном документе (если документ доступен) и полноту receipts. Если объявлен `omission_condition`, дополнительно проверяется exact kind, selector или capability того же target; wire-only audit требует соответствующий final-wire контекст. Старые корректные явные значения не меняются.",
+        "",
+        '<a id="retired"></a>',
+        "",
+        "## Решение по старому lowering",
+        "",
+        "Удалены family/root reducers и whole-weapon route tables. Извлечённые movement/controller/event helpers вызываются только по явно authored capability name. "
+        "Никакой путь `family → held/thrust/straight/retract` не существует.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    args = parser.parse_args()
+    audit = capability_library_audit()
+    outputs = {
+        ROOT / "docs/reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md": inventory_markdown(audit),
+        ROOT / "docs/reference/generated/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md": audit_markdown(audit),
+        ROOT / "docs/reference/generated/TECHNICAL_LOWERING_AUDIT_RU.md": lowering_markdown(),
+    }
+    stale: list[str] = []
+    for path, text in outputs.items():
+        normalized = text.rstrip() + "\n"
+        if args.check:
+            if not path.is_file() or path.read_text("utf-8") != normalized:
+                stale.append(str(path.relative_to(ROOT)))
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(normalized, encoding="utf-8")
+    if stale:
+        print(json.dumps({"ok": False, "stale": stale}, ensure_ascii=False, indent=2))
+        return 1
+    print(json.dumps({"ok": bool(audit["ok"]), "files": [str(p.relative_to(ROOT)) for p in outputs]}, ensure_ascii=False, indent=2))
+    return 0 if audit["ok"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -12,7 +12,7 @@
 
 ## Разработка
 
-[Руководство разработчика](development/README_RU.md) → [архитектура](development/ARCHITECTURE_RU.md) → [карта модулей](development/MODULES_RU.md).
+[Руководство разработчика](development/README_RU.md) → [архитектура](development/architecture/ARCHITECTURE_RU.md) → [карта модулей](development/MODULES_RU.md).
 
 Для изменения механики нужны [технические контракты](reference/README_RU.md); для сборки и проверки — [сборка](development/BUILD_RU.md) и [тесты](development/TESTING_RU.md). [Архив](archive/README_RU.md) хранит прежние решения и отчёты, не инструкции для первого запуска.
 

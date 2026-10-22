@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_optional_real_tml_build_helper_is_present_and_skips_without_target():
     result = subprocess.run(
-        [sys.executable, str(ROOT / "tools/try_tml_build_check.py")],
+        [sys.executable, str(ROOT / "tools/build/try_tml_build_check.py")],
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
@@ -21,8 +21,8 @@ def test_optional_real_tml_build_helper_is_present_and_skips_without_target():
 
 
 def test_tml_build_helper_discovers_windows_dotnet_exe_when_linux_dotnet_missing(monkeypatch, tmp_path):
-    sys.path.insert(0, str(ROOT / "tools"))
-    import try_tml_build_check
+    sys.path.insert(0, str(ROOT))
+    from tools.build import try_tml_build_check
 
     fake_dotnet = tmp_path / "dotnet.exe"
     fake_dotnet.write_text("fake", encoding="utf-8")
@@ -34,8 +34,8 @@ def test_tml_build_helper_discovers_windows_dotnet_exe_when_linux_dotnet_missing
 
 
 def test_tml_build_helper_converts_wsl_external_deps_for_windows_dotnet(monkeypatch):
-    sys.path.insert(0, str(ROOT / "tools"))
-    import try_tml_build_check
+    sys.path.insert(0, str(ROOT))
+    from tools.build import try_tml_build_check
 
     calls = []
 
@@ -69,8 +69,8 @@ def test_tml_build_helper_converts_wsl_external_deps_for_windows_dotnet(monkeypa
     ), "InfiniCrafterLocal", "CS1061", 593, id="tml-prefix-dedup-filter"),
 ])
 def test_build_log_parser_retains_exact_diagnostics(log, mod, code, line):
-    sys.path.insert(0, str(ROOT / "tools"))
-    from parse_tml_build_log import parse_build_log
+    sys.path.insert(0, str(ROOT))
+    from tools.build.parse_tml_build_log import parse_build_log
 
     summary = parse_build_log(log, mod=mod)
     assert summary["ok"] is False
@@ -84,8 +84,8 @@ def _native_registration_issues(project, runner, sources):
     from fnmatch import fnmatchcase
     import re
     import xml.etree.ElementTree as ET
-    sys.path.insert(0, str(ROOT / "tools"))
-    from check_csharp_contracts import method_body, stripped
+    sys.path.insert(0, str(ROOT))
+    from tools.checks.check_csharp_contracts import method_body, stripped
 
     compile_items = list(ET.fromstring(project).iter("Compile"))
     includes = [row.attrib.get("Include") for row in compile_items]
@@ -113,8 +113,8 @@ def _native_registration_issues(project, runner, sources):
 
 
 def test_native_sources_compiled_once_and_registrations_resolve():
-    sources = {p.name: p.read_text(encoding="utf-8") for p in (ROOT / "tools").glob("EngineRuntimeChecks*.cs")}
-    assert _native_registration_issues((ROOT / "tools/EngineRuntimeChecks.csproj").read_text(), sources["EngineRuntimeChecks.cs"], sources) == []
+    sources = {p.name: p.read_text(encoding="utf-8") for p in (ROOT / "tools/native").glob("EngineRuntimeChecks*.cs")}
+    assert _native_registration_issues((ROOT / "tools/native/EngineRuntimeChecks.csproj").read_text(), sources["EngineRuntimeChecks.cs"], sources) == []
 
 
 @pytest.mark.parametrize("glob", [False, True])

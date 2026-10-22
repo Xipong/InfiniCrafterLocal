@@ -56,7 +56,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
         report = environment.get('INFINI_AGENT_SELFTEST_REPORT', '')
         if not report or not (root / report).is_file():
             return result('notRun', 'Real tModLoader runtime self-test report unavailable; run tML with INFINI_AGENT_SELFTEST=1')
-        command = [sys.executable, 'tools/check_tml_selftest_report.py', report]
+        command = [sys.executable, 'tools/checks/check_tml_selftest_report.py', report]
     if name in {'tml_build', 'native_checks'}:
         dotnet = shutil.which('dotnet') or shutil.which('dotnet.exe')
         if not dotnet:
@@ -70,7 +70,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
             return result('failed', f'Project not found: {project_path}', 2)
         shell = environment.get('TML_TEST_PWSH') or shutil.which('pwsh') or shutil.which('pwsh.exe') or (shutil.which('powershell') if os.name == 'nt' else None)
         if name == 'tml_build' and shell:
-            command = [shell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', _host_path(shell, str(root / 'tools/build_tml_windows.ps1'), root),
+            command = [shell, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', _host_path(shell, str(root / 'tools/build/build_tml_windows.ps1'), root),
                        '-Project', _host_path(shell, str(project_path), root), '-Configuration', 'Debug', '-WarningsAsErrors']
             if deps:
                 command += ['-InfiniExternalDepsRoot', _host_path(shell, deps, root)]
@@ -78,7 +78,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
             log = root / 'artifacts/validation/tml-build.log'
             log.parent.mkdir(parents=True, exist_ok=True)
             log.write_text(proc.stdout, encoding='utf-8')
-            parsed = _execute([sys.executable, 'tools/parse_tml_build_log.py', str(log), '--mod', 'InfiniCrafterLocal'], root, environment)
+            parsed = _execute([sys.executable, 'tools/build/parse_tml_build_log.py', str(log), '--mod', 'InfiniCrafterLocal'], root, environment)
             output = proc.stdout + parsed.stdout
             if proc.returncode == 77 and parsed.returncode == 0:
                 return result('notRun', output, 77)
@@ -94,12 +94,12 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
             if not refs or not (Path(refs) / 'tModLoader.dll').is_file():
                 return result('notRun', 'Native CPU checks need INFINI_TML_REFERENCE_DIR containing tModLoader.dll')
             filters = command[command.index('--check-filter'):] if '--check-filter' in command else []
-            command = [dotnet, 'build', _host_path(dotnet, 'tools/EngineRuntimeChecks.csproj', root), '-c', 'Debug', '--nologo', '-v:minimal',
+            command = [dotnet, 'build', _host_path(dotnet, 'tools/native/EngineRuntimeChecks.csproj', root), '-c', 'Debug', '--nologo', '-v:minimal',
                        f'/p:InfiniTmlReferenceDir={_host_path(dotnet, refs, root)}', f'/p:InfiniExternalDepsRoot={_host_path(dotnet, deps, root)}']
             build = _execute(command, root, environment)
             if build.returncode:
                 return result('failed', build.stdout, build.returncode)
-            run = _execute([dotnet, _host_path(dotnet, 'tools/bin/Debug/net8.0/EngineRuntimeChecks.dll', root), *filters], root, environment)
+            run = _execute([dotnet, _host_path(dotnet, 'tools/native/bin/Debug/net8.0/EngineRuntimeChecks.dll', root), *filters], root, environment)
             return result('passed' if run.returncode == 0 else 'failed', build.stdout + run.stdout, run.returncode)
         command = [dotnet, 'build', _host_path(dotnet, str(project_path), root), '-c', 'Debug', '--nologo', '-v:minimal', '-warnaserror',
                    f'/p:InfiniExternalDepsRoot={_host_path(dotnet, deps, root)}']
@@ -107,7 +107,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
         log = root / 'artifacts/validation/tml-build.log'
         log.parent.mkdir(parents=True, exist_ok=True)
         log.write_text(build.stdout, encoding='utf-8')
-        parsed = _execute([sys.executable, 'tools/parse_tml_build_log.py', str(log)], root, environment)
+        parsed = _execute([sys.executable, 'tools/build/parse_tml_build_log.py', str(log)], root, environment)
         code = build.returncode or parsed.returncode
         return result('passed' if code == 0 else 'failed', build.stdout + parsed.stdout, code)
     if command and command[0] in {'python', 'python3'}:
@@ -117,7 +117,7 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
     if name == 'pyright' and importlib.util.find_spec('pyright') is None and not shutil.which('pyright'):
         return result('unavailable', 'pyright is not installed')
     if name == 'pyright':
-        command = [sys.executable, 'tools/run_pyright.py', '--pythonpath', sys.executable]
+        command = [sys.executable, 'tools/testing/run_pyright.py', '--pythonpath', sys.executable]
     if not command:
         return result('unavailable', 'No command configured')
     if not Path(command[0]).is_file() and not shutil.which(command[0]):

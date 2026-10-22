@@ -1,0 +1,174 @@
+# VFX material elements — текущий контракт
+
+Контракт расширяет существующие `vfxManifest.slots`, а не вводит weapon presets, classifier, VM, shader generation, второй effect graph или четвёртую текстовую LLM-роль. Художественное качество реальной генерации не следует из DTO/CPU/native fixtures. Явный `ownerLink` и persisted-v5 readback ниже входят в исходники 0.5.1; наличие их в установленной сборке проверяется по фактической паре мод + генератор, commit и release notes.
+
+<a id="owners"></a>
+## Владельцы и handoff
+
+`Gameplay Author → Visual Director → VFX Director → image generation → strict delivery → C#`.
+
+VFX Director и VFX Repair получают `acceptedRuntimeProgramReadOnly`: точную копию принятого runtimeProgram без per-entity `visual` (отдельный Visual context уже передаётся). Не создаётся второй механический контракт и не выводятся траектории из описания. Числа, entity IDs, движения, controllers, collision, события и bindings не меняются этим handoff.
+
+VFX владеет своими image requests и временно-пространственной композицией. `impactSprite` явно задаёт `spritePrompt`, `spriteNegativePrompt`, `spriteCanvasSize` (24/32/48/64/96/128); pipeline переносит их в same-entity `visual.impactPrompt/impactNegativePrompt/impactCanvasSize`. Остальные renderer branches не имеют этих generation fields и не требуют пустых строк. Canvas не выводится из hitbox. Он не меняет внешний вид основного предмета, gameplay, коллизии, урон или события. Image backend выполняет принятые запросы через существующий ограниченный generation gate; никакой скрытой смены backend/provider или подмены отсутствующего изображения.
+
+Лимит ответа VFX Director и его условного Repair наследует `INFINI_LLM_MAX_TOKENS` (application recommendation 18000); timeout наследует `INFINI_LLM_TIMEOUT` (600 s). `INFINI_VFX_LLM_DIRECTOR_MAX_TOKENS`/`INFINI_VFX_LLM_DIRECTOR_TIMEOUT` задают явные overrides. Явная настройка пользователя сохраняет приоритет; новая LLM-роль или дополнительные Repair-попытки не добавляются.
+
+Источники: [VFX owner](../../../LocalGenerator/infini_local/core/vfx_manifest.py) — schema/surface/diagnostics/Repair; [material payloads](../../../LocalGenerator/infini_local/core/vfx_material_contract.py) — потребляемые поля и profile math; [C# DTO](../../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxManifestSpec.cs) и [material executor](../../../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Materials.cs). Image/byte/texture ownership вынесен в [жизненный цикл ассетов](../../development/pipeline/IMAGE_ASSET_LIFECYCLE_RU.md).
+
+<a id="assets"></a>
+## Ингредиенты и selectors
+
+`rendererKind=spriteElement` требует только payload `element`; `texturedPath` — только `path`. Остальные renderers не принимают эти payload. Renderer — единственный selector исполнительной ветви; renderer/event/entity applicability задаётся accepted surface, не независимым декартовым произведением enum.
+
+Optional `assets` в Director/manifest содержит до четырёх самостоятельных ингредиентов. Отсутствие означает отсутствие новых запросов и остаётся отсутствием в старом wire; явный null не является отсутствием.
+
+У каждого запроса обязательны:
+
+- `id`: точный безопасный идентификатор `[A-Za-z0-9_-]{1,48}`;
+- `prompt`, `negativePrompt`;
+- `canvasSize`: 16, 24, 32, 48, 64, 96 или 128;
+- `layout`: `cutout` или `strip`.
+
+`cutout` — отдельный объект с мягкой alpha и обычным вписыванием. `strip` — полный frame для UV-текстуры: keying/resize не должны менять его смысл bbox-crop, вращением, центрированием или silhouette-refit. Это технический выбор обработки изображения, не classifier эффекта: оба layout можно явно использовать в обоих новых renderers.
+
+Одна декларация даёт одну image job; несколько слотов могут ссылаться на тот же ID. Дубликаты, dangling references и неиспользованные новые requests не принимаются. Runtime path/URL/status/score пишет image pipeline, не LLM. Серверные descriptors/PNG hashes и передача остаются у существующего AssetSync.
+
+Texture selector обоих payload — `{source, assetId}`: `source=item|entity|impact|asset`, `assetId=""` для первых трёх; `asset` требует exact declared ID. Пути/URL модель не авторит. `entity` требует принятую `baked_sprite|reuse_item_icon` image role, `impact` — same-entity `impactSprite` producer; `no_asset|runtime_geometry` не является незагруженным PNG. Все producer/dependency правила и различие fresh/cache/network admission — [единая PNG projection](../../development/pipeline/IMAGE_ASSET_LIFECYCLE_RU.md#dependencies).
+
+<a id="libraries"></a>
+## ParticleLibrary и Luminance: явные additive primitives
+
+`libraryParticle` требует только свой payload `particle`; renderer выбирает ParticleLibrary consumer напрямую. Это настоящий ParticleLibrary V3 instance/shader path. Simple Dust slots отдельно выбирают exact `GemDiamond`, `TintableDustLighted`, `Glass`, `Smoke`, `Electric` или `none`, не библиотечные aliases.
+
+Все 17 полей обязательны: `textureId`, `count`, `speedMinPxPerTick`, `speedMaxPxPerTick`, `spreadRadians`, `inheritVelocity`, `drag`, `accelerationXPxPerTickSquared`, `accelerationYPxPerTickSquared`, `widthPx`, `heightPx`, `rotationRadians`, `rotationSpeedRadiansPerTick`, `colorStart`, `colorEnd`, `endScaleMultiplier`, `endOpacity`. Полные ranges принадлежат `library_particle_schema()` в [canonical payload owner](../../../LocalGenerator/infini_local/core/vfx_material_contract.py), не второму каталогу.
+
+- `textureId=star` — единственная объявленная встроенная текстура, не movement preset и не новая image job. Реальный stock Star — opaque grayscale с чёрными texels: alpha blend включает чёрный прямоугольный footprint, additive даёт нулевой вклад чёрных texels. Это явно передаётся модели для выбора blend, не исправляется подменой картинки.
+- World-only particle захватывает event anchor/forward/velocity. Каждый world tick: `velocity=velocity*drag+worldAcceleration`, затем `position+=velocity`; extraUpdates не ускоряет lifetime. Наследование использует captured `Projectile.velocity*MaxUpdates` либо `Player.velocity`.
+- Независимые width/height — полные размеры unit quad в world pixels, без деления на native texture size. Rotation относительно captured forward; spin — radians/world tick.
+- RGB линейно переходит colorStart→colorEnd; размер 1→endScaleMultiplier, opacity 1→endOpacity. Common alpha применяется один раз. Count, размер или alpha=0 остаются тишиной.
+- `duration` — 3..120 world ticks жизни частицы. Nonperiodic `startTick` — задержка от события, `repeatEvery=0`; periodic требует repeatEvery≥1, projectile startTick ограничивает возраст, item startTick=0.
+- Alpha/additive и точный before/after-projectiles слой выбираются явно. Четыре fixed mod-lifetime buffers удерживаются через world clear и освобождаются graphics-owner callback на unload; per-emission/per-world GPU buffers не создаются. Ещё не готовый backend ожидается ограниченно, без Dust/PNG substitute.
+
+`screenShakeCue` требует только свой payload `screenShake` и nonperiodic event. Шесть обязательных controls: `strengthPx`, `angularVarianceRadians`, `directionRadians`, `dissipationPxPerFrame`, `taperStartDistancePx`, `taperEndDistancePx`; ranges — `screen_shake_schema()` того же owner. Direction задан относительно captured forward; taper end строго больше start. Strength=0 — тишина.
+
+`startTick` задерживает native `Luminance.ScreenShakeSystem.StartShakeAtPoint` от события в world ticks; captured anchor/forward сохраняются после retirement источника. Поля `duration`, `repeatEvery`, `alpha`, `blend`, `layer` у camera cue отсутствуют: они не управляют native camera lifespan/отрисовкой и не запрашиваются как placeholders. Native ModifyScreenPosition и пользовательские Luminance screenshake controls владеют dissipation. Один handle расходует один existing instance allowance; нулевой budget не обходит лимит. Clear/disable отменяет только наши handles, не чужие. Если native universal rumble удаляет handle без обнуления strength, наш camera hook наблюдает отсутствие native dissipation на последовательных camera visits и освобождает запись; world ticks не имитируют dissipation, private/global native roster не читается и не изменяется.
+
+Новые branches используют существующие delayed/cadence/occurrence/relay owners и общие source/particle/draw/resource caps. Model не выбирает native hooks или authority. Client settings `EnableParticleLibraryBackend`, `ParticleSpawnMultiplier`/`ParticleAlphaMultiplier` и `EnableLuminanceScreenShakeBackend` подавляют соответствующие presentation paths без подмены. Gameplay, звук, свет и generated PNG не добавляются неявно. Runtime owner — [bounded library executor](../../../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Library.cs); strict DTO — [VfxLibrarySpec](../../../ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxLibrarySpec.cs).
+
+<a id="element"></a>
+## SpriteElement: время, привязка, движение
+
+- `attachment=world`: положение/направление захватывается в момент события; собственное движение дальше независимо от источника.
+- `attachment=source`: локальное состояние преобразуется текущим forward/normal того же живого источника; при его исчезновении эффект заканчивается, не перепривязывается к переиспользованному slot и не превращается автоматически в world effect.
+- Терминальные `on_expire`/`on_kill` не допускают source attachment.
+- Count, source-local offset, диапазон начальной скорости, полный угол конуса, наследование скорости, drag, ускорение X/Y, начальный угол и spin выбирает модель.
+- Для новых элементов наследуемая engine velocity сначала переводится в pixels/world tick: текущая `Projectile.velocity * (1 + extraUpdates)` либо неизменная `Player.velocity`. Коэффициент применяется один раз. Это не измеренное перемещение anchor (controller может использовать velocity как steering). Значение захватывается до retirement и сохраняется в сетевом snapshot; старый Dust/raw-velocity путь не переопределяется.
+- При world attachment ускорение X/Y задано в мировых осях; при source attachment — в локальных осях источника.
+- `widthPx` и `heightPx` независимы; texture axes используются буквально, без PCA-переориентации новой картинки.
+- `duration` — lifetime экземпляра; для nonperiodic `startTick` — задержка от события, `repeatEvery=0`.
+- Для periodic `repeatEvery>=1` — world-tick cadence; startTick ограничивает projectile age. Item periodic использует startTick=0, поскольку per-Item activation clock не объявлен.
+- Delayed world хранит исходные event facts и может сработать после смерти источника. Delayed source требует тот же живой generation/Item instance.
+
+Повторные emissions могут намеренно перекрываться, но остаются в общих лимитах. Повторные визиты одного periodic hook не должны удваивать emission; отдельные hit/crit и expire/kill остаются отдельными событиями.
+
+Два настоящих одноимённых события в одном tick (например, два попадания в разные точки) также различаются у новых веток: runtime/relay несёт техническую occurrence identity. Повтор того же occurrence подавляется. Историческое dedup-поведение старых renderers не расширяется молча. Live attachment требует конкретный Item/projectile generation; равенства definition ID или номера переиспользованного slot недостаточно. Item event snapshots тоже сохраняют положение/направление/скорость в момент события, а не восстанавливают их из текущего Player после получения пакета.
+
+Все payload keys обязательны, конечны и явно authored. Полные ranges/schema остаются у `element_schema`, не у отдельного ручного реестра.
+
+| Поля | Единицы / граница |
+|---|---|
+| `count` | integer 0..64 за emission; 0 — тишина; расход при emission, не Draw |
+| `offsetForwardPx`, `offsetSidePx` | −128..128 px в captured forward/normal |
+| `speedMinPxPerTick`, `speedMaxPxPerTick` | 0..24 px/world tick; max ≥ min |
+| `spreadRadians` | 0..2π, полный угол конуса, не half-angle |
+| `inheritVelocity` | 0..1 доля captured engine velocity после одного перевода в world-tick units |
+| `drag` | 0..1 множитель сохранения скорости/world tick: 1 сохраняет, 0 обнуляет |
+| `accelerationXPxPerTickSquared`, `accelerationYPxPerTickSquared` | −2..2 px/world tick² в выбранной attachment frame |
+| `rotationRadians`, `rotationSpeedRadiansPerTick` | −2π..2π относительно captured forward; spin −1..1 rad/world tick |
+| `widthPx`, `heightPx` | независимые 0..128 px по буквальным texture X/Y; 0 сохраняется |
+
+<a id="profiles"></a>
+## Profiles и exact Repair
+
+Width/height/opacity/color profiles — объекты `{start,middle,end,curve}` для нормализованных позиций 0, 0.5 и 1. `curve` = `linear`, `easeIn`, `easeOut`, `smoothStep`, применяется отдельно к каждому интервалу. Это фиксированная математика, не выражения/код модели.
+
+Размеры/ширина имеют knots 0..4, opacity 0..1. Явный ноль сохраняется. Color knots — explicit local RGB objects `{r,g,b}`, каждый канал integer 0..255; `{r:255,g:255,b:255}` сохраняет RGB исходного изображения. Свежие/сетевые payloads не принимают named tokens и global references. Persisted reader не восстанавливает RGB из старых v15 tokens или `motif`: непустой VFX v15 несовместим с текущей исполнительной формой, а v16 использует только сохранённые явные RGB. [Граница сохранений](../../development/architecture/ENGINE_RUNTIME_BOUNDARIES_RU.md#saved-v5). RGB-профиль не заменяет opacity и не должен умножать прозрачность дважды. Все параметры снимаются в immutable state, изменения исходного DTO не переписывают уже испущенный эффект.
+
+Именованные поля позволяют Repair менять одну ошибочную точку без общего indexed-array merge и без размораживания соседних корректных параметров.
+
+Validator-diagnosed foreign/additional fields допускают точное удаление через существующие delete-path permissions: например, лишний `path` у spriteElement. Только для этих диагностированных leaves omission означает delete; остальные omissions остаются no-change. Дублирующая asset-строка удаляется по ошибочному индексу, не вместе с корректной строкой того же ID.
+
+На каждом полуинтервале для локального t: linear=t; easeIn=t²; easeOut=1−(1−t)²; smoothStep=t²(3−2t). Sprite profiles используют normalized age; path — выбранный age/length. Отсутствие, explicit null и ноль не взаимозаменяемы.
+
+При пустом asset-domain ошибка относится и к `texture.source`, и к `texture.assetId`: допустимую замену явно выбирает Repair, не код. При непустом домене меняется только сломанная ссылка; source и requests frozen. Unknown target сначала требует identity Repair, а не размораживания валидного selector без контекста. Общая процедура — [frozen-first Repair](../../development/pipeline/TARGETED_REPAIR_PROTOCOL_RU.md).
+
+<a id="path"></a>
+## TexturedPath: реальные geometry/UV
+
+`source=anchorHistory` хранит действительные timestamped позиции выбранного anchor, до 32 samples; identical points не образуют фиктивных segments. `historyTicks` задаёт retention, `minDistancePx` — порог записи.
+
+`source=beam|whip` читает существующий canonical collision geometry supplier. Это не короткая декоративная линия, не вычисление range по картинке и не генерация новых damaging entities. Геометрические corners сохраняются; при необходимости средний profile knot добавляется линейно на существующий отрезок. Geometry ограничена 66 sections; history — 32. Decorative width не меняет collision width.
+
+Совместимость следует реальному приоритету collision consumer: активный ChannelBeam выбирает beam до whip movement. Нельзя объявить обе геометрии доступными только по присутствию двух компонентов. Для beam/whip `anchor=self` нейтрален — supplier владеет размещением centerline; иной anchor не переносит её в выдуманную позицию. Временно отсутствующая geometry ничего не рисует.
+
+`source=ownerLink` — отдельный явный выбор VFX Director/Repair: прямая текстурная связь из двух текущих точек **явный `path.ownerAnchor` владельца → `Projectile.Center`**. Она доступна любой принятой projectile entity независимо от movement/controller, а не только flail. `ownerAnchor` обязателен ровно как `mountedCenter|frontHand`: `mountedCenter` читает точный native `owner.MountedCenter`, это не рука; `frontHand` читает текущую native composite pose с её world-space conversion **только при `compositeFrontArm.enabled=true`**. При disabled pose renderer не использует её rotation/stretch: obsolete значения не доказывают положение руки. Поэтому `frontHand` при недоступной pose отказывается от регистрации/retire без coasting, frozen endpoint или fallback на центр; body/skin-frame inference, приблизительные offsets и PNG grip не добавлены. В accepted surface source и anchor не выбираются по имени, ингредиентам, категории или DamageClass.
+
+Связь косметическая: не меняет collision, reach, damage, ownership или движение. Head-only projectile PNG, скрытый root body и полная inventory-картинка сами по себе не рисуют соединение в мире. Модель выбирает `rendererKind=texturedPath`, `path.source=ownerLink`, явный `path.ownerAnchor`, texture selector/asset, width/profiles, RGB/opacity, layer, UV stretch/repeat и scroll через существующие controls. Missing PNG не превращается в Dust/stock mask. Отсутствие слота означает отсутствие связи: ни существующие вещи, ни будущие flail crafts не получают её автоматически; новая возможность доступна модели при будущей генерации без whole-weapon preset или дополнительного обязательного judge.
+
+Только `ownerLink` требует `ownerAnchor`; у `anchorHistory|beam|whip` поле запрещено, включая `null`, и не сериализуется. Пропуск, `null`, неверный регистр/alias не выбирают anchor автоматически. Это новая ещё не опубликованная ветка, не изменение shipped saved definitions. Для `ownerLink` обязательны projectile `periodic|on_spawn`, `anchor=self`, `historyTicks=0`, `minDistancePx=0`, `profileDomain=length`. `startTick`, `maxSegmentLengthPx`, zero width/opacity/budget и существующие UV constraints сохраняют смысл. Это текущая двухточечная geometry, не история и не beam/whip collision supplier. Live Player и projectile generation/instance fences сохраняются: смерть/неактивность/замена владельца, retirement/переиспользование projectile не оставляют frozen endpoint и не перепривязывают связь к новому игроку в том же slot. Возобновление требует настоящего нового producer; Draw не оживляет запись.
+
+Owners: [`GeneratedProjectile.TryCapturePresentationGeometry`](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Presentation.cs) поставляет endpoints; [`InfiniDetachedVfxSystem.Paths`](../../../ModSources/InfiniCrafterLocal/Common/VFX/InfiniDetachedVfxSystem.Paths.cs) владеет live registration/update/mesh/retirement. Старые `anchorHistory`, `beam`, `whip` сохраняют свою geometry/lifetime semantics; появление `ownerLink` их не подменяет.
+
+`profileDomain=age` применяется только к истории; `length` использует нормализованную накопленную длину. `uvMode=stretch` натягивает текстуру; `repeat` использует явную `repeatLengthPx` и `scrollPxPerTick`. Геометрия источник/история не сглаживается в выдуманную траекторию. Пропуски/скачки больше явно заданного `maxSegmentLengthPx` не соединяются.
+
+Live paths доступны projectile `periodic`/`on_spawn`, не item_body и не terminal event. История после retirement затухает по retention; текущая beam/whip geometry заканчивается вместе с источником, а ownerLink — также при потере живого владельца. `startTick` управляет началом sampling. `repeatEvery` и `duration` у path отсутствуют: нет repeated detached emission или отдельного lifespan control.
+
+| Поля | Единицы / обязательные сочетания |
+|---|---|
+| `ownerAnchor` | только ownerLink: обязательный `mountedCenter\|frontHand`; остальные sources запрещают поле |
+| `historyTicks`, `minDistancePx` | history: integer 2..32 world ticks и 0..16 px; beam/whip/ownerLink: оба 0 |
+| `maxSegmentLengthPx` | 1..4096 px; разрыв пропускается, не мостится |
+| `widthPx` | 0..96 decorative px; 0 сохраняется, collision width не меняется |
+| `profileDomain` | history: `age\|length`; beam/whip/ownerLink: только `length` и `anchor=self` |
+| `uvMode` | `stretch\|repeat`; stretch требует `repeatLengthPx=1`, `scrollPxPerTick=0` |
+| `repeatLengthPx`, `scrollPxPerTick` | 1..512 px/repeat; −32..32 UV px/world tick |
+
+<a id="runtime"></a>
+## Потребляемые поля, бюджеты и transport identity
+
+Каждая renderer branch содержит только потребляемые поля. У `spriteElement`, `texturedPath`, `libraryParticle`, `screenShakeCue` отсутствуют `scale`, `density`, `spread`, `particleSystemId`, `textureRole`. У path также отсутствуют `duration`/`repeatEvery`; у camera cue — `duration`/`repeatEvery`/`alpha`/`blend`/`layer`. Schema не требует inert нули или placeholder нейтрали и отвергает эти foreign fields. `alpha` применяется с opacityProfile один раз; звук/свет/Dust — отдельные возможности, не незапрошенные слои.
+
+Сохраняются event/entity producer validation, frozen-first Repair, лимиты source/tick/draw, работа после source retirement для world effects, finite checks и controlled Begin/End. Симуляция не живёт в Draw. Dedicated server не исполняет presentation. Networking использует проверенную definition/asset identity, не пересылает произвольные image paths/bytes в VFX-event packet. Persisted `recipeId` участвует в content-addressed PNG identity, `slotSeed` — deterministic random/phase, optional `phaseOffset` — процедурная фаза, не sound pitch. Это реальные technical consumers, не biography/debug metadata.
+
+В `budget` остаются ровно `maxParticlesPerTick`, `maxParticlesTotal`, `maxDrawCalls`: source/world-tick, lifetime/event и draw allowance соответственно. Wire safety ceilings — 256/12000/512; current application emergency ceilings (`vfx_manifest_config.py`) по умолчанию 240/9000/420 и client quality могут дополнительно ограничить исполнение. Explicit zero — запрет. Caps/seeds/identity не являются вопросами Director и не подменяют authored дизайн.
+
+Незапрошенный/отсутствующий PNG не заменяется stock маской, белым quad или Dust. Требуемый PNG блокирует delivery при ошибке; ещё не загруженная клиентом текстура временно не рисуется. Старые слоты без новых fields не получают новые значения автоматически.
+
+| Исполнительная граница | Каноническая семантика |
+|---|---|
+| Placed-selected periodic budget | Только optional `placementBindingId` с accepted `placedVfx`: `maxParticlesTotal` ограничивает каждый отдельный due burst fresh `MaterialEventAllowance`; не lifetime cap постоянной мебели. Per-source/world-tick и global live-instance/draw caps прежние. Gate — реальный top-left TileFrameY, binding generation — exact retained ledger group. Только periodic/self spriteElement/libraryParticle/lightCue; отсутствующий selector сохраняет старую семантику. |
+| Periodic item budget | `InfiniDetachedVfxSystem.Materials.StartMaterialEmission`: без per-Item activation clock положительный `maxParticlesTotal` не превращается ни в бессрочный item lifetime cap, ни в cap одной periodic-группы. Действуют общий source/world-tick allowance и существующие resource/draw caps; явный total=0 остаётся запретом. Для одного nonperiodic item event `MaterialEventAllowance` общий между material/legacy слотами; projectile lifetime ledger не меняется. |
+| Nonowner lifecycle | `GeneratedProjectile.EmitAndSyncVfxEvent`: owner исполняет свои element events локально; у другого MP-клиента их единственный event-producer — validated server relay. Локальные legacy callbacks и регистрация live `texturedPath` не отключены. `on_spawn`, release/channel-complete, tile-collision, expire/kill не складываются второй раз при local-before-relay или relay-before-local. |
+| Ordered replay | `VfxOrderedPeerStream`: отдельно для projectile/item event lane один monotone owner stream охватывает все source generations; сервер даёт каждому принятому claim свой sequence из одного outbound stream этой lane. Generation остаётся attachment identity, не replay/admission bucket. Нет rolling generation cap, TTL-replay window или eviction живых claims. Owner cursor ограничен `Main.maxPlayers` и сбрасывается при замене Player/socket; relay cursor — при замене server socket. World-exit/unload очищают состояние. Это контракт упорядоченного ModPacket/TCP transport, не независимое доказательство collision или anti-cheat. |
+| Unresolved Item forwarding | `GeneratedItem.NetSend/NetReceive` и `GeneratedItem.Presentation`: полученный material token/capability сохраняется до registry hydration и при дальнейшей пересылке compact reference (current material item payload v8). Отсутствие уже загруженных material slots не понижает его до nonmaterial v7; точный instance/generation не заменяется definition ID. |
+
+Technical transport: projectile event v5, material item event v5, compact material Item v8; current nonmaterial Item v7. Item decoder также принимает прежние v5/v6. Native prefix token в v7/v8 не меняет presentation identity. Это существующие версии, не новая model-authored schema и не обновление transport ради library primitives. Token/capability сохраняется до registry hydration и дальнейшей пересылки: unloaded material slots не понижают compact Item до nonmaterial.
+
+`VfxSourceBinding.ItemBinding.IsLive` требует живого игрока. После смерти periodic-регистрация и source-attached effects завершаются без нового Draw/producer; captured world events сохраняют delay/duration. Respawn допускает новую регистрацию только через настоящий producer, без ослабления instance/generation fences.
+
+При переносе того же Item между functional/vanity/held slots старая slot-bound periodic-регистрация удаляется до проверки дубликатов новой. Поэтому перенос на due tick не пропускает emission; cadence остаётся привязан к world clock. Старые source-attached instances завершаются по прежнему slot fence, world instances сохраняют authored duration. Повторные hooks не создают дубликаты; правила видимости не меняются.
+
+## Placed-world sources
+
+`enable_placed_vfx` и optional slot `placementBindingId` описаны в [Author contract](../authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#явные-живые-эффекты-размещённого-предмета). Director/Repair получают read-only `runtimeSurface.placementBindings` с exact IDs/item entity/bounds. `self` — центр native footprint, forward вправо, side вниз, velocity ноль. Имеющиеся independent `assets`/`spriteElement` задают отдельные языки пламени, `libraryParticle` — world-only particles, `lightCue` — gated свет (steady только при explicit repeatEvery=1). Root art не превращается в fire preset и не пульсирует целиком автоматически. Held/equipped paths исключают selected slots. Off/removal завершает source-attached effects, world effects имеют только прежний bounded lifetime; reenable никогда не оживляет старое attachment generation. Никакого retrofit сохранённых recipes.
+
+<a id="verification"></a>
+## Проверка и доказательные границы
+
+Проверять не только отдельные поля, но комбинации: texture source × applicability × attachment × event × profiles × zero/delay/cadence. Реальные составные файлы проходят Director validation → compile → asset generation boundary → storage/delivery → C# FromJson → executor/transport.
+
+Offline native fixtures должны явно называться hand-authored test inputs. Структурно разные stamp/particles/delayed scatter/history/beam/whip сцены, отсутствующие слои, реальные разные texture bytes и negative controls доказывают доступные способы исполнения, но не качество LLM/image-model.
+
+Проверять source replacement/retirement, immutable event snapshots, exact beam/whip centerline, ownerLink mountedCenter и enabled frontHand endpoints/disabled и obsolete composite pose/owner death/replacement/reused projectile generation и отсутствие implicit flail slot, repeated Draw/frozen clock, alpha/additive на тёмном/светлом, zero budgets/missing texture, общий расход caps, unload и восстановление batch/device state. Не выдавать headless/native за Terraria game-loop или сетевой матч.
+
+Текущие Python owners: `test_vfx_packet_contracts.py`, `test_vfx_material_admission_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_vfx_dependency_delivery_contracts.py`, `test_vfx_ingredient_generation_contracts.py`; реальные C# seams — зарегистрированные checks `tools/native/EngineRuntimeChecks.csproj`. Команды/изоляция — [test owners](../../development/TESTING_RU.md). Тестовый PASS не переносится на socket delivery, game-loop, GPU или новую художественную/model/image приёмку. История .243–.246 — [audit provenance](../../archive/VISUAL_AUDIT_HISTORY_RU.md#rollback), не актуальный список открытых дефектов.

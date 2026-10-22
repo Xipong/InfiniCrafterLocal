@@ -50,7 +50,7 @@ jobs:
         run: |
           archive_root="$(mktemp -d)"
           git archive --format=tar HEAD | tar -xf - -C "$archive_root"
-          (cd "$archive_root" && python tools/check_project_hygiene.py --strict-archive)
+          (cd "$archive_root" && python tools/checks/check_project_hygiene.py --strict-archive)
 
   tml-build:
     name: Windows tModLoader/dotnet build smoke
@@ -223,9 +223,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python tools/test_tmod_package.py
+          python tools/testing/test_tmod_package.py
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ./tools/package_tmod.ps1
+          ./tools/build/package_tmod.ps1
       - name: Upload verified playable mod package
         uses: actions/upload-artifact@v4
         with:

@@ -7,8 +7,8 @@
 | Раздел | Назначение |
 |---|---|
 | [user](../user/README_RU.md) | Установка, настройки, запуск/остановка, MP и диагностика. Один основной launcher: `OPEN_INFINICRAFT.bat`. |
-| [development](README_RU.md) | Architecture → code map → task owners → modules, затем build/testing и тематические development контракты. |
-| [reference](../reference/README_RU.md) | Полные Author/runtime/units/VFX/engine manuals. `generated/` — проверяемые проекции canonical sources. |
+| [development](README_RU.md) | Architecture → code map → task owners → modules, затем build/testing и тематические контракты в `architecture/`, `pipeline/`, `providers/`, `runtime/`. |
+| [reference](../reference/README_RU.md) | Точные тематические manuals в `authoring/`, `items/`, `projectiles/`, `presentation/`, `terraria/`. `generated/` — проверяемые проекции canonical sources. |
 | [archive](../archive/README_RU.md) | Исторические решения, release notes, измерения и verdicts с их snapshot/fixture/пределами доказательства. |
 | `contracts/schemas/`, `contracts/config_registry.json` | Generated machine-readable exports, не ручной registry. |
 | `contracts/reports/` | Сохранённые audit/validation receipts, не пользовательские инструкции. |
@@ -20,7 +20,7 @@
 ## Источники и обновление
 
 - Canonical source/registry/schema и реальный consumer имеют приоритет над описанием. [Карта исходников](CODE_MAP_RU.md) выбирает точку изменения; [AGENTS](../../AGENTS.md) определяет transformation/vertical-slice правила. Не создавай вторую таблицу владельцев рядом с картой.
-- Автор изменения обновляет соответствующий guide и прямые ссылки по [consumer-first workflow](ARCHITECTURE_RU.md#consumer-first). Не дублируй инструкции запуска в architecture, exhaustive catalog — в overview, исторический PASS — в текущую гарантию.
+- Автор изменения обновляет соответствующий guide и прямые ссылки по [consumer-first workflow](architecture/ARCHITECTURE_RU.md#consumer-first). Не дублируй инструкции запуска в architecture, exhaustive catalog — в overview, исторический PASS — в текущую гарантию.
 - Generated Markdown живёт в `docs/reference/generated/`; JSON/schema — в `contracts/`. Изменяй producer, а не output вручную. Полный список source → output → refresh/check — [GENERATED](../reference/GENERATED_RU.md).
 - Сохраняй selectors/units/type/zero/null/absence и пределы proof в тематическом контракте. Не превращай legacy proposal, stale metadata version или fixture prose в текущую механику. Лицензии и upstream notices не сокращаются и не заменяются лицензией проекта.
 

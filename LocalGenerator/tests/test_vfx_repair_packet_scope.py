@@ -101,8 +101,8 @@ def test_actual_http_sender_carries_scoped_grammar_for_all_provider_routes(mode)
     import sys
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
-    sys.path.insert(0, str(root / "tools"))
-    from measure_llm_request_sizes import COHORT, ROUTES, OfflineCapture, dossier
+    sys.path.insert(0, str(root))
+    from tools.diagnostics.measure_llm_request_sizes import COHORT, ROUTES, OfflineCapture, dossier
     with OfflineCapture(root) as capture:
         request, evidence = capture.builder("vfx_repair", COHORT[0], mode)
         expected = dossier(request)["outputSchema"]

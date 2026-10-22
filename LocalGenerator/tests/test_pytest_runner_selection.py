@@ -9,11 +9,11 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import agentctl  # noqa: E402
-import run_changed_pytests as changed  # noqa: E402
-import run_focused_pytests as focused  # noqa: E402
-import run_pytest_shards as shards  # noqa: E402
+sys.path.insert(0, str(ROOT))
+from tools import agentctl  # noqa: E402
+from tools.testing import run_changed_pytests as changed  # noqa: E402
+from tools.testing import run_focused_pytests as focused  # noqa: E402
+from tools.testing import run_pytest_shards as shards  # noqa: E402
 
 
 def _git_status(monkeypatch: pytest.MonkeyPatch, status: str) -> None:
@@ -96,7 +96,7 @@ def test_selected_subset_with_uncovered_docs_is_not_a_complete_pass(
 
 def test_focused_accepts_toolbox_test_but_rejects_outside_and_non_tests() -> None:
     assert focused._safe_test_path("toolbox/tests/test_live20_support_v5.py") == ROOT / "toolbox/tests/test_live20_support_v5.py"
-    for raw in ("toolbox/live-generation", "toolbox/tests/../live-generation", "tools/run_pytest_shards.py"):
+    for raw in ("toolbox/live-generation", "toolbox/tests/../live-generation", "tools/testing/run_pytest_shards.py"):
         with pytest.raises(ValueError):
             focused._safe_test_path(raw)
 
@@ -194,14 +194,14 @@ def test_hosted_shards_use_the_accepted_finite_command_budget() -> None:
 
 
 def test_hosted_suite_executes_supported_roots_once() -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     manifest = json.loads((ROOT / ".agent/manifest.json").read_text(encoding="utf-8"))
     groups = [name for group in ("python", "static", "build") for name in validation.checks_for_group(group, manifest)]
     assert len(groups) == len(set(groups))
     assert groups == validation.checks_for_group("full", manifest)
     assert groups.count("pytest") == groups.count("tml_build") == 1
-    assert manifest["checks"]["pytest"][1] == "tools/run_pytest_shards.py"
+    assert manifest["checks"]["pytest"][1] == "tools/testing/run_pytest_shards.py"
 
 
 def test_failed_shard_cli_explains_command_termination(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -319,7 +319,7 @@ def test_hosted_cache_policy_ignores_scalar_layout_but_not_missing_or_conditiona
 
 
 def test_validation_missing_native_environment_is_not_passed(monkeypatch: pytest.MonkeyPatch) -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     monkeypatch.setattr(validation.shutil, 'which', lambda name: None)
     for name in ('tml_build', 'native_checks'):
@@ -330,7 +330,7 @@ def test_validation_missing_native_environment_is_not_passed(monkeypatch: pytest
 
 
 def test_validation_native_checks_build_once_then_execute(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     for relative in ('refs/tModLoader.dll', 'deps/ParticleLibrary/ParticleLibrary.dll',
                      'deps/Luminance/bin/Debug/net8.0/Luminance.dll'):
@@ -349,12 +349,12 @@ def test_validation_native_checks_build_once_then_execute(tmp_path: Path, monkey
                                env={'INFINI_TML_REFERENCE_DIR': str(tmp_path / 'refs'), 'INFINI_TML_DEPS_SRC': str(tmp_path / 'deps')})
     assert row['status'] == 'passed'
     assert len(calls) == 2
-    assert calls[0][1:3] == ['build', 'tools/EngineRuntimeChecks.csproj']
-    assert calls[1][1] == 'tools/bin/Debug/net8.0/EngineRuntimeChecks.dll'
+    assert calls[0][1:3] == ['build', 'tools/native/EngineRuntimeChecks.csproj']
+    assert calls[1][1] == 'tools/native/bin/Debug/net8.0/EngineRuntimeChecks.dll'
 
 
 def test_validation_native_failure_does_not_execute_stale_dll(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     for relative in ('refs/tModLoader.dll', 'deps/ParticleLibrary/ParticleLibrary.dll',
                      'deps/Luminance/bin/Debug/net8.0/Luminance.dll'):
@@ -560,7 +560,7 @@ def test_verify_explicit_scope_executes_owner_checks_without_discovering_changes
     assert report["status"] == "passed" and report["ok"]
     assert [name for name, _ in calls] == expected["checks"] + (["focused_pytest"] if expected["tests"] else [])
     if expected["tests"]:
-        assert calls[-1][1] == ["python", "tools/run_focused_pytests.py", *expected["tests"]]
+        assert calls[-1][1] == ["python", "tools/testing/run_focused_pytests.py", *expected["tests"]]
     jsonschema.validate(report, json.loads((ROOT / ".agent/run_result.schema.json").read_text()))
 
 
@@ -593,7 +593,7 @@ def test_verify_refuses_invalid_or_ambiguous_explicit_scope(monkeypatch, capsys,
 
 @pytest.mark.parametrize('group', ['runtime', 'config', 'docs'])
 def test_refresh_rebuilds_handbook_once(group: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     calls = []
 
@@ -608,7 +608,7 @@ def test_refresh_rebuilds_handbook_once(group: str, monkeypatch: pytest.MonkeyPa
 
 
 def test_refresh_stops_before_handbook_on_producer_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     calls = []
 
@@ -623,7 +623,7 @@ def test_refresh_stops_before_handbook_on_producer_failure(monkeypatch: pytest.M
 
 
 def test_validation_forces_offline_config_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     def execute(command, root, env):
         assert env['INFINI_SKIP_CONFIG_FILE'] == '1'
@@ -655,7 +655,7 @@ def test_diff_reports_git_scope_without_running_validation(monkeypatch, capsys):
 
 
 def test_docs_reuses_one_audit_for_both_renderers(monkeypatch, tmp_path, capsys):
-    import generate_low_level_runtime_docs as docs
+    from tools.generate import generate_low_level_runtime_docs as docs
 
     calls = []
     report = {"ok": True, "issues": []}
@@ -736,10 +736,22 @@ def test_context_refuses_invalid_source_location(monkeypatch, capsys, arguments)
 
 
 def test_validation_translates_paths_only_for_windows_hosts(monkeypatch: pytest.MonkeyPatch) -> None:
-    import validate_release as validation
+    from tools import validate_release as validation
 
     monkeypatch.setattr(validation.os, 'name', 'posix')
     monkeypatch.setattr(validation.shutil, 'which', lambda name: '/usr/bin/wslpath')
     monkeypatch.setattr(validation.subprocess, 'run', lambda command, **kwargs: SimpleNamespace(returncode=0, stdout='C:\\repo\\tools\\check.csproj\n'))
     assert validation._host_path('dotnet', 'tools/check.csproj', ROOT) == 'tools/check.csproj'
     assert validation._host_path('dotnet.exe', 'tools/check.csproj', ROOT) == 'C:\\repo\\tools\\check.csproj'
+
+
+def test_agentctl_imported_check_dispatch_uses_the_public_release_owner(monkeypatch):
+    from tools import validate_release
+
+    observed = {}
+    def run_check(name, command, *, root, env):
+        observed.update(name=name, command=command, root=root, offline=env["INFINI_TEST_USE_PROJECT_CONFIG"])
+        return {"status": "passed"}
+    monkeypatch.setattr(validate_release, "run_check", run_check)
+    assert agentctl._run_check("probe", ["python", "--version"]) == {"status": "passed"}
+    assert observed == {"name": "probe", "command": ["python", "--version"], "root": ROOT, "offline": "0"}

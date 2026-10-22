@@ -9,7 +9,7 @@
 
 1. Для значительного изменения сначала открой issue с задачей и предлагаемой
    границей. Небольшое исправление можно отправить непосредственно PR.
-2. Прочитай [AGENTS.md](AGENTS.md) и [архитектуру](docs/development/ARCHITECTURE_RU.md).
+2. Прочитай [AGENTS.md](AGENTS.md) и [архитектуру](docs/development/architecture/ARCHITECTURE_RU.md).
    Gameplay-решения принадлежат модели; не добавляй semantic/name routers,
    weapon presets, скрытые fallback или переавторство сохранённых рецептов.
 3. Делай узкий diff: опиши исходную проблему, изменение и реально выполненные

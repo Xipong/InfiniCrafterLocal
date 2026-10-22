@@ -80,7 +80,7 @@
 - `/getinfini` повторяет синхронизацию уже известных данных. Это не переавторство старого предмета, не конвертер неизвестных механик и не восстановление потерянного JSON/PNG.
 - Цепь к снаряду — явный выбор VFX `texturedPath.source=ownerLink` и `ownerAnchor=mountedCenter|frontHand` (неактивная composite-рука недоступна), не обязательная часть flail movement. Её отсутствие у сохранённого предмета само по себе не доказывает поломку gameplay; добавлять связь всем предметам автоматически нельзя. При явно объявленной связи приложи экспорт и скриншот, проверь также наличие её PNG.
 
-[Безопасное обновление и границы поддержки](UPDATING_RU.md) · [контракт сохранённых v5](../development/ENGINE_RUNTIME_BOUNDARIES_RU.md#saved-v5) · [VFX path](../reference/VFX_MATERIAL_ELEMENTS_RU.md#path).
+[Безопасное обновление и границы поддержки](UPDATING_RU.md) · [контракт сохранённых v5](../development/architecture/ENGINE_RUNTIME_BOUNDARIES_RU.md#saved-v5) · [VFX path](../reference/presentation/VFX_MATERIAL_ELEMENTS_RU.md#path).
 
 ## Проверить изображения без крафта
 

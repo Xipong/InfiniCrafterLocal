@@ -259,7 +259,7 @@ def test_lowery_renderer_projects_shared_player_description_and_unit_guidance():
     from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm
 
     root = Path(__file__).resolve().parents[2]
-    generator = runpy.run_path(str(root / "tools" / "generate_lowery.py"))
+    generator = runpy.run_path(str(root / "tools" / "generate" / "generate_lowery.py"))
     rendered = generator["render"]()  # Pure renderer: do not refresh parent-owned docs here.
     assert '<a id="player-text"></a>' in rendered
     assert "Lowery — технический lowering, не lore" in rendered

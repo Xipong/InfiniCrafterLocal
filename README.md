@@ -30,6 +30,19 @@ Studio работает в браузере: Python больше не требу
 
 [Выбрать нейросети](docs/user/PROVIDERS_RU.md) · [Настройки и спрайты](docs/user/SETTINGS_RU.md) · [Ежедневный запуск](docs/user/OPERATIONS_RU.md) · [Игра с друзьями](docs/user/MULTIPLAYER_RU.md) · [Обновление](docs/user/UPDATING_RU.md) · [Решение проблем](docs/user/DIAGNOSTICS_RU.md) · [Команды чата](docs/user/COMMANDS_RU.md)
 
-Меняешь код? [Сборка](docs/development/BUILD_RU.md), [правила проекта](AGENTS.md) и [участие в разработке](CONTRIBUTING.md). Пользовательская инструкция не требует проходить технические тесты.
+## Где что лежит
+
+| Папка / вход | Что искать |
+|---|---|
+| [docs/user/](docs/user/README_RU.md) | Всё для игрока: установка → провайдеры → первый крафт → диагностика. |
+| [docs/development/](docs/development/README_RU.md) | Разработка: сборка, тесты; отдельные папки архитектуры, pipeline, провайдеров и runtime. |
+| [docs/reference/](docs/reference/README_RU.md) | Точные правила по темам: Author, предметы, снаряды, отображение, Terraria; `generated/` — каталоги из кода. |
+| [LocalGenerator/](LocalGenerator) | Python-генератор и браузерная Studio; проверки — `LocalGenerator/tests/`. |
+| [ModSources/InfiniCrafterLocal/](ModSources/InfiniCrafterLocal) | C#-мод для tModLoader. |
+| [tools/](tools/README_RU.md) | Утилиты по назначению: сборка, проверки, тестовые runners, генераторы, диагностика и native harnesses. |
+| [.agent/](.agent/manifest.json) | Машиночитаемые команды проверок и выбор затронутых областей. |
+| [docs/archive/](docs/archive/README_RU.md) | Исторические решения и отчёты, не инструкции запуска. |
+
+Меняешь код? Начни с [руководства разработчика](docs/development/README_RU.md); точный исходник и проверку выбирай по единой [карте задач](docs/development/CODE_MAP_RU.md#fast-start). [Правила проекта](AGENTS.md) и [участие в разработке](CONTRIBUTING.md) — для contributors и агентов. Игроку не нужно собирать исходники или проходить технические тесты.
 
 **Лицензия:** [Source-Available License 1.0](LICENSE), [русский перевод](LICENSE_RU.md). Это не open-source лицензия. Вместо зеркала или репака делись ссылкой на оригинальные загрузки. Автор и сопровождающий — [Xipong](https://github.com/Xipong).

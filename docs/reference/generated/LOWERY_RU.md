@@ -1,6 +1,6 @@
 # Low-level authoring и Lowery — канонический контракт
 
-> Generated: [`tools/generate_lowery.py`](../../../tools/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).
+> Generated: [`tools/generate/generate_lowery.py`](../../../tools/generate/generate_lowery.py). Не редактировать вручную; менять canonical owner и [обновлять projection](#refresh).
 > Sources: [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py), [Author shape](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py), [lowering](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py), [tModLoader vocabulary](../../../LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py), [Author/Repair prose](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py), [unit guide](../../../LocalGenerator/infini_local/pipelines/llm_authoring_prompt.py).
 
 Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v6` / `infini.runtime-program.wire.v3`.
@@ -294,17 +294,17 @@ Whole-pattern aliases и archetype routers не входят в текущий �
 Из корня репозитория, с Python окружения проекта. Без `--check` этот generator записывает **только `docs/reference/generated/LOWERY_RU.md`**. [Inventory и audit](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) обновляются своими generators.
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate_lowery.py
-PYTHONPATH=LocalGenerator python tools/generate_lowery.py --check
-PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py --check
-PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check
+PYTHONPATH=LocalGenerator python tools/generate/generate_lowery.py
+PYTHONPATH=LocalGenerator python tools/generate/generate_lowery.py --check
+PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py --check
+PYTHONPATH=LocalGenerator python tools/generate/generate_primitive_parity.py --check
 PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_registry_*.py LocalGenerator/tests/test_low_level_three_stage_pipeline.py LocalGenerator/tests/test_pipeline_repair_contract.py
 ```
 
-Type check: `python tools/run_pyright.py --pythonpath "$(python -c 'import sys; print(sys.executable)')"`. Полные delivery gates: [AGENTS.md](../../../AGENTS.md).
+Type check: `python tools/testing/run_pyright.py --pythonpath "$(python -c 'import sys; print(sys.executable)')"`. Полные delivery gates: [AGENTS.md](../../../AGENTS.md).
 
 Change-locality acceptance: изменить один canonical owner, обновить generated projections, пройти affected replay; не редактировать параллельные prose contracts и не запускать Live как замену локальному доказательству.
 
 ## Запрет на добавление alias
 
-Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует изменить canonical vocabulary owner, перегенерировать этот файл и пройти `tools/audit_terraria_standardization.py`.
+Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует изменить canonical vocabulary owner, перегенерировать этот файл и пройти `tools/checks/audit_terraria_standardization.py`.

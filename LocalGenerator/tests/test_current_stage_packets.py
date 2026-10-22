@@ -14,8 +14,8 @@ import pytest
 from jsonschema import Draft202012Validator
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-from measure_llm_request_sizes import (  # noqa: E402
+sys.path.insert(0, str(ROOT))
+from tools.diagnostics.measure_llm_request_sizes import (  # noqa: E402
     COHORT, MODES, ROUTES, STAGES, OfflineCapture, dossier, measurements,
 )
 

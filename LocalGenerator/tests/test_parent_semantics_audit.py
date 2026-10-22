@@ -5,7 +5,7 @@ from pathlib import Path
 
 def test_standardization_audit_accepts_exact_deepcopy_parent_projection(monkeypatch):
     root = Path(__file__).resolve().parents[2]
-    spec = importlib.util.spec_from_file_location("parent_semantics_audit", root / "tools/audit_terraria_standardization.py")
+    spec = importlib.util.spec_from_file_location("parent_semantics_audit", root / "tools/checks/audit_terraria_standardization.py")
     assert spec is not None and spec.loader is not None
     audit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(audit)

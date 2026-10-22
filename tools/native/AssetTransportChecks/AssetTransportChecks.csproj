@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssetSyncSource Condition="'$(AssetSyncSource)' == ''">../../../ModSources/InfiniCrafterLocal/Common/Services/Assets/GeneratedAssetSyncService.cs</AssetSyncSource>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The complete canonical owner, not a copied/extracted algorithm. -->
+    <Compile Include="$(AssetSyncSource)" Link="GeneratedAssetSyncService.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="TmlBoundary.cs" />
+  </ItemGroup>
+</Project>

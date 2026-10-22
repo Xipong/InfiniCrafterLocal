@@ -22,10 +22,10 @@
 | Complete builder-owned instruction/data segments, changed-tail identity и role-preserving provider wire | [craft instruction segments](../../LocalGenerator/tests/test_craft_instruction_segments.py); `prompt_packet_helpers.py` — только derived dossier observer в semantic tests |
 | Profile pin, retry/failover, request semantics, HTTP и lifecycle | `test_provider_*`; [activity/real-route faults](../../LocalGenerator/tests/test_provider_activity_contract.py) — current stages, semaphore/rate waits, cache I/O recovery, actionable failures и sibling identity; [Codex subscription](../../LocalGenerator/tests/test_codex_subscription_contract.py) отдельно защищает auth/SSE/privacy/no-paid-fallback |
 | Placement provenance, maxStack и use-policy | [placement](../../LocalGenerator/tests/test_item_placement_contracts.py), [dual-use transactions](../../LocalGenerator/tests/test_dual_use_placeable_contract.py) |
-| Source-language policies и runner registration | Существующие [C# gate](../../tools/check_csharp_contracts.py), [hygiene gate](../../tools/check_project_hygiene.py); их synthetic positive/negative controls — [source audits](../../LocalGenerator/tests/test_source_audit_gates.py) |
+| Source-language policies и runner registration | Существующие [C# gate](../../tools/checks/check_csharp_contracts.py), [hygiene gate](../../tools/checks/check_project_hygiene.py); их synthetic positive/negative controls — [source audits](../../LocalGenerator/tests/test_source_audit_gates.py) |
 | Studio HTTP/session и headless controller: все поля, сохранение и unknown keys | [bridge/controller](../../LocalGenerator/tests/test_web_studio.py) |
 | Browser draft: поздняя LAN-правка и polling до подтверждения преобразования | [delayed-response integration](../../LocalGenerator/tests/test_web_studio_browser.py) — настоящий headless controller + Chromium, не mock API |
-| Реальная C#/tML/FNA CPU-семантика | [EngineRuntimeChecks.csproj](../../tools/EngineRuntimeChecks.csproj) и зарегистрированные partial checks |
+| Реальная C#/tML/FNA CPU-семантика | [EngineRuntimeChecks.csproj](../../tools/native/EngineRuntimeChecks.csproj) и зарегистрированные partial checks |
 
 Самостоятельные UI, multiplayer, trace и tooling-контракты сохраняют своих владельцев. Сходство названий не доказывает дублирование.
 
@@ -75,7 +75,7 @@ python tools/agentctl.py diff --base origin/main
 
 ```bash
 PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/<affected_module>.py
-python tools/check_csharp_contracts.py
+python tools/checks/check_csharp_contracts.py
 ```
 
 Studio controller проверяется без Tcl/Tk и дисплея. Для browser integration нужны `playwright` и установленный Chromium (`python -m playwright install chromium`). Без этих optional prerequisites соответствующая проверка явно пропускается; HTTP/security-контракт остаётся headless. Запуск:
@@ -84,16 +84,16 @@ Studio controller проверяется без Tcl/Tk и дисплея. Для
 PYTHONPATH=LocalGenerator python -m pytest -q LocalGenerator/tests/test_web_studio.py LocalGenerator/tests/test_web_studio_browser.py
 ```
 
-Полная Python приёмка: `PYTHONPATH=LocalGenerator python tools/run_pytest_shards.py --shards 4` (оба test roots). Native:
+Полная Python приёмка: `PYTHONPATH=LocalGenerator python tools/testing/run_pytest_shards.py --shards 4` (оба test roots). Native:
 
 ```bash
-dotnet build tools/EngineRuntimeChecks.csproj -c Release \
+dotnet build tools/native/EngineRuntimeChecks.csproj -c Release \
   -p:InfiniTmlReferenceDir="<tModLoader lib/net8.0>" \
   -p:InfiniExternalDepsRoot="<ParticleLibrary/Luminance root>"
-dotnet tools/bin/Release/net8.0/EngineRuntimeChecks.dll --check-filter "<named behavior>"
+dotnet tools/native/bin/Release/net8.0/EngineRuntimeChecks.dll --check-filter "<named behavior>"
 ```
 
-Новый `tools/EngineRuntimeChecks*.cs` входит в Compile автоматически; добавь явный вызов check в `RunChecks`. C# source gate проверяет развёрнутый compile roster и фактическую регистрацию.
+Новый `tools/native/EngineRuntimeChecks*.cs` входит в Compile автоматически; добавь явный вызов check в `RunChecks`. C# source gate проверяет развёрнутый compile roster и фактическую регистрацию.
 
 Filter должен выбрать хотя бы одну проверку; compile и registration smoke не равны execution. Без .NET/tML/FNA/native DLL — `notRun`, не PASS. CPU/headless не доказывает GPU/game-loop или сетевой матч. Не меняй production, operator config, captured fixtures или generated artifacts ради tests-only GREEN.
 
@@ -101,8 +101,8 @@ Filter должен выбрать хотя бы одну проверку; comp
 ## Advisory-контроль сложности Python
 
 ```bash
-python tools/check_code_health.py --base origin/main
-python tools/check_code_health.py --base origin/main --path LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py
+python tools/checks/check_code_health.py --base origin/main
+python tools/checks/check_code_health.py --base origin/main --path LocalGenerator/infini_local/core/runtime_authoring/repair_scope.py
 ```
 
 Команда сравнивает текущие Python implementation files с Git merge-base; без `--path` учитывает committed, staged, unstaged и untracked изменения. Без `--base` baseline — `HEAD`. Tests и декларации вне функций не входят в измерение; функции внутри большого registry проверяются как обычно. Старый показатель выше ориентира становится своим текущим пределом: сохранение или уменьшение не даёт предупреждения, рост показывает before/after/cap.

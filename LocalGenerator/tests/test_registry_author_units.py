@@ -362,7 +362,7 @@ def test_numeric_constraints_reach_serialized_author_and_exact_repair(monkeypatc
 
 def test_generated_equipment_bounds_stay_current():
     root = Path(__file__).resolve().parents[2]
-    assert runpy.run_path(str(root / "tools/generate_equipment_bounds.py"))["render"]() == (
+    assert runpy.run_path(str(root / "tools/generate/generate_equipment_bounds.py"))["render"]() == (
         root / "ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedEquipmentBounds.g.cs").read_text()
 
 

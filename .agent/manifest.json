@@ -30,7 +30,7 @@
   "checks": {
     "pytest": [
       "python",
-      "tools/run_pytest_shards.py",
+      "tools/testing/run_pytest_shards.py",
       "--shards",
       "4",
       "--timeout-seconds",
@@ -49,42 +49,42 @@
     ],
     "schema_check": [
       "python",
-      "tools/export_contract_schemas.py",
+      "tools/generate/export_contract_schemas.py",
       "--check"
     ],
     "generated_docs": [
       "python",
-      "tools/generate_low_level_runtime_docs.py",
+      "tools/generate/generate_low_level_runtime_docs.py",
       "--check"
     ],
     "delivery_contract": [
       "python",
-      "tools/check_delivery_contract.py"
+      "tools/checks/check_delivery_contract.py"
     ],
     "mutation_gate": [
       "python",
-      "tools/mutation_contract_gate.py"
+      "tools/checks/mutation_contract_gate.py"
     ],
     "planner_prompt": [
       "python",
-      "tools/check_planner_prompt_usability.py"
+      "tools/checks/check_planner_prompt_usability.py"
     ],
     "csharp_contracts": [
       "python",
-      "tools/check_csharp_contracts.py"
+      "tools/checks/check_csharp_contracts.py"
     ],
     "project_hygiene": [
       "python",
-      "tools/check_project_hygiene.py"
+      "tools/checks/check_project_hygiene.py"
     ],
     "config_registry": [
       "python",
-      "tools/config_registry.py",
+      "tools/generate/config_registry.py",
       "--check"
     ],
     "portable_sandbox": [
       "python",
-      "tools/validate_sandbox.py"
+      "tools/testing/validate_sandbox.py"
     ],
     "ruff": [
       "ruff",
@@ -103,27 +103,27 @@
     ],
     "terraria_standardization": [
       "python",
-      "tools/audit_terraria_standardization.py",
+      "tools/checks/audit_terraria_standardization.py",
       "--check"
     ],
     "targeted_repair": [
       "python",
-      "tools/audit_targeted_repair.py",
+      "tools/checks/audit_targeted_repair.py",
       "--check"
     ],
     "lowery": [
       "python",
-      "tools/generate_lowery.py",
+      "tools/generate/generate_lowery.py",
       "--check"
     ],
     "equipment_bounds": [
       "python",
-      "tools/generate_equipment_bounds.py",
+      "tools/generate/generate_equipment_bounds.py",
       "--check"
     ],
     "primitive_parity": [
       "python",
-      "tools/generate_primitive_parity.py",
+      "tools/generate/generate_primitive_parity.py",
       "--check"
     ],
     "handbook": [
@@ -139,15 +139,15 @@
     "native_checks": [
       "dotnet",
       "build",
-      "tools/EngineRuntimeChecks.csproj"
+      "tools/native/EngineRuntimeChecks.csproj"
     ],
     "tml_runtime_selftest": [
       "python",
-      "tools/check_tml_selftest_report.py"
+      "tools/checks/check_tml_selftest_report.py"
     ],
     "tml_ci_regression": [
       "python",
-      "tools/test_tml_ci.py",
+      "tools/testing/test_tml_ci.py",
       "-v"
     ]
   },
@@ -211,40 +211,40 @@
     "runtime": [
       [
         "python",
-        "tools/export_contract_schemas.py"
+        "tools/generate/export_contract_schemas.py"
       ],
       [
         "python",
-        "tools/generate_equipment_bounds.py"
+        "tools/generate/generate_equipment_bounds.py"
       ],
       [
         "python",
-        "tools/generate_primitive_parity.py"
+        "tools/generate/generate_primitive_parity.py"
       ],
       [
         "python",
-        "tools/generate_lowery.py"
+        "tools/generate/generate_lowery.py"
       ],
       [
         "python",
-        "tools/generate_low_level_runtime_docs.py"
+        "tools/generate/generate_low_level_runtime_docs.py"
       ],
       [
         "python",
-        "tools/audit_targeted_repair.py",
+        "tools/checks/audit_targeted_repair.py",
         "--output",
         "contracts/targeted_repair_audit.generated.json"
       ],
       [
         "python",
-        "tools/audit_terraria_standardization.py",
+        "tools/checks/audit_terraria_standardization.py",
         "--write"
       ]
     ],
     "config": [
       [
         "python",
-        "tools/config_registry.py"
+        "tools/generate/config_registry.py"
       ]
     ],
     "docs": [

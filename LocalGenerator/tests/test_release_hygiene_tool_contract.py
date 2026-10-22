@@ -9,11 +9,11 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-TOOL = ROOT / "tools" / "check_project_hygiene.py"
-SANDBOX_TOOL = ROOT / "tools" / "validate_sandbox.py"
-PYTEST_RUNNER = ROOT / "tools" / "run_pytest_shards.py"
-RELEASE_RENDERER = ROOT / "tools" / "render_validation_report.py"
-SELFTEST_CHECKER = ROOT / "tools" / "check_tml_selftest_report.py"
+TOOL = ROOT / "tools" / "checks" / "check_project_hygiene.py"
+SANDBOX_TOOL = ROOT / "tools" / "testing" / "validate_sandbox.py"
+PYTEST_RUNNER = ROOT / "tools" / "testing" / "run_pytest_shards.py"
+RELEASE_RENDERER = ROOT / "tools" / "diagnostics" / "render_validation_report.py"
+SELFTEST_CHECKER = ROOT / "tools" / "checks" / "check_tml_selftest_report.py"
 SELFTEST_EMITTER = (
     ROOT / "ModSources" / "InfiniCrafterLocal" / "Common" / "Systems" / "Diagnostics" / "InfiniAgentContractSelfTestSystem.cs"
 )
@@ -95,7 +95,7 @@ def _contract_check_dependency_free_sandbox_gate_is_honest_and_bounded(tmp_path:
     assert runner_report["status"] == "unavailable"
     assert runner_report["fullSuiteAvailable"] is False
     assert not runner_report["shards"]
-    assert runner_report["portableCommand"].endswith("tools/validate_sandbox.py")
+    assert runner_report["portableCommand"].endswith("tools/testing/validate_sandbox.py")
 
 
 def _contract_check_release_report_rejects_an_incomplete_roster(tmp_path: Path) -> None:
