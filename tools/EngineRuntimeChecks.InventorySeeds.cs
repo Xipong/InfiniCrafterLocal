@@ -63,14 +63,14 @@ internal static partial class EngineRuntimeChecks
             var host = AttachItem(new GeneratedItem(), new Item(ItemID.WoodenSword), visible);
             typeof(ModType).GetProperty("Mod", TestInstance)!.SetValue(host, new TooltipProbeMod());
             var rows = new System.Collections.Generic.List<TooltipLine>();
-            host.ModifyTooltips(rows);
+            host.ModifyRuntimeTooltips(rows, expanded: true);
             string expected = locale == "ru-RU"
                 ? "В инвентаре: позволяет получать семена при срезании травы"
                 : "While in inventory: allows grass to drop Seeds";
             Equal(expected, rows.Single(row => row.Name == "InfiniInventorySeedCollection").Text,
                 "inventory passive is disclosed as its actual native condition, not an active-use promise");
             SeedFlag().SetValue(visible.Gameplay, false);
-            rows.Clear(); host.ModifyTooltips(rows);
+            rows.Clear(); host.ModifyRuntimeTooltips(rows, expanded: true);
             Equal(false, rows.Any(row => row.Name == "InfiniInventorySeedCollection"), "inactive flag makes no seed promise");
         });
     }

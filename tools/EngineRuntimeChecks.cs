@@ -44,6 +44,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
+            ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
+            ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),
+            ("UI QoL compact tooltip critical inputs and Shift expansion", CompactTooltipsKeepInputsAndLockoutsAndExpandWithEitherShift),
             ("audit escrow take acknowledgement preserves changed cursor", EscrowTakeAcknowledgementPreservesChangedCursor),
             ("audit sentry original damage selected prefixed base", SentryOriginalDamageUsesSelectedPrefixedBase),
             ("charge presentation actual clock ExtraAI and once-only ready cue", ChargePresentationReadsActualClockAndSignalsOnce),

@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Terraria.GameContent;
+using Microsoft.Xna.Framework.Input;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Common.Services;
@@ -25,11 +26,18 @@ public partial class GeneratedItem
     /// echo authored name/category/realization/selfEvaluation as instructions.
     /// </summary>
     public override void ModifyTooltips(List<TooltipLine> tooltips)
+        => ModifyRuntimeTooltips(tooltips, Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift));
+
+    internal void ModifyRuntimeTooltips(List<TooltipLine> tooltips, bool expanded)
     {
         GeneratedItemData data = PresentationData();
         if (GeneratedItemData.IsPlayerSaveReferenceOnly(data)) return;
         RuntimeProgramSpec program = data.RuntimeProgram;
         int addedLines = 0;
+        var details = new List<(string Name, string Key, object[] Args)>();
+        var useEffects = new List<(string Name, string Key, object[] Args)>();
+        var equipmentStats = new List<(string Name, string Key, object[] Args)>();
+        void Detail(string name, string key, params object[] args) => details.Add((name, key, args));
         void Add(string name, string key, params object[] args)
         {
             if (addedLines >= MaxRuntimeTooltipLines) return;
@@ -79,8 +87,8 @@ public partial class GeneratedItem
             }
         }
         if (data.Gameplay.CollectSeedsFromGrass == true)
-            Add("InventorySeedCollection", "InventorySeedCollection");
-        AddRuntimeEquipmentStats(data, Add);
+            Detail("InventorySeedCollection", "InventorySeedCollection");
+        AddRuntimeEquipmentStats(data, (name, key, args) => equipmentStats.Add((name, key, args)), Detail);
         if (program.TryGetEffectGroup(program.HeldEffectGroupId)?.GeneratedBuff is { } held)
             AddRuntimeExhaustion(held, "Hold", RuntimeTooltipText("InputHold"), Add);
         // This is display order, not a chooser: BindingForInput is the canonical
@@ -142,9 +150,26 @@ public partial class GeneratedItem
             if (action.Kind == RuntimeBindingAction.PlaceItem)
                 Add("Placement" + suffix, "PlacementAvailability", label);
             if (active && action.Kind == RuntimeBindingAction.ApplyItemEffects)
-                AddRuntimeUseEffects(data.EffectsForBinding(binding), suffix, label, Add);
+                AddRuntimeUseEffects(data.EffectsForBinding(binding), suffix, label,
+                    (name, key, args) => useEffects.Add((name, key, args)));
         }
-        AddRuntimeSecondaryCombat(data, Add);
+        // Both active input contracts and their lockouts precede any secondary
+        // facts, so verbose equipment/reaction details cannot crowd them out.
+        foreach (var effect in useEffects)
+            if (effect.Key is "ExhaustionDeclared" or "Recall" or "Blink") Add(effect.Name, effect.Key, effect.Args);
+        foreach (var stat in equipmentStats) Add(stat.Name, stat.Key, stat.Args);
+        // Keep lockout facts in the compact view, including passive reactions.
+        // Everything else remains an exact, read-only expansion of the same DTO.
+        AddRuntimeSecondaryCombat(data, (name, key, args) =>
+        {
+            if (key is "ReactionCooldown" or "ExhaustionDeclared") Add(name, key, args);
+            else Detail(name, key, args);
+        });
+        if (!expanded && details.Count > 0) Add("ExpandDetails", "ExpandDetails");
+        foreach (var effect in useEffects)
+            if (effect.Key is not ("ExhaustionDeclared" or "Recall" or "Blink")) Add(effect.Name, effect.Key, effect.Args);
+        if (expanded)
+            foreach (var detail in details) Add(detail.Name, detail.Key, detail.Args);
     }
 
     // Terraria lays out TooltipLine rows independently. Split overwide localized

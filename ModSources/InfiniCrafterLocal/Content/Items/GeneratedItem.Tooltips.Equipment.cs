@@ -9,7 +9,8 @@ public partial class GeneratedItem
 {
     // Read the exact equipment action/DTO consumed by UpdateAccessory/UpdateEquip.
     // Never project Item, hydrate, infer stats from parents, or advertise inactive data.
-    private static void AddRuntimeEquipmentStats(GeneratedItemData data, Action<string, string, object[]> add)
+    private static void AddRuntimeEquipmentStats(GeneratedItemData data, Action<string, string, object[]> add,
+        Action<string, string, object[]> detail)
     {
         RuntimeBindingSpec? binding = data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive
@@ -31,7 +32,7 @@ public partial class GeneratedItem
         }
         void Flag(string name, bool enabled)
         {
-            if (enabled) add("Equipment" + name, "Equipment" + name, new object[] { input });
+            if (enabled) detail("Equipment" + name, "Equipment" + name, new object[] { input });
         }
         Stat("MaxLife", "EquipmentMaxLife", a?.MaxLife ?? armor!.MaxLife);
         Stat("MaxMana", "EquipmentMaxMana", a?.MaxMana ?? armor!.MaxMana);

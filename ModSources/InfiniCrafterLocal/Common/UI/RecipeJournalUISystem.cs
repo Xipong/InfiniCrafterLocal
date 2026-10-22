@@ -22,6 +22,24 @@ namespace InfiniCrafterLocal.Common.UI;
 public sealed class RecipeJournalUISystem : ModSystem
 {
     public static bool IsOpen { get; private set; }
+    public static ModKeybind ToggleJournalKey { get; private set; } = null!;
+
+    public override void Load()
+        => ToggleJournalKey = KeybindLoader.RegisterKeybind(Mod, "ToggleRecipeJournal", Keys.K);
+
+    public override void Unload() => ToggleJournalKey = null!;
+
+    internal static bool CanToggleFromKey(bool focused, bool menu, bool dead, bool writing,
+        bool chat, bool blocked, bool rebinding)
+        => focused && !menu && !dead && !writing && !chat && !blocked && !rebinding;
+
+    public override void PostUpdateInput()
+    {
+        if (ToggleJournalKey?.JustPressed != true || Main.LocalPlayer is not { active: true } player
+            || !CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
+                Main.drawingPlayerChat, Main.blockInput, PlayerInput.CurrentlyRebinding)) return;
+        if (IsOpen) Close(); else Open();
+    }
     private static string _query = "", _selected = "";
     private static bool _searchFocus, _favoritesOnly;
     private static int _page, _detailScroll;
@@ -182,15 +200,18 @@ public sealed class RecipeJournalUISystem : ModSystem
         if (area.Width < 60 || area.Height < 40) return;
         Chassis(sb, area, Inset);
         int x = area.X + 12, y = area.Y + 10, w = area.Width - 24;
+        // Keep navigation and save reachable even in the short stacked layout.
+        var controls = RecipeJournalView.DetailControls(area);
+        if (History.Count > 0 && Button(sb, controls.Back, Text("Back"), click, cursor)) { Select(History.Pop(), false); return; }
+        if (Button(sb, controls.Save, player.IsJournalFavorite(data.Id) ? Text("Saved") : Text("Save"), click, cursor, selected: player.IsJournalFavorite(data.Id))) player.ToggleJournalFavorite(data.Id);
         if (area.Height < 200)
         {
-            Label(sb, data.Name, new Vector2(x, y), Ink, 0.7f, w);
-            Paragraph(sb, data.ParentA + " + " + data.ParentB, new Rectangle(x, y + 25, w, area.Height - 45), Muted, 0.6f);
+            y = controls.Save.Bottom + 6;
+            if (area.Bottom - y >= 20) Label(sb, data.Name, new Vector2(x, y), Ink, 0.7f, w);
+            if (area.Bottom - y >= 45)
+                Paragraph(sb, data.ParentA + " + " + data.ParentB, new Rectangle(x, y + 25, w, Math.Max(0, area.Bottom - y - 30)), Muted, 0.6f);
             return;
         }
-        int saveWidth = Math.Min(118, w / 2);
-        if (History.Count > 0 && Button(sb, new Rectangle(x, y, Math.Min(88, w - saveWidth - 6), 26), Text("Back"), click, cursor)) { Select(History.Pop(), false); return; }
-        if (Button(sb, new Rectangle(area.Right - 12 - saveWidth, y, saveWidth, 26), player.IsJournalFavorite(data.Id) ? Text("Saved") : Text("Save"), click, cursor, selected: player.IsJournalFavorite(data.Id))) player.ToggleJournalFavorite(data.Id);
         y += 36;
         Label(sb, data.Name, new Vector2(x, y), Ink, 0.85f, w);
         if (new Rectangle(x, y, w, 25).Contains(cursor.ToPoint())) _hoverText = data.Name;

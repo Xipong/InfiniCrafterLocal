@@ -391,7 +391,7 @@ def test_author_and_scoped_repair_share_contact_suppression_guide(monkeypatch, m
     suppression = "Actual item-body contact requires configure_item_use.disableMeleeHitbox=false and no ammo category"
     assert json.dumps(author_packet).count(suppression) == 1
     assert json.dumps(repair_packet).count(suppression) == 1
-    assert set(units) == {"paramNotation", "sourceWireUnits", "bindingTarget", "descendantSpawnBudget", "playerFacingUnits"}
+    assert set(units) == {"paramNotation", "bindingTarget", "descendantSpawnBudget", "playerFacingUnits"}
     assert units["descendantSpawnBudget"] == author_packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["descendantSpawnBudget"]
     assert repair_packet["repairScope"] == build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
     assert repair_packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
@@ -411,14 +411,9 @@ def test_scoped_repair_carries_canonical_clock_units_without_expanding_permissio
     units = packet["runtimeExecutionTruth"]["units"]
     author_guide = author_packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
     assert units["paramNotation"] == author_guide["paramNotation"]
-    # Repair keeps the complete registry glossary; Author sends only source
-    # paths present in its raw parents. Both preserve the same reading rules.
-    assert {key: value for key, value in units["sourceWireUnits"].items() if key != "scopes"} == {
-        key: value for key, value in author_packet["sourceWireUnits"].items() if key != "scopes"}
-    for scoped in author_packet["sourceWireUnits"]["scopes"]:
-        full = next(row for row in units["sourceWireUnits"]["scopes"]
-                    if (row["source"], row["fn"]) == (scoped["source"], scoped["fn"]))
-        assert scoped["fields"].items() <= full["fields"].items()
+    # Both stages explain exactly the present source paths, in USER data.
+    assert packet["sourceWireUnits"] == author_packet["sourceWireUnits"]
+    assert "sourceWireUnits" not in units
     assert units["paramNotation"] == runtime_authoring_prompt_field_guide()["paramNotation"]
     for clock in ("60 ticks/s", "updatesPerTick", "nearest world tick", "algorithm counters", "immunity.localCooldown"):
         assert clock in units["paramNotation"]
@@ -477,7 +472,7 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
         assert first["response_format"] == second["response_format"]
         assert "UNTRUSTED" not in prefix
         assert "UNTRUSTED" in suffix
-        assert ("sourceWireUnits" in prefix) is (root != "A")
+        assert "sourceWireUnits" not in prefix
         assert set(static) == set(author._AUTHOR_CACHE_PREFIX_KEYS if root == "A" else author._REPAIR_CACHE_PREFIX_KEYS)
         raw = changed["parents"][root]["packet"]["raw"]
         assert raw["item"]["axePower"] == 13
@@ -485,9 +480,8 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
         for section in ("accessory", "armor", "gameplay"):
             assert json.dumps(raw["generatedParent"][section]) == json.dumps(variant["generatedData"][section])
         changed["parents"][root] = copy.deepcopy(packet["parents"][root])
-        if root == "A":
-            assert changed["sourceWireUnits"] != packet["sourceWireUnits"]
-            changed["sourceWireUnits"] = copy.deepcopy(packet["sourceWireUnits"])
+        assert changed["sourceWireUnits"] != packet["sourceWireUnits"]
+        changed["sourceWireUnits"] = copy.deepcopy(packet["sourceWireUnits"])
         assert changed == packet
         if root == "A":
             assert second["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
@@ -620,3 +614,62 @@ def test_units_addition_is_bounded_and_never_grants_hostile_repair_edits(monkeyp
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
     assert validate_runtime_program(repaired)["ok"]
     assert json.dumps(item) == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_repair_source_units_cover_every_registry_path_without_changing_scope(monkeypatch, mode):
+    from infini_local.pipelines.llm_authoring_prompt import source_wire_units_for_llm
+
+    full = source_wire_units_for_llm()
+    packet = {}
+    # Synthetic path-coverage fixture, not an executable item: populate every
+    # declared source path, including nested arrays and dotted numeric leaves.
+    for row in full["scopes"]:
+        for field in row["fields"]:
+            owner = packet
+            parts = (row["source"] + "." + field).split(".")
+            for part in parts[:-1]:
+                if part.endswith("[]"):
+                    owner = owner.setdefault(part[:-2], [{}])[0]
+                else:
+                    owner = owner.setdefault(part, {})
+            owner[parts[-1]] = 0
+    source = {**packet["raw"]["item"], "generatedData": packet["raw"]["generatedParent"]}
+    item = _broken_item()
+    _, with_sources = _repair_request(monkeypatch, mode, source, item)
+    _, without_sources = _repair_request(monkeypatch, mode, {}, item)
+    assert with_sources["sourceWireUnits"] == full
+    assert without_sources["sourceWireUnits"]["scopes"] == []
+    # Source availability only changes source data and its reading aid, never
+    # allowed calls, schema, errors, accepted context or repair permissions.
+    for dossier in (with_sources, without_sources):
+        dossier.pop("parents")
+        dossier.pop("sourceWireUnits")
+    assert with_sources == without_sources
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_repair_unit_filter_keeps_zero_null_and_exact_array_namespaces(monkeypatch, mode):
+    source = {"axePower": 0, "generatedData": {
+        "accessory": {"movementSpeed": None},
+        "armor": {"lifeRegen": 0},
+        "gameplay": {"movementSpeed": 55, "generatedBuff": {"lifeRegen": 2}},
+        "runtimeProgram": {"entities": [
+            {"id": "empty", "spawn": {}},
+            {"id": "present", "collision": {"extraUpdates": 2}, "spawn": {
+                "velocityDistribution": {"minSpeedPxPerUpdate": 0}}},
+        ]},
+    }}
+    _, dossier = _repair_request(monkeypatch, mode, source, _broken_item())
+    actual = {(row["source"], row["fn"], field)
+              for row in dossier["sourceWireUnits"]["scopes"] for field in row["fields"]}
+    assert actual == {
+        ("raw.item", "configure_tool", "axePower"),
+        ("raw.generatedParent.accessory", "configure_accessory", "movementSpeed"),
+        ("raw.generatedParent.armor", "configure_armor", "lifeRegen"),
+        ("raw.generatedParent.gameplay.generatedBuff", "apply_generated_buff_on_use", "lifeRegen"),
+        ("raw.generatedParent.runtimeProgram.entities[].collision", "set_projectile_collision", "extraUpdates"),
+        ("raw.generatedParent.runtimeProgram.entities[].spawn", "configure_spawn", "velocityDistribution.minSpeedPxPerUpdate"),
+    }
+    spawn = next(row for row in dossier["sourceWireUnits"]["scopes"] if row["fn"] == "configure_spawn")
+    assert spawn["fields"]["velocityDistribution.minSpeedPxPerUpdate"][1] == "source * 60 * updatesPerTick / 16"

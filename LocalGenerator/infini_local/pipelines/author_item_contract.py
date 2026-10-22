@@ -107,9 +107,10 @@ def _call_prompt_shape_cards(variants: Iterable[Mapping[str, Any]]) -> list[dict
 
 def author_item_prompt_shape_card() -> dict[str, Any]:
     schema = _author_schema()
+    concept_properties = schema["properties"]["concept"]["properties"]
     report_properties = schema["properties"]["realization"]["properties"]
     call_variants = schema["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["oneOf"]
-    return {
+    card = {
         # This order is model-facing: non-binding intent, executable mechanics,
         # then the same Author's account and self-evaluation of the result.
         "root": ["name", "category", "runtimeProgram"],
@@ -210,6 +211,20 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "selfEvaluation": "optional advisory notes; no required checklist, verdict, runtime references or acceptance claim",
         },
     }
+    # JSON-object providers do not send the response schema. Make existing
+    # text bounds visible next to the prose, not an extra reporting duty.
+    for name, spec in concept_properties.items():
+        if spec.get("type") == "string":
+            card["concept"][name] = (
+                f"string minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode code points. "
+                + card["concept"][name]
+            )
+    intent = concept_properties["plannedPlayerActions"]["items"]["properties"]["intent"]
+    card["concept"]["plannedPlayerActions"][0]["intent"] = (
+        f"string minLength={intent['minLength']}, maxLength={intent['maxLength']} Unicode code points. "
+        + card["concept"]["plannedPlayerActions"][0]["intent"]
+    )
+    return card
 
 
 def provider_nullable_transport_rule(response_format: Mapping[str, Any] | None) -> str:

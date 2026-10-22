@@ -6,6 +6,33 @@ ChargeUI: {
 Mods: {
 	InfiniCrafterLocal: {
 
+		Keybinds: {
+			ToggleRecipeJournal: {
+				DisplayName: "Открыть / закрыть атлас синтеза"
+			}
+		}
+
+		UseFeedback: {
+			GroundRequired: "Нужна твёрдая опора"
+			Wet: "Нельзя использовать в воде"
+			LifeRequired: "Нужно {0} здоровья"
+			ManaRequired: "Нужно {0} маны"
+			OwnerProjectileLimit: "Достигнут лимит созданных снарядов ({0} на игрока)"
+			EntityBatchLimit: "Нельзя создать {0} снарядов: лимит этой сущности — {1} активных"
+			OwnerAttachedActive: "Этот привязанный к игроку эффект оружия уже активен"
+			MobilityCooldown: "Перезарядка перемещения: {0} с"
+			MobilityDataMissing: "Нет данных перемещения"
+			MobilityModeMissing: "Не задан режим перемещения"
+			MobilityUnsupported: "Неподдерживаемое перемещение: {0}"
+			MobilityDead: "Нельзя перемещаться после смерти"
+			MobilityAuthority: "Перемещение ожидает игровую сторону, отвечающую за действие"
+			MobilitySpawnMissing: "Нет допустимой точки появления"
+			MobilityLocalControl: "Перемещение ожидает локальное управление"
+			MobilityRangeMissing: "Не задана дальность скачка"
+			MobilityUnsafe: "Небезопасное место для скачка"
+		}
+
+
 		RecipeJournal: {
 			Result: "Результат"
 			SpaceHint: "Уменьши масштаб интерфейса или увеличь окно, чтобы открыть страницы книги."
@@ -174,6 +201,7 @@ StationUI: {
 }
 
 RuntimeTooltip: {
+	ExpandDetails: "Удерживайте Shift для подробностей о вторичных и пассивных эффектах."
 	SecondaryOwnerHurt: "При получении урона"
 	SecondaryEnemyKilled: "При убийстве противника"
 	ReactionCooldown: "{0}: перезарядка реакции {1}"

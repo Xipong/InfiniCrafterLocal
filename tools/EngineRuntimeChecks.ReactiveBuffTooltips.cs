@@ -15,7 +15,7 @@ internal static partial class EngineRuntimeChecks
             typeof(ModType).GetProperty("Mod", TestInstance)!.SetValue(item, new TooltipProbeMod());
             var action = item.Data.RuntimeProgram.TryGetEntity(item.Data.RuntimeProgram.ItemEntityId)!.Events.Single();
             string before = item.Data.ToNetworkJson();
-            var lines = new List<TooltipLine>(); item.ModifyTooltips(lines);
+            var lines = new List<TooltipLine>(); item.ModifyRuntimeTooltips(lines, expanded: true);
             Equal(true, lines.Any(l => l.Name.StartsWith("InfiniMovementReaction") && l.Text.Contains("+25%")
                 && l.Text.Contains(locale == "ru-RU" ? "1 с" : "1 s")), "actual reactive buff magnitude and duration visible");
             Equal(true, lines.Any(l => l.Name.StartsWith("InfiniReactionCooldown")), "reaction's own cooldown visible before activation");
@@ -23,11 +23,11 @@ internal static partial class EngineRuntimeChecks
             Equal(true, lines.Any(l => l.Name.StartsWith("InfiniExhaustionReaction")), "source exhaustion remains distinct from reaction cooldown");
             Equal(before, item.Data.ToNetworkJson(), "tooltip projection never modifies accepted action or buff");
             action.Event = RuntimeEventKind.OnEnemyKill;
-            lines.Clear(); item.ModifyTooltips(lines);
+            lines.Clear(); item.ModifyRuntimeTooltips(lines, expanded: true);
             Equal(true, lines.Any(l => l.Name.StartsWith("InfiniMovementReaction")
                 && l.Text.Contains(locale == "ru-RU" ? "убийств" : "killed")), "effect label follows exact kill event");
             item.Data.RuntimeProgram.Bindings = System.Array.Empty<RuntimeBindingSpec>();
-            lines.Clear(); item.ModifyTooltips(lines);
+            lines.Clear(); item.ModifyRuntimeTooltips(lines, expanded: true);
             Equal(false, lines.Any(l => l.Name.Contains("Reaction")), "unreachable equipment event cannot advertise a buff");
         });
     }
