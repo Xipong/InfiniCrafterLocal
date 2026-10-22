@@ -365,6 +365,8 @@ internal static partial class EngineRuntimeChecks
             ("placed vfx exact server mirror late hydration and retirement", PlacedVfxMirrorHydratesExactDefinitionAndRetires),
             ("placed vfx actual Python final delivery native draw", PlacedVfxFinalPythonDeliveryRuns),
             ("placed vfx continuous per-burst budgets", PlacedVfxContinuousBurstBudgets),
+            ("placed vfx registration deduplication and viewport delivery", PlacedVfxRegistrationAndViewportRegressions),
+            ("placed vfx inactive broad phase preserves retirement", PlacedVfxInactiveLedgerBroadPhaseRetainsRetirement),
             ("placed vfx DTO exact selector admission", PlacedVfxDtoAndSelectorAdmission),
             ("placed vfx two instances state generation FNA draw", PlacedVfxTwoInstancesGateAndGenerationDraw),
             ("placed vfx library light and held exclusion", PlacedVfxLibraryAndLightRealConsumers),

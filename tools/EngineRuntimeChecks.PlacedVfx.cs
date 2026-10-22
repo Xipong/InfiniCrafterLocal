@@ -176,8 +176,6 @@ internal static partial class EngineRuntimeChecks
 
     private static void PlacedVfxContinuousBurstBudgets()
     {
-        PlacedVfxRegistrationAndViewportRegressions();
-        PlacedVfxInactiveLedgerBroadPhaseRetainsRetirement();
         WithPlacedLedger((player,ledger)=>WithLighting((config,_)=>{
             ulong tick=Terraria.Main.GameUpdateCount;var system=new InfiniDetachedVfxSystem();
             Vector2 camera=Terraria.Main.screenPosition;
