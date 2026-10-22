@@ -40,6 +40,7 @@ Studio работает в браузере: Python больше не требу
 | [LocalGenerator/](LocalGenerator) | Python-генератор и браузерная Studio; проверки — `LocalGenerator/tests/`. |
 | [ModSources/InfiniCrafterLocal/](ModSources/InfiniCrafterLocal) | C#-мод для tModLoader. |
 | [tools/](tools/README_RU.md) | Утилиты по назначению: сборка, проверки, тестовые runners, генераторы, диагностика и native harnesses. |
+| [toolbox/](toolbox/README.md) | Дополнительные ручные QA-кампании и помощники для агентов; не нужны для обычной игры. |
 | [.agent/](.agent/manifest.json) | Машиночитаемые команды проверок и выбор затронутых областей. |
 | [docs/archive/](docs/archive/README_RU.md) | Исторические решения и отчёты, не инструкции запуска. |
 
