@@ -1,0 +1,288 @@
+{
+  "name": "Oreline Surveyor",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "The supplied parents are empty synthetic Terraria contexts named Unknown, with no recorded appearance to preserve. The authored result is a compact surveyor's pick with a luminous ore lens and a returning crescent head; those details are new design choices, not claims about either parent.",
+    "coreMechanic": "A 55% pick tool mines through its native primary-use action while launching a straight 24-damage bolt. Alternate use refreshes a modest utility group and sends a returning 18-damage crescent. While the item is selected, the same group is refreshed with spelunker ore highlighting and 0.5 HP/s regeneration. The synthetic parents provide no damage, timing, rarity, acquisition, or progression facts, so these bounded values are authored choices rather than inferred upgrades. The generated effect lasts 3 seconds and has 6 seconds of exhaustion, making held refresh a periodic benefit rather than free permanent uptime. The bolt and crescent are separate projectiles with independently authored collision and motion.",
+    "parentAContribution": "Parent A is an empty synthetic Terraria context with no observed appearance or abilities. Its contribution is a newly authored surveyor-tool role: the straight bolt accompanies the native pick action.",
+    "parentBContribution": "Parent B is likewise an empty synthetic context with no observed appearance or abilities. Its contribution is a newly authored returning crescent action and the ore-survey theme; these are design inventions, not inherited effects.",
+    "playerExperience": "Primary use mines and fires a straight bolt; alternate use sends a returning crescent and refreshes a modest utility effect. Holding the selected item periodically renews that effect, subject to its 6-second exhaustion policy.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Mine with the native pick and fire the straight damaging bolt."
+      },
+      {
+        "input": "alternate_use",
+        "intent": "Launch the returning crescent and refresh the named ore-survey effect group."
+      },
+      {
+        "input": "hold",
+        "intent": "While the item remains selected, periodically refresh the effect group for ore highlighting and modest life regeneration."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "item_body",
+    "entities": [
+      {
+        "id": "item_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "straight_bolt",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "returning_crescent",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "primary_bolt_binding",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "straight_bolt"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "alternate_effect_binding",
+        "input": "alternate_use",
+        "action": {
+          "kind": "apply_item_effects",
+          "targetId": "item_body",
+          "effectGroupId": "ore_survey_group"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "item_body",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "rarity": 2,
+          "valueCopper": 50000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 32,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "item_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": true,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": "one_handed"
+        }
+      },
+      {
+        "id": "native_pick",
+        "fn": "configure_tool",
+        "target": "item_body",
+        "params": {
+          "pickPower": 55,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1
+        }
+      },
+      {
+        "id": "straight_spawn",
+        "fn": "configure_spawn",
+        "target": "straight_bolt",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 24
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "straight_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_bolt",
+        "params": {
+          "lifetimeSeconds": 2.5
+        }
+      },
+      {
+        "id": "straight_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_bolt",
+        "params": {
+          "widthPx": 12,
+          "heightPx": 12,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "straight_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_bolt",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "straight_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_bolt",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 24,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "straight_motion",
+        "fn": "move_straight",
+        "target": "straight_bolt",
+        "params": {}
+      },
+      {
+        "id": "crescent_spawn",
+        "fn": "configure_spawn",
+        "target": "returning_crescent",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 18
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "crescent_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_crescent",
+        "params": {
+          "lifetimeSeconds": 3.5
+        }
+      },
+      {
+        "id": "crescent_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_crescent",
+        "params": {
+          "widthPx": 20,
+          "heightPx": 20,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "crescent_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_crescent",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 2,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "crescent_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_crescent",
+        "params": {
+          "damageClass": "melee",
+          "damage": 18,
+          "knockback": 3,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "crescent_return",
+        "fn": "move_boomerang",
+        "target": "returning_crescent",
+        "params": {
+          "returnAfterSeconds": 0.8,
+          "returnSpeedBlocksPerSecond": 18
+        }
+      },
+      {
+        "id": "held_utility",
+        "fn": "apply_generated_buff_on_use",
+        "target": "item_body",
+        "params": {
+          "durationSeconds": 3,
+          "exhaustionSeconds": 6,
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 0.5,
+          "effectGroupId": "ore_survey_group"
+        }
+      },
+      {
+        "id": "held_group_refresh",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "item_body",
+        "params": {
+          "effectGroupId": "ore_survey_group"
+        }
+      },
+      {
+        "id": "alternate_return_spawn",
+        "fn": "spawn_entity_on_event",
+        "target": "item_body",
+        "params": {
+          "when": "on_use",
+          "entity": "returning_crescent",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Primary use works as a mining pick and fires a straight bolt. Alternate use refreshes the ore survey group and launches a returning crescent. While you keep the item selected, ore highlighting and 0.5 HP/s regeneration are refreshed when the group's 6-second exhaustion allows; each application lasts 3 seconds. The native ore highlighting covers eligible treasure such as ores, chests, and life crystals. Projectile damage, lifetime, and return behavior are authored separately from the pick's mining power.",
+    "playerExperience": "The held utility has downtime by design. The two shots use different damage classes and motion, while the pick's native power applies to its own active mining use.",
+    "selfEvaluation": "The supplied synthetic parents contain no facts, so all mechanics and numeric values are authored choices."
+  }
+}

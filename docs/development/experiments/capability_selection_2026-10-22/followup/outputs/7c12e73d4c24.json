@@ -1,0 +1,190 @@
+{
+  "name": "Stitched Vampiric Ember Wand",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A vampire-spark wand dressed in the stitched panels of a vampire suit: the wand identity stays clear in its slim casting form, while the suit's stitched vampiric motif becomes its wearable mantle. Its ember is a small red spark rather than a broad blast.",
+    "coreMechanic": "Primary use fires one cursor-aimed magic ember from the owner, with the wand's source cadence of about 0.43 seconds and its modest 12 base damage. The ember travels quickly, then curves downward under gravity; it dies on its first solid-tile collision or after one NPC hit, so it rewards deliberate aim rather than broad coverage. A hit heals the owner for 10% of damage dealt, capped at 1 HP per hit. The item also works as an accessory: while equipped it grants 2 defense, +1 HP/s life regeneration and +5% movement speed. The defense and regeneration are equipment benefits, never effects of holding the wand. The 4 mana cost follows the wand's source and applies to each newly started use animation; no ammunition is consumed. The wearable bonuses are useful but modest, and the spark's healing is intentionally capped so its fast flight does not turn into large repeatable recovery.",
+    "parentAContribution": "The Жезл вампирской искры supplies the wand identity, magic damage, source use cadence and mana price. Its red blood-ember projectile, downward arc and small on-hit siphon establish the active action; the explicit runtime values retain the source's 12 damage, 26-tick cadence, 7-pixel-per-tick launch speed and 10% healing capped at 1 HP.",
+    "parentBContribution": "The Сшитый вампирский костюм supplies the stitched vampire-wearable identity and accessory role. Its source +1 HP/s life regeneration and +5% movement bonus remain while equipped; a small explicit defense bonus makes the mantle protective without implying that the wand grants defense while held.",
+    "playerExperience": "Aim and tap to send a single fast ember; connect with enemies for a small capped heal. Equip the item for its defense, regeneration and movement bonuses. Each active cast costs 4 mana, while the accessory benefits require wearing it.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Aim at a target and fire one magic ember; hits deal modest damage and return a small capped amount of life. Each use costs 4 mana."
+      },
+      {
+        "input": "equipped",
+        "intent": "Wear the stitched vampire accessory for 2 defense, +1 HP/s life regeneration and +5% movement speed; these benefits apply only while equipped."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "ember_wand_body",
+    "entities": [
+      {
+        "id": "ember_wand_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "blood_ember",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "fire_blood_ember",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "blood_ember"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "wear_stitched_mantle",
+        "input": "equipped",
+        "action": {
+          "kind": "equip_passive",
+          "targetId": "ember_wand_body"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "wand_item_stats",
+        "fn": "configure_item_stats",
+        "target": "ember_wand_body",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "useTimeSeconds": 0.43333333333333335,
+          "useAnimationSeconds": 0.43333333333333335,
+          "manaCost": 4,
+          "rarity": 1,
+          "valueCopper": 50000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 36,
+          "scale": 1
+        }
+      },
+      {
+        "id": "wand_use_controls",
+        "fn": "configure_item_use",
+        "target": "ember_wand_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "stitched_accessory_bonuses",
+        "fn": "configure_accessory",
+        "target": "ember_wand_body",
+        "params": {
+          "defensePoints": 2,
+          "lifeRegenHpPerSecond": 1,
+          "moveSpeedBonusPercent": 5
+        }
+      },
+      {
+        "id": "ember_spawn_setup",
+        "fn": "configure_spawn",
+        "target": "blood_ember",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 26.25
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "ember_magic_damage",
+        "fn": "set_projectile_damage",
+        "target": "blood_ember",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "ember_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "blood_ember",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "ember_collision_box",
+        "fn": "set_projectile_hitbox",
+        "target": "blood_ember",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "ember_collision_rules",
+        "fn": "set_projectile_collision",
+        "target": "blood_ember",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "ember_gravity_arc",
+        "fn": "move_gravity_arc",
+        "target": "blood_ember",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 27
+        }
+      },
+      {
+        "id": "ember_life_siphon",
+        "fn": "heal_owner_on_event",
+        "target": "blood_ember",
+        "params": {
+          "when": "on_hit",
+          "damageFraction": 0.1,
+          "maxHeal": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Tap primary use to fire one fast red ember toward the cursor. It deals 12 base magic damage, curves downward, and ends on its first solid tile or NPC hit. An NPC hit heals you for 10% of damage dealt, up to 1 life. Each use costs 4 mana. Equip the item to gain 2 defense, +1 life regeneration per second, and +5% movement speed; these bonuses do not apply while merely holding it. The item is reusable and uses no ammunition.",
+    "playerExperience": "The projectile is quick but narrow, so aim for a clean hit. Healing stays small per impact. Wearing the accessory adds steady survivability and movement without changing the cast's mana cost.",
+    "selfEvaluation": "The active shot and equipped accessory are separate authored functions. The primary entity is the item body; the projectile has explicit spawn, damage, lifetime, hitbox, collision, gravity and on-hit healing calls."
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "item",
+    "entity_spawn",
+    "entity_combat",
+    "entity_collision",
+    "entity_lifecycle",
+    "movement",
+    "event"
+  ],
+  "fullCatalog": false,
+  "intent": "Consume fallen-star ammo on the primary weapon shot; author the main projectile gravity arc and an on-hit spawned child star with slow homing on that child. Need both projectile entities\u2019 spawn, damage/collision/lifetime feasibility, event producer/action, movement, and weapon ammo configuration; this item is not ammo."
+}

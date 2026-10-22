@@ -1,0 +1,188 @@
+{
+  "name": "Vampire Spark Wand",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A magic wand of vampire sparks sewn into the identity of a stitched vampire suit: a red-lit ember wand paired with a wearable vampire garment.",
+    "coreMechanic": "Primary use casts one cursor-aimed magic ember. It keeps the wand parent's 12 base magic damage, 26-tick use interval and 4 mana cost; the projectile travels at the parent's authored launch speed, curves under gravity and heals its owner for 10% of damage dealt, up to 1 HP per hit. It expires after 1.5 seconds or on its first NPC hit or tile contact. The same item can be equipped as an accessory for 2 defense, +1 HP/s life regeneration and +5% movement speed; these bonuses apply only while equipped. Both parents have generation depth 0; the source values are 40,000 and 60,000 copper and their rarities are Blue and White. The chosen 50,000 copper value and Blue rarity keep the wand's observed magic cost and modest hit power central while adding a restrained wearable benefit; no progression tier is inferred.",
+    "parentAContribution": "The Russian-named vampire-spark wand supplies the concrete wand identity and the active magic ember: its source facts include 12 magic damage, 26-tick use time, 4 mana, a red-lit gravity arc and an on-hit heal capped at 1 HP. Those projectile details are preserved in the authored behavior.",
+    "parentBContribution": "The Russian-named stitched vampire suit supplies the sewn vampire-garment identity and the wearable accessory role. Its source accessory has +1 HP/s regeneration and +5% movement speed; the 2 defense is a deliberately added modest equipment benefit, not an observed source effect.",
+    "playerExperience": "Aim and cast at the cursor for a slow, gravity-curved ember; each successful hit restores at most 1 HP. Casting uses 4 base mana per use animation. Equipping the wand adds defense, regeneration and movement speed; simply holding it grants none of those passive bonuses.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Cast one gravity-curved magic ember toward the cursor for 4 base mana; a successful hit heals up to 1 HP."
+      },
+      {
+        "input": "equipped",
+        "intent": "Wear the wand as an accessory for 2 defense, +1 HP/s life regeneration and +5% movement speed."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "vampire_spark_wand",
+    "entities": [
+      {
+        "id": "vampire_spark_wand",
+        "kind": "item_body"
+      },
+      {
+        "id": "blood_ember",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "cast_blood_ember",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "blood_ember"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "wear_vampire_spark_wand",
+        "input": "equipped",
+        "action": {
+          "kind": "equip_passive",
+          "targetId": "vampire_spark_wand"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "wand_item_stats",
+        "fn": "configure_item_stats",
+        "target": "vampire_spark_wand",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "useTimeSeconds": 0.43333333333333335,
+          "useAnimationSeconds": 0.43333333333333335,
+          "manaCost": 4,
+          "rarity": 1,
+          "valueCopper": 50000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 36,
+          "scale": 1
+        }
+      },
+      {
+        "id": "wand_item_use",
+        "fn": "configure_item_use",
+        "target": "vampire_spark_wand",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "wand_accessory_effects",
+        "fn": "configure_accessory",
+        "target": "vampire_spark_wand",
+        "params": {
+          "defensePoints": 2,
+          "lifeRegenHpPerSecond": 1,
+          "moveSpeedBonusPercent": 5
+        }
+      },
+      {
+        "id": "ember_spawn",
+        "fn": "configure_spawn",
+        "target": "blood_ember",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 26.25
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "ember_damage",
+        "fn": "set_projectile_damage",
+        "target": "blood_ember",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "ember_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "blood_ember",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "ember_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "blood_ember",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "ember_collision",
+        "fn": "set_projectile_collision",
+        "target": "blood_ember",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "ember_gravity",
+        "fn": "move_gravity_arc",
+        "target": "blood_ember",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 27
+        }
+      },
+      {
+        "id": "ember_siphon",
+        "fn": "heal_owner_on_event",
+        "target": "blood_ember",
+        "params": {
+          "when": "on_hit",
+          "damageFraction": 0.1,
+          "maxHeal": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Use the wand to cast a single red-lit ember toward the cursor. It deals 12 base magic damage, follows a gravity arc, and on a damaging NPC hit restores 10% of damage dealt, capped at 1 HP. The ember disappears on its first NPC hit, its first solid-tile contact, or after 1.5 seconds. Each use animation has a base 4-mana cost and a 0.433-second use interval. Equip the item as an accessory to gain 2 defense, +1 HP/s life regeneration and +5% movement speed. The passive effects apply while equipped, not while held.",
+    "playerExperience": "The projectile preserves the source wand's modest damage and single-hit handling, with a small capped heal rather than scaling the recovery into a large sustain loop. The added accessory bonuses give the stitched-vampire identity practical value while worn.",
+    "selfEvaluation": "The item body is the primary entity for inventory/equipment representation; the independently spawned ember owns projectile movement, collision and hit healing. The equipped binding explicitly activates the accessory effects."
+  }
+}

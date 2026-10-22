@@ -1,0 +1,90 @@
+[
+  {
+    "id": "matched_full_controls_and_policy_scope",
+    "status": "verified",
+    "finding": "Each full arm uses the same frozen selector intent and source context as its reduced partner. selected_only has no 50-card automatic reserve: its audit reserve is empty, while the full-plus-index IDs still cover the registry. The new default non_drivers path is byte-structure equivalent to the pre-follow-up implementation for selector and Author packets/audits across all three cases and both modes.",
+    "evidence": [
+      "protocol.json controls statement; follow-up assemble() derives full arms from the same selection and asserts matching intent and parents.",
+      "experiment_capability_selection.py sets reserve to an empty set for selected_only and compacts the index by dropping requires while preserving positionOwnership/constructionMeaning/budget where present.",
+      "Independent comparison against HEAD implementation matched the selector and Author packet/audit structures for wand, musket, and tool in groups and capabilities modes."
+    ]
+  },
+  {
+    "id": "held_effect_score_misses_active_action_occupancy",
+    "status": "verified_rubric_gap",
+    "finding": "The held_ore_regeneration predicate checks a matching effectGroupId between the buff and held refresher, but does not check whether that same group is also bound to primary_use or alternate_use. It marks the held function true for outputs that bind alternate_use to apply_item_effects for the held group, contrary to the brief that held effects occupy neither active action. These particular outputs are rejected overall for other errors, so this is a per-function score false positive rather than a currently accepted aggregate false positive.",
+    "affected_trials": [
+      {
+        "id": "95b4eef6a8e7",
+        "evidence": "alternate_effect_binding binds alternate_use to apply_item_effects on ore_survey_group; held buff and refresher share that group; held_ore_regeneration=true."
+      },
+      {
+        "id": "b078423fbce2",
+        "evidence": "alternate_prospecting_throw binds alternate_use to apply_item_effects on prospecting_group; held buff and refresher share that group; held_ore_regeneration=true."
+      }
+    ],
+    "suggested_scoring_fix": "Require no primary_use/alternate_use apply_item_effects binding to the held effectGroupId when scoring the held-only requirement.",
+    "resolution": {
+      "status": "fixed_and_verified",
+      "details": "The scorer now rejects held-effect groups that are also bound to primary_use or alternate_use.",
+      "verification": "24 focused tests passed; all 30 frozen outputs were rescored with aggregate counts unchanged."
+    }
+  },
+  {
+    "id": "alternate_isolation_event_closure_is_asymmetric",
+    "status": "verified_rubric_gap_unobserved_counterexample",
+    "finding": "The tool isolation check computes event reachability from primary roots, including item_body.on_use, and checks that returning roots are absent there. For the reverse direction it only checks whether a straight-shot target is a direct alternate spawn root; it does not compute alternate reachability through item_body.on_use. Since item_body.on_use fires for both primary and alternate inputs, a valid graph with a direct primary straight shot plus a body on_use straight-shot producer and a direct alternate returner could pass the isolation predicate while the alternate also launches the straight shot. No frozen output exhibits this exact counterexample.",
+    "evidence": [
+      "experiment_capability_selection_followup.py::functional_checks tool branch: reachable is seeded from primary roots plus item_body on_use edges; isolated_alternate_returner only tests returning roots against reachable and straight roots against direct alternate roots.",
+      "CATALOG_LIMITATIONS_RU.md section 2 documents that item_body.on_use fires for both accepted active inputs."
+    ],
+    "suggested_scoring_fix": "Compute transitive reachable sets from both active inputs, with shared item_body.on_use producers included in both, then assert each required projectile is absent from the opposite input's closure.",
+    "resolution": {
+      "status": "fixed_and_verified",
+      "details": "The scorer now computes symmetric reachable event closures for primary and alternate inputs.",
+      "verification": "24 focused tests passed; all 30 frozen outputs were rescored with aggregate counts unchanged."
+    }
+  },
+  {
+    "id": "live_parent_does_not_enable_child_damage",
+    "status": "verified_semantic_miss_correctly_flagged",
+    "finding": "This frozen output has a real child-damage omission, not a scorer false negative. `damageBasis=live_parent` supplies a damage override only if the child entity has damage enabled; it does not enable child combat by itself. The current predicate correctly marks this output false because it has no set_projectile_damage call. Separately, the rubric should accept an explicit zero-base set_projectile_damage call when a reachable on_hit event supplies a positive live_parent override: zero is legal and the compiler still enables the child's Damage lane.",
+    "affected_trials": [
+      {
+        "id": "325c90f89e75",
+        "evidence": "Valid and compiled, but not functionally complete: falling_star_round has positive ranged damage and gravity; on_hit spawns seeking_child_star with damageBasis=live_parent and damageMultiplier=0.35; child has move_slow_homing but no set_projectile_damage. GeneratedProjectile.cs gates spawned damage on entity.Damage.Enabled, and GeneratedProjectile.RuntimeEvents.cs::CanHitNPC rejects entities whose damage is disabled. compiler.py only sets damage.enabled=true for set_projectile_damage."
+      }
+    ],
+    "interpretation": "Do not credit 325c90f89e75 with preserving the brief's damaging child star. Preserve the enabled-lane requirement, but allow the legal zero-authored-base plus positive live-parent override pattern in future scoring.",
+    "resolution": {
+      "status": "fixed_and_verified",
+      "details": "The scorer now accepts an enabled zero-base child damage lane when a reachable positive live_parent event supplies its damage; the frozen 325c90f89e75 output still correctly fails because it has no child set_projectile_damage call.",
+      "verification": "24 focused tests passed; all 30 frozen outputs were rescored with aggregate counts unchanged."
+    }
+  },
+  {
+    "id": "index_only_usage_exposes_contract_risk",
+    "status": "verified",
+    "finding": "The selected_only reduced Authors did use index-only capabilities. The valid set_projectile_homing_modifier call in 14923e2db3ef adds late homing to the root projectile beyond the brief's required root gravity and child homing. However, parent A's compiled wire already has the same homingModifier, and sourceWireUnits explicitly maps its raw update/tick fields to the corresponding Author parameters; the output values match those conversions exactly. This is not evidence of guessing or a missing-doc failure, though it is an extra inherited behavior that was not part of the checklist. A separate reduced output attempted an unsupported input filter on spawn_entity_on_event and failed strict validation; this is an actual example of an Author inferring an unavailable operation from an index-only capability summary.",
+    "affected_trials": [
+      {
+        "id": "14923e2db3ef",
+        "evidence": "Index-only set_projectile_homing_modifier is used on gravity_star_round with rangeTiles=12, maxTurnRadiansPerSecond=2.1, requireLineOfSight=true, startDelaySeconds=0.2, durationSeconds=1.3. Parent A's compiled piercing_star_arrow homingModifier is rangeTiles=12, maxTurnRadiansPerUpdate=0.035, requireLineOfSight=true, startDelayTicks=12, durationTicks=78; sourceWireUnits maps these fields, and the numeric conversions match exactly (0.035*60=2.1; 12/60=0.2; 78/60=1.3). The resulting extra root homing is outside the checklist, but is present in parent evidence."
+      },
+      {
+        "id": "b078423fbce2",
+        "evidence": "Index-only spawn_entity_on_event attempts when={event:on_use,input:alternate_use}; strict schema rejects the object and its extra properties. The same output also omits required lightStrength/lightColor from the generated buff."
+      }
+    ],
+    "interpretation": "The homing-modifier example is explainable from source wire plus the unit aid and should not be treated as proof of guessing. The unsupported input filter is a concrete mis-authoring risk. Keep index-only selection explicitly lossy; these few samples do not establish general recovery of omitted parameter contracts."
+  },
+  {
+    "id": "small_sample_descriptive_only",
+    "status": "verified_limit",
+    "finding": "All 30 outputs are now present and evaluated. acceptedAndPreserved counts are baseline 6/6, groups_full 5/6, groups 5/6, capabilities_full 4/6, and capabilities 5/6. These are two replicates for each of three cases per arm; they do not establish reliability or a causal benefit of reduction. The capabilities_full count includes a real semantic miss: an on-hit child has a live_parent damage basis but no enabled child damage lane. No paid API usage, constrained decoding, actual billing/cache/latency measurement, or in-game smoke was performed. After rubric fixes, all 30 were rescored and these aggregate counts remained unchanged.",
+    "evidence": [
+      "selection_followup/results.json contains 30 evaluated rows and marks the tokenizer values as an o200k_base proxy.",
+      "protocol.json limits the design to two replicates per case/arm and states no paid provider requests, no constrained decoding, and no game smoke."
+    ]
+  }
+]

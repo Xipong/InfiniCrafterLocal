@@ -1,0 +1,218 @@
+{
+  "name": "Prospector's Twinflight Pick",
+  "category": "tool",
+  "concept": {
+    "literalSynthesis": "The supplied parents are empty synthetic context, so no parent appearance or identity can be stated. The authored object is a compact prospector's pick with a bright survey effect and two distinct thrown shots.",
+    "coreMechanic": "A reusable native mining tool with 55 pick power. Primary use swings the pick for mining and body contact while launching one straight 8-damage shot. Alternate use launches a separate returning 10-damage boomerang-like shot; it does not launch the straight shot. While the item is held, a named generated effect group refreshes Spelunker ore highlighting and 0.5 HP/s life regeneration. These sustained benefits are deliberately modest and have no recurring resource cost. The empty parent context supplies no damage, tempo, progression or acquisition evidence, so these values are bounded authored choices rather than inherited upgrades.",
+    "parentAContribution": "Parent A is an empty synthetic Terraria packet with no observed appearance, stats or ability. Its contribution is limited to the brief's mining-tool direction; no mechanics are attributed to it as source facts.",
+    "parentBContribution": "Parent B is an empty synthetic Terraria packet with no observed appearance, stats or ability. Its contribution is limited to the brief's dual-shot direction; the returning shot is newly authored, not an observed parent ability.",
+    "playerExperience": "Use primary to mine and send a straight shot; use alternate for the returning shot. Holding the item refreshes ore highlighting and modest life regeneration. The effects are free to sustain while held; each shot has a finite lifetime and the item is reusable.",
+    "plannedPlayerActions": [
+      {"input": "primary_use", "intent": "Mine with the pick and launch one straight damaging shot; do not launch the returning shot on this input."},
+      {"input": "alternate_use", "intent": "Launch the returning boomerang-like shot without launching the straight shot."},
+      {"input": "passive_or_event", "intent": "While this exact item is held, refresh ore detection and modest life regeneration from one named generated effect group."}
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "prospectors_pick_body",
+    "entities": [
+      {"id": "prospectors_pick_body", "kind": "item_body"},
+      {"id": "straight_survey_shot", "kind": "free_projectile"},
+      {"id": "returning_survey_shot", "kind": "free_projectile"}
+    ],
+    "bindings": [
+      {
+        "id": "primary_straight_shot",
+        "input": "primary_use",
+        "action": {"kind": "spawn_entity", "targetId": "straight_survey_shot"},
+        "stackCost": 0,
+        "contactDamage": true
+      },
+      {
+        "id": "alternate_returning_shot",
+        "input": "alternate_use",
+        "action": {"kind": "spawn_entity", "targetId": "returning_survey_shot"},
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "pick_item_stats",
+        "fn": "configure_item_stats",
+        "target": "prospectors_pick_body",
+        "params": {
+          "damageClass": "melee",
+          "damage": 8,
+          "knockback": 2,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "manaCost": 0,
+          "rarity": 1,
+          "valueCopper": 3000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 28,
+          "heightPx": 28,
+          "scale": 1
+        }
+      },
+      {
+        "id": "pick_use_controls",
+        "fn": "configure_item_use",
+        "target": "prospectors_pick_body",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": true,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": false,
+          "channel": false,
+          "handPose": "one_handed"
+        }
+      },
+      {
+        "id": "native_mining_power",
+        "fn": "configure_tool",
+        "target": "prospectors_pick_body",
+        "params": {
+          "pickPower": 55,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1
+        }
+      },
+      {
+        "id": "straight_shot_spawn",
+        "fn": "configure_spawn",
+        "target": "straight_survey_shot",
+        "params": {
+          "velocity": {"constantSpeedBlocksPerSecond": 15},
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0.5,
+          "aim": "cursor",
+          "position": {"at": "owner_center"}
+        }
+      },
+      {
+        "id": "straight_shot_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_survey_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 8,
+          "knockback": 1,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "straight_shot_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_survey_shot",
+        "params": {"lifetimeSeconds": 1.5}
+      },
+      {
+        "id": "straight_shot_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_survey_shot",
+        "params": {"widthPx": 12, "heightPx": 12, "drawScale": 1, "hitboxScale": 1}
+      },
+      {
+        "id": "straight_shot_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_survey_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {"id": "straight_shot_motion", "fn": "move_straight", "target": "straight_survey_shot", "params": {}},
+      {
+        "id": "returning_shot_spawn",
+        "fn": "configure_spawn",
+        "target": "returning_survey_shot",
+        "params": {
+          "velocity": {"constantSpeedBlocksPerSecond": 13},
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0.5,
+          "aim": "cursor",
+          "position": {"at": "owner_center"}
+        }
+      },
+      {
+        "id": "returning_shot_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_survey_shot",
+        "params": {
+          "damageClass": "melee",
+          "damage": 10,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "returning_shot_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_survey_shot",
+        "params": {"lifetimeSeconds": 3}
+      },
+      {
+        "id": "returning_shot_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_survey_shot",
+        "params": {"widthPx": 18, "heightPx": 18, "drawScale": 1, "hitboxScale": 1}
+      },
+      {
+        "id": "returning_shot_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_survey_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "returning_shot_motion",
+        "fn": "move_boomerang",
+        "target": "returning_survey_shot",
+        "params": {"returnAfterSeconds": 0.55, "returnSpeedBlocksPerSecond": 16}
+      },
+      {
+        "id": "survey_effect_group",
+        "fn": "apply_generated_buff_on_use",
+        "target": "prospectors_pick_body",
+        "params": {
+          "durationSeconds": 2,
+          "miningSpeedMultiplier": 1,
+          "lightStrength": 0,
+          "lightColor": "yellow",
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 0.5,
+          "effectGroupId": "held_survey"
+        }
+      },
+      {
+        "id": "refresh_survey_while_held",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "prospectors_pick_body",
+        "params": {"effectGroupId": "held_survey"}
+      }
+    ]
+  },
+  "realization": {
+    "description": "A reusable pick with 55% pick power. Primary use swings for mining and also launches one straight shot dealing 8 base damage. Alternate use launches a separate returning shot dealing 10 base damage; it does not fire the straight shot. While you hold the item, it refreshes ore highlighting and 0.5 HP/s life regeneration. The shots are finite-lived; the returning shot flies outward for 0.55 seconds before returning, and a wall can also begin its return.",
+    "playerExperience": "The two active inputs stay distinct. The held survey effect is modest and free to maintain while the item remains held; it can linger briefly after release.",
+    "selfEvaluation": "The parents are empty synthetic context. Stats and projectile behaviors are explicit authored values."
+  }
+}

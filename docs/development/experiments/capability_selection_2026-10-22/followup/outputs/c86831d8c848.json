@@ -1,0 +1,191 @@
+{
+  "name": "Bloodspark Mantle",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A red-sparking wand stitched into a vampire's fitted coat: the coat's seams glow like veins, and each cast sends a bright ember out from its cuff.",
+    "coreMechanic": "Use the mantle to cast one cursor-aimed magic ember every 0.433 seconds. It travels at 26.25 blocks/s, curves downward under gravity, deals 12 magic damage, and ends on its first NPC hit or solid tile. That hit heals its owner for 10% of damage dealt, capped at 1 HP per hit. The use costs 4 mana per native use animation. While equipped in an accessory slot, the mantle adds 2 defense, 1 HP/s life regeneration, and 5% movement speed; these bonuses do not apply merely for holding it. The ember keeps the wand's damage, mana cost, cadence, and healing fraction while using the observed single-hit policy and 1.5-second lifetime. The accessory adds explicit defense to the suit's observed life regeneration and movement bonus. Both parents have generation depth 0, but that does not establish a progression tier, so no tier is claimed.",
+    "parentAContribution": "The vampiric spark wand supplies the red ember identity and the magic-casting role. Its observed 12 damage, 4 mana cost, 26-tick cadence, 7-pixel-per-tick launch speed, gravity arc, and capped on-hit healing inform the mantle's active shot.",
+    "parentBContribution": "The stitched vampire suit supplies the wearable, sewn vampire-coat identity and the equipped-support role. Its observed +1 HP/s life regeneration and +5% movement speed become explicit accessory effects; the mantle also gains a deliberate +2 defense bonus.",
+    "playerExperience": "Aim with primary use to fire a single ember; the short-lived shot can restore at most 1 HP on a successful hit. Equip the mantle for modest defense, regeneration, and movement bonuses. Each new use animation attempts the 4-mana payment; equipping is passive and grants no benefit while the item is merely held.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Aim and cast a single gravity-curved magic ember that can return a small amount of life on hit."
+      },
+      {
+        "input": "equipped",
+        "intent": "Wear the stitched mantle as an accessory for defense, life regeneration, and movement speed."
+      },
+      {
+        "input": "passive_or_event",
+        "intent": "On an ember's actual damaging NPC hit, heal its owner for 10% of damage dealt, up to 1 HP."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "bloodspark_mantle",
+    "entities": [
+      {
+        "id": "bloodspark_mantle",
+        "kind": "item_body"
+      },
+      {
+        "id": "bloodspark_ember",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "cast_bloodspark",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "bloodspark_ember"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "wear_bloodspark",
+        "input": "equipped",
+        "action": {
+          "kind": "equip_passive",
+          "targetId": "bloodspark_mantle"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "mantle_item_stats",
+        "fn": "configure_item_stats",
+        "target": "bloodspark_mantle",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "useTimeSeconds": 0.43333333333333335,
+          "useAnimationSeconds": 0.43333333333333335,
+          "manaCost": 4,
+          "rarity": 1,
+          "valueCopper": 100000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 40,
+          "scale": 1
+        }
+      },
+      {
+        "id": "mantle_item_use",
+        "fn": "configure_item_use",
+        "target": "bloodspark_mantle",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "mantle_accessory_effects",
+        "fn": "configure_accessory",
+        "target": "bloodspark_mantle",
+        "params": {
+          "defensePoints": 2,
+          "lifeRegenHpPerSecond": 1,
+          "moveSpeedBonusPercent": 5
+        }
+      },
+      {
+        "id": "ember_spawn",
+        "fn": "configure_spawn",
+        "target": "bloodspark_ember",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 26.25
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "ember_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "bloodspark_ember",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "ember_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "bloodspark_ember",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "ember_collision",
+        "fn": "set_projectile_collision",
+        "target": "bloodspark_ember",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "ember_damage",
+        "fn": "set_projectile_damage",
+        "target": "bloodspark_ember",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "ember_gravity",
+        "fn": "move_gravity_arc",
+        "target": "bloodspark_ember",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 27
+        }
+      },
+      {
+        "id": "ember_siphon",
+        "fn": "heal_owner_on_event",
+        "target": "bloodspark_ember",
+        "params": {
+          "when": "on_hit",
+          "damageFraction": 0.1,
+          "maxHeal": 1
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Primary use fires one cursor-aimed ember for 4 mana per new use animation. The 12-damage magic projectile travels at 26.25 blocks/s, curves downward, lasts up to 1.5 seconds, and stops at its first NPC hit or solid tile. A damaging hit heals the owner for 10% of damage dealt, capped at 1 HP. While equipped as an accessory, the mantle grants 2 defense, +1 HP/s life regeneration, and +5% movement speed. Holding it alone grants no defense or accessory bonuses.",
+    "playerExperience": "Fire individual shots with primary use and aim them toward the cursor. The projectile's healing requires a real NPC hit and is capped per hit; misses provide no healing. Equip the item to receive its three passive bonuses.",
+    "selfEvaluation": "The active and equipped functions are separate bindings. The item body is the primary entity; the free ember is the single explicit active spawn target. Gravity, damage, collision, lifetime, and on-hit healing are authored on that projectile."
+  }
+}

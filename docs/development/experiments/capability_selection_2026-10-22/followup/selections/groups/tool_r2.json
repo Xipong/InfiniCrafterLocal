@@ -1,0 +1,15 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "item",
+    "item_tool",
+    "item_utility",
+    "entity_spawn",
+    "entity_combat",
+    "entity_collision",
+    "entity_lifecycle",
+    "movement"
+  ],
+  "fullCatalog": false,
+  "intent": "Provide native mining with positive pick power on primary use plus a straight damaging projectile; alternate fires a returning boomerang-like projectile; while held, refresh a generated utility group with ore sense and modest life regeneration. Preserve input isolation and held refresh; include item/tool, spawn, damage/collision/lifetime, movement, and utility docs."
+}

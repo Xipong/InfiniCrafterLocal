@@ -1,0 +1,252 @@
+{
+  "name": "Jester's Fallen-Star Musket",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "A jester's star musket fed by fallen stars: the musket identity remains the weapon, while each spent fallen star becomes its own brief answering spark on a hit.",
+    "coreMechanic": "Fire a 31-damage ranged shot every 32 ticks (about 0.533 seconds). Each shot consumes one fallen-star ammo unit and follows a deliberate gravity arc. The shot can pierce up to three NPCs; each actual hit can admit one separate 14-damage star that homes slowly for up to 1.25 seconds. The secondary output is a hit reward, not a free extra shot on a miss, and it shares the event spawn budget. The main shot retains the musket's one-ammo-per-shot economy and its useful three-target pierce, while the stars add bounded follow-up damage for the same ammo cost. The source weapon was Blue rarity, valued at 77,600 copper, and had 32-tick use timing; the fallen star is a consumable material in the fallen_star ammo category with no positive observed damage contribution. These facts do not establish a progression tier, so the added output is kept modest and finite rather than treating the ammo identity as evidence for exceptional power.",
+    "parentAContribution": "The Jester's Star Musket supplies the musket identity, ranged class, 31 base damage, 5.25 knockback, 32-tick use tempo, and the observed fallen-star ammo requirement. Its source projectile had a three-hit pierce and a 1.5-second lifetime. The authored arc and hit-born star are new mechanics, not claims about the parent's observed behavior.",
+    "parentBContribution": "The Fallen Star supplies the literal fallen-star identity and the exact fallen_star ammo category. It is a consumable material with no positive observed damage contribution; here it pays for each musket shot, and the separate homing child is a new authored effect rather than an inherited ammo ability.",
+    "playerExperience": "Aim and fire the visible musket normally. Each shot consumes one fallen star; a successful hit may add a brief homing follow-up, while a miss spends ammo without spawning one. The one-ammo cost, source-paced cadence, three-hit pierce and finite child lifetime keep the extra damage tied to successful hits.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Fire one cursor-aimed, gravity-arc ranged shot and consume one fallen-star ammo unit; actual NPC hits can each produce a distinct, briefly homing star."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "item_body",
+    "entities": [
+      {
+        "id": "item_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "musket_shot",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "hit_star",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "fire_musket",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "musket_shot"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "item_body",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "useTimeSeconds": 0.5333333333333333,
+          "useAnimationSeconds": 0.5333333333333333,
+          "manaCost": 0,
+          "rarity": 1,
+          "valueCopper": 77600,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 56,
+          "heightPx": 20,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "item_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "handPose": "two_handed"
+        }
+      },
+      {
+        "id": "fallen_star_ammo",
+        "fn": "configure_weapon_ammo",
+        "target": "item_body",
+        "params": {
+          "ammoCategory": "fallen_star",
+          "speedBasis": "authored_spawn"
+        }
+      },
+      {
+        "id": "shot_spawn",
+        "fn": "configure_spawn",
+        "target": "musket_shot",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 33.75
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1.75,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "shot_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "musket_shot",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "shot_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "musket_shot",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "shot_damage",
+        "fn": "set_projectile_damage",
+        "target": "musket_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "shot_collision",
+        "fn": "set_projectile_collision",
+        "target": "musket_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 3,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "shot_gravity_arc",
+        "fn": "move_gravity_arc",
+        "target": "musket_shot",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 48
+        }
+      },
+      {
+        "id": "star_spawn",
+        "fn": "configure_spawn",
+        "target": "hit_star",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 20
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "velocity",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "star_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "hit_star",
+        "params": {
+          "lifetimeSeconds": 1.25
+        }
+      },
+      {
+        "id": "star_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "hit_star",
+        "params": {
+          "widthPx": 12,
+          "heightPx": 12,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "star_damage",
+        "fn": "set_projectile_damage",
+        "target": "hit_star",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 14,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "star_collision",
+        "fn": "set_projectile_collision",
+        "target": "hit_star",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "star_slow_homing",
+        "fn": "move_slow_homing",
+        "target": "hit_star",
+        "params": {
+          "rangeTiles": 12,
+          "homingStrength": 0.02
+        }
+      },
+      {
+        "id": "star_on_hit_spawn",
+        "fn": "spawn_entity_on_event",
+        "target": "musket_shot",
+        "params": {
+          "when": "on_hit",
+          "entity": "hit_star",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Fire the musket with primary use. Each shot consumes one fallen star and travels in a gravity arc. A shot can pierce up to three NPCs; each actual hit can send a separate star along the shot's direction. These stars home gradually toward nearby chaseable NPCs, deal 14 ranged damage on contact, and expire after 1.25 seconds. No hit means no follow-up star.",
+    "playerExperience": "The familiar musket cadence and three-target pierce remain. Fallen stars fund every trigger; the short-lived homing sparks reward hits without creating an independent firing loop.",
+    "selfEvaluation": ""
+  }
+}

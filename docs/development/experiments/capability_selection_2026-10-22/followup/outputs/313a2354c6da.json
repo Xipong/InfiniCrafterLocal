@@ -1,0 +1,188 @@
+{
+  "name": "Vampire Ember Mantle",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "The vampire-spark wand (Жезл вампирской искры) is stitched into the cuff of the sewn vampire suit (Сшитый вампирский костюм), making a recognizable wand-and-garment combination: the cuff releases a falling red ember while the suit can be worn as an accessory.",
+    "coreMechanic": "Primary use fires one cursor-aimed magic ember for 12 base magic damage. It follows an authored gravity arc, has a 10×10 px hitbox, collides with tiles, lasts 1.5 seconds, and ends on its first NPC hit; a successful hit heals 10% of damage dealt, capped at 1 HP. The shot uses a 4-mana base cost and a 26-tick use interval/animation, preserving the wand parent's modest single-hit output and cadence while adding an explicit falling trajectory and on-hit siphon. The wearable accessory grants +2 defense, +1 HP/s life regeneration, and +5% movement speed. The latter two match the suit parent's passive regeneration and speed contribution; defense is a new authored benefit, not a parent fact or a holding bonus. Both parents have generation depth 0; rarity and value do not establish an acquisition tier, so no progression claim is made. The magic shot and its mana cost are a deliberate active benefit alongside the separately equipped passive package.",
+    "parentAContribution": "Жезл вампирской искры is a 12-damage magic wand with a 26-tick use interval, 4-mana cost, and a single cursor-aimed ember that has a gravity arc and heals its owner on a successful hit. Its focused wand identity supplies the active magic-ember action; this design keeps the source damage, timing, and mana cost and authors the gravity and capped healing directly.",
+    "parentBContribution": "Сшитый вампирский костюм is a sewn vampire-themed accessory whose source effects include life regeneration and movement speed. Its garment identity supplies the wearable passive role; the design retains +1 HP/s regeneration and +5% movement speed and adds +2 defense as a new explicit accessory effect.",
+    "playerExperience": "Use the wand-like cuff for a slow, mana-costing single ember with short reach and a small collision area; a hit returns at most 1 HP. Equip the mantle for its passive defense, regeneration, and speed. Those bonuses apply while equipped, not merely while held.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Fire one cursor-aimed magic ember; its gravity arc and first-hit healing make each deliberate shot useful without increasing the parent's base damage or firing rate."
+      },
+      {
+        "input": "equipped",
+        "intent": "Wear the stitched garment as an accessory for defense, life regeneration, and movement speed while equipped."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "vampire_ember_mantle",
+    "entities": [
+      {
+        "id": "vampire_ember_mantle",
+        "kind": "item_body"
+      },
+      {
+        "id": "vampire_ember",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "cast_vampire_ember",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "vampire_ember"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "wear_vampire_ember_mantle",
+        "input": "equipped",
+        "action": {
+          "kind": "equip_passive",
+          "targetId": "vampire_ember_mantle"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "set_mantle_item_stats",
+        "fn": "configure_item_stats",
+        "target": "vampire_ember_mantle",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "useTimeSeconds": 0.43333333333333335,
+          "useAnimationSeconds": 0.43333333333333335,
+          "manaCost": 4,
+          "rarity": 1,
+          "valueCopper": 60000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 40,
+          "scale": 1
+        }
+      },
+      {
+        "id": "set_mantle_use_style",
+        "fn": "configure_item_use",
+        "target": "vampire_ember_mantle",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "set_worn_mantle_bonuses",
+        "fn": "configure_accessory",
+        "target": "vampire_ember_mantle",
+        "params": {
+          "defensePoints": 2,
+          "lifeRegenHpPerSecond": 1,
+          "moveSpeedBonusPercent": 5
+        }
+      },
+      {
+        "id": "set_ember_launch",
+        "fn": "configure_spawn",
+        "target": "vampire_ember",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 26.25
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "set_ember_damage",
+        "fn": "set_projectile_damage",
+        "target": "vampire_ember",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "set_ember_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "vampire_ember",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "set_ember_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "vampire_ember",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "set_ember_collision",
+        "fn": "set_projectile_collision",
+        "target": "vampire_ember",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "set_ember_gravity",
+        "fn": "move_gravity_arc",
+        "target": "vampire_ember",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 27
+        }
+      },
+      {
+        "id": "heal_on_ember_hit",
+        "fn": "heal_owner_on_event",
+        "target": "vampire_ember",
+        "params": {
+          "when": "on_hit",
+          "damageFraction": 0.1,
+          "maxHeal": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Primary use fires one cursor-aimed 12-base-damage magic ember from the owner, at 26.25 blocks/s. Gravity curves its path downward (27 blocks/s²); the 10×10 px projectile collides with tiles and lasts up to 1.5 seconds. On a damaging NPC hit it heals 10% of damage dealt, capped at 1 HP, and then ends after that first hit. The wand's base mana cost is 4, with a 26-tick use interval and animation. Equip the stitched mantle as an accessory for +2 defense, +1 HP/s life regeneration, and +5% movement speed. These accessory effects apply while equipped; holding the item grants no defense.",
+    "playerExperience": "This combines a modest single-hit magic shot with a small, capped healing return and a separate wearable survival bonus. The ember's short lifetime, small hitbox, first-hit termination, and mana cost reward deliberate aiming; the accessory passives have value only in an equipment slot.",
+    "selfEvaluation": ""
+  }
+}

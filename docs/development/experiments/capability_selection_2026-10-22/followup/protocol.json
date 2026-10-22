@@ -1,0 +1,234 @@
+{
+  "schema": "ifc.selection-followup.v1",
+  "documentationPolicy": "selected_only",
+  "cases": [
+    "wand",
+    "musket",
+    "tool"
+  ],
+  "repeats": [
+    1,
+    2
+  ],
+  "arms": [
+    "baseline",
+    "groups_full",
+    "groups",
+    "capabilities_full",
+    "capabilities"
+  ],
+  "trials": [
+    {
+      "id": "f2580a328f7b",
+      "arm": "baseline",
+      "case": "wand",
+      "repeat": 1
+    },
+    {
+      "id": "b81836e90a3d",
+      "arm": "groups_full",
+      "case": "wand",
+      "repeat": 1
+    },
+    {
+      "id": "c86831d8c848",
+      "arm": "groups",
+      "case": "wand",
+      "repeat": 1
+    },
+    {
+      "id": "313a2354c6da",
+      "arm": "capabilities_full",
+      "case": "wand",
+      "repeat": 1
+    },
+    {
+      "id": "7c12e73d4c24",
+      "arm": "capabilities",
+      "case": "wand",
+      "repeat": 1
+    },
+    {
+      "id": "70e22213ae29",
+      "arm": "baseline",
+      "case": "wand",
+      "repeat": 2
+    },
+    {
+      "id": "58e916d9130c",
+      "arm": "groups_full",
+      "case": "wand",
+      "repeat": 2
+    },
+    {
+      "id": "0e15b865b005",
+      "arm": "groups",
+      "case": "wand",
+      "repeat": 2
+    },
+    {
+      "id": "631b3e8a199d",
+      "arm": "capabilities_full",
+      "case": "wand",
+      "repeat": 2
+    },
+    {
+      "id": "262bdac6c34e",
+      "arm": "capabilities",
+      "case": "wand",
+      "repeat": 2
+    },
+    {
+      "id": "e7b16819ae2a",
+      "arm": "baseline",
+      "case": "musket",
+      "repeat": 1
+    },
+    {
+      "id": "2f7081fcc9f8",
+      "arm": "groups_full",
+      "case": "musket",
+      "repeat": 1
+    },
+    {
+      "id": "14923e2db3ef",
+      "arm": "groups",
+      "case": "musket",
+      "repeat": 1
+    },
+    {
+      "id": "0f9e2679e51c",
+      "arm": "capabilities_full",
+      "case": "musket",
+      "repeat": 1
+    },
+    {
+      "id": "3e4dd2eb1725",
+      "arm": "capabilities",
+      "case": "musket",
+      "repeat": 1
+    },
+    {
+      "id": "28dcf98d1387",
+      "arm": "baseline",
+      "case": "musket",
+      "repeat": 2
+    },
+    {
+      "id": "b3c94e5aeb7b",
+      "arm": "groups_full",
+      "case": "musket",
+      "repeat": 2
+    },
+    {
+      "id": "eaf846afd998",
+      "arm": "groups",
+      "case": "musket",
+      "repeat": 2
+    },
+    {
+      "id": "325c90f89e75",
+      "arm": "capabilities_full",
+      "case": "musket",
+      "repeat": 2
+    },
+    {
+      "id": "60865d71d64a",
+      "arm": "capabilities",
+      "case": "musket",
+      "repeat": 2
+    },
+    {
+      "id": "a829bb543070",
+      "arm": "baseline",
+      "case": "tool",
+      "repeat": 1
+    },
+    {
+      "id": "95b4eef6a8e7",
+      "arm": "groups_full",
+      "case": "tool",
+      "repeat": 1
+    },
+    {
+      "id": "b078423fbce2",
+      "arm": "groups",
+      "case": "tool",
+      "repeat": 1
+    },
+    {
+      "id": "a502d9052420",
+      "arm": "capabilities_full",
+      "case": "tool",
+      "repeat": 1
+    },
+    {
+      "id": "3d3388c8ba9f",
+      "arm": "capabilities",
+      "case": "tool",
+      "repeat": 1
+    },
+    {
+      "id": "7cab69cba728",
+      "arm": "baseline",
+      "case": "tool",
+      "repeat": 2
+    },
+    {
+      "id": "7385276e7892",
+      "arm": "groups_full",
+      "case": "tool",
+      "repeat": 2
+    },
+    {
+      "id": "4d94bbe6b5ab",
+      "arm": "groups",
+      "case": "tool",
+      "repeat": 2
+    },
+    {
+      "id": "b150ae473ce3",
+      "arm": "capabilities_full",
+      "case": "tool",
+      "repeat": 2
+    },
+    {
+      "id": "bc9f69f1f9d8",
+      "arm": "capabilities",
+      "case": "tool",
+      "repeat": 2
+    }
+  ],
+  "selection": "4 fresh Luna sessions: one per mode/repeat, each selecting three cases; batch is the independent selector unit",
+  "author": "30 fresh GPT-6 Luna high sessions; one packet and one frozen answer each; no validator feedback or repair",
+  "controls": "Within each mode/case/repeat, full and reduced share the exact same selector intent and source context",
+  "limits": [
+    "no paid provider requests",
+    "no constrained decoding",
+    "no billed reasoning/cache/latency measurement",
+    "two replicates per case/arm, not a reliability estimate",
+    "no game smoke"
+  ],
+  "secondaryPreservation": "All 73 IDs remain discoverable; index-only cards lack full parameter grammar, so losslessness is NOT guaranteed",
+  "trap": "Excluded from comparative pass rate because original conjunction is not executable; retained as a separate catalogue diagnostic",
+  "primaryOutcome": "canonical validation AND all preregistered function checks; not validator alone",
+  "functionChecks": {
+    "wand": [
+      "primary magic damage",
+      "gravity on primary projectile",
+      "on-hit owner healing",
+      "equipped defense and regeneration"
+    ],
+    "musket": [
+      "fallen-star ammo consumption",
+      "primary damaging gravity projectile",
+      "on-hit reachable damaging homing child"
+    ],
+    "tool": [
+      "native primary pick action",
+      "primary straight damaging projectile",
+      "alternate returning damaging projectile isolated from primary",
+      "same-group held ore detection and regeneration"
+    ]
+  }
+}

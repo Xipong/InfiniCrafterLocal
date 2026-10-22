@@ -1,0 +1,272 @@
+{
+  "name": "Seamdelver",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A compact miner's pick with a crescent-shaped, returning head and a short, bright trail. The synthetic parent context supplies no concrete names or appearance, so the design establishes its own visual identity without claiming either feature was observed.",
+    "coreMechanic": "A reusable pick that mines on primary use while launching one straight, cursor-aimed bolt, and launches a separate returning crescent on alternate use. The tool has 65% pick power and a modest 10% faster mining factor while held. A one-second generated effect refreshes each tick while the pick is held, highlighting eligible ores, chests, and life crystals and restoring 1 HP/s; it lingers for up to one second after release. Both shots are explicit authored projectiles, not mining tools. Synthetic parents have no numeric damage, cadence, progression, rarity, or acquisition facts, so values are bounded design choices rather than inherited power. At a 0.5-second base use interval, each active input can be repeated while held; the straight shot and return shot each have a modest 18 damage, with separate use roots and no cross-launch. The item is reusable and consumes no stack per use. No ammunition requirement is added.",
+    "parentAContribution": "Parent A is an unnamed, empty synthetic Terraria source with no supplied appearance or mechanics. Its contribution is represented as the miner's pick form and useful pick power, both authored for this design rather than attributed to the source.",
+    "parentBContribution": "Parent B is an unnamed, empty synthetic Terraria source with no supplied appearance or mechanics. Its contribution is represented as the returning crescent projectile action, newly authored rather than claimed as an observed parent ability.",
+    "playerExperience": "Mine normally with primary use and send a straight shot at the cursor at the same time. Alternate use launches the returning shot without launching the straight one. Holding the item refreshes ore highlighting and 1 HP/s regeneration; the buff can linger briefly after release. The item itself is reusable, while both attacks still follow its 0.5-second base use interval.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Mine with the configured pick power and launch only the straight cursor-aimed damaging projectile."
+      },
+      {
+        "input": "alternate_use",
+        "intent": "Launch only the damaging crescent that turns back toward its owner after a short outbound flight."
+      },
+      {
+        "input": "hold",
+        "intent": "While the item is selected and held, refresh the named utility group for eligible treasure highlighting and modest life regeneration; do not create a held projectile or defense effect."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "seamdelver_body",
+    "entities": [
+      {
+        "id": "seamdelver_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "straight_bolt",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "returning_crescent",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "primary_mine_and_bolt",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "straight_bolt"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "alternate_returning_crescent",
+        "input": "alternate_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "returning_crescent"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "body_stats",
+        "fn": "configure_item_stats",
+        "target": "seamdelver_body",
+        "params": {
+          "damageClass": "melee",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "manaCost": 0,
+          "rarity": 3,
+          "valueCopper": 25000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 32,
+          "scale": 1
+        }
+      },
+      {
+        "id": "body_use",
+        "fn": "configure_item_use",
+        "target": "seamdelver_body",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": true,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": "one_handed"
+        }
+      },
+      {
+        "id": "mining_tool",
+        "fn": "configure_tool",
+        "target": "seamdelver_body",
+        "params": {
+          "pickPower": 65,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1.1
+        }
+      },
+      {
+        "id": "held_utility_group",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "seamdelver_body",
+        "params": {
+          "effectGroupId": "held_ore_vigor"
+        }
+      },
+      {
+        "id": "held_utility_effect",
+        "fn": "apply_generated_buff_on_use",
+        "target": "seamdelver_body",
+        "params": {
+          "durationSeconds": 1,
+          "lightStrength": 0,
+          "lightColor": "white",
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 1,
+          "effectGroupId": "held_ore_vigor"
+        }
+      },
+      {
+        "id": "bolt_spawn",
+        "fn": "configure_spawn",
+        "target": "straight_bolt",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 30
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0.5,
+          "aim": "cursor",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "bolt_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_bolt",
+        "params": {
+          "damageClass": "melee",
+          "damage": 18,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "bolt_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_bolt",
+        "params": {
+          "lifetimeSeconds": 2
+        }
+      },
+      {
+        "id": "bolt_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_bolt",
+        "params": {
+          "widthPx": 16,
+          "heightPx": 16,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "bolt_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_bolt",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "bolt_motion",
+        "fn": "move_straight",
+        "target": "straight_bolt",
+        "params": {}
+      },
+      {
+        "id": "crescent_spawn",
+        "fn": "configure_spawn",
+        "target": "returning_crescent",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 24
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0.5,
+          "aim": "cursor",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "crescent_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_crescent",
+        "params": {
+          "damageClass": "melee",
+          "damage": 18,
+          "knockback": 3,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "crescent_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_crescent",
+        "params": {
+          "lifetimeSeconds": 4
+        }
+      },
+      {
+        "id": "crescent_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_crescent",
+        "params": {
+          "widthPx": 24,
+          "heightPx": 24,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "crescent_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_crescent",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "pierce": 2,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "crescent_return_motion",
+        "fn": "move_boomerang",
+        "target": "returning_crescent",
+        "params": {
+          "returnAfterSeconds": 0.7,
+          "returnSpeedBlocksPerSecond": 30
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Use primary to mine and launch a straight 18-damage shot at the cursor. Use alternate to launch a separate 18-damage crescent; after 0.7 seconds it turns back toward you. Each action repeats at a base interval of 0.5 seconds while held, and the item is not consumed. While you hold the pick, eligible ores, chests, and life crystals receive native treasure highlighting, and the generated effect restores 1 HP per second. The effect lasts up to one second after you stop holding it. The pick has 65% pick power and mines at a modestly faster base rate. Projectile damage and mining output can vary with player modifiers and game rules.",
+    "playerExperience": "The active inputs are independent: primary mines and launches only the straight shot; alternate launches only the returning crescent. Repeated use follows the shared 0.5-second base use interval. Holding the item supplies ore detection and a small life-regeneration benefit, without a defense bonus or ammo requirement.",
+    "selfEvaluation": "Authored from an empty synthetic parent context. The required held utility group uses apply_generated_buff_on_use with a matching held refresh selector; the active projectile bindings remain separate and no item-body event is used to launch either shot."
+  }
+}

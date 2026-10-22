@@ -1,0 +1,18 @@
+{
+  "focusedTests": {
+    "passed": 24,
+    "files": [
+      "LocalGenerator/tests/test_capability_selection_experiment.py",
+      "LocalGenerator/tests/test_capability_selection_scoring.py"
+    ]
+  },
+  "round1ArtifactsHashMatched": 40,
+  "round2ReconstructedPacketsHashMatched": 30,
+  "round2FrozenOutputsHashMatched": 30,
+  "canonicalAcceptedOutputsCompiled": 26,
+  "evidenceJsonAndRelativeLinksChecked": true,
+  "productionChanged": false,
+  "gameRun": false,
+  "providerApiRun": false,
+  "fullReleaseGateRun": false
+}

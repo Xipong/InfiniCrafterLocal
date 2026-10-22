@@ -1,0 +1,292 @@
+{
+  "name": "Prospector's Twinflight Pick",
+  "category": "tool",
+  "concept": {
+    "literalSynthesis": "Both supplied parents are Unknown Terraria entries with empty item packets, so no concrete parent appearance is available to preserve. This new item is imagined as a compact prospecting pick with a straight-shot channel and a returning crescent projectile.",
+    "coreMechanic": "This is a reusable native pick with positive pick power. Primary use performs the item's native mining action and launches one straight, damaging projectile. Alternate use applies the named prospecting effect group and launches a separate returning projectile; the return shot is emitted only from the alternate-use event. While the item is held, the same group refreshes Spelunker ore and treasure highlighting and grants a modest 1 HP/s life regeneration. The synthetic parents provide no numeric damage, tempo, rarity, value, acquisition, or progression facts, so the bounded stats below are authored choices rather than inherited observations. The 0.5-second reuse interval supports one deliberate shot per activation; both projectiles are reusable, consume no item stack, and have no mana cost. Pick power is 65 with a mild 1.15 mining-speed divisor. The projectiles have distinct damage and handling: the straight shot deals 14 base damage and ends on its first NPC hit, while the 22-damage crescent can strike during its outbound and return path before its finite lifetime ends. The effect group refreshes while held without an exhaustion lockout, so its modest bonuses are sustained while the item remains held, not a limited burst.",
+    "parentAContribution": "Parent A is an Unknown Terraria entry with an empty synthetic item packet; no appearance or mechanics are supplied. Its role here is a newly authored straight prospecting shot paired with the native mining-tool function, not a claimed source ability.",
+    "parentBContribution": "Parent B is an Unknown Terraria entry with an empty synthetic item packet; no appearance or mechanics are supplied. Its role here is a newly authored returning crescent shot and a prospecting theme, not a claimed source ability.",
+    "playerExperience": "Mine and fire the straight shot with primary use; use alternate fire for a returning crescent and a brief effect refresh. Holding the item sustains ore highlighting and modest regeneration. Both shots are reusable, but their hit policies and travel paths differ.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Use the native pick and fire one straight damaging projectile; this input does not fire the returning projectile."
+      },
+      {
+        "input": "alternate_use",
+        "intent": "Apply the named prospecting effect group and emit one separate boomerang-like returning projectile; this input does not fire the straight projectile."
+      },
+      {
+        "input": "hold",
+        "intent": "While the item is held, refresh the same generated effect group for ore and treasure highlighting plus modest life regeneration, without occupying either active-use action."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "prospector_body",
+    "entities": [
+      {
+        "id": "prospector_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "straight_shot",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "returning_crescent",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "primary_pick_shot",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "straight_shot"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "alternate_prospecting_throw",
+        "input": "alternate_use",
+        "action": {
+          "kind": "apply_item_effects",
+          "targetId": "prospector_body",
+          "effectGroupId": "prospecting_group"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "body_stats",
+        "fn": "configure_item_stats",
+        "target": "prospector_body",
+        "params": {
+          "damageClass": "melee",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "manaCost": 0,
+          "rarity": 2,
+          "valueCopper": 1600,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 30,
+          "heightPx": 30,
+          "scale": 1
+        }
+      },
+      {
+        "id": "body_use",
+        "fn": "configure_item_use",
+        "target": "prospector_body",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": false,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": "one_handed",
+          "customHeldSprite": "inherit"
+        }
+      },
+      {
+        "id": "native_pick",
+        "fn": "configure_tool",
+        "target": "prospector_body",
+        "params": {
+          "pickPower": 65,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1.15
+        }
+      },
+      {
+        "id": "straight_spawn_config",
+        "fn": "configure_spawn",
+        "target": "straight_shot",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 28
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "straight_life",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_shot",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "straight_box",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_shot",
+        "params": {
+          "widthPx": 12,
+          "heightPx": 12,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "straight_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "straight_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_shot",
+        "params": {
+          "damageClass": "melee",
+          "damage": 14,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "straight_motion",
+        "fn": "move_straight",
+        "target": "straight_shot",
+        "params": {}
+      },
+      {
+        "id": "return_spawn_config",
+        "fn": "configure_spawn",
+        "target": "returning_crescent",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 24
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "return_life",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_crescent",
+        "params": {
+          "lifetimeSeconds": 2.5
+        }
+      },
+      {
+        "id": "return_box",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_crescent",
+        "params": {
+          "widthPx": 18,
+          "heightPx": 18,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "return_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_crescent",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 3,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "return_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_crescent",
+        "params": {
+          "damageClass": "melee",
+          "damage": 22,
+          "knockback": 3,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "return_motion",
+        "fn": "move_returning_glaive",
+        "target": "returning_crescent",
+        "params": {
+          "returnAfterSeconds": 0.65,
+          "returnSpeedBlocksPerSecond": 36
+        }
+      },
+      {
+        "id": "held_group_effect",
+        "fn": "apply_generated_buff_on_use",
+        "target": "prospector_body",
+        "params": {
+          "durationSeconds": 2,
+          "exhaustionSeconds": 0,
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 1,
+          "effectGroupId": "prospecting_group"
+        }
+      },
+      {
+        "id": "held_group_refresh",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "prospector_body",
+        "params": {
+          "effectGroupId": "prospecting_group"
+        }
+      },
+      {
+        "id": "alternate_return_event",
+        "fn": "spawn_entity_on_event",
+        "target": "prospector_body",
+        "params": {
+          "when": {
+            "event": "on_use",
+            "input": "alternate_use"
+          },
+          "entity": "returning_crescent",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Primary use swings the pick to mine with 65 pick power and launches one straight projectile with 14 base damage. Alternate use applies the prospecting group and, on that alternate-use event, emits one separate 22-damage crescent that flies out and returns toward you after 0.65 seconds; it can hit up to three times per NPC, subject to Terraria collision and immunity rules. While held, the group refreshes each world tick and provides Spelunker highlighting for eligible ores, chests, and life crystals plus 1 HP/s regeneration. Its two-second duration lingers briefly after release. The projectiles do not mine. Neither active use consumes the reusable tool or mana.",
+    "playerExperience": "The straight shot is narrower and stops at its first NPC contact; the crescent has a longer, finite path and may revisit targets on its return. Holding the pick sustains the modest prospecting effects, so the brief buff duration is not a use cooldown."
+  }
+}

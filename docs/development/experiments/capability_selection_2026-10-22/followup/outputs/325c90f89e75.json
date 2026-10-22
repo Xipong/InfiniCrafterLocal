@@ -1,0 +1,244 @@
+{
+  "name": "Мушкет звёздного Джестера: Падающая звезда",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "The Russian-named Jester's Star Musket is loaded with a Terraria Fallen Star and fires a bright star round that arcs downward; when it hits an enemy, a smaller seeking star breaks away.",
+    "coreMechanic": "Use a ranged musket shot every 32 ticks (about 0.53 seconds). Each active shot requires a Fallen Star and uses Terraria's native ammo selection and consumption rules, including any native ammo-saving hooks. The main projectile deals the musket's authored 31 ranged base damage plus the selected ammo's native contribution, follows a deliberate downward gravity arc, and stops after its first NPC hit. That hit creates one child star whose damage is 35% of the main projectile's live damage; the child turns slowly toward a nearby enemy and expires after one second. This creates a single, bounded follow-up hit per main shot, while making Fallen Stars a recurring combat cost. The musket's source facts show 31 damage, a 32-tick interval, Blue rarity, value 77,600 copper, and generation depth zero; the Fallen Star is a Blue, 2,500-copper consumable material. No progression tier or standalone Fallen Star damage is inferred from those facts.",
+    "parentAContribution": "The Jester's Star Musket supplies the concrete musket identity, ranged damage class, 31 base damage, 5.25 knockback, 32-tick cadence, and 9-pixel-per-tick projectile-speed reference. Its observed runtime shot was a piercing star arrow; the new downward gravity and Fallen Star ammo requirement are authored mechanics for this synthesis, not claims about that observed shot.",
+    "parentBContribution": "Terraria's Fallen Star supplies the second identity and is used as the weapon's selected ammo category. Its observed facts include Blue rarity, a 2,500-copper value, and consumable-material status; its damage sentinel does not establish a damage amount. The authored child star is a new effect, not an observed Fallen Star ability.",
+    "playerExperience": "Aim the musket and fire at the normal cadence. A shot consumes a Fallen Star subject to native ammo-saving rules, arcs downward, and can produce one weaker homing follow-up on its first enemy hit. The arc rewards aiming ahead, while ammunition limits repeat use.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Fire one cursor-aimed, gravity-arc ranged round using a Fallen Star as ammunition; its first enemy hit creates one slower, weaker homing star. Native ammo selection and consumption govern the recurring cost."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "jester_star_musket_body",
+    "entities": [
+      {
+        "id": "jester_star_musket_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "falling_star_round",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "seeking_child_star",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "fire_fallen_star_round",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "falling_star_round"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "musket_item_stats",
+        "fn": "configure_item_stats",
+        "target": "jester_star_musket_body",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "useTimeSeconds": 0.5333333333333333,
+          "useAnimationSeconds": 0.5333333333333333,
+          "rarity": 1,
+          "valueCopper": 77600,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 56,
+          "heightPx": 20,
+          "scale": 1,
+          "manaCost": 0
+        }
+      },
+      {
+        "id": "musket_use_controls",
+        "fn": "configure_item_use",
+        "target": "jester_star_musket_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "handPose": "two_handed",
+          "customHeldSprite": "inherit"
+        }
+      },
+      {
+        "id": "fallen_star_ammo_requirement",
+        "fn": "configure_weapon_ammo",
+        "target": "jester_star_musket_body",
+        "params": {
+          "ammoCategory": "fallen_star",
+          "speedBasis": "native_shot"
+        }
+      },
+      {
+        "id": "main_round_spawn",
+        "fn": "configure_spawn",
+        "target": "falling_star_round",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 33.75
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1.75,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "main_round_damage",
+        "fn": "set_projectile_damage",
+        "target": "falling_star_round",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "main_round_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "falling_star_round",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "main_round_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "falling_star_round",
+        "params": {
+          "widthPx": 12,
+          "heightPx": 12,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "main_round_collision",
+        "fn": "set_projectile_collision",
+        "target": "falling_star_round",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "main_round_gravity_arc",
+        "fn": "move_gravity_arc",
+        "target": "falling_star_round",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 12
+        }
+      },
+      {
+        "id": "child_star_spawn",
+        "fn": "configure_spawn",
+        "target": "seeking_child_star",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 8
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "velocity",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "child_star_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "seeking_child_star",
+        "params": {
+          "lifetimeSeconds": 1
+        }
+      },
+      {
+        "id": "child_star_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "seeking_child_star",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "child_star_collision",
+        "fn": "set_projectile_collision",
+        "target": "seeking_child_star",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": {
+            "localCooldown": 20
+          }
+        }
+      },
+      {
+        "id": "child_star_slow_homing",
+        "fn": "move_slow_homing",
+        "target": "seeking_child_star",
+        "params": {
+          "rangeTiles": 18,
+          "homingStrength": 0.035
+        }
+      },
+      {
+        "id": "main_hit_spawns_child_star",
+        "fn": "spawn_entity_on_event",
+        "target": "falling_star_round",
+        "params": {
+          "when": "on_hit",
+          "entity": "seeking_child_star",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "live_parent",
+          "knockbackBasis": "live_parent",
+          "damageMultiplier": 0.35,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Fire with primary use while carrying Fallen Stars. The musket launches a cursor-aimed shot at its base 32-tick interval; each active shot uses Terraria's native Fallen Star ammo selection and conservation rules. The shot follows a downward gravity arc and ends on its first NPC hit. That hit spawns one child star with 35% of the main shot's live damage and knockback; it starts along the shot's travel direction, turns gradually toward a chaseable enemy within 18 blocks, and lasts up to one second. The child can be blocked by tiles and hits each NPC at most once.",
+    "playerExperience": "The main round is the reliable direct hit; the slower child can add a follow-up when a target remains in range and the path is clear. Fallen Star availability and the native ammo-saving result set the effective firing supply.",
+    "selfEvaluation": "The primary shot is an active spawn_entity binding and the item explicitly requires fallen_star ammunition. Main and child movement are authored on their respective entities; the main on_hit event spawns one bounded child."
+  }
+}

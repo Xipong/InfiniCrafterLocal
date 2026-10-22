@@ -1,0 +1,250 @@
+{
+  "name": "Jester's Falling Star Musket",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "The jester's star musket fires with a fallen star as its ammunition; a successful hit sends a smaller, trailing star back into the fight.",
+    "coreMechanic": "Fire one gravity-arching ranged shot at a time, consuming one fallen-star ammunition unit for each accepted primary shot. A hit releases one separate, slower star that gradually homes toward nearby enemies. The musket's 31 base damage and 0.533-second use interval retain the generated musket's basic shot profile; the follow-up adds a modest 10-damage hit when it connects. The weapon is single-stack and reusable, but its ammunition is a recurring cost. The fallen star's own damage is a source ammunition contribution, not evidence of a standalone weapon attack.",
+    "parentAContribution": "The generated parent's identity is a Jester's Star Musket, with ranged damage 31, 5.25 knockback, a 32-tick firing interval, and a star projectile. Its useful contribution is the musket's deliberate, measured shot cadence and ranged punch; the new primary trajectory and follow-up are authored mechanics.",
+    "parentBContribution": "The other parent is Terraria's Fallen Star, a consumable material and fallen-star ammo category with a large stack size. It supplies the actual native ammunition requirement and the identity of the small follow-up star; its negative damage sentinel is not treated as an attack value.",
+    "playerExperience": "Aim and fire at the cursor. Each shot spends a fallen star; direct hits can release one low-damage homing follow-up. Gravity makes the main shot arc, while the follow-up's slow steering helps it pursue nearby targets.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Aim at a target and fire a single gravity-arching musket shot, consuming one fallen star. A hit releases one separate, slowly homing star."
+      }
+    ]
+  },
+  "realization": {
+    "description": "A reusable ranged musket that consumes one fallen star per shot. Its cursor-aimed main projectile follows a gravity arc; on a hit, it releases a separate star that slowly homes toward nearby enemies. The follow-up is a separate projectile and is not guaranteed to hit.",
+    "playerExperience": "The 32-tick base firing interval is deliberate, and ammunition is the recurring cost. The main shot deals 31 base damage; a hit can add one 10-damage follow-up if the slower star connects."
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "musket_body",
+    "entities": [
+      {
+        "id": "musket_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "gravity_star_shot",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "homing_followup_star",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "fire_gravity_star",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "gravity_star_shot"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "musket_stats",
+        "fn": "configure_item_stats",
+        "target": "musket_body",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "useTimeSeconds": 0.5333333333333333,
+          "useAnimationSeconds": 0.5333333333333333,
+          "rarity": 1,
+          "valueCopper": 77600,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 56,
+          "heightPx": 20,
+          "scale": 1
+        }
+      },
+      {
+        "id": "musket_use",
+        "fn": "configure_item_use",
+        "target": "musket_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": "two_handed"
+        }
+      },
+      {
+        "id": "fallen_star_ammo",
+        "fn": "configure_weapon_ammo",
+        "target": "musket_body",
+        "params": {
+          "ammoCategory": "fallen_star",
+          "speedBasis": "authored_spawn"
+        }
+      },
+      {
+        "id": "main_star_spawn",
+        "fn": "configure_spawn",
+        "target": "gravity_star_shot",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 33.75
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1.75,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "main_star_damage",
+        "fn": "set_projectile_damage",
+        "target": "gravity_star_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "main_star_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "gravity_star_shot",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "main_star_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "gravity_star_shot",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "main_star_collision",
+        "fn": "set_projectile_collision",
+        "target": "gravity_star_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "main_star_gravity",
+        "fn": "move_gravity_arc",
+        "target": "gravity_star_shot",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 6
+        }
+      },
+      {
+        "id": "main_star_hit_release",
+        "fn": "spawn_entity_on_event",
+        "target": "gravity_star_shot",
+        "params": {
+          "when": "on_hit",
+          "entity": "homing_followup_star",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      },
+      {
+        "id": "followup_star_spawn",
+        "fn": "configure_spawn",
+        "target": "homing_followup_star",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 10
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "velocity",
+          "position": {
+            "above": "activation_origin",
+            "heightTiles": 1,
+            "activationDelaySeconds": 0.1
+          }
+        }
+      },
+      {
+        "id": "followup_star_damage",
+        "fn": "set_projectile_damage",
+        "target": "homing_followup_star",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 10,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "followup_star_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "homing_followup_star",
+        "params": {
+          "lifetimeSeconds": 2.5
+        }
+      },
+      {
+        "id": "followup_star_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "homing_followup_star",
+        "params": {
+          "widthPx": 8,
+          "heightPx": 8,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "followup_star_collision",
+        "fn": "set_projectile_collision",
+        "target": "homing_followup_star",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "followup_star_homing",
+        "fn": "move_slow_homing",
+        "target": "homing_followup_star",
+        "params": {
+          "rangeTiles": 12,
+          "homingStrength": 0.025
+        }
+      }
+    ]
+  }
+}

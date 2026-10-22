@@ -1,9 +1,10 @@
 """Offline two-pass documentation experiments; never called by production craft.
 
 Selection changes documentation detail, never registry admission or runtime code.
-All non-driver operations remain fully documented to protect secondary functions.
-Only movement/controller detail is selective. Every operation remains discoverable
-in the complete index. An explicit fullCatalog choice restores the original packet.
+The original non_drivers policy reserves secondary-function documentation.
+The follow-up selected_only policy tests selection across all registry groups.
+Every operation remains discoverable; index-only is not full parameter grammar.
+An explicit fullCatalog choice restores the original packet.
 These are prompt experiments, not a new provider adapter or a gameplay router.
 """
 from __future__ import annotations
@@ -16,6 +17,7 @@ from typing import Any, Mapping
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
 MODES = ("groups", "capabilities")
+POLICIES = ("non_drivers", "selected_only")
 _SELECTIVE_CATEGORIES = frozenset({"movement", "controller"})
 _NEGATIVE_REQUIREMENTS = frozenset({
     "capability_absent", "capability_param_absent", "present_param_forbids_capability",
@@ -39,8 +41,8 @@ def catalog_revision(payload: Mapping[str, Any]) -> str:
     return hashlib.sha256(_json(_cards(payload)).encode("utf-8")).hexdigest()
 
 
-def catalogue_index(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Every capability, including all secondary parameter names and requirements."""
+def catalogue_index(payload: Mapping[str, Any], *, compact: bool = False) -> list[dict[str, Any]]:
+    """Every capability and parameter name; compact mode omits requirements."""
     rows = []
     for card in _cards(payload):
         cap = CAPABILITY_REGISTRY[card["fn"]]
@@ -49,6 +51,13 @@ def catalogue_index(payload: Mapping[str, Any]) -> list[dict[str, Any]]:
             "exclusiveGroup", "effectGroups", "multiplicity",
         ) if key in card}
         row.update(group=cap.category, parameters=list(card["params"]), dependencies=list(cap.dependencies))
+        if compact:
+            # Discovery descriptions stay verbatim. Parameter grammar belongs to
+            # the selected full cards; dependency expansion uses the registry.
+            row.pop("requires", None)
+            for key in ("positionOwnership", "constructionMeaning", "budget"):
+                if key in card:
+                    row[key] = deepcopy(card[key])
         rows.append(row)
     return rows
 
@@ -69,7 +78,9 @@ def selection_schema(payload: Mapping[str, Any], mode: str) -> dict[str, Any]:
     }
 
 
-def build_selector_packet(payload: Mapping[str, Any], mode: str) -> dict[str, Any]:
+def build_selector_packet(payload: Mapping[str, Any], mode: str, *, policy: str = "non_drivers") -> dict[str, Any]:
+    if policy not in POLICIES:
+        raise ValueError(f"Unknown documentation policy: {policy}")
     schema = selection_schema(payload, mode)
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     return {
@@ -79,9 +90,13 @@ def build_selector_packet(payload: Mapping[str, Any], mode: str) -> dict[str, An
             "Consider secondary active inputs, held effects, equipment reactions, placement, "
             "tools, ammunition and child entities as well as the main action. "
             "Do not promise unsupported effects. Keep source facts distinct from invented design. "
-            "The next Author receives full documentation for all non-movement/non-controller "
+            + ("The next Author receives full documentation for all non-movement/non-controller "
             "capabilities automatically. Your selection decides which movement/controller "
-            "documentation is also detailed. Consider every entity, including secondary shots. "
+            "documentation is also detailed. " if policy == "non_drivers" else
+            "There is no automatic secondary-function reserve. Select documentation for every "
+            "required operation, including secondary functions, event producers, buffs and bindings. "
+            "The compact index is discovery information, not a complete feasibility contract. ")
+            + "Consider every entity, including secondary shots. "
             "Select multiple alternatives if the implementation may need them. "
             "Conflicts are per target, not global. Selection is permission to consider, not an "
             "instruction to instantiate every capability. fullCatalog=true explicitly keeps "
@@ -92,7 +107,7 @@ def build_selector_packet(payload: Mapping[str, Any], mode: str) -> dict[str, An
         ),
         "static": {
             "mode": mode, "catalogRevision": catalog_revision(payload),
-            "completeCatalogue": catalogue_index(payload),
+            "completeCatalogue": catalogue_index(payload, compact=policy == "selected_only"),
             "topology": {key: deepcopy(catalog[key]) for key in (
                 "entityKinds", "inputs", "bindingActions", "events", "limits",
             )},
@@ -149,17 +164,19 @@ def _positive_dependencies(names: set[str]) -> tuple[set[str], list[dict[str, st
         result.update(additions)
 
 
-def build_author_variant(payload: Mapping[str, Any], mode: str, selection: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+def build_author_variant(payload: Mapping[str, Any], mode: str, selection: Mapping[str, Any], *, policy: str = "non_drivers") -> tuple[dict[str, Any], dict[str, Any]]:
     """Two implementations: whole registry groups, or exact capability selection.
 
     Runtime admission stays global. No enum, validator, compiler or production
     prompt is patched. A valid call outside the detailed subset stays valid.
     """
+    if policy not in POLICIES:
+        raise ValueError(f"Unknown documentation policy: {policy}")
     _validate_selection(payload, mode, selection)
     all_cards = _cards(payload)
     selected = set(selection["selected"])
     requested = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.category in selected} if mode == "groups" else selected
-    reserve = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.category not in _SELECTIVE_CATEGORIES}
+    reserve = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.category not in _SELECTIVE_CATEGORIES} if policy == "non_drivers" else set()
     detailed, receipts = _positive_dependencies(requested | reserve)
     if selection["fullCatalog"]:
         detailed = set(CAPABILITY_REGISTRY)
@@ -169,7 +186,7 @@ def build_author_variant(payload: Mapping[str, Any], mode: str, selection: Mappi
         # Detailed cards already expose their full meaning. Index only omitted
         # cards, so preserving catalogue discovery does not duplicate all docs.
         result["runtimeCapabilityContract"]["indexOnlyCapabilities"] = [
-            row for row in catalogue_index(payload) if row["fn"] not in detailed
+            row for row in catalogue_index(payload, compact=policy == "selected_only") if row["fn"] not in detailed
         ]
         header = result["priorityHeader"]
         original = "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities."
@@ -191,4 +208,6 @@ def build_author_variant(payload: Mapping[str, Any], mode: str, selection: Mappi
         "dependencyDocumentation": receipts, "explicitFullCatalog": selection["fullCatalog"],
         "runtimeAdmissionChanged": False,
     }
+    if policy != "non_drivers":
+        audit["documentationPolicy"] = policy
     return result, audit

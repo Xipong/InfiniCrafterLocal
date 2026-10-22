@@ -1,0 +1,214 @@
+{
+  "name": "Surveyor's Pick",
+  "category": "tool",
+  "concept": {
+    "literalSynthesis": "The supplied synthetic parents are both named Unknown and contain no appearance details, so no concrete parent-derived visual combination can be asserted. The authored item is a straightforward surveyor's pick.",
+    "coreMechanic": "A reusable mining tool with 65% pick power mines on primary use while launching one straight 18-damage projectile. Alternate use launches a separate 24-damage projectile that returns after its outbound interval. Both shots use cursor aim and have independently authored movement. Holding the item refreshes a named utility effect with native ore highlighting and 0.5 HP/s life regeneration. The synthetic parents supply no damage, tempo, progression, ingredient, or resource facts; these are bounded authored values rather than inherited measurements. The tool replaces ordinary mining with an explicit 65-pick tool and adds two distinct ranged actions, so it has broader utility than an unarmed pick but no claimed progression tier. The 0.5-second base use interval governs both active inputs. The projectiles can overlap during their lifetimes; no additional projectile cap or recurring payment is authored. The held effect is refreshed while selected, lasts 2 seconds per application, and can therefore remain active during continued holding; its modest regeneration is valued as sustained utility. No crafting or parent economy facts were supplied, so no acquisition or cost claim is made.",
+    "parentAContribution": "Parent A is supplied only as Unknown with empty item data, so its appearance and mechanics cannot be established. The mining-tool role and straight primary projectile are new authored functions for this synthesis, not observed parent abilities.",
+    "parentBContribution": "Parent B is supplied only as Unknown with empty item data, so its appearance and mechanics cannot be established. The returning alternate projectile and held survey effect are new authored functions for this synthesis, not observed parent abilities.",
+    "playerExperience": "Primary use mines and fires a straight shot; alternate use throws a returning shot. Holding the selected tool refreshes modest ore-finding and healing utility. The active actions share a half-second base use interval, and the held benefit has no authored recurring resource cost.",
+    "plannedPlayerActions": [
+      {"input": "primary_use", "intent": "Mine with the pick and launch only the straight damaging projectile."},
+      {"input": "alternate_use", "intent": "Launch only the returning damaging projectile."},
+      {"input": "hold", "intent": "While the tool is selected, refresh the named ore-detection and modest life-regeneration effect group."}
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "item_body",
+    "entities": [
+      {"id": "item_body", "kind": "item_body"},
+      {"id": "straight_shot", "kind": "free_projectile"},
+      {"id": "returning_shot", "kind": "free_projectile"}
+    ],
+    "bindings": [
+      {
+        "id": "primary_shot_binding",
+        "input": "primary_use",
+        "action": {"kind": "spawn_entity", "targetId": "straight_shot"},
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "alternate_return_binding",
+        "input": "alternate_use",
+        "action": {"kind": "spawn_entity", "targetId": "returning_shot"},
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "item_body",
+        "params": {
+          "damageClass": "melee",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "rarity": 0,
+          "valueCopper": 50000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 32,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "item_body",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": true,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "pick_tool",
+        "fn": "configure_tool",
+        "target": "item_body",
+        "params": {
+          "pickPower": 65,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1.2
+        }
+      },
+      {
+        "id": "straight_spawn",
+        "fn": "configure_spawn",
+        "target": "straight_shot",
+        "params": {
+          "velocity": {"constantSpeedBlocksPerSecond": 26},
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": {"at": "activation_origin"}
+        }
+      },
+      {
+        "id": "straight_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 18,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "straight_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_shot",
+        "params": {"lifetimeSeconds": 1.2}
+      },
+      {
+        "id": "straight_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_shot",
+        "params": {"widthPx": 12, "heightPx": 12, "drawScale": 1, "hitboxScale": 1}
+      },
+      {
+        "id": "straight_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {"id": "straight_movement", "fn": "move_straight", "target": "straight_shot", "params": {}},
+      {
+        "id": "return_spawn",
+        "fn": "configure_spawn",
+        "target": "returning_shot",
+        "params": {
+          "velocity": {"constantSpeedBlocksPerSecond": 24},
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": {"at": "activation_origin"}
+        }
+      },
+      {
+        "id": "return_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 24,
+          "knockback": 3,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "return_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_shot",
+        "params": {"lifetimeSeconds": 2.4}
+      },
+      {
+        "id": "return_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_shot",
+        "params": {"widthPx": 18, "heightPx": 18, "drawScale": 1, "hitboxScale": 1}
+      },
+      {
+        "id": "return_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": -1,
+          "updatesPerTick": 1,
+          "immunity": {"localCooldown": 15}
+        }
+      },
+      {
+        "id": "return_movement",
+        "fn": "move_boomerang",
+        "target": "returning_shot",
+        "params": {"returnAfterSeconds": 0.65, "returnSpeedBlocksPerSecond": 27}
+      },
+      {
+        "id": "held_survey_effect",
+        "fn": "apply_generated_buff_on_use",
+        "target": "item_body",
+        "params": {
+          "durationSeconds": 2,
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 0.5,
+          "effectGroupId": "held_survey"
+        }
+      },
+      {
+        "id": "held_survey_refresh",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "item_body",
+        "params": {"effectGroupId": "held_survey"}
+      }
+    ]
+  },
+  "realization": {
+    "description": "Primary use mines with 65% pick power and launches one straight 18-damage shot. Alternate use launches one 24-damage returning shot; it turns back after 0.65 seconds or when it hits a wall and can hit each NPC repeatedly subject to its 15-count local immunity timer. Both inputs share a base 0.5-second use interval. While this item is selected, it refreshes an effect that highlights eligible treasure and ores and restores 0.5 life per second. Each application lasts 2 seconds, so the effect continues briefly after you stop holding the tool. The projectiles do not mine.",
+    "playerExperience": "The pick's mining powers are modest, and the two ranged inputs remain separate. The held survey effect is useful during exploration but remains a low-rate, sustained benefit while the tool stays selected."
+  }
+}

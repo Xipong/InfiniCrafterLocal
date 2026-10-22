@@ -97,3 +97,33 @@ def test_existing_full_registry_validator_remains_unchanged(payload):
     assert validate_runtime_program(original)["ok"]
     build_author_variant(payload, "capabilities", choice(payload))
     assert validate_runtime_program(original)["ok"]
+
+
+def test_selected_only_has_no_hidden_reserve_but_preserves_catalogue(payload):
+    packet, audit = build_author_variant(payload, "capabilities", choice(payload, ["configure_tool"]), policy="selected_only")
+    assert audit["secondaryReserveIds"] == []
+    assert "configure_tool" in audit["detailedIds"]
+    assert "configure_item_use" in audit["detailedIds"]
+    assert "configure_accessory" in audit["indexOnlyIds"]
+    full = packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
+    index = packet["runtimeCapabilityContract"]["indexOnlyCapabilities"]
+    assert {c["fn"] for c in full + index} == set(CAPABILITY_REGISTRY)
+    assert packet["requiredJsonShape"] == payload["requiredJsonShape"]
+
+
+def test_compact_discovery_retains_verbatim_meaning_and_position_ownership(payload):
+    original = {c["fn"]: c for c in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]}
+    for row in catalogue_index(payload, compact=True):
+        assert row["does"] == original[row["fn"]]["does"]
+        if "positionOwnership" in original[row["fn"]]:
+            assert row["positionOwnership"] == original[row["fn"]]["positionOwnership"]
+
+
+@pytest.mark.parametrize("mode,selected", [("groups", ["movement"]), ("capabilities", ["move_gravity_arc"])])
+def test_matched_full_control_has_identical_plan_context_and_shape(payload, mode, selected):
+    selection = choice(payload, selected)
+    reduced, _ = build_author_variant(payload, mode, selection, policy="selected_only")
+    full, _ = build_author_variant(payload, mode, {**selection, "fullCatalog": True}, policy="selected_only")
+    for key in ("selectionIntent", "parents", "balanceCorridor", "requiredJsonShape"):
+        assert full[key] == reduced[key]
+    assert full["runtimeCapabilityContract"] == payload["runtimeCapabilityContract"]

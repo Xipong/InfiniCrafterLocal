@@ -1,0 +1,98 @@
+{
+  "schema": "capability-selection-method-audit.v1",
+  "audit_date": "2026-10-22",
+  "scope": {
+    "files_reviewed": [
+      "LocalGenerator/infini_local/qa/capability_selection_experiment.py",
+      "tools/experiment_capability_selection.py",
+      "docs/development/experiments/capability_selection_2026-10-22/README.md",
+      "docs/development/experiments/capability_selection_2026-10-22/manifest.json",
+      "docs/development/experiments/capability_selection_2026-10-22/results.json",
+      "docs/development/experiments/capability_selection_2026-10-22/functional_review.json",
+      "docs/development/experiments/capability_selection_2026-10-22/selections/",
+      "docs/development/experiments/capability_selection_2026-10-22/audit/",
+      "docs/development/experiments/capability_selection_2026-10-22/outputs/",
+      "docs/development/CATALOG_LIMITATIONS_RU.md"
+    ],
+    "constraints": ["read-only audit", "no model Authors run", "no paid API calls"]
+  },
+  "findings": [
+    {
+      "id": "reserve_narrows_estimand",
+      "status": "verified",
+      "severity": "material_scope_limit",
+      "finding": "Both reducers reserve every capability outside movement/controller at full detail. The report counts this as 50 of 73 cards, so only the remaining 23 are even eligible for detail reduction. This protects secondary functions, but makes the observed token and quality outcomes evidence about selective movement/controller documentation under a large fixed reserve, not about capability selection or catalogue reduction in general.",
+      "evidence": [
+        "capability_selection_experiment.py::_SELECTIVE_CATEGORIES and build_author_variant(): reserve is every registry capability whose category is not movement or controller.",
+        "README.md: explicitly reports a 50/73 reserve and 70-73 detailed cards for groups, 52-54 for exact-capability selection.",
+        "results.json: detailedCapabilities are 52 or 53 in the four capability arms; fullCatalog is false throughout."
+      ],
+      "interpretation": "This is an intentional safety constraint, not an implementation defect. It strongly biases any measured reduction downward and leaves broad secondary groups such as equipment, held effects, placement, ammunition, and event infrastructure untested as omission candidates."
+    },
+    {
+      "id": "index_is_discovery_not_contract",
+      "status": "verified",
+      "severity": "material_scope_limit",
+      "finding": "The complete index preserves capability IDs, prose summary, targets, requirements/events and parameter names, but does not preserve the full parameter contracts of index-only capabilities. The Author packet therefore retains discoverability and legality while omitting parameter types, allowed values/ranges, defaults/neutral semantics and detailed conditional constraints carried by the full cards.",
+      "evidence": [
+        "capability_selection_experiment.py::catalogue_index() copies a bounded set of card fields and sets parameters to list(card['params']); it does not copy the parameter specifications.",
+        "build_author_variant() places only full cards in catalog.capabilities and omitted rows in indexOnlyCapabilities.",
+        "README.md explicitly says parameter detail and constraints for index-only cards are not transmitted in full and that index retention is not a guarantee of implementation freedom.",
+        "The Author header tells the model not to fabricate index-only parameters and states there is no retrieval/corrective selection."
+      ],
+      "interpretation": "The quality question is specifically whether a model can preserve a useful function when it knows the capability's existence and rough meaning but lacks its operational contract. Passing validation is not sufficient evidence that such a function was preserved."
+    },
+    {
+      "id": "no_full_docs_same_plan_control",
+      "status": "verified",
+      "severity": "causal_attribution_limit",
+      "finding": "There is no arm that restores the full catalogue while retaining the same selector-produced intent/plan. Baseline Authors receive neither selector intent nor a selector pass; reduced arms receive both a selector-derived intent and selectively detailed documentation. Thus the improved tool result (and other output differences) cannot be attributed to documentation reduction separately from planning/intent, as the report itself acknowledges.",
+      "evidence": [
+        "experiment_capability_selection.py::evaluate() compares baseline payloads to assembled group/capability payloads only.",
+        "capability_selection_experiment.py::build_author_variant() always adds selectionIntent; selected reduced packets also replace the original catalogue instruction.",
+        "All eight saved selection records set fullCatalog=false; there is no selector-fullCatalog control output.",
+        "README.md notes that selector intent is advisory and the apparent improvement cannot be attributed to reduction alone."
+      ],
+      "interpretation": "This is the key missing controlled comparison for distinguishing planning benefit from missing-documentation harm."
+    },
+    {
+      "id": "four_case_design_and_infeasible_trap",
+      "status": "verified",
+      "severity": "low_power_and_construct_limit",
+      "finding": "The study uses four deliberately heterogeneous stress cases, one Author attempt per case per arm, rather than replicated trials. The trap brief combines tethered hovering on the source entity with target_and_fire on that same entity; functional_review and CATALOG_LIMITATIONS_RU establish that target_and_fire owns motion and suppresses movement execution. The capability arm selects both requirements but produces a stationary helper, while baseline chooses a different supported behavior and the group output is invalid for conflicting child movements. Those outcomes do not form a clean test of whether selection preserves the requested conjunction, which the runtime cannot currently execute as stated.",
+      "evidence": [
+        "experiment_capability_selection.py::CASES defines exactly wand, trap, musket, and tool; tool is synthetic and the other three are stress-test briefs added to observed parent context.",
+        "README.md and results.json state one trial per case per arm and no statistical claim.",
+        "functional_review.json documents target_and_fire owning controller motion and the differing trap outcomes by arm.",
+        "CATALOG_LIMITATIONS_RU.md section 1 documents the executor path that skips movement when target_and_fire owns dispatch."
+      ],
+      "interpretation": "The 2/4, 3/4, and 4/4 validity counts are descriptive for this frozen set only. The trap is useful as a feasibility/validator negative control, but should not be pooled as a straightforward preservation success/failure case."
+    },
+    {
+      "id": "subagent_transport_not_api_or_truncation_measurement",
+      "status": "partly_verified_partly_unknown",
+      "severity": "measurement_limit",
+      "finding": "The report identifies the runs as fresh GPT-6 Luna subagents instructed to inspect their own packet, and explicitly says packet tokenization is a compact-JSON o200k_base proxy rather than actual service context or billed usage. It also says packets were read through tools. The checked-in artifacts do not include raw subagent transcripts, the exact tool-read excerpts, context-window/truncation telemetry, or provider request/usage records. Therefore the API cost/context figures are not measured; whether any subagent saw a truncated or excerpted packet cannot be independently confirmed from these files.",
+      "evidence": [
+        "README.md 'Как тестировали' and 'Размер запросов' distinguish subagent trials from API and state that packet reading occurred through tools and context size was not the actual subagent service context.",
+        "results.json labels counts as o200k_base proxy and lists no billed/reasoning-token usage, no schema-constrained decoding, and no measured cache hits.",
+        "No transcripts or tool-read logs are present in the experiment directory."
+      ],
+      "interpretation": "Do not claim these packets were truncated; the available artifacts do not establish that. Do not generalize the reported input totals to API billing, exact provider prompt length, latency, or cache behavior."
+    }
+  ],
+  "smallest_useful_controlled_continuation": {
+    "purpose": "Test whether omitting full documentation for non-primary movement/controller capabilities harms preservation of explicitly requested secondary functions, while controlling for the selector's planning effect.",
+    "design": [
+      "Use one selector pass per case, then freeze the exact selector JSON and intent for both Author conditions. Do not add a retrieval or corrective selector pass.",
+      "Condition A: Author receives the full 73-card documentation plus the frozen selector intent. Condition B: Author receives the current reduced packet built from that same selection and intent. This isolates documentation availability while holding the plan text constant.",
+      "Retain full runtime admission and global capability access; no catalogue deletions, host-side semantic routing, or automatic item/family classification.",
+      "Use a small set of feasible briefs that each require a non-primary secondary movement or controller function to be included and composed with a different primary function. Avoid the known infeasible trap conjunction, or retain it only as a separately scored feasibility negative control.",
+      "Run matched, blinded fresh Authors with identical model, reasoning setting, parent facts, brief, schema, and no validator feedback. Use at least two independent attempts per condition/case before treating directional differences as repeatable; report per-function preservation and validity separately."
+    ],
+    "primary_measure": "For each explicitly requested secondary function: whether the frozen output includes the correct target/binding/capability topology, uses a valid detailed contract, passes validation, and is executable under canonical runtime semantics.",
+    "secondary_measure": "Author input token proxy and selector input, reported separately from any future actual API usage; no cost-saving claim without provider usage data.",
+    "scope_note": "This is a narrow controlled continuation, not a production rollout test. The existing reserve policy remains unchanged during the comparison."
+  },
+  "no_execution_performed": true
+}

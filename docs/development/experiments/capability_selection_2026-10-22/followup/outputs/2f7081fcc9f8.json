@@ -1,0 +1,251 @@
+{
+  "name": "Fallen-Star Fool's Musket",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "A jester-themed musket built around the bright, pointed identity of a fallen star, with the star used as its ammunition.",
+    "coreMechanic": "A ranged musket firing one authored star projectile per use and consuming fallen-star ammunition through Terraria's native ammo selection. The main shot keeps the source musket's 31 base damage and 0.533-second cadence, but follows a deliberate gravity arc. On each actual NPC hit it can release one separate 12-damage homing star; the main shot can pierce up to three different NPCs, so the child attack is bounded by real hits and the activation spawn budget. The child has its own speed, lifetime, hitbox, collision and gradual homing. This makes the plentiful but consumable fallen star a clear recurring cost for a stronger, two-stage attack. The source musket's acquisition record has generationDepth 0, but no additional progression tier is inferred from that fact or from rarity/value. The parent's 31 damage and 32-tick use interval are preserved; the child's extra damage is an intentional added benefit balanced by ammunition use and conditional contact.",
+    "parentAContribution": "The Jester's Star Musket supplies the concrete musket identity and the ranged baseline: 31 damage, 5.25 knockback and a 32-tick use interval. Its straight, homing projectile is deliberately reshaped into an arcing shot, while the new on-hit star adds a bounded follow-up.",
+    "parentBContribution": "The Fallen Star remains the weapon's actual fallen-star ammo category, so the weapon asks for this consumable input on each active shot. Its star identity also informs the distinct child projectile. The source ammunition's negative damage field is not treated as a standalone attack or as bonus weapon damage.",
+    "playerExperience": "Aim and fire at a measured cadence; each shot uses fallen-star ammo subject to native ammo-saving effects. The heavy arc rewards leading targets. A successful hit may add one slower homing star, and a piercing main shot may trigger one on each of up to three distinct targets; neither a child spawn admission nor a child hit is guaranteed.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Fire one cursor-aimed, gravity-arc ranged shot using fallen-star ammunition; an actual NPC hit can spawn a separate slower homing star."
+      }
+    ]
+  },
+  "realization": {
+    "description": "Fire the musket with primary use. It consumes fallen-star ammunition through Terraria's native ammo system, including its normal conservation effects. The main star deals 31 base ranged damage, travels in a gravity arc, and can pierce up to three different enemies. Each actual hit can launch a separate, slower 12-damage star that gradually homes toward a nearby enemy. The child star can miss or fail to spawn if runtime limits are reached.",
+    "playerExperience": "Firing follows a 0.533-second use interval and does not auto-repeat. Fallen stars are the ongoing cost; native ammo-saving effects may conserve one. The arcing main shot trades a straight homing path for a trajectory that rewards aiming ahead, while the smaller follow-up adds pressure only after a real hit.",
+    "selfEvaluation": "The runtime explicitly authors ammo consumption, projectile motion, event production and the separate child movement. Child spawns are bounded by the three-hit main projectile and the runtime event budget."
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "starjester_body",
+    "entities": [
+      {
+        "id": "starjester_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "arc_star",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "homing_echo",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "fire_star_ammo",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "arc_star"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "starjester_body",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "useTimeSeconds": 0.5333333333333333,
+          "useAnimationSeconds": 0.5333333333333333,
+          "rarity": 1,
+          "valueCopper": 77600,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 56,
+          "heightPx": 20,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "starjester_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": "two_handed"
+        }
+      },
+      {
+        "id": "fallen_star_ammo",
+        "fn": "configure_weapon_ammo",
+        "target": "starjester_body",
+        "params": {
+          "ammoCategory": "fallen_star",
+          "speedBasis": "authored_spawn"
+        }
+      },
+      {
+        "id": "main_spawn",
+        "fn": "configure_spawn",
+        "target": "arc_star",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 33.75
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1.75,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "main_damage",
+        "fn": "set_projectile_damage",
+        "target": "arc_star",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "main_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "arc_star",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "main_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "arc_star",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "main_collision",
+        "fn": "set_projectile_collision",
+        "target": "arc_star",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 3,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "main_arc",
+        "fn": "move_gravity_arc",
+        "target": "arc_star",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 8
+        }
+      },
+      {
+        "id": "child_spawn",
+        "fn": "configure_spawn",
+        "target": "homing_echo",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 15
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "velocity",
+          "position": {
+            "above": "activation_origin",
+            "heightTiles": 1,
+            "activationDelaySeconds": 0.1
+          }
+        }
+      },
+      {
+        "id": "child_damage",
+        "fn": "set_projectile_damage",
+        "target": "homing_echo",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 12,
+          "knockback": 1.5,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "child_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "homing_echo",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "child_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "homing_echo",
+        "params": {
+          "widthPx": 8,
+          "heightPx": 8,
+          "drawScale": 0.85,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "child_collision",
+        "fn": "set_projectile_collision",
+        "target": "homing_echo",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "child_homing",
+        "fn": "move_slow_homing",
+        "target": "homing_echo",
+        "params": {
+          "rangeTiles": 12,
+          "homingStrength": 0.04
+        }
+      },
+      {
+        "id": "on_hit_star",
+        "fn": "spawn_entity_on_event",
+        "target": "arc_star",
+        "params": {
+          "when": "on_hit",
+          "entity": "homing_echo",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  }
+}

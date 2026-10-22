@@ -1,0 +1,35 @@
+{
+  "note": "Manual compiler witness only, not a model retry or a scored success. Frozen Author output unchanged; no game execution. Engine gates interpreted from C# source.",
+  "sourceOutput": "outputs/325c90f89e75.json",
+  "addedCall": {
+    "id": "manual_enable_child_damage",
+    "fn": "set_projectile_damage",
+    "target": "seeking_child_star",
+    "params": {
+      "damageClass": "ranged",
+      "damage": 0,
+      "knockback": 5.25,
+      "ownerHitCheck": false
+    }
+  },
+  "rows": [
+    {
+      "variant": "frozen_author",
+      "valid": true,
+      "childDamageWire": null,
+      "damageEnabled": false
+    },
+    {
+      "variant": "manual_counterfactual",
+      "valid": true,
+      "childDamageWire": {
+        "damageClass": "ranged",
+        "damage": 0,
+        "knockback": 5.25,
+        "ownerHitCheck": false,
+        "enabled": true
+      },
+      "damageEnabled": true
+    }
+  ]
+}

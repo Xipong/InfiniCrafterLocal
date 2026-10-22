@@ -1,6 +1,6 @@
 # Ограничения каталога и найденные пробелы контрактов
 
-Проверено 22 октября 2026 года на `57c58d50504a7c69712e5843fa392b9a39800537`, каталог из 73 capabilities. Основание: эксперимент с двумя вариантами выбора документации, 12 первых ответов GPT-6 Luna, штатный Python-валидатор и компилятор, чтение C#-исполнителя. Terraria не запускалась. Предложенные изменения ниже ещё не реализованы.
+Проверено 22 октября 2026 года на `57c58d50504a7c69712e5843fa392b9a39800537`, каталог из 73 capabilities. Основание: эксперимент с двумя вариантами выбора документации, 12 исходных и 30 дополнительных первых ответов GPT-6 Luna, штатный Python-валидатор и компилятор, чтение C#-исполнителя. Terraria не запускалась. Предложенные изменения ниже ещё не реализованы.
 
 ## 1. Валидная комбинация может содержать неисполняемое движение
 
@@ -70,6 +70,20 @@
 
 Доказательство: [baseline/tool](experiments/capability_selection_2026-10-22/outputs/baseline/tool.json), [baseline/musket](experiments/capability_selection_2026-10-22/outputs/baseline/musket.json), [точные ошибки](experiments/capability_selection_2026-10-22/results.json).
 
+## 6. `live_parent` переносит величину урона, но не включает урон дочерней сущности
+
+**Тип:** скрытая предпосылка композиции и пробел model-facing объяснения. **Приоритет: высокий.**
+
+В повторной серии полный каталог с планом selector дал валидную программу: основной снаряд наносит урон и при попадании создаёт самонаводящуюся звезду с `damageBasis=live_parent`, `damageMultiplier=0.35`. У ребёнка отсутствует `set_projectile_damage`. Компилятор принимает программу, но не создаёт включённую damage-конфигурацию ребёнка.
+
+В `GeneratedProjectile.cs::SpawnRuntimeEntity` применение damage override зависит от `entity.Damage.Enabled`. Дополнительные проверки в `GeneratedProjectile.DamageGate.cs` и `GeneratedProjectile.RuntimeEvents.cs` также запрещают повреждение при выключенной damage-конфигурации. Поэтому самонаведение работает, а задуманный дочерний урон теряется. Это вывод из компилятора и кода исполнителя; игровой прогон не проводился.
+
+**Обход сейчас:** явно вызвать `set_projectile_damage` для ребёнка. Даже допустимый `damage=0` включает damage-конфигурацию; положительный `live_parent` override затем может дать фактический урон. Нельзя требовать строго положительный authored damage ребёнка как универсальное условие.
+
+**Доработка:** явно объяснить различие выбора источника урона и включения damage-конфигурации в карточках spawn/damage. Рассмотреть проверку или диагностическое предупреждение для заявленного наследования урона без включённого damage у цели; намеренно безвредные дочерние сущности допустимы, поэтому общий запрет неверен.
+
+Доказательство: [неизменённый ответ `325c90f89e75`](experiments/capability_selection_2026-10-22/followup/outputs/325c90f89e75.json), [ручное сравнение wire с добавленным damage=0](experiments/capability_selection_2026-10-22/followup/damage_gate_witness.json). Ручной пример не засчитан как успешный ответ модели. Владельцы: [компилятор](../../LocalGenerator/infini_local/core/runtime_authoring/compiler.py), [spawn](../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.cs), [damage gate](../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.DamageGate.cs), [runtime events](../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs).
+
 ## Что ограничением не является
 
 - Кирка может одновременно сохранять native mining и прямую основную атаку; альтернативный input может прямо запускать другой снаряд. Проверена композиция с независимым held buff.
@@ -78,3 +92,5 @@
 - Нативное размещение плиты и отдельная активная ловушка могут сосуществовать. Ограничение из пункта 1 относится к движению и контроллеру конкретной активной сущности, а не к размещению.
 
 Полные результаты и оговорки: [отчёт эксперимента](experiments/capability_selection_2026-10-22/README.md), [разбор функций](experiments/capability_selection_2026-10-22/functional_review.json).
+
+Повторная проверка и актуальный статус **HOLD**: [отчёт продолжения](experiments/capability_selection_2026-10-22/followup/README.md). Ошибки обязательных полей из пункта 5 наблюдались без provider-constrained decoding; их частоту нельзя напрямую переносить на production JSON-schema режим.

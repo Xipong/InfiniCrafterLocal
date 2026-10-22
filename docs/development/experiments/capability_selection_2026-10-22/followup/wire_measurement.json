@@ -1,0 +1,77 @@
+{
+  "fullProviderSchemaTokensProxy": 21805,
+  "rows": [
+    {
+      "arm": "baseline",
+      "commonAuthorPrefixProxy": 41535,
+      "distinctDerivedCacheKeys": 1,
+      "messageContentPlusResponseFormatMeanProxy": 68559.66666666667,
+      "cacheKeys": [
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5"
+      ]
+    },
+    {
+      "arm": "groups_full",
+      "commonAuthorPrefixProxy": 41535,
+      "distinctDerivedCacheKeys": 1,
+      "messageContentPlusResponseFormatMeanProxy": 68632.0,
+      "cacheKeys": [
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5"
+      ]
+    },
+    {
+      "arm": "groups",
+      "commonAuthorPrefixProxy": 9664,
+      "distinctDerivedCacheKeys": 3,
+      "messageContentPlusResponseFormatMeanProxy": 59416.333333333336,
+      "cacheKeys": [
+        "infini-942962cd55d45357dec9bfd3c65a042b",
+        "infini-942962cd55d45357dec9bfd3c65a042b",
+        "infini-326a4ba0f65dd223ccf9e42f022d8c9f",
+        "infini-326a4ba0f65dd223ccf9e42f022d8c9f",
+        "infini-e2f1a432a5750a0847c1124ec5808769",
+        "infini-e2f1a432a5750a0847c1124ec5808769"
+      ]
+    },
+    {
+      "arm": "capabilities_full",
+      "commonAuthorPrefixProxy": 41535,
+      "distinctDerivedCacheKeys": 1,
+      "messageContentPlusResponseFormatMeanProxy": 68632.33333333333,
+      "cacheKeys": [
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5",
+        "infini-01a24084400fe0eb97c695be3d9790b5"
+      ]
+    },
+    {
+      "arm": "capabilities",
+      "commonAuthorPrefixProxy": 9373,
+      "distinctDerivedCacheKeys": 4,
+      "messageContentPlusResponseFormatMeanProxy": 53567.666666666664,
+      "cacheKeys": [
+        "infini-e489bdb0d64a2bb3ef39906ace727565",
+        "infini-a148bdb6787f634677c3e83be3360510",
+        "infini-874168d6a4dce7638c30da197ccd0b88",
+        "infini-874168d6a4dce7638c30da197ccd0b88",
+        "infini-a0adf87ee8e951c3463040072ebe3bef",
+        "infini-a0adf87ee8e951c3463040072ebe3bef"
+      ]
+    }
+  ],
+  "note": "Canonical ordinary-provider instruction split and content-derived cache routing hint. Counts message contents plus response_format serialization separately, without outer JSON escaping. Environment system suffix/options and provider framing excluded. No actual schema accounting, constrained decoding or cache hits measured.",
+  "schemaIncludedInAuthorTrials": false
+}
