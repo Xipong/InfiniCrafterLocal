@@ -27,7 +27,9 @@ internal static partial class EngineRuntimeChecks
             var source = Pb02Data("cold-http-metadata", "http");
             string before = source.ToJson();
             Task<GeneratedItemData> prepare = Task.Run(() => Pb02Prepare(source));
-            var cold = await prepare.WaitAsync(TimeSpan.FromMilliseconds(250));
+            // Discovery stays behind an explicit server barrier until Release below.
+            // This bound detects dependency deadlock, not thread-pool scheduling speed.
+            var cold = await prepare.WaitAsync(TimeSpan.FromSeconds(5));
             Equal("http", cold.RecipeMeta.AssetTransport, "unobserved snapshot cannot assert native transport");
             Equal(source.RecipeMeta.AssetBaseUrl, cold.RecipeMeta.AssetBaseUrl, "unobserved host retains accepted validated HTTP route");
             Equal(before, source.ToJson(), "cold publication never mutates accepted definition");
@@ -36,7 +38,7 @@ internal static partial class EngineRuntimeChecks
             Environment.SetEnvironmentVariable("INFINI_ASSET_PUBLIC_BASE_URL", null);
             await server.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Equal(1, server.DiscoveryRequests, "cold publication queues discovery on a worker");
-            var held = await Task.Run(() => Pb02Prepare(source)).WaitAsync(TimeSpan.FromMilliseconds(250));
+            var held = await Task.Run(() => Pb02Prepare(source)).WaitAsync(TimeSpan.FromSeconds(5));
             Equal("http", held.RecipeMeta.AssetTransport, "registry consumer never waits on held discovery lock");
             Equal(1, server.DiscoveryRequests, "pending discovery is coalesced");
             foreach (string invalid in new[] { "ftp://192.0.2.17:5055", "http://127.0.0.1:5055", "http://0.0.0.0:5055", "http://224.0.0.1:5055" })

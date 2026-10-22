@@ -6,7 +6,7 @@ of the unmerged parallel-image PR #137; no production changes from it are includ
 ## Scope and interpretation
 
 Baseline collection finds **5,879 Python cases in 181 modules**, plus **118 C#
-harness source files / 367 registered native check groups** and one Node frontend
+harness source files / 381 registered native check groups** and one Node frontend
 suite. Counts are not interchangeable: native groups contain multiple assertions
 and Python parametrization expands functions. This is a whole-suite inventory and
 risk screen plus focused semantic audits, **not a claim that every assertion was
@@ -17,6 +17,21 @@ index assertions. These are navigation signals, not errors: fixture/data reads,
 controlled clocks, pump-loop polling, wire coordinates and meaningful dependency
 order must remain. Auditors then followed actual owners in runtime/repair,
 provider/asset transfer, UI, and native placed-VFX families.
+
+## Python navigation categories
+
+One category per baseline module, assigned by its primary test family; cross-cutting
+coverage is not counted twice. Counts describe collection, not review depth.
+
+| Family | Modules | Cases |
+|---|---:|---:|
+| Desktop / configuration / browser | 16 | 287 |
+| Gameplay / runtime / storage | 71 | 1934 |
+| Image / Visual / VFX delivery | 28 | 1070 |
+| Provider / auth / trace | 17 | 639 |
+| Registry / schema / Author | 23 | 1328 |
+| Repair / frozen authority | 9 | 356 |
+| Tooling / bootstrap / harness | 17 | 265 |
 
 ## Decisions and evidence
 
@@ -37,6 +52,34 @@ wire. `PlacedVfxTwoInstancesGateAndGenerationDraw` covers same-tick duplicate
 prevention. `PlacedVfxInactiveLedgerBroadPhaseRetainsRetirement` covers offscreen
 retirement/no resurrection/material ownership. Registration checks and their
 existing missing/duplicate/commented/renamed controls remain unchanged.
+
+## Native, Node and tooling risk screen
+
+All 118 native harness files were screened: reflection occurs in 101 files,
+IL instrumentation in 26, `SequenceEqual` in 17, and file reads in 13 (fixture
+and persistence reads, not source scans). No `Thread.Sleep`/`Task.Delay` calls.
+The accurate baseline runner count is 381 named entries; 383 after making two
+previously nested scenarios directly selectable. A stricter one-line regex misses
+14 registrations, so is not used as the total.
+
+The complete Node script has 142 assertion call sites and three named async
+workflows plus linear scenarios; these are not 142 independent test cases. Three
+real-browser tests contain 54 assertion sites; local execution skips them because
+Playwright is absent. The supplementary tooling/bootstrap/logging screen covers
+30 modules / 462 collected cases, plus offline bootstrap/shared check helpers.
+
+| Finding | Disposition and reason |
+|---|---|
+| Native proximity dictionary iteration mistaken for event chronology | Fixed with duplicate-sensitive event roster; actual ordered light-cue output stays exact. |
+| Native metadata publication uses 250ms scheduler limit | Fixed to bounded deadlock watchdog while server discovery is explicitly held; independent publication must finish before release. |
+| Tooling XML/YAML exact whitespace/attribute order | Fixed by XML structure and narrow existing job/scalar extraction, with formatting-positive and missing-contract negative controls. |
+| Trace clear worker release only after assertions | Fixed to guaranteed finally cleanup and bounded rendezvous. |
+| Node exact 94px scroll offset | Fixed layout constant to target-directed bounded scroll; retain navigation wait, group expansion and focus contract. |
+| Node exact repaint counts + VM source-injection seam | Retained pending real DOM observer: fake render does not simulate DOM replacement, so removing counts would lose protection despite focus assertions. |
+| Native RootSpawn `AssertRootHookCallsCapacity` scans a helper metadata token in IL | Deferred with a precise replacement: observe complete `SpawnRuntimeEntity` volley calls/arguments from Shoot/HoldItem. Existing sentinel stops at first spawn and does not prove full volley count; deletion now would lose wiring coverage. Requires executable native boundary validation, not a larger string scanner. |
+| Browser delayed acknowledgement uses timed edit/poll windows | Deferred until browser prerequisites permit validating request/edit/poll/ack barriers; no claim these race prerequisites are fully hardened. |
+| Native IL compatibility/security mutation tests | Keep: exact installed dependency shape, fail-closed hooks and rollback are real compatibility contracts, unlike incidental helper call shape. |
+| Trace ordered byte ranges, input-ordered batch results, captured fixture hash | Keep: persistence/provenance, explicit executor-map output and captured source identity are meaningful; completion-time callbacks have separate tests. |
 
 ## Deliberately retained / next targeted investigations
 
@@ -250,3 +293,128 @@ in the baseline (including legitimate data reads and fake sleeps).
 | `LocalGenerator/tests/test_web_studio_workflows_browser.py` | 15 | wait:2 |
 | `LocalGenerator/tests/test_world_recipe_cache_admission.py` | 37 | read:19 |
 | `toolbox/tests/test_live20_support_v5.py` | 20 | read:3 |
+
+## Native harness inventory
+
+Risk tokens guide review; reflection/IL usage is not automatically brittle.
+
+| Baseline harness | Screen signals |
+|---|---|
+| `tools/EngineRuntimeChecks.AccessoryIdentity.cs` | reflection:22, il_instrumentation:2 |
+| `tools/EngineRuntimeChecks.Ammo.cs` | — |
+| `tools/EngineRuntimeChecks.AssetIdentity.cs` | reflection:51, sequence_equal:4, il_instrumentation:3 |
+| `tools/EngineRuntimeChecks.AssetLifecycle.cs` | reflection:16, file_text_read:2, il_instrumentation:6 |
+| `tools/EngineRuntimeChecks.Assets.cs` | reflection:12, sequence_equal:1 |
+| `tools/EngineRuntimeChecks.AuditGameplay.cs` | reflection:2 |
+| `tools/EngineRuntimeChecks.BodyGeometry.cs` | reflection:5 |
+| `tools/EngineRuntimeChecks.BudgetPeer.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.BuffPrecision.cs` | — |
+| `tools/EngineRuntimeChecks.ChannelBeam.cs` | reflection:10 |
+| `tools/EngineRuntimeChecks.ChargePresentation.cs` | — |
+| `tools/EngineRuntimeChecks.ChildCombat.cs` | reflection:10 |
+| `tools/EngineRuntimeChecks.Client.cs` | reflection:122, il_instrumentation:5 |
+| `tools/EngineRuntimeChecks.CompactTooltips.cs` | reflection:1, sequence_equal:1 |
+| `tools/EngineRuntimeChecks.Concurrency.cs` | reflection:1 |
+| `tools/EngineRuntimeChecks.Contract.cs` | reflection:12 |
+| `tools/EngineRuntimeChecks.CraftCancellation.cs` | reflection:7 |
+| `tools/EngineRuntimeChecks.CraftQol.cs` | reflection:27, il_instrumentation:4 |
+| `tools/EngineRuntimeChecks.CraftWorldExit.cs` | reflection:7 |
+| `tools/EngineRuntimeChecks.CursorDeath.cs` | reflection:8 |
+| `tools/EngineRuntimeChecks.DelayedNpcIncarnation.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.DetachedVfxRetirement.cs` | reflection:12, il_instrumentation:4 |
+| `tools/EngineRuntimeChecks.DocxImageReadiness.cs` | reflection:1, file_text_read:4, sequence_equal:1 |
+| `tools/EngineRuntimeChecks.Equipment.cs` | reflection:11, file_text_read:1 |
+| `tools/EngineRuntimeChecks.EquipmentPresentation.cs` | reflection:30 |
+| `tools/EngineRuntimeChecks.EquipmentUtilities.cs` | reflection:14 |
+| `tools/EngineRuntimeChecks.EscrowSession.cs` | reflection:8, il_instrumentation:3 |
+| `tools/EngineRuntimeChecks.EventDomains.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.Events.cs` | reflection:35 |
+| `tools/EngineRuntimeChecks.Exhaustion.cs` | reflection:17 |
+| `tools/EngineRuntimeChecks.ExhaustionPresentation.cs` | reflection:17, sequence_equal:4, il_instrumentation:11 |
+| `tools/EngineRuntimeChecks.Float32BuffIdentity.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.ForgePresentation.cs` | reflection:24 |
+| `tools/EngineRuntimeChecks.FrontHand.cs` | reflection:5, file_text_read:1 |
+| `tools/EngineRuntimeChecks.FrontHandRepairs.cs` | reflection:28, sequence_equal:1 |
+| `tools/EngineRuntimeChecks.GeneratedItemPrefix.cs` | reflection:18 |
+| `tools/EngineRuntimeChecks.GeneratedStacking.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.Grounded.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.HeldProxy.cs` | reflection:23 |
+| `tools/EngineRuntimeChecks.HitboxCurve.cs` | reflection:9 |
+| `tools/EngineRuntimeChecks.InitialNpcExclusion.cs` | reflection:10 |
+| `tools/EngineRuntimeChecks.IntegratedQol.cs` | reflection:34, il_instrumentation:5 |
+| `tools/EngineRuntimeChecks.InventorySeeds.cs` | reflection:6, file_text_read:4, sequence_equal:1 |
+| `tools/EngineRuntimeChecks.ItemVfxEvents.cs` | reflection:23 |
+| `tools/EngineRuntimeChecks.JournalReactions.cs` | — |
+| `tools/EngineRuntimeChecks.LegacyRetirement.cs` | — |
+| `tools/EngineRuntimeChecks.LibraryInterop.cs` | reflection:9, il_instrumentation:6 |
+| `tools/EngineRuntimeChecks.LibraryVfx.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.LiteralStackCost.cs` | reflection:1, il_instrumentation:1 |
+| `tools/EngineRuntimeChecks.LocalRgb.cs` | reflection:6, sort:1 |
+| `tools/EngineRuntimeChecks.MaterialElements.cs` | reflection:68 |
+| `tools/EngineRuntimeChecks.MaterialReview.cs` | reflection:44 |
+| `tools/EngineRuntimeChecks.Mobility.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.MobilityConsumption.cs` | reflection:11, il_instrumentation:4 |
+| `tools/EngineRuntimeChecks.Modifiers.cs` | reflection:9 |
+| `tools/EngineRuntimeChecks.NamedItemEffects.cs` | reflection:4, il_instrumentation:3 |
+| `tools/EngineRuntimeChecks.NativeChest.cs` | reflection:24, il_instrumentation:16 |
+| `tools/EngineRuntimeChecks.NativeChestNetwork.cs` | reflection:7 |
+| `tools/EngineRuntimeChecks.NativeChestPersistence.cs` | reflection:25 |
+| `tools/EngineRuntimeChecks.NativeChestVfx.cs` | reflection:1 |
+| `tools/EngineRuntimeChecks.NativeDtoRetirement.cs` | reflection:14 |
+| `tools/EngineRuntimeChecks.NetworkHit.cs` | reflection:6 |
+| `tools/EngineRuntimeChecks.OwnerLink.cs` | reflection:12 |
+| `tools/EngineRuntimeChecks.ParentFacts.cs` | reflection:35, sort:4 |
+| `tools/EngineRuntimeChecks.ParentPlacement.cs` | reflection:16 |
+| `tools/EngineRuntimeChecks.ParentTileState.cs` | reflection:15 |
+| `tools/EngineRuntimeChecks.PersistedDefinitions.cs` | reflection:3, file_text_read:1, sequence_equal:2 |
+| `tools/EngineRuntimeChecks.PlacedAlphaPivot.cs` | reflection:12, file_text_read:1, sequence_equal:1, il_instrumentation:1 |
+| `tools/EngineRuntimeChecks.PlacedBody.cs` | reflection:8 |
+| `tools/EngineRuntimeChecks.PlacedBodyLedger.cs` | reflection:6, sequence_equal:1, il_instrumentation:3 |
+| `tools/EngineRuntimeChecks.PlacedBodyNative.cs` | reflection:7, il_instrumentation:2 |
+| `tools/EngineRuntimeChecks.PlacedBodyPeerIdentity.cs` | reflection:6, il_instrumentation:5 |
+| `tools/EngineRuntimeChecks.PlacedLight.cs` | reflection:2 |
+| `tools/EngineRuntimeChecks.PlacedVfx.cs` | reflection:25, file_text_read:1 |
+| `tools/EngineRuntimeChecks.PlacementPool.cs` | reflection:2, il_instrumentation:4 |
+| `tools/EngineRuntimeChecks.PlacementPrefix.cs` | — |
+| `tools/EngineRuntimeChecks.PlayedMechanics.cs` | reflection:44, file_text_read:1, il_instrumentation:1 |
+| `tools/EngineRuntimeChecks.PlayedPresentation.cs` | reflection:8, sequence_equal:1 |
+| `tools/EngineRuntimeChecks.PlayedSilver.cs` | file_text_read:1 |
+| `tools/EngineRuntimeChecks.PlayedUmbrella.cs` | file_text_read:1 |
+| `tools/EngineRuntimeChecks.Player.cs` | reflection:36 |
+| `tools/EngineRuntimeChecks.ProjectileControls.cs` | — |
+| `tools/EngineRuntimeChecks.ProjectileHydration.cs` | reflection:9 |
+| `tools/EngineRuntimeChecks.Proximity.cs` | reflection:7 |
+| `tools/EngineRuntimeChecks.QuickUse.cs` | reflection:6 |
+| `tools/EngineRuntimeChecks.QuickUtilityActivation.cs` | reflection:21, il_instrumentation:1 |
+| `tools/EngineRuntimeChecks.RawJsonNumeric.cs` | — |
+| `tools/EngineRuntimeChecks.ReactionPresentation.cs` | reflection:14, sequence_equal:2, il_instrumentation:6 |
+| `tools/EngineRuntimeChecks.ReactiveBuffNetwork.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.ReactiveBuffTooltips.cs` | reflection:1 |
+| `tools/EngineRuntimeChecks.ReactiveBuffs.cs` | — |
+| `tools/EngineRuntimeChecks.RootCombat.cs` | reflection:29, il_instrumentation:8 |
+| `tools/EngineRuntimeChecks.RootSpawn.cs` | reflection:8, sequence_equal:1, raw_il_body:2 |
+| `tools/EngineRuntimeChecks.SentryLifecycle.cs` | reflection:6 |
+| `tools/EngineRuntimeChecks.SentryTargeting.cs` | reflection:8 |
+| `tools/EngineRuntimeChecks.SoundSelection.cs` | reflection:5, sequence_equal:6 |
+| `tools/EngineRuntimeChecks.SpawnDistributions.cs` | reflection:9 |
+| `tools/EngineRuntimeChecks.StackChance.cs` | — |
+| `tools/EngineRuntimeChecks.SwarmPersistence.cs` | reflection:19 |
+| `tools/EngineRuntimeChecks.SwarmRuntime.cs` | reflection:21, sort:1, il_instrumentation:4 |
+| `tools/EngineRuntimeChecks.TargetEmission.cs` | reflection:4 |
+| `tools/EngineRuntimeChecks.TestSupport.cs` | reflection:28, il_instrumentation:2 |
+| `tools/EngineRuntimeChecks.TooltipSecondaries.cs` | reflection:1, file_text_read:1, sequence_equal:1 |
+| `tools/EngineRuntimeChecks.Tooltips.cs` | reflection:13, sequence_equal:2 |
+| `tools/EngineRuntimeChecks.TransportIdentity.cs` | reflection:5 |
+| `tools/EngineRuntimeChecks.UiQol.cs` | — |
+| `tools/EngineRuntimeChecks.UnitBoundaries.cs` | — |
+| `tools/EngineRuntimeChecks.UseFeedback.cs` | — |
+| `tools/EngineRuntimeChecks.VerticalAcceleration.cs` | — |
+| `tools/EngineRuntimeChecks.Vfx.cs` | reflection:75 |
+| `tools/EngineRuntimeChecks.VfxEventConsistency.cs` | reflection:15 |
+| `tools/EngineRuntimeChecks.VfxGeometry.cs` | reflection:7 |
+| `tools/EngineRuntimeChecks.VfxPreview.cs` | reflection:3 |
+| `tools/EngineRuntimeChecks.VideoUiBuffs.cs` | reflection:20, file_text_read:1, sequence_equal:2, il_instrumentation:9 |
+| `tools/EngineRuntimeChecks.WeaponAmmo.cs` | reflection:11 |
+| `tools/EngineRuntimeChecks.Whip.cs` | reflection:8 |
+| `tools/EngineRuntimeChecks.World.cs` | — |
+| `tools/EngineRuntimeChecks.cs` | reflection:13 |

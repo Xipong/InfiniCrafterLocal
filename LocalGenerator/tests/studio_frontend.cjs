@@ -294,12 +294,18 @@ let scroll=null,focused=false;window.scrollTo=options=>{scroll=options;};
 state.fields=[{key:'INFINI_LLM_TEMPERATURE',route:'providers'}];
 const row=document.querySelector('[data-field-row="INFINI_LLM_TEMPERATURE"]');
 row.parentElement={tagName:'DETAILS',dataset:{details:'providers-advanced'},open:false,parentElement:null};
-row.getBoundingClientRect=()=>({top:600});
+const searchRowTop=600;window.innerHeight=400;
+row.getBoundingClientRect=()=>({top:searchRowTop});
 row.querySelector=()=>({focus(){focused=true;}});
 studio.focusField('INFINI_LLM_TEMPERATURE');
 assert.equal(location.hash,'providers');assert.equal(scroll,null);
 location.hash='#providers';studio.navigate();
-assert(row.parentElement.open);assert(focused);assert.equal(scroll.top,506);assert.equal(state.focusKey,null);
+assert(row.parentElement.open);assert(focused);
+// The destination must bring the row into view, not encode today's header offset.
+assert(scroll && Number.isFinite(scroll.top),'search must request a finite scroll destination');
+assert(scroll.top>0 && scroll.top<=searchRowTop && searchRowTop-scroll.top<window.innerHeight,
+  'search must scroll toward the requested row and leave it inside the viewport');
+assert.equal(state.focusKey,null);
 // Exit must remain unconfirmed while running, even if HTTP accepted the queue.
 state.pending={id:'exit',action:'exitStudio',sent:{},clock:3};
 acceptSnapshot(snapshot({}, {actionResults:[{id:'exit',status:'running',ok:true}]}));

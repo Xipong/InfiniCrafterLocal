@@ -88,8 +88,13 @@ internal static partial class EngineRuntimeChecks
                 }
                 static void Events(InfiniVfxState state, string label, params string[] expected)
                 {
-                    string actual = string.Join(",", state.LastSlotEmission.Keys.Select(k => k.EventName));
-                    Equal(string.Join(",", expected), actual, label + " event slots marked once");
+                    // Dictionary enumeration is not the event trace. Sequence above
+                    // independently checks chronology through actual emitted light cues.
+                    // Sort both sequences (not sets) to retain exact multiplicity.
+                    string actual = string.Join(",", state.LastSlotEmission.Keys.Select(k => k.EventName)
+                        .OrderBy(name => name, StringComparer.Ordinal));
+                    Equal(string.Join(",", expected.OrderBy(name => name, StringComparer.Ordinal)), actual,
+                        label + " exact event slots marked once");
                 }
 
                 lights.Clear();

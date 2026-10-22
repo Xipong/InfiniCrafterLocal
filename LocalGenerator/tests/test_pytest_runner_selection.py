@@ -282,12 +282,40 @@ def test_hosted_concurrency_only_replaces_the_same_pull_request(previous, curren
     assert key(previous) != key(previous, workflow="Another workflow")
 
 
+def _assert_hosted_python_cache(block: str) -> None:
+    # These two scalar keys need not be adjacent or have a particular indentation.
+    # The existing workflow-block reader owns job boundaries; this is not a YAML parser.
+    lines = [line.strip() for line in block.splitlines() if not line.lstrip().startswith("#")]
+    fields = [line.partition(":") for line in lines]
+    for key, expected in (("cache", "pip"), ("cache-dependency-path", "LocalGenerator/requirements-dev.lock")):
+        values = [value.strip().strip("\"'") for name, separator, value in fields if separator and name == key]
+        assert values == [expected]
+    executable = "\n".join(lines)
+    assert "python -m pip install -r LocalGenerator/requirements-dev.lock" in executable
+    assert "cache-hit" not in executable
+
+
 def test_hosted_python_cache_uses_the_lockfile_without_skipping_installation() -> None:
     for job in ("python-tests", "strict-hygiene"):
-        block = "\n".join(_workflow_section(job, indent=2))
-        assert "          cache: pip\n          cache-dependency-path: LocalGenerator/requirements-dev.lock" in block
-        assert "python -m pip install -r LocalGenerator/requirements-dev.lock" in block
-        assert "cache-hit" not in block
+        _assert_hosted_python_cache("\n".join(_workflow_section(job, indent=2)))
+
+
+def test_hosted_cache_policy_ignores_scalar_layout_but_not_missing_or_conditional_install():
+    block = """    cache-dependency-path: 'LocalGenerator/requirements-dev.lock'
+    # Cache keys may be reordered around other setup-python options.
+    python-version: '3.12'
+    cache: "pip"
+  run: python -m pip install -r LocalGenerator/requirements-dev.lock
+"""
+    _assert_hosted_python_cache(block)
+    for broken in (
+        block.replace('cache: "pip"', '# cache: "pip"'),
+        block.replace('requirements-dev.lock', 'requirements.txt'),
+        block.replace('python -m pip install -r', 'echo install -r'),
+        block + "  if: steps.python.outputs.cache-hit != 'true'\n",
+    ):
+        with pytest.raises(AssertionError):
+            _assert_hosted_python_cache(broken)
 
 
 def test_validation_missing_native_environment_is_not_passed(monkeypatch: pytest.MonkeyPatch) -> None:
