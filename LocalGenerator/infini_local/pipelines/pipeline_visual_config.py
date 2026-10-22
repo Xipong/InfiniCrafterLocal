@@ -122,8 +122,9 @@ CODEX_IMAGE_QUALITY = env_str("INFINI_CODEX_IMAGE_QUALITY", "medium")
 CODEX_IMAGE_SIZE = env_str("INFINI_CODEX_IMAGE_SIZE", "1024x1024")
 CODEX_IMAGE_TIMEOUT = env_int("INFINI_CODEX_IMAGE_TIMEOUT", 240, lo=1, hi=3600)
 GENERATE_VARIANTS = env_int("INFINI_IMAGE_VARIANTS", 1)
-IMAGE_MAX_CONCURRENCY = env_int("INFINI_IMAGE_MAX_CONCURRENCY", 1, lo=1, hi=4)
-IMAGE_GENERATION_GATE = sdcpp_service.ImageRequestGate(IMAGE_MAX_CONCURRENCY)
+IMAGE_PARALLEL = env_bool("INFINI_IMAGE_PARALLEL", True)
+IMAGE_MAX_CONCURRENCY = env_int("INFINI_IMAGE_MAX_CONCURRENCY", 4, lo=1, hi=4)
+IMAGE_GENERATION_GATE = sdcpp_service.ImageRequestGate(IMAGE_MAX_CONCURRENCY if IMAGE_PARALLEL else 1)
 # Visual asset generation mode. "item" = inventory icon only; "full" = item + projectile + impact briefs.
 VISUAL_ASSET_MODE = env_str("INFINI_VISUAL_ASSET_MODE", "full").lower()
 # A diagnostic pipeline label; selected assets are authored per exact entity.
@@ -263,6 +264,7 @@ __all__ = [
     "IMAGE_API_TIMEOUT",
     "IMAGE_API_EXTRA_HEADERS_JSON",
     "GENERATE_VARIANTS",
+    "IMAGE_PARALLEL",
     "IMAGE_MAX_CONCURRENCY",
     "IMAGE_GENERATION_GATE",
     "VISUAL_ASSET_MODE",

@@ -254,3 +254,20 @@ def test_save_preserves_opaque_extension_whitespace(studio, through_bridge):
     saved = parse_env(app.config_path)
     assert saved['INFINI_EXTENSION_TEMPLATE'] == value
     assert saved['INFINI_PORT'] == '5055'
+
+
+def test_parallel_image_checkbox_round_trips_saved_config(studio):
+    app, controller = studio
+    assert controller.snapshot()['values']['INFINI_IMAGE_PARALLEL'] == '1'
+    for enabled in ('0', '1', '0'):
+        result = apply(controller, 'save', {'INFINI_IMAGE_PARALLEL': enabled, 'INFINI_IMAGE_MAX_CONCURRENCY': '4'})
+        assert result['saved']
+        saved = parse_env(app.config_path)
+        assert saved['INFINI_IMAGE_PARALLEL'] == enabled
+        assert saved['INFINI_IMAGE_MAX_CONCURRENCY'] == '4'
+        reloaded = SettingsController(app.config_path)
+        try:
+            assert reloaded.values['INFINI_IMAGE_PARALLEL'] == enabled
+            assert reloaded.values['INFINI_IMAGE_MAX_CONCURRENCY'] == '4'
+        finally:
+            reloaded.on_close()

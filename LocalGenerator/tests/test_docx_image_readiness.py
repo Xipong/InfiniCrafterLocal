@@ -213,7 +213,9 @@ def test_ingredient_scheduling_keeps_bound_and_failed_identity(offline_backend, 
     out = generation.maybe_generate_visual_assets(data)
     assets = {row["id"]: row for row in out["vfxManifest"]["assets"]}
     assert peak == capacity and len(calls) == 4
-    assert calls[0] == "item" and set(calls[1:]) == {"vfx:first", "vfx:bad", "vfx:third"}
+    assert set(calls) == {"item", "vfx:first", "vfx:bad", "vfx:third"}
+    if capacity == 1:
+        assert calls[0] == "item", "single-slot mode preserves original order"
     assert assets["bad"]["spriteStatus"] == "failed" and assets["bad"]["spritePath"] == ""
     assert all(assets[name]["spriteStatus"] == "generated" for name in ("first", "third"))
     report = delivery.visual_delivery_report(out, check_backend_config=False)

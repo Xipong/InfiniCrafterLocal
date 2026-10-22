@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from infini_local.desktop.settings_schema import FIELD_HELP
 
-_BASIC_FIELDS = frozenset({'INFINI_HOST', 'INFINI_PORT', 'INFINI_LLM_PROVIDER', 'INFINI_USE_LLM', 'INFINI_PROMPT_STYLE', 'INFINI_CODEX_LLM_MODEL', 'INFINI_LLM_REASONING_MODE', 'INFINI_LMSTUDIO_URL', 'INFINI_LMSTUDIO_MODEL', 'INFINI_OPENROUTER_API_KEY', 'INFINI_OPENROUTER_MODEL', 'INFINI_OPENROUTER_PROVIDER', 'INFINI_OPENAI_COMPAT_BASE_URL', 'INFINI_OPENAI_COMPAT_API_KEY', 'INFINI_OPENAI_COMPAT_MODEL', 'INFINI_IMAGE_BACKEND', 'INFINI_CODEX_IMAGE_MODEL', 'INFINI_CODEX_IMAGE_QUALITY', 'INFINI_CODEX_IMAGE_SIZE', 'INFINI_SDCPP_SERVER_EXE', 'INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM', 'INFINI_SDCPP_SERVER_AUTOSTART', 'INFINI_SDCPP_LORA_FILE', 'INFINI_SDCPP_LORA_WEIGHT', 'INFINI_SDCPP_SERVER_URL', 'INFINI_SDCPP_STEPS', 'INFINI_SDCPP_CFG', 'INFINI_SDCPP_SAMPLER', 'INFINI_IMAGE_API_BASE_URL', 'INFINI_IMAGE_API_KEY', 'INFINI_IMAGE_API_MODEL', 'INFINI_IMAGE_API_SIZE', 'INFINI_A1111_URL', 'INFINI_COMFYUI_URL', 'INFINI_BG_COLOR', 'INFINI_REMOVE_BG', 'INFINI_SPRITE_DOWNSCALE_FILTER', 'INFINI_MP_ASSET_TRANSPORT', 'INFINI_TERRARIA_PORT', 'INFINI_ASSET_PUBLIC_BASE_URL', 'INFINI_MULTIDEV_CONCURRENCY', 'INFINI_TRACE_PROMPTS'})
+_BASIC_FIELDS = frozenset({'INFINI_HOST', 'INFINI_PORT', 'INFINI_LLM_PROVIDER', 'INFINI_USE_LLM', 'INFINI_PROMPT_STYLE', 'INFINI_CODEX_LLM_MODEL', 'INFINI_LLM_REASONING_MODE', 'INFINI_LMSTUDIO_URL', 'INFINI_LMSTUDIO_MODEL', 'INFINI_OPENROUTER_API_KEY', 'INFINI_OPENROUTER_MODEL', 'INFINI_OPENROUTER_PROVIDER', 'INFINI_OPENAI_COMPAT_BASE_URL', 'INFINI_OPENAI_COMPAT_API_KEY', 'INFINI_OPENAI_COMPAT_MODEL', 'INFINI_IMAGE_BACKEND', 'INFINI_IMAGE_PARALLEL', 'INFINI_IMAGE_MAX_CONCURRENCY', 'INFINI_CODEX_IMAGE_MODEL', 'INFINI_CODEX_IMAGE_QUALITY', 'INFINI_CODEX_IMAGE_SIZE', 'INFINI_SDCPP_SERVER_EXE', 'INFINI_SDCPP_MODEL', 'INFINI_SDCPP_VAE', 'INFINI_SDCPP_LLM', 'INFINI_SDCPP_SERVER_AUTOSTART', 'INFINI_SDCPP_LORA_FILE', 'INFINI_SDCPP_LORA_WEIGHT', 'INFINI_SDCPP_SERVER_URL', 'INFINI_SDCPP_STEPS', 'INFINI_SDCPP_CFG', 'INFINI_SDCPP_SAMPLER', 'INFINI_IMAGE_API_BASE_URL', 'INFINI_IMAGE_API_KEY', 'INFINI_IMAGE_API_MODEL', 'INFINI_IMAGE_API_SIZE', 'INFINI_A1111_URL', 'INFINI_COMFYUI_URL', 'INFINI_BG_COLOR', 'INFINI_REMOVE_BG', 'INFINI_SPRITE_DOWNSCALE_FILTER', 'INFINI_MP_ASSET_TRANSPORT', 'INFINI_TERRARIA_PORT', 'INFINI_ASSET_PUBLIC_BASE_URL', 'INFINI_MULTIDEV_CONCURRENCY', 'INFINI_TRACE_PROMPTS'})
 
 
 def _field(key, label, page, *, options=(), hint='', secret=False, multiline=False):
@@ -85,7 +85,8 @@ FIELDS = [
     _field('INFINI_LLM_POOL_3_API_MODE', 'Режим API', 'models', options=['auto', 'responses', 'chat_completions']),
     _field('INFINI_LLM_POOL_4_API_MODE', 'Режим API', 'models', options=['auto', 'responses', 'chat_completions']),
     _field('INFINI_IMAGE_BACKEND', 'Источник картинок', 'images', options=['sdcpp', 'openai_codex', 'image_api', 'off', 'comfyui', 'a1111'], hint='openai_codex = ChatGPT/Codex OAuth по подписке; sdcpp = локальная модель; image_api = отдельный API; off = без PNG.'),
-    _field('INFINI_IMAGE_MAX_CONCURRENCY', 'Параллельных запросов', 'images', hint='Один общий GPU/sd-server: 1. Увеличивай только если backend действительно обслуживает параллельные image jobs без OOM/очереди внутри.'),
+    _field('INFINI_IMAGE_PARALLEL', 'Параллельная генерация изображений', 'images', options=['1', '0']),
+    _field('INFINI_IMAGE_MAX_CONCURRENCY', 'Параллельных запросов', 'images'),
     _field('INFINI_CODEX_IMAGE_MODEL', 'Codex image model', 'images', options=['gpt-image-2'], hint='gpt-image-2 — встроенная известная модель. Ручное имя сохраняется, но не подтверждает доступ к нему.'),
     _field('INFINI_CODEX_IMAGE_QUALITY', 'Codex quality', 'images', options=['low', 'medium', 'high', 'auto']),
     _field('INFINI_CODEX_IMAGE_SIZE', 'Codex size', 'images', options=['1024x1024', '1536x1024', '1024x1536', 'auto']),
@@ -219,7 +220,9 @@ def disabled_reasons(values, lan_enabled=False):
     asset_pack_active = image_active and visual_mode in {'full', 'all', 'projectile', 'visualpack', 'assetpack'}
     for key in ['INFINI_VISUAL_DIRECTOR_LLM', 'INFINI_VFX_LLM_DIRECTOR']:
         set_field_enabled(key, asset_pack_active, 'Visual asset mode сейчас off или image backend выключен; director-pass не вызывается.')
-    set_field_enabled('INFINI_IMAGE_MAX_CONCURRENCY', image_active, 'Image backend=off; image request gate не участвует.')
+    set_field_enabled('INFINI_IMAGE_PARALLEL', image_active, 'Image backend=off; изображения не генерируются.')
+    set_field_enabled('INFINI_IMAGE_MAX_CONCURRENCY', image_active and str(values.get('INFINI_IMAGE_PARALLEL', '1')) == '1',
+                      'Параллельная генерация выключена или image backend=off; запросы идут по одному.')
     sprite_processing_active = image_active
     for key in ['INFINI_REMOVE_BG', 'INFINI_SPRITE_RETRIES', 'INFINI_PIXEL_POSTERIZE', 'INFINI_VISUAL_STRICT_AI_AUTHORSHIP']:
         set_field_enabled(key, sprite_processing_active, 'Image backend = off; PNG не генерируются, sprite postprocess не запускается.')

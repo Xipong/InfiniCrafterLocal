@@ -52,3 +52,23 @@ def test_upstream_pinning_requires_enabled_openrouter_profile():
     assert not disabled_reasons(values)['INFINI_LLM_POOL_2_OPENROUTER_PROVIDER']
     assert disabled_reasons({**values, 'INFINI_LLM_POOL_2_ENABLED': '0'})['INFINI_LLM_POOL_2_OPENROUTER_PROVIDER']
     assert disabled_reasons({**values, 'INFINI_LLM_POOL_2_PROVIDER': 'local'})['INFINI_LLM_POOL_2_OPENROUTER_PROVIDER']
+
+
+def test_parallel_images_default_on_basic_checkbox_preserves_disabled_limit():
+    fields = {field['key']: field for field in FIELDS}
+    field = fields['INFINI_IMAGE_PARALLEL']
+    assert DEFAULTS['INFINI_IMAGE_PARALLEL'] == '1'
+    assert DEFAULTS['INFINI_IMAGE_MAX_CONCURRENCY'] == '4'
+    assert field['options'] == ['1', '0']
+    assert field['page'] == 'images' and not field['advanced']
+    assert not fields['INFINI_IMAGE_MAX_CONCURRENCY']['advanced']
+    assert 'видеопамять' in field['help']
+    assert '2–4' in field['help']
+    assert 'не будут выполняться одновременно с VFX Designer' in field['help']
+    values = {**DEFAULTS, 'INFINI_IMAGE_PARALLEL': '0', 'INFINI_IMAGE_MAX_CONCURRENCY': '4'}
+    original = deepcopy(values)
+    assert not disabled_reasons(values)['INFINI_IMAGE_PARALLEL']
+    assert disabled_reasons(values)['INFINI_IMAGE_MAX_CONCURRENCY']
+    assert values == original
+    assert not disabled_reasons({**values, 'INFINI_IMAGE_PARALLEL': '1'})['INFINI_IMAGE_MAX_CONCURRENCY']
+    assert disabled_reasons({**values, 'INFINI_IMAGE_BACKEND': 'off'})['INFINI_IMAGE_PARALLEL']
