@@ -1,0 +1,112 @@
+{
+  "schema": "infini.toolbox-panel.v1",
+  "id": "live20-classic",
+  "command": "live20",
+  "title": "Классический Live20: преимущественно ранний / смешанный прогресс",
+  "historical": true,
+  "runtimeDump": "../items.jsonl",
+  "provenance": "Original classic Live20 order from archived tracked harness, corroborated by fixed20_cases.json and saved campaign manifests; exact original 39-parent fixture.",
+  "notes": "Сохранены исходные 20 пар tracked harness. Не строго early-game: в наборе есть QueenSpiderStaff и SpiderFang.",
+  "cases": [
+    {
+      "case": "woodwork_blade",
+      "itemA": "WoodenSword",
+      "itemB": "WorkBench"
+    },
+    {
+      "case": "astral_mirror",
+      "itemA": "MagicMirror",
+      "itemB": "FallenStar"
+    },
+    {
+      "case": "bee_boomstick",
+      "itemA": "Boomstick",
+      "itemB": "BeeWax"
+    },
+    {
+      "case": "swift_boots",
+      "itemA": "HermesBoots",
+      "itemB": "Aglet"
+    },
+    {
+      "case": "ropebound_spear",
+      "itemA": "Spear",
+      "itemB": "Rope"
+    },
+    {
+      "case": "infernal_boomerang",
+      "itemA": "EnchantedBoomerang",
+      "itemB": "HellstoneBar"
+    },
+    {
+      "case": "meteor_spacegun",
+      "itemA": "SpaceGun",
+      "itemB": "MeteoriteBar"
+    },
+    {
+      "case": "astral_minishark",
+      "itemA": "Minishark",
+      "itemB": "FallenStar"
+    },
+    {
+      "case": "chained_ball",
+      "itemA": "BallOHurt",
+      "itemB": "Chain"
+    },
+    {
+      "case": "corrupt_yoyo",
+      "itemA": "CorruptYoyo",
+      "itemB": "DemoniteBar"
+    },
+    {
+      "case": "jungle_whip",
+      "itemA": "ThornWhip",
+      "itemB": "JungleSpores"
+    },
+    {
+      "case": "lens_finch_staff",
+      "itemA": "BabyBirdStaff",
+      "itemB": "Lens"
+    },
+    {
+      "case": "spider_sentry",
+      "itemA": "QueenSpiderStaff",
+      "itemB": "SpiderFang"
+    },
+    {
+      "case": "gel_grenade",
+      "itemA": "Grenade",
+      "itemB": "Gel"
+    },
+    {
+      "case": "jester_bow",
+      "itemA": "WoodenBow",
+      "itemB": "JestersArrow"
+    },
+    {
+      "case": "obsidian_pickaxe",
+      "itemA": "MoltenPickaxe",
+      "itemB": "Obsidian"
+    },
+    {
+      "case": "vital_regen_band",
+      "itemA": "BandofRegeneration",
+      "itemB": "LifeCrystal"
+    },
+    {
+      "case": "torch_mining_helmet",
+      "itemA": "MiningHelmet",
+      "itemB": "Torch"
+    },
+    {
+      "case": "glowing_healing_potion",
+      "itemA": "HealingPotion",
+      "itemB": "GlowingMushroom"
+    },
+    {
+      "case": "silt_extractinator",
+      "itemA": "Extractinator",
+      "itemB": "SiltBlock"
+    }
+  ]
+}

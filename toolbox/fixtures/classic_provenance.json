@@ -1,0 +1,83 @@
+{
+  "schema": "infini.classic-input-provenance.v1",
+  "description": "Recovered request inputs only; no provider outputs/config and no historical quality verdict. Relative source paths identify archives, not runtime dependencies.",
+  "fixtures": [
+    {
+      "file": "toolbox/fixtures/parents/live10-midgame.jsonl",
+      "sha256": "addb002f3bd6ace73daf250aad2307c010257528836ce3638dc2b17f7015075b",
+      "rowCount": 20,
+      "source": {
+        "path": "artifacts/live10-luna6-high-midgame-20261011-0335/items_runtime_dump.jsonl",
+        "sha256": "dbb1700a4afc65e2d18f365e536732d2464fbd190358b9e056b9da9645c4d964"
+      },
+      "originalLinesPreserved": true,
+      "wholeSourceBytesCopied": false
+    },
+    {
+      "file": "toolbox/fixtures/items.jsonl",
+      "sha256": "62b64ac70eaad27004e4d4e006c1bfb6ba44775b98a216ad2aaa4afaebb20e06",
+      "rowCount": 39,
+      "source": {
+        "path": "artifacts/live20-luna-medium-fusion-20261012/items_runtime_dump.jsonl",
+        "sha256": "62b64ac70eaad27004e4d4e006c1bfb6ba44775b98a216ad2aaa4afaebb20e06"
+      },
+      "originalLinesPreserved": true,
+      "wholeSourceBytesCopied": true
+    },
+    {
+      "file": "toolbox/fixtures/parents/live20-classic-sprites.jsonl",
+      "sha256": "ea85bb4a86dbe5795c7fea41b40040688b0b1d3ce309f10bc79a239454543d40",
+      "rowCount": 39,
+      "source": {
+        "path": "artifacts/live20-sol-luna-comparison-20261005/parent-native/items-with-sprite-references.jsonl",
+        "sha256": "ea85bb4a86dbe5795c7fea41b40040688b0b1d3ce309f10bc79a239454543d40"
+      },
+      "originalLinesPreserved": true,
+      "wholeSourceBytesCopied": true
+    }
+  ],
+  "rosters": [
+    {
+      "preset": "live10-midgame",
+      "source": {
+        "path": "artifacts/live10-luna6-high-midgame-20261011-0335/cases.json",
+        "sha256": "12be6fdacb38d84dc09780213481f160c5bb64bbcf9627e7d14b6e1760259593"
+      },
+      "orderedRoutesSha256": "4e2f98754fc6b828333ec38057c835f142e4592f8906f86b0466c433db6af702"
+    },
+    {
+      "preset": "live20-classic",
+      "source": {
+        "path": "artifacts/live20-luna-medium-fusion-20261012/cases.json",
+        "sha256": "a984b17af2e8de67d5a96e6b34ecc8641f94b5226509b62abe5e0a5791a5d786"
+      },
+      "orderedRoutesSha256": "7a3df240f919a18fa99c47a9ed5adfb61b01e09d289ba706a101177377415239"
+    }
+  ],
+  "sourceContextDrift": {
+    "sameRouteLive20SpriteVariant": {
+      "onlyChangedField": "spriteReferenceRaw",
+      "parentsChanged": 39,
+      "gameplayBaseRowsEqual": true,
+      "notNewRecipePanel": true
+    },
+    "sharedParentBetweenLive10AndLive20": [
+      {
+        "internalName": "QueenSpiderStaff",
+        "changedTopLevelFields": [
+          "directProjectileRaw",
+          "effectiveProjectileRaw",
+          "expert",
+          "master",
+          "placeStyle",
+          "questItem",
+          "stack",
+          "textureMetrics",
+          "tooltipLines"
+        ],
+        "sharedScalarStatDifferences": {}
+      }
+    ],
+    "mergeRule": "Never overwrite parents by internalName across fixtures. Select the panel-specific fixture. QueenSpiderStaff has different source-context fields, not scalar gameplay stat drift."
+  }
+}

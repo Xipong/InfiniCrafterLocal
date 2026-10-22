@@ -10,7 +10,7 @@ import subprocess
 from urllib.parse import urlsplit
 
 from toolbox.infini_toolbox import discover_project, read_config_env
-from toolbox.live.panels import PANEL_PROVENANCE, load_selection
+from toolbox.live.panels import load_selection
 
 
 def read_environment(project: Path, config: Path | None) -> dict[str, str]:
@@ -103,10 +103,10 @@ def prepare(args: Namespace) -> tuple[dict, dict[str, str]]:
             raise ValueError('project HEAD does not match --expected-head')
         if not clean:
             raise ValueError('--expected-head requires a clean project worktree')
-    dump, routes, _, _, _ = load_selection(args)
+    dump, routes, _, _, _, panel_metadata = load_selection(args)
     return {
         'preflightOnly': not args.run, 'realImageGeneration': False,
-        'project': str(project), 'panel': args.panel, 'panelProvenance': PANEL_PROVENANCE,
+        'project': str(project), 'panel': args.panel, **panel_metadata,
         'caseCount': len(routes), 'cases': [dict(case=c, itemA=a, itemB=b) for c, a, b in routes],
         'runtimeDumpSha256': hashlib.sha256(dump.read_bytes()).hexdigest(),
         'ok': True, 'configured': configured, 'endpointConfigured': bool(endpoint), 'fallbackConfigured': fallback,

@@ -6,7 +6,9 @@
 
 ```bash
 python -m toolbox live10
+python -m toolbox panels
 python -m toolbox live20 --expected-case-count 20
+python -m toolbox live20 --preset live20-classic-sprites
 python -m toolbox live10 --help
 python -m toolbox live20 --config /path/outside/repo/private.env --preflight-only
 ```
@@ -27,16 +29,24 @@ Environment имеет приоритет; используется канони
 
 ## Панели и fixture
 
-Live20 — 20 исходных tracked комбинаций, от `woodwork_blade` до
-`silt_extractinator`. Live10 — явный тематический subset:
+`live10` по умолчанию — **исторический midgame**: от `night_missile`
+(`NightsEdge` + `MagicMissile`) до `meteor_star_cannon` (`StarCannon` + `MeteorStaff`).
+Это прежние 10 кейсов в исходном порядке и 20 точных parent rows, не subset Live20.
+`live20` — прежние 20 пар, от `woodwork_blade` до `silt_extractinator`, и отдельный
+исходный snapshot из 39 родителей. Есть восстановленный вариант тех же запросов
+со `spriteReferenceRaw`: `live20 --preset live20-classic-sprites`.
 
-- `woodwork_blade`, `astral_mirror`, `bee_boomstick`, `swift_boots`, `ropebound_spear`;
-- `corrupt_yoyo`, `jungle_whip`, `lens_finch_staff`, `obsidian_pickaxe`, `glowing_healing_potion`.
+Все пары, источники и fixtures — в [каталоге входов](../fixtures/README.md);
+`python -m toolbox panels` показывает доступные пакеты без runtime/network.
+`--preset` выбирает пакет вместе с его собственным fixture. Нельзя смешивать его
+с `--cases-file`; `--runtime-dump` остаётся явной заменой родительских данных.
+Новый subset из PR141 доступен только как `live10 --preset live10-starter`.
 
-Это выборка melee / ranged / accessory / mobility / summon / tool / consumable,
-а не заявление о качестве или исторической Live10 performance. Полные пары —
-[panels.py](panels.py), фактические родители — [items.jsonl](../fixtures/items.jsonl).
-Snapshot неизменён; его SHA-256 записывается в preflight и campaign manifest.
+Восстановлены исторические **входы**, не старая версия production-кода или ответов.
+Исполняется настоящий текущий pipeline Gameplay Author → Visual/VFX → conditional
+Repair и delivery с прежним no-image control. Старые модели/порты/температуры не
+назначаются defaults. Точные bytes fixture и SHA256 case-пакета записываются в
+preflight и campaign manifest; успешность прежних прогонов не наследуется.
 
 `--cases id1,id2` выбирает subset известных IDs в порядке панели; `--cases-file`
 читает JSON list или `{ "cases": [...] }` с `{ "case", "itemA", "itemB" }`, где

@@ -16,11 +16,21 @@ def main(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description='Утилиты QA: безопасный offline-вход; live только с --run.',
-        epilog='live10/live20: preflight или явная text-кампания; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks.',
+        epilog='live10/live20: исторические входы, preflight или явная text-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks.',
     )
-    parser.add_argument('command', choices=('live10', 'live20', 'summary', 'doctor', 'verify', 'replay'))
+    parser.add_argument('command', choices=('live10', 'live20', 'panels', 'summary', 'doctor', 'verify', 'replay'))
     if not values or values[0] in ('-h', '--help'):
         parser.print_help()
+        return 0
+    if values[0] == 'panels':
+        from toolbox.live.catalog import panel_catalog
+        catalog_parser = argparse.ArgumentParser(description='Исходные пакеты запросов и родители; без inference.')
+        catalog_parser.parse_args(values[1:])
+        try:
+            entries = panel_catalog()
+        except (ValueError, OSError) as exc:
+            catalog_parser.error(str(exc))
+        print(json.dumps({'offlineOnly': True, 'panels': entries}, ensure_ascii=False, indent=2))
         return 0
     if values[0] == 'verify':
         return subprocess.run([sys.executable, str(BASE_ROOT / 'tools/agentctl.py'), 'verify', *values[1:]], cwd=BASE_ROOT).returncode

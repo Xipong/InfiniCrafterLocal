@@ -1,0 +1,62 @@
+{
+  "schema": "infini.toolbox-panel.v1",
+  "id": "live10-starter",
+  "command": "live10",
+  "title": "Короткий тематический subset из PR141 (не исторический midgame)",
+  "historical": false,
+  "runtimeDump": "../items.jsonl",
+  "provenance": "Tracked Live20 route bank, preserved at main84cd55319c2bedf279f5d8ee56b8df3f81420169 before classic-panel recovery.",
+  "notes": "Это новый subset, опубликованный в PR141; не подменяет классический Live10 midgame.",
+  "cases": [
+    {
+      "case": "woodwork_blade",
+      "itemA": "WoodenSword",
+      "itemB": "WorkBench"
+    },
+    {
+      "case": "astral_mirror",
+      "itemA": "MagicMirror",
+      "itemB": "FallenStar"
+    },
+    {
+      "case": "bee_boomstick",
+      "itemA": "Boomstick",
+      "itemB": "BeeWax"
+    },
+    {
+      "case": "swift_boots",
+      "itemA": "HermesBoots",
+      "itemB": "Aglet"
+    },
+    {
+      "case": "ropebound_spear",
+      "itemA": "Spear",
+      "itemB": "Rope"
+    },
+    {
+      "case": "corrupt_yoyo",
+      "itemA": "CorruptYoyo",
+      "itemB": "DemoniteBar"
+    },
+    {
+      "case": "jungle_whip",
+      "itemA": "ThornWhip",
+      "itemB": "JungleSpores"
+    },
+    {
+      "case": "lens_finch_staff",
+      "itemA": "BabyBirdStaff",
+      "itemB": "Lens"
+    },
+    {
+      "case": "obsidian_pickaxe",
+      "itemA": "MoltenPickaxe",
+      "itemB": "Obsidian"
+    },
+    {
+      "case": "glowing_healing_potion",
+      "itemA": "HealingPotion",
+      "itemB": "GlowingMushroom"
+    }
+  ]
+}
