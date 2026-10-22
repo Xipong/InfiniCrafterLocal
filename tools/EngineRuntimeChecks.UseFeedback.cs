@@ -21,7 +21,7 @@ internal static partial class EngineRuntimeChecks
             Equal(Text("EntityBatchLimit", 2, 2), generated.RootSpawnBlockedReason(player, entity), "whole authored batch must fit entity concurrency");
             active.Projectile.owner = 1;
             Equal("", generated.RootSpawnBlockedReason(player, entity), "other player's same entity does not consume owner budget");
-            active.Projectile.owner = 0; entity.Spawn.MaxActive = null;
+            active.Projectile.owner = 0; entity.Spawn.MaxActive = InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner;
             entity.Kind = RuntimeEntityKind.OwnerAttachedProjectile;
             Equal(Text("OwnerAttachedActive"), generated.RootSpawnBlockedReason(player, entity), "attached duplicate has distinct refusal");
             entity.Kind = RuntimeEntityKind.FreeProjectile;

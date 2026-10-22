@@ -29,9 +29,12 @@ internal static partial class EngineRuntimeChecks
     {
         using var actorState = new NativeActorState();
 
+        WithPlayer((owner, _) => {
         Projectile[] oldProjectiles = Terraria.Main.projectile;
                 Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.myPlayer = 0;
-        var owner = Terraria.Main.player[0] = new Player { active = true, whoAmI = 0, direction = 1 };
+        Terraria.Main.dedServ = true; // Admission regression is CPU-only; do not draw feedback chat.
+        owner.active = true; owner.whoAmI = 0; owner.direction = 1;
+        Terraria.Main.player[0] = owner;
         void Reset() => Terraria.Main.projectile = Enumerable.Range(0, oldProjectiles.Length)
             .Select(i => new Projectile { whoAmI = i, active = false }).ToArray();
         void Live(GeneratedItemData data, int slot, int player = 0, string entityId = "root", int depth = 0)
@@ -119,5 +122,6 @@ internal static partial class EngineRuntimeChecks
             capped.RuntimeProgram.Entities[0], action, owner, source, Vector2.Zero, Vector2.UnitX, null, 0, 0, ledger);
         Equal(0, _rootIntercepts, "immediate action refuses full cap before native spawn");
         Equal(3, ledger.Remaining, "immediate cap refusal returns event budget");
+        });
     }
 }

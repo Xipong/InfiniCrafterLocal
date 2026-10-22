@@ -81,7 +81,9 @@ internal static partial class EngineRuntimeChecks
                 gameplay.UseConditionMode = "not_wet"; player.wet = false;
                 Equal("", GeneratedItem.UseBlockedReason(player, gameplay), "non-grounded condition remains independent of map support");
                 player.wet = true;
-                Equal("Cannot be used while wet", GeneratedItem.UseBlockedReason(player, gameplay), "wet condition unchanged");
+                WithForgePresentationLanguages(locale =>
+                    Equal(Terraria.Localization.Language.GetTextValue("Mods.InfiniCrafterLocal.UseFeedback.Wet"),
+                        GeneratedItem.UseBlockedReason(player, gameplay), locale + " wet condition remains the localized wet refusal"));
                 gameplay.UseConditionMode = "grounded";
                 Collision.up = true; Collision.down = false; Collision.stair = true;
                 Collision.stairFall = true; Collision.sloping = true;
