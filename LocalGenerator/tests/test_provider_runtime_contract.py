@@ -101,17 +101,23 @@ def test_combine_endpoint_preserves_admission_cache_and_failure_owner(endpoint, 
     endpoint.semaphore.release()
 
 
-@pytest.mark.parametrize("port,expected", [("-7", 1), ("70000", 65535)])
-def test_server_startup_owns_cleanup_registration_before_bounded_bind(monkeypatch, port, expected):
+@pytest.mark.parametrize("port,expected,echo_levels", [("-7", 1, ("warn", "error")), ("70000", 65535, ())])
+def test_server_startup_owns_cleanup_registration_before_bounded_bind(monkeypatch, capsys, port, expected, echo_levels):
     events = []
     monkeypatch.setenv("INFINI_PORT", port)
     monkeypatch.setenv("INFINI_HOST", "127.0.0.1")
     monkeypatch.setenv("INFINI_IMAGE_BACKEND", "off")
     monkeypatch.setattr(server, "initialize_trace_storage", lambda: None)
+    monkeypatch.setattr(server, "TRACE_PROMPTS_ENABLED", True)
+    monkeypatch.setattr(server, "CONSOLE_EVENT_LEVELS", echo_levels)
     monkeypatch.setattr(server.visual_config, "install_sdcpp_cleanup_handlers", lambda: events.append("cleanup"))
     monkeypatch.setattr(server, "ThreadingHTTPServer", lambda address, handler: events.append(address) or SimpleNamespace(serve_forever=lambda: events.append("served")))
     server.main()
     assert events == ["cleanup", ("127.0.0.1", expected), "served"]
+    banner = capsys.readouterr().out
+    assert "events.ndjson" in banner and "INFINI_CONSOLE_EVENT_LEVEL" in banner
+    mode_line = next(line for line in banner.splitlines() if "events.ndjson" in line).split("(INFINI_", 1)[0]
+    assert all(level in mode_line for level in (echo_levels or ("off",)))
 
 
 @pytest.mark.parametrize("path,status,body,expected", [
@@ -136,6 +142,15 @@ def test_sdcpp_readiness_identifies_the_actual_image_service(monkeypatch, path, 
         "INFINI_SDCPP_STEPS": "0", "INFINI_SDCPP_CFG": "-2", "INFINI_SDCPP_SERVER_PORT": "70000"},
         "from infini_local.pipelines import pipeline_visual_config as v, image_backend_pipeline as i; print(json.dumps([v.SDCPP_WIDTH,v.SDCPP_HEIGHT,v.SDCPP_STEPS,v.SDCPP_CFG,v.SDCPP_SERVER_PORT,i.SDCPP_WIDTH,i.SDCPP_HEIGHT]))",
         [64, 2048, 1, 0.0, 65535, 64, 2048], id="bounded-env-shared-backend"),
+    pytest.param("lora-file", {
+        "INFINI_SDCPP_LORA_FILE": r"D:\Art\loras\terraria_items.safetensors",
+        "INFINI_SDCPP_LORA_DIR": r"C:\stale\wrong_loras", "INFINI_SDCPP_LORA_PROMPT_TAGS": "",
+        "INFINI_SDCPP_LORA_WEIGHT": "0.55", "INFINI_SDCPP_SERVER_COMMAND_MODE": "safe_args",
+        "INFINI_SDCPP_SERVER_EXTRA_ARGS": ""},
+        "from infini_local.pipelines import pipeline_visual_config as v, image_backend_pipeline as i; "
+        "cmd,shell=i.build_sdcpp_server_command(); print(json.dumps([shell,v.SDCPP_LORA_DIR,"
+        "cmd[cmd.index('--lora-model-dir')+1],v.SDCPP_LORA_PROMPT_TAGS]))",
+        [False, r"D:\Art\loras", r"D:\Art\loras", "<lora:terraria_items:0.55>"], id="selected-lora-file-overrides-stale-directory"),
     pytest.param("signal-import", {},
         "import signal; signals=[s for s in (getattr(signal,'SIGINT',None),getattr(signal,'SIGTERM',None)) if s is not None]; before=[signal.getsignal(s) for s in signals]; import infini_local.pipelines.pipeline_visual_config; after=[signal.getsignal(s) for s in signals]; print(json.dumps([a is b for a,b in zip(before,after)]))",
         [True, True], id="import-does-not-own-process-signals"),

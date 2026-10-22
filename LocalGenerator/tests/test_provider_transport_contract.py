@@ -229,24 +229,28 @@ def test_real_http_deadline_covers_trickle_headers_error_body_and_retry(loopback
 
 
 @pytest.mark.parametrize("reason", ["pacing", "provider_429"])
-def test_real_http_deadline_prevents_sending_after_rate_wait(loopback_transport, monkeypatch, reason):
+def test_deadline_prevents_sending_after_rate_wait(loopback_transport, rate_clock, monkeypatch, reason):
     endpoint, _events = loopback_transport
     base, observed = endpoint()
     monkeypatch.setattr(llm_config, "OPENROUTER_BASE_URL", base)
     monkeypatch.setattr(llm_admission, "_remote_rate_key", lambda *_args: "synthetic-rate-key")
-    now = time.monotonic()
+    now = rate_clock.now
     llm_admission._LLM_RATE_STATE["synthetic-rate-key"] = {
         "events": [], "lastRequest": now if reason == "pacing" else -1.0e30,
         "blockedUntil": now + 10 if reason == "provider_429" else 0,
     }
-    started = time.monotonic()
-    with pytest.raises(TimeoutError) as caught:
-        transport.llm_chat_json(packet(), timeout=0.18)
-    assert caught.value._infini_transport_debug["physicalAttemptCount"] == 0
-    assert caught.value._infini_transport_debug["physicalAttempts"] == []
-    assert time.monotonic() - started < 0.33
+    # Spend exactly the logical budget; host scheduling must not decide whether
+    # a request was incorrectly admitted after the deadline.
+    assert rate_clock.start("expired-admission", lambda: transport.llm_chat_json(packet(), timeout=0.18)) == "waiting"
+    assert rate_clock.parked["expired-admission"] == pytest.approx(0.18)
+    assert rate_clock.step("expired-admission", now + 0.18) == "done"
+    error = rate_clock.results["expired-admission"]
+    assert isinstance(error, TimeoutError)
+    assert error._infini_transport_debug["physicalAttemptCount"] == 0
+    assert error._infini_transport_debug["physicalAttempts"] == []
     assert observed == []
     assert llm_admission._LLM_RATE_STATE["synthetic-rate-key"]["events"] == []
+    assert llm_admission._LLM_RATE_STATE["synthetic-rate-key"]["waiters"] == []
 
 
 @pytest.mark.parametrize("oversized", [False, True])

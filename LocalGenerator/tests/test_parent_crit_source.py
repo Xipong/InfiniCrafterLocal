@@ -26,9 +26,15 @@ def offline(monkeypatch):
 
 
 
-@pytest.mark.parametrize("mode", ["json_schema", "json_object", "off"])
-@pytest.mark.parametrize("crit", [0, 4, 29])
-@pytest.mark.parametrize("surface", ["top_level", "fingerprint"])
+# Parent projection runs before response-format selection. Cover every source
+# surface/value boundary once, then retain delivery through both other formats.
+@pytest.mark.parametrize("mode,crit,surface", [
+    ("json_schema", crit, surface)
+    for surface in ("top_level", "fingerprint") for crit in (0, 4, 29)
+] + [
+    ("json_object", 29, "fingerprint"),
+    ("off", 0, "top_level"),
+])
 def test_native_crit_reaches_actual_author_message_unchanged(monkeypatch, mode, crit, surface):
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     parent = {"name": "native base crit source", "damage": 40, "damageClass": "ranged"}

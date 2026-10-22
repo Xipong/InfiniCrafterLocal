@@ -500,9 +500,10 @@ def test_image_request_gate_bounds_parallel_backend_ownership() -> None:
     gate = ImageRequestGate(1)
     active = 0
     maximum = 0
+    completed = []
     lock = threading.Lock()
 
-    def worker() -> None:
+    def worker(index: int) -> None:
         nonlocal active, maximum
         with gate.slot():
             with lock:
@@ -511,12 +512,16 @@ def test_image_request_gate_bounds_parallel_backend_ownership() -> None:
             time.sleep(0.03)
             with lock:
                 active -= 1
+                completed.append(index)
 
-    threads = [threading.Thread(target=worker) for _ in range(3)]
+    threads = [threading.Thread(target=worker, args=(index,), daemon=True) for index in range(3)]
     for thread in threads:
         thread.start()
     for thread in threads:
-        thread.join(timeout=2)
+        thread.join(timeout=5)
+    assert all(not thread.is_alive() for thread in threads), "image gate leaked a blocked worker"
+    assert sorted(completed) == [0, 1, 2], "every admitted backend request must finish"
+    assert active == 0
     assert maximum == 1
 
 def test_backend_dispatch_enters_shared_image_gate(monkeypatch) -> None:

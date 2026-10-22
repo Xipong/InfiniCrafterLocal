@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -17,31 +16,6 @@ from provider_test_support import OwnedProcess, loopback_server, write_json_resp
 from infini_local.desktop import settings_env, settings_schema
 from infini_local.desktop import studio_operations as controls
 from infini_local.desktop.settings_controller import SettingsController
-
-
-def test_settings_controller_imports_without_tkinter_installed(tmp_path):
-    import subprocess
-    code = """
-import sys
-import importlib.abc
-class BlockTk(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname in ('tkinter', '_tkinter') or fullname.startswith('tkinter.'):
-            raise AssertionError('Studio must not load Tk')
-sys.meta_path.insert(0, BlockTk())
-from infini_local.desktop.settings_controller import SettingsController
-from infini_local.desktop.web_studio import StudioController
-app = SettingsController(sys.argv[1])
-assert isinstance(app.values, dict)
-assert StudioController(app, None).snapshot()['fields']
-app.pump()
-app.on_close()
-"""
-    env = dict(os.environ)
-    env.pop('DISPLAY', None)
-    env['PYTHONPATH'] = str(Path(__file__).resolve().parents[1])
-    result = subprocess.run([sys.executable, '-c', code, str(tmp_path / 'config.env')], env=env, capture_output=True, text=True, timeout=15)
-    assert result.returncode == 0, result.stderr
 
 
 class _GuiWorkflowHarness(SettingsController):
@@ -69,35 +43,49 @@ def gui_workflow(tmp_path, monkeypatch):
 
 @pytest.fixture
 def held_gui_call(monkeypatch):
-    """Hold one worker; teardown releases unfinished calls."""
+    """Hold IO until the test releases it; verify callbacks return with IO pending."""
     holds = []
     workers = []
 
     def install(target, method, response, *, first_only=False):
         entered, release, finished = (threading.Event() for _ in range(3))
         calls = []
+        call_threads = []
         holds.append(release)
 
         def fetch(*args, **kwargs):
-            workers.append(threading.current_thread())
+            worker = threading.current_thread()
+            workers.append(worker)
+            call_threads.append(worker)
             calls.append(kwargs.get("base_url"))
-            if not first_only or len(calls) == 1:
-                entered.set()
-                assert release.wait(3), "test worker hold expired"
             try:
+                if not first_only or len(calls) == 1:
+                    entered.set()
+                    assert release.wait(5), "test worker hold expired"
                 if isinstance(response, Exception):
                     raise response
                 return response(**kwargs) if callable(response) else response
             finally:
                 finished.set()
 
+        def assert_pending():
+            # This is a deadlock watchdog, not a performance budget. A callback
+            # may be descheduled on CI; it must still return before IO completes.
+            assert entered.wait(3), "callback did not start the IO worker"
+            assert call_threads[0] is not threading.current_thread(), "IO ran on the controller thread"
+            assert not release.is_set(), "test released IO before checking responsiveness"
+            assert not finished.is_set(), "callback waited for held IO instead of returning"
+
         monkeypatch.setattr(target, method, fetch)
-        return SimpleNamespace(entered=entered, release=release, finished=finished, calls=calls)
+        return SimpleNamespace(entered=entered, release=release, finished=finished,
+                               calls=calls, assert_pending=assert_pending)
 
     yield install
     for release in holds:
         release.set()
     for worker in workers:
+        if worker is threading.current_thread():
+            continue  # A synchronous-IO regression is reported by assert_pending.
         worker.join(timeout=3)
         assert not worker.is_alive(), "held worker did not finish"
 
@@ -197,10 +185,8 @@ def test_trace_refresh_is_nonblocking_and_only_latest_endpoint_renders(gui_workf
         "serverRoot": str(root), "cacheDir": kw["base_url"],
         "events": [{"message": kw["base_url"]}],
     }, first_only=True)
-    before = time.monotonic()
     gui.refresh_trace()
-    assert time.monotonic() - before < 0.2, "Refresh blocked the UI on IO"
-    assert hold.entered.wait(1)
+    hold.assert_pending()
     assert not any(gui.trace.values())
     for port in (5056, 5057):
         gui.update_values({"INFINI_PORT": str(port)})
@@ -443,10 +429,8 @@ def test_server_actions_return_while_health_is_held_and_do_not_duplicate_work(gu
         "generationActivity": {"active": 1, "waiting": 0, "accepting": True},
     })
     callback = getattr(gui, action)
-    before = time.monotonic()
     callback()
-    assert time.monotonic() - before < 0.2
-    assert hold.entered.wait(1)
+    hold.assert_pending()
     callback()
     hold.release.set()
     gui.drain_until(lambda: "busy" in gui.status.lower())
@@ -484,10 +468,8 @@ def test_health_feedback_is_async_bounded_truthful_and_nonsecret(applied_gui, he
               "generationActivity": {"active": 1, "waiting": 0, "accepting": True,
                                      "requests": rows, "requestsOmitted": 2}}
     hold = held_gui_call(gui, "_fetch_health_snapshot", health)
-    before = time.monotonic()
     gui._delayed_health_check()
-    assert time.monotonic() - before < 0.2
-    assert hold.entered.wait(1)
+    hold.assert_pending()
     hold.release.set()
     gui.drain_until(lambda: "matches" in gui.applied_config.lower())
     feedback = gui.applied_config

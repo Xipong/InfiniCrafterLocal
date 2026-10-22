@@ -352,8 +352,12 @@ def test_canvas_consumer_pixels(tmp_path, monkeypatch, canvas, entry, role):
             assert image.mode == "RGBA" and image.getchannel("A").getextrema() == (0, 255)
     assert contracts.sprite_contract_for(role, target)["size"] == canvas
 
-@pytest.mark.parametrize("owner", ["item", "reuse", "distinct"])
-@pytest.mark.parametrize("value", [None, True, "32", 32.0, 33], ids=["missing", "bool", "string", "float", "unsupported"])
+# Owner selection and value validation are independent: retain every invalid
+# value, plus each ownership route with its positive and missing-canvas checks.
+@pytest.mark.parametrize("owner,value", [
+    pytest.param("item", value, id=label + "-item")
+    for label, value in (("missing", None), ("bool", True), ("string", "32"), ("float", 32.0), ("unsupported", 33))
+] + [pytest.param(owner, None, id="missing-" + owner) for owner in ("reuse", "distinct")])
 def test_asset_plan_requires_explicit_image_project_canvas_without_hitbox_fallback(owner, value):
     data = {"visual": {"preferredCanvasSize": 96}, "runtimeProgram": {"itemEntityId": "item", "entities": []}}
     entity = {"id": "item" if owner == "item" else "body", "kind": "item_body" if owner == "item" else "free_projectile",

@@ -9,7 +9,6 @@ global.document={createElement:()=>node(),activeElement:null,addEventListener(na
 global.window={INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
 const messages=[];
 let source=fs.readFileSync(require('node:path').join(__dirname,'../infini_local/desktop/webui/studio.js'),'utf8');
-assert(!source.includes('window.confirm('),'discard must use the in-page dialog');
 source=source.replace('  navigate();poll();',`
   poll=()=>{};setMenu=()=>{};render=()=>{globalThis.renderCount++;};renderOperate=()=>{};syncInputs=()=>{};updateDiagnostics=()=>{};updateActionButtons=()=>{};
   const originalToast=toast;toast=(message,error)=>{originalToast(message,error);if(!state.suppressToast) globalThis.messages.push({message,error});};
@@ -294,12 +293,18 @@ let scroll=null,focused=false;window.scrollTo=options=>{scroll=options;};
 state.fields=[{key:'INFINI_LLM_TEMPERATURE',route:'providers'}];
 const row=document.querySelector('[data-field-row="INFINI_LLM_TEMPERATURE"]');
 row.parentElement={tagName:'DETAILS',dataset:{details:'providers-advanced'},open:false,parentElement:null};
-row.getBoundingClientRect=()=>({top:600});
+const searchRowTop=600;window.innerHeight=400;
+row.getBoundingClientRect=()=>({top:searchRowTop});
 row.querySelector=()=>({focus(){focused=true;}});
 studio.focusField('INFINI_LLM_TEMPERATURE');
 assert.equal(location.hash,'providers');assert.equal(scroll,null);
 location.hash='#providers';studio.navigate();
-assert(row.parentElement.open);assert(focused);assert.equal(scroll.top,506);assert.equal(state.focusKey,null);
+assert(row.parentElement.open);assert(focused);
+// The destination must bring the row into view, not encode today's header offset.
+assert(scroll && Number.isFinite(scroll.top),'search must request a finite scroll destination');
+assert(scroll.top>0 && scroll.top<=searchRowTop && searchRowTop-scroll.top<window.innerHeight,
+  'search must scroll toward the requested row and leave it inside the viewport');
+assert.equal(state.focusKey,null);
 // Exit must remain unconfirmed while running, even if HTTP accepted the queue.
 state.pending={id:'exit',action:'exitStudio',sent:{},clock:3};
 acceptSnapshot(snapshot({}, {actionResults:[{id:'exit',status:'running',ok:true}]}));
@@ -365,6 +370,38 @@ async function testInterruptedDefaultsRefresh() {
     state.posting=false;
   }
 }
+// Discard is an explicit in-page decision, never an automatic write or native prompt.
+{
+  window.confirm=global.confirm=()=>assert.fail('discard must not invoke a native confirmation dialog');
+  global.fetch=()=>assert.fail('discard must not submit settings or another backend action');
+  const dialog=document.querySelector('#utility-dialog');
+  function clickUi(ui) {
+    const button={dataset:{ui},closest:selector=>selector==='dialog' ? dialog:null};
+    events.click({target:{closest:selector=>selector==='button,[data-ui],[data-search-key]' ? button:null}});
+  }
+  state.remote=null;state.draft={};state.dirty.clear();state.edits={};state.pending=null;state.posting=false;
+  acceptSnapshot(snapshot({[key]:'prepared-but-unsaved'}, {
+    savedValues:{[key]:'on-disk'},savedRevision:'discard-disk',savedLanEnabled:false
+  }));
+  state.draft[key]='local-edit';state.lan=true;recomputeDirty();
+  clickUi('discard');
+  assert(dialog.open,'discard must request consent before changing the draft');
+  assert.equal(state.draft[key],'local-edit');assert(state.lan);assert(state.dirty.has(key));
+  clickUi('close-dialog');
+  assert(!dialog.open);assert.equal(state.draft[key],'local-edit');assert(state.lan);
+  for(const busy of ['pending','posting']) {
+    state[busy]=busy==='pending' ? {id:'unfinished-save'}:true;
+    clickUi('discard');
+    assert(!dialog.open,'in-flight save must be acknowledged before discard is available');
+    assert.equal(state.draft[key],'local-edit');assert(state.lan);
+    state[busy]=busy==='pending' ? null:false;
+  }
+  clickUi('discard');document.querySelector('#confirm-submit').onclick();
+  assert(!dialog.open);assert.equal(state.draft[key],'on-disk');
+  assert.equal(state.baseline[key],'on-disk');assert.equal(state.dirty.size,0);
+  assert.equal(state.lan,false);assert.equal(state.savedRevision,'discard-disk');
+}
+
 testRepeatedSubmission().then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
 
 // The image checkbox is a real checked boolean, and disabling it preserves the limit.

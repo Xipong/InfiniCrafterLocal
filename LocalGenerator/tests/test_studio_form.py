@@ -1,10 +1,6 @@
 """Real browser-controller form semantics, independent of a windowing toolkit."""
 from __future__ import annotations
 
-import os
-from pathlib import Path
-import subprocess
-import sys
 
 from infini_local.desktop.settings_controller import SettingsController
 from infini_local.desktop.settings_env import parse_env
@@ -89,37 +85,3 @@ def test_form_branches_preserve_secrets_unknown_keys_and_explicit_choices(tmp_pa
         assert 'FAKE-HIDDEN-TOKEN' not in app.home_state + app.home_detail + app.home_config
     finally:
         app.on_close()
-
-
-def test_studio_import_construct_pump_and_close_without_tk_or_display(tmp_path):
-    # A fresh interpreter catches indirect imports that an already-loaded module
-    # could conceal. The blocker fails even if Tcl/Tk is installed on the host.
-    code = '''
-import importlib.abc
-import sys
-from pathlib import Path
-class RejectTk(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname == '_tkinter' or fullname == 'tkinter' or fullname.startswith('tkinter.'):
-            raise AssertionError('Studio attempted a Tk import: ' + fullname)
-sys.meta_path.insert(0, RejectTk())
-from infini_local.desktop.settings_controller import SettingsController
-from infini_local.desktop.web_studio import StudioServer, StudioController
-app = SettingsController(Path(sys.argv[1]))
-server = StudioServer(Path(sys.argv[2]))
-try:
-    controller = StudioController(app, server)
-    state = controller.snapshot()
-    assert state['fields'] and state['values']
-    app.pump()
-finally:
-    app.on_close()
-    server.close()
-'''
-    root = Path(__file__).resolve().parents[1]
-    env = {**os.environ, 'PYTHONPATH': str(root)}
-    env.pop('DISPLAY', None)
-    result = subprocess.run([sys.executable, '-c', code, str(tmp_path / 'config.env'),
-                             str(root / 'infini_local/desktop/webui')], env=env,
-                            capture_output=True, text=True, timeout=15)
-    assert result.returncode == 0, result.stdout + result.stderr

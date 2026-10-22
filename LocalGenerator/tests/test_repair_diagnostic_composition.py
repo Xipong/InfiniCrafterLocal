@@ -12,9 +12,10 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
+@pytest.mark.parametrize("reverse_permissions", [False, True], ids=["scope-order", "reversed-scope-order"])
 @pytest.mark.parametrize("reverse_errors", [False, True], ids=["validator-order", "reversed-order"])
 @pytest.mark.parametrize("contact_suppressed", [False, True], ids=["repair-contact", "frozen-hitbox"])
-def test_component_and_event_repairs_keep_independent_frozen_values(contact_suppressed, reverse_errors):
+def test_component_and_event_repairs_keep_independent_frozen_values(contact_suppressed, reverse_errors, reverse_permissions):
     authored = build_capability_witness("restore_resources_on_use")
     calls = authored["runtimeProgram"]["calls"]
     healing = next(row for row in calls if row["fn"] == "restore_resources_on_use")
@@ -34,10 +35,19 @@ def test_component_and_event_repairs_keep_independent_frozen_values(contact_supp
     if reverse_errors:
         errors.reverse()
     scope = build_runtime_repair_scope(authored, errors)
-    assert scope["fieldPermissions"]["calls"] == [
+    if reverse_permissions:
+        for permissions in scope["fieldPermissions"].values():
+            permissions.reverse()
+            for permission in permissions:
+                permission["paths"].reverse()
+    # Scope permissions are keyed by identity/path, not traversal order. Sorting
+    # (rather than a dict or set) still detects duplicate rows and permissions.
+    permissions = [{**row, "paths": sorted(row["paths"])} for row in scope["fieldPermissions"]["calls"]]
+    expected_permissions = [
         {"id": event["id"], "paths": ["params.when"]},
         {"id": healing["id"], "paths": ["params.healLife", "params.healMana"]},
     ]
+    assert sorted(permissions, key=lambda row: row["id"]) == sorted(expected_permissions, key=lambda row: row["id"])
     assert scope["fieldPermissions"]["bindings"] == ([] if contact_suppressed else [
         {"id": binding["id"], "paths": ["contactDamage"]},
     ])

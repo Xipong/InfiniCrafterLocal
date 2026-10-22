@@ -12,10 +12,6 @@ second source of truth or swallow a level the user asked to see.
 
 import io
 import json
-from pathlib import Path
-
-ROOT = Path(__file__).resolve().parents[1]
-SERVER = ROOT / "infini_local" / "web" / "server.py"
 
 
 def _check_file_record_is_written_regardless_of_echo(tmp_path, capsys):
@@ -124,7 +120,7 @@ def _check_level_threshold_resolution(monkeypatch):
     assert reloaded._configured_echo_levels() == ("warn", "error")
 
 
-def _check_runtime_and_server_are_wired_to_the_echo(tmp_path, capsys, monkeypatch):
+def _check_runtime_echo_preserves_the_file_record(tmp_path, capsys, monkeypatch):
     from infini_local.storage import trace_runtime
 
     monkeypatch.setattr(trace_runtime, "CACHE_DIR", tmp_path)
@@ -140,11 +136,6 @@ def _check_runtime_and_server_are_wired_to_the_echo(tmp_path, capsys, monkeypatc
     trace_runtime.log_event("error", "silent through runtime")
     assert capsys.readouterr().out == ""
     assert "silent through runtime" in (tmp_path / "events.ndjson").read_text()
-
-    # The server banner must expose the mode and the setting to change it.
-    server_text = SERVER.read_text(encoding="utf-8")
-    assert "CONSOLE_EVENT_LEVELS" in server_text
-    assert "INFINI_CONSOLE_EVENT_LEVEL" in server_text
 
 
 def _check_setting_is_exposed_in_the_gui():

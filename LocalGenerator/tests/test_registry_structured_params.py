@@ -1,4 +1,5 @@
 """Structured Author parameters keep strict shape and exact wire provenance."""
+from collections import Counter
 from copy import deepcopy
 from dataclasses import replace
 import json
@@ -15,18 +16,24 @@ from infini_local.core.runtime_authoring.program_schema import strict_schema_err
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-def test_object_keeps_exact_leaf_units_and_rejects_empty_group():
-    spec = ParamSpec("object", "Explicit grouped stats", min_properties=1, properties={
+@pytest.mark.parametrize("reverse_properties", [False, True], ids=["declared-order", "reversed-order"])
+def test_object_keeps_exact_leaf_units_and_rejects_empty_group(reverse_properties):
+    properties = {
         "radiusTiles": ParamSpec("number", "Radius on the exact pixel lattice", minimum=0.5,
                                  maximum=48, multiple_of=1 / 16, wire_multiplier=16, wire_name="radiusPx"),
         "updatesPerTick": ParamSpec("integer", "Updates", minimum=1, maximum=6, wire_offset=-1,
                                     wire_name="extraUpdates", required=False),
-    })
+    }
+    if reverse_properties:
+        properties = dict(reversed(list(properties.items())))
+    spec = ParamSpec("object", "Explicit grouped stats", min_properties=1, properties=properties)
     assert not strict_schema_errors({"radiusTiles": 8.0625, "updatesPerTick": 6}, spec.schema())
     rows = spec.projected_fields({"radiusTiles": 8.0625, "updatesPerTick": 6}, "group")
-    assert [(r.authored_path, r.wire_path, r.value) for r in rows] == [
+    # Independent DTO destinations have no execution order. Keep provenance,
+    # values and multiplicity exact rather than pinning registry insertion order.
+    assert Counter((r.authored_path, r.wire_path, r.value) for r in rows) == Counter([
         ("group.radiusTiles", "radiusPx", 129), ("group.updatesPerTick", "extraUpdates", 5),
-    ]
+    ])
     assert strict_schema_errors({}, spec.schema())
     assert strict_schema_errors({"radiusTiles": 0.6}, spec.schema())
 

@@ -279,13 +279,11 @@ def test_nested_existing_texture_requires_ready_exact_producer(offline_backend, 
 def test_ready_pixels_do_not_allow_pending_or_fallback_ingredient_admission(offline_backend, tmp_path, status):
     from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
     from infini_local.pipelines.combine_pipeline import _cached_payload_report
-    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
     from infini_local.storage import world_storage
     out = visual_sprite_generation.maybe_generate_visual_assets(_data())
     asset = out["vfxManifest"]["assets"][0]
     asset["spriteStatus"] = status
     assert asset_sync_service.is_complete_png_file(asset["spritePath"])
-    assert validate_vfx_manifest_wire(out)["ok"]
     assert validate_vfx_manifest_wire(out)["ok"]  # wire helper remains the authority
     assert not visual_delivery_gate.visual_delivery_report(out, check_backend_config=False)["ok"]
     assert not world_storage.is_deliverable_recipe_payload(out)

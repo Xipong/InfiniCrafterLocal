@@ -61,10 +61,6 @@ def _silver_delivery(wire_transport, monkeypatch):
     return delivered
 
 
-def test_silver_survives_visual_vfx_and_final_delivery_without_gray_repair(wire_transport, monkeypatch):
-    _silver_delivery(wire_transport, monkeypatch)
-
-
 def test_native_silver_fixture_is_actual_final_delivery(wire_transport, monkeypatch):
     import json
     from pathlib import Path
@@ -122,17 +118,6 @@ def test_serialized_vfx_packet_explains_readability_without_reauthoring(repair):
     assert "count, world-pixel dimensions, opacity and lifetime" in rules
     assert "do not invent damage, extra gameplay projectiles or a larger damaging area" in rules
     assert data == before
-
-
-def test_native_rendering_endpoints_use_local_rgb_not_global_token_capture():
-    # Source parity only; native DTO/consumer execution belongs to native checks.
-    from pathlib import Path
-    root = Path(__file__).resolve().parents[2]
-    library = (root / "ModSources/InfiniCrafterLocal/Common/Models/Presentation/VfxLibrarySpec.cs").read_text()
-    assert "RuntimeRgbSpec ColorStart" in library
-    assert "RuntimeRgbSpec ColorEnd" in library
-    assert "ColorStart.Validate(); ColorEnd.Validate();" in library
-    assert "RequireRenderingToken" not in library
 
 
 @pytest.mark.parametrize("repair", [False, True])

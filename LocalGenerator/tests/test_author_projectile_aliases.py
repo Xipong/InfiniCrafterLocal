@@ -77,12 +77,21 @@ def test_collision_rejects_ambiguous_choices_and_noninteger_updates(name, value)
         compile_runtime_program(document)
 
 
-@pytest.mark.parametrize("anchor,wire_anchor", [
-    ("activation_origin", "item_use_origin"), ("owner_center", "owner_center"),
-    ("cursor", "cursor"), ("ground_at_cursor", "ground_at_cursor"),
-    ("native_resting_spot", "native_resting_spot"),
+# Every anchor is exercised in both structural variants. Height and delay use
+# the same independent leaf projectors for every anchor: distribute their
+# minimum/interior/maximum witnesses instead of crossing every pair again.
+@pytest.mark.parametrize("anchor,wire_anchor,height,delay", [
+    ("activation_origin", "item_use_origin", None, 0),
+    ("activation_origin", "item_use_origin", 1, 0),
+    ("owner_center", "owner_center", None, 0),
+    ("owner_center", "owner_center", 7.25, 19),
+    ("cursor", "cursor", None, 0),
+    ("cursor", "cursor", 80, 600),
+    ("ground_at_cursor", "ground_at_cursor", None, 0),
+    ("ground_at_cursor", "ground_at_cursor", 7.25, 19),
+    ("native_resting_spot", "native_resting_spot", None, 0),
+    ("native_resting_spot", "native_resting_spot", 80, 600),
 ])
-@pytest.mark.parametrize("height,delay", [(None, 0), (1, 0), (7.25, 19), (80, 600)])
 def test_spawn_position_keeps_all_anchors_height_delay_aim_and_ids(anchor, wire_anchor, height, delay):
     document = build_capability_witness("configure_spawn")
     call = selected(document)
@@ -115,11 +124,13 @@ def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(
     ("damage_area_on_event", "radiusTiles", "radiusPx", 8, 768),
     ("move_proximity_missile", "triggerRadiusTiles", "proximityRadiusPx", 4, 512),
 ])
-@pytest.mark.parametrize("case", ["minimum", "next-pixel", "interior", "before-maximum", "maximum", "below", "above", "off-step", "boolean"])
+# Each owner retains both bounds, a non-boundary exact pixel, and every
+# rejection class. Extra interior pixels repeat the same exact projection.
+@pytest.mark.parametrize("case", ["minimum", "next-pixel", "maximum", "below", "above", "off-step", "boolean"])
 def test_tile_radius_boundaries_keep_exact_pixel_projection(fn, name, wire_name, lo, hi, case):
     spec = CAPABILITY_REGISTRY[fn].params[name]
     assert (spec.minimum, spec.maximum, spec.multiple_of) == (lo / 16, hi / 16, 1 / 16)
-    pixels = {"minimum": lo, "next-pixel": lo + 1, "interior": 127, "before-maximum": hi - 1,
+    pixels = {"minimum": lo, "next-pixel": lo + 1,
               "maximum": hi, "below": lo - 1, "above": hi + 1, "off-step": lo + .5, "boolean": 16}[case]
     document = build_capability_witness(fn)
     call = selected(document)

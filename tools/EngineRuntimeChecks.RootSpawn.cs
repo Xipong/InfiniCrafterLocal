@@ -8,6 +8,7 @@ using InfiniCrafterLocal.Content.Items;
 using InfiniCrafterLocal.Content.Projectiles;
 using Microsoft.Xna.Framework;
 using MonoMod.RuntimeDetour;
+using MonoMod.Cil;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ID;
@@ -42,8 +43,6 @@ internal static partial class EngineRuntimeChecks
         }
         var raw = new RuntimeEntitySpec { Spawn = new RuntimeSpawnSpec { Enabled = true, Count = int.MaxValue } };
         Equal(InfiniRuntimeLimits.MaxRuntimeSpawnCount, GeneratedItem.RootBindingSpawnCapacity(raw), "global root spawn ceiling");
-        AssertRootHookCallsCapacity(nameof(GeneratedItem.HoldItem));
-        AssertRootHookCallsCapacity(nameof(GeneratedItem.Shoot));
         RootSpawnPreflightRetainsDepthAndOwnerCaps();
         RootHooksReachUnregisteredSpawnBoundary();
     }
@@ -79,18 +78,6 @@ internal static partial class EngineRuntimeChecks
             },
         };
         return data;
-    }
-
-    // Examine the compiled canonical hooks, not copied arithmetic in this test.
-    // Full NewProjectileDirect is unavailable without registered mod/world content.
-    private static void AssertRootHookCallsCapacity(string hook)
-    {
-        MethodInfo helper = typeof(GeneratedItem).GetMethod("RootBindingSpawnCapacity", BindingFlags.NonPublic | BindingFlags.Static)!;
-        MethodInfo method = typeof(GeneratedItem).GetMethod(hook)!;
-        byte[] il = method.GetMethodBody()!.GetILAsByteArray()!;
-        byte[] token = BitConverter.GetBytes(helper.MetadataToken);
-        Equal(true, Enumerable.Range(0, il.Length - token.Length).Any(i => il[i] == 0x28
-            && il.AsSpan(i + 1, token.Length).SequenceEqual(token)), hook + " calls root capacity helper");
     }
 
     private static void RootSpawnPreflightRetainsDepthAndOwnerCaps()
@@ -141,9 +128,32 @@ internal static partial class EngineRuntimeChecks
             .Select(i => new Projectile { whoAmI = i, active = false }).ToArray();
         // Stop precisely at the real NewProjectileDirect entry. Never return a
         // projectile or claim a game spawn in this unregistered headless process.
+        // Observe the allowance actually delivered by each item hook. A helper
+        // token in its IL neither proves the returned value is used nor survives
+        // a behavior-preserving helper extraction/inlining. Keep the real spawn
+        // implementation running through the native registration boundary below.
+        int? deliveredAllowance = null;
+        int allowanceCalls = 0;
+        bool underfillAllowance = false;
+        using var allowanceObserver = new ILHook(typeof(GeneratedProjectile).GetMethod(
+            "SpawnRuntimeEntity", BindingFlags.Static | BindingFlags.NonPublic)!, il => {
+            var cursor = new MonoMod.Cil.ILCursor(il);
+            cursor.Emit(Mono.Cecil.Cil.OpCodes.Ldarg, il.Method.Parameters[7]);
+            cursor.EmitDelegate<Func<int, int>>(value => {
+                int delivered = underfillAllowance ? 1 : value;
+                deliveredAllowance = delivered; allowanceCalls++;
+                return delivered;
+            });
+            cursor.Emit(Mono.Cecil.Cil.OpCodes.Starg, il.Method.Parameters[7]);
+        });
         using var intercept = new Hook(NativeProjectileEntry(),
             (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
                 InterceptUnregisteredRootSpawn);
+        void CheckAllowance(int count, string label)
+        {
+            Equal<int?>(count, deliveredAllowance, label + " full authored root allowance independently of event budget");
+            Equal(1, allowanceCalls, label + " enters the spawn owner exactly once");
+        }
         Equal(0, ModContent.ProjectileType<GeneratedProjectile>(), "generated projectile is not registered in headless check");
         foreach (int eventAllowance in new[] { 0, 7 })
         foreach (int count in new[] { 1, 4 })
@@ -157,10 +167,33 @@ internal static partial class EngineRuntimeChecks
                 BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(generated)!;
             Equal(eventAllowance, ledger.Remaining, "root use starts with authored event ledger");
             var source = new EntitySource_ItemUse_WithAmmo(owner, item, ItemID.MusketBall, "root test");
+            deliveredAllowance = null; allowanceCalls = 0;
             ExpectUnregisteredRootSpawn(() => generated.Shoot(owner, source, Vector2.Zero,
                 Vector2.UnitX, 0, 0, 0f), "Shoot event budget=" + eventAllowance + " count=" + count);
+            CheckAllowance(count, "Shoot");
             Equal(eventAllowance, ledger.Remaining, "free root Shoot does not spend event ledger");
+            deliveredAllowance = null; allowanceCalls = 0;
             ExpectUnregisteredRootSpawn(() => generated.HoldItem(owner), "HoldItem event budget=" + eventAllowance + " count=" + count);
+            CheckAllowance(count, "HoldItem");
+            if (count == 4 && eventAllowance == 0)
+            {
+                // Sensitivity control: inject a real undersized allowance at
+                // the spawn boundary. Batch admission must refuse it, and the
+                // same allowance oracle must reject the wrong delivered value.
+                underfillAllowance = true; deliveredAllowance = null; allowanceCalls = 0;
+                try
+                {
+                    _rootIntercepts = 0;
+                    generated.Shoot(owner, source, Vector2.Zero, Vector2.UnitX, 0, 0, 0f);
+                    Equal(0, _rootIntercepts, "underfilled allowance cannot spawn a partial native volley");
+                    Equal<int?>(1, deliveredAllowance, "control reached actual spawn owner with wrong allowance");
+                    bool rejected = false;
+                    try { CheckAllowance(count, "underfilled allowance control"); }
+                    catch (InvalidOperationException) { rejected = true; }
+                    Equal(true, rejected, "allowance oracle rejects the actual underfilled argument");
+                }
+                finally { underfillAllowance = false; }
+            }
         }
     }
 

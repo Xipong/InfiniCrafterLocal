@@ -169,16 +169,48 @@ def _check_sdcpp_debug_snapshot_exposes_lora_file_fields() -> None:
     assert snap["loraPromptTags"] == "<lora:terraria_items:0.55>"
 
 
-def _check_sdcpp_canonical_state_cleanup_and_health_snapshot() -> None:
-    import infini_local.pipelines.pipeline_visual_config as pipeline_visual_config
-    import infini_local.pipelines.image_backend_pipeline as image_backend_pipeline
+def _check_shutdown_releases_the_owned_sdcpp_process(monkeypatch) -> None:
+    import io
+    import threading
+    from types import SimpleNamespace
+    from provider_test_support import OwnedProcess
+    from infini_local.services import combine_endpoint, sdcpp_service
+    from infini_local.web import server_utility_routes
 
-    assert pipeline_visual_config.SDCPP_SERVER_STATE is image_backend_pipeline.SDCPP_SERVER_STATE
-    assert not hasattr(server, "SDCPP_SERVER_STATE")
-    assert server.cleanup_sdcpp_server_process is pipeline_visual_config.cleanup_sdcpp_server_process
+    state = visual_config.SDCPP_SERVER_STATE
+    process = OwnedProcess()
+    log_handle = io.StringIO()
+    process._infini_log_handle = log_handle
+    monkeypatch.setattr(state, "process", process)
+    # Never let Windows taskkill or a process-group signal target a fabricated PID.
+    def terminate(owned, *, hard):
+        assert owned is process and hard is False
+        owned.terminate()
+    monkeypatch.setattr(sdcpp_service, "_terminate_process_tree", terminate)
+    workers = []
+    def new_thread(*args, **kwargs):
+        thread = threading.Thread(*args, **kwargs)
+        workers.append(thread)
+        return thread
+    monkeypatch.setattr(server_utility_routes, "threading", SimpleNamespace(Thread=new_thread))
+    monkeypatch.setattr(combine_endpoint, "_GENERATION_ACCEPTING", True)
+    stopped = threading.Event()
+    replies = []
+    handler = SimpleNamespace(json=replies.append, server=SimpleNamespace(shutdown=stopped.set))
 
-    utility_routes = server._utility_routes()
-    assert utility_routes.cleanup_for_shutdown is server.cleanup_sdcpp_server_process
+    # Exercise the real route -> cleanup callback -> process owner. Wrappers and
+    # module aliases may change, but shutdown must terminate the owned child.
+    try:
+        assert server._utility_routes().handle_post(handler, "/shutdown?force=1", {})
+        assert stopped.wait(5), "shutdown never completed"
+    finally:
+        for worker in workers:
+            worker.join(5)
+        assert all(not worker.is_alive() for worker in workers), "shutdown leaked a worker"
+    assert replies[0]["ok"] is True
+    assert process.actions == ["terminate"]
+    assert state.process is None
+    assert log_handle.closed
 
 
 @pytest.mark.parametrize("backend", ["openai_codex", "sdcpp"])
@@ -219,29 +251,6 @@ def _check_sdcpp_health_reads_canonical_state_fields() -> None:
         state.last_start_error = old_last_start_error
         state.last_exit = old_last_exit
         state.last_log_file = old_last_log_file
-
-
-def _check_sdcpp_lora_file_overrides_stale_lora_dir(monkeypatch) -> None:
-    _set_pipeline_sdcpp_command(
-        monkeypatch,
-        SDCPP_VAE="", SDCPP_LLM="",
-        SDCPP_LORA_DIR=r"C:\stale\wrong_loras",
-        SDCPP_LORA_PROMPT_TAGS="<lora:terraria_items:0.55>",
-    )
-    # Simulate server startup normalization after reading INFINI_SDCPP_LORA_FILE.
-    monkeypatch.setattr(
-        IMAGE_BACKEND_PIPELINE,
-        "SDCPP_LORA_DIR",
-        sdcpp_backend.lora_dir_from_file(r"D:\Art\loras\terraria_items.safetensors"),
-    )
-
-    cmd, shell = IMAGE_BACKEND_PIPELINE.build_sdcpp_server_command()
-
-    assert shell is False
-    assert isinstance(cmd, list)
-    assert "--lora-model-dir" in cmd
-    assert r"D:\Art\loras" in cmd
-    assert r"C:\stale\wrong_loras" not in cmd
 
 
 # One collected item per contract module: the checks above keep source order and

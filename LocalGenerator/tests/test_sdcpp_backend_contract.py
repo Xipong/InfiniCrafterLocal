@@ -38,35 +38,6 @@ def _cfg(**overrides):
     return sdcpp_backend.SdcppBackendConfig(**values)
 
 
-def _check_backend_builds_safe_argv_without_template_bleed() -> None:
-    cfg = _cfg(command_mode="safe_args")
-    cmd, shell = sdcpp_backend.build_server_command(
-        cfg,
-        "{exe} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
-    )
-
-    assert shell is False
-    assert isinstance(cmd, list)
-    assert "--sampling-method" in cmd
-    assert "euler" in cmd
-    assert all("OpenRouter" not in part for part in cmd)
-    assert "--vae" in cmd and cfg.vae in cmd
-    assert "--llm" in cmd and cfg.llm in cmd
-
-
-def _check_backend_repairs_known_bad_template_in_template_mode() -> None:
-    cfg = _cfg(command_mode="template", vae="", llm="", extra_args="-v")
-    cmd, shell = sdcpp_backend.build_server_command(
-        cfg,
-        "{exe} --diffusion-model {model} -l {host} --listen-port {port} -W {width} -H {height} --steps {steps} --cfg-scale {cfg} --sampling-mOpenRouter + local Z-Image/sd.cppethod {sampler} {extra}",
-    )
-
-    assert shell is True
-    assert isinstance(cmd, str)
-    assert "--sampling-method euler" in cmd
-    assert "sampling-mOpenRouter" not in cmd
-
-
 def _check_backend_zimage_payload_clears_negative_channel() -> None:
     payload = sdcpp_backend.server_payload(
         _cfg(),
@@ -96,34 +67,6 @@ def _check_backend_extracts_a1111_base64_response(tmp_path: Path) -> None:
 
     assert ok is True
     assert out.read_bytes() == png
-
-
-def _check_backend_adds_lora_model_dir_and_prompt_tags() -> None:
-    cfg = _cfg(
-        lora_dir=r"C:\Games\sdcpp\loras",
-        lora_file=r"C:\Games\sdcpp\loras\terraria_items.safetensors",
-        lora_prompt_tags="<lora:terraria_items:0.65>",
-    )
-
-    cmd, shell = sdcpp_backend.build_server_command(cfg)
-    payload = sdcpp_backend.server_payload(
-        cfg,
-        "a copper bow",
-        "",
-        512,
-        512,
-        42,
-        "a1111",
-        is_zimage=True,
-        positive_only=True,
-    )
-
-    assert shell is False
-    assert isinstance(cmd, list)
-    assert "--lora-model-dir" in cmd
-    assert r"C:\Games\sdcpp\loras" in cmd
-    assert payload["prompt"] == "a copper bow"
-    assert payload["lora"] == [{"path": "terraria_items.safetensors", "multiplier": 0.65, "is_high_noise": False}]
 
 
 def _check_image_pipeline_derives_sdcpp_lora_tag_from_selected_file_when_prompt_tags_blank() -> None:

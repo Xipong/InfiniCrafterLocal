@@ -298,10 +298,15 @@ def test_both_processing_and_final_png_identity_are_exact_recipe_scoped(offline_
     assert Path(asset1["spritePath"]).read_bytes() == Path(asset2["spritePath"]).read_bytes()
     assert Path(asset1["spritePath"]).name.casefold() != Path(asset2["spritePath"]).name.casefold()
 
+# Canvas/layout determine the ingredient pixels; the consuming renderer does not.
+# Keep every supported canvas for both layouts, then independently exercise the
+# second consumer for both layouts and the shared-ingredient delivery contract.
 INGREDIENT_CASES = [("grain", 32, "cutout", "shared")] + [
-    ("band" if layout == "strip" else "ingredient", canvas, layout, renderer)
+    ("band" if layout == "strip" else "ingredient", canvas, layout, "spriteElement")
     for canvas in (16, 24, 32, 48, 64, 96, 128) for layout in ("cutout", "strip")
-    for renderer in ("spriteElement", "texturedPath")
+] + [
+    ("band" if layout == "strip" else "ingredient", 32, layout, "texturedPath")
+    for layout in ("cutout", "strip")
 ]
 
 @pytest.mark.parametrize("asset_id,canvas,layout,renderer", INGREDIENT_CASES,

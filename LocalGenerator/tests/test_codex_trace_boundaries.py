@@ -79,25 +79,27 @@ def test_completed_calls_cannot_reappear_after_live_trace_clear(recording, monke
 
     def slow(*args, **kwargs):
         entered.set()
-        assert release.wait(3)
+        assert release.wait(10)
         return original(*args, **kwargs)
 
     monkeypatch.setattr(trace_tools, "persist_transport_artifact", slow)
     trace.trace_codex_transport({"event": "request", "transportCallId": "finished-before-clear"}, raw=b"{}")
-    assert entered.wait(1)
-    trace.trace_codex_transport({"event": "call_end", "transportCallId": "finished-before-clear", "outcome": "success"})
-    from infini_local.web.server_utility_routes import ServerUtilityRoutes
+    try:
+        assert entered.wait(5)
+        trace.trace_codex_transport({"event": "call_end", "transportCallId": "finished-before-clear", "outcome": "success"})
+        from infini_local.web.server_utility_routes import ServerUtilityRoutes
 
-    route = object.__new__(ServerUtilityRoutes)
-    route.app_version = "fixture"
-    route.trace_files = tuple(recording / name for name in ["events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"])
-    replies = []
-    handler = type("Handler", (), {"json": lambda self, response: replies.append(response)})()
-    route.trace_clear(handler)
-    assert replies[0]["ok"] is True
-    assert set(replies[0]["cleared"]) == set(map(str, route.trace_files))
-    assert trace.TRACE_FILE.read_text() == ""
-    release.set()
+        route = object.__new__(ServerUtilityRoutes)
+        route.app_version = "fixture"
+        route.trace_files = tuple(recording / name for name in ["events.ndjson", "prompt_trace.ndjson", "pipeline_trace.ndjson"])
+        replies = []
+        handler = type("Handler", (), {"json": lambda self, response: replies.append(response)})()
+        route.trace_clear(handler)
+        assert replies[0]["ok"] is True
+        assert set(replies[0]["cleared"]) == set(map(str, route.trace_files))
+        assert trace.TRACE_FILE.read_text() == ""
+    finally:
+        release.set()
     assert trace.flush_codex_transport(5)
     saved = trace.TRACE_FILE.read_text()
     assert "finished-before-clear" not in saved
