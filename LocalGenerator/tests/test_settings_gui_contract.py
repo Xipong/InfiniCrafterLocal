@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import sys
 import threading
 import time
 from contextlib import contextmanager
@@ -17,31 +16,6 @@ from provider_test_support import OwnedProcess, loopback_server, write_json_resp
 from infini_local.desktop import settings_env, settings_schema
 from infini_local.desktop import studio_operations as controls
 from infini_local.desktop.settings_controller import SettingsController
-
-
-def test_settings_controller_imports_without_tkinter_installed(tmp_path):
-    import subprocess
-    code = """
-import sys
-import importlib.abc
-class BlockTk(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname in ('tkinter', '_tkinter') or fullname.startswith('tkinter.'):
-            raise AssertionError('Studio must not load Tk')
-sys.meta_path.insert(0, BlockTk())
-from infini_local.desktop.settings_controller import SettingsController
-from infini_local.desktop.web_studio import StudioController
-app = SettingsController(sys.argv[1])
-assert isinstance(app.values, dict)
-assert StudioController(app, None).snapshot()['fields']
-app.pump()
-app.on_close()
-"""
-    env = dict(os.environ)
-    env.pop('DISPLAY', None)
-    env['PYTHONPATH'] = str(Path(__file__).resolve().parents[1])
-    result = subprocess.run([sys.executable, '-c', code, str(tmp_path / 'config.env')], env=env, capture_output=True, text=True, timeout=15)
-    assert result.returncode == 0, result.stderr
 
 
 class _GuiWorkflowHarness(SettingsController):

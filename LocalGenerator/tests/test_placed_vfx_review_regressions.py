@@ -6,9 +6,6 @@ to registered EngineRuntimeChecks, not private C# text/order snapshots.
 These checks do not execute C#, create a graphics device or claim a game/MP run.
 """
 from pathlib import Path
-import re
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 VFX = ROOT / "ModSources/InfiniCrafterLocal/Common/VFX"
@@ -28,22 +25,10 @@ def test_visibility_uses_authored_motion_size_and_existing_client_preference():
     assert "ToNetworkJson" not in source
 
 
-@pytest.mark.parametrize("locale", ["en-US", "ru-RU"])
-def test_mana_tooltip_has_visible_percentage_units(locale):
-    path = ROOT / f"ModSources/InfiniCrafterLocal/Localization/{locale}_Mods.InfiniCrafterLocal.hjson"
-    source = path.read_text(encoding="utf-8")
-    match = re.search(r'^\s*EquipmentManaCost:\s*"([^"\n]+)"', source, re.MULTILINE)
-    assert match is not None
-    template = match.group(1)
-    assert "{1}%" in template
-    assert "-5%" in template.format("Equipped", "-5")
-    assert "+5%" not in template.format("Equipped", "-5")
-    # Actual rendered tooltip/sign is exercised by the registered native VFUI14 check.
-    assert "native minimum" not in template and "минимума движка" not in template
-    assert "PlacementUnsupported:" in source
-
-
 def test_placement_feedback_is_local_bounded_and_does_not_relax_guard():
+    for locale in ("en-US", "ru-RU"):
+        localization = ROOT / f"ModSources/InfiniCrafterLocal/Localization/{locale}_Mods.InfiniCrafterLocal.hjson"
+        assert "PlacementUnsupported:" in localization.read_text(encoding="utf-8")
     source = (ROOT / "ModSources/InfiniCrafterLocal/Common/Systems/Placement/"
               "GeneratedPlacementLedgerSystem.PlacedBodyAdmission.cs").read_text(encoding="utf-8")
     feedback = source.split("private static void ShowPlacedBodyAdmissionFailure", 1)[1].split(

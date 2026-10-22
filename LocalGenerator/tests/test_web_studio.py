@@ -189,7 +189,6 @@ def test_real_controller_defaults_consent_only_updates_offer_keys(tmp_path, monk
                           'extra': {'revision': offer['revision'], 'lanEnabled': True}})
         assert config.read_bytes() == original.replace(b'9000', b'18000')
         assert app.values['INFINI_LLM_MAX_TOKENS'] == '18000'
-        assert app.values['INFINI_LLM_MAX_TOKENS'] == '18000'
         assert app.values['INFINI_PROMPT_STYLE'] == 'Unsaved controller draft'
         assert app.values['INFINI_PRIVATE_UNKNOWN'] == 'keep'
         assert app.lan_enabled is False

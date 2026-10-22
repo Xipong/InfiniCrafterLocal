@@ -34,6 +34,13 @@ apply to test changes, not to production behavior.
   delivery, overbroad repair permissions, or another relevant real defect still
   fails. No production changes, fixture golden rewrites, or assertion deletion
   merely to make a test green.
+- Delete redundant tests when the retained executable case exercises the same
+  setup and guarantees (or a strict superset). Record that mapping and check a
+  relevant broken behavior still fails. Similar names, identical coarse-runner
+  wrappers, or assertions on opposite sides of a state change are not duplicates.
+- Never pre-normalize a test input to the desired result before calling the owner
+  under test. Stub OS process/network boundaries, not the cleanup/delivery owner;
+  fake process IDs must never reach real termination APIs on any platform.
 
 Primary references consulted for this policy:
 [pytest flaky tests](https://docs.pytest.org/en/stable/explanation/flaky.html),

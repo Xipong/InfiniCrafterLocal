@@ -209,6 +209,9 @@ internal static partial class EngineRuntimeChecks
                 string rendered = string.Join(" ",manaLines.Select(row => row.Text));
                 Equal(true,rendered.Contains("-5%",StringComparison.Ordinal),locale + " actual tooltip shows negative five percent");
                 Equal(false,rendered.Contains("+5%",StringComparison.Ordinal),locale + " positive reduction sign is never displayed");
+                Equal(false,rendered.Contains("native minimum",StringComparison.OrdinalIgnoreCase)
+                    || rendered.Contains("минимума движка",StringComparison.OrdinalIgnoreCase),
+                    locale + " tooltip never invents a native minimum mana cost");
                 Equal(true,rendered.Contains(locale == "ru-RU" ? "расход маны" : "mana cost",StringComparison.OrdinalIgnoreCase),
                     locale + " exact mana-cost label is used");
             });

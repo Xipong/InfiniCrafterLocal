@@ -76,7 +76,7 @@ Playwright is absent. The supplementary tooling/bootstrap/logging screen covers
 | Trace clear worker release only after assertions | Fixed to guaranteed finally cleanup and bounded rendezvous. |
 | Node exact 94px scroll offset | Fixed layout constant to target-directed bounded scroll; retain navigation wait, group expansion and focus contract. |
 | Node exact repaint counts + VM source-injection seam | Retained pending real DOM observer: fake render does not simulate DOM replacement, so removing counts would lose protection despite focus assertions. |
-| Native RootSpawn `AssertRootHookCallsCapacity` scans a helper metadata token in IL | Deferred with a precise replacement: observe complete `SpawnRuntimeEntity` volley calls/arguments from Shoot/HoldItem. Existing sentinel stops at first spawn and does not prove full volley count; deletion now would lose wiring coverage. Requires executable native boundary validation, not a larger string scanner. |
+| Native RootSpawn `AssertRootHookCallsCapacity` scans a helper metadata token in IL | Follow-up replaced the raw-token scan with observation of the actual allowance delivered by Shoot/HoldItem at `SpawnRuntimeEntity` entry. The real body still reaches the native registration sentinel; counts 1/4 with event budgets 0/7 must deliver the authored allowance. This proves caller delivery, not full in-game spawning. |
 | Browser delayed acknowledgement uses timed edit/poll windows | Deferred until browser prerequisites permit validating request/edit/poll/ack barriers; no claim these race prerequisites are fully hardened. |
 | Native IL compatibility/security mutation tests | Keep: exact installed dependency shape, fail-closed hooks and rollback are real compatibility contracts, unlike incidental helper call shape. |
 | Trace ordered byte ranges, input-ordered batch results, captured fixture hash | Keep: persistence/provenance, explicit executor-map output and captured source identity are meaningful; completion-time callbacks have separate tests. |
@@ -101,6 +101,44 @@ Playwright is absent. The supplementary tooling/bootstrap/logging screen covers
 No blanket list-to-set rewrite, production change, retry masking, skip/xfail,
 new global test framework or copied Hermes runner is introduced. The companion
 `LocalGenerator/tests/AGENTS.md` records the transferable test-writing policy.
+
+## Explicit deletion pass (renewed request, 09:35 UTC)
+
+The follow-up screened all Python test-function bodies for exact duplicates and
+nearby repeated assertions, then traced the flagged behavior. Identical coarse
+`run_contract_checks(globals(), ...)` wrappers are **not** duplicates: their module
+namespaces contain different checks. Likewise assertions before/after repair,
+serialization or state transitions remain separate guarantees. Frozen fixture
+hashes, opcode identity and model-facing safety instructions are not arbitrary
+implementation snapshots and remain intact.
+
+| Removed / replaced | Surviving executable protection |
+|---|---|
+| Two redundant no-Tk fresh-process tests | `test_settings_controller::test_real_controller_import_and_run_without_tk_or_display` now combines `_tkinter`/`tkinter` rejection, no early backend bootstrap, values/snapshot shape, callback delivery and close. |
+| Three duplicate sd.cpp backend checks | `test_sdcpp_command_contract` calls the real pipeline-to-backend wrapper and already exercises safe argv, malformed-template repair and LoRA delivery. Unique direct-backend extraction/payload cases remain. |
+| sd.cpp module/function identity and private-alias assertions | Real `/shutdown` route terminates the owned fake process, closes its log and clears process state; independent health snapshot checks remain. |
+| sd.cpp LoRA test that corrected its own stale input before execution | Fresh-process environment → actual pipeline configuration → argv test now supplies the stale directory unchanged and observes selected-file precedence. |
+| Server echo banner constant-name source scan | Existing inert server-startup cases capture actual enabled/off banner output, including operator setting guidance. |
+| Silver-presentation wrapper that only calls `_silver_delivery` | The retained native-fixture test calls the same helper with the same fixtures, then checks the actual final delivered payload against the native fixture. |
+| C# RGB property/validation source-string scan | Registered native PlayedSilver checks deserialize strict RGB, reject nested token capture/malformed RGB, and observe actual library consumer color delivery. |
+| Two locale mana-template tests | Registered native VFUI14 runs real `ModifyTooltips` in EN/RU, checks -5% not +5%, native arithmetic, and now rejects misleading minimum-cost wording in the rendered result. Placement-refusal localization presence remains checked separately. |
+| Raw IL helper-call token scanner | Actual spawn-entry allowance observer described above; depth and owner-cap refusal tests remain. |
+| Node `window.confirm(` source substring scan | Actual discard click/cancel/confirm flow checks persisted-baseline restoration, no native prompt/network request, and refusal while save/poll work is pending. |
+| Adjacent repeated defaults / VFX wire assertions | One identical assertion remains at the same state; VFX cache/delivery refusals and persisted UI state checks unchanged. |
+
+Negative probes are recorded in the PR: broken argv/template/LoRA/cleanup,
+unwanted Tk/backend imports, lost scheduled callback, and native prompt/premature
+or unguarded discard/wrong baseline must fail. RootSpawn also injects an actual
+undersized allowance at the spawn entry: batch admission refuses it and the
+retained delivery oracle rejects the observed wrong value. A harmless native-prompt string in
+a JavaScript comment is now accepted. These probes modify temporary test processes
+or copies only, never committed production files. Native execution is validated by
+exact-head Windows CI, not inferred from source inspection.
+
+The previous Node repaint/VM seam and browser timed-ack findings remain open:
+there is still no equivalent verified DOM observer or browser rendezvous. Other
+native source-policy checks with uncovered motion reach, selector/filter and
+notice-throttling guarantees are retained rather than silently discarded.
 
 ## Reproduce and read the inventory
 

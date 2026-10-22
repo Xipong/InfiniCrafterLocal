@@ -38,7 +38,7 @@ import importlib.abc, sys
 class RejectTk(importlib.abc.MetaPathFinder):
     forbid_bootstrap = True
     def find_spec(self, fullname, path=None, target=None):
-        if fullname == 'tkinter' or fullname.startswith('tkinter.'):
+        if fullname in {'tkinter', '_tkinter'} or fullname.startswith('tkinter.'):
             raise AssertionError('Tk must not be imported')
         if self.forbid_bootstrap and (fullname in {'infini_local.core.config_bootstrap', 'infini_local.web.server'} or fullname.startswith('infini_local.pipelines.')):
             raise AssertionError('Studio must not bootstrap the generation backend: ' + fullname)
@@ -52,7 +52,9 @@ app = SettingsController(Path(sys.argv[1]))
 guard.forbid_bootstrap = False
 server = StudioServer(Path('.'))
 controller = StudioController(app, server)
-assert controller.snapshot()['fields']
+assert isinstance(app.values, dict)
+state = controller.snapshot()
+assert state['fields'] and state['values']
 app.after(0, lambda: setattr(app, 'status', 'scheduled'))
 app.pump()
 assert app.status == 'scheduled'
