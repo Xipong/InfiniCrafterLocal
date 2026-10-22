@@ -137,12 +137,12 @@ Live10 добавил важные границы: native minion lifecycle не 
 
 На точном дереве, вошедшем через #142 в текущий main, проверен [CI run](https://github.com/Xipong/InfiniCrafterLocal/actions/runs/39795380505): Windows build/package успешен, **383 native CPU checks passed, 0 failed**. В логе прямо указано `tml_runtime_selftest=notRun`. Это существующие C# regression checks, не игровой прогон каждого нового предмета. Локально dotnet отсутствует; новые локальные C# build/game smoke не объявляются успешными.
 
-Полные входы, schema, оба протокола, 70 raw outputs, 40 selections, canonical projections, compiled outputs, три независимых review, correction witnesses, старый replay и SHA-манифест собраны в отдельный архив `LIVE10_EVIDENCE_2026-10-22.tar.xz`, переданный пользователю личным файлом. Здесь опубликованы итоговые документы; архив доступен отдельно.
+Полные входы, schema, оба протокола, 70 raw outputs, 40 selections, canonical projections, compiled outputs, три независимых review, correction witnesses, старый replay и SHA-манифест собраны в один [evidence bundle](LIVE10_EVIDENCE_2026-10-22.tar.xz). Это один файл рядом с существующими отчётами, без новой реорганизации репозитория.
 
 После распаковки из корня репозитория, с `LocalGenerator` и зависимостями `jsonschema`, `tiktoken`, `pytest`:
 
 ```bash
-tar -xf LIVE10_EVIDENCE_2026-10-22.tar.xz
+tar -xf docs/development/experiments/capability_selection_2026-10-22/LIVE10_EVIDENCE_2026-10-22.tar.xz
 python research/live10_2026-10-22/study.py verify_frozen
 python research/live10_2026-10-22/study.py evaluate
 python research/live10_2026-10-22/secondary_checks.py
