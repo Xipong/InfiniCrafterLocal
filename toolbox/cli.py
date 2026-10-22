@@ -61,8 +61,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         report, _ = prepare(args)
         if args.run:
+            # The child runs at BASE_ROOT; preserve the caller's selected files.
+            forwarded = list(values[1:])
+            for name in ('project', 'output', 'config', 'cases_file', 'runtime_dump'):
+                path = getattr(args, name)
+                if path is not None:
+                    forwarded += ['--' + name.replace('_', '-'), str(path.expanduser().resolve())]
             return subprocess.run(
-                [sys.executable, '-m', 'toolbox.live.runner', '--panel', command, *values[1:]],
+                [sys.executable, '-m', 'toolbox.live.runner', '--panel', command, *forwarded],
                 cwd=BASE_ROOT,
             ).returncode
         print(json.dumps(report, ensure_ascii=False, indent=2))

@@ -87,7 +87,8 @@ def test_clean_head_binding_rejects_dirty_source(monkeypatch, capsys, tmp_path):
     assert 'clean' in captured.err
 
 
-def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monkeypatch, capsys, tmp_path):
+@pytest.mark.parametrize('output_kind', ['absolute', 'existing_tilde', 'relative'])
+def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monkeypatch, capsys, tmp_path, output_kind):
     import subprocess
     project = tmp_path / 'source'
     (project / 'LocalGenerator/infini_local').mkdir(parents=True)
@@ -105,16 +106,39 @@ def test_deliberate_run_dispatches_canonical_harness_and_propagates_status(monke
         calls.append((command, kwargs))
         return subprocess.CompletedProcess(command, 7)
     monkeypatch.setattr(subprocess, 'run', dispatched)
-    flags = ['--run', '--project', project, '--config', config, '--output', tmp_path / 'out',
+    output_arg = tmp_path / 'out'
+    if output_kind == 'existing_tilde':
+        monkeypatch.setenv('HOME', str(tmp_path))
+        output_arg.mkdir()
+        (output_arg / 'existing.txt').write_text('preserve prior evidence')
+        output_arg = Path('~/out')
+    elif output_kind == 'relative':
+        monkeypatch.chdir(tmp_path)
+        project = Path('source')
+        config = Path('private.env')
+        output_arg = Path('out')
+    flags = ['--run', '--project', project, '--config', config, '--output', output_arg,
              '--expected-head', head, '--expected-provider', 'openai_compat', '--expected-model', 'qa-model',
              '--expected-base-url', 'https://example.invalid/v1', '--expected-api-mode', 'chat_completions',
              '--expected-response-format', 'json_object', '--expected-temperature', '0.5',
              '--expected-vfx-temperature', '0.34', '--expected-repair-temperature', '0.12',
              '--expected-max-tokens', '18000', '--expected-visual-max-tokens', '18000', '--expected-vfx-max-tokens', '18000']
-    code, _ = cli(monkeypatch, capsys, 'live10', *flags)
+    code, output = cli(monkeypatch, capsys, 'live10', *flags)
+    if output_kind == 'existing_tilde':
+        assert code == 2
+        assert 'new or empty' in output.err
+        assert calls == []
+        assert (tmp_path / 'out/existing.txt').read_text() == 'preserve prior evidence'
+        return
     assert code == 7
     assert len(calls) == 1
     command, kwargs = calls[0]
+    if output_kind == 'relative':
+        from toolbox.live.options import build_parser
+        forwarded = build_parser(internal=True).parse_args(command[3:])
+        assert forwarded.project == tmp_path / 'source'
+        assert forwarded.config == tmp_path / 'private.env'
+        assert forwarded.output == tmp_path / 'out'
     assert command[:3] == [sys.executable, '-m', 'toolbox.live.runner']
     assert command[3:5] == ['--panel', 'live10']
     assert '--run' in command

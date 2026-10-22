@@ -51,6 +51,8 @@ def prepare(args: Namespace) -> tuple[dict, dict[str, str]]:
         if value is not None and value <= 0:
             raise ValueError(f'--{key.replace("_", "-")} must be positive')
     if args.run:
+        if args.output is not None:
+            args.output = args.output.expanduser().resolve()
         required = ('output', 'expected_head', 'expected_provider', 'expected_model', 'expected_base_url',
                     'expected_api_mode', 'expected_response_format', 'expected_temperature',
                     'expected_vfx_temperature', 'expected_repair_temperature', 'expected_max_tokens',
@@ -62,7 +64,7 @@ def prepare(args: Namespace) -> tuple[dict, dict[str, str]]:
             raise ValueError('this HTTP-accounted harness supports --run only for openai_compat (not OAuth/native adapters)')
         if args.expected_api_mode not in ('chat_completions', 'responses') or args.expected_response_format not in ('json_object', 'json_schema'):
             raise ValueError('--run requires explicit API mode and response format, not auto')
-        if args.output.exists() and any(args.output.iterdir()):
+        if args.output is not None and args.output.exists() and any(args.output.iterdir()):
             raise ValueError('--output must be a new or empty directory; existing evidence is never overwritten')
     project = discover_project(args.project)
     env = read_environment(project, args.config)
