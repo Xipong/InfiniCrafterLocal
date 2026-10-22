@@ -1,0 +1,508 @@
+{
+  "schema": "selection-runs.functional-review.v1",
+  "scope": {
+    "inputs": "Frozen outputs/* and matching packets/* only; canonical registry/compiler/runtime executor checked for feasibility.",
+    "not_a_statistical_claim": true,
+    "validity_by_arm": {
+      "baseline": {
+        "valid_cases": 2,
+        "total_cases": 4,
+        "reported_failures": {
+          "tool": "apply_generated_buff_on_use omits required lightStrength and lightColor",
+          "musket": "bounceCount omitted for root and child collision calls"
+        }
+      },
+      "groups": {
+        "valid_cases": 3,
+        "total_cases": 4,
+        "reported_failures": {
+          "trap": "dart target has conflicting move_slow_homing and move_straight calls in exclusive movement group"
+        }
+      },
+      "capabilities": {
+        "valid_cases": 4,
+        "total_cases": 4
+      }
+    },
+    "engine_constraints": [
+      "configure_tool executes mining on primary_use spawn_entity or use_item_body actions; the spawned projectile itself does not mine.",
+      "A named apply_generated_buff_on_use group with a matching refresh_generated_effect_group_while_held bypasses the apply_item_effects binding requirement; held refresh applies the generated buff group every held tick.",
+      "item_body.on_use is emitted for every accepted non-placement primary_use/alternate_use. spawn_entity_on_event offers no per-input filter, so its effect cannot be limited to one active input.",
+      "target_and_fire supports stationary_projectile and temporary_helper, sets velocity to zero, and its executor returns controllerOwnsMotion=true; GeneratedProjectile AI therefore skips RunMovement and modifiers for that update. Coauthored move_orbit does not execute alongside it. A target_and_fire entity cannot simultaneously cursor/tether-hover through movement."
+    ]
+  },
+  "cases": {
+    "tool": {
+      "packetBrief": "Primary use mines and also fires a straight projectile; alternate use fires a returning boomerang; while held, refresh a generated group with ore detection and modest regeneration.",
+      "arms": {
+        "baseline": {
+          "output": "outputs/baseline/tool.json",
+          "packet": "packets/baseline/tool.json",
+          "programValid": false,
+          "functions": {
+            "primary_mining": {
+              "status": "preserved",
+              "calls": [
+                "mining_tool: configure_tool",
+                "primary_mine_and_shoot: spawn_entity"
+              ],
+              "execution": "configure_tool supports primary spawn_entity; program-level rejection is due to the generated buff call missing required lightStrength/lightColor."
+            },
+            "primary_straight_shot": {
+              "status": "preserved",
+              "calls": [
+                "straight_spawn",
+                "straight_motion"
+              ],
+              "execution": "Straight shot has its own free_projectile target; tool power is on item_body."
+            },
+            "alternate_only_boomerang": {
+              "status": "partial",
+              "calls": [
+                "alternate_return_event: spawn_entity_on_event",
+                "boomerang_motion: move_boomerang"
+              ],
+              "execution": "on_use producer fires for both primary and alternate; concept explicitly admits returner also fires on primary."
+            },
+            "held_ore_and_regeneration_refresh": {
+              "status": "partial",
+              "calls": [
+                "held_prospector_group",
+                "refresh_prospector_group"
+              ],
+              "execution": "Correct named-group/held-refresh topology and intended effects, but program is invalid because required lightStrength and lightColor are absent from held_prospector_group."
+            }
+          }
+        },
+        "groups": {
+          "output": "outputs/groups/tool.json",
+          "packet": "packets/groups/tool.json",
+          "programValid": true,
+          "functions": {
+            "primary_mining": {
+              "status": "preserved",
+              "calls": [
+                "mining_tool: configure_tool",
+                "primary_shot_binding: spawn_entity"
+              ],
+              "execution": "Primary spawn_entity activates native tool powers; 100 pick power and 1.2 mining-speed divisor are explicit."
+            },
+            "primary_straight_shot": {
+              "status": "preserved",
+              "calls": [
+                "straight_spawn",
+                "straight_motion"
+              ],
+              "execution": "Separate straight_shot target."
+            },
+            "alternate_only_boomerang": {
+              "status": "partial",
+              "calls": [
+                "blade_on_use: spawn_entity_on_event",
+                "blade_motion: move_boomerang"
+              ],
+              "execution": "Shared item_body.on_use also spawns the blade on primary; concept acknowledges this. No input-scoped event selector exists."
+            },
+            "held_ore_and_regeneration_refresh": {
+              "status": "preserved",
+              "calls": [
+                "survey_effect",
+                "survey_while_held"
+              ],
+              "execution": "Named group has explicit lightStrength=0/lightColor=gray, oreSenseEnabled=true, lifeRegenHpPerSecond=1, and matching held refresh."
+            }
+          }
+        },
+        "capabilities": {
+          "output": "outputs/capabilities/tool.json",
+          "packet": "packets/capabilities/tool.json",
+          "programValid": true,
+          "functions": {
+            "primary_mining": {
+              "status": "preserved",
+              "calls": [
+                "native_pick_tool: configure_tool",
+                "primary_mine_and_fire: spawn_entity"
+              ],
+              "execution": "Valid primary projectile-plus-tool action."
+            },
+            "primary_straight_shot": {
+              "status": "preserved",
+              "calls": [
+                "straight_movement: move_straight"
+              ],
+              "execution": "Primary binding directly targets straight_shot."
+            },
+            "alternate_only_boomerang": {
+              "status": "preserved",
+              "calls": [
+                "alternate_returning_throw: spawn_entity",
+                "returning_movement: move_boomerang"
+              ],
+              "execution": "Alternate binding directly targets returning_shard; unlike the shared on_use variants, no primary path references it."
+            },
+            "held_ore_and_regeneration_refresh": {
+              "status": "preserved",
+              "calls": [
+                "held_survey_effect",
+                "refresh_survey_while_held"
+              ],
+              "execution": "Valid named effect group plus matching held refresh; no apply_item_effects binding is required for this held-only group."
+            }
+          }
+        }
+      }
+    },
+    "wand": {
+      "packetBrief": "Primary magic ember projectile with gravity and on-hit owner healing; wearable accessory with positive defense and life regeneration.",
+      "arms": {
+        "baseline": {
+          "output": "outputs/baseline/wand.json",
+          "packet": "packets/baseline/wand.json",
+          "programValid": true,
+          "functions": {
+            "primary_magic_projectile": {
+              "status": "preserved",
+              "calls": [
+                "cast_vampire_ember",
+                "ember_spawn",
+                "ember_damage"
+              ],
+              "execution": "Primary spawn binding targets ember_projectile."
+            },
+            "gravity_arc": {
+              "status": "preserved",
+              "calls": [
+                "ember_gravity_arc: move_gravity_arc"
+              ],
+              "execution": "Same projectile target."
+            },
+            "on_hit_owner_heal": {
+              "status": "preserved",
+              "calls": [
+                "ember_siphon_heal: heal_owner_on_event"
+              ],
+              "execution": "on_hit with 10% of damageDone, capped at 1 HP."
+            },
+            "equipped_defense_and_regeneration": {
+              "status": "preserved",
+              "calls": [
+                "wear_ember_wand: equip_passive",
+                "wand_accessory_bonuses: configure_accessory"
+              ],
+              "execution": "2 defense and +1 HP/s are attached to equipped state, not holding."
+            }
+          }
+        },
+        "groups": {
+          "output": "outputs/groups/wand.json",
+          "packet": "packets/groups/wand.json",
+          "programValid": true,
+          "functions": {
+            "primary_magic_projectile": {
+              "status": "preserved",
+              "calls": [
+                "fire_blood_ember",
+                "ember_spawn",
+                "ember_damage"
+              ],
+              "execution": "Primary spawn binding targets blood_ember."
+            },
+            "gravity_arc": {
+              "status": "preserved",
+              "calls": [
+                "ember_gravity: move_gravity_arc"
+              ],
+              "execution": "Same projectile target."
+            },
+            "on_hit_owner_heal": {
+              "status": "preserved",
+              "calls": [
+                "ember_siphon: heal_owner_on_event"
+              ],
+              "execution": "on_hit; 10% capped at 1 HP."
+            },
+            "equipped_defense_and_regeneration": {
+              "status": "preserved",
+              "calls": [
+                "wear_vampire_spark_wand: equip_passive",
+                "stitched_vampire_accessory: configure_accessory"
+              ],
+              "execution": "4 defense and +1 HP/s while equipped; also authors +5% movement speed."
+            }
+          }
+        },
+        "capabilities": {
+          "output": "outputs/capabilities/wand.json",
+          "packet": "packets/capabilities/wand.json",
+          "programValid": true,
+          "functions": {
+            "primary_magic_projectile": {
+              "status": "preserved",
+              "calls": [
+                "fire_blood_ember",
+                "ember_spawn",
+                "ember_damage"
+              ],
+              "execution": "Primary spawn binding targets blood_ember."
+            },
+            "gravity_arc": {
+              "status": "preserved",
+              "calls": [
+                "ember_gravity: move_gravity_arc"
+              ],
+              "execution": "Same projectile target."
+            },
+            "on_hit_owner_heal": {
+              "status": "preserved",
+              "calls": [
+                "ember_siphon: heal_owner_on_event"
+              ],
+              "execution": "on_hit; 10% capped at 1 HP."
+            },
+            "equipped_defense_and_regeneration": {
+              "status": "preserved",
+              "calls": [
+                "wear_stitchwand: equip_passive",
+                "wearer_bonuses: configure_accessory"
+              ],
+              "execution": "2 defense and +1 HP/s while equipped; also authors +5% movement speed."
+            }
+          }
+        }
+      }
+    },
+    "musket": {
+      "packetBrief": "Primary shot consumes fallen-star ammunition; root follows gravity; an actual hit spawns a separate slowly homing child. Weapon is not an ammo item.",
+      "arms": {
+        "baseline": {
+          "output": "outputs/baseline/musket.json",
+          "packet": "packets/baseline/musket.json",
+          "programValid": false,
+          "functions": {
+            "native_fallen_star_consumption": {
+              "status": "preserved",
+              "calls": [
+                "fallen_star_ammo: configure_weapon_ammo"
+              ],
+              "execution": "Uses configure_weapon_ammo, not configure_vanilla_ammo_item; program is blocked by missing bounceCount on root and child collision calls."
+            },
+            "root_gravity": {
+              "status": "preserved",
+              "calls": [
+                "root_shot_gravity: move_gravity_arc"
+              ],
+              "execution": "Applied to fallen_star_shot."
+            },
+            "on_hit_child_spawn": {
+              "status": "preserved",
+              "calls": [
+                "impact_child_star: spawn_entity_on_event"
+              ],
+              "execution": "Root on_hit references homing_child_star."
+            },
+            "child_homing": {
+              "status": "preserved",
+              "calls": [
+                "child_star_slow_homing: move_slow_homing"
+              ],
+              "execution": "Applied to child target; its event producer is authored."
+            }
+          }
+        },
+        "groups": {
+          "output": "outputs/groups/musket.json",
+          "packet": "packets/groups/musket.json",
+          "programValid": true,
+          "functions": {
+            "native_fallen_star_consumption": {
+              "status": "preserved",
+              "calls": [
+                "fallen_star_ammo: configure_weapon_ammo"
+              ],
+              "execution": "Native ammo category fallen_star is selected; authored_spawn still consumes native ammo."
+            },
+            "root_gravity": {
+              "status": "preserved",
+              "calls": [
+                "main_gravity_arc: move_gravity_arc"
+              ],
+              "execution": "Applied only to jester_star_shot."
+            },
+            "on_hit_child_spawn": {
+              "status": "preserved",
+              "calls": [
+                "on_hit_child_star: spawn_entity_on_event"
+              ],
+              "execution": "Root on_hit references seeking_child_star."
+            },
+            "child_homing": {
+              "status": "preserved",
+              "calls": [
+                "child_slow_homing: move_slow_homing"
+              ],
+              "execution": "Applied only to child."
+            }
+          }
+        },
+        "capabilities": {
+          "output": "outputs/capabilities/musket.json",
+          "packet": "packets/capabilities/musket.json",
+          "programValid": true,
+          "functions": {
+            "native_fallen_star_consumption": {
+              "status": "preserved",
+              "calls": [
+                "fallen_star_ammo: configure_weapon_ammo"
+              ],
+              "execution": "Native ammo category fallen_star is selected with native_shot speed basis; this is ammo consumption, not marking the gun as ammunition."
+            },
+            "root_gravity": {
+              "status": "preserved",
+              "calls": [
+                "gravity_star_arc: move_gravity_arc"
+              ],
+              "execution": "Applied only to gravity_star_shot."
+            },
+            "on_hit_child_spawn": {
+              "status": "preserved",
+              "calls": [
+                "spawn_child_on_hit: spawn_entity_on_event"
+              ],
+              "execution": "Verified in full frozen file; root on_hit references homing_star_child."
+            },
+            "child_homing": {
+              "status": "preserved",
+              "calls": [
+                "child_star_slow_homing: move_slow_homing"
+              ],
+              "execution": "Applied only to child."
+            }
+          }
+        }
+      }
+    },
+    "trap": {
+      "packetBrief": "Primary active hovering trap fires separate straight damaging darts at nearby enemies; alternate use places exact native gray pressure plate (tile 135, style 2); placed tile is not a turret.",
+      "feasibility": "Exact combination of cursor/tether movement plus target_and_fire on the same entity is not executable: target_and_fire returns controllerOwnsMotion=true and skips RunMovement, so it holds the entity at its spawn position. Alternatives are (a) cursor/tether movement with periodic event shots, optionally homing darts instead of straight darts, or (b) a position-owning stationary/helper target_and_fire turret that fires authored shots without tether movement. Do not score either alternative as a simple loss of the other function.",
+      "arms": {
+        "baseline": {
+          "output": "outputs/baseline/trap.json",
+          "packet": "packets/baseline/trap.json",
+          "programValid": true,
+          "functions": {
+            "hovering_tethered_trap": {
+              "status": "preserved",
+              "calls": [
+                "trap_hover: move_yoyo_hover",
+                "trap_spawn: configure_spawn"
+              ],
+              "execution": "owner_attached_projectile, channel=true, yoyo hover follows cursor within authored leash and returns on release."
+            },
+            "periodic_straight_darts": {
+              "status": "preserved",
+              "calls": [
+                "trap_fire: spawn_entity_on_event",
+                "dart_motion: move_straight"
+              ],
+              "execution": "periodic 0.5-second event emits separate facing-aimed straight darts."
+            },
+            "nearby_enemy_targeting": {
+              "status": "unsupported",
+              "calls": [],
+              "execution": "No target acquisition is authored. Adding target_and_fire would own the source entity's movement and suppress yoyo tether; homing the dart would change it from straight motion."
+            },
+            "exact_gray_pressure_plate_placement": {
+              "status": "preserved",
+              "calls": [
+                "place_gray_plate: configure_tile_placement",
+                "place_gray_plate: place_item"
+              ],
+              "execution": "Alternate use references tileId=135, placeStyle=2; distinct from active trap."
+            }
+          }
+        },
+        "groups": {
+          "output": "outputs/groups/trap.json",
+          "packet": "packets/groups/trap.json",
+          "programValid": false,
+          "functions": {
+            "hovering_tethered_trap": {
+              "status": "preserved",
+              "calls": [
+                "trap_hover: move_yoyo_hover"
+              ],
+              "execution": "channel=true and yoyo hover target retain cursor leash/return."
+            },
+            "periodic_straight_darts": {
+              "status": "partial",
+              "calls": [
+                "trap_periodic_fire: spawn_entity_on_event",
+                "dart_straight_flight: move_straight"
+              ],
+              "execution": "Periodic event and straight movement are authored, but same guided_dart also has dart_targeting: move_slow_homing; movement calls share exclusive movement group, so output is invalid."
+            },
+            "nearby_enemy_targeting": {
+              "status": "partial",
+              "calls": [
+                "dart_targeting: move_slow_homing"
+              ],
+              "execution": "Homing alone is a supported alternative on the child, but cannot coexist with the requested straight driver; no trap controller target selection."
+            },
+            "exact_gray_pressure_plate_placement": {
+              "status": "preserved",
+              "calls": [
+                "gray_plate_placement: configure_tile_placement",
+                "place_gray_plate: place_item"
+              ],
+              "execution": "Alternate use references tileId=135, placeStyle=2."
+            }
+          }
+        },
+        "capabilities": {
+          "output": "outputs/capabilities/trap.json",
+          "packet": "packets/capabilities/trap.json",
+          "programValid": true,
+          "functions": {
+            "hovering_tethered_trap": {
+              "status": "unsupported",
+              "calls": [
+                "trap_orbit: move_orbit",
+                "trap_target_fire: target_and_fire"
+              ],
+              "execution": "Executor zeros velocity and skips movement whenever target_and_fire owns controller dispatch; coauthored move_orbit does not execute. Result is a stationary helper, not an orbiting/tethered trap."
+            },
+            "periodic_straight_darts": {
+              "status": "preserved",
+              "calls": [
+                "trap_target_fire: target_and_fire",
+                "dart_movement: move_straight"
+              ],
+              "execution": "Controller acquires an eligible NPC and spawns the separate straight-moving trap_dart at its authored interval."
+            },
+            "nearby_enemy_targeting": {
+              "status": "preserved",
+              "calls": [
+                "trap_target_fire: target_and_fire"
+              ],
+              "execution": "temporary_helper is an allowed kind; explicit 12-tile hard range and LOS; firing works, while helper stays at spawn point."
+            },
+            "exact_gray_pressure_plate_placement": {
+              "status": "preserved",
+              "calls": [
+                "gray_plate_placement: configure_tile_placement",
+                "place_plate: place_item"
+              ],
+              "execution": "Alternate use references tileId=135, placeStyle=2."
+            }
+          }
+        }
+      }
+    }
+  },
+  "limitations": [
+    "This is a four-case stress review, not a benchmark or estimate of model quality.",
+    "Statuses describe the authored frozen runtimeProgram plus canonical mechanics; when programValid=false, otherwise-preserved calls cannot execute until the separate validation failure is repaired.",
+    "The brief's trap conjunction of tether-hover and automatic target_and_fire cannot be achieved on one entity under the present executor. The observed arms choose different supported sides of that constraint."
+  ]
+}

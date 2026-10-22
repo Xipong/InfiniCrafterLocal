@@ -1,0 +1,271 @@
+{
+  "name": "Grayline Dart Trap",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A square gray pressure plate is bound to a compact rope-lashed dart trap: the plate remains a distinct native tile, while the tethered trap circles overhead and sends out narrow darts.",
+    "coreMechanic": "Primary use deploys one orbiting trap for 60 seconds. It acquires nearby enemies within 12 blocks and fires one straight dart every 0.5 seconds when a clear shot is available. Each dart deals 5 ranged damage, can hit one enemy, and travels at 18 blocks per second. The trap admits up to six live darts at once; continued firing can pause when all six slots are occupied. The reusable trap does not spend the item, and only one trap from this item can be active. Alternate use places the exact native Gray Pressure Plate (tile 135, style 2); accepted placement escrows this one-item stack until the placed tile is broken. The placed plate is a pressure plate, not a turret. The ingredients combine a reusable hovering defense with a useful native plate, so placement temporarily gives up access to the trap. The trap keeps the parent's half-second firing cadence and dart damage, and replaces its direct-contact trap damage with target selection and a bounded orbit; it adds no mana or ammo payment.",
+    "parentAContribution": "The Gray Pressure Plate contributes its exact native tile identity and style (135, style 2) as the alternate-use placement. Its player-pressed activation remains the plate's function; it does not fire darts.",
+    "parentBContribution": "The rope dart trap contributes the compact tethered-trap identity and the half-second, 5-damage ranged dart rhythm. Here the trap circles the owner and selects nearby targets; its darts remain separate straight-moving projectiles.",
+    "playerExperience": "Use primary to deploy the reusable trap, which circles nearby and fires at visible enemies for up to a minute. Alternate use places the pressure plate and makes the same item unavailable until that tile is broken. One active trap and six simultaneous darts bound the output.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Deploy the reusable tethered trap to orbit nearby and fire one straight dart at a visible enemy every half-second for up to 60 seconds."
+      },
+      {
+        "input": "alternate_use",
+        "intent": "Place the native Gray Pressure Plate, tile 135 style 2; the placed plate performs its own pressure-plate function and does not become a shooter."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "tethered_trap",
+    "entities": [
+      {
+        "id": "trap_item",
+        "kind": "item_body"
+      },
+      {
+        "id": "tethered_trap",
+        "kind": "temporary_helper"
+      },
+      {
+        "id": "trap_dart",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "deploy_trap",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "tethered_trap"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "place_plate",
+        "input": "alternate_use",
+        "action": {
+          "kind": "place_item",
+          "targetId": "trap_item",
+          "placementCallId": "gray_plate_placement"
+        },
+        "stackCost": 1,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "trap_item_stats",
+        "fn": "configure_item_stats",
+        "target": "trap_item",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "rarity": 0,
+          "valueCopper": 15010,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 24,
+          "heightPx": 24,
+          "scale": 1
+        }
+      },
+      {
+        "id": "trap_item_use",
+        "fn": "configure_item_use",
+        "target": "trap_item",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": true,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "gray_plate_placement",
+        "fn": "configure_tile_placement",
+        "target": "trap_item",
+        "params": {
+          "tileId": 135,
+          "placeStyle": 2
+        }
+      },
+      {
+        "id": "trap_spawn",
+        "fn": "configure_spawn",
+        "target": "tethered_trap",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 0
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "none",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "trap_live_cap",
+        "fn": "set_projectile_concurrency",
+        "target": "tethered_trap",
+        "params": {
+          "maxActive": 1
+        }
+      },
+      {
+        "id": "trap_dart_pool",
+        "fn": "set_descendant_concurrency",
+        "target": "tethered_trap",
+        "params": {
+          "maxActive": 6
+        }
+      },
+      {
+        "id": "trap_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "tethered_trap",
+        "params": {
+          "lifetimeSeconds": 60
+        }
+      },
+      {
+        "id": "trap_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "tethered_trap",
+        "params": {
+          "widthPx": 20,
+          "heightPx": 20,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "trap_collision",
+        "fn": "set_projectile_collision",
+        "target": "tethered_trap",
+        "params": {
+          "tileCollide": false,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "trap_orbit",
+        "fn": "move_orbit",
+        "target": "tethered_trap",
+        "params": {
+          "radiusTiles": 3,
+          "turnRadiansPerSecond": 1.2
+        }
+      },
+      {
+        "id": "trap_target_fire",
+        "fn": "target_and_fire",
+        "target": "tethered_trap",
+        "params": {
+          "shotEntity": "trap_dart",
+          "intervalSeconds": 0.5,
+          "rangeTiles": 12,
+          "sameTargetBias": 0.2,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "count": 1,
+          "spreadRadians": 0,
+          "targetPolicy": "distance_score",
+          "requireLineOfSight": true,
+          "hardRange": true
+        }
+      },
+      {
+        "id": "dart_spawn",
+        "fn": "configure_spawn",
+        "target": "trap_dart",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 18
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "velocity",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "dart_damage",
+        "fn": "set_projectile_damage",
+        "target": "trap_dart",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 5,
+          "knockback": 1,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "dart_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "trap_dart",
+        "params": {
+          "lifetimeSeconds": 2
+        }
+      },
+      {
+        "id": "dart_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "trap_dart",
+        "params": {
+          "widthPx": 12,
+          "heightPx": 6,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "dart_collision",
+        "fn": "set_projectile_collision",
+        "target": "trap_dart",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "dart_movement",
+        "fn": "move_straight",
+        "target": "trap_dart",
+        "params": {}
+      }
+    ]
+  },
+  "realization": {
+    "description": "Primary use sends a trap to circle you at a 3-block radius. For 60 seconds it targets visible enemies within 12 blocks and fires one straight, 5-damage dart every half-second. Darts travel at 18 blocks per second and can each hit one enemy. The trap keeps at most six darts active and only one trap can be out at once. Alternate use places a native Gray Pressure Plate (tile 135, style 2); the item is stored with the placed tile and returns when it is broken. The plate does not fire darts.",
+    "playerExperience": "The trap is reusable and has no mana or ammo cost. Its orbit and target range give it a local defense area, while six live dart slots bound continuous fire. Placing the plate commits the single item until the placed tile is broken.",
+    "selfEvaluation": "The active trap is a separate orbiting target-and-fire entity; the darts are separate straight-moving child projectiles. The alternate binding references the exact native plate placement, with the plate and shooter authored as separate functions."
+  }
+}

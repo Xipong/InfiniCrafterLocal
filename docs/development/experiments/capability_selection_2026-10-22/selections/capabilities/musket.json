@@ -1,0 +1,16 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "configure_item_stats",
+    "configure_item_use",
+    "configure_weapon_ammo",
+    "configure_spawn",
+    "set_projectile_damage",
+    "set_projectile_lifetime",
+    "move_gravity_arc",
+    "move_slow_homing",
+    "spawn_entity_on_event"
+  ],
+  "fullCatalog": false,
+  "intent": "Consume native fallen-star ammunition on the primary authored shot. Keep the root projectile's gravity arc and its separate on-hit child star's slow homing on their respective entities; the weapon is not itself a vanilla ammo item."
+}

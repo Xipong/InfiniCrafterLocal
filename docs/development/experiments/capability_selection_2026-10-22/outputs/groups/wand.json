@@ -1,0 +1,189 @@
+{
+  "name": "Vampire Spark Wand",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A vampire-spark wand wrapped in the stitched panels of a vampire's coat, its red ember glowing through the seams. It remains a wand in the hand and becomes a wearable stitched accessory when equipped.",
+    "coreMechanic": "A reusable magic wand fires one cursor-aimed ember at 26.25 blocks/s every 26 ticks, costs 4 mana per native use, and launches with a forward 1-block offset. The ember travels on an authored gravity arc with 27 blocks/s² downward acceleration, lasts up to 1.5 seconds, deals 12 magic damage, and heals its owner for 10% of damage dealt on a hit, capped at 1 HP per hit. Equipping the wand grants 4 defense, +1 HP/s life regeneration, and +5% movement speed. Defense and equipment bonuses apply only while equipped. The parents have generation depth 0; no progression tier is inferred from that fact, their rarity, or value.",
+    "parentAContribution": "The vampire spark wand contributes its magic identity, 12 damage, 4-mana cost, 26-tick cadence, and gravity-arc ember with on-hit owner healing. Its source projectile used 7 pixels per tick, a 16-pixel forward offset, a 90-tick lifetime, and 0.12 gravity per update; the new runtime expresses those values in its current units.",
+    "parentBContribution": "The stitched vampire suit contributes the wearable vampire-garment identity and its equipped passive role. The generated accessory gives that role explicit defense and life regeneration, while retaining the source suit's 5% movement-speed bonus; none of these bonuses applies merely from holding the wand.",
+    "playerExperience": "Use the wand for a deliberate, mana-priced ember shot; hits provide at most 1 HP of healing each. Equip it for a modest defensive and regenerative benefit plus a small speed increase. Its 4 defense is an equipped bonus, not a held bonus.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Fire one cursor-aimed gravity-arc ember for 4 mana; a damaging hit heals up to 1 HP."
+      },
+      {
+        "input": "equipped",
+        "intent": "Wear the wand as a stitched vampire accessory for 4 defense, +1 HP/s life regeneration, and +5% movement speed."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "vampire_spark_wand",
+    "entities": [
+      {
+        "id": "vampire_spark_wand",
+        "kind": "item_body"
+      },
+      {
+        "id": "blood_ember",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "fire_blood_ember",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "blood_ember"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "wear_vampire_spark_wand",
+        "input": "equipped",
+        "action": {
+          "kind": "equip_passive",
+          "targetId": "vampire_spark_wand"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "wand_item_stats",
+        "fn": "configure_item_stats",
+        "target": "vampire_spark_wand",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "useTimeSeconds": 0.43333333333333335,
+          "useAnimationSeconds": 0.43333333333333335,
+          "manaCost": 4,
+          "rarity": 1,
+          "valueCopper": 100000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 36,
+          "scale": 1
+        }
+      },
+      {
+        "id": "wand_use_controls",
+        "fn": "configure_item_use",
+        "target": "vampire_spark_wand",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "ember_spawn",
+        "fn": "configure_spawn",
+        "target": "blood_ember",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 26.25
+          },
+          "aim": "cursor",
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "ember_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "blood_ember",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "ember_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "blood_ember",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "ember_collision",
+        "fn": "set_projectile_collision",
+        "target": "blood_ember",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "ember_damage",
+        "fn": "set_projectile_damage",
+        "target": "blood_ember",
+        "params": {
+          "damageClass": "magic",
+          "damage": 12,
+          "knockback": 0,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "ember_gravity_arc",
+        "fn": "move_gravity_arc",
+        "target": "blood_ember",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 27
+        }
+      },
+      {
+        "id": "ember_siphon",
+        "fn": "heal_owner_on_event",
+        "target": "blood_ember",
+        "params": {
+          "when": "on_hit",
+          "damageFraction": 0.1,
+          "maxHeal": 1
+        }
+      },
+      {
+        "id": "stitched_vampire_accessory",
+        "fn": "configure_accessory",
+        "target": "vampire_spark_wand",
+        "params": {
+          "defensePoints": 4,
+          "lifeRegenHpPerSecond": 1,
+          "moveSpeedBonusPercent": 5
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Use the wand to fire one 12-damage magic ember toward the cursor. Each shot costs 4 mana and can heal up to 1 HP when it hits. It travels with a downward gravity arc and expires after 1.5 seconds if it has not already hit an enemy or tile. While equipped, the stitched wand grants 4 defense, 1 HP/s life regeneration, and 5% movement speed.",
+    "playerExperience": "The wand keeps its source's 26-tick rhythm and mana cost. Healing is tied to actual damaging hits and capped per hit; the accessory bonuses require equipping it.",
+    "selfEvaluation": ""
+  }
+}

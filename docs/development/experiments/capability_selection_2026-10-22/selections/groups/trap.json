@@ -1,0 +1,9 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "controller",
+    "movement"
+  ],
+  "fullCatalog": false,
+  "intent": "Preserve the primary tethered hovering trap and its periodic targeting/fire of separate damaging darts, plus alternate placement of parent A\u2019s exact native gray pressure plate/style. Include controller docs for target acquisition and periodic firing, and movement docs for the hovering trap and straight-moving darts. Keep placed plate independent from the projectile trap."
+}

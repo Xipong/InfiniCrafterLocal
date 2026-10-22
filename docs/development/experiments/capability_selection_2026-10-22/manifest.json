@@ -1,0 +1,22 @@
+{
+  "cases": {
+    "wand": [
+      "r_644814a304c6e125cfe85592",
+      "Stress-test design brief, not extra observed parent facts: keep a primary magic ember projectile with gravity and on-hit owner healing; also make the item wearable as an accessory granting positive defense and life regeneration. Preserve both active and equipped functions. Do not claim defense merely from holding it."
+    ],
+    "trap": [
+      "r_8a8e8749e7f31b3b501f7d54",
+      "Stress-test design brief: primary use controls a tethered hovering trap which periodically fires separate straight-moving damaging darts at nearby enemies. Alternate use places the native gray pressure plate from parent A, using its exact native tile/style. Keep the placed plate and active projectile trap as separate functions; do not claim the placed plate is a shooting turret."
+    ],
+    "musket": [
+      "r_c5e9826181107dedc5319164",
+      "Stress-test design brief: consume fallen-star ammunition for the primary shot. The main projectile follows a gravity arc; its on-hit event spawns a separate slowly homing child star. Keep both movements on their respective entities and preserve actual ammunition consumption. The weapon itself is not a vanilla ammunition item."
+    ],
+    "tool": [
+      null,
+      "Synthetic stress-test brief: create a real native mining tool with positive pick power. Primary use mines with the item and also spawns a straight damaging projectile, without claiming that the projectile mines. Alternate use fires a boomerang-like returning projectile. While held, refresh a generated effect group providing ore detection and modest life regeneration. Keep all four functions. Defense while held is not requested. Parents below are deliberately empty synthetic context, not observed game facts; choose bounded authored values."
+    ]
+  },
+  "archive": "stage_requests.zip",
+  "providerCalls": 0
+}

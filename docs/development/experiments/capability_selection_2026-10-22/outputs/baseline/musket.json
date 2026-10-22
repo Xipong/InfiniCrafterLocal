@@ -1,0 +1,159 @@
+{
+  "name": "Jester's Fallen-Star Musket",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "A musket carrying the Jester's Star identity, loaded with fallen stars; each shot is a star that leaves a second, smaller star in its wake when it hits.",
+    "coreMechanic": "Fire one ranged musket shot every 32 ticks (about 0.53 seconds), consuming one fallen-star ammo unit through Terraria's native ammo system. The 31-damage gravity-arc projectile can hit once; on an actual NPC hit it creates one 12-damage star that starts along the shot direction and homes slowly. The root's speed is authored at 33.75 blocks/s, matching the source projectile's 9 pixels per tick at one update per tick, while the gravity arc and homing follow-up are explicitly authored here. This keeps the musket's observed 31 base damage, 5.25 knockback and 32-tick tempo, while making fallen stars a required recurring input instead of granting a reusable no-ammo shot. The follow-up adds damage only on a successful hit, so total combat output is greater than the musket's base shot; the one-hit root and one-child event keep that addition bounded. The fallen star is an observed ammo item, not a standalone weapon, and its source damage sentinel is not treated as attack damage.",
+    "parentAContribution": "The Jester's Star Musket contributes the musket identity and the observed ranged 31 damage, 5.25 knockback, shoot style, and 32-tick use interval. Its source program has a piercing star-arrow projectile and uses fallen-star ammo; this design authors a gravity arc and hit-triggered child explicitly rather than claiming those as observed abilities.",
+    "parentBContribution": "The Fallen Star contributes the exact fallen_star ammo category and a consumable-star identity. Its native ammo use is made an explicit requirement for every primary projectile; its source damage of -1 is an item sentinel, not weapon damage.",
+    "playerExperience": "Aim and fire the visible musket at the usual cadence. Each accepted shot spends one fallen star. A direct hit produces one slower homing star, so misses do not create the follow-up and the weapon has no free fallback shot.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Aim at a target and fire one gravity-curving musket projectile, spending one fallen-star ammo unit; on an NPC hit, release one slowly homing child star."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "musket_body",
+    "entities": [
+      {"id": "musket_body", "kind": "item_body"},
+      {"id": "fallen_star_shot", "kind": "free_projectile"},
+      {"id": "homing_child_star", "kind": "child_projectile"}
+    ],
+    "bindings": [
+      {
+        "id": "fire_fallen_star_shot",
+        "input": "primary_use",
+        "action": {"kind": "spawn_entity", "targetId": "fallen_star_shot"},
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "musket_item_stats",
+        "fn": "configure_item_stats",
+        "target": "musket_body",
+        "params": {
+          "damageClass": "ranged", "damage": 31, "knockback": 5.25,
+          "useTimeSeconds": 0.5333333333333333, "useAnimationSeconds": 0.5333333333333333,
+          "rarity": 1, "valueCopper": 77600, "maxStack": 1, "craftYield": 1,
+          "widthPx": 56, "heightPx": 20, "scale": 1
+        }
+      },
+      {
+        "id": "musket_item_use",
+        "fn": "configure_item_use",
+        "target": "musket_body",
+        "params": {
+          "useStyle": "shoot", "autoReuse": false, "useTurn": false,
+          "hideUseGraphic": false, "disableMeleeHitbox": true,
+          "channel": false, "handPose": "two_handed"
+        }
+      },
+      {
+        "id": "fallen_star_ammo",
+        "fn": "configure_weapon_ammo",
+        "target": "musket_body",
+        "params": {"ammoCategory": "fallen_star", "speedBasis": "authored_spawn"}
+      },
+      {
+        "id": "root_shot_spawn",
+        "fn": "configure_spawn",
+        "target": "fallen_star_shot",
+        "params": {
+          "velocity": {"constantSpeedBlocksPerSecond": 33.75},
+          "count": 1, "spreadRadians": 0, "offsetBlocks": 1.75,
+          "aim": "cursor", "position": {"at": "owner_center"}
+        }
+      },
+      {
+        "id": "root_shot_damage",
+        "fn": "set_projectile_damage",
+        "target": "fallen_star_shot",
+        "params": {"damageClass": "ranged", "damage": 31, "knockback": 5.25, "ownerHitCheck": false}
+      },
+      {
+        "id": "root_shot_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "fallen_star_shot",
+        "params": {"lifetimeSeconds": 1.5}
+      },
+      {
+        "id": "root_shot_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "fallen_star_shot",
+        "params": {"widthPx": 10, "heightPx": 10, "drawScale": 1, "hitboxScale": 1}
+      },
+      {
+        "id": "root_shot_collision",
+        "fn": "set_projectile_collision",
+        "target": "fallen_star_shot",
+        "params": {"tileCollide": true, "ignoreWater": false, "pierce": 1, "updatesPerTick": 1, "immunity": "owner_shared"}
+      },
+      {
+        "id": "root_shot_gravity",
+        "fn": "move_gravity_arc",
+        "target": "fallen_star_shot",
+        "params": {"accelerationYBlocksPerSecondSquared": 10}
+      },
+      {
+        "id": "impact_child_star",
+        "fn": "spawn_entity_on_event",
+        "target": "fallen_star_shot",
+        "params": {
+          "when": "on_hit", "entity": "homing_child_star", "count": 1,
+          "spreadRadians": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child",
+          "damageMultiplier": 1, "delaySeconds": 0
+        }
+      },
+      {
+        "id": "child_star_spawn",
+        "fn": "configure_spawn",
+        "target": "homing_child_star",
+        "params": {
+          "velocity": {"constantSpeedBlocksPerSecond": 8},
+          "offsetBlocks": 0, "aim": "velocity", "position": {"at": "activation_origin"}
+        }
+      },
+      {
+        "id": "child_star_damage",
+        "fn": "set_projectile_damage",
+        "target": "homing_child_star",
+        "params": {"damageClass": "ranged", "damage": 12, "knockback": 2, "ownerHitCheck": false}
+      },
+      {
+        "id": "child_star_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "homing_child_star",
+        "params": {"lifetimeSeconds": 2.5}
+      },
+      {
+        "id": "child_star_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "homing_child_star",
+        "params": {"widthPx": 8, "heightPx": 8, "drawScale": 0.8, "hitboxScale": 1}
+      },
+      {
+        "id": "child_star_collision",
+        "fn": "set_projectile_collision",
+        "target": "homing_child_star",
+        "params": {"tileCollide": true, "ignoreWater": false, "pierce": 1, "updatesPerTick": 1, "immunity": "owner_shared"}
+      },
+      {
+        "id": "child_star_slow_homing",
+        "fn": "move_slow_homing",
+        "target": "homing_child_star",
+        "params": {"rangeTiles": 28, "homingStrength": 0.04}
+      }
+    ]
+  },
+  "realization": {
+    "description": "Aim and fire the Jester's Fallen-Star Musket. Each accepted shot consumes one fallen star and launches a 31-damage ranged projectile with a downward-curving arc. If it hits an NPC, it creates one smaller 12-damage star at the impact that moves forward and homes slowly for up to 2.5 seconds. The follow-up occurs only on an actual NPC hit; it can still expire or collide with terrain before finding another target.",
+    "playerExperience": "The source musket's 32-tick firing interval is retained. Fallen stars are the required ammo, so keep a supply on hand; the secondary star rewards a direct hit without adding another input.",
+    "selfEvaluation": "The main shot explicitly owns its gravity movement, and the separate child owns slow homing. Native fallen-star ammo selection and consumption apply to the active primary spawn."
+  }
+}

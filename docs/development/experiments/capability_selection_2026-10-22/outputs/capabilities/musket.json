@@ -1,0 +1,242 @@
+{
+  "name": "Fallen-Star Jester Musket",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "A two-handed jester's musket carries the bright, pointed shape and yellow glow of a fallen star in its shot.",
+    "coreMechanic": "Fire one cursor-aimed ranged shot every 32 ticks, consuming a fallen star as native ammunition. The 31-damage musket shot travels in a deliberate downward gravity arc. When it hits an NPC, it creates one smaller, slower-homing star with 10 authored damage, giving a successful shot a modest follow-up without a wide burst or unbounded chain. The star is ammunition, not a projectile copied from its native AI. The weapon remains reusable; ammunition is paid through native ammo consumption.",
+    "parentAContribution": "The Jester's musket supplies the two-handed ranged launcher identity, 31 base damage, 5.25 knockback, blue rarity, and its measured 32-tick shooting tempo. Its star-themed shot motivates the authored gravity-arc projectile.",
+    "parentBContribution": "The Fallen Star contributes the actual fallen-star ammunition requirement and the small, bright star identity used for the on-hit follow-up. Its damage sentinel is not treated as a weapon stat.",
+    "playerExperience": "Aim and fire at the normal musket cadence. Each primary shot consumes a fallen star; a hit can produce one modest homing follow-up. The follow-up is secondary damage, not guaranteed if the shot misses.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Aim and fire a single gravity-arc musket shot, spending one selected fallen-star ammunition unit; a hit creates one smaller homing star."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "star_musket_body",
+    "entities": [
+      {
+        "id": "star_musket_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "gravity_star_shot",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "homing_star_child",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "fire_gravity_star",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "gravity_star_shot"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "musket_item_stats",
+        "fn": "configure_item_stats",
+        "target": "star_musket_body",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "useTimeSeconds": 0.5333333333333333,
+          "useAnimationSeconds": 0.5333333333333333,
+          "rarity": 1,
+          "valueCopper": 77600,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 56,
+          "heightPx": 20,
+          "scale": 1
+        }
+      },
+      {
+        "id": "musket_item_use",
+        "fn": "configure_item_use",
+        "target": "star_musket_body",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": false,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": "two_handed"
+        }
+      },
+      {
+        "id": "fallen_star_ammo",
+        "fn": "configure_weapon_ammo",
+        "target": "star_musket_body",
+        "params": {
+          "ammoCategory": "fallen_star",
+          "speedBasis": "native_shot"
+        }
+      },
+      {
+        "id": "gravity_star_spawn",
+        "fn": "configure_spawn",
+        "target": "gravity_star_shot",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 33.75
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1.75,
+          "aim": "cursor",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "gravity_star_damage",
+        "fn": "set_projectile_damage",
+        "target": "gravity_star_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 31,
+          "knockback": 5.25,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "gravity_star_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "gravity_star_shot",
+        "params": {
+          "lifetimeSeconds": 1.5
+        }
+      },
+      {
+        "id": "gravity_star_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "gravity_star_shot",
+        "params": {
+          "widthPx": 10,
+          "heightPx": 10,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "gravity_star_collision",
+        "fn": "set_projectile_collision",
+        "target": "gravity_star_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "gravity_star_arc",
+        "fn": "move_gravity_arc",
+        "target": "gravity_star_shot",
+        "params": {
+          "accelerationYBlocksPerSecondSquared": 12
+        }
+      },
+      {
+        "id": "child_star_spawn",
+        "fn": "configure_spawn",
+        "target": "homing_star_child",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 12
+          },
+          "offsetBlocks": 0,
+          "aim": "velocity",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "child_star_damage",
+        "fn": "set_projectile_damage",
+        "target": "homing_star_child",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 10,
+          "knockback": 1.5,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "child_star_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "homing_star_child",
+        "params": {
+          "lifetimeSeconds": 2.5
+        }
+      },
+      {
+        "id": "child_star_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "homing_star_child",
+        "params": {
+          "widthPx": 8,
+          "heightPx": 8,
+          "drawScale": 0.8,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "child_star_collision",
+        "fn": "set_projectile_collision",
+        "target": "homing_star_child",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "child_star_slow_homing",
+        "fn": "move_slow_homing",
+        "target": "homing_star_child",
+        "params": {
+          "rangeTiles": 12,
+          "homingStrength": 0.035
+        }
+      },
+      {
+        "id": "spawn_child_on_hit",
+        "fn": "spawn_entity_on_event",
+        "target": "gravity_star_shot",
+        "params": {
+          "when": "on_hit",
+          "entity": "homing_star_child",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  }
+}

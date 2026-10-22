@@ -1,0 +1,275 @@
+{
+  "name": "Surveyor's Twin Pick",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "Both recipe parents are supplied only as Unknown Terraria items, with no concrete appearance facts to preserve. The new item is imagined as a compact pick with a green survey crystal in its head and a matching returning shard motif; these are newly authored visual ideas, not claims about either parent.",
+    "coreMechanic": "A reusable native pick mines when used and launches a modest straight shot on the same primary input. Alternate use throws a lighter returning projectile. While the item is held, a named generated effect refreshes ore detection and 1 HP/s regeneration; it lasts two seconds after release and can therefore be sustained indefinitely by holding the item. The synthetic parents provide no progression or resource facts, so the values are bounded design choices rather than inherited measurements. The tool uses a 55% pick power and no extra mining-speed bonus. Primary fire repeats no faster than the authored 0.6-second use interval; it costs no mana or item stack. The two projectile attacks have separate damage and handling, with no guaranteed hit count. The held utility has no recurring resource cost, so its sustained benefit is deliberately limited to ore highlighting and modest regeneration.",
+    "parentAContribution": "Parent A is identified only as an Unknown Terraria item, with no supplied appearance, stats, or behavior. No observed ability is attributed to it; the pick's mining function is authored for this synthetic recipe.",
+    "parentBContribution": "Parent B is also an Unknown Terraria item with no supplied appearance, stats, or behavior. Its role here is a synthetic recipe slot inspiring the separately authored returning throw; this is not an observed parent ability.",
+    "playerExperience": "Use the pick to mine and fire a straight shot, or use alternate input for a returning throw. Holding it sustains modest regeneration and ore detection. These repeatable functions consume no mana or item stack, so their value is balanced by restrained damage and utility.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Mine with the native pick and launch one straight projectile from the same use; repeated use is limited by the authored 0.6-second interval."
+      },
+      {
+        "input": "alternate_use",
+        "intent": "Throw one projectile that flies outward, then returns after its short outbound phase or a wall collision."
+      },
+      {
+        "input": "passive_or_event",
+        "intent": "While this item is held, refresh ore detection and 1 HP/s regeneration in its named effect group; both effects can remain active continuously while held."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "item_body",
+    "entities": [
+      {
+        "id": "item_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "straight_shot",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "returning_shard",
+        "kind": "free_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "primary_mine_and_fire",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "straight_shot"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "alternate_returning_throw",
+        "input": "alternate_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "returning_shard"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "item_body",
+        "params": {
+          "damageClass": "default",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.6,
+          "useAnimationSeconds": 0.6,
+          "rarity": 1,
+          "valueCopper": 2000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 32,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "item_body",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": true,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false
+        }
+      },
+      {
+        "id": "native_pick_tool",
+        "fn": "configure_tool",
+        "target": "item_body",
+        "params": {
+          "pickPower": 55,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1
+        }
+      },
+      {
+        "id": "held_survey_effect",
+        "fn": "apply_generated_buff_on_use",
+        "target": "item_body",
+        "params": {
+          "durationSeconds": 2,
+          "miningSpeedMultiplier": 1,
+          "lightStrength": 0,
+          "lightColor": "green",
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 1,
+          "effectGroupId": "survey"
+        }
+      },
+      {
+        "id": "refresh_survey_while_held",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "item_body",
+        "params": {
+          "effectGroupId": "survey"
+        }
+      },
+      {
+        "id": "straight_spawn",
+        "fn": "configure_spawn",
+        "target": "straight_shot",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 24
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "straight_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 14,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "straight_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_shot",
+        "params": {
+          "lifetimeSeconds": 2.5
+        }
+      },
+      {
+        "id": "straight_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_shot",
+        "params": {
+          "widthPx": 12,
+          "heightPx": 12,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "straight_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "straight_movement",
+        "fn": "move_straight",
+        "target": "straight_shot",
+        "params": {}
+      },
+      {
+        "id": "returning_spawn",
+        "fn": "configure_spawn",
+        "target": "returning_shard",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 20
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "returning_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_shard",
+        "params": {
+          "damageClass": "melee",
+          "damage": 10,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "returning_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_shard",
+        "params": {
+          "lifetimeSeconds": 3.5
+        }
+      },
+      {
+        "id": "returning_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_shard",
+        "params": {
+          "widthPx": 16,
+          "heightPx": 16,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "returning_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_shard",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": -1,
+          "updatesPerTick": 1,
+          "immunity": {
+            "localCooldown": 20
+          }
+        }
+      },
+      {
+        "id": "returning_movement",
+        "fn": "move_boomerang",
+        "target": "returning_shard",
+        "params": {
+          "returnAfterSeconds": 0.45,
+          "returnSpeedBlocksPerSecond": 24
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Use the Surveyor's Twin Pick to mine and fire a straight 14-damage shot toward the cursor. Alternate use throws a 10-damage shard that returns after 0.45 seconds or when it hits a wall. While held, the pick refreshes ore detection and 1 HP/s life regeneration; the effect lingers for up to two seconds after you stop holding it. The projectiles use separate collision and return behavior, and neither is guaranteed to hit a target.",
+    "playerExperience": "The primary attack repeats at the item's 0.6-second use interval while held. Mining uses the item's 55% pick power; the projectile itself does not mine. Both attacks are reusable and have no mana cost. The held survey benefit is free to maintain, so it is intentionally modest.",
+    "selfEvaluation": "The primary action uses an explicit spawn_entity binding, satisfying the native tool's primary-use requirement; mining remains an item-body tool effect. Both moving projectile entities have explicit spawn, lifetime, hitbox, collision, and movement calls. The named generated-buff group is refreshed only while held and contains ore detection plus modest regeneration, with no defense effect."
+  }
+}

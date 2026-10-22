@@ -1,0 +1,8 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "movement"
+  ],
+  "fullCatalog": false,
+  "intent": "Preserve native fallen-star ammo consumption for the primary shot, the main projectile gravity arc, and its on-hit spawn of a separate slowly homing child star. Include movement docs for both projectile entities. The weapon consumes ammo; it is not itself a vanilla ammo item."
+}

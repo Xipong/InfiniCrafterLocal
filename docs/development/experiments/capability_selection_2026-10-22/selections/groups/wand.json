@@ -1,0 +1,8 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "movement"
+  ],
+  "fullCatalog": false,
+  "intent": "Preserve the primary gravity-arc ember projectile and its on-hit owner healing, plus accessory equipment defense and life regeneration. Include movement documentation for the projectile arc; retain the separate equipped passive function without implying defense while held."
+}

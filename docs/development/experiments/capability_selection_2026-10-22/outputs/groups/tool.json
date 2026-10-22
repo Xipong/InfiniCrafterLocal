@@ -1,0 +1,246 @@
+{
+  "name": "Wayfinder's Survey Pick",
+  "category": "tool",
+  "concept": {
+    "literalSynthesis": "A compact mining pick with a small crescent-like returning blade and a restrained surveyor's glint. The supplied parent records are empty, so these are newly authored design cues rather than observed parent appearances.",
+    "coreMechanic": "A practical pick with 100 pick power mines when used and launches a straight, single-hit shot from the same primary use. Its alternate use applies a brief survey effect and launches a returning blade; the same blade also launches on primary use because the runtime's item-body on_use event is shared across active inputs. While selected, the item refreshes ore highlighting and 1 HP/s life regeneration. The shots are separate from mining: neither projectile carries tool power. There are no source progression, rarity, cost, or attack values in the synthetic parent records, so these bounded values are authored choices rather than inherited measurements.",
+    "parentAContribution": "Parent A is supplied as Unknown with no appearance or gameplay facts. Its contribution is therefore an authored mining-pick role, not an observed source ability.",
+    "parentBContribution": "Parent B is supplied as Unknown with no appearance or gameplay facts. Its contribution is therefore an authored returning-blade role, not an observed source ability.",
+    "playerExperience": "Use the pick to mine and fire a straight shot together; alternate use launches a returning blade and applies the survey effect. The blade also launches on primary use because both active inputs emit the same item-body use event. Keeping the item selected sustains ore detection and modest regeneration. The authored source facts do not support a progression claim or measured balance comparison.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Mine with the pick and fire its straight shot; the shared item-use event also launches the returning blade."
+      },
+      {
+        "input": "alternate_use",
+        "intent": "Apply the short survey buff and launch a returning blade."
+      },
+      {
+        "input": "passive_or_event",
+        "intent": "Keep the item selected to refresh ore detection and modest life regeneration."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "item_body",
+    "entities": [
+      { "id": "item_body", "kind": "item_body" },
+      { "id": "straight_shot", "kind": "free_projectile" },
+      { "id": "returning_blade", "kind": "free_projectile" }
+    ],
+    "bindings": [
+      {
+        "id": "primary_shot_binding",
+        "input": "primary_use",
+        "action": { "kind": "spawn_entity", "targetId": "straight_shot" },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "survey_boomerang_binding",
+        "input": "alternate_use",
+        "action": { "kind": "apply_item_effects", "targetId": "item_body", "effectGroupId": "survey_effect" },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "item_body",
+        "params": {
+          "damageClass": "melee",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "rarity": 0,
+          "valueCopper": 0,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 32,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "item_body",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": true,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "mining_tool",
+        "fn": "configure_tool",
+        "target": "item_body",
+        "params": {
+          "pickPower": 100,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1.2
+        }
+      },
+      {
+        "id": "straight_spawn",
+        "fn": "configure_spawn",
+        "target": "straight_shot",
+        "params": {
+          "velocity": { "constantSpeedBlocksPerSecond": 18 },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": { "at": "activation_origin" }
+        }
+      },
+      {
+        "id": "straight_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_shot",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 22,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "straight_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_shot",
+        "params": { "lifetimeSeconds": 1.5 }
+      },
+      {
+        "id": "straight_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_shot",
+        "params": { "widthPx": 16, "heightPx": 16, "drawScale": 1, "hitboxScale": 1 }
+      },
+      {
+        "id": "straight_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_shot",
+        "params": {
+          "tileCollide": false,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "straight_motion",
+        "fn": "move_straight",
+        "target": "straight_shot",
+        "params": {}
+      },
+      {
+        "id": "blade_spawn",
+        "fn": "configure_spawn",
+        "target": "returning_blade",
+        "params": {
+          "velocity": { "constantSpeedBlocksPerSecond": 16 },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": { "at": "activation_origin" }
+        }
+      },
+      {
+        "id": "blade_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_blade",
+        "params": {
+          "damageClass": "melee",
+          "damage": 20,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "blade_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_blade",
+        "params": { "lifetimeSeconds": 3 }
+      },
+      {
+        "id": "blade_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_blade",
+        "params": { "widthPx": 20, "heightPx": 20, "drawScale": 1, "hitboxScale": 1 }
+      },
+      {
+        "id": "blade_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_blade",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": -1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "blade_motion",
+        "fn": "move_boomerang",
+        "target": "returning_blade",
+        "params": { "returnAfterSeconds": 0.7, "returnSpeedBlocksPerSecond": 24 }
+      },
+      {
+        "id": "blade_on_use",
+        "fn": "spawn_entity_on_event",
+        "target": "item_body",
+        "params": {
+          "when": "on_use",
+          "entity": "returning_blade",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      },
+      {
+        "id": "survey_effect",
+        "fn": "apply_generated_buff_on_use",
+        "target": "item_body",
+        "params": {
+          "durationSeconds": 2,
+          "exhaustionSeconds": 0,
+          "lightStrength": 0,
+          "lightColor": "gray",
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 1,
+          "effectGroupId": "survey_effect"
+        }
+      },
+      {
+        "id": "survey_while_held",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "item_body",
+        "params": { "effectGroupId": "survey_effect" }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Use the pick to mine and fire a straight shot. The alternate input applies the survey effect and launches a returning blade. The same blade also launches on primary use because the runtime item-use event is shared by both active inputs. While you keep the item selected, it refreshes ore highlighting and restores 1 life per second. The blade and straight shot have separately authored damage; neither has mining power.",
+    "playerExperience": "The survey effect lasts 2 seconds per application and refreshes while selected; it grants ore detection and modest regeneration. The projectiles use distinct damage classes and collision behavior. Source packets contain no factual progression or economy details, so item price, craft yield and power are authored bounds."
+  }
+}

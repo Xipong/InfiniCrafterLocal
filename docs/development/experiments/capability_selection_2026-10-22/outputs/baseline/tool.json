@@ -1,0 +1,289 @@
+{
+  "name": "Prospector's Return Pick",
+  "category": "tool",
+  "concept": {
+    "literalSynthesis": "The packet supplies no concrete parent names, appearance, or identity details, so none can be faithfully combined. This is a newly authored miner's pick whose working throw has a distinct returning companion; those gameplay effects are inventions for this design, not observed parent abilities.",
+    "coreMechanic": "A reusable pickaxe with 60% pick power mines on primary use while launching one straight 18-damage shot. The shot itself has no mining power. Alternate use applies a held-utility group and emits a returning 24-damage boomerang; the shared on_use event also emits that boomerang on primary use. While the pick is selected, the group refreshes each world tick, providing native ore highlighting and 1 HP/s life regeneration. This is intentionally sustained utility while held, with no recurring resource payment or cooldown. The blank parent records provide no damage, timing, progression, acquisition, or economy facts, so the bounded damage, 0.5-second use interval, value, and rarity are authored choices rather than inferred upgrades.",
+    "parentAContribution": "Parent A is an empty synthetic placeholder with no supplied appearance or ability facts. The pick's mining role is authored for the brief and is not attributed to this parent.",
+    "parentBContribution": "Parent B is an empty synthetic placeholder with no supplied appearance or ability facts. The boomerang-like return is authored for the brief and is not attributed to this parent.",
+    "playerExperience": "Primary use mines and fires a straight shot; alternate use fires the returning shot and refreshes the utility group. The boomerang also emits on primary use because both accepted actions produce the same item-body on_use event. Holding the pick selected sustains broad ore highlighting and modest regeneration without a payment; projectile damage and native pick power remain separate."
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "item_body",
+    "entities": [
+      {
+        "id": "item_body",
+        "kind": "item_body"
+      },
+      {
+        "id": "straight_shot",
+        "kind": "free_projectile"
+      },
+      {
+        "id": "returning_pick",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "primary_mine_and_shoot",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "straight_shot"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "alternate_utility_and_returner",
+        "input": "alternate_use",
+        "action": {
+          "kind": "apply_item_effects",
+          "targetId": "item_body",
+          "effectGroupId": "prospector_sense"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "item_body",
+        "params": {
+          "damageClass": "default",
+          "damage": 0,
+          "knockback": 0,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "rarity": 0,
+          "valueCopper": 1000,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 34,
+          "heightPx": 34,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "item_body",
+        "params": {
+          "useStyle": "swing",
+          "autoReuse": false,
+          "useTurn": true,
+          "hideUseGraphic": false,
+          "disableMeleeHitbox": true,
+          "channel": false,
+          "handPose": "one_handed"
+        }
+      },
+      {
+        "id": "mining_tool",
+        "fn": "configure_tool",
+        "target": "item_body",
+        "params": {
+          "pickPower": 60,
+          "axePowerTooltipPercent": 0,
+          "hammerPower": 0,
+          "miningSpeedMultiplier": 1
+        }
+      },
+      {
+        "id": "held_prospector_group",
+        "fn": "apply_generated_buff_on_use",
+        "target": "item_body",
+        "params": {
+          "durationSeconds": 4,
+          "oreSenseEnabled": true,
+          "lifeRegenHpPerSecond": 1,
+          "effectGroupId": "prospector_sense"
+        }
+      },
+      {
+        "id": "refresh_prospector_group",
+        "fn": "refresh_generated_effect_group_while_held",
+        "target": "item_body",
+        "params": {
+          "effectGroupId": "prospector_sense"
+        }
+      },
+      {
+        "id": "straight_spawn",
+        "fn": "configure_spawn",
+        "target": "straight_shot",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 26
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "straight_damage",
+        "fn": "set_projectile_damage",
+        "target": "straight_shot",
+        "params": {
+          "damageClass": "default",
+          "damage": 18,
+          "knockback": 2,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "straight_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "straight_shot",
+        "params": {
+          "lifetimeSeconds": 1.1
+        }
+      },
+      {
+        "id": "straight_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "straight_shot",
+        "params": {
+          "widthPx": 14,
+          "heightPx": 14,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "straight_collision",
+        "fn": "set_projectile_collision",
+        "target": "straight_shot",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "straight_motion",
+        "fn": "move_straight",
+        "target": "straight_shot",
+        "params": {}
+      },
+      {
+        "id": "straight_live_cap",
+        "fn": "set_projectile_concurrency",
+        "target": "straight_shot",
+        "params": {
+          "maxActive": 2
+        }
+      },
+      {
+        "id": "boomerang_spawn",
+        "fn": "configure_spawn",
+        "target": "returning_pick",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 20
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "boomerang_damage",
+        "fn": "set_projectile_damage",
+        "target": "returning_pick",
+        "params": {
+          "damageClass": "default",
+          "damage": 24,
+          "knockback": 3,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "boomerang_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "returning_pick",
+        "params": {
+          "lifetimeSeconds": 2.4
+        }
+      },
+      {
+        "id": "boomerang_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "returning_pick",
+        "params": {
+          "widthPx": 18,
+          "heightPx": 18,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "boomerang_collision",
+        "fn": "set_projectile_collision",
+        "target": "returning_pick",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 2,
+          "updatesPerTick": 1,
+          "immunity": "once_per_npc"
+        }
+      },
+      {
+        "id": "boomerang_motion",
+        "fn": "move_boomerang",
+        "target": "returning_pick",
+        "params": {
+          "returnAfterSeconds": 0.45,
+          "returnSpeedBlocksPerSecond": 34
+        }
+      },
+      {
+        "id": "boomerang_live_cap",
+        "fn": "set_projectile_concurrency",
+        "target": "returning_pick",
+        "params": {
+          "maxActive": 2
+        }
+      },
+      {
+        "id": "alternate_return_event",
+        "fn": "spawn_entity_on_event",
+        "target": "item_body",
+        "params": {
+          "when": "on_use",
+          "entity": "returning_pick",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      }
+    ]
+  },
+  "realization": {
+    "description": "Use primary to mine with 60% pick power and launch a straight 18-damage shot at the cursor. Alternate use applies ore highlighting and 1 HP/s regeneration for up to 4 seconds, and the item's on_use event launches a returning 24-damage pick. That same on_use event also launches the returner after primary use. While the item is selected, its utility group is attempted for refresh each world tick, so the effect is intended to remain active while held. The straight shot travels at 26 blocks/s for 1.1 seconds, collides with tiles, and hits each NPC at most once. The returner begins returning after 0.45 seconds or on wall contact, travels back at 34 blocks/s, can hit an NPC twice before returning or expiring after 2.4 seconds. Both projectile entities have a two-live-projectile cap per owner and item definition; a spawn can be refused when that cap is full.",
+    "playerExperience": "This is a reusable mining tool with two bounded attack bodies and continuous held exploration support. Mining comes from the native tool power; neither projectile mines. Utility has no recurring payment or exhaustion lockout, so remaining selected sustains it. The alternate action shares the item's on_use event with primary use, which means primary use also launches a returner in addition to the straight shot.",
+    "selfEvaluation": "The parent packets are empty synthetic placeholders, so identity, acquisition, progression, source tempo, and source damage could not be established. The authored values are bounded choices. on_use is shared across both active inputs; the returning projectile therefore also spawns on primary use."
+  }
+}

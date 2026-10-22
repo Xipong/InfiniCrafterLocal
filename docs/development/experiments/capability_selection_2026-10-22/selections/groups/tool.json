@@ -1,0 +1,8 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "movement"
+  ],
+  "fullCatalog": false,
+  "intent": "Preserve positive native pick power; primary use mines with the item and separately spawns a straight damaging projectile; alternate use fires a returning boomerang-like projectile; while held, refresh a generated group with ore detection and modest life regeneration. Include movement docs for both projectile paths. Do not assign tool power to the projectile or imply held defense."
+}

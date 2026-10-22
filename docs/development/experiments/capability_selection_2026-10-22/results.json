@@ -1,0 +1,502 @@
+{
+  "tokenizer": "o200k_base proxy; JSON compact serialization, not billed API usage",
+  "limits": [
+    "subagent first attempts, not provider requests",
+    "no schema-constrained decoding",
+    "no repairs",
+    "no billed or reasoning-token usage",
+    "no measured cache hits",
+    "no Terraria smoke run",
+    "one trial per case per arm"
+  ],
+  "rows": [
+    {
+      "mode": "baseline",
+      "case": "wand",
+      "authorPayloadTokensProxy": 49822,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1288,
+      "capabilitiesUsed": [
+        "configure_accessory",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "heal_owner_on_event",
+        "move_gravity_arc",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "baseline",
+      "case": "trap",
+      "authorPayloadTokensProxy": 48810,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1498,
+      "capabilitiesUsed": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_tile_placement",
+        "move_straight",
+        "move_yoyo_hover",
+        "set_projectile_collision",
+        "set_projectile_concurrency",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "baseline",
+      "case": "musket",
+      "authorPayloadTokensProxy": 47898,
+      "valid": false,
+      "errors": [
+        {
+          "path": "$.runtimeProgram.calls[7].params.bounceCount",
+          "code": "missing_dependency_param",
+          "message": "This parameter is required outside its declared inactive consumer branch",
+          "allowed": [
+            "bounceCount"
+          ],
+          "relatedIds": []
+        },
+        {
+          "path": "$.runtimeProgram.calls[14].params.bounceCount",
+          "code": "missing_dependency_param",
+          "message": "This parameter is required outside its declared inactive consumer branch",
+          "allowed": [
+            "bounceCount"
+          ],
+          "relatedIds": []
+        }
+      ],
+      "authorOutputTokensProxy": 1611,
+      "capabilitiesUsed": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_weapon_ammo",
+        "move_gravity_arc",
+        "move_slow_homing",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ]
+    },
+    {
+      "mode": "baseline",
+      "case": "tool",
+      "authorPayloadTokensProxy": 42114,
+      "valid": false,
+      "errors": [
+        {
+          "path": "$.runtimeProgram.calls[3]",
+          "code": "shape_one_of",
+          "message": "Strict schema violation: {'path': '$.runtimeProgram.calls[3]', 'kind': 'one_of', 'expected': 'exactly_one', 'actual': 0}",
+          "allowed": [],
+          "relatedIds": []
+        },
+        {
+          "path": "$.runtimeProgram.calls[3].params.lightStrength",
+          "code": "shape_required",
+          "message": "Strict schema violation: {'path': '$.runtimeProgram.calls[3].params.lightStrength', 'kind': 'required'}",
+          "allowed": [],
+          "relatedIds": []
+        },
+        {
+          "path": "$.runtimeProgram.calls[3].params.lightColor",
+          "code": "shape_required",
+          "message": "Strict schema violation: {'path': '$.runtimeProgram.calls[3].params.lightColor', 'kind': 'required'}",
+          "allowed": [],
+          "relatedIds": []
+        }
+      ],
+      "authorOutputTokensProxy": 1803,
+      "capabilitiesUsed": [
+        "apply_generated_buff_on_use",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_tool",
+        "move_boomerang",
+        "move_straight",
+        "refresh_generated_effect_group_while_held",
+        "set_projectile_collision",
+        "set_projectile_concurrency",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ]
+    },
+    {
+      "mode": "groups",
+      "case": "wand",
+      "authorPayloadTokensProxy": 48542,
+      "selectorPacketTokensProxy": 25214,
+      "selectorOutputTokensProxy": 98,
+      "detailedCapabilities": 70,
+      "indexOnlyIds": [
+        "channel_beam",
+        "charge_then_release",
+        "target_and_fire"
+      ],
+      "fullCatalog": false,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1315,
+      "capabilitiesUsed": [
+        "configure_accessory",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "heal_owner_on_event",
+        "move_gravity_arc",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "groups",
+      "case": "trap",
+      "authorPayloadTokensProxy": 48938,
+      "selectorPacketTokensProxy": 24202,
+      "selectorOutputTokensProxy": 119,
+      "detailedCapabilities": 73,
+      "indexOnlyIds": [],
+      "fullCatalog": false,
+      "valid": false,
+      "errors": [
+        {
+          "path": "$.runtimeProgram.calls[17]",
+          "code": "exclusive_component_conflict",
+          "message": "calls[16] ('dart_targeting') and calls[17] ('dart_straight_flight') both occupy exclusive component group 'movement' on 'guided_dart'.",
+          "allowed": [
+            "keep one",
+            "split behaviour into separate entities"
+          ],
+          "relatedIds": [
+            "dart_targeting",
+            "dart_straight_flight",
+            "guided_dart"
+          ]
+        }
+      ],
+      "authorOutputTokensProxy": 1525,
+      "capabilitiesUsed": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_tile_placement",
+        "move_slow_homing",
+        "move_straight",
+        "move_yoyo_hover",
+        "set_projectile_collision",
+        "set_projectile_concurrency",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ]
+    },
+    {
+      "mode": "groups",
+      "case": "musket",
+      "authorPayloadTokensProxy": 46628,
+      "selectorPacketTokensProxy": 23290,
+      "selectorOutputTokensProxy": 108,
+      "detailedCapabilities": 70,
+      "indexOnlyIds": [
+        "channel_beam",
+        "charge_then_release",
+        "target_and_fire"
+      ],
+      "fullCatalog": false,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1562,
+      "capabilitiesUsed": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_weapon_ammo",
+        "move_gravity_arc",
+        "move_slow_homing",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "groups",
+      "case": "tool",
+      "authorPayloadTokensProxy": 40859,
+      "selectorPacketTokensProxy": 17506,
+      "selectorOutputTokensProxy": 123,
+      "detailedCapabilities": 70,
+      "indexOnlyIds": [
+        "channel_beam",
+        "charge_then_release",
+        "target_and_fire"
+      ],
+      "fullCatalog": false,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1585,
+      "capabilitiesUsed": [
+        "apply_generated_buff_on_use",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_tool",
+        "move_boomerang",
+        "move_straight",
+        "refresh_generated_effect_group_while_held",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "capabilities",
+      "case": "wand",
+      "authorPayloadTokensProxy": 47035,
+      "selectorPacketTokensProxy": 25556,
+      "selectorOutputTokensProxy": 134,
+      "detailedCapabilities": 52,
+      "indexOnlyIds": [
+        "channel_beam",
+        "charge_then_release",
+        "move_accelerate",
+        "move_blackhole_pull",
+        "move_boomerang",
+        "move_drift",
+        "move_expanding_wave",
+        "move_flail_tether",
+        "move_forward_then_retract",
+        "move_front_hand",
+        "move_orbit",
+        "move_phase",
+        "move_proximity_missile",
+        "move_returning_glaive",
+        "move_sine_homing",
+        "move_slow_homing",
+        "move_spiral",
+        "move_straight",
+        "move_vortex_orb",
+        "move_yoyo_hover",
+        "target_and_fire"
+      ],
+      "fullCatalog": false,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1297,
+      "capabilitiesUsed": [
+        "configure_accessory",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "heal_owner_on_event",
+        "move_gravity_arc",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "capabilities",
+      "case": "trap",
+      "authorPayloadTokensProxy": 46647,
+      "selectorPacketTokensProxy": 24544,
+      "selectorOutputTokensProxy": 156,
+      "detailedCapabilities": 54,
+      "indexOnlyIds": [
+        "channel_beam",
+        "charge_then_release",
+        "move_accelerate",
+        "move_blackhole_pull",
+        "move_boomerang",
+        "move_drift",
+        "move_expanding_wave",
+        "move_flail_tether",
+        "move_forward_then_retract",
+        "move_front_hand",
+        "move_gravity_arc",
+        "move_phase",
+        "move_proximity_missile",
+        "move_returning_glaive",
+        "move_sine_homing",
+        "move_slow_homing",
+        "move_spiral",
+        "move_vortex_orb",
+        "move_yoyo_hover"
+      ],
+      "fullCatalog": false,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1688,
+      "capabilitiesUsed": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_tile_placement",
+        "move_orbit",
+        "move_straight",
+        "set_descendant_concurrency",
+        "set_projectile_collision",
+        "set_projectile_concurrency",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "target_and_fire"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "capabilities",
+      "case": "musket",
+      "authorPayloadTokensProxy": 45164,
+      "selectorPacketTokensProxy": 23632,
+      "selectorOutputTokensProxy": 139,
+      "detailedCapabilities": 53,
+      "indexOnlyIds": [
+        "channel_beam",
+        "charge_then_release",
+        "move_accelerate",
+        "move_blackhole_pull",
+        "move_boomerang",
+        "move_drift",
+        "move_expanding_wave",
+        "move_flail_tether",
+        "move_forward_then_retract",
+        "move_front_hand",
+        "move_orbit",
+        "move_phase",
+        "move_proximity_missile",
+        "move_returning_glaive",
+        "move_sine_homing",
+        "move_spiral",
+        "move_straight",
+        "move_vortex_orb",
+        "move_yoyo_hover",
+        "target_and_fire"
+      ],
+      "fullCatalog": false,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1282,
+      "capabilitiesUsed": [
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_weapon_ammo",
+        "move_gravity_arc",
+        "move_slow_homing",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ],
+      "compiled": true
+    },
+    {
+      "mode": "capabilities",
+      "case": "tool",
+      "authorPayloadTokensProxy": 39329,
+      "selectorPacketTokensProxy": 17848,
+      "selectorOutputTokensProxy": 161,
+      "detailedCapabilities": 53,
+      "indexOnlyIds": [
+        "channel_beam",
+        "charge_then_release",
+        "move_accelerate",
+        "move_blackhole_pull",
+        "move_drift",
+        "move_expanding_wave",
+        "move_flail_tether",
+        "move_forward_then_retract",
+        "move_front_hand",
+        "move_gravity_arc",
+        "move_orbit",
+        "move_phase",
+        "move_proximity_missile",
+        "move_returning_glaive",
+        "move_sine_homing",
+        "move_slow_homing",
+        "move_spiral",
+        "move_vortex_orb",
+        "move_yoyo_hover",
+        "target_and_fire"
+      ],
+      "fullCatalog": false,
+      "valid": true,
+      "errors": [],
+      "authorOutputTokensProxy": 1705,
+      "capabilitiesUsed": [
+        "apply_generated_buff_on_use",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_tool",
+        "move_boomerang",
+        "move_straight",
+        "refresh_generated_effect_group_while_held",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime"
+      ],
+      "compiled": true
+    }
+  ],
+  "commonPrefixes": [
+    {
+      "mode": "baseline",
+      "stage": "packets",
+      "sharedPrefixTokensProxy": 41535
+    },
+    {
+      "mode": "groups",
+      "stage": "packets",
+      "sharedPrefixTokensProxy": 31566
+    },
+    {
+      "mode": "groups",
+      "stage": "selectors",
+      "sharedPrefixTokensProxy": 16927
+    },
+    {
+      "mode": "capabilities",
+      "stage": "packets",
+      "sharedPrefixTokensProxy": 27115
+    },
+    {
+      "mode": "capabilities",
+      "stage": "selectors",
+      "sharedPrefixTokensProxy": 17269
+    }
+  ]
+}

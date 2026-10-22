@@ -1,0 +1,278 @@
+{
+  "name": "Grayplate Rope Dart Trap",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A gray pressure plate is lashed into the rope frame of a hovering dart trap, combining the plate's flat gray face and the rope trap's suspended dart launcher into one compact device.",
+    "coreMechanic": "Primary use launches a single rope trap that hovers within 10 blocks of the owner, follows the cursor while held, and returns when released. While alive, it fires one separate 5-damage ranged dart every 0.5 seconds; each dart flies straight at first and steers toward nearby valid enemies. Alternate use places the exact gray pressure plate from the source item (tile 135, style 2). The plate is an independent native pressure plate, not a shooting turret. The trap keeps the source trap's 4 damage, 14-tick reuse interval, 4-second lifetime, and one-dart-per-half-second firing rhythm; homing darts make the outgoing shots more useful against moving targets. It is reusable, but its one-item stack is escrowed while the plate is placed and returns when the plate is broken.",
+    "parentAContribution": "The gray pressure plate contributes its exact native tile placement (tile 135, style 2) as the alternate action, and its flat gray identity is worked into the trap's frame. Its source is a common, stackable material with a native placement use; it supplies no combat damage.",
+    "parentBContribution": "The rope dart-shooting trap supplies the tethered cursor-following hover, 10-block leash, 4-second lifetime, 4-damage ranged body, and periodic dart-launching idea. Its source already fires a separate straight dart every 30 ticks; the authored darts keep the source's 5 damage and 30 blocks/s launch speed, with gentle homing added for practical target tracking.",
+    "playerExperience": "Use primary to place the reusable trap near a fight, then hold the input to guide it and release to recall it. It can hit with its body and steadily launch homing darts, but the trap lasts at most four seconds per use. Alternate places a pressure plate; that action temporarily removes the only copy from inventory until the plate is broken.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Launch and guide one tethered hovering trap that attacks with its own body and periodically sends homing darts toward nearby enemies; releasing primary returns it."
+      },
+      {
+        "input": "alternate_use",
+        "intent": "Place the exact gray pressure plate (tile 135, style 2) as a separate native environmental switch; it does not fire darts."
+      }
+    ]
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "hover_trap",
+    "entities": [
+      {
+        "id": "trap_item",
+        "kind": "item_body"
+      },
+      {
+        "id": "hover_trap",
+        "kind": "owner_attached_projectile"
+      },
+      {
+        "id": "guided_dart",
+        "kind": "child_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "launch_trap",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "hover_trap"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      },
+      {
+        "id": "place_gray_plate",
+        "input": "alternate_use",
+        "action": {
+          "kind": "place_item",
+          "targetId": "trap_item",
+          "placementCallId": "gray_plate_placement"
+        },
+        "stackCost": 1,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "target": "trap_item",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 4,
+          "knockback": 1,
+          "useTimeSeconds": 0.23333333333333334,
+          "useAnimationSeconds": 0.23333333333333334,
+          "rarity": 0,
+          "valueCopper": 15010,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 28,
+          "heightPx": 28,
+          "scale": 1
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "target": "trap_item",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": true,
+          "hideUseGraphic": true,
+          "disableMeleeHitbox": true,
+          "channel": true,
+          "handPose": ""
+        }
+      },
+      {
+        "id": "gray_plate_placement",
+        "fn": "configure_tile_placement",
+        "target": "trap_item",
+        "params": {
+          "tileId": 135,
+          "placeStyle": 2
+        }
+      },
+      {
+        "id": "trap_spawn",
+        "fn": "configure_spawn",
+        "target": "hover_trap",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 30
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 1,
+          "aim": "cursor",
+          "position": {
+            "at": "owner_center"
+          }
+        }
+      },
+      {
+        "id": "trap_concurrency",
+        "fn": "set_projectile_concurrency",
+        "target": "hover_trap",
+        "params": {
+          "maxActive": 1
+        }
+      },
+      {
+        "id": "trap_damage",
+        "fn": "set_projectile_damage",
+        "target": "hover_trap",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 4,
+          "knockback": 1,
+          "ownerHitCheck": true
+        }
+      },
+      {
+        "id": "trap_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "hover_trap",
+        "params": {
+          "lifetimeSeconds": 4
+        }
+      },
+      {
+        "id": "trap_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "hover_trap",
+        "params": {
+          "widthPx": 24,
+          "heightPx": 24,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "trap_collision",
+        "fn": "set_projectile_collision",
+        "target": "hover_trap",
+        "params": {
+          "tileCollide": false,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": -1,
+          "updatesPerTick": 1,
+          "immunity": {
+            "localCooldown": 30
+          }
+        }
+      },
+      {
+        "id": "trap_hover",
+        "fn": "move_yoyo_hover",
+        "target": "hover_trap",
+        "params": {
+          "rangeTiles": 10,
+          "speedBlocksPerSecond": 30
+        }
+      },
+      {
+        "id": "trap_periodic_fire",
+        "fn": "spawn_entity_on_event",
+        "target": "hover_trap",
+        "params": {
+          "when": {
+            "everySeconds": 0.5
+          },
+          "entity": "guided_dart",
+          "count": 1,
+          "spreadRadians": 0,
+          "damageBasis": "authored_child",
+          "knockbackBasis": "authored_child",
+          "damageMultiplier": 1,
+          "delaySeconds": 0
+        }
+      },
+      {
+        "id": "dart_spawn",
+        "fn": "configure_spawn",
+        "target": "guided_dart",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 30
+          },
+          "count": 1,
+          "spreadRadians": 0,
+          "offsetBlocks": 0,
+          "aim": "facing",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "dart_damage",
+        "fn": "set_projectile_damage",
+        "target": "guided_dart",
+        "params": {
+          "damageClass": "ranged",
+          "damage": 5,
+          "knockback": 1,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "dart_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "guided_dart",
+        "params": {
+          "lifetimeSeconds": 0.75
+        }
+      },
+      {
+        "id": "dart_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "guided_dart",
+        "params": {
+          "widthPx": 12,
+          "heightPx": 6,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "dart_collision",
+        "fn": "set_projectile_collision",
+        "target": "guided_dart",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "updatesPerTick": 1,
+          "immunity": "owner_shared"
+        }
+      },
+      {
+        "id": "dart_targeting",
+        "fn": "move_slow_homing",
+        "target": "guided_dart",
+        "params": {
+          "rangeTiles": 12,
+          "homingStrength": 0.12
+        }
+      },
+      {
+        "id": "dart_straight_flight",
+        "fn": "move_straight",
+        "target": "guided_dart",
+        "params": {}
+      }
+    ]
+  }
+}

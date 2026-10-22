@@ -1,0 +1,18 @@
+{
+  "catalogRevision": "515ef709dc99cd0bcdab263a43b45cb61f153cfb943e10f341f2a40e9131bc6b",
+  "selected": [
+    "configure_item_stats",
+    "configure_item_use",
+    "configure_spawn",
+    "set_projectile_damage",
+    "set_projectile_lifetime",
+    "set_projectile_collision",
+    "move_orbit",
+    "target_and_fire",
+    "move_straight",
+    "spawn_entity_on_event",
+    "configure_tile_placement"
+  ],
+  "fullCatalog": false,
+  "intent": "Preserve the active hovering tethered trap as a separate targeting/firing entity and its darts as separate straight-moving damaging entities. Keep primary active use distinct from alternate native tile placement, using the parent GrayPressurePlate tile/style facts. The placed plate is not a turret."
+}
