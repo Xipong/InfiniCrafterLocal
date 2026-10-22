@@ -366,3 +366,27 @@ async function testInterruptedDefaultsRefresh() {
   }
 }
 testRepeatedSubmission().then(testCatalogAutoload).then(testInterruptedDefaultsRefresh).then(()=>console.log('Studio frontend regressions passed')).catch(error=>{console.error(error);process.exitCode=1;});
+
+// The image checkbox is a real checked boolean, and disabling it preserves the limit.
+const parallelKey='INFINI_IMAGE_PARALLEL', limitKey='INFINI_IMAGE_MAX_CONCURRENCY';
+acceptSnapshot(snapshot({INFINI_IMAGE_BACKEND:'image_api',[parallelKey]:'1',[limitKey]:'4'}));
+const parallelField={key:parallelKey,options:['1','0'],page:'images',advanced:false};
+assert.match(studio.fieldHTML(parallelField), /type="checkbox"[^>]*checked/);
+assert.equal(inactiveReason({key:limitKey}), '');
+state.draft[parallelKey]='0';
+assert.match(inactiveReason({key:limitKey}), /по одному/);
+assert.equal(state.draft[limitKey],'4');
+assert.doesNotMatch(studio.fieldHTML(parallelField), /type="checkbox"[^>]*checked/);
+state.draft[parallelKey]='1';
+assert.equal(inactiveReason({key:limitKey}), '');
+assert.equal(state.draft[limitKey],'4');
+state.draft.INFINI_IMAGE_BACKEND='off';
+assert.match(inactiveReason(parallelField), /выключены/);
+
+// Adjacent hints must render without opening the full-help disclosure.
+state.helpFields.delete(parallelKey);
+const parallelHTML=studio.fieldHTML(parallelField);
+assert.match(parallelHTML, /Если сохранён лимит 1/);
+assert.match(parallelHTML, /поставь 2–4 ниже/);
+assert.match(parallelHTML, /перезапустить сервер/);
+assert.match(studio.fieldHTML({key:limitKey}), /по умолчанию 4/);

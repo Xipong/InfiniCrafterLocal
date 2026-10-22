@@ -246,11 +246,13 @@ def run_plan(tmp_path, monkeypatch, entity_id, kind, declared=None):
     entity = {"id": entity_id, "kind": kind, "visualRole": declared if declared is not None else VISUAL_ROLE_BY_ENTITY_KIND[kind],
               "hitbox": {"widthPx": 32, "heightPx": 32},
               "visual": {"assetMode": "baked_sprite", "prompt": "blue authored shape", "preferredCanvasSize": 32, "renderSizePx": 32, "forwardAngleDegrees": 0}}
-    data = {"id": "fixture", "runtimeProgram": {"entities": [entity]},
+    data = {"id": "fixture", "visual": {}, "runtimeProgram": {"entities": [entity]},
             "vfxManifest": {"slots": [{"entityId": entity_id, "rendererKind": "impactSprite"}]}}
     entity["visual"].update(impactPrompt="blue authored impact", impactCanvasSize=32)
     plan = build_visual_asset_plan(copy.deepcopy(data))
     result = generation.maybe_generate_visual_assets(data)
+    # Independent body/impact providers may finish in either order.
+    calls.sort(key=lambda call: (call["role"] == "impact", call["role"]))
     return plan, result, calls
 
 @pytest.mark.parametrize("kind", [k for k in VISUAL_ROLE_BY_ENTITY_KIND if k != "item_body"])

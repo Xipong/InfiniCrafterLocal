@@ -1,6 +1,6 @@
 {
   "authority": "derived-evidence-only",
-  "documentedFieldCount": 130,
+  "documentedFieldCount": 131,
   "entries": [
     {
       "declarations": [
@@ -1575,16 +1575,16 @@
     {
       "declarations": [
         {
-          "default": 1,
+          "default": 4,
           "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
           "maximum": 4,
           "minimum": 1,
           "type": "integer"
         }
       ],
-      "default": 1,
+      "default": 4,
       "documented": true,
-      "example": "1",
+      "example": "4",
       "gui": true,
       "maximum": 4,
       "minimum": 1,
@@ -1594,6 +1594,30 @@
       ],
       "secret": false,
       "type": "integer",
+      "visibility": "gui"
+    },
+    {
+      "declarations": [
+        {
+          "default": true,
+          "file": "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
+          "maximum": null,
+          "minimum": null,
+          "type": "boolean"
+        }
+      ],
+      "default": true,
+      "documented": true,
+      "example": "1",
+      "gui": true,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_IMAGE_PARALLEL",
+      "owners": [
+        "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py"
+      ],
+      "secret": false,
+      "type": "boolean",
       "visibility": "gui"
     },
     {
@@ -5369,15 +5393,15 @@
     }
   ],
   "errors": [],
-  "fieldCount": 218,
-  "fingerprint": "8a7da0e47954cf17c4b73105801ef2afc60b3cda4bc4607477c8f4c16883f9f9",
+  "fieldCount": 219,
+  "fingerprint": "eeb32d799dac8bee35a598c73777869e4aeb721d17af5b584c7a6d20f5093e65",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",
     "LocalGenerator/config.example.env",
     "C# INFINI_* references"
   ],
-  "guiFieldCount": 130,
+  "guiFieldCount": 131,
   "ok": true,
   "schema": "infini.config-registry.v1",
   "secretFieldCount": 12,

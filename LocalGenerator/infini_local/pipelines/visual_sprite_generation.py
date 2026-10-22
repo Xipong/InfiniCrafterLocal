@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import copy
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from contextvars import copy_context
 import hashlib
 import json
@@ -577,45 +578,127 @@ def _runtime_entities(data: dict[str, Any]) -> list[dict[str, Any]]:
     return [row for row in runtime.get("entities") or [] if isinstance(row, dict)]
 
 
-def _generate_independent_vfx_assets(data: dict[str, Any], plan: list[dict[str, Any]]) -> dict[str, tuple[str, str, float, str]]:
-    """Overlap only declared ingredient jobs within the existing provider gate.
+def _independent_image_jobs(data: dict[str, Any], plan: list[dict[str, Any]]):
+    """Only authored text-to-image jobs; icon reuse is projected after joining.
 
-    These jobs take authored text/canvas only, not another job's image. Item
-    generation/hydration remains a barrier; entity/reuse/impact scheduling is
-    unchanged. Do not expand this roster to jobs with image-reference edges.
+    No request consumes a sibling PNG. Keep selection identical to the delivery
+    loop below, including disabled entity images and invalid registry roles.
     """
-    slots = [slot for slot in plan if str(slot.get("role") or "").startswith("vfx:")]
-    workers = min(len(slots), getattr(IMAGE_GENERATION_GATE, "capacity", 1))
+    yield "item", maybe_generate_sprite, (), {}
+    kit = data.get("visualKit") or {}
+    negative = str((kit.get("item") or {}).get("negativePrompt") or "").strip()
+    for slot in plan:
+        role = slot["role"]
+        kwargs = {}
+        backend_role = role
+        if role.startswith("vfx:"):
+            kwargs["processing_role"] = slot["processingRole"]
+            slot_negative = slot["negativePrompt"]
+        elif role == "equip_overlay":
+            slot_negative = negative
+        elif role.startswith("impact:"):
+            backend_role = "impact"
+            kwargs["publication_entity_id"] = slot["entityId"]
+            slot_negative = slot["negativePrompt"]
+        elif role.startswith("entity:") and slot["assetMode"] == "baked_sprite":
+            expected = VISUAL_ROLE_BY_ENTITY_KIND.get(slot["entityKind"])
+            if (VISUAL_ASSET_MODE not in {"full", "projectile", "all", "visualpack", "assetpack"}
+                    or not expected or (slot["visualRole"] and slot["visualRole"] != expected)):
+                continue
+            backend_role = "runtime:" + expected
+            kwargs["entity_id"] = slot["entityId"]
+            slot_negative = negative
+        else:
+            continue
+        yield role, generate_visual_asset, (backend_role, slot["prompt"], slot_negative, slot["assetId"], slot["canvas"]), kwargs
+
+
+def _run_independent_image(job, snapshot):
+    role, function, args, kwargs = job
+    local = copy.deepcopy(snapshot)
+    # Generation writes diagnostics, never consumes historical receipts. Fresh
+    # keys avoid stale siblings and repeated-role/prefix-related ID collisions.
+    local["debug"] = {}
+    result = function(local, *args, **kwargs)
+    prefix = "item" if role == "item" else args[0]
+    return result, local["debug"], prefix
+
+
+class _ImageBatch:
+    """One bounded craft batch, optionally spanning the VFX authoring stage."""
+
+    def __init__(self, workers):
+        self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="infini-image")
+        self.futures = {}
+
+    def submit(self, data, plan):
+        for future in self.futures.values():
+            if future.done():
+                future.result()  # Do not enqueue new VFX work after an earlier exception.
+        snapshot = copy.deepcopy(data)
+        for job in _independent_image_jobs(snapshot, plan):
+            role = job[0]
+            if role not in self.futures:
+                self.futures[role] = self.pool.submit(copy_context().run, _run_independent_image, job, snapshot)
+
+    def finish(self):
+        roles = {future: role for role, future in self.futures.items()}
+        return {roles[future]: future.result() for future in as_completed(roles)}
+
+    def close(self):
+        # Cancel queued siblings; running HTTP calls retain provider deadlines.
+        # Join before returning, including when VFX authoring itself failed.
+        self.pool.shutdown(wait=True, cancel_futures=True)
+
+
+@contextmanager
+def overlap_visual_images(data: dict[str, Any]):
+    """Start accepted Visual images while VFX authors only new effect requests.
+
+    The original DTO remains untouched until the image-stage join. Single-slot
+    mode preserves the full old sequence, avoiding local LLM+diffusion overlap.
+    """
+    workers = getattr(IMAGE_GENERATION_GATE, "capacity", 1)
+    if workers < 2 or IMAGE_BACKEND == "off":
+        yield None
+        return
+    batch = _ImageBatch(workers)
+    try:
+        visual_only = copy.deepcopy(data)
+        # VFX from an input/retained DTO is not authority for the new VFX stage.
+        visual_only.pop("vfxManifest", None)
+        batch.submit(visual_only, build_visual_asset_plan(visual_only))
+        yield batch
+    finally:
+        batch.close()
+
+
+def _generate_independent_images(data: dict[str, Any], plan: list[dict[str, Any]], pending=None):
+    workers = getattr(IMAGE_GENERATION_GATE, "capacity", 1)
     if workers < 2:
-        return {}  # Preserve the default single-slot execution order exactly.
-    snapshot = copy.deepcopy(data)
-    before = snapshot.get("debug", {})
-
-    def generate(slot: dict[str, Any]):
-        local = copy.deepcopy(snapshot)
-        result = generate_visual_asset(local, slot["role"], slot["prompt"], slot["negativePrompt"],
-            slot["assetId"], slot["canvas"], processing_role=slot["processingRole"])
-        after = local.get("debug", {})
-        # Merge only this job's delta: a stale sibling receipt in the input must
-        # never overwrite a just-completed sibling's evidence.
-        changes = {key: value for key, value in after.items() if key not in before or value != before[key]}
-        removed = set(before) - set(after)
-        return result, changes, removed
-
-    results: dict[str, tuple[str, str, float, str]] = {}
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="infini-image") as pool:
-        futures = [pool.submit(copy_context().run, generate, slot) for slot in slots]
-        for slot, future in zip(slots, futures):
-            result, changes, removed = future.result()
-            debug = data.setdefault("debug", {})
-            for key in removed:
-                debug.pop(key, None)
-            debug.update(changes)
-            results[slot["role"]] = result
-    return results
+        return {}  # Preserve sequential execution and global provider admission.
+    batch = pending if pending is not None else _ImageBatch(workers)
+    try:
+        # Already-running Visual jobs are not resubmitted; VFX contributes only
+        # its new impact/ingredient jobs after its own validation and Repair.
+        batch.submit(data, plan)
+        return batch.finish()
+    finally:
+        if pending is None:
+            batch.close()
 
 
-def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
+def _join_image_result(data, completed, role):
+    result, diagnostics, prefix = completed[role]
+    debug = data.setdefault("debug", {})
+    # _finish_image_request explicitly clears this key after a successful job.
+    if prefix + "SpriteValidation" in diagnostics:
+        debug.pop(prefix + "SpriteFailurePhase", None)
+    debug.update(diagnostics)
+    return result
+
+
+def maybe_generate_visual_assets(data: dict[str, Any], pending=None) -> dict[str, Any]:
     """Generate exactly the assets authored for accepted runtime entities.
 
     The function never invents projectile/impact/child roles.  Every non-item
@@ -624,8 +707,13 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
     """
     # Validate declared requests/references before any image job, including item.
     # Rebuild the ordinary plan after item PNG hydration.
-    build_visual_asset_plan(data)
-    data = maybe_generate_sprite(data)
+    initial_plan = build_visual_asset_plan(data)
+    completed = _generate_independent_images(data, initial_plan, pending)
+    if "item" in completed:
+        item_result = _join_image_result(data, completed, "item")
+        data["visual"] = item_result["visual"]
+    else:
+        data = maybe_generate_sprite(data)
     visual = data.setdefault("visual", {})
     item_path = str(visual.get("spritePath") or "")
     item_url = str(visual.get("spriteUrl") or "")
@@ -639,7 +727,11 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
     raw_item_kit = visual_kit.get("item")
     item_kit: dict[str, Any] = raw_item_kit if isinstance(raw_item_kit, dict) else {}
     director_negative = str(item_kit.get("negativePrompt") or "").strip()
-    parallel_vfx = _generate_independent_vfx_assets(data, plan)
+
+    def image_result(role, *args, **kwargs):
+        if role in completed:
+            return _join_image_result(data, completed, role)
+        return generate_visual_asset(data, *args, **kwargs)
 
     for slot in plan:
         if not isinstance(slot, dict):
@@ -647,8 +739,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         role = str(slot.get("role") or "")
         if role.startswith("vfx:"):
             asset = next(row for row in data["vfxManifest"]["assets"] if row["id"] == slot["vfxAssetId"])
-            path, url, score, status = parallel_vfx[role] if role in parallel_vfx else generate_visual_asset(
-                data, role, slot["prompt"], slot["negativePrompt"], slot["assetId"], slot["canvas"],
+            path, url, score, status = image_result(
+                role, role, slot["prompt"], slot["negativePrompt"], slot["assetId"], slot["canvas"],
                 processing_role=slot["processingRole"],
             )
             asset.update(spritePath=path, spriteUrl=url, spriteStatus=status, spriteTechnicalScore=score)
@@ -657,8 +749,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         if role == "equip_overlay":
             prompt = str(slot.get("prompt") or visual.get("equipOverlayPrompt") or "")
             canvas = int(slot.get("canvas") or 48)
-            path, url, score, status = generate_visual_asset(
-                data,
+            path, url, score, status = image_result(
+                role,
                 "equip_overlay",
                 prompt,
                 director_negative,
@@ -694,8 +786,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
             negative = str(slot.get("negativePrompt") or "")
             canvas = int(slot.get("canvas") or 32)
             backend_role = "impact"
-            path, url, score, status = generate_visual_asset(
-                data,
+            path, url, score, status = image_result(
+                role,
                 backend_role,
                 prompt,
                 negative,
@@ -761,8 +853,8 @@ def maybe_generate_visual_assets(data: dict[str, Any]) -> dict[str, Any]:
         # Exact registry projection, not a name/prose router. The namespace keeps
         # runtime pose independent of the legacy +X projectile processing path.
         backend_role = "runtime:" + expected_role
-        path, url, score, status = generate_visual_asset(
-            data,
+        path, url, score, status = image_result(
+            role,
             backend_role,
             prompt,
             director_negative,

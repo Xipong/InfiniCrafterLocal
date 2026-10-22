@@ -38,7 +38,7 @@ from infini_local.pipelines.pipeline_visual_config import VISUAL_PIPELINE_PROFIL
 from infini_local.pipelines.visual_asset_plan import finalize_visual_asset_runtime_gates
 from infini_local.pipelines.visual_delivery_gate import assert_visual_delivery_ready, visual_delivery_report
 from infini_local.pipelines.visual_generation_pipeline import apply_visual_director, attach_visual
-from infini_local.pipelines.visual_sprite_generation import maybe_generate_visual_assets
+from infini_local.pipelines.visual_sprite_generation import maybe_generate_visual_assets, overlap_visual_images
 from infini_local.services import asset_sync_service
 from infini_local.services.combine_endpoint import generation_stage
 from infini_local.storage import world_storage
@@ -184,9 +184,11 @@ def combine(payload: dict[str, Any]) -> dict[str, Any]:
             data = compile_and_validate_authored_runtime(data, a, b, key, run_stage=step)
             data = step("04_visual_technical_init", attach_visual, data)
             data = step("05_visual_director", apply_visual_director, data, a, b)
-            data = step("06_vfx_director", attach_vfx_manifest, data, key, a, b, call_llm_vfx_director if USE_LLM else None)
-            data = step("07_visual_asset_runtime_gates", finalize_visual_asset_runtime_gates, data)
-            data = step("08_visual_asset_generation", maybe_generate_visual_assets, data)
+            with overlap_visual_images(data) as pending_images:
+                data = step("06_vfx_director", attach_vfx_manifest, data, key, a, b, call_llm_vfx_director if USE_LLM else None)
+                data = step("07_visual_asset_runtime_gates", finalize_visual_asset_runtime_gates, data)
+                image_kwargs = {"pending": pending_images} if pending_images is not None else {}
+                data = step("08_visual_asset_generation", maybe_generate_visual_assets, data, **image_kwargs)
             data = step("09_visual_delivery_gate", assert_visual_delivery_ready, data)
             data = step("10_generated_parent_summary", attach_generated_parent_summary, data)
             data = step("11_final_normalize", final_normalize, data)
