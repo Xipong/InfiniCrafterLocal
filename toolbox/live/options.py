@@ -9,6 +9,7 @@ def build_parser(*, internal: bool = False) -> argparse.ArgumentParser:
         description="Run real InfiniCrafter LLM generation while hard-blocking every image backend call."
     )
     parser.add_argument("--project", type=Path, help="Authoritative InfiniCrafterLocal worktree.")
+    parser.add_argument("--preset", help="Packaged historical case set; inspect with python -m toolbox panels.")
     parser.add_argument("--output", type=Path, help="Private trace directory; required for --run, untouched by preflight.")
     parser.add_argument("--cases", help="Distinct comma-separated case IDs; default is the named Live10/Live20 panel.")
     parser.add_argument(

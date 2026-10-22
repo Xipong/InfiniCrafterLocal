@@ -16,7 +16,7 @@ from typing import Any, cast
 from toolbox.infini_toolbox import discover_project
 from toolbox.live.options import build_parser
 from toolbox.live.preflight import prepare
-from toolbox.live.panels import load_selection, PANEL_PROVENANCE
+from toolbox.live.panels import load_selection
 
 parser = build_parser(internal=True)
 args = parser.parse_args()
@@ -484,12 +484,12 @@ def parent(name: str, **fields: Any) -> dict[str, Any]:
     base.update(fields)
     return base
 
-runtime_dump, selected_routes, selected_cases, cases_file_path, cases_file_sha256 = load_selection(args)
+runtime_dump, selected_routes, selected_cases, cases_file_path, cases_file_sha256, selection_metadata = load_selection(args)
 
 campaign_identity = {
     'schema': 'infini.live-campaign-identity.v1',
     'panel': args.panel,
-    'panelProvenance': PANEL_PROVENANCE,
+    **selection_metadata,
     'project': str(ROOT),
     'gitHead': git_head,
     'gitClean': not bool(git_status),

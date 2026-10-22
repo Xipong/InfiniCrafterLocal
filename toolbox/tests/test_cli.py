@@ -38,7 +38,7 @@ def test_default_cli_preflight_selects_real_parents_without_bootstrap(monkeypatc
     assert report['caseCount'] == count
     assert len({case['case'] for case in report['cases']}) == count
     assert all(case['itemA'] and case['itemB'] for case in report['cases'])
-    assert report['panelProvenance'].startswith('Live20')
+    assert isinstance(report['panelProvenance'], str) and report['panelProvenance']
     assert set(tmp_path.rglob('*')) == before
 
 

@@ -13,8 +13,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
-@pytest.mark.parametrize('outcome,panel', [('failure', 'live10'), ('success', 'live10'), ('success', 'live20')])
-def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_inference(tmp_path, outcome, panel):
+@pytest.mark.parametrize('outcome,panel,preset', [
+    ('failure', 'live10', 'live10-midgame'), ('success', 'live10', 'live10-midgame'),
+    ('success', 'live20', 'live20-classic'), ('success', 'live20', 'live20-classic-sprites'),
+])
+def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_inference(tmp_path, outcome, panel, preset):
     output = tmp_path / 'campaign'
     env = {key: value for key, value in os.environ.items() if not key.startswith('INFINI_')}
     env.update(INFINI_SKIP_CONFIG_FILE='1', INFINI_USE_LLM='1', INFINI_CACHE_DIR=str(tmp_path / 'preimport/cache'),
@@ -26,7 +29,8 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
     script = textwrap.dedent('''
         import json, runpy, subprocess, sys
         from pathlib import Path
-        root, output, outcome, panel = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4]
+        root, output, outcome, panel, preset = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5]
+        case_id = 'night_missile' if panel == 'live10' else 'woodwork_blade'
         sys.path[:0] = [str(root), str(root / 'LocalGenerator')]
         def offline(event, args):
             if event in ('socket.connect', 'socket.getaddrinfo', 'socket.sendto'):
@@ -61,7 +65,7 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
             return {'choices': [{'message': {'content': json.dumps(responses.pop(0))}}]}
         llm_transport.http_json = synthetic_sender
         sys.argv = ['campaign', '--run', '--panel', panel, '--output', str(output),
-            '--project', str(project), '--expected-head', head, '--cases', 'woodwork_blade',
+            '--project', str(project), '--expected-head', head, '--cases', case_id, '--preset', preset,
             '--expected-case-count', '1', '--parallel-crafts', '1',
             '--expected-provider', 'openai_compat', '--expected-model', 'qa-model',
             '--expected-base-url', 'https://example.invalid/v1/', '--expected-api-mode', 'chat_completions',
@@ -76,14 +80,17 @@ def test_real_campaign_entry_records_synthetic_sender_without_network_or_live_in
             assert outcome == 'success', 'synthetic failed campaign must exit nonzero'
         assert len(physical) == (1 if outcome == 'failure' else 3), (output / 'results.ndjson').read_text()
     ''')
-    result = subprocess.run([sys.executable, '-c', script, str(ROOT), str(output), outcome, panel], env=env, text=True, capture_output=True)
+    result = subprocess.run([sys.executable, '-c', script, str(ROOT), str(output), outcome, panel, preset], env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stderr + result.stdout[-1500:]
     manifest = json.loads((output / 'campaign_manifest.json').read_text())
     summary = json.loads((output / 'summary.json').read_text())
     assert manifest['panel'] == panel
-    assert manifest['cases'] == ['woodwork_blade']
+    case_id = 'night_missile' if panel == 'live10' else 'woodwork_blade'
+    assert manifest['cases'] == [case_id]
+    assert manifest['preset'] == preset
+    assert manifest['fullPreset'] is False
     assert manifest['realImageGeneration'] is False
-    assert summary['failedCases'] == (['woodwork_blade'] if outcome == 'failure' else [])
+    assert summary['failedCases'] == ([case_id] if outcome == 'failure' else [])
     assert summary['logicalRequests'] == summary['httpRequests'] == (1 if outcome == 'failure' else 3)
     rows = [json.loads(line) for line in (output / 'results.ndjson').read_text().splitlines()]
     if outcome == 'failure':

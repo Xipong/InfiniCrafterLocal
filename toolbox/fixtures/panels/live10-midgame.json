@@ -1,0 +1,72 @@
+{
+  "schema": "infini.toolbox-panel.v1",
+  "id": "live10-midgame",
+  "command": "live10",
+  "title": "Исторический Live10 midgame / преимущественно early Hardmode",
+  "historical": true,
+  "runtimeDump": "../parents/live10-midgame.jsonl",
+  "provenance": "Original live10-luna6-high-midgame-20261011-0335 cases and caseIndex order; exact frozen parent rows from the historical runtime dump.",
+  "notes": "Исходные 10 пар, порядок и ориентация A/B. Не subset Live20; не переносятся старые model/provider settings или ответы.",
+  "sources": {
+    "roster": {
+      "path": "artifacts/live10-luna6-high-midgame-20261011-0335/cases.json",
+      "sha256": "12be6fdacb38d84dc09780213481f160c5bb64bbcf9627e7d14b6e1760259593"
+    },
+    "frozenParents": {
+      "path": "artifacts/live10-luna6-high-midgame-20261011-0335/frozen-parent-inputs.json",
+      "sha256": "ab326621307d810fdf206f49e6bb6ece88d70e023b093829f7d0dca61da66a22"
+    }
+  },
+  "cases": [
+    {
+      "case": "night_missile",
+      "itemA": "NightsEdge",
+      "itemB": "MagicMissile"
+    },
+    {
+      "case": "crystal_repeater",
+      "itemA": "AdamantiteRepeater",
+      "itemB": "CrystalShard"
+    },
+    {
+      "case": "shadow_frost",
+      "itemA": "ShadowFlameKnife",
+      "itemB": "Frostbrand"
+    },
+    {
+      "case": "rain_spiders",
+      "itemA": "SpiderStaff",
+      "itemB": "NimbusRod"
+    },
+    {
+      "case": "ichor_spider_queen",
+      "itemA": "QueenSpiderStaff",
+      "itemB": "GoldenShower"
+    },
+    {
+      "case": "holy_storm",
+      "itemA": "DaedalusStormbow",
+      "itemB": "HolyArrow"
+    },
+    {
+      "case": "precision_titanium",
+      "itemA": "TitaniumPickaxe",
+      "itemB": "MechanicalLens"
+    },
+    {
+      "case": "frost_obsidian_guard",
+      "itemA": "FrostsparkBoots",
+      "itemB": "ObsidianShield"
+    },
+    {
+      "case": "radiant_forge",
+      "itemA": "OrichalcumAnvil",
+      "itemB": "SoulofLight"
+    },
+    {
+      "case": "meteor_star_cannon",
+      "itemA": "StarCannon",
+      "itemB": "MeteorStaff"
+    }
+  ]
+}

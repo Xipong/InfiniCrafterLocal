@@ -2,3 +2,8 @@ START_HERE.html linguist-generated=true
 
 # Frozen byte-hash fixture must remain identical on Windows checkouts.
 tools/fixtures/placed-body-pre-alpha-delivered.json text eol=lf
+
+# Historical inputs retain exact source bytes, including their original line endings.
+toolbox/fixtures/items.jsonl -text
+toolbox/fixtures/parents/live10-midgame.jsonl -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+toolbox/fixtures/parents/live20-classic-sprites.jsonl -text

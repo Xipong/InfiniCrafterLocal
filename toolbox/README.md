@@ -4,6 +4,7 @@
 
 ```bash
 python -m toolbox --help
+python -m toolbox panels
 python -m toolbox doctor
 python -m toolbox live10
 python -m toolbox live20
@@ -19,7 +20,8 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 
 | Задача | Команда | Что действительно проверяет |
 |---|---|---|
-| Подготовить короткую / полную панель | `python -m toolbox live10` / `live20` | 10 / 20 конкретных комбинаций, наличие родителей, входные ограничения |
+| Исторический midgame / классический Live20 | `python -m toolbox live10` / `live20` | Исходные 10 / 20 комбинаций с их собственными parent inputs |
+| Найти все пакеты запросов | `python -m toolbox panels` | Пары ингредиентов, provenance, число cases и пути к исходным fixtures |
 | Узнать prerequisites | `python -m toolbox doctor` | Пути, доступность Python-модулей/команд, native-команда из manifest; без чтения credentials |
 | Разобрать сохранённую кампанию | `python -m toolbox summary /path/to/campaign` | Results + logical/HTTP/retry/image ledgers, пропуски, дубликаты и незавершённые запросы |
 | Проверить сохранённый предмет | `python -m toolbox replay /path/to/case --compare` | Настоящие strict wire / delivery projection и сравнение `compiled_runtime.json`; без inference |
@@ -44,22 +46,31 @@ toolbox/
   __main__.py, cli.py      публичные команды
   infini_toolbox.py        discovery выбранного проекта
   live/                   одна реализация Live10 и Live20
-    panels.py             явные панели и загрузка родителей
+    catalog.py            каталог JSON-пакетов и defaults
+    panels.py             загрузка выбранных пар и их собственных родителей
     preflight.py          read-only admission/config/source checks
     runner.py             настоящий producer + accounting + no-image boundary
     support.py            stages, concurrency, retry accounting
     summary.py            offline сверка сохранённых ledgers
     README.md             настройки и явный live-запуск
-  fixtures/items.jsonl     неизменённый Terraria snapshot (39 родителей)
+  fixtures/
+    panels/               исходные пары Live10 midgame / Live20 / sprite-вариант
+    parents/              отдельные исторические parent snapshots
+    items.jsonl           неизменённые 39 родителей классического Live20
+    classic_provenance.json  SHA256 и источники восстановленных входов
   testing/                adapters к существующим verify/replay owners, doctor
   tests/                  offline CLI, transport, pipeline и accounting tests
   live-generation/        только безопасный shim старой команды Live20
 ```
 
-**Происхождение панелей:** Live20 сохраняет первые 20 комбинаций существовавшего
-tracked harness. Live10 — новый **явно выбранный тематический subset** этой панели,
-не восстановленная историческая кампания и не заявление о её результатах.
-Точные IDs и родители видны в JSON preflight и [panels.py](live/panels.py).
+**Исторические входы восстановлены:** `live10` — прежние 10 midgame-кейсов,
+а не сокращение Live20; `live20` — прежние 20 пар, преимущественно pre-Hardmode,
+но с early-Hardmode sentry. Сохранены порядок, ориентация A/B и точные исходные
+parent rows, включая различия контекста общего `QueenSpiderStaff`.
+Оригинальный вариант Live20 со sprite references доступен через
+`live20 --preset live20-classic-sprites`. Новый subset из PR141 сохранён только
+как явно отдельный `live10 --preset live10-starter`, не исторический midgame.
+Все пары, файлы и происхождение — в [каталоге входов](fixtures/README.md).
 
 ## Реальные текстовые вызовы — отдельно
 
