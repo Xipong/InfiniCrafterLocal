@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime
-import importlib.util
 import os
+import importlib.util
 from pathlib import Path
 
 
@@ -34,23 +33,18 @@ def discover_project(explicit: str | Path | None = None) -> Path:
     return candidates[0].resolve()
 
 
-def load_config_env(project: Path) -> None:
-    path = project / "LocalGenerator/config.env"
-    if not path.exists():
-        return
-    # Load the canonical dependency-free codec from this toolbox distribution.
-    # The selected project may be elsewhere; never import its runtime bootstrap
-    # or create caches merely to inspect its configuration.
+def read_config_env(path: Path) -> dict[str, str]:
+    """Read the canonical dependency-free codec without runtime bootstrap."""
     source = BASE_ROOT / 'LocalGenerator/infini_local/core/env_file.py'
-    spec = importlib.util.spec_from_file_location('_infini_toolbox_env_codec', source)
+    spec = importlib.util.spec_from_file_location('_toolbox_env_codec', source)
     if spec is None or spec.loader is None:
-        raise RuntimeError('Cannot load the config.env codec from this toolbox installation.')
+        raise RuntimeError('Cannot load canonical env codec')
     codec = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(codec)
-    for key, value in codec.read_env_file(path).items():
+    return codec.read_env_file(path)
+
+
+def load_config_env(project: Path) -> None:
+    """Compatibility API: explicitly load project settings; environment wins."""
+    for key, value in read_config_env(project / 'LocalGenerator/config.env').items():
         os.environ.setdefault(key, value)
-
-
-def new_run_dir(label: str) -> Path:
-    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    return BASE_ROOT / "artifacts/tool-runs" / f"{label}-{timestamp}"
