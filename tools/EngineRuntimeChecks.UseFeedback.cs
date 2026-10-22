@@ -53,19 +53,24 @@ internal static partial class EngineRuntimeChecks
         Equal(true, wrap.TryReserveGeneratedUseNotice(uint.MaxValue - 10), "first near clock wrap");
         Equal(false, wrap.TryReserveGeneratedUseNotice(20), "clock wrap does not bypass throttle");
         Equal(true, wrap.TryReserveGeneratedUseNotice(49), "clock wrap retains elapsed duration");
-        WithPlayer((player, owner) => {
-            bool oldServer = Terraria.Main.dedServ; int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
-            uint oldTick = Terraria.Main.GameUpdateCount;
-            try {
-                Terraria.Main.dedServ = true;
-                owner.NotifyGeneratedUseRefusal("server must not announce");
-                Equal(true, owner.TryReserveGeneratedUseNotice(Terraria.Main.GameUpdateCount), "dedicated server does not reserve notice");
-                Terraria.Main.dedServ = false; Terraria.Main.netMode = NetmodeID.MultiplayerClient;
-                Terraria.Main.myPlayer = player.whoAmI + 1;
-                Terraria.Main.GameUpdateCount = unchecked(oldTick + 60);
-                owner.NotifyGeneratedUseRefusal("remote owner must not announce");
-                Equal(true, owner.TryReserveGeneratedUseNotice(Terraria.Main.GameUpdateCount), "remote owner does not reserve notice");
-            } finally { Terraria.Main.dedServ = oldServer; Terraria.Main.netMode = oldMode; Terraria.Main.myPlayer = oldLocal; Terraria.Main.GameUpdateCount = oldTick; }
-        });
+        // Each authority path gets a fresh owner, so checking reservation does
+        // not require mutating Terraria's read-only native update clock.
+        foreach (bool dedicatedServer in new[] { true, false })
+            WithPlayer((player, owner) => {
+                bool oldServer = Terraria.Main.dedServ;
+                int oldMode = Terraria.Main.netMode, oldLocal = Terraria.Main.myPlayer;
+                try {
+                    Terraria.Main.dedServ = dedicatedServer;
+                    Terraria.Main.netMode = dedicatedServer ? NetmodeID.Server : NetmodeID.MultiplayerClient;
+                    Terraria.Main.myPlayer = dedicatedServer ? player.whoAmI : player.whoAmI + 1;
+                    owner.NotifyGeneratedUseRefusal("nonlocal authority must not announce");
+                    Equal(true, owner.TryReserveGeneratedUseNotice(Terraria.Main.GameUpdateCount),
+                        dedicatedServer ? "dedicated server does not reserve notice" : "remote owner does not reserve notice");
+                } finally {
+                    Terraria.Main.dedServ = oldServer;
+                    Terraria.Main.netMode = oldMode;
+                    Terraria.Main.myPlayer = oldLocal;
+                }
+            });
     }
 }

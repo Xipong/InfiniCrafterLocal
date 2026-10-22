@@ -11,7 +11,7 @@ internal static partial class EngineRuntimeChecks
     private static void CompactTooltipsKeepInputsAndLockoutsAndExpandWithEitherShift()
     {
         using var actors = new SwarmRuntimeScope();
-        KeyboardState previous = Main.keyState;
+        KeyboardState previous = Terraria.Main.keyState;
         try
         {
             WithForgePresentationLanguages(locale =>
@@ -20,7 +20,7 @@ internal static partial class EngineRuntimeChecks
                 typeof(ModType).GetProperty("Mod", TestInstance)!.SetValue(host, new TooltipProbeMod());
                 host.Data.Accessory.MaxLife = 20;
                 host.Data.Accessory.FallDamageImmune = true;
-                Main.keyState = new KeyboardState();
+                Terraria.Main.keyState = new KeyboardState();
                 List<TooltipLine> Lines()
                 {
                     var lines = new List<TooltipLine>(); host.ModifyTooltips(lines); return lines;
@@ -36,14 +36,14 @@ internal static partial class EngineRuntimeChecks
                     && !l.Text.Contains("Mods.InfiniCrafterLocal.")), "localized expansion affordance");
                 foreach (Keys key in new[] { Keys.LeftShift, Keys.RightShift })
                 {
-                    Main.keyState = new KeyboardState(key);
+                    Terraria.Main.keyState = new KeyboardState(key);
                     var expanded = Lines();
                     Equal(true, expanded.Any(l => l.Name == "InfiniEquipmentNoFallDamage"), "expanded exposes passive equipment flag");
                     Equal(true, expanded.Any(l => l.Name.StartsWith("InfiniMovementReaction")), "either Shift exposes real passive magnitude");
                     Equal(true, expanded.Any(l => l.Name.StartsWith("InfiniReactionDelay")), "expanded includes exact scheduling details");
                     Equal(false, expanded.Any(l => l.Name == "InfiniExpandDetails"), "expanded does not ask for expansion");
                 }
-                Main.keyState = new KeyboardState();
+                Terraria.Main.keyState = new KeyboardState();
                 Equal(true, compact.Select(l => l.Name + l.Text).SequenceEqual(Lines().Select(l => l.Name + l.Text)), "release Shift returns to compact without stale state");
                 Equal(before, host.Data.ToNetworkJson(), "expansion never changes authoritative item data");
 
@@ -66,6 +66,6 @@ internal static partial class EngineRuntimeChecks
                 }
             });
         }
-        finally { Main.keyState = previous; }
+        finally { Terraria.Main.keyState = previous; }
     }
 }
