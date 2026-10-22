@@ -3,35 +3,34 @@ ChargeUI: {
 	Ready: "Ready"
 }
 
+Keybinds: {
+	ToggleRecipeJournal: {
+		DisplayName: "Toggle fusion atlas"
+	}
+}
+
+UseFeedback: {
+	GroundRequired: "Requires solid ground"
+	Wet: "Cannot be used while wet"
+	LifeRequired: "Requires {0} life"
+	ManaRequired: "Requires {0} mana"
+	OwnerProjectileLimit: "Generated projectile limit reached ({0} per player)"
+	EntityBatchLimit: "Cannot create {0} projectiles: this entity allows at most {1} active"
+	OwnerAttachedActive: "This attached weapon effect is already active"
+	MobilityCooldown: "Mobility cooldown: {0}s"
+	MobilityDataMissing: "Missing generated mobility data"
+	MobilityModeMissing: "No generated mobility mode"
+	MobilityUnsupported: "Unsupported mobility: {0}"
+	MobilityDead: "Cannot use mobility while dead"
+	MobilityAuthority: "Mobility is waiting for gameplay authority"
+	MobilitySpawnMissing: "No valid spawn point"
+	MobilityLocalControl: "Mobility is waiting for local control"
+	MobilityRangeMissing: "Missing authored blink range"
+	MobilityUnsafe: "Unsafe blink destination"
+}
+
 Mods: {
 	InfiniCrafterLocal: {
-
-		Keybinds: {
-			ToggleRecipeJournal: {
-				DisplayName: "Toggle fusion atlas"
-			}
-		}
-
-		UseFeedback: {
-			GroundRequired: "Requires solid ground"
-			Wet: "Cannot be used while wet"
-			LifeRequired: "Requires {0} life"
-			ManaRequired: "Requires {0} mana"
-			OwnerProjectileLimit: "Generated projectile limit reached ({0} per player)"
-			EntityBatchLimit: "Cannot create {0} projectiles: this entity allows at most {1} active"
-			OwnerAttachedActive: "This attached weapon effect is already active"
-			MobilityCooldown: "Mobility cooldown: {0}s"
-			MobilityDataMissing: "Missing generated mobility data"
-			MobilityModeMissing: "No generated mobility mode"
-			MobilityUnsupported: "Unsupported mobility: {0}"
-			MobilityDead: "Cannot use mobility while dead"
-			MobilityAuthority: "Mobility is waiting for gameplay authority"
-			MobilitySpawnMissing: "No valid spawn point"
-			MobilityLocalControl: "Mobility is waiting for local control"
-			MobilityRangeMissing: "Missing authored blink range"
-			MobilityUnsafe: "Unsafe blink destination"
-		}
-
 
 		RecipeJournal: {
 			Result: "Result"

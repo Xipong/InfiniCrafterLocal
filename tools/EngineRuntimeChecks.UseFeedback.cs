@@ -32,6 +32,8 @@ internal static partial class EngineRuntimeChecks
             // The read-only feedback query cannot remove an actor or change authored limits.
             Equal(2, entity.Spawn.Count, "refusal does not lower or raise authored count");
             Equal(true, active.Projectile.active, "refusal leaves existing effects alive");
+            Equal(false, Terraria.Localization.Language.GetTextValue("Mods.InfiniCrafterLocal.Keybinds.ToggleRecipeJournal.DisplayName")
+                .StartsWith("Mods.", StringComparison.Ordinal), locale + " localized atlas keybind");
             foreach (string key in new[] { "GroundRequired", "Wet", "LifeRequired", "ManaRequired",
                 "OwnerProjectileLimit", "EntityBatchLimit", "OwnerAttachedActive", "MobilityCooldown",
                 "MobilityDataMissing", "MobilityModeMissing", "MobilityUnsupported", "MobilityDead",
