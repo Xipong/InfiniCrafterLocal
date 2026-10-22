@@ -96,7 +96,8 @@ def _capture_backend(monkeypatch, tmp_path: Path, *, retries: bool = False) -> l
         else:
             image.paste((170, 90, 40, 255), (18, 8, 46, 56))
         image.save(raw)
-        calls.append(dict(prompt=prompt, negative=negative, canvas=canvas, raw=str(raw), bytes=raw.read_bytes()))
+        calls.append(dict(prompt=prompt, negative=negative, canvas=canvas, raw=str(raw), bytes=raw.read_bytes(),
+                          attempt=int(output_dir.name.removeprefix("attempt-"))))
         return [str(raw)]
 
     monkeypatch.setattr(generation, "generate_openai_codex", offline_response)
@@ -138,6 +139,8 @@ def test_real_retry_compactor_retains_selected_frame_with_long_art_and_png_diagn
     frozen = copy.deepcopy(data)
     calls = _capture_backend(monkeypatch, tmp_path, retries=True)
     result = generation.maybe_generate_visual_assets(data)
+    # Assert authored ownership/retry order, not cross-asset completion order.
+    calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     assert len(calls) == 4
     for first, retry, role in ((calls[0], calls[1], "item"), (calls[2], calls[3], "runtime:child_projectile")):
         assert _framing(retry["prompt"]) == _framing(first["prompt"])
@@ -173,6 +176,8 @@ def test_prompt_only_mode_preserves_the_same_exact_backend_framing(monkeypatch, 
     calls = _capture_backend(monkeypatch, tmp_path)
     monkeypatch.setattr(generation, "IMAGE_BACKEND", "off")
     result = generation.maybe_generate_visual_assets(data)
+    # Assert authored ownership/retry order, not cross-asset completion order.
+    calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     assert calls == []
     assert _framing(result["visual"]["finalItemPrompt"])["renderSizePx"] == 32
     assert _framing(result["debug"]["runtime:child_projectileFinalPrompt"])["renderSizePx"] == 22
@@ -185,6 +190,8 @@ def test_image_composition_preserves_prospective_grip_and_literal_topology(monke
     data = _accepted_visual_data()
     calls = _capture_backend(monkeypatch, tmp_path)
     result = generation.maybe_generate_visual_assets(data)
+    # Assert authored ownership/retry order, not cross-asset completion order.
+    calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     root_prompt, arrow_prompt = (call["prompt"] for call in calls)
     for prompt in (root_prompt, arrow_prompt):
         assert "Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements" in prompt
@@ -203,6 +210,8 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     frozen = copy.deepcopy(data)
     calls = _capture_backend(monkeypatch, tmp_path)
     result = generation.maybe_generate_visual_assets(data)
+    # Assert authored ownership/retry order, not cross-asset completion order.
+    calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     assert len(calls) == 2, "reuse_item_icon must not invent a third image job"
     root, arrow = (_framing(call["prompt"]) for call in calls)
     assert root["canvasSizePx"] == 48 and root["renderSizePx"] == 32
@@ -240,6 +249,8 @@ def test_actual_image_jobs_preserve_curve_facts_for_shared_root_and_distinct_bod
     frozen = copy.deepcopy(data)
     calls = _capture_backend(monkeypatch, tmp_path)
     result = generation.maybe_generate_visual_assets(data)
+    # Assert authored ownership/retry order, not cross-asset completion order.
+    calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     assert len(calls) == 2, "the read-only curve must not create another image job for reuse"
     root, distinct = (_framing(call["prompt"]) for call in calls)
     shared = root["sharedEntityMultipliers"][0]
@@ -261,6 +272,8 @@ def test_real_image_jobs_keep_independent_visual_curve_and_hitbox_ownership(monk
     frozen = copy.deepcopy(data)
     calls = _capture_backend(monkeypatch, tmp_path)
     result = generation.maybe_generate_visual_assets(data)
+    # Assert authored ownership/retry order, not cross-asset completion order.
+    calls.sort(key=lambda call: (_framing(call["prompt"]).get("entityId", ""), call["attempt"]))
     assert len(calls) == 2
     root, distinct = (_framing(call["prompt"]) for call in calls)
     for actual, entity_id in ((root["sharedEntityMultipliers"][0], "workbench_blade"), (distinct, "nail")):
