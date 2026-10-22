@@ -164,7 +164,7 @@ def test_leaf_repair_freezes_seed_selection_or_absence(monkeypatch, present, mod
 
 def test_inventory_passive_generated_docs_do_not_claim_a_binding():
     import importlib.util
-    path = Path(__file__).resolve().parents[2] / "tools/generate_low_level_runtime_docs.py"
+    path = Path(__file__).resolve().parents[2] / "tools/generate/generate_low_level_runtime_docs.py"
     spec = importlib.util.spec_from_file_location("seed_doc_owner", path)
     assert spec is not None and spec.loader is not None
     docs = importlib.util.module_from_spec(spec)

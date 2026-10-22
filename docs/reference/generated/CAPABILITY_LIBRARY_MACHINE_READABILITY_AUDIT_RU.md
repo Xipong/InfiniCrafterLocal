@@ -1,6 +1,6 @@
 # Аудит машиночитаемости библиотеки компонентов
 
-> Generated: [`tools/generate_low_level_runtime_docs.py`](../../../tools/generate_low_level_runtime_docs.py) из [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и [audit-кода](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; [refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).
+> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py) из [registry](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и [audit-кода](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). Не редактировать вручную; [refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).
 > Architecture/owners: [Lowery](LOWERY_RU.md). Полный каталог: [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md).
 
 **Навигация:** [вердикт/критерии](#verdict) · [измерения](#metrics) · [проверяемость](#proof) · [ограничения](#limits) · [практическая оценка](#assessment).
@@ -53,7 +53,7 @@
 - Cross-entity references доступны только там, где runtime реально их исполняет (`target_and_fire`, event child spawn).
 - Authority metadata проверяется статическими контрактами, но реальный host/client smoke требует tModLoader runtime.
 - Статический vertical witness доказывает доставку Python→C# contract surface, но не заменяет успешный C# build и игровой smoke.
-- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет [`tools/check_planner_prompt_usability.py`](../../../tools/check_planner_prompt_usability.py); catalog-only size — другая величина.
+- Author получает self-contained catalog без retrieval/tool loop. Исторические оценки около 71k/83k символов при лимите 96k из прежнего аудита не являются текущими размерами или верхней границей. Текущий размер **компактного полного Author user payload** (без system text/provider envelope/schema), configured limit и headroom измеряет [`tools/checks/check_planner_prompt_usability.py`](../../../tools/checks/check_planner_prompt_usability.py); catalog-only size — другая величина.
 - Публичный каталог покрывает реализованные 73 primitive/controller/effect, а не всю потенциальную семантику Terraria/mod ecosystem.
 
 <a id="assessment"></a>

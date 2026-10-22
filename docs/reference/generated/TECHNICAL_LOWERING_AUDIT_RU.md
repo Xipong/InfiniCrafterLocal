@@ -1,6 +1,6 @@
 # TECHNICAL LOWERING AUDIT
 
-> Generated: [`tools/generate_low_level_runtime_docs.py`](../../../tools/generate_low_level_runtime_docs.py) из [technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; [refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).
+> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py) из [technical_lowering.py](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py). Не редактировать вручную; [refresh/check всех трёх outputs](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md#refresh).
 > Policy/owners: [Lowery](LOWERY_RU.md). Полные wire outputs каждого lowerer: [manifest](LOWERY_RU.md#lowering).
 
 Schema: `infini.technical-lowering-manifest.v1`.

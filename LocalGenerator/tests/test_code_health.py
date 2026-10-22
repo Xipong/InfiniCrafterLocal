@@ -9,9 +9,9 @@ import sys
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "tools"))
-import agentctl
-import check_code_health as health
+sys.path.insert(0, str(ROOT))
+from tools import agentctl
+from tools.checks import check_code_health as health
 
 
 def _long_function(statements: int, name: str = "work") -> str:

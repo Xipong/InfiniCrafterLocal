@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def gates():
     modules = []
     for name in ("check_project_hygiene", "check_csharp_contracts"):
-        spec = importlib.util.spec_from_file_location(name, ROOT / "tools" / (name + ".py"))
+        spec = importlib.util.spec_from_file_location(name, ROOT / "tools/checks" / (name + ".py"))
         assert spec is not None and spec.loader is not None
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -34,7 +34,7 @@ def python_sources(source):
     ('import os as system\nx = system.environ.get("INFINI_DIRECT")', "raw_environment_read"),
     ('from os import getenv as read_env\nx = read_env("INFINI_DIRECT")', "raw_environment_read"),
     ('BAD_NAME_PATTERNS = ()', "constant_owner"),
-    ('from tools.check_delivery_contract import build_report', "tooling_import"),
+    ('from tools.checks.check_delivery_contract import build_report', "tooling_import"),
 ])
 def test_python_lint_reports_invalid_source(gates, source, code):
     hygiene, _ = gates

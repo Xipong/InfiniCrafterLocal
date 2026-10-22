@@ -1,6 +1,6 @@
 # Parity примитивов Author ↔ Terraria/tModLoader
 
-> Generated: [`tools/generate_primitive_parity.py`](../../../tools/generate_primitive_parity.py). Не редактировать вручную; [refresh/check](#refresh).
+> Generated: [`tools/generate/generate_primitive_parity.py`](../../../tools/generate/generate_primitive_parity.py). Не редактировать вручную; [refresh/check](#refresh).
 > Sources: [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) — имена, единицы, диапазоны, wire и фазы; [primitive_loss_audit.py](../../../LocalGenerator/infini_local/qa/primitive_loss_audit.py) — C# executable-поля из AST. [Lowery](LOWERY_RU.md) — boundary/owners; [inventory](LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) — полный каталог.
 
 **Навигация:** [источник](#history) · [machine audit](#audit) · [equipment](#equipment) · [events/runtime](#events) · [граница расширения](#unsupported) · [extraUpdates units](#units) · [границы проверки](#limits) · [обновление](#refresh).
@@ -166,8 +166,8 @@ AST audit анализирует нынешние DTO и названные C# e
 Из корня репозитория, с Python окружения проекта. Без `--check` generator записывает **только этот Markdown**, не JSON, DTO или bounds:
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py
-PYTHONPATH=LocalGenerator python tools/generate_primitive_parity.py --check
+PYTHONPATH=LocalGenerator python tools/generate/generate_primitive_parity.py
+PYTHONPATH=LocalGenerator python tools/generate/generate_primitive_parity.py --check
 ```
 
 Generation/check исполняют все пять surface audits выше и завершаются ошибкой при loss; freshness доказывает совпадение projection с owners, а не игровой smoke. Affected regressions: [test_registry_vertical_contract.py](../../../LocalGenerator/tests/test_registry_vertical_contract.py), [test_registry_author_packet.py](../../../LocalGenerator/tests/test_registry_author_packet.py).

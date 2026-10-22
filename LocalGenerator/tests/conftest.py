@@ -42,7 +42,7 @@ def _stop_dependency_poor_collection() -> None:
     pytest.exit(
         "full test dependencies are unavailable: "
         + ", ".join(missing)
-        + "; run `python tools/validate_sandbox.py` instead",
+        + "; run `python tools/testing/validate_sandbox.py` instead",
         returncode=2,
     )
 

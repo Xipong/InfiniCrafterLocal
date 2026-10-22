@@ -9,7 +9,7 @@ from typing import Any, cast
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
-_REPLAY_PATH = Path(__file__).resolve().parents[2] / "tools" / "replay_generation_case.py"
+_REPLAY_PATH = Path(__file__).resolve().parents[2] / "tools" / "diagnostics" / "replay_generation_case.py"
 _SPEC = importlib.util.spec_from_file_location("infini_v5_replay_tool", _REPLAY_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
 _MODULE = importlib.util.module_from_spec(_SPEC)

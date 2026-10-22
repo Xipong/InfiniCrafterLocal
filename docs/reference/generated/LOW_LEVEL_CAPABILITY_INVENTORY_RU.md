@@ -1,6 +1,6 @@
 # Низкоуровневый capability inventory InfiniCrafterLocal
 
-> Generated: [`tools/generate_low_level_runtime_docs.py`](../../../tools/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).
+> Generated: [`tools/generate/generate_low_level_runtime_docs.py`](../../../tools/generate/generate_low_level_runtime_docs.py). Не редактировать вручную; [refresh/check](#refresh).
 > Sources: [capability_registry.py](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py) и [capability_library_audit.py](../../../LocalGenerator/infini_local/qa/capability_library_audit.py). [Lowery](LOWERY_RU.md) задаёт Author/Repair boundary и owners; [primitive parity](PRIMITIVE_PARITY_RU.md) — текущее Author ↔ C# сопоставление, единицы и исключения.
 
 Контракты: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v6` / `infini.runtime-program.wire.v3`.
@@ -71,7 +71,7 @@ Inventory: **73 public capabilities**, **7 entity kinds**, **4 inputs**, **5 bin
 
 ## Capability catalog
 
-Параметры: `type{enum}` или `type[min..max]`, затем units; `optional, omitted = value` — объявленный default. `required=false` само по себе не объявляет omission default; `multipleOf` — точный шаг, `pattern` — schema regex. `consumer=float32, neutral=value` требует, чтобы конечное ненейтральное число оставалось ненейтральным после хранения в float32; validation не округляет и не заменяет значение. Пропуски полного Author и Repair различаются: [boundary](LOWERY_RU.md#boundary). `omissionAllowedOnlyWhen` задаёт точные ветви, где пропуск не выбирает механику. Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](../PROJECTILE_AUTHOR_API_RU.md).
+Параметры: `type{enum}` или `type[min..max]`, затем units; `optional, omitted = value` — объявленный default. `required=false` само по себе не объявляет omission default; `multipleOf` — точный шаг, `pattern` — schema regex. `consumer=float32, neutral=value` требует, чтобы конечное ненейтральное число оставалось ненейтральным после хранения в float32; validation не округляет и не заменяет значение. Пропуски полного Author и Repair различаются: [boundary](LOWERY_RU.md#boundary). `omissionAllowedOnlyWhen` задаёт точные ветви, где пропуск не выбирает механику. Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](../projectiles/PROJECTILE_AUTHOR_API_RU.md).
 
 | capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | external reference |
 |---|---|---|---|---|---|---|---|---|---|
@@ -167,8 +167,8 @@ Whole-weapon macros, family route tables, `AttackSpec`, `runtimeFamily`, hidden 
 Из корня репозитория, с Python окружения проекта:
 
 ```bash
-PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py
-PYTHONPATH=LocalGenerator python tools/generate_low_level_runtime_docs.py --check
+PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py
+PYTHONPATH=LocalGenerator python tools/generate/generate_low_level_runtime_docs.py --check
 ```
 
 Без `--check` generator записывает ровно три Markdown-файла: этот inventory, [machine-readability audit](CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md) и [technical lowering audit](TECHNICAL_LOWERING_AUDIT_RU.md). Он не обновляет JSON/schema/registry. `--check` сравнивает все три projections без записи; [Lowery](LOWERY_RU.md#refresh) и [primitive parity](PRIMITIVE_PARITY_RU.md#refresh) имеют отдельные generators.

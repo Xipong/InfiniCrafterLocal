@@ -1,6 +1,6 @@
 """Contract: a stale config registry must say what drifted.
 
-``tools/config_registry.py --check`` used to print a single verdict::
+``tools/generate/config_registry.py --check`` used to print a single verdict::
 
     {"ok": false, "error": "config registry is stale", "path": "..."}
 
@@ -19,7 +19,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-REGISTRY_TOOL = ROOT / "tools" / "config_registry.py"
+REGISTRY_TOOL = ROOT / "tools" / "generate" / "config_registry.py"
 
 
 def _load_registry_module():

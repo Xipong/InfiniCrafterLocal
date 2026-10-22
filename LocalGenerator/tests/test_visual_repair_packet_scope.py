@@ -153,8 +153,8 @@ def test_actual_http_sender_preserves_calibration_and_size_dependencies(mode):
     import sys
     from pathlib import Path
     root = Path(__file__).resolve().parents[2]
-    sys.path.insert(0, str(root / "tools"))
-    from measure_llm_request_sizes import OfflineCapture, COHORT, ROUTES, dossier
+    sys.path.insert(0, str(root))
+    from tools.diagnostics.measure_llm_request_sizes import OfflineCapture, COHORT, ROUTES, dossier
     from test_generated_parent_exact_context import _accepted_appearance_parent
     parent = _accepted_appearance_parent()
     frozen_parent = copy.deepcopy(parent)

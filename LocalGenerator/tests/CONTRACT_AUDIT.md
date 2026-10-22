@@ -143,7 +143,7 @@ notice-throttling guarantees are retained rather than silently discarded.
 ## Reproduce and read the inventory
 
 `PYTHONPATH=LocalGenerator python -m pytest --collect-only -q` produces the case
-counts. Final acceptance uses `python tools/run_pytest_shards.py --shards 4` and
+counts. Final acceptance uses `python tools/testing/run_pytest_shards.py --shards 4` and
 existing CI native/static gates. Check execution results are recorded in the PR,
 not inferred from inventory. `read`, `wait`, `index` below are AST signal counts
 in the baseline (including legitimate data reads and fake sleeps).
@@ -335,6 +335,10 @@ in the baseline (including legitimate data reads and fake sleeps).
 ## Native harness inventory
 
 Risk tokens guide review; reflection/IL usage is not automatically brittle.
+
+Harness paths in the baseline table below identify the audited snapshot; current
+sources live under `tools/native/` with the same filenames. These historical
+signal counts are not a current validation result.
 
 | Baseline harness | Screen signals |
 |---|---|

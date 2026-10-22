@@ -443,7 +443,7 @@
           "default": {
             "expression": "_LOCAL_GEN / \"cache\""
           },
-          "file": "tools/replay_generation_case.py",
+          "file": "tools/diagnostics/replay_generation_case.py",
           "maximum": null,
           "minimum": null,
           "type": "path"
@@ -465,8 +465,8 @@
       "name": "INFINI_CACHE_DIR",
       "owners": [
         "LocalGenerator/infini_local/core/config_bootstrap.py",
-        "tools/measure_llm_request_sizes.py",
-        "tools/replay_generation_case.py"
+        "tools/diagnostics/measure_llm_request_sizes.py",
+        "tools/diagnostics/replay_generation_case.py"
       ],
       "secret": false,
       "type": "path",
@@ -2635,7 +2635,7 @@
       "name": "INFINI_LLM_REPLAY_RAW",
       "owners": [
         "LocalGenerator/infini_local/pipelines/llm_transport.py",
-        "tools/replay_generation_case.py"
+        "tools/diagnostics/replay_generation_case.py"
       ],
       "secret": false,
       "type": "string",
@@ -3765,7 +3765,7 @@
       "name": "INFINI_SDCPP_SERVER_AUTOSTART",
       "owners": [
         "LocalGenerator/infini_local/pipelines/pipeline_visual_config.py",
-        "tools/measure_llm_request_sizes.py"
+        "tools/diagnostics/measure_llm_request_sizes.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -4230,7 +4230,7 @@
       "name": "INFINI_SKIP_CONFIG_FILE",
       "owners": [
         "LocalGenerator/infini_local/core/env_utils.py",
-        "tools/measure_llm_request_sizes.py"
+        "tools/diagnostics/measure_llm_request_sizes.py"
       ],
       "secret": false,
       "type": "unknown",
@@ -4711,7 +4711,7 @@
       "name": "INFINI_TRACE_PROMPTS",
       "owners": [
         "LocalGenerator/infini_local/storage/trace_runtime.py",
-        "tools/replay_generation_case.py"
+        "tools/diagnostics/replay_generation_case.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -4736,7 +4736,7 @@
       "name": "INFINI_USE_LLM",
       "owners": [
         "LocalGenerator/infini_local/core/llm_config.py",
-        "tools/measure_llm_request_sizes.py"
+        "tools/diagnostics/measure_llm_request_sizes.py"
       ],
       "secret": false,
       "type": "boolean",
@@ -5298,8 +5298,8 @@
       "name": "INFINI_WORLD_RECIPES_DIR",
       "owners": [
         "LocalGenerator/infini_local/core/config_bootstrap.py",
-        "tools/measure_llm_request_sizes.py",
-        "tools/replay_generation_case.py"
+        "tools/diagnostics/measure_llm_request_sizes.py",
+        "tools/diagnostics/replay_generation_case.py"
       ],
       "secret": false,
       "type": "path",
@@ -5394,7 +5394,7 @@
   ],
   "errors": [],
   "fieldCount": 219,
-  "fingerprint": "eeb32d799dac8bee35a598c73777869e4aeb721d17af5b584c7a6d20f5093e65",
+  "fingerprint": "72e4af710da1f903fa0a5af019d6004e8a9afaa39ae2d90085f50066b62d9b96",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

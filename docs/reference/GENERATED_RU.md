@@ -4,11 +4,11 @@
 
 | Нужно проверить | Справочник | Генератор |
 |---|---|---|
-| Границы авторства модели и технических преобразований | [Lowery](generated/LOWERY_RU.md) | `tools/generate_lowery.py` |
-| Полный набор возможностей и параметров | [Каталог](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) | `tools/generate_low_level_runtime_docs.py` |
+| Границы авторства модели и технических преобразований | [Lowery](generated/LOWERY_RU.md) | `tools/generate/generate_lowery.py` |
+| Полный набор возможностей и параметров | [Каталог](generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) | `tools/generate/generate_low_level_runtime_docs.py` |
 | Проверку полноты и доступности каталога модели | [Аудит каталога](generated/CAPABILITY_LIBRARY_MACHINE_READABILITY_AUDIT_RU.md) | тот же |
 | Точный перевод авторского описания в исполняемый формат | [Аудит lowering](generated/TECHNICAL_LOWERING_AUDIT_RU.md) | тот же |
-| Соответствие возможностей Terraria/tModLoader | [Parity](generated/PRIMITIVE_PARITY_RU.md) | `tools/generate_primitive_parity.py` |
+| Соответствие возможностей Terraria/tModLoader | [Parity](generated/PRIMITIVE_PARITY_RU.md) | `tools/generate/generate_primitive_parity.py` |
 
 ## Обновление
 
@@ -23,13 +23,13 @@ python tools/validate_release.py --refresh runtime
 Для scoped docs/schema-only задачи без записи native generated bounds можно запускать producers отдельно:
 
 ```bash
-python tools/export_contract_schemas.py
-python tools/generate_primitive_parity.py
-python tools/generate_lowery.py
-python tools/generate_low_level_runtime_docs.py
-python tools/audit_targeted_repair.py --output contracts/targeted_repair_audit.generated.json
-python tools/audit_terraria_standardization.py --write
-python tools/config_registry.py
+python tools/generate/export_contract_schemas.py
+python tools/generate/generate_primitive_parity.py
+python tools/generate/generate_lowery.py
+python tools/generate/generate_low_level_runtime_docs.py
+python tools/checks/audit_targeted_repair.py --output contracts/targeted_repair_audit.generated.json
+python tools/checks/audit_terraria_standardization.py --write
+python tools/generate/config_registry.py
 python tools/build_documentation.py
 ```
 

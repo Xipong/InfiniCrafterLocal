@@ -25,22 +25,22 @@ include = [
   "LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py",
   "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
   "tools/agentctl.py",
-  "tools/check_code_health.py",
-  "tools/config_registry.py",
-  "tools/replay_generation_case.py",
-  "tools/mutation_contract_gate.py",
-  "tools/export_contract_schemas.py",
+  "tools/checks/check_code_health.py",
+  "tools/generate/config_registry.py",
+  "tools/diagnostics/replay_generation_case.py",
+  "tools/checks/mutation_contract_gate.py",
+  "tools/generate/export_contract_schemas.py",
   "tools/validate_release.py",
-  "tools/render_validation_report.py",
-  "tools/run_pytest_shards.py",
-  "tools/run_pyright.py",
-  "tools/check_tml_selftest_report.py",
+  "tools/diagnostics/render_validation_report.py",
+  "tools/testing/run_pytest_shards.py",
+  "tools/testing/run_pyright.py",
+  "tools/checks/check_tml_selftest_report.py",
 ]
 exclude = [
   "**/__pycache__",
   "LocalGenerator/cache",
 ]
-extraPaths = ["LocalGenerator"]
+extraPaths = [".", "LocalGenerator"]
 reportMissingTypeStubs = "none"
 reportUnknownArgumentType = "none"
 reportUnknownMemberType = "none"

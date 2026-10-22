@@ -16,6 +16,7 @@ import sys
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 AGENT_DIR = ROOT / ".agent"
 MANIFEST_PATH = AGENT_DIR / "manifest.json"
 RULES_PATH = AGENT_DIR / "impact_rules.json"
@@ -216,7 +217,7 @@ def _environment() -> dict[str, str]:
 
 
 def _run_check(name: str, command: list[str]) -> dict[str, Any]:
-    from validate_release import run_check
+    from tools.validate_release import run_check
     return run_check(name, command, root=ROOT, env=_environment())
 
 
@@ -276,7 +277,7 @@ def command_verify(args: argparse.Namespace) -> int:
         return 0
     checks = [_run_check(name, list(manifest["checks"][name])) for name in plan["checks"]]
     if plan["tests"]:
-        checks.append(_run_check("focused_pytest", ["python", "tools/run_focused_pytests.py", *plan["tests"]]))
+        checks.append(_run_check("focused_pytest", ["python", "tools/testing/run_focused_pytests.py", *plan["tests"]]))
     passed = bool(checks) and all(row["status"] == "passed" for row in checks)
     report = {
         "schema": "infini.agent-run-result.v3",

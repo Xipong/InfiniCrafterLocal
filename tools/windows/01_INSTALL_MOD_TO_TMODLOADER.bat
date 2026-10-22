@@ -5,9 +5,9 @@ pushd "%~dp0..\.."
 if errorlevel 1 exit /b 2
 where py >nul 2>nul
 if %ERRORLEVEL% EQU 0 (
-  py -3 tools\install_to_tmodloader_modsources.py
+  py -3 tools\build\install_to_tmodloader_modsources.py
 ) else (
-  python tools\install_to_tmodloader_modsources.py
+  python tools\build\install_to_tmodloader_modsources.py
 )
 
 set "RESULT=%ERRORLEVEL%"

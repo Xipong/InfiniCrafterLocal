@@ -49,10 +49,10 @@ C:\deps\Luminance\bin\Debug\net8.0\Luminance.dll
 
 ### Сборка с журналом
 
-[tools/build_tml_windows.bat](../../tools/build_tml_windows.bat) запускает PowerShell-обёртку. Ей можно передать `-Project`, `-Configuration`, `-LogDir`, `-InfiniExternalDepsRoot`, `-InfiniParticleLibraryDll`, `-InfiniLuminanceDll`. Пример:
+[tools/build/build_tml_windows.bat](../../tools/build/build_tml_windows.bat) запускает PowerShell-обёртку. Ей можно передать `-Project`, `-Configuration`, `-LogDir`, `-InfiniExternalDepsRoot`, `-InfiniParticleLibraryDll`, `-InfiniLuminanceDll`. Пример:
 
 ```powershell
-.\tools\build_tml_windows.bat -Configuration Release -InfiniParticleLibraryDll "C:\deps\ParticleLibrary.dll" -InfiniLuminanceDll "C:\deps\Luminance.dll"
+.\tools\build\build_tml_windows.bat -Configuration Release -InfiniParticleLibraryDll "C:\deps\ParticleLibrary.dll" -InfiniLuminanceDll "C:\deps\Luminance.dll"
 ```
 
 Код **77** означает отсутствие необходимой сборочной среды (`notRun`), а не успешную сборку. Если сборка действительно запущена и падает, изучи журнал; не скрывай ошибку отсутствием зависимостей.
@@ -70,7 +70,7 @@ C:\deps\Luminance\bin\Debug\net8.0\Luminance.dll
 ## Что проверять после сборки
 
 - [Тесты и их уровни](TESTING_RU.md): Python-контракты, headless native checks и игра — разные проверки.
-- [Архитектура](ARCHITECTURE_RU.md) и [границы модулей](MODULES_RU.md): кто владеет данными и действиями.
+- [Архитектура](architecture/ARCHITECTURE_RU.md) и [границы модулей](MODULES_RU.md): кто владеет данными и действиями.
 - [Диагностика игры](../user/DIAGNOSTICS_RU.md) и [команды кеша](../user/COMMANDS_RU.md#догрузка-и-кеш).
 
 PNG созданных предметов хранятся отдельно от встроенных ресурсов мода. Очистка runtime-кеша не должна удалять сохранённые рецепты и PNG. Крафт, отмена и возврат материалов принадлежат существующим серверным владельцам; сборочная правка не даёт права менять эти механики.

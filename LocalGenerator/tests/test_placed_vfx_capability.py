@@ -176,7 +176,7 @@ def test_exported_vfx_schema_has_real_opt_in_sample_not_empty_selector_domain():
     import importlib.util
     from pathlib import Path
     from infini_local.core.schema_validation import strict_schema_errors
-    path=Path(__file__).resolve().parents[2]/'tools/export_contract_schemas.py'
+    path=Path(__file__).resolve().parents[2]/'tools/generate/export_contract_schemas.py'
     spec=importlib.util.spec_from_file_location('placed_schema_export',path)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     schema=next(json.loads(text) for path,text in module.render().items() if path.name=='vfx_runtime_events.schema.json')

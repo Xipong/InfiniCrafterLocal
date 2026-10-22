@@ -21,7 +21,7 @@ def test_asset_transport_linked_source(tmp_path: Path) -> None:
         if os.environ.get("CI"):
             pytest.fail("Asset transport behavioral checks require the .NET 8 SDK in CI")
         pytest.skip(".NET SDK unavailable; asset transport execution is notRun")
-    project = ROOT / "tools" / "AssetTransportChecks" / "AssetTransportChecks.csproj"
+    project = ROOT / "tools" / "native" / "AssetTransportChecks" / "AssetTransportChecks.csproj"
     environment = {**os.environ, "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1"}
     output_dir = tmp_path / "bin"
     build = subprocess.run(

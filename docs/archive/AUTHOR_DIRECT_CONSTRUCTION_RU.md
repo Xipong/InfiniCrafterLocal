@@ -1,6 +1,6 @@
 # Прямое построение Author — исторический request-builder замер
 
-Текущие construction/diagnostic constraints принадлежат [Author contract](../reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#construction). Эта запись хранит измерение отдельного изменения, не current prompt size, latency или acceptance guarantee.
+Текущие construction/diagnostic constraints принадлежат [Author contract](../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md#construction). Эта запись хранит измерение отдельного изменения, не current prompt size, latency или acceptance guarantee.
 
 <a id="change"></a>
 ## Что было изменено

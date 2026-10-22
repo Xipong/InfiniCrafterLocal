@@ -8,13 +8,13 @@
         "LocalGenerator/infini_local/pipelines/llm_authoring_*.py",
         "LocalGenerator/infini_local/pipelines/author_item_*.py",
         "contracts/schemas/runtime_program_*.json",
-        "tools/audit_capability_library.py",
-        "tools/check_delivery_contract.py",
-        "tools/mutation_contract_gate.py",
-        "tools/check_planner_prompt_usability.py",
+        "tools/checks/audit_capability_library.py",
+        "tools/checks/check_delivery_contract.py",
+        "tools/checks/mutation_contract_gate.py",
+        "tools/checks/check_planner_prompt_usability.py",
         "LocalGenerator/infini_local/core/runtime_authoring/terraria_vocabulary.py",
         "docs/reference/generated/LOWERY_RU.md",
-        "tools/audit_terraria_standardization.py",
+        "tools/checks/audit_terraria_standardization.py",
         "LocalGenerator/infini_local/pipelines/gameplay_stage.py"
       ],
       "checks": [
@@ -22,12 +22,12 @@
         "delivery_contract"
       ],
       "context": [
-        "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md",
+        "docs/reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md",
         "docs/development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md",
-        "docs/development/TECHNICAL_LOWERING_POLICY_RU.md",
+        "docs/development/architecture/TECHNICAL_LOWERING_POLICY_RU.md",
         "LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py",
         "docs/reference/generated/LOWERY_RU.md",
-        "docs/reference/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md"
+        "docs/reference/terraria/TERRARIA_TMODLOADER_STANDARDIZATION_RU.md"
       ],
       "area": "runtime",
       "tests": [
@@ -50,8 +50,8 @@
       "patterns": [
         "ModSources/**/*.cs",
         "ModSources/**/*.csproj",
-        "tools/EngineRuntimeChecks*.cs",
-        "tools/EngineRuntimeChecks.csproj",
+        "tools/native/EngineRuntimeChecks*.cs",
+        "tools/native/EngineRuntimeChecks.csproj",
         "Directory.Build.props",
         "global.json"
       ],
@@ -85,8 +85,8 @@
         "schema_check"
       ],
       "context": [
-        "docs/development/THREE_STAGE_LLM_PIPELINE_RU.md",
-        "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
+        "docs/development/pipeline/THREE_STAGE_LLM_PIPELINE_RU.md",
+        "docs/reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
       ],
       "area": "visual",
       "tests": [
@@ -111,8 +111,8 @@
       ],
       "requiresBuild": false,
       "context": [
-        "docs/development/ARCHITECTURE_RU.md",
-        "docs/reference/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
+        "docs/development/architecture/ARCHITECTURE_RU.md",
+        "docs/reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md"
       ],
       "area": "storage",
       "tests": [
@@ -138,7 +138,7 @@
         "project_hygiene"
       ],
       "context": [
-        "docs/development/THREE_STAGE_LLM_PIPELINE_RU.md"
+        "docs/development/pipeline/THREE_STAGE_LLM_PIPELINE_RU.md"
       ],
       "area": "transport",
       "tests": [
@@ -186,14 +186,15 @@
       "area": "tooling",
       "patterns": [
         "tools/agentctl.py",
-        "tools/run_changed_pytests.py",
-        "tools/run_focused_pytests.py",
-        "tools/run_pytest_shards.py",
-        "tools/validate_release*",
-        "tools/render_validation_report.py",
+        "tools/testing/run_changed_pytests.py",
+        "tools/testing/run_focused_pytests.py",
+        "tools/testing/run_pytest_shards.py",
+        "tools/validate_release.py",
+        "tools/build/validate_release*",
+        "tools/diagnostics/render_validation_report.py",
         ".agent/**",
         ".github/workflows/ci.yml",
-        "tools/check_code_health.py"
+        "tools/checks/check_code_health.py"
       ],
       "checks": [
         "project_hygiene"
@@ -213,6 +214,7 @@
       "area": "docs",
       "patterns": [
         "docs/**",
+        "tools/README_RU.md",
         "AGENTS.md",
         "**/AGENTS.md",
         "README.md",
@@ -232,15 +234,15 @@
       "id": "tml-build-workflow",
       "area": "tooling",
       "patterns": [
-        "tools/test_tml_ci.py",
-        "tools/build_tml_windows.*",
-        "tools/parse_tml_build_log.py"
+        "tools/testing/test_tml_ci.py",
+        "tools/build/build_tml_windows.*",
+        "tools/build/parse_tml_build_log.py"
       ],
       "checks": [
         "tml_ci_regression"
       ],
       "entrypoints": [
-        "tools/test_tml_ci.py"
+        "tools/testing/test_tml_ci.py"
       ],
       "context": [
         "docs/development/BUILD_RU.md"
