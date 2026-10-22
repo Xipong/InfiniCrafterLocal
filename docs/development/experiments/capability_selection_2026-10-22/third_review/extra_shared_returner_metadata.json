@@ -1,0 +1,53 @@
+{
+  "kind": "manual_counterexample_not_author_trial",
+  "source": "docs/development/experiments/capability_selection_2026-10-22/followup/outputs/7cab69cba728.json",
+  "sourceSha256": "37729e2bfd04a92f829760b646f9aff8fa93f45b3aabc342e9734c44dbf2ba9a",
+  "canonicalValidation": {
+    "schema": "infini.runtime-program-validation.v1",
+    "ok": true,
+    "errors": [],
+    "stats": {
+      "entities": 4,
+      "bindings": 2,
+      "calls": 24,
+      "eventSpawnBudget": 1,
+      "spawnGraphDepth": 0,
+      "capabilitiesUsed": [
+        "apply_generated_buff_on_use",
+        "configure_item_stats",
+        "configure_item_use",
+        "configure_spawn",
+        "configure_tool",
+        "move_boomerang",
+        "move_straight",
+        "refresh_generated_effect_group_while_held",
+        "set_projectile_collision",
+        "set_projectile_damage",
+        "set_projectile_hitbox",
+        "set_projectile_lifetime",
+        "spawn_entity_on_event"
+      ],
+      "primaryEntityId": "pick_body",
+      "registryDrivenChecks": {
+        "typedReferences": 3,
+        "requirements": 69,
+        "exclusiveGroups": [
+          "ammo_role",
+          "controller",
+          "item_mobility",
+          "movement",
+          "placeable"
+        ]
+      }
+    }
+  },
+  "compiled": true,
+  "functionalChecks": {
+    "native_primary_pick": true,
+    "primary_straight_damage": true,
+    "isolated_alternate_returner": true,
+    "held_ore_regeneration": true
+  },
+  "semanticViolation": "item_body.on_use shared by primary and alternate spawns extra_shared_returner with move_boomerang, so primary launches a returning projectile although the scorer reports isolated_alternate_returner=true.",
+  "mechanism": "Scorer forbids only the particular direct alternate returning root IDs in primary reachability, not every returning-behavior entity."
+}

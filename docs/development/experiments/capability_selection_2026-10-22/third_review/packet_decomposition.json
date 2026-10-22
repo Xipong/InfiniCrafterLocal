@@ -1,0 +1,65 @@
+{
+  "note": "Offline measurement only, not an Author trial. All-index candidate keeps complete provider schema externally but removes detailed capability cards; semantic equivalence and quality not tested. No selector/intent.",
+  "rows": [
+    {
+      "case": "wand",
+      "baseline": 49822,
+      "fullIndex": 27471,
+      "fullIndexCount": 73,
+      "sections": {
+        "priorityHeader": 312,
+        "runtimeProgramInvariants": 261,
+        "runtimeCapabilityContract": 39377,
+        "requiredJsonShape": 1518,
+        "diagnosticReport": 46,
+        "recipeKey": 16,
+        "parents": 4564,
+        "balanceCorridor": 184,
+        "sourceWireUnits": 3455,
+        "experimentBrief": 57
+      },
+      "catalogueFull": 31812,
+      "index": 9415
+    },
+    {
+      "case": "musket",
+      "baseline": 47898,
+      "fullIndex": 25547,
+      "fullIndexCount": 73,
+      "sections": {
+        "priorityHeader": 312,
+        "runtimeProgramInvariants": 261,
+        "runtimeCapabilityContract": 39377,
+        "requiredJsonShape": 1518,
+        "diagnosticReport": 46,
+        "recipeKey": 15,
+        "parents": 3129,
+        "balanceCorridor": 166,
+        "sourceWireUnits": 2982,
+        "experimentBrief": 60
+      },
+      "catalogueFull": 31812,
+      "index": 9415
+    },
+    {
+      "case": "tool",
+      "baseline": 42145,
+      "fullIndex": 19794,
+      "fullIndexCount": 73,
+      "sections": {
+        "priorityHeader": 312,
+        "runtimeProgramInvariants": 261,
+        "runtimeCapabilityContract": 39377,
+        "requiredJsonShape": 1518,
+        "diagnosticReport": 46,
+        "recipeKey": 5,
+        "parents": 65,
+        "balanceCorridor": 163,
+        "sourceWireUnits": 240,
+        "experimentBrief": 127
+      },
+      "catalogueFull": 31812,
+      "index": 9415
+    }
+  ]
+}

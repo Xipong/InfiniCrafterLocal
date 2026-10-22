@@ -1,0 +1,23 @@
+{
+  "note": "Manually mutated witness, NOT a model answer or aggregate result. Demonstrates a scorer false positive. Frozen outputs remain unchanged. No game execution.",
+  "sourceOutput": "docs/development/experiments/capability_selection_2026-10-22/followup/outputs/e7b16819ae2a.json",
+  "mutation": "Set all move_gravity_arc.accelerationYBlocksPerSecondSquared to 0",
+  "valid": true,
+  "functions": {
+    "native_star_ammo": true,
+    "primary_gravity_damage": true,
+    "reachable_hit_homing_child": true
+  },
+  "movementWire": [
+    {
+      "entity": "falling_star_round",
+      "movement": {
+        "name": "move_gravity_arc",
+        "code": 2,
+        "params": {
+          "gravityPerTick": 0.0
+        }
+      }
+    }
+  ]
+}

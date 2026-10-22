@@ -1,0 +1,92 @@
+{
+  "kind": "offline_read_only_cost_cache_audit",
+  "providerCalls": 0,
+  "productionChanged": false,
+  "assumptions": [
+    "All token counts use o200k_base compact JSON proxy, not provider usage.",
+    "Counterfactual selector static split comprises system and static packet fields; context and JSON joining remainder are dynamic. No production selector request builder/cache boundary exists.",
+    "Warm scenario assumes cached input multiplier 0.1 for both models; Author developer documentation and selector static are fully warm per their exact selected set. This is not an actual provider tariff or cache hit measurement.",
+    "Fixed Author response schema is identical in both branches and cancels in the absolute author-saving difference whether or not it is cached.",
+    "Selector output, reasoning, retries, provider framing and external selector response_format are omitted."
+  ],
+  "authorSegments": {
+    "baseline": {
+      "developerMean": 41532,
+      "dynamicUserMean": 5090.666666666667,
+      "system": 108,
+      "contentPlusResponseFormatMean": 68559.66666666667,
+      "commonDeveloperPrefix": 41532
+    },
+    "groups": {
+      "developerMean": 32316.333333333332,
+      "dynamicUserMean": 5163,
+      "system": 108,
+      "contentPlusResponseFormatMean": 59416.333333333336,
+      "commonDeveloperPrefix": 9664
+    },
+    "capabilities": {
+      "developerMean": 26467.333333333332,
+      "dynamicUserMean": 5163.333333333333,
+      "system": 108,
+      "contentPlusResponseFormatMean": 53567.666666666664,
+      "commonDeveloperPrefix": 9373
+    }
+  },
+  "selectorSegments": {
+    "groups": {
+      "static": 12794,
+      "dynamicPlusJoiningRemainder": 5091.666666666668,
+      "total": 17885.666666666668,
+      "warmEquivalentInput": 6371.0666666666675
+    },
+    "capabilities": {
+      "static": 13136,
+      "dynamicPlusJoiningRemainder": 5091.666666666668,
+      "total": 18227.666666666668,
+      "warmEquivalentInput": 6405.266666666668
+    }
+  },
+  "breakEvenSelectorToAuthorUncachedInputPriceRatio": {
+    "definition": "P_selector/P_author < author_equivalent_input_saving / selector_equivalent_input",
+    "groups": {
+      "bothCold": 0.5112100937435937,
+      "authorWarmSelectorCold": 0.04748122332594071,
+      "bothStaticWarm": 0.13329531423309549,
+      "authorWarmEquivalentSaving": 849.2333333333336
+    },
+    "capabilities": {
+      "bothCold": 0.8224859645593698,
+      "authorWarmSelectorCold": 0.07866064407585574,
+      "bothStaticWarm": 0.2238470425379125,
+      "authorWarmEquivalentSaving": 1433.8000000000065
+    }
+  },
+  "cacheInterpretation": [
+    "Cross-case common prefix is not the maximum cacheable prefix for a repeated selected set; repeated sets can reuse their whole developer segment.",
+    "1/3/4 derived key counts were computed through context=None ordinary-provider identity, not actual backend cache behaviour.",
+    "OpenAI Codex identity uses canonical projected wire; _cache_wire_options transmits keys/breakpoints only on recognized endpoint/model routes.",
+    "prompt_cache_key is a routing hint, not proof of hits or misses."
+  ],
+  "providerSchemaAnnotations": {
+    "schemaDescriptionAnnotations": 0,
+    "unitAnnotations": 0,
+    "xInfiniAnnotations": 0,
+    "note": "The single recursive key named description is a realization.description output property, not an annotation.",
+    "numericMinimumNodes": 268,
+    "numericMaximumNodes": 268,
+    "enumNodes": 58,
+    "constNodes": 127,
+    "requiredNodes": 206,
+    "implication": "Full provider schema retains grammar/ranges but deliberately omits descriptions and x-infini-* under omit_annotations=True. It cannot replace param meanings, complete units or cross-call requirements from omitted detailed cards."
+  },
+  "sources": [
+    "tools/experiment_capability_selection_followup.py::measure_wire",
+    "LocalGenerator/infini_local/core/llm_prompt_cache.py::with_instruction_segments",
+    "LocalGenerator/infini_local/pipelines/llm_authoring_pipeline.py::_AUTHOR_CACHE_PREFIX_KEYS",
+    "LocalGenerator/infini_local/pipelines/llm_provider_wire.py::_prompt_cache_identity",
+    "LocalGenerator/infini_local/pipelines/llm_provider_wire.py::_cache_route",
+    "LocalGenerator/infini_local/pipelines/llm_provider_wire.py::_cache_wire_options",
+    "LocalGenerator/infini_local/pipelines/author_item_contract.py::_provider_strict_projection",
+    "LocalGenerator/infini_local/pipelines/author_item_contract.py::author_item_provider_response_schema"
+  ]
+}
