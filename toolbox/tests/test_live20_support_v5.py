@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 import pytest
 
-LIVE_GENERATION = Path(__file__).resolve().parents[1] / "live-generation"
+LIVE_GENERATION = Path(__file__).resolve().parents[1] / "live"
 PROJECTS_ROOT = Path(__file__).resolve().parents[2]
 PROJECT = (
     PROJECTS_ROOT
@@ -25,7 +25,7 @@ if str(LOCAL_GENERATOR) not in sys.path:
 if str(LIVE_GENERATION) not in sys.path:
     sys.path.insert(0, str(LIVE_GENERATION))
 
-from live20_support_v5 import (  # noqa: E402  # pyright: ignore[reportMissingImports]
+from toolbox.live.support import (  # noqa: E402  # pyright: ignore[reportMissingImports]
     FROZEN_LLM_STAGES,
     GlobalStageAccounting,
     INITIAL_AUTHOR,
@@ -133,9 +133,9 @@ def test_response_format_type_is_read_from_each_logical_payload() -> None:
 def test_real_campaign_freeze_observes_provider_reasoning_forms(payload: dict[str, Any], accepted: bool) -> None:
     import ast
     from argparse import Namespace
-    from live20_support_v5 import expected_stage_max_tokens  # pyright: ignore[reportMissingImports]
+    from toolbox.live.support import expected_stage_max_tokens  # pyright: ignore[reportMissingImports]
 
-    source = (LIVE_GENERATION / "generate_20_items_without_images.py").read_text()
+    source = (LIVE_GENERATION / "runner.py").read_text()
     function = next(node for node in ast.parse(source).body
                     if isinstance(node, ast.FunctionDef) and node.name == "assert_frozen_logical_settings")
     namespace: dict[str, Any] = dict(args=Namespace(expected_temperature=None, expected_repair_temperature=None,
@@ -151,6 +151,12 @@ def test_real_campaign_freeze_observes_provider_reasoning_forms(payload: dict[st
     else:
         with pytest.raises(RuntimeError, match="reasoning effort"):
             check(payload, stage=INITIAL_AUTHOR)
+
+
+def test_retry_recovered_case_is_not_campaign_first_author_success() -> None:
+    from toolbox.live.support import is_first_author_success
+    assert not is_first_author_success(initial_calls=1, repair_calls=0, case_transport_retries=1)
+    assert is_first_author_success(initial_calls=1, repair_calls=0, case_transport_retries=0)
 
 
 def test_failed_logical_call_hidden_retry_is_caught_by_physical_http_overhead() -> None:

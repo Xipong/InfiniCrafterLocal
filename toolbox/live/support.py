@@ -9,10 +9,6 @@ import threading
 import time
 from typing import Any, TypeVar, cast
 
-from infini_local.qa.live_no_image_fixture import (
-    hydrate_no_image_fixture_assets,
-    write_no_image_fixture_png,
-)
 
 INITIAL_AUTHOR = "initial_author"
 SCOPED_REPAIR = "scoped_repair"
@@ -36,16 +32,7 @@ _REPAIR_WIRE_STAGE = "author_repair"
 _STAGE_KEY = "_infini_stage"
 
 
-def select_case_routes(
-    routes: Iterable[tuple[str, str, str]], selected_ids: set[str],
-) -> list[tuple[str, str, str]]:
-    """Filter before resolving parent dumps; unused campaign extras are irrelevant."""
-    rows = list(routes)
-    unknown = selected_ids - {row[0] for row in rows}
-    if unknown:
-        raise ValueError(f"unknown case IDs: {', '.join(sorted(unknown))}")
-    return [row for row in rows if not selected_ids or row[0] in selected_ids]
-
+from toolbox.live.panels import select_case_routes  # noqa: F401
 
 
 def expected_stage_max_tokens(
@@ -252,8 +239,8 @@ def author_stage(payload: dict[str, Any]) -> str:
     return NON_AUTHOR
 
 
-def is_first_author_success(*, initial_calls: int, repair_calls: int) -> bool:
-    return initial_calls == 1 and repair_calls == 0
+def is_first_author_success(*, initial_calls: int, repair_calls: int, case_transport_retries: int = 0) -> bool:
+    return initial_calls == 1 and repair_calls == 0 and case_transport_retries == 0
 
 
 def expected_stage_temperature(
@@ -274,6 +261,8 @@ def expected_stage_temperature(
 
 def response_format_type(payload: dict[str, Any]) -> str:
     value = payload.get("response_format")
+    if value is None and isinstance(payload.get("text"), dict):
+        value = payload["text"].get("format")
     if isinstance(value, dict):
         return str(value.get("type") or "").strip()
     return str(value or "").strip()
@@ -454,6 +443,4 @@ __all__ = [
     "case_accounting_scope",
     "current_case_accounting",
     "run_parallel_crafts",
-    "write_no_image_fixture_png",
-    "hydrate_no_image_fixture_assets",
 ]

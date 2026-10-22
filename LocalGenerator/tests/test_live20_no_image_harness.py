@@ -28,7 +28,7 @@ def _campaign_observers(fixture):
     from infini_local.pipelines import combine_pipeline
     from infini_local.qa import live_no_image_fixture
 
-    harness = Path(__file__).resolve().parents[2] / "toolbox/live-generation/generate_20_items_without_images.py"
+    harness = Path(__file__).resolve().parents[2] / "toolbox/live/runner.py"
     nodes = []
     for node in ast.parse(harness.read_text(encoding="utf-8")).body:
         if isinstance(node, ast.ImportFrom) and node.module == "infini_local.qa.live_no_image_fixture":
@@ -72,7 +72,7 @@ def test_campaign_fixture_uses_canonical_serving_root(tmp_path, monkeypatch, out
 
     # Execute the actual campaign fixture owner without argparse, config loading
     # or inference. A helper-only check would miss an OUT-local fixture again.
-    harness = Path(__file__).resolve().parents[2] / "toolbox/live-generation/generate_20_items_without_images.py"
+    harness = Path(__file__).resolve().parents[2] / "toolbox/live/runner.py"
     nodes: list[ast.stmt] = [
         node for node in ast.parse(harness.read_text(encoding="utf-8")).body
         if (isinstance(node, ast.ImportFrom) and node.module == "infini_local.core.config_bootstrap")
