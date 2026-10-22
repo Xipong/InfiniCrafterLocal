@@ -1,10 +1,12 @@
 # Ограничения каталога и найденные пробелы контрактов
 
-Проверено 22 октября 2026 года на `57c58d50504a7c69712e5843fa392b9a39800537`, каталог из 73 capabilities. Основание: эксперимент с двумя вариантами выбора документации, 12 исходных и 30 дополнительных первых ответов GPT-6 Luna, штатный Python-валидатор и компилятор, чтение C#-исполнителя. Terraria не запускалась. Предложенные изменения ниже ещё не реализованы.
+Повторно проверено 22 октября 2026 года на текущем main `c2899c79fe990583f4be8001721b6ba2f3a438c9`, каталог из 73 capabilities. Объединены прежние 42 первых ответа GPT-6 Luna, повторное исполнение validator/compiler, восстановленный исторический Live10 и новый аудит исходных фактов/C# consumer. Проверенные runtime-файлы совпадают с прежней базой `57c58d5`; все шесть исходных findings перепроверены. Предложенные доработки не реализованы. Игровой smoke новых предметов не выполнялся. **PR #138 остаётся HOLD.**
 
 ## 1. Валидная комбинация может содержать неисполняемое движение
 
 **Тип:** пробел проверки композиции и ограничение исполнителя. **Приоритет: высокий.**
+
+Карточка `target_and_fire` уже прямо описывает stationary entity. Поэтому речь о допустимой, но неисполняемой добавке движения, а не о полностью отсутствующем объяснении неподвижности.
 
 Пример: `temporary_helper` с `move_orbit` и `target_and_fire` на одной сущности. В эксперименте JSON проходит `validate_runtime_program` и компиляцию, но орбитальное движение не исполняется.
 
@@ -70,6 +72,8 @@
 
 Доказательство: [baseline/tool](experiments/capability_selection_2026-10-22/outputs/baseline/tool.json), [baseline/musket](experiments/capability_selection_2026-10-22/outputs/baseline/musket.json), [точные ошибки](experiments/capability_selection_2026-10-22/results.json).
 
+При provider `json_schema` объявленные nullable optional поля сначала декодируются штатным `project_provider_author_item_to_local`: `null` может означать отсутствие. Нельзя считать сырой nullable transport невалидной gameplay-композицией до этой projection. Неизвестные/обязательные null и элементы массивов это правило не разрешает.
+
 ## 6. `live_parent` переносит величину урона, но не включает урон дочерней сущности
 
 **Тип:** скрытая предпосылка композиции и пробел model-facing объяснения. **Приоритет: высокий.**
@@ -94,3 +98,69 @@
 Полные результаты и оговорки: [отчёт эксперимента](experiments/capability_selection_2026-10-22/README.md), [разбор функций](experiments/capability_selection_2026-10-22/functional_review.json).
 
 Повторная проверка и актуальный статус **HOLD**: [отчёт продолжения](experiments/capability_selection_2026-10-22/followup/README.md). Ошибки обязательных полей из пункта 5 наблюдались без provider-constrained decoding; их частоту нельзя напрямую переносить на production JSON-schema режим.
+
+
+## 7. Generic helper не даёт полную native minion lifecycle
+
+**Тип:** отсутствующая native возможность. **Пример Live10:** SpiderStaff + NimbusRod.
+
+Каталог позволяет создать самостоятельного атакующего помощника, настроить summon damage, homing, события и ограничения числа копий. Но в проверенном API нет регистрации `Projectile.minion` и `Projectile.minionSlots` для такой сущности. `configure_accessory.minionSlotsBonus` увеличивает вместимость игрока, а не превращает helper в minion. Нельзя считать имя spider, summon-class или `temporary_helper` доказательством native upkeep/slot semantics.
+
+При этом **native sentry поддерживается** через `set_projectile_sentry.enabled=true` — это нужно проверять в QueenSpiderStaff, не списывать все summons в неподдерживаемые. Обход сейчас — честно описанный generic боевой helper; доработка minion-регистрации требует отдельного полного vertical slice, включая native dismissal/slots/lifecycle.
+
+## 8. Native ammo consumer и самостоятельный ammo item несовместимы на одном теле
+
+**Тип:** явное ограничение композиции. **Пример Live10:** DaedalusStormbow + HolyArrow.
+
+`configure_weapon_ammo` и `configure_vanilla_ammo_item` конфликтуют в `exclusiveGroup=ammo_role`. Синтетическая попытка совместить их на одном `item_body` действительно отклонена текущим validator с `exclusive_component_conflict`. Это не ограничение selector и не недостаток discovery index.
+
+Сейчас можно сохранить bow, реально потребляющий стрелы, и явно создать hit-triggered звёзды; либо сделать самостоятельный native ammunition item. Сохранить обе native роли в одном generated item этим API нельзя. Вдобавок native ammo consumption не копирует AI/эффекты выбранного боеприпаса: hit-star behavior требует собственных событий, детей, движения и включённого damage.
+
+## 9. Parent dump не содержит всех данных для точного восстановления эффектов
+
+**Тип:** ограничение исходного контекста, отдельно от runtime-каталога.
+
+ShadowFlameKnife tooltip сообщает on-hit flame, GoldenShower — снижение защиты, но в точном Live10 dump `buffType=0` и отсутствуют inflicted BuffIDs дочерней projectile AI. `apply_status_on_event` требует точный загруженный `buffId`; Author запрещено угадывать tile/wall/buff IDs. Угаданный числовой ID может пройти форму JSON и всё равно не быть обоснованным переносом функции.
+
+Это означает **source-blocked exact status**, а не автоматическую ошибку reduced каталога. Generic armor penetration не тождествен Ichor debuff на цели. Доработка — расширить точный source dossier hit-status/child-AI фактами либо дать отдельно проверенную, одинаковую для всех arms vocabulary. Не брать догадку модели за источник истины.
+
+Точная vanilla AI также не наследуется из `aiStyle` автоматически. `move_yoyo_hover` обеспечивает cursor-follow + return on release, а не полный клон Magic Missile. Для MeteorStaff локализованный tooltip буквально «Показывает метеоры»; направление, дождевую цепочку и происхождение каждой дочерней сущности нельзя доказать одним этим текстом.
+
+## 10. Material identity не переносится автоматически во все native recipes
+
+**Тип:** граница model-facing интерфейса; не игровой exhaustive-тест всех рецептов.
+
+`material=true` у CrystalShard или SoulofLight не даёт generated item той же native ingredient identity. В исследованном каталоге нет capability, объявляющей универсальную подстановку исходного item type в vanilla recipes. Нельзя обещать её из названия или описания.
+
+Это отличается от **нативного размещения**: CrystalShard имеет `createTile=129, placeStyle=0`; OrichalcumAnvil — `tileId=134, placeStyle=1`. Exact placement + исполняемый `place_item` binding сохраняют native tile interaction/station semantics по source/code, хотя здесь без game smoke. Soul of Light не заявляет наблюдаемую светимость: новый placed light допустим как авторское добавление, а не обязательная унаследованная функция.
+
+## 11. Конечные budgets ограничивают граф и длительные дочерние эффекты
+
+**Тип:** объявленные инженерные границы, не обнаруженная ошибка.
+
+Текущий каталог задаёт максимум **12 entities, 8 bindings, 48 calls, child depth 3, 32 event spawns per activation**. Наличие периодического события и положительного интервала не доказывает бесконечный дождь: проверять lifetime, delay и общий spawn budget нужно вместе. Контроллерные volley/count и spawn.count имеют разные смыслы; нельзя складывать их только на глаз по именам.
+
+Доработка при необходимости — сделать расход/остаток бюджета заметным в Author/диагностике. Нельзя объявлять runtime-функцию сохранённой лишь потому, что её capability присутствует в calls.
+
+## 12. Базовые mana/ammo costs общие для item, а не произвольные per-input цены
+
+**Тип:** объявленная область действия контрактов. **Примеры:** Night’s Edge + Magic Missile, Star Cannon + Meteor Staff.
+
+`configure_item_stats.manaCost` задаёт единый Item.mana: native payment относится к старту use animation, а не к каждому отдельному projectile. `configure_weapon_ammo` требует native ammo для каждого активного `spawn_entity` данного item. Две разные bindings сами по себе не создают две независимые таблицы расхода ресурсов.
+
+Поэтому формулировка «основной выстрел тратит только звёзды, альтернативный — только ману» должна подтверждаться конкретной исполняемой композицией, а не намерением в prose. Некоторые контроллеры имеют явно объявленные дополнительные mana payments; это отдельные ограниченные контракты, не универсальная per-binding цена. Нельзя приписывать им отсутствующий общий cost API или считать смешанные resource semantics автоматически точным сохранением обеих исходных экономик.
+
+## Что Live10 подтвердил как доступное
+
+- **FrostsparkBoots + ObsidianShield:** equipped `moveSpeedBonusPercent`, native sprint floor `accRunSpeedBlocksPerSecond`, `rocketBoots`, `iceSkate`, `noKnockback`, `fireWalk`, `defensePoints`. Все существенные наблюдаемые функции выразимы. Jump bonus не заменяет flight; lava immunity не заменяет hot-block immunity.
+- **TitaniumPickaxe + MechanicalLens:** native mining + equipped `wireVision` могут сосуществовать. Ore detection не заменяет wire vision; equipped не равно held/inventory scope.
+- **CrystalShard:** independent native placement не должно исчезнуть за декоративными кристальными снарядами.
+- **OrichalcumAnvil:** точный native tile/style сохраняет станцию; Soul of Light может дать дополнительный авторский мотив, но не подтверждает native свет.
+
+## Значение для роутинга и следующий порядок доработок
+
+Первый приоритет — убрать расхождения prose/requirements и явно объяснить damage gate, подавление движения и event scope. Затем расширять source dossier там, где он не даёт точных фактов. Новые runtime-возможности minion/held-defense/совместимых ammo roles требуют самостоятельного дизайна; не добавлять их скрытым host fallback ради успешного benchmark.
+
+73/73 discoverable IDs и полная JSON schema сохраняют форму/доступность, но не все значения единиц, ограничения совместимости и способы активации. `selected_only` не является доказанно lossless. Новый Compact full сохраняет все сведения обратимым кодированием; сохранение информации не доказывает одинаковую понятность модели.
+
+Подробные новые результаты, matched controls, экономика и оговорки: [сводный отчёт Live10](experiments/capability_selection_2026-10-22/LIVE10_CONSOLIDATED_RU.md). В evidence bundle сохранены повторные witnesses, точные source hashes, frozen первые ответы и независимые reviews. Отдельно проверенный CI текущего runtime содержит 383 успешных native CPU checks; `tml_runtime_selftest=notRun`, поэтому это не игровой прогон новых предметов.
