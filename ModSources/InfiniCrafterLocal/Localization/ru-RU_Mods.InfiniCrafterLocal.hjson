@@ -33,6 +33,7 @@ UseFeedback: {
 
 
 		RecipeJournal: {
+	SearchEditing: "Ctrl+Вверх/Вниз: история поиска · Ctrl+Backspace: убрать последнее условие · Ctrl+L: очистить · Enter: запомнить и перейти к просмотру"
 	KeyboardBrowse: "Стрелки: выбор · PgUp/PgDn: страница · Home/End: начало/конец · Пробел: избранное · Ctrl+Пробел: выделение · Tab: разделы · Backspace: назад"
 	BatchHint: "Ctrl + щелчок — выделение; прокрутка — другие действия."
 	BatchCollection: "Назначить коллекцию выбранным"

@@ -33,6 +33,7 @@ UseFeedback: {
 
 
 		RecipeJournal: {
+	SearchEditing: "Ctrl+Up/Down: recent searches · Ctrl+Backspace: remove last term · Ctrl+L: clear · Enter: remember and browse"
 	KeyboardBrowse: "Arrows: select · PgUp/PgDn: page · Home/End: first/last · Space: favorite · Ctrl+Space: batch select · Tab: workspaces · Backspace: previous item"
 	BatchHint: "Ctrl-click grid entries to select; scroll for more actions."
 	BatchCollection: "Apply this collection to selected"

@@ -44,6 +44,7 @@ public sealed partial class RecipeJournalUISystem
             if (Button(sb, new Rectangle(area.X, area.Y, area.Width, 26), Text("Collection" + collection), click, cursor))
                 owner.SetJournalCollection(data.Id, (collection + 1) % 5);
             var box = new Rectangle(area.X, area.Y + 34, area.Width, Math.Min(100, Math.Max(0, area.Height - 65)));
+            if (box.Width < 40 || box.Height < 28) { SetNoteFocus(false); return true; }
             Chassis(sb, box, _noteFocus ? Panel : Inset);
             if (click) SetNoteFocus(box.Contains(cursor.ToPoint()));
             string note = owner.JournalNote(data.Id);

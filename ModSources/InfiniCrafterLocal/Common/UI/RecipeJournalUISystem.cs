@@ -86,23 +86,13 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
             InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
     }
-    private static void SetSearchFocus(bool focused)
-    {
-        if (_searchFocus && !focused && !_noteFocus) PlayerInput.WritingText = false;
-        if (focused) _noteFocus = false;
-        _searchFocus = focused;
-        Main.blockInput = focused;
-    }
-    internal static void Close() { IsOpen = false; SetNoteFocus(false); SetSearchFocus(false); }
-    private static void SetNoteFocus(bool focused)
-    {
-        if (_noteFocus && !focused) PlayerInput.WritingText = false;
-        _noteFocus = focused; Main.blockInput = _searchFocus || focused;
-    }
+    private static void SetSearchFocus(bool focused) => SetTextFocus(focused ? 1 : _noteFocus ? 2 : 0);
+    private static void SetNoteFocus(bool focused) => SetTextFocus(focused ? 2 : _searchFocus ? 1 : 0);
+    internal static void Close() { IsOpen = false; SetTextFocus(0); }
     public override void OnWorldUnload()
     {
         Close(); _query = _selected = _comparisonId = ""; _detailPage = DetailPage.Recipe; _page = 0; _favoritesOnly = false; _revealSelection = false; _sortOrder = RecipeJournalView.SortOrder.Name;
-        _known = Array.Empty<GeneratedItemData>(); _filteredEntries = Array.Empty<GeneratedItemData>(); BatchSelection.Clear(); History.Clear(); _unreadOnly = false; _workspaceMenu = false; _workspaceScroll = 0;
+        _known = Array.Empty<GeneratedItemData>(); _filteredEntries = Array.Empty<GeneratedItemData>(); BatchSelection.Clear(); History.Clear(); RecentQueries.Clear(); _queryRecall = -1; _unreadOnly = false; _workspaceMenu = false; _workspaceScroll = 0;
         _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
     }
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
@@ -119,7 +109,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         }
         if (Main.LocalPlayer is { active: true } local && _known.Any(d => d.Id == id && d.RecipeMeta.WorldId == Main.worldID.ToString()))
             local.GetModPlayer<InfiniCraftPlayer>().VisitJournalRecipe(id);
-        _selected = id; SetNoteFocus(false); _detailScroll = 0; _revealSelection = true; SetSearchFocus(false); Main.blockInput = false;
+        _selected = id; SetNoteFocus(false); _detailScroll = 0; _revealSelection = true; SetTextFocus(0);
     }
     private static bool Draw()
     {
@@ -127,6 +117,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead) { Close(); return true; }
         if (Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow || Main.inFancyUI || !Main.hasFocus)
         { SetNoteFocus(false); SetSearchFocus(false); return true; }
+        if (Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding) { SetTextFocus(0); return true; }
         if (Main.hasFocus && Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape))
         {
             if (_workspaceMenu) { _workspaceMenu = false; return true; }
@@ -135,7 +126,8 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             Close(); return true;
         }
         if (Main.hasFocus && !Main.drawingPlayerChat && !PlayerInput.CurrentlyRebinding
-            && (!PlayerInput.WritingText || _searchFocus)
+            && (!PlayerInput.WritingText || _searchFocus || _noteFocus)
+            && (!Main.blockInput || _searchFocus || _noteFocus)
             && (Main.keyState.IsKeyDown(Keys.LeftControl) || Main.keyState.IsKeyDown(Keys.RightControl))
             && Main.keyState.IsKeyDown(Keys.F) && Main.oldKeyState.IsKeyUp(Keys.F)) SetSearchFocus(true);
         _hoverText = "";
@@ -148,11 +140,11 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             _known = InfiniCrafterLocalMod.GeneratedItems?.Snapshot() ?? Array.Empty<GeneratedItemData>();
             _snapshotTick = Main.GameUpdateCount;
         }
-        Main.blockInput = _searchFocus || _noteFocus;
+        if (_searchFocus || _noteFocus) Main.blockInput = true;
         if (_searchFocus)
         {
             PlayerInput.WritingText = true; Main.instance.HandleIME();
-            string query = Main.GetInputText(_query);
+            string query = EditSearchText();
             query = query[..Math.Min(query.Length, 240)];
             if (query != _query) { _query = query; _page = 0; }
         }
@@ -175,15 +167,15 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         Rectangle book = layout.Book;
         Vector2 cursor = new Vector2(Main.mouseX, Main.mouseY);
         bool click = Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface;
-        if (click && !book.Contains(cursor.ToPoint())) { SetSearchFocus(false); Main.mouseLeftRelease = false; }
+        if (click && !book.Contains(cursor.ToPoint())) { SetTextFocus(0); Main.mouseLeftRelease = false; }
         var sb = Main.spriteBatch;
         Fill(sb, new Rectangle(0, 0, width, height), new Color(0, 0, 0, 75));
-        if (book.Width < 40 || book.Height < 80) { SetSearchFocus(false); if (click) Main.mouseLeftRelease = false; return true; }
+        if (book.Width < 40 || book.Height < 80) { SetTextFocus(0); if (click) Main.mouseLeftRelease = false; return true; }
         Chassis(sb, book, Panel);
         CornerClamps(sb, new Rectangle(book.X + 3, book.Y + 3, book.Width - 6, book.Height - 6), Bronze);
         if (book.Width < 260 || book.Height < 240 || layout.Rows == 0 || layout.Columns == 0)
         {
-            SetSearchFocus(false);
+            SetTextFocus(0);
             Label(sb, Text("Title"), book.TopLeft() + new Vector2(12, 12), Ink, 0.75f, book.Width - 24);
             if (Button(sb, new Rectangle(book.X + 12, book.Y + 42, Math.Max(0, book.Width - 24), 28), Text("Close"), click, cursor)) Close();
             if (book.Height >= 140) Paragraph(sb, Text("SpaceHint"), new Rectangle(book.X + 12, book.Y + 82, book.Width - 24, book.Height - 96), Muted, 0.65f);
@@ -198,10 +190,10 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         string queryIssue = RecipeJournalView.QueryIssue(_query);
         Chassis(sb, search, queryIssue.Length > 0 ? new Color(61, 36, 28) : _searchFocus ? new Color(32, 45, 53) : Inset);
         Label(sb, _query.Length == 0 ? Text("Search") : _query + (_searchFocus && Main.GameUpdateCount % 60 < 30 ? "|" : ""), search.TopLeft() + new Vector2(8, 5), _query.Length == 0 ? Muted : Ink, 0.65f, search.Width - 16);
-        if (search.Contains(cursor.ToPoint())) _hoverText = Text("SearchKeys") + "\n" + Text("StructuredSearch") + (queryIssue.Length > 0 ? "\n" + Text(queryIssue) : "");
+        if (search.Contains(cursor.ToPoint())) _hoverText = Text("SearchKeys") + "\n" + Text("SearchEditing") + "\n" + Text("StructuredSearch") + (queryIssue.Length > 0 ? "\n" + Text(queryIssue) : "");
         if (click && search.Contains(cursor.ToPoint())) { SetSearchFocus(true); Main.mouseLeftRelease = false; }
         else if (click) SetSearchFocus(false);
-        if (_searchFocus && Main.keyState.IsKeyDown(Keys.Enter)) SetSearchFocus(false);
+        if (_searchFocus && KeyPressed(Keys.Enter)) { RememberQuery(_query); SetSearchFocus(false); }
         Rectangle favorites = new(search.Right + 6, search.Y, 104, 30);
         if (Button(sb, favorites, _favoritesOnly ? Text("All") : Text("Favorites"), click, cursor, selected: _favoritesOnly)) { _favoritesOnly = !_favoritesOnly; _page = 0; }
         if (layout.Detail.X > layout.List.Right)
@@ -290,7 +282,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     }
     private static void DrawDetail(SpriteBatch sb, GeneratedItemData data, Rectangle area, InfiniCraftPlayer player, bool click, Vector2 cursor)
     {
-        if (area.Width < 60 || area.Height < 40) return;
+        if (area.Width < 60 || area.Height < 40) { SetNoteFocus(false); return; }
         Chassis(sb, area, Inset);
         int x = area.X + 12, y = area.Y + 10, w = area.Width - 24;
         // Keep navigation and save reachable even in the short stacked layout.
@@ -309,7 +301,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             if (Button(sb, new Rectangle(x, y, half, 24), Text("View" + _detailPage), click, cursor))
             { SetNoteFocus(false); _workspaceMenu = !_workspaceMenu; _workspaceScroll = 0; }
             if (Button(sb, new Rectangle(x + half + 6, y, half, 24), Text(_comparisonId == data.Id ? "ReferenceSet" : "SetReference"), click, cursor))
-            { _comparisonId = data.Id; _detailPage = DetailPage.Comparison; _detailScroll = 0; }
+            { SetNoteFocus(false); _comparisonId = data.Id; _detailPage = DetailPage.Comparison; _detailScroll = 0; }
             if (Button(sb, new Rectangle(x + (half + 6) * 2, y, w - (half + 6) * 2, 24), Text(player.IsJournalPinned(data.Id) ? "UnpinGoal" : "PinGoal"), click, cursor))
             {
                 if (!player.ToggleJournalPin(data.Id)) _hoverText = Text("PinLimit");
@@ -318,6 +310,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             if (DrawWorkspacePicker(sb, new Rectangle(x, y, w, area.Bottom - y - 10), click, cursor)) return;
             if (DrawAnalysisPage(sb, data, new Rectangle(x, y, w, area.Bottom - y - 10), click, cursor)) return;
         }
+        SetNoteFocus(false);
         if (area.Height < 230)
         {
             if (area.Bottom - y >= 20) Label(sb, data.Name, new Vector2(x, y), Ink, 0.7f, w);

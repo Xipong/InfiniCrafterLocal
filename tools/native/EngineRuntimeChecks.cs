@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Atlas motion AtlasTextInput", AtlasTextInput),
             ("Atlas motion AtlasGridKeyboard", AtlasGridKeyboard),
             ("Atlas motion AtlasCollectionOperations", AtlasCollectionOperations),
             ("Atlas motion AtlasSearchLanguage", AtlasSearchLanguage),
