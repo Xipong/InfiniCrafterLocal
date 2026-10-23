@@ -3022,6 +3022,12 @@
                     "x-infini-semanticType": "defense_points",
                     "x-infini-units": "defense_points"
                   },
+                  "divingHelm": {
+                    "description": "Native diving helmet breath conservation. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "fallDamageImmune": {
                     "description": "Prevent fall damage while equipped",
                     "type": "boolean",
@@ -3304,6 +3310,12 @@
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
                   },
+                  "swimFlipper": {
+                    "description": "Native flipper swimming jump while wet. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "taggedSummonSourceDamageBonusPercent": {
                     "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
                     "maximum": 300,
@@ -3322,6 +3334,18 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
+                  },
+                  "underwaterBreathing": {
+                    "description": "Native gills: breathe air and water; getGoodWorld reverses drowning and requires water. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "waterFloat": {
+                    "description": "Native water flotation, descend with down control. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "waterWalk": {
                     "description": "Walk on water while equipped",

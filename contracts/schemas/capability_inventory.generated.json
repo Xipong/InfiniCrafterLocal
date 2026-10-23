@@ -1922,6 +1922,10 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.swimFlipper",
+        "accessory.divingHelm",
+        "accessory.underwaterBreathing",
+        "accessory.waterFloat",
         "accessory.jumpCloud",
         "accessory.jumpBlizzard",
         "accessory.jumpSandstorm",
@@ -1986,6 +1990,16 @@
           "required": false,
           "semanticType": "defense_points",
           "units": "defense_points"
+        },
+        "divingHelm": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "fallDamageImmune": {
           "enum": [],
@@ -2269,6 +2283,16 @@
           "semanticType": "slots",
           "units": "slots"
         },
+        "swimFlipper": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "taggedSummonSourceDamageBonusPercent": {
           "enum": [],
           "kind": "number",
@@ -2278,6 +2302,26 @@
           "required": false,
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
+        },
+        "underwaterBreathing": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "waterFloat": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "waterWalk": {
           "enum": [],
@@ -2345,6 +2389,10 @@
             "fallDamageImmune",
             "lavaImmune",
             "waterWalk",
+            "swimFlipper",
+            "divingHelm",
+            "underwaterBreathing",
+            "waterFloat",
             "jumpCloud",
             "jumpBlizzard",
             "jumpSandstorm",

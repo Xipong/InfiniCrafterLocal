@@ -10,6 +10,7 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 
 CASES = []
+CASES.append({'swimFlipper': True, 'divingHelm': True, 'underwaterBreathing': True, 'waterFloat': True})
 CASES.append({'jumpCloud': True, 'jumpBlizzard': True, 'jumpSandstorm': True, 'jumpFart': True, 'jumpTsunami': True})
 
 @pytest.mark.parametrize("params", CASES)

@@ -96,3 +96,13 @@ inventory/void-bag activation, полный slot UI/content registration или 
 
 
 Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.
+
+## Aquatic: независимая авторская композиция
+
+- `swimFlipper`: Плавательные прыжки в воде.
+- `divingHelm`: Замедленный расход воздуха.
+- `underwaterBreathing`: Жабры: дыхание в воде и на суше; getGoodWorld требует воду.
+- `waterFloat`: Всплытие в воде, спуск кнопкой вниз.
+
+
+Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.

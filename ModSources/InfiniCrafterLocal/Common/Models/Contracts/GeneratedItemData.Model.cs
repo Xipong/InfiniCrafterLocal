@@ -287,6 +287,35 @@ public sealed class BuffEntrySpec
 
 public sealed class AccessorySpec
 {
+    private bool? _swimFlipper;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SwimFlipper
+    {
+        get => _swimFlipper;
+        set => _swimFlipper = value ?? throw new System.IO.InvalidDataException("swimFlipper requires a boolean when present");
+    }
+    private bool? _divingHelm;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DivingHelm
+    {
+        get => _divingHelm;
+        set => _divingHelm = value ?? throw new System.IO.InvalidDataException("divingHelm requires a boolean when present");
+    }
+    private bool? _underwaterBreathing;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? UnderwaterBreathing
+    {
+        get => _underwaterBreathing;
+        set => _underwaterBreathing = value ?? throw new System.IO.InvalidDataException("underwaterBreathing requires a boolean when present");
+    }
+    private bool? _waterFloat;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WaterFloat
+    {
+        get => _waterFloat;
+        set => _waterFloat = value ?? throw new System.IO.InvalidDataException("waterFloat requires a boolean when present");
+    }
+
     private bool? _jumpCloud;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? JumpCloud
@@ -377,7 +406,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

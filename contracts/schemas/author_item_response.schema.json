@@ -3354,6 +3354,30 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "swimFlipper": {
+                        "type": "boolean",
+                        "description": "Native flipper swimming jump while wet. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "divingHelm": {
+                        "type": "boolean",
+                        "description": "Native diving helmet breath conservation. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "underwaterBreathing": {
+                        "type": "boolean",
+                        "description": "Native gills: breathe air and water; getGoodWorld reverses drowning and requires water. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "waterFloat": {
+                        "type": "boolean",
+                        "description": "Native water flotation, descend with down control. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "jumpCloud": {
                         "type": "boolean",
                         "description": "Cloud bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",

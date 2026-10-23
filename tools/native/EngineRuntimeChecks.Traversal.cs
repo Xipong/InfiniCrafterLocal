@@ -26,4 +26,40 @@ internal static partial class EngineRuntimeChecks
             Equal(true, rejected, "present null rejected");
         });
     }
+    private static void NativeTraversalAquatic()
+    {
+        WithPlayer((player, _) => {
+            player.ResetEffects();
+            var item = NativeUtilityItem("\"swimFlipper\":true,\"divingHelm\":true,\"waterFloat\":true,\"underwaterBreathing\":false");
+            item.UpdateAccessory(player, false);
+            Equal(true, player.GetJumpState(ExtraJump.Flipper).Enabled, "native swim jump enabled");
+            Equal(true, player.GetJumpState(ExtraJump.Flipper).Available, "native flipper repeats while swimming");
+            Equal(true, player.accDivingHelm, "breath conservation enabled");
+            Equal(42, player.breathCDMax, "actual native diving breath cadence is six times baseline seven");
+            Equal(false, player.gills, "water breathing independently disabled");
+            player.controlDown = false;
+            Equal(true, player.ShouldFloatInWater, "native flotation consumer");
+            player.controlDown = true;
+            Equal(false, player.ShouldFloatInWater, "down input overrides buoyancy");
+            player.ResetEffects();
+            Equal(false, player.accDivingHelm || player.canFloatInWater || player.gills, "all aquatic effects expire");
+            NativeUtilityItem("\"underwaterBreathing\":true").UpdateAccessory(player, true);
+            Equal(true, player.gills, "independent gills without swim grants");
+            Equal(false, player.GetJumpState(ExtraJump.Flipper).Enabled, "gills does not bundle swim");
+        });
+        using var actors = new NativeActorState();
+        WithPersistenceTilemap((_, _) => WithPlayer((player, _) => {
+            Terraria.Main.myPlayer = 0; player.whoAmI = 0; Terraria.Main.player[0] = player;
+            player.position = new Microsoft.Xna.Framework.Vector2(640, 640); player.gravDir = 1;
+            player.ResetEffects();
+            NativeUtilityItem("\"underwaterBreathing\":true").UpdateAccessory(player, false);
+            player.breath = 100; Terraria.Main.getGoodWorld = false;
+            player.CheckDrowning();
+            Equal(103, player.breath, "ordinary world gills preserve air breathing");
+            Terraria.Main.getGoodWorld = true; player.breath = 100; player.breathCD = player.breathCDMax - 1;
+            player.lavaWet = true; // suppress cosmetic bubble allocation, not drowning logic
+            player.CheckDrowning();
+            Equal(99, player.breath, "native special-seed gills require water");
+        }));
+    }
 }

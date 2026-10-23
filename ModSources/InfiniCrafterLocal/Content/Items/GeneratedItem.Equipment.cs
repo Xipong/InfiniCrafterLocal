@@ -56,6 +56,10 @@ public partial class GeneratedItem
         if (a.JumpSandstorm == true) { player.GetJumpState(ExtraJump.SandstormInABottle).Enable(); }
         if (a.JumpFart == true) { player.GetJumpState(ExtraJump.FartInAJar).Enable(); }
         if (a.JumpTsunami == true) { player.GetJumpState(ExtraJump.TsunamiInABottle).Enable(); }
+        if (a.SwimFlipper == true) { player.GetJumpState(ExtraJump.Flipper).Enable(); player.GetJumpState(ExtraJump.Flipper).Available = true; }
+        if (a.DivingHelm == true) { player.accDivingHelm = true; }
+        if (a.UnderwaterBreathing == true) { player.gills = true; }
+        if (a.WaterFloat == true) { player.canFloatInWater = true; }
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;
