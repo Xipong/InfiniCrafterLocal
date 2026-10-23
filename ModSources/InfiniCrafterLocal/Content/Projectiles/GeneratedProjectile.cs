@@ -156,6 +156,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
             && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(budgetOwner);
         if (!preserveSyncedState)
         {
+            _returning = false;
             _penetrationInitialized = false;
             _spawnBudgetLease?.Release();
             _spawnBudgetLease = null;

@@ -437,7 +437,7 @@ public sealed partial class GeneratedProjectile
     {
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
-        if (!_returning && _age >= Math.Max(1, AuthoredTicksToProjectileUpdates(returnAfterTicks))) _returning = true;
+        if (!_returning && _age >= Math.Max(1, AuthoredTicksToProjectileUpdates(returnAfterTicks))) BeginReturn();
         if (!_returning) return;
         Projectile.tileCollide = false;
         float speed = Math.Max(1f, returnSpeed);
@@ -511,7 +511,7 @@ public sealed partial class GeneratedProjectile
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
         float maxRange = Math.Max(32f, p.RangeTiles * 16f);
-        if (!_returning && (Projectile.Distance(owner.MountedCenter) >= maxRange || !owner.channel)) _returning = true;
+        if (!_returning && (Projectile.Distance(owner.MountedCenter) >= maxRange || !owner.channel)) BeginReturn();
         if (_returning)
         {
             Projectile.tileCollide = false;
@@ -527,7 +527,7 @@ public sealed partial class GeneratedProjectile
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
         float leash = Math.Max(32f, p.RangeTiles * 16f);
-        if (!owner.channel) _returning = true;
+        if (!owner.channel) BeginReturn();
         Vector2 target;
         if (_returning) target = owner.MountedCenter;
         else

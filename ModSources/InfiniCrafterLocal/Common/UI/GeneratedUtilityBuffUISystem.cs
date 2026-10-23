@@ -1,6 +1,8 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using InfiniCrafterLocal.Content.Projectiles;
 using System.Linq.Expressions;
 using InfiniCrafterLocal.Common.Players;
 using Microsoft.Xna.Framework;
@@ -80,6 +82,16 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
             if (sprite is not null)
                 DrawStatus(player, null, status.Label, status.Tooltip, status.RemainingTicks,
                     append++, inventoryOffset, sprite);
+        }
+        var returning = GeneratedReturnStatusView.Build(Main.projectile
+            .Where(p => p is not null && p.active && p.owner == player.whoAmI)
+            .Select(p => (p.ModProjectile as GeneratedProjectile)?.CaptureReturnStatus(player.whoAmI, player.Center))
+            .Where(s => s is not null).Select(s => s!), Language.ActiveCulture.CultureInfo);
+        foreach (var status in returning)
+        {
+            Main.instance.LoadItem(ItemID.WoodenBoomerang);
+            DrawStatus(player, TextureAssets.Item[ItemID.WoodenBoomerang], status.Name, status.Tooltip, 0,
+                append++, inventoryOffset, InfiniCrafterLocalMod.Sprites?.TryGet(status.SpritePath));
         }
         return true;
     }
