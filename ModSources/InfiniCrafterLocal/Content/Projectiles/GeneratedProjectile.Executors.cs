@@ -238,7 +238,7 @@ public sealed partial class GeneratedProjectile
     private bool ApplyTargetAndFire()
     {
         if (!_entity!.Movement.IsConfigured) Projectile.velocity = Vector2.Zero;
-        if (_entity.Targeting.IntervalTicks <= 0) return true;
+        if (_entity.Targeting.IntervalTicks <= 0 || !TryGetFiringOwner(out Player firingOwner)) return true;
         if (!AdvanceFiringSchedule(ref _controllerTimer, _entity.Targeting, Math.Max(1, Projectile.extraUpdates + 1))
             || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)) return true;
         float range = Math.Max(16f, (_entity.Targeting.RangeTiles > 0 ? _entity.Targeting.RangeTiles : _entity.Controller.Params.RangeTiles) * 16f);
@@ -251,17 +251,40 @@ public sealed partial class GeneratedProjectile
         if (_entity.Targeting.DamageMultiplier is not float damageMultiplier)
             return true;
         if (!RuntimeChildCombat.TryResolve(_entity.Targeting.DamageBasis, _entity.Targeting.KnockbackBasis,
-            damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), Owner()),
+            damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), firingOwner),
             out int? damageOverride, out float? knockbackOverride))
             return true;
         int requested = _entity.Targeting.Count ?? 1;
         int granted = budget.Reserve(requested);
-        int spawned = granted == requested ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
-            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: requested,
-            spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
-            damageMultiplier: damageMultiplier, activationBudget: budget,
-            rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride) : 0;
-        budget.Return(granted - spawned);
+        if (granted != requested) { budget.Return(granted); return true; }
+        RuntimeVolleyManaPayment? payment = null;
+        if (_entity.Targeting.ManaCost is > 0 && !RuntimeVolleyManaPayment.TryReserve(firingOwner,
+            _entity.Targeting.ManaCost.Value, _entity.Targeting.ManaCostBasis == "shot", requested,
+            _entity.Targeting.ManaReserve ?? 0, out payment))
+        {
+            budget.Return(granted);
+            if (_entity.Targeting.OnManaShortage == "retire") Projectile.Kill();
+            return true;
+        }
+        int spawned = 0;
+        bool completed = false;
+        try
+        {
+            spawned = SpawnRuntimeEntity(_data!, shotId, firingOwner, Projectile.GetSource_FromThis(),
+                Projectile.Center, direction, _childDepth + 1, granted, requestedCount: requested,
+                spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
+                damageMultiplier: damageMultiplier, activationBudget: budget,
+                rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride,
+                onSpawnProgress: count => spawned = count);
+            completed = true;
+        }
+        finally
+        {
+            // SpawnRuntimeEntity already refunds unused child capacity on an
+            // exception. Mana still settles against each successfully admitted host.
+            if (completed) budget.Return(granted - spawned);
+            payment?.Complete(spawned);
+        }
         Projectile.netUpdate = true;
         return true;
     }

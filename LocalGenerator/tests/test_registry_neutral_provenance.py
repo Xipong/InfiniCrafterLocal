@@ -34,6 +34,8 @@ DECLARED = {
                         "targetPriority": "distance",
                         "aimMode": "direct", "leadSeconds": 0, "maximumLeadTiles": 120,
                         "warmupSeconds": 0.0, "burstCount": 1, "burstSpacingSeconds": 0.1,
+                        "manaCost": 0, "manaCostBasis": "volley",
+                        "manaReserve": 0, "onManaShortage": "hold_fire",
                         },
     "apply_generated_buff_on_use": {
         "miningSpeedMultiplier": 1,

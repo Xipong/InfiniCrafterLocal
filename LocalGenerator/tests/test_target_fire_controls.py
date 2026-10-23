@@ -93,3 +93,11 @@ def test_burst_schedule_world_time_projection_and_strict_delivery():
     call["params"]["warmupSeconds"] = 31
     assert not validate_runtime_program(doc)["ok"]
     rejected(dict(burstCount=3), dict(burstCount=9))
+
+
+def test_mana_payment_basis_reserve_and_shortage_are_independent_explicit_choices():
+    for basis in ("volley", "shot"):
+        for shortage in ("hold_fire", "retire"):
+            accepted(dict(manaCost=12, manaCostBasis=basis, manaReserve=20, onManaShortage=shortage, burstCount=3))
+    rejected(dict(manaCost=12, manaCostBasis="shot", manaReserve=20, onManaShortage="hold_fire"),
+             dict(manaCost=-1, manaCostBasis="held_item", manaReserve=401, onManaShortage=None))

@@ -6906,6 +6906,10 @@
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
         "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.onManaShortage",
+        "runtimeProgram.entities[].targeting.manaReserve",
+        "runtimeProgram.entities[].targeting.manaCostBasis",
+        "runtimeProgram.entities[].targeting.manaCost",
         "runtimeProgram.entities[].targeting.burstSpacingTicks",
         "runtimeProgram.entities[].targeting.burstCount",
         "runtimeProgram.entities[].targeting.warmupTicks",
@@ -7069,6 +7073,39 @@
           "semanticType": "seconds",
           "units": ""
         },
+        "manaCost": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "mana_points",
+          "units": ""
+        },
+        "manaCostBasis": {
+          "enum": [
+            "volley",
+            "shot"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "manaReserve": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 400,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
         "maximumHealthRatio": {
           "enum": [],
           "kind": "number",
@@ -7107,6 +7144,19 @@
           "reference": null,
           "required": false,
           "semanticType": "tiles",
+          "units": ""
+        },
+        "onManaShortage": {
+          "enum": [
+            "hold_fire",
+            "retire"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
         "rangeTiles": {

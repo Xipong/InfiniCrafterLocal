@@ -1,11 +1,28 @@
 #nullable enable
 using System;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Services;
 using Microsoft.Xna.Framework;
 using Terraria;
 namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
+    private Player? _targetingOwnerPlayer;
+    private int _targetingOwnerIndex = -1;
+    private void CaptureTargetingOwner(bool preserveSyncedState)
+    {
+        if (preserveSyncedState && _targetingOwnerPlayer is not null) return;
+        _targetingOwnerIndex = Projectile.owner;
+        _targetingOwnerPlayer = _targetingOwnerIndex >= 0 && _targetingOwnerIndex < Main.maxPlayers ? Main.player[_targetingOwnerIndex] : null;
+    }
+    internal bool TryGetFiringOwner(out Player owner)
+    {
+        owner = _targetingOwnerPlayer!;
+        return _targetingOwnerIndex >= 0 && _targetingOwnerIndex < Main.maxPlayers
+            && Projectile.owner == _targetingOwnerIndex && ReferenceEquals(owner, Main.player[_targetingOwnerIndex])
+            && owner is { active: true, dead: false } && owner.whoAmI == _targetingOwnerIndex
+            && InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile) && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner);
+    }
     internal static bool AdvanceFiringSchedule(ref int timer, RuntimeTargetingSpec targeting, int updatesPerTick)
     {
         int scale = Math.Clamp(updatesPerTick, 1, 6);
@@ -16,7 +33,7 @@ public sealed partial class GeneratedProjectile
         int last = first + (count - 1) * spacing;
         // Bounded phase state uses the already synchronized controller timer.
         // Reset to warmup after the last volley: warmup is paid once, not per burst.
-        timer = Math.Min(Math.Max(0, timer) + 1L, last) is long next ? (int)next : last;
+        timer = (int)Math.Min(Math.Max(0, timer) + 1L, last);
         bool due = timer >= first && (timer - first) % spacing == 0;
         if (timer >= last) timer = warmup;
         return due;

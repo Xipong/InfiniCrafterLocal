@@ -9025,6 +9025,35 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "seconds"
                   },
+                  "manaCost": {
+                    "default": 0,
+                    "description": "Base owner mana paid at each scheduled volley. Native manaCost multiplier is sampled once; no held-item hooks or automatic potions. Zero disables this payment and its reserve floor",
+                    "maximum": 200,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "mana_points"
+                  },
+                  "manaCostBasis": {
+                    "default": "volley",
+                    "description": "volley pays once if any child successfully spawns; shot pays for the actual successful child count. Reserve full requested cost before spawning and refund unused payment on failure or partial spawn",
+                    "enum": [
+                      "volley",
+                      "shot"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "volley",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "manaReserve": {
+                    "default": 0,
+                    "description": "Keep at least this much actual owner mana after reserving the requested volley; active only when manaCost is positive",
+                    "maximum": 400,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
                   "maximumHealthRatio": {
                     "default": 1,
                     "description": "Maximum inclusive current life/lifeMax ratio; combines with minimumHealthRatio as a health band",
@@ -9084,6 +9113,17 @@
                     },
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "tiles"
+                  },
+                  "onManaShortage": {
+                    "default": "hold_fire",
+                    "description": "hold_fire skips this scheduled volley and retries at later due times; retire kills this projectile through its normal lifecycle when mana payment cannot be reserved",
+                    "enum": [
+                      "hold_fire",
+                      "retire"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "hold_fire",
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "rangeTiles": {
                     "description": "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount",

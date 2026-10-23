@@ -9092,6 +9092,46 @@
                         "default": false,
                         "x-infini-neutral": false
                       },
+                      "onManaShortage": {
+                        "type": "string",
+                        "enum": [
+                          "hold_fire",
+                          "retire"
+                        ],
+                        "description": "hold_fire skips this scheduled volley and retries at later due times; retire kills this projectile through its normal lifecycle when mana payment cannot be reserved",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "hold_fire",
+                        "x-infini-neutral": "hold_fire"
+                      },
+                      "manaReserve": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 400,
+                        "description": "Keep at least this much actual owner mana after reserving the requested volley; active only when manaCost is positive",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 0,
+                        "x-infini-neutral": 0
+                      },
+                      "manaCostBasis": {
+                        "type": "string",
+                        "enum": [
+                          "volley",
+                          "shot"
+                        ],
+                        "description": "volley pays once if any child successfully spawns; shot pays for the actual successful child count. Reserve full requested cost before spawning and refund unused payment on failure or partial spawn",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "volley",
+                        "x-infini-neutral": "volley"
+                      },
+                      "manaCost": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 200,
+                        "description": "Base owner mana paid at each scheduled volley. Native manaCost multiplier is sampled once; no held-item hooks or automatic potions. Zero disables this payment and its reserve floor",
+                        "x-infini-semanticType": "mana_points",
+                        "default": 0,
+                        "x-infini-neutral": 0
+                      },
                       "burstSpacingSeconds": {
                         "type": "number",
                         "minimum": 0.008333333333333333,

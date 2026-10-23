@@ -1945,7 +1945,19 @@ public sealed class RuntimeTargetingSpec
     private int? _burstSpacingTicks;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? BurstSpacingTicks { get => _burstSpacingTicks; set => _burstSpacingTicks = value ?? throw new InvalidDataException("present targeting burstSpacingTicks cannot be null"); }
-    [JsonIgnore] public bool HasVolleyOptions => BurstSpacingTicks is not null || BurstCount is not null || WarmupTicks is not null || MaximumLeadTiles is not null || LeadSeconds is not null || AimMode is not null || TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
+    private int? _manaCost;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ManaCost { get => _manaCost; set => _manaCost = value ?? throw new InvalidDataException("present targeting manaCost cannot be null"); }
+    private string? _manaCostBasis;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ManaCostBasis { get => _manaCostBasis; set => _manaCostBasis = value ?? throw new InvalidDataException("present targeting manaCostBasis cannot be null"); }
+    private int? _manaReserve;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ManaReserve { get => _manaReserve; set => _manaReserve = value ?? throw new InvalidDataException("present targeting manaReserve cannot be null"); }
+    private string? _onManaShortage;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OnManaShortage { get => _onManaShortage; set => _onManaShortage = value ?? throw new InvalidDataException("present targeting onManaShortage cannot be null"); }
+    [JsonIgnore] public bool HasVolleyOptions => OnManaShortage is not null || ManaReserve is not null || ManaCostBasis is not null || ManaCost is not null || BurstSpacingTicks is not null || BurstCount is not null || WarmupTicks is not null || MaximumLeadTiles is not null || LeadSeconds is not null || AimMode is not null || TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
         || TargetPolicy is not null || RequireLineOfSight.HasValue || HardRange.HasValue;
     public void Normalize()
     {
@@ -1964,6 +1976,10 @@ public sealed class RuntimeTargetingSpec
         if (WarmupTicks is < 0 or > 1800) throw new InvalidDataException("invalid targeting warmupTicks");
         if (BurstCount is < 1 or > 8) throw new InvalidDataException("invalid targeting burstCount");
         if (BurstSpacingTicks is < 1 or > 600) throw new InvalidDataException("invalid targeting burstSpacingTicks");
+        if (ManaCost is < 0 or > 200) throw new InvalidDataException("invalid targeting manaCost");
+        if (ManaCostBasis is not null and not ("volley" or "shot")) throw new InvalidDataException("invalid targeting manaCostBasis");
+        if (ManaReserve is < 0 or > 400) throw new InvalidDataException("invalid targeting manaReserve");
+        if (OnManaShortage is not null and not ("hold_fire" or "retire")) throw new InvalidDataException("invalid targeting onManaShortage");
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
         RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
