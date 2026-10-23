@@ -248,15 +248,18 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityAuthority");
             return false;
         }
-        int sx = Player.SpawnX >= 0 ? Player.SpawnX : Main.spawnTileX;
-        int sy = Player.SpawnY >= 0 ? Player.SpawnY : Main.spawnTileY;
-        if (sx <= 0 || sy <= 0)
+        bool validBed = Terraria.Player.CheckSpawn(Player.SpawnX, Player.SpawnY);
+        int sx = validBed ? Player.SpawnX : Main.spawnTileX;
+        int sy = validBed ? Player.SpawnY : Main.spawnTileY;
+        if (sx <= 0 || sy <= 0 || sx >= Main.maxTilesX - 1 || sy >= Main.maxTilesY - 1)
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilitySpawnMissing");
             return false;
         }
         Vector2 destination = new(sx * 16f + 8f - Player.width / 2f, sy * 16f - Player.height);
         Player.Teleport(destination, 0);
+        Player.velocity = Vector2.Zero;
+        Player.fallStart2 = Player.fallStart;
         InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, destination);
         return true;
     }
@@ -288,13 +291,18 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityRangeMissing");
             return false;
         }
+        if (!float.IsFinite(target.X) || !float.IsFinite(target.Y))
+        {
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
+            return false;
+        }
         int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 120);
         Vector2 delta = target - Player.Center;
         float max = rangeTiles * 16f;
         if (delta.Length() > max)
             target = Player.Center + delta.SafeNormalize(Vector2.UnitX * Player.direction) * max;
         Vector2 destination = new(target.X - Player.width / 2f, target.Y - Player.height / 2f);
-        if (gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
+        if (!IsBlinkWithinWorld(destination) || gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
             return false;
@@ -304,29 +312,17 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
-    private bool IsSafeBlinkDestination(Vector2 destination)
-    {
-        Rectangle target = new((int)destination.X, (int)destination.Y, Player.width, Player.height);
-        if (target.Left < 16 || target.Top < 16 || target.Right >= (Main.maxTilesX - 1) * 16 || target.Bottom >= (Main.maxTilesY - 1) * 16)
-            return false;
-        int left = Math.Max(0, target.Left / 16 - 1);
-        int right = Math.Min(Main.maxTilesX - 1, target.Right / 16 + 1);
-        int top = Math.Max(0, target.Top / 16 - 1);
-        int bottom = Math.Min(Main.maxTilesY - 1, target.Bottom / 16 + 1);
-        for (int x = left; x <= right; x++)
-        for (int y = top; y <= bottom; y++)
-        {
-            Tile tile = Main.tile[x, y];
-            if (tile.HasTile && Main.tileSolid[tile.TileType] && !Main.tileSolidTop[tile.TileType])
-            {
-                Rectangle block = new(x * 16, y * 16, 16, 16);
-                if (target.Intersects(block)) return false;
-            }
-            if (tile.LiquidAmount > 0 && tile.LiquidType == LiquidID.Lava)
-                return false;
-        }
-        return true;
-    }
+    internal bool IsBlinkWithinWorld(Vector2 destination)
+        => float.IsFinite(destination.X) && float.IsFinite(destination.Y)
+            && destination.X >= 16 && destination.Y >= 16
+            && destination.X + Player.width < (Main.maxTilesX - 1) * 16f
+            && destination.Y + Player.height < (Main.maxTilesY - 1) * 16f;
+
+    internal bool IsSafeBlinkDestination(Vector2 destination)
+        => IsBlinkWithinWorld(destination)
+            && !Collision.SolidCollision(destination, Player.width, Player.height)
+            && !Collision.LavaCollision(destination, Player.width, Player.height);
+
 
 
     private void TickGeneratedUtilityBuff()

@@ -187,6 +187,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _remainingBounces = entity.Collision.BounceCount;
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
         if (!preserveSyncedState) {
+            _returning = false;
             _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
             _lastPublishedOwnerVector = null;
             _lastOwnerVectorSyncAge = -1000;

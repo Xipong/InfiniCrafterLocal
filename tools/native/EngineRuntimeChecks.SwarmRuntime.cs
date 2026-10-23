@@ -111,8 +111,15 @@ internal static partial class EngineRuntimeChecks
             typeof(GeneratedProjectile).GetMethod("Yoyo",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(generated,new object[]{yoyo.Movement.Params});
             Equal(authored,generated.Projectile.tileCollide,"held yoyo respects authored collision");
             owner.channel=false;
+            generated.Projectile.netUpdate=false;
             typeof(GeneratedProjectile).GetMethod("Yoyo",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(generated,new object[]{yoyo.Movement.Params});
             Equal(false,generated.Projectile.tileCollide,"return phase remains able to recover through walls");
+            Equal(true,generated.Projectile.netUpdate,"entering return phase requests peer synchronization");
+            generated.Projectile.netUpdate=false;
+            typeof(GeneratedProjectile).GetMethod("Yoyo",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(generated,new object[]{yoyo.Movement.Params});
+            Equal(false,generated.Projectile.netUpdate,"return phase does not repeatedly request synchronization");
+            generated.Configure(yoyoData,yoyo,0,8,Vector2.UnitX);
+            Equal(false,(bool)typeof(GeneratedProjectile).GetField("_returning",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(generated)!,"fresh configuration does not inherit return phase");
         }
         foreach(bool authored in new[]{false,true})
         {

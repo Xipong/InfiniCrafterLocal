@@ -425,16 +425,31 @@ public sealed partial class GeneratedProjectile
         Projectile.tileCollide = false;
     }
 
+    internal static bool ReturnPathReachesOwner(Vector2 center, Vector2 velocity, Vector2 ownerCenter, float radius)
+    {
+        Vector2 offset = ownerCenter - center;
+        float lengthSquared = velocity.LengthSquared();
+        float along = lengthSquared > 0f ? Math.Clamp(Vector2.Dot(offset, velocity) / lengthSquared, 0f, 1f) : 0f;
+        return Vector2.DistanceSquared(center + velocity * along, ownerCenter) < radius * radius;
+    }
+
+    private void BeginReturn()
+    {
+        if (_returning) return;
+        _returning = true;
+        Projectile.netUpdate = true;
+    }
+
     private void ReturnAfter(int returnAfterTicks, float returnSpeed)
     {
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
-        if (!_returning && _age >= Math.Max(1, AuthoredTicksToProjectileUpdates(returnAfterTicks))) _returning = true;
+        if (!_returning && _age >= Math.Max(1, AuthoredTicksToProjectileUpdates(returnAfterTicks))) BeginReturn();
         if (!_returning) return;
         Projectile.tileCollide = false;
         float speed = Math.Max(1f, returnSpeed);
         Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(owner.Center) * speed, 0.2f);
-        if (Projectile.Distance(owner.Center) < 24f) Projectile.Kill();
+        if (ReturnPathReachesOwner(Projectile.Center, Projectile.velocity, owner.Center, 24f)) Projectile.Kill();
     }
 
     private void PhaseDrift(float strength)
@@ -503,12 +518,12 @@ public sealed partial class GeneratedProjectile
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
         float maxRange = Math.Max(32f, p.RangeTiles * 16f);
-        if (!_returning && (Projectile.Distance(owner.MountedCenter) >= maxRange || !owner.channel)) _returning = true;
+        if (!_returning && (Projectile.Distance(owner.MountedCenter) >= maxRange || !owner.channel)) BeginReturn();
         if (_returning)
         {
             Projectile.tileCollide = false;
             Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(owner.MountedCenter) * Math.Max(1f, p.ReturnSpeed), 0.25f);
-            if (Projectile.Distance(owner.MountedCenter) < 20f) Projectile.Kill();
+            if (ReturnPathReachesOwner(Projectile.Center, Projectile.velocity, owner.MountedCenter, 20f)) Projectile.Kill();
         }
         ClaimHeldProjectile(owner);
         Projectile.rotation += 0.4f;
@@ -519,7 +534,7 @@ public sealed partial class GeneratedProjectile
         Player owner = Owner();
         if (!OwnerCanControl(owner)) { Projectile.Kill(); return; }
         float leash = Math.Max(32f, p.RangeTiles * 16f);
-        if (!owner.channel) _returning = true;
+        if (!owner.channel) BeginReturn();
         Vector2 target;
         if (_returning) target = owner.MountedCenter;
         else
@@ -534,7 +549,7 @@ public sealed partial class GeneratedProjectile
         Projectile.tileCollide = !_returning && _entity!.Collision.TileCollide;
         ClaimHeldProjectile(owner);
         Projectile.rotation += 0.35f;
-        if (_returning && Projectile.Distance(owner.MountedCenter) < 20f) Projectile.Kill();
+        if (_returning && ReturnPathReachesOwner(Projectile.Center, Projectile.velocity, owner.MountedCenter, 20f)) Projectile.Kill();
     }
 
     private void Whip(RuntimeParamsSpec p)
