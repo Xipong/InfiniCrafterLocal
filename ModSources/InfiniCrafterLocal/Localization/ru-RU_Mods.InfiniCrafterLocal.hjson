@@ -256,6 +256,15 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	InspectionGuide: "Управление и базовые эффекты созданного предмета:"
+	InspectionStack: "Стак: {0} / {1}"
+	InspectionTools: "Сила кирки / топора / молота: {0} / {1}% / {2}"
+	InspectionDefense: "Защита: {0}"
+	InspectionUse: "Использование / анимация: {0} / {1} тиков; мана: {2}"
+	InspectionDamage: "Урон: {0}; отбрасывание: {1}"
+	InspectionNative: "Этот экземпляр предмета (включая префикс):"
+	InspectionHint: "Alt + щелчок по ингредиенту: осмотреть, не забирая."
+	InspectionTitle: "Осмотр ингредиента"
 	PickerEmpty: "Нет подходящих ингредиентов"
 	PickerHint: "Одна единица · инвентарь · избранное защищено"
 	PickIngredient: "Выберите ингредиент {0}"

@@ -111,7 +111,7 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
         {
             RecipeJournalUISystem.Open(); Main.mouseLeftRelease = false;
         }
-        if (_pickerSlot < 0) HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
+        if (_pickerSlot < 0 && _inspectedItem is null) HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
         DrawPanel(spriteBatch, panel);
         DrawFittedText(spriteBatch, ForgeText("Title"), new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan,
             bookButton.X - panel.X - 24, 0.92f);
@@ -153,7 +153,7 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
             {
                 Main.hoverItemName = "";
                 Main.HoverItem = new Item();
-                string details = craftPlayer.CraftLaneDetails(lane) + "\n" + ForgeText("RetrieveHint");
+                string details = craftPlayer.CraftLaneDetails(lane) + "\n" + ForgeText("RetrieveHint") + "\n" + ForgeText("InspectionHint");
                 if (!pending)
                     details += "\n" + ForgeText("InputPair",
                         first.IsAir ? ForgeText("Empty") : DisplayItemName(first),
@@ -166,6 +166,7 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
             : ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
         DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 28, 0.56f);
         if (_pickerSlot >= 0) DrawInventoryPicker(spriteBatch, panel, craftPlayer);
+        if (_inspectedItem is not null) DrawInputInspection(spriteBatch, panel);
         if (!PlayerInput.IgnoreMouseInterface && panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
     }
@@ -203,6 +204,12 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
 
         for (int lane = 0; lane < slotA.Length; lane++)
         {
+            if (Main.keyState.IsKeyDown(Keys.LeftAlt) || Main.keyState.IsKeyDown(Keys.RightAlt))
+            {
+                int inspect = slotA[lane].Contains(mouse) ? lane * 2 : slotB[lane].Contains(mouse) ? lane * 2 + 1 : -1;
+                if (inspect >= 0 && !craftPlayer.StationInput(inspect).IsAir)
+                { _inspectedItem = craftPlayer.StationInput(inspect).Clone(); _inspectionScroll = 0; Main.mouseLeftRelease = false; return; }
+            }
             if (slotA[lane].Contains(mouse))
             {
                 if (Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift))

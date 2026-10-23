@@ -49,6 +49,7 @@ internal static partial class EngineRuntimeChecks
             ("Atlas motion AtlasCollectionOperations", AtlasCollectionOperations),
             ("Atlas motion AtlasSearchLanguage", AtlasSearchLanguage),
             ("Atlas motion AtlasWorkspaceNavigation", AtlasWorkspaceNavigation),
+            ("Station expansion Inspection", StationInspection),
             ("Expansion RecipePreparation", RecipePreparation),
             ("Expansion InventoryDeposit", InventoryDeposit),
             ("Expansion ItemGuide", ItemGuide),

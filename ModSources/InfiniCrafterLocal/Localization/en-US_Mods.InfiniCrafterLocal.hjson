@@ -256,6 +256,15 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	InspectionGuide: "Generated item controls and base effects:"
+	InspectionStack: "Stack: {0} / {1}"
+	InspectionTools: "Pick / axe / hammer power: {0} / {1}% / {2}"
+	InspectionDefense: "Defense: {0}"
+	InspectionUse: "Use / animation: {0} / {1} ticks; mana: {2}"
+	InspectionDamage: "Damage: {0}; knockback: {1}"
+	InspectionNative: "This exact item instance (including its prefix):"
+	InspectionHint: "Alt-click an ingredient to inspect it without taking it."
+	InspectionTitle: "Ingredient inspection"
 	PickerEmpty: "No eligible ingredients in inventory"
 	PickerHint: "One unit · inventory only · favorites protected"
 	PickIngredient: "Choose ingredient {0}"
