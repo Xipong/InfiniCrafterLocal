@@ -305,7 +305,7 @@ internal static partial class EngineRuntimeChecks
                     {
                         Point position = GeneratedUtilityBuffStatusView.IconPosition(i + 2, inventory, 1280, 800, inventory ? 13 : 0, 0);
                         Equal(position.ToVector2(), drawn[i + 1].Point, "appends without changing native or utility grid positions");
-                        Equal(Lang.LocalizedDuration(new TimeSpan(0, 0, new[] { 61, 122, 183, 244, 305 }[i] / 60), true, false), durations[i + 1], "each actual drawn countdown is its own");
+                        Equal(Lang.LocalizedDuration(new TimeSpan(0, 0, (new[] { 61, 122, 183, 244, 305 }[i] + 59) / 60), true, false), durations[i + 1], "each actual drawn countdown is its own");
                         Terraria.Main.mouseX = position.X + 1; Terraria.Main.mouseY = position.Y + 1;
                         hovers.Clear(); draw.Invoke(null, null);
                         Equal(1, hovers.Count, "one actual hover target");

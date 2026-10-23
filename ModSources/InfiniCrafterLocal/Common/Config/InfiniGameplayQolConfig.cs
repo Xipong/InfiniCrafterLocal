@@ -10,6 +10,9 @@ public sealed class InfiniGameplayQolConfig : ModConfig
 
     [Header("InfiniCraftStationQoL")]
     [DefaultValue(true)]
+    public bool PlayCraftCompletionSound = true;
+
+    [DefaultValue(true)]
     public bool EnableInventoryAssetPrefetch = true;
 
     [DefaultValue(120)]
@@ -23,6 +26,17 @@ public sealed class InfiniGameplayQolConfig : ModConfig
     public int InventoryAssetPrefetchMaxItems = 24;
 
     [Header("GeneratedGameplayQoL")]
+    [DefaultValue(40)]
+    [Range(25, 100)]
+    [Slider]
+    public int GeneratedStatusOpacityPercent = 40;
+
+    [DefaultValue(true)]
+    public bool PlayChargeReadySound = true;
+
+    [DefaultValue(false)]
+    public bool AlwaysExpandGeneratedTooltips = false;
+
     [DefaultValue(true)]
     public bool EnableGeneratedMeleeOnHitEffects = true;
 

@@ -71,6 +71,9 @@ internal static partial class EngineRuntimeChecks
             player.position = new Vector2(640, 640);
             for (int slot = 0; slot < 50; slot++) player.inventory[slot] = new Item();
             int oldX = Player.tileTargetX, oldY = Player.tileTargetY;
+            int oldSpawnX = Terraria.Main.spawnTileX, oldSpawnY = Terraria.Main.spawnTileY;
+            // No native bed exists in this fixture: recall must use a valid world spawn.
+            Terraria.Main.spawnTileX = Terraria.Main.spawnTileY = 42;
             int entries = 0;
             var mining = typeof(Player).GetMethod("ItemCheck_UseMiningTools", BindingFlags.Instance | BindingFlags.NonPublic)!;
             var strike = typeof(Player).GetMethod("ItemCheck_UseMiningTools_ActuallyUseMiningTool", BindingFlags.Instance | BindingFlags.NonPublic)!;
@@ -224,7 +227,8 @@ internal static partial class EngineRuntimeChecks
                     player.controlUseItem = true;
                 }
             }
-            finally { Player.tileTargetX = oldX; Player.tileTargetY = oldY; }
+            finally { Player.tileTargetX = oldX; Player.tileTargetY = oldY;
+                Terraria.Main.spawnTileX = oldSpawnX; Terraria.Main.spawnTileY = oldSpawnY; }
         })));
     }
 

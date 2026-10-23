@@ -210,6 +210,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void OnEnterWorld()
     {
+        _preparationParents = null;
         ClearGeneratedItemExhaustion();
         if (InputA is null) InputA = NewAirItem();
         if (InputB is null) InputB = NewAirItem();
@@ -579,6 +580,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void PostUpdate()
     {
+        if (Main.netMode != NetmodeID.Server && Player.whoAmI == Main.myPlayer) TickRecipePreparation();
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickCraftAudioGuard();

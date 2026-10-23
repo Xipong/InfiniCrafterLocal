@@ -91,6 +91,21 @@ internal static partial class EngineRuntimeChecks
                 }
                 catch (Exception error) { failures.Add(label + ": " + error.Message); }
             }
+            int previousX = Terraria.Main.spawnTileX, previousY = Terraria.Main.spawnTileY;
+            try
+            {
+                Terraria.Main.spawnTileX = 100; Terraria.Main.spawnTileY = 100;
+                WithPlayer((player, generated) => {
+                    player.active = true; player.whoAmI = 1;
+                    player.SpawnX = 200; player.SpawnY = 100; // empty world: removed bed
+                    player.velocity = new Vector2(18, 24);
+                    lastPositions[1] = player.position;
+                    Equal(true, generated.TryRunGeneratedMobility(new GameplaySpec { MobilityMode = "recall_home", MobilityCooldownTicks = 60 }), "removed bed falls back to world spawn");
+                    Equal(new Vector2(1608 - player.width / 2f, 1600 - player.height), player.position, "native bed validity selects actual destination");
+                    Equal(Vector2.Zero, player.velocity, "recall stops previous falling/dash momentum");
+                });
+            }
+            finally { Terraria.Main.spawnTileX = previousX; Terraria.Main.spawnTileY = previousY; }
             foreach (string reason in new[] { "zero", "unsafe", "dead", "inactive" })
             {
                 try

@@ -5,15 +5,9 @@ ChargeUI: {
 
 Keybinds: {
 	ToggleRecipeJournal: {
-            FilterAll: "Effects: all"
-            FilterHealing: "Effects: healing"
-            FilterMining: "Effects: mining"
-            FilterSummon: "Effects: summon"
-            FilterMobility: "Effects: mobility"
-            UsingIngredient: "Uses {0} ×"
-            Children: "Discovered fusions using this item: {0}"
 
-		DisplayName: "Toggle fusion atlas"
+
+		DisplayName: "Toggle fusion atlas (Shift: held item recipe)"
 	}
 }
 
@@ -37,10 +31,92 @@ UseFeedback: {
 	MobilityUnsafe: "Unsafe blink destination"
 }
 
-Mods: {
-	InfiniCrafterLocal: {
 
 		RecipeJournal: {
+	HelpOwnership: "Ownership: discoveries belong to the current world. Unknown ancestors stay unknown. Notes, collections, favorites and goals are personal character metadata. Inventory counts exclude the cursor and equipment; favorite ingredients stay protected."
+	HelpPlan: "Planning: choose the desired output amount. The plan uses the real recipe yield, shares available stock across branches and reuses crafting leftovers. Tracking a goal shows missing materials while exploring. Preparation fills station inputs; it never starts crafting."
+	HelpSearch: "Search: Ctrl+F focuses the field; Escape leaves editing first. Use quoted phrases and -excluded words, or qualifiers such as parent:wood, tag:fire, depth:>=2, note:boss and collection:combat. All terms must match."
+	HelpBrowse: "Browse: select a discovery, use the workspace button to open comparison, ancestry, stock, planning, personal notes or the item guide. Right-click a grid item to favorite it. PgUp/PgDn change pages; Home/End go to the first/last page."
+	WorkspaceHelp: "Choose a workspace · scroll for more · Escape goes back"
+	ViewHelp: "View: atlas help"
+	PrepareRefused: "Needs two available inventory ingredients, an empty cursor and an idle lane with empty inputs. Favorites stay protected. This prepares inputs only; start crafting at the station."
+	PrepareRecipe: "Prepare this recipe"
+	PrepareLane: "Lane {0}"
+	GuideHint: "Controls, costs, requirements, equipment bonuses and secondary effects. Scroll to read all details."
+	ViewGuide: "View: item guide"
+	OnlyUnvisited: "Show only unvisited discoveries"
+	ShowVisited: "Show all discoveries"
+	DiscoverySummary: "Known: {0} · unvisited: {1} · favorites: {2}"
+	SortRecent: "Recently viewed"
+	ViewDiscovery: "View: discovery log"
+	StructuredSearch: "Quoted phrases, -excluded words; name:, parent:, tag:, kind:, id:, note:, depth:>=2, collection:combat/exploration/building/experiments."
+	NotePrivacy: "Saved with your character for this world. Notes and collections do not rename the item or change generation prompts."
+	NoteHint: "Click to write a personal note (240 characters). Enter/Escape finishes editing."
+	Collection4: "Collection: experiments"
+	Collection3: "Collection: building"
+	Collection2: "Collection: exploration"
+	Collection1: "Collection: combat"
+	Collection0: "Collection: none"
+	ViewNotebook: "View: notebook"
+	GoalMore: "… and {0} more ingredient types"
+	GoalReady: "Ingredients available; open the atlas for craft order."
+	PinLimit: "Up to three goals per world. Unpin one first."
+	UnpinGoal: "Untrack goal"
+	PinGoal: "Track goal"
+	PlanStep: "{0} crafts: {1} → {2} units"
+	PlanSteps: "Craft in this order:"
+	PlanStockReady: "No additional ingredients shown."
+	PlanMissing: "Ingredients still needed:"
+	PlanTruncated: "Incomplete plan: cyclic/invalid recipe or traversal limit reached."
+	PlanNotice: "Planning only. One unit per ingredient per craft; favorite carried items excluded. Bank items must be retrieved manually."
+	PlanBanks: "Use inventory + banks"
+	PlanCarried: "Use inventory"
+	ViewPlan: "View: fusion plan"
+	StockScope: "Counts use exact identities in inventory and personal banks, including the Void Vault. Mouse slot, equipment and world chests are excluded. Stored and favorite items are never moved automatically."
+	StockRow: "Inventory: {0} · banks: {1} · protected in inventory: {2}"
+	ViewInventory: "View: inventory"
+	RepeatedAncestor: "Already visited; the branch stops here."
+	UnknownAncestor: "Generated ancestor is not available in this world."
+	NoRelations: "No known relations in this world."
+	LineageLimit: "Generation distance · scroll to browse (up to 256 links / 32 levels)"
+	ViewDescendants: "View: descendants"
+	ViewAncestors: "View: ancestors"
+	StatStack: "Maximum stack"
+	StatYield: "Craft yield"
+	StatDefense: "Defense"
+	StatHammer: "Hammer power"
+	StatAxe: "Axe power (%)"
+	StatPick: "Pick power"
+	StatMana: "Mana cost"
+	StatKnockback: "Knockback"
+	StatAnimationTicks: "Animation (ticks)"
+	StatUseTicks: "Use interval (ticks)"
+	StatBaseDamage: "Item contact damage"
+	DamageClasses: "Damage class: {0} / {1}"
+	BaseStatsHint: "Accepted base stats. Prefixes, player bonuses and projectile damage are separate; this is not DPS."
+	ComparisonHelp: "Select a reference, then browse another discovery. Values show selected / reference (difference)."
+	ReferenceSet: "Reference selected"
+	SetReference: "Compare with this"
+	ViewComparison: "View: comparison"
+	ViewRecipe: "View: recipe"
+            FilterAll: "Effects: all"
+            FilterHealing: "Effects: healing"
+            FilterMining: "Effects: mining"
+            FilterSummon: "Effects: summon"
+            FilterMobility: "Effects: mobility"
+            UsingIngredient: "Uses {0} ×"
+            Children: "Discovered fusions using this item: {0}"
+			FavoriteHint: "Right-click: toggle favorite"
+			PageKeys: "Page Up / Page Down: pages; Home / End: first / last"
+			SearchKeys: "Ctrl+F: search; Escape: leave search"
+			ResetFilters: "Reset search and filters"
+			FilterMana: "Effects: mana restoration"
+			FilterPlacement: "Effects: placement"
+			FilterEquipment: "Effects: equipment"
+			SortHint: "Click to sort by name or fusion generation; favorites stay first."
+			SortDeepFirst: "Depth ↓"
+			SortShallowFirst: "Depth ↑"
+			SortName: "A–Z"
 			Result: "Result"
 			SpaceHint: "Reduce UI scale or enlarge the window to read the recipe pages."
 			ReadOnly: "Discovered recipes only"
@@ -97,6 +173,14 @@ Mods: {
 			}
 
 			InfiniGameplayQolConfig: {
+			PlayCraftCompletionSound.Tooltip: "Play one cue when your finished item is delivered."
+			PlayCraftCompletionSound.Label: "Craft completion sound"
+			GeneratedStatusOpacityPercent.Tooltip: "Increase readability of generated buff and cooldown icons. Hovered icons remain fully opaque."
+			GeneratedStatusOpacityPercent.Label: "Generated status icon opacity (%)"
+			PlayChargeReadySound.Tooltip: "Disable the ready cue while keeping the charge bar and weapon sounds."
+			PlayChargeReadySound.Label: "Charge-ready sound"
+			AlwaysExpandGeneratedTooltips.Tooltip: "Show secondary effects without holding Shift. Compact tooltips remain the default."
+			AlwaysExpandGeneratedTooltips.Label: "Always show detailed item tooltips"
 				DisplayName: InfiniCraft gameplay QoL
 
 				Headers: {
@@ -141,11 +225,15 @@ Mods: {
 				}
 			}
 		}
-	}
-}
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	PickerEmpty: "No eligible ingredients in inventory"
+	PickerHint: "One unit · inventory only · favorites protected"
+	PickIngredient: "Choose ingredient {0}"
+			RetrieveHint: "Shift-click or right-click: return ingredient"
+			DepositHint: "Left-click with an item to deposit one unit. Favorited items and the Infini Core are protected."
+			FavoriteProtected: "Favorited items are protected. Unfavorite the item before depositing it."
 	Cancel: "Cancel"
 	CancelPending: "Cancellation: awaiting host confirmation"
 	DeliveryWait: "Ready; waiting for world item space"
@@ -208,6 +296,9 @@ StationUI: {
 }
 
 RuntimeTooltip: {
+			RecipeParents: "Created from: {0} + {1}"
+			DefinitionOtherWorld: "This item belongs to another world. Return to its world to use it."
+			DefinitionSyncing: "Waiting for this world to synchronize the item definition."
 	ExpandDetails: "Hold Shift for secondary and passive details."
 	SecondaryOwnerHurt: "When the owner takes damage"
 	SecondaryEnemyKilled: "When an enemy is killed"

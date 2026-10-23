@@ -19,7 +19,7 @@ using Terraria.UI;
 namespace InfiniCrafterLocal.Common.UI;
 
 [Autoload(Side = ModSide.Client)]
-public sealed class RecipeJournalUISystem : ModSystem
+public sealed partial class RecipeJournalUISystem : ModSystem
 {
     public static bool IsOpen { get; private set; }
     public static ModKeybind ToggleJournalKey { get; private set; } = null!;
@@ -38,13 +38,33 @@ public sealed class RecipeJournalUISystem : ModSystem
         if (ToggleJournalKey?.JustPressed != true || Main.LocalPlayer is not { active: true } player
             || !CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
                 Main.drawingPlayerChat, Main.blockInput, PlayerInput.CurrentlyRebinding)) return;
-        if (IsOpen) Close(); else Open();
+        if (IsOpen) Close();
+        else
+        {
+            Open();
+            if ((Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift))
+                && player.HeldItem?.ModItem is GeneratedItem held
+                && InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.IsCurrentWorldData(held.Data)
+                && !GeneratedItemData.IsPlayerSaveReferenceOnly(held.Data))
+            {
+                _query = ""; _favoritesOnly = false; _ingredientFilter = "";
+                _effectFilter = RecipeJournalView.EffectFilter.All; _page = 0;
+                Select(held.Data.Id);
+            }
+        }
     }
     private static string _query = "", _selected = "";
-    private static bool _searchFocus, _favoritesOnly;
+    private static string _comparisonId = "";
+    private enum DetailPage { Recipe, Comparison, Ancestors, Descendants, Inventory, Plan, Notebook, Discovery, Guide, Help }
+    private static DetailPage _detailPage;
+    private static bool _workspaceMenu;
+    private static int _workspaceScroll;
+    private static bool _searchFocus, _favoritesOnly, _noteFocus;
     private static RecipeJournalView.EffectFilter _effectFilter;
     private static string _ingredientFilter = "";
     private static int _page, _detailScroll;
+    private static bool _revealSelection, _unreadOnly;
+    private static RecipeJournalView.SortOrder _sortOrder;
     private static GeneratedItemData[] _known = Array.Empty<GeneratedItemData>();
     private static uint _snapshotTick;
     private static readonly Stack<string> History = new();
@@ -65,15 +85,21 @@ public sealed class RecipeJournalUISystem : ModSystem
     }
     private static void SetSearchFocus(bool focused)
     {
-        if (_searchFocus && !focused) PlayerInput.WritingText = false;
+        if (_searchFocus && !focused && !_noteFocus) PlayerInput.WritingText = false;
+        if (focused) _noteFocus = false;
         _searchFocus = focused;
         Main.blockInput = focused;
     }
-    private static void Close() { IsOpen = false; SetSearchFocus(false); }
+    internal static void Close() { IsOpen = false; SetNoteFocus(false); SetSearchFocus(false); }
+    private static void SetNoteFocus(bool focused)
+    {
+        if (_noteFocus && !focused) PlayerInput.WritingText = false;
+        _noteFocus = focused; Main.blockInput = _searchFocus || focused;
+    }
     public override void OnWorldUnload()
     {
-        Close(); _query = _selected = ""; _page = 0; _favoritesOnly = false;
-        _known = Array.Empty<GeneratedItemData>(); History.Clear();
+        Close(); _query = _selected = _comparisonId = ""; _detailPage = DetailPage.Recipe; _page = 0; _favoritesOnly = false; _revealSelection = false; _sortOrder = RecipeJournalView.SortOrder.Name;
+        _known = Array.Empty<GeneratedItemData>(); History.Clear(); _unreadOnly = false; _workspaceMenu = false; _workspaceScroll = 0;
         _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
     }
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
@@ -88,14 +114,27 @@ public sealed class RecipeJournalUISystem : ModSystem
             if (History.Count >= 32) History.Clear();
             History.Push(_selected);
         }
-        _selected = id; _detailScroll = 0; SetSearchFocus(false); Main.blockInput = false;
+        if (Main.LocalPlayer is { active: true } local && _known.Any(d => d.Id == id && d.RecipeMeta.WorldId == Main.worldID.ToString()))
+            local.GetModPlayer<InfiniCraftPlayer>().VisitJournalRecipe(id);
+        _selected = id; SetNoteFocus(false); _detailScroll = 0; _revealSelection = true; SetSearchFocus(false); Main.blockInput = false;
     }
     private static bool Draw()
     {
         if (!IsOpen) return true;
         if (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead) { Close(); return true; }
-        if (Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape)) { Close(); return true; }
-        if (Main.hideUI) { SetSearchFocus(false); return true; }
+        if (Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow || Main.inFancyUI || !Main.hasFocus)
+        { SetNoteFocus(false); SetSearchFocus(false); return true; }
+        if (Main.hasFocus && Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape))
+        {
+            if (_workspaceMenu) { _workspaceMenu = false; return true; }
+            if (_noteFocus) { SetNoteFocus(false); return true; }
+            if (_searchFocus) { SetSearchFocus(false); return true; }
+            Close(); return true;
+        }
+        if (Main.hasFocus && !Main.drawingPlayerChat && !PlayerInput.CurrentlyRebinding
+            && (!PlayerInput.WritingText || _searchFocus)
+            && (Main.keyState.IsKeyDown(Keys.LeftControl) || Main.keyState.IsKeyDown(Keys.RightControl))
+            && Main.keyState.IsKeyDown(Keys.F) && Main.oldKeyState.IsKeyUp(Keys.F)) SetSearchFocus(true);
         _hoverText = "";
         var player = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
         Main.LocalPlayer.mouseInterface = true;
@@ -106,7 +145,7 @@ public sealed class RecipeJournalUISystem : ModSystem
             _known = InfiniCrafterLocalMod.GeneratedItems?.Snapshot() ?? Array.Empty<GeneratedItemData>();
             _snapshotTick = Main.GameUpdateCount;
         }
-        Main.blockInput = _searchFocus;
+        Main.blockInput = _searchFocus || _noteFocus;
         if (_searchFocus)
         {
             PlayerInput.WritingText = true; Main.instance.HandleIME();
@@ -115,9 +154,10 @@ public sealed class RecipeJournalUISystem : ModSystem
             if (query != _query) { _query = query; _page = 0; }
         }
         var discoveries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), "", player.IsJournalFavorite, false);
-        var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly)
-            .Where(d => RecipeJournalView.MatchesEffect(d, _effectFilter)
+        var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly, player.JournalNote, player.JournalCollection)
+            .Where(d => (!_unreadOnly || player.JournalLastVisited(d.Id) == 0) && RecipeJournalView.MatchesEffect(d, _effectFilter)
                 && (_ingredientFilter.Length == 0 || d.RecipeMeta.ParentIdentities?.Contains("generated:" + _ingredientFilter, StringComparer.Ordinal) == true)).ToArray();
+        entries = RecipeJournalView.Sort(entries, _sortOrder, player.IsJournalFavorite, player.JournalLastVisited);
         if (_selected.Length == 0 && entries.Length > 0)
         {
             // Hydration may finish while the player is typing; auto-selection must not steal focus.
@@ -151,6 +191,7 @@ public sealed class RecipeJournalUISystem : ModSystem
         Rectangle search = new(book.X + 12, book.Y + 44, Math.Max(60, layout.List.Width - 110), 30);
         Chassis(sb, search, _searchFocus ? new Color(32, 45, 53) : Inset);
         Label(sb, _query.Length == 0 ? Text("Search") : _query + (_searchFocus && Main.GameUpdateCount % 60 < 30 ? "|" : ""), search.TopLeft() + new Vector2(8, 5), _query.Length == 0 ? Muted : Ink, 0.65f, search.Width - 16);
+        if (search.Contains(cursor.ToPoint())) _hoverText = Text("SearchKeys") + "\n" + Text("StructuredSearch");
         if (click && search.Contains(cursor.ToPoint())) { SetSearchFocus(true); Main.mouseLeftRelease = false; }
         else if (click) SetSearchFocus(false);
         if (_searchFocus && Main.keyState.IsKeyDown(Keys.Enter)) SetSearchFocus(false);
@@ -160,7 +201,7 @@ public sealed class RecipeJournalUISystem : ModSystem
             Label(sb, Text("Count", discoveries.Length), new Vector2(layout.Detail.X + 12, search.Y + 5), Muted, 0.65f, layout.Detail.Width - 24);
         var effectButton = new Rectangle(book.X + 12, book.Y + 80, Math.Min(182, book.Width - 24), 26);
         if (Button(sb, effectButton, Text("Filter" + _effectFilter), click, cursor))
-        { _effectFilter = (RecipeJournalView.EffectFilter)(((int)_effectFilter + 1) % 5); _page = 0; }
+        { _effectFilter = (RecipeJournalView.EffectFilter)(((int)_effectFilter + 1) % Enum.GetValues<RecipeJournalView.EffectFilter>().Length); _page = 0; }
         if (_ingredientFilter.Length > 0)
         {
             var clear = new Rectangle(effectButton.Right + 6, effectButton.Y, Math.Max(0, book.Right - effectButton.Right - 18), 26);
@@ -168,10 +209,31 @@ public sealed class RecipeJournalUISystem : ModSystem
             if (Button(sb, clear, Text("UsingIngredient", ingredient?.Name ?? _ingredientFilter), click, cursor, selected: true))
             { _ingredientFilter = ""; _page = 0; }
         }
+        if (_ingredientFilter.Length == 0 && (_query.Length > 0 || _favoritesOnly || _unreadOnly || _effectFilter != RecipeJournalView.EffectFilter.All))
+        {
+            var reset = new Rectangle(effectButton.Right + 6, effectButton.Y, Math.Max(0, book.Right - effectButton.Right - 18), 26);
+            if (Button(sb, reset, Text("ResetFilters"), click, cursor))
+            { _query = ""; _favoritesOnly = false; _unreadOnly = false; _effectFilter = RecipeJournalView.EffectFilter.All; _page = 0; SetSearchFocus(false); }
+        }
         Rectangle list = layout.List;
         int capacity = Math.Max(1, layout.Rows * layout.Columns);
         int pages = Math.Max(1, (entries.Length + capacity - 1) / capacity);
+        if (_revealSelection)
+        {
+            int selectedIndex = Array.FindIndex(entries, d => d.Id == _selected);
+            if (selectedIndex >= 0) _page = selectedIndex / capacity;
+            _revealSelection = false;
+        }
         _page = Math.Clamp(_page, 0, pages - 1);
+        if (!_searchFocus && Main.hasFocus && !Main.drawingPlayerChat && !Main.blockInput
+            && !PlayerInput.WritingText && !PlayerInput.CurrentlyRebinding)
+        {
+            bool Pressed(Keys key) => Main.keyState.IsKeyDown(key) && Main.oldKeyState.IsKeyUp(key);
+            if (Pressed(Keys.PageDown)) _page = Math.Min(pages - 1, _page + 1);
+            if (Pressed(Keys.PageUp)) _page = Math.Max(0, _page - 1);
+            if (Pressed(Keys.Home)) _page = 0;
+            if (Pressed(Keys.End)) _page = pages - 1;
+        }
         for (int i = 0; i < layout.Rows * layout.Columns; i++)
         {
             var slot = new Rectangle(list.X + i % layout.Columns * 52, list.Y + i / layout.Columns * 52, 48, 48);
@@ -183,7 +245,13 @@ public sealed class RecipeJournalUISystem : ModSystem
             if (entry is null) continue;
             Sprite(sb, entry, new Rectangle(slot.X + 6, slot.Y + 6, 36, 36));
             if (player.IsJournalFavorite(entry.Id)) Label(sb, "★", new Vector2(slot.Right - 14, slot.Y + 1), Gold, 0.5f, 14);
-            if (hover) _hoverText = entry.Name + "\n" + entry.ParentA + " + " + entry.ParentB;
+            if (player.JournalLastVisited(entry.Id) == 0) Label(sb, "•", slot.TopLeft() + new Vector2(3, 1), Link, .7f, 12);
+            if (hover) _hoverText = entry.Name + "\n" + entry.ParentA + " + " + entry.ParentB + "\n" + Text("FavoriteHint");
+            if (hover && Main.mouseRight && Main.mouseRightRelease && !PlayerInput.IgnoreMouseInterface)
+            {
+                player.ToggleJournalFavorite(entry.Id);
+                Main.mouseRightRelease = false;
+            }
             if (click && hover) { Select(entry.Id); Main.mouseLeftRelease = false; }
         }
         int wheel = PlayerInput.ScrollWheelDeltaForUI;
@@ -202,8 +270,12 @@ public sealed class RecipeJournalUISystem : ModSystem
             Paragraph(sb, Text("Welcome"), new Rectangle(layout.Detail.X + 16, layout.Detail.Y + 16, layout.Detail.Width - 32, layout.Detail.Height - 32), Muted, 0.7f);
         }
         int bottom = book.Bottom - 29;
+        if (new Rectangle(list.X, bottom, list.Width, 24).Contains(cursor.ToPoint())) _hoverText = Text("PageKeys");
         if (Button(sb, new Rectangle(list.X, bottom, 30, 24), "‹", click, cursor, enabled: _page > 0)) _page--;
-        CenterLabel(sb, Text("Page", _page + 1, pages), new Rectangle(list.X + 34, bottom + 3, list.Width - 68, 20), Ink, 0.6f);
+        if (Button(sb, new Rectangle(list.X + 34, bottom, list.Width - 68, 24),
+            Text("Sort" + _sortOrder) + " · " + Text("Page", _page + 1, pages), click, cursor))
+        { _sortOrder = (RecipeJournalView.SortOrder)(((int)_sortOrder + 1) % Enum.GetValues<RecipeJournalView.SortOrder>().Length); _page = 0; }
+        if (new Rectangle(list.X + 34, bottom, list.Width - 68, 24).Contains(cursor.ToPoint())) _hoverText = Text("SortHint");
         if (Button(sb, new Rectangle(list.Right - 30, bottom, 30, 24), "›", click, cursor, enabled: _page + 1 < pages)) _page++;
         if (layout.Detail.X > layout.List.Right) Label(sb, Text("ReadOnly"), new Vector2(layout.Detail.X + 12, bottom + 3), Muted, 0.55f, layout.Detail.Width - 24);
         if (click && book.Contains(cursor.ToPoint())) Main.mouseLeftRelease = false;
@@ -225,6 +297,21 @@ public sealed class RecipeJournalUISystem : ModSystem
                 enabled: children.Length > 0))
         { _ingredientFilter = data.Id; _effectFilter = RecipeJournalView.EffectFilter.All; _favoritesOnly = false; _query = ""; _page = 0; SetSearchFocus(false); }
         y += 30;
+        if (area.Bottom - y >= 60)
+        {
+            int half = (w - 12) / 3;
+            if (Button(sb, new Rectangle(x, y, half, 24), Text("View" + _detailPage), click, cursor))
+            { SetNoteFocus(false); _workspaceMenu = !_workspaceMenu; _workspaceScroll = 0; }
+            if (Button(sb, new Rectangle(x + half + 6, y, half, 24), Text(_comparisonId == data.Id ? "ReferenceSet" : "SetReference"), click, cursor))
+            { _comparisonId = data.Id; _detailPage = DetailPage.Comparison; _detailScroll = 0; }
+            if (Button(sb, new Rectangle(x + (half + 6) * 2, y, w - (half + 6) * 2, 24), Text(player.IsJournalPinned(data.Id) ? "UnpinGoal" : "PinGoal"), click, cursor))
+            {
+                if (!player.ToggleJournalPin(data.Id)) _hoverText = Text("PinLimit");
+            }
+            y += 30;
+            if (DrawWorkspacePicker(sb, new Rectangle(x, y, w, area.Bottom - y - 10), click, cursor)) return;
+            if (DrawAnalysisPage(sb, data, new Rectangle(x, y, w, area.Bottom - y - 10), click, cursor)) return;
+        }
         if (area.Height < 230)
         {
             if (area.Bottom - y >= 20) Label(sb, data.Name, new Vector2(x, y), Ink, 0.7f, w);
@@ -279,6 +366,14 @@ public sealed class RecipeJournalUISystem : ModSystem
             bool hover = slot.Contains(cursor.ToPoint());
             ItemSlotBackground(sb, slot, false, hover && parent is not null);
             if (parent is not null) Sprite(sb, parent, new Rectangle(slot.X + 5, slot.Y + 5, slot.Width - 10, slot.Height - 10));
+            else if (RecipeJournalView.NativeParentType(data, p) is > 0 and var nativeType)
+            {
+                Main.instance.LoadItem(nativeType);
+                Texture2D texture = TextureAssets.Item[nativeType].Value;
+                Rectangle frame = Main.itemAnimations[nativeType]?.GetFrame(texture) ?? texture.Bounds;
+                float scale = Math.Min((slot.Width - 10f) / frame.Width, (slot.Height - 10f) / frame.Height);
+                sb.Draw(texture, slot.Center.ToVector2(), frame, Color.White, 0f, frame.Size() * .5f, scale, SpriteEffects.None, 0f);
+            }
             else CenterLabel(sb, (p + 1).ToString(), new Rectangle(slot.X + 4, slot.Y + 8, slot.Width - 8, 20), Muted, 0.7f);
             if (!compact)
             {

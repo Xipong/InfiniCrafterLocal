@@ -2,6 +2,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Globalization;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
 using Microsoft.Xna.Framework;
@@ -11,7 +13,17 @@ namespace InfiniCrafterLocal.Common.UI;
 // Read-only discovery projection. Names never resolve identities or reveal unknown recipes.
 internal static class RecipeJournalView
 {
-    internal enum EffectFilter { All, Healing, Mining, Summon, Mobility }
+    internal enum SortOrder { Name, ShallowFirst, DeepFirst, Recent }
+
+    internal static GeneratedItemData[] Sort(GeneratedItemData[] entries, SortOrder order, Func<string, bool> favorite, Func<string, long>? visited = null)
+        => entries.OrderByDescending(d => favorite(d.Id))
+            .ThenBy(d => order == SortOrder.ShallowFirst ? (long)d.RecipeMeta.GenerationDepth
+                : order == SortOrder.DeepFirst ? -(long)d.RecipeMeta.GenerationDepth
+                : order == SortOrder.Recent ? -(visited?.Invoke(d.Id) ?? 0) : 0L)
+            .ThenBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(d => d.Id, StringComparer.Ordinal).ToArray();
+
+    internal enum EffectFilter { All, Healing, Mining, Summon, Mobility, Equipment, Placement, Mana }
 
     internal static GeneratedItemData[] Children(GeneratedItemData parent, IEnumerable<GeneratedItemData> known)
         => Entries(known, parent.RecipeMeta.WorldId, "", _ => false, false)
@@ -42,6 +54,9 @@ internal static class RecipeJournalView
                 || effects.Any(e => e.GeneratedBuff is { MiningSpeedMultiplier: > 1f }),
             EffectFilter.Summon => program.Entities.Any(e => e.IsProjectileEntity && e.Damage.Enabled
                 && e.Damage.DamageClass is "summon" or "summon_melee_speed" or "magic_summon_hybrid"),
+            EffectFilter.Equipment => data.Accessory.Enabled || data.Armor.Enabled,
+            EffectFilter.Placement => program.Bindings.Any(b => b.UsePolicy.Action.Kind == RuntimeBindingAction.PlaceItem),
+            EffectFilter.Mana => effects.Any(e => e.HealMana > 0 || e.GeneratedBuff is { ManaRegen: > 0 }),
             EffectFilter.Mobility => effects.Any(e => e.MobilityMode.Length > 0 || e.GeneratedBuff is { } b
                     && (b.MovementSpeed != 0 || b.JumpBoost != 0))
                 || program.Entities.Any(e => e.Events.Any(a => a.ActionCode == RuntimeEventActionCode.MoveOwner
@@ -51,14 +66,73 @@ internal static class RecipeJournalView
     }
 
     internal static GeneratedItemData[] Entries(IEnumerable<GeneratedItemData> records, string world,
-        string query, Func<string, bool> favorite, bool onlyFavorites)
+        string query, Func<string, bool> favorite, bool onlyFavorites, Func<string, string>? note = null, Func<string, int>? collection = null)
         => records.Where(d => d is not null && d.RecipeMeta.WorldScoped && d.RecipeMeta.WorldId == world
                 && !GeneratedItemData.IsPlayerSaveReferenceOnly(d) && d.Id != "placeholder"
                 && (!onlyFavorites || favorite(d.Id))
-                && (string.IsNullOrWhiteSpace(query) || new[] { d.Name, d.ParentA, d.ParentB }
-                    .Any(text => (text ?? "").Contains(query.Trim(), StringComparison.OrdinalIgnoreCase))))
+                && MatchesQuery(d, query, note?.Invoke(d.Id) ?? "", collection?.Invoke(d.Id) ?? 0))
             .GroupBy(d => d.Id, StringComparer.Ordinal).Select(g => g.First())
             .OrderByDescending(d => favorite(d.Id)).ThenBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+
+    internal static bool MatchesQuery(GeneratedItemData data, string query, string note = "", int collection = 0)
+    {
+        foreach (string raw in SearchTerms(query ?? ""))
+        {
+            bool excluded = raw.StartsWith('-') && raw.Length > 1;
+            string term = excluded ? raw[1..] : raw;
+            int colon = term.IndexOf(':');
+            string field = colon >= 0 ? term[..colon].ToLowerInvariant() : "";
+            string value = colon >= 0 ? term[(colon + 1)..] : term;
+            bool Contains(string? text) => (text ?? "").Contains(value, StringComparison.OrdinalIgnoreCase);
+            bool matches = value.Length > 0 && (field switch {
+                "name" => Contains(data.Name), "parent" => Contains(data.ParentA) || Contains(data.ParentB),
+                "tag" => data.Tags.Any(Contains), "kind" => Contains(data.Category), "id" => Contains(data.Id),
+                "note" => Contains(note),
+                "collection" => value.Equals(collection switch { 1 => "combat", 2 => "exploration", 3 => "building", 4 => "experiments", _ => "none" }, StringComparison.OrdinalIgnoreCase),
+                "depth" => DepthMatches(data.RecipeMeta.GenerationDepth, value),
+                "" => Contains(data.Name) || Contains(data.ParentA) || Contains(data.ParentB),
+                _ => new[] { data.Name, data.ParentA, data.ParentB }.Any(text => (text ?? "").Contains(term, StringComparison.OrdinalIgnoreCase)),
+            });
+            if (excluded ? matches : !matches) return false;
+        }
+        return true;
+    }
+    private static bool DepthMatches(int depth, string value)
+    {
+        string op = value.StartsWith(">=") || value.StartsWith("<=") ? value[..2]
+            : value.StartsWith('>') || value.StartsWith('<') || value.StartsWith('=') ? value[..1] : "";
+        return int.TryParse(value[op.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+            && (op switch { ">=" => depth >= n, "<=" => depth <= n, ">" => depth > n, "<" => depth < n, _ => depth == n });
+    }
+    private static IEnumerable<string> SearchTerms(string query)
+    {
+        var word = new StringBuilder(); bool quote = false;
+        foreach (char c in query.Take(240))
+        {
+            if (c == '"') { quote = !quote; continue; }
+            if (char.IsWhiteSpace(c) && !quote)
+            { if (word.Length > 0) { yield return word.ToString(); word.Clear(); } }
+            else word.Append(c);
+        }
+        if (word.Length > 0) yield return word.ToString();
+    }
+
+    internal static int NativeParentType(GeneratedItemData child, int index)
+    {
+        var identities = child.RecipeMeta.ParentIdentities;
+        if (identities is null || index < 0 || index >= identities.Length) return 0;
+        string[] parts = identities[index].Split(':');
+        string name, typeText;
+        if (parts.Length == 3 && parts[0] == "item" && parts[1].StartsWith("Terraria/", StringComparison.Ordinal))
+        { name = parts[1][9..]; typeText = parts[2]; }
+        else if (parts.Length == 4 && parts[0] == "item" && parts[1] == "Terraria")
+        { name = parts[2]; typeText = parts[3]; }
+        else return 0;
+        if (!int.TryParse(typeText, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int type)
+            || type <= 0 || type >= Terraria.ID.ItemID.Count
+            || !Terraria.ID.ItemID.Search.TryGetId(name, out int named) || named != type) return 0;
+        return type;
+    }
 
     internal static GeneratedItemData? Parent(GeneratedItemData child, int index, IEnumerable<GeneratedItemData> known)
     {

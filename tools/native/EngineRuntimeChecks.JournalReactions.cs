@@ -33,6 +33,10 @@ internal static partial class EngineRuntimeChecks
 
     private static void RecipeJournalKeepsWorldIdentityAndFavorites()
     {
+        WithForgePresentationLanguages(locale => {
+            foreach (string key in new[] { "Title", "Search", "FilterAll", "FilterHealing", "FilterMining", "FilterSummon", "FilterMobility", "UsingIngredient", "Children" })
+                Equal(false, RecipeJournalUISystem.Text(key, "item").StartsWith("Mods.", StringComparison.Ordinal), locale + " atlas localization resolves " + key);
+        });
         GeneratedItemData Entry(string id, string world, string name)
         {
             var data = GeneratedItemData.Placeholder(); data.Id = id; data.Name = name;

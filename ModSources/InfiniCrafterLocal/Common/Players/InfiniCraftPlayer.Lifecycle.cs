@@ -43,12 +43,20 @@ public sealed partial class InfiniCraftPlayer
         if (kind is CraftLaneOutcomeKind.Failed or CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
             && IsCraftLanePending(laneIndex) && (Main.netMode == NetmodeID.Server || _stationEscrowUsesRemoteAuthority))
             materials = CraftLaneMaterialDisposition.ServerRetained;
+        if (kind == CraftLaneOutcomeKind.Succeeded && _craftLaneOutcomes[laneIndex].Kind != kind
+            && !Main.dedServ && Main.netMode != NetmodeID.Server && Player.whoAmI == Main.myPlayer
+            && Terraria.ModLoader.ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>().PlayCraftCompletionSound)
+            Terraria.Audio.SoundEngine.PlaySound(SoundID.ResearchComplete, Player.Center);
         _craftLaneOutcomes[laneIndex] = new(kind, bounded[..Math.Min(bounded.Length, 240)], materials);
         _craftLaneOutcomeTicks[laneIndex] = kind == CraftLaneOutcomeKind.None ? 0 : 30 * 60;
     }
 
     private void TickCraftLanePresentation()
     {
+        // Count visible reading time, not time spent fighting or in another window.
+        if (Main.netMode != NetmodeID.Server && (!Main.playerInventory || !Main.hasFocus
+            || Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow || Main.inFancyUI
+            || Common.UI.RecipeJournalUISystem.IsOpen || Player.chest != -1 || Main.npcShop != 0)) return;
         for (int lane = 0; lane < 3; lane++)
             if (_craftLaneOutcomeTicks[lane] > 0 && --_craftLaneOutcomeTicks[lane] == 0)
                 _craftLaneOutcomes[lane] = default;

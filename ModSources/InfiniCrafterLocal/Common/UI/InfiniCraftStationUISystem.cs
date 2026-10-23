@@ -3,6 +3,7 @@ using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using System;
 using System.Collections.Generic;
 using Terraria;
@@ -20,7 +21,7 @@ namespace InfiniCrafterLocal.Common.UI;
 /// "first two inventory items" behavior.
 /// </summary>
 [Autoload(Side = ModSide.Client)]
-public sealed class InfiniCraftStationUISystem : ModSystem
+public sealed partial class InfiniCraftStationUISystem : ModSystem
 {
     private const int SlotSize = 52;
     private static string ForgeText(string key, params object[] args)
@@ -75,7 +76,9 @@ public sealed class InfiniCraftStationUISystem : ModSystem
 
     private static void DrawInventoryStation(SpriteBatch spriteBatch)
     {
-        if (!Main.playerInventory || Main.LocalPlayer is null || !Main.LocalPlayer.active)
+        if (!Main.playerInventory || Main.LocalPlayer is null || !Main.LocalPlayer.active
+            || Main.LocalPlayer.dead || Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow
+            || Main.inFancyUI || !Main.hasFocus || Main.LocalPlayer.chest != -1 || Main.npcShop != 0)
             return;
 
         if (RecipeJournalUISystem.IsOpen) return;
@@ -108,7 +111,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         {
             RecipeJournalUISystem.Open(); Main.mouseLeftRelease = false;
         }
-        HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
+        if (_pickerSlot < 0) HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
         DrawPanel(spriteBatch, panel);
         DrawFittedText(spriteBatch, ForgeText("Title"), new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan,
             bookButton.X - panel.X - 24, 0.92f);
@@ -145,11 +148,12 @@ public sealed class InfiniCraftStationUISystem : ModSystem
             if (fill > 0)
                 DrawGradient(spriteBatch, new Rectangle(bar.X, bar.Y, fill, bar.Height), new Color(40, 190, 220, 235), laneColor * 0.9f);
             var detailsBounds = layout.Details;
-            if (!PlayerInput.IgnoreMouseInterface && detailsBounds.Contains(Main.mouseX, Main.mouseY))
+            if (!PlayerInput.IgnoreMouseInterface && detailsBounds.Contains(Main.mouseX, Main.mouseY)
+                && !slotA[lane].Contains(Main.mouseX, Main.mouseY) && !slotB[lane].Contains(Main.mouseX, Main.mouseY))
             {
                 Main.hoverItemName = "";
                 Main.HoverItem = new Item();
-                string details = craftPlayer.CraftLaneDetails(lane);
+                string details = craftPlayer.CraftLaneDetails(lane) + "\n" + ForgeText("RetrieveHint");
                 if (!pending)
                     details += "\n" + ForgeText("InputPair",
                         first.IsAir ? ForgeText("Empty") : DisplayItemName(first),
@@ -161,6 +165,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         string footer = craftPlayer.HasPendingCraftRefunds ? ForgeText("RefundPending")
             : ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
         DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 28, 0.56f);
+        if (_pickerSlot >= 0) DrawInventoryPicker(spriteBatch, panel, craftPlayer);
         if (!PlayerInput.IgnoreMouseInterface && panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
     }
@@ -200,13 +205,21 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         {
             if (slotA[lane].Contains(mouse))
             {
-                if (!craftPlayer.TryTakeInputToMouse(lane * 2)) craftPlayer.TryPutMouseItemIntoInput(lane * 2);
+                if (Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift))
+                    craftPlayer.TryClearInputToInventory(lane * 2);
+                else if (!craftPlayer.TryTakeInputToMouse(lane * 2) && !craftPlayer.TryPutMouseItemIntoInput(lane * 2)
+                    && Main.mouseItem.IsAir && craftPlayer.StationInput(lane * 2).IsAir && !craftPlayer.IsCraftLanePending(lane))
+                { _pickerSlot = lane * 2; _pickerPage = 0; }
                 Main.mouseLeftRelease = false;
                 return;
             }
             if (slotB[lane].Contains(mouse))
             {
-                if (!craftPlayer.TryTakeInputToMouse(lane * 2 + 1)) craftPlayer.TryPutMouseItemIntoInput(lane * 2 + 1);
+                if (Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift))
+                    craftPlayer.TryClearInputToInventory(lane * 2 + 1);
+                else if (!craftPlayer.TryTakeInputToMouse(lane * 2 + 1) && !craftPlayer.TryPutMouseItemIntoInput(lane * 2 + 1)
+                    && Main.mouseItem.IsAir && craftPlayer.StationInput(lane * 2 + 1).IsAir && !craftPlayer.IsCraftLanePending(lane))
+                { _pickerSlot = lane * 2 + 1; _pickerPage = 0; }
                 Main.mouseLeftRelease = false;
                 return;
             }
@@ -243,6 +256,17 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         Vector2 pos = rect.TopLeft();
         ItemSlot.Draw(spriteBatch, ref item, ItemSlot.Context.BankItem, pos);
         Main.inventoryScale = oldScale;
+        if (!PlayerInput.IgnoreMouseInterface && rect.Contains(Main.mouseX, Main.mouseY) && item is { IsAir: false })
+        {
+            Main.HoverItem = item.Clone();
+            Main.hoverItemName = item.Name;
+        }
+        if ((item is null || item.IsAir) && !PlayerInput.IgnoreMouseInterface && rect.Contains(Main.mouseX, Main.mouseY))
+        {
+            string hint = Main.mouseItem is { IsAir: false } carried && carried.favorited
+                ? ForgeText("FavoriteProtected") : ForgeText("DepositHint");
+            Main.instance.MouseText(hint);
+        }
         if (item is null || item.IsAir)
             Utils.DrawBorderString(spriteBatch, label, new Vector2(rect.X + 20, rect.Y + 16), Color.DimGray, 0.8f);
     }

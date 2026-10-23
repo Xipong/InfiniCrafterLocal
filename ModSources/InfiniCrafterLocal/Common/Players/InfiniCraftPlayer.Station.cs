@@ -30,6 +30,30 @@ public sealed partial class InfiniCraftPlayer
         return item;
     }
 
+    public bool TryDepositInventoryItem(int inventorySlot, int stationSlot)
+    {
+        if (inventorySlot is < 0 or >= 58 || stationSlot is < 0 or >= 6 || !CanMutateStationInputs()
+            || IsCraftLanePending(stationSlot / 2) || HasPendingStationEscrowOperation
+            || Main.mouseItem is null || !Main.mouseItem.IsAir || !InputSlot(stationSlot).IsAir) return false;
+        Item source = Player.inventory[inventorySlot];
+        if (!InfiniCore.IsValidIngredient(source)) return false;
+        // Use the same synchronized cursor -> escrow path as a manual inventory drag.
+        // Never create a second MP deposit authority or skip its acknowledgement.
+        Main.mouseItem = source.Clone(); Main.mouseItem.stack = 1;
+        source.stack--; if (source.stack <= 0) source.TurnToAir();
+        SyncRefundedInventorySlot(inventorySlot);
+        if (TryPutMouseItemIntoInput(stationSlot)) return true;
+        // Admission refusal leaves the one-unit cursor untouched. Restore exactly
+        // that original source slot; no selection heuristics or inventory scan.
+        if (!Main.mouseItem.IsAir)
+        {
+            if (source.IsAir) Player.inventory[inventorySlot] = Main.mouseItem;
+            else source.stack += Main.mouseItem.stack;
+            Main.mouseItem = NewAirItem(); SyncRefundedInventorySlot(inventorySlot);
+        }
+        return false;
+    }
+
     public bool TryPutMouseItemIntoInput(int index)
     {
         if (!CanMutateStationInputs() || IsCraftLanePending(index / 2) || HasPendingStationEscrowOperation || Main.mouseItem is null || Main.mouseItem.IsAir || !InfiniCore.IsValidIngredient(Main.mouseItem))
@@ -271,10 +295,13 @@ public sealed partial class InfiniCraftPlayer
             Item slot = Player.inventory[i];
             if (slot is null || slot.IsAir || slot.type != refund.type || slot.stack >= slot.maxStack)
                 continue;
-            // Only merge plain vanilla stacks. Generated/modded items may share a type
-            // while carrying different serialized data, so they must keep exact slots.
+            // Generated proxies may merge only through their exact definition
+            // contract; other mod items retain the conservative separate-slot route.
             if (slot.ModItem is not null || refund.ModItem is not null)
-                continue;
+            {
+                if (slot.ModItem is not GeneratedItem generated
+                    || !GeneratedItem.SameGeneratedStack(generated, refund)) continue;
+            }
 
             // Native hooks own prefix/global-item compatibility and OnStack.
             // Type equality alone is not enough even for non-ModItem vanilla shells.

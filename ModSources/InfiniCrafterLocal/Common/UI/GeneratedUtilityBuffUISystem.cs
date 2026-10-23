@@ -99,13 +99,14 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         float scale = itemSprite is null ? 1f : Math.Min(32f / texture.Width, 32f / texture.Height);
         Vector2 imagePoint = point.ToVector2() + new Vector2((width - texture.Width * scale) / 2f, (height - texture.Height * scale) / 2f);
         bool hovered = !PlayerInput.IgnoreMouseInterface && bounds.Contains(Main.mouseX, Main.mouseY);
-        Color color = Color.White * (hovered ? 1f : (Main.playerInventory ? 0.65f : 0.4f));
+        float opacity = Math.Clamp(ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>()?.GeneratedStatusOpacityPercent ?? 40, 25, 100) / 100f;
+        Color color = Color.White * (hovered ? 1f : Main.playerInventory ? Math.Max(.65f, opacity) : opacity);
         // GameInterfaceLayer owns Begin/End and UIScaleMatrix. No gameplay slots,
         // DrawBuffIcon, HasBuff gate, timer advancement or click-to-remove behavior.
         Main.spriteBatch.Draw(texture, imagePoint, null, color, 0f, Vector2.Zero, scale, SpriteEffects.None, 0f);
         if (remainingTicks > 2)
         {
-            string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, itemSprite is null ? remainingTicks / 60 : (remainingTicks + 59) / 60),
+            string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, (int)((remainingTicks + 59L) / 60)),
                 abbreviated: true, showAllAvailableUnits: false);
             Utils.DrawBorderString(Main.spriteBatch, duration,
                 new Vector2(point.X, point.Y + height), color, 0.8f);

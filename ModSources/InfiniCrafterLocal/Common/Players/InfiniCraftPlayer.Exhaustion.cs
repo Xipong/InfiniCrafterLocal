@@ -99,7 +99,14 @@ public sealed partial class InfiniCraftPlayer
         if (changed && syncNetwork) CorrectGeneratedBuffPrediction();
     }
 
-    public override void UpdateDead() => ClearGeneratedItemExhaustion(syncNetwork: true);
+    public override void UpdateDead()
+    {
+        bool changed = _generatedItemExhaustion.Count > 0 || _activeGeneratedUtilityBuffs.Count > 0 || _generatedBuffTicks > 0;
+        ClearGeneratedItemExhaustion();
+        _activeGeneratedUtilityBuffs.Clear();
+        ResetGeneratedUtilityBuffAggregate();
+        if (changed) CorrectGeneratedBuffPrediction();
+    }
 
     // Existing utility snapshot, no second protocol. BinaryWriter strings use
     // a 7-bit UTF8 byte count; read the count BEFORE allocating the bounded bytes.

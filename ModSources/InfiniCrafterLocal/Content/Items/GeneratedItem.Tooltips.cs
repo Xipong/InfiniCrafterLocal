@@ -26,12 +26,30 @@ public partial class GeneratedItem
     /// echo authored name/category/realization/selfEvaluation as instructions.
     /// </summary>
     public override void ModifyTooltips(List<TooltipLine> tooltips)
-        => ModifyRuntimeTooltips(tooltips, Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift));
+        => ModifyRuntimeTooltips(tooltips, ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>()?.AlwaysExpandGeneratedTooltips == true
+            || Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift));
 
     internal void ModifyRuntimeTooltips(List<TooltipLine> tooltips, bool expanded)
     {
-        GeneratedItemData data = PresentationData();
-        if (GeneratedItemData.IsPlayerSaveReferenceOnly(data)) return;
+        WriteRuntimeFacts(PresentationData(), expanded,
+            (name, text) => tooltips.Add(new TooltipLine(Mod, name, text)));
+    }
+
+    internal static IReadOnlyList<string> RuntimeGuide(GeneratedItemData data)
+    {
+        var rows = new List<string>();
+        WriteRuntimeFacts(data, true, (_, text) => rows.Add(text));
+        return rows;
+    }
+
+    private static void WriteRuntimeFacts(GeneratedItemData data, bool expanded, Action<string, string> emit)
+    {
+        if (GeneratedItemData.IsPlayerSaveReferenceOnly(data))
+        {
+            bool current = GeneratedItemRegistryService.IsCurrentWorldData(data);
+            emit("InfiniDefinitionState", RuntimeTooltipText(current ? "DefinitionSyncing" : "DefinitionOtherWorld"));
+            return;
+        }
         RuntimeProgramSpec program = data.RuntimeProgram;
         int addedLines = 0;
         var details = new List<(string Name, string Key, object[] Args)>();
@@ -49,8 +67,8 @@ public partial class GeneratedItem
             // A wrapped fact occupies several native TooltipLine rows.
             int admitted = RuntimeTooltipRowsToAdd(addedLines, rows.Count);
             for (int i = 0; i < admitted; i++)
-                tooltips.Add(new TooltipLine(Mod, "Infini" + name
-                    + (i == 0 ? "" : "Wrap" + i.ToString(CultureInfo.InvariantCulture)), rows[i]));
+                emit("Infini" + name
+                    + (i == 0 ? "" : "Wrap" + i.ToString(CultureInfo.InvariantCulture)), rows[i]);
             addedLines += admitted;
         }
         // Exact live player table + existing registry definition identity. Never
@@ -86,6 +104,8 @@ public partial class GeneratedItem
                 }
             }
         }
+        if (data.RecipeMeta.WorldScoped && !string.IsNullOrWhiteSpace(data.ParentA) && !string.IsNullOrWhiteSpace(data.ParentB))
+            Detail("RecipeParents", "RecipeParents", GeneratedStatusTooltipView.LiteralName(data.ParentA), GeneratedStatusTooltipView.LiteralName(data.ParentB));
         if (data.Gameplay.CollectSeedsFromGrass == true)
             Detail("InventorySeedCollection", "InventorySeedCollection");
         AddRuntimeEquipmentStats(data, (name, key, args) => equipmentStats.Add((name, key, args)), Detail);

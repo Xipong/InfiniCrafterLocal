@@ -50,7 +50,7 @@ public sealed class GeneratedChargeUISystem : ModSystem
                 _status = status;
         }
         _announced.RemoveWhere(source => !live.Contains(source));
-        if (readySound && Visible()) SoundEngine.PlaySound(SoundID.MaxMana, player.Center);
+        if (readySound && Visible() && ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>().PlayChargeReadySound) SoundEngine.PlaySound(SoundID.MaxMana, player.Center);
     }
 
     public override void OnWorldUnload() { _status = null; _announced.Clear(); }
