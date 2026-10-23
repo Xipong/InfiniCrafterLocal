@@ -103,6 +103,36 @@ def _pad_complete_png(path: Path, target_size: int) -> None:
     assert path.stat().st_size == target_size
     assert asset_sync_service.is_complete_png_file(path)
 
+
+def test_png_admission_bounds_file_io_before_rejecting_oversize(tmp_path, monkeypatch):
+    from PIL import Image
+    path = tmp_path / "bounded.png"
+    Image.new("RGBA", (2, 2), (255, 100, 40, 255)).save(path)
+    raw = path.read_bytes()
+    monkeypatch.setattr(asset_sync_service, "_MAX_PNG_BYTES", len(raw))
+    assert asset_sync_service.is_complete_png_file(path)
+    path.write_bytes(raw + b"x" * 1024)
+    opened = []
+    real_open = Path.open
+
+    class BoundedRead:
+        def __enter__(self):
+            self.stream = real_open(path, "rb")
+            return self
+
+        def read(self, size=-1):
+            assert 0 < size <= len(raw) + 1
+            result = self.stream.read(size)
+            opened.append(len(result))
+            return result
+
+        def __exit__(self, *args):
+            self.stream.close()
+
+    monkeypatch.setattr(Path, "open", lambda self, *a, **kw: BoundedRead() if self == path else real_open(self, *a, **kw))
+    assert not asset_sync_service.is_complete_png_file(path)
+    assert opened == [len(raw) + 1]
+
 @pytest.mark.parametrize('width,height,accepted', [
     (512, 1, True), (1, 512, True), (513, 1, False), (1, 513, False),
 ])
