@@ -110,9 +110,13 @@ public sealed partial class RecipeJournalUISystem
                 RecipeInventoryView.Capture(Main.LocalPlayer, data.RecipeMeta.WorldId), _planIncludeStorage);
             content = Text("PlanNotice") + "\n" + (plan.Truncated ? Text("PlanTruncated") + "\n" : "") + Text("PlanMissing");
             foreach (var row in plan.Missing) content += "\n" + row.Count + " × " + row.Name;
-            if (plan.Missing.Count == 0) content += "\n" + Text("PlanStockReady");
+            if (!plan.Truncated && plan.Missing.Count == 0) content += "\n" + Text(plan.Completed ? "GoalCompleted" : "PlanStockReady");
             content += "\n\n" + Text("PlanSteps");
             foreach (var row in plan.Steps) content += "\n" + Text("PlanStep", row.Crafts, row.Name, row.Produced);
+            content += "\n\n" + Text("PlanAllocationTitle", plan.TotalCrafts);
+            foreach (var row in plan.Allocations.Where(r => r.Used > 0 || r.Surplus > 0))
+                content += "\n" + Text("PlanAllocation", row.Name, row.Used, row.Surplus);
+            content += "\n" + Text("PlanProtection");
         }
         if (_detailPage == DetailPage.Inventory)
         {

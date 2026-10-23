@@ -77,6 +77,12 @@ internal static partial class EngineRuntimeChecks
         Equal(true, RecipeStockFilter.Matches(recipe, RecipeStockFilter.Mode.ReadyCarried, stock), "live stock change makes duplicate recipe ready");
         recipe.RecipeMeta.ParentIdentities = new[] { "generated:parent", "generated:other" };
         Equal(false, RecipeStockFilter.Matches(recipe, RecipeStockFilter.Mode.ReadyWithBanks, stock), "names cannot substitute missing identity");
+        recipe.RecipeMeta.ParentIdentities = new[] { "item:Terraria:Wood:9", "item:Terraria/Wood:9" };
+        stock["item:Terraria/Wood:9"] = new("item:Terraria/Wood:9", 1, 1, 0, 1);
+        Equal(false, RecipeStockFilter.Matches(recipe, RecipeStockFilter.Mode.ReadyCarried, stock), "identity aliases consume two units");
+        Equal(false, RecipeStockFilter.Matches(recipe, RecipeStockFilter.Mode.ReadyWithBanks, stock), "protected bank stock cannot fulfill readiness");
+        stock["item:Terraria/Wood:9"] = new("item:Terraria/Wood:9", 1, 1, 0, 0);
+        Equal(true, RecipeStockFilter.Matches(recipe, RecipeStockFilter.Mode.ReadyWithBanks, stock), "unprotected bank stock fulfills exact duplicate count");
         WithPlayer((player, owner) => {
             var preset = new InfiniCrafterLocal.Common.Players.JournalFilterPreset("", false, false,
                 RecipeJournalView.EffectFilter.All, "", RecipeJournalView.SortOrder.Name, RecipeStockFilter.Mode.ReadyCarried);

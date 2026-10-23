@@ -39,6 +39,7 @@ public sealed class RecipeObjectiveUISystem : ModSystem
                 var plan = RecipePlanView.Build(data, 1, known, stock, false);
                 rows.Add(data.Name);
                 if (plan.Truncated) rows.Add(RecipeJournalUISystem.Text("PlanTruncated"));
+                else if (plan.Completed) rows.Add(RecipeJournalUISystem.Text("GoalCompleted"));
                 else if (plan.Missing.Count == 0) rows.Add(RecipeJournalUISystem.Text("GoalReady"));
                 else
                 {

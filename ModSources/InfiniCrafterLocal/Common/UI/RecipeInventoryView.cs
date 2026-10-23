@@ -11,7 +11,7 @@ namespace InfiniCrafterLocal.Common.UI;
 
 internal static class RecipeInventoryView
 {
-    internal readonly record struct Stock(string Identity, long Carried, long Stored, long Protected);
+    internal readonly record struct Stock(string Identity, long Carried, long Stored, long Protected, long StoredProtected = 0);
     internal static string Identity(Item? item, string world) => RecipeIngredientIdentity.Of(item, world);
     internal static IReadOnlyDictionary<string, Stock> Capture(Player player, string world)
     {
@@ -26,10 +26,13 @@ internal static class RecipeInventoryView
                 string id = Identity(item, world); if (id.Length == 0) continue;
                 totals.TryGetValue(id, out var old);
                 totals[id] = new(id, old.Carried + (!stored ? Math.Max(0, item.stack) : 0),
-                    old.Stored + (stored ? Math.Max(0, item.stack) : 0), old.Protected + (!stored && item.favorited ? Math.Max(0, item.stack) : 0));
+                    old.Stored + (stored ? Math.Max(0, item.stack) : 0), old.Protected + (!stored && item.favorited ? Math.Max(0, item.stack) : 0),
+                    old.StoredProtected + (stored && item.favorited ? Math.Max(0, item.stack) : 0));
             }
         }
     }
+    internal static string CanonicalIdentity(string identity)
+        => identity.StartsWith("item:Terraria:", StringComparison.Ordinal) ? "item:Terraria/" + identity[14..] : identity;
     internal static Stock Find(IReadOnlyDictionary<string, Stock> stock, string identity)
     {
         if (stock.TryGetValue(identity, out var value)) return value;

@@ -17,10 +17,10 @@ internal static class RecipeStockFilter
         if (mode == Mode.Missing) return output.Carried + output.Stored == 0;
         var parents = data.RecipeMeta.ParentIdentities;
         if (parents is null || parents.Length != 2 || parents.Any(string.IsNullOrWhiteSpace)) return false;
-        foreach (var required in parents.GroupBy(id => id, StringComparer.Ordinal))
+        foreach (var required in parents.GroupBy(RecipeInventoryView.CanonicalIdentity, StringComparer.Ordinal))
         {
             var value = RecipeInventoryView.Find(stock, required.Key);
-            long available = Math.Max(0, value.Carried - value.Protected) + (mode == Mode.ReadyWithBanks ? value.Stored : 0);
+            long available = Math.Max(0, value.Carried - value.Protected) + (mode == Mode.ReadyWithBanks ? Math.Max(0, value.Stored - value.StoredProtected) : 0);
             if (available < required.LongCount()) return false;
         }
         return true;
