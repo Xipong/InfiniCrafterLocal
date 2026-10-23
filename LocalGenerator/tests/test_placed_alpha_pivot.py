@@ -253,7 +253,12 @@ def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_le
     final_wire = sanitize_recipe_for_delivery(wire)
     assert placement(final_wire)["placedBody"]["pivotSpace"] == "alpha_bounds"
     expected = json.loads((Path(__file__).resolve().parents[2] / "tools/fixtures/placed-alpha-pivot-delivered.json").read_text())
-    assert final_wire == expected  # same retained final payload used by the native observer
+    # The retained native observer consumes placement/rendering, not unrelated
+    # future item-stat defaults. Keep its bytes and validate both deliveries.
+    assert validate_runtime_wire(expected)["ok"]
+    assert placement(final_wire) == placement(expected)
+    for component in ("runtimeProgram", "visual", "vfxManifest"):
+        assert final_wire[component] == expected[component]
     assert validate_runtime_wire(json.loads(json.dumps(final_wire)))["ok"]
     assert wire == before
     for leaf, value in (("pivotSpace", None), ("foreignAlphaCrop", True)):

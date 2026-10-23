@@ -1240,6 +1240,18 @@
                         "default": 0,
                         "x-infini-neutral": 0
                       },
+                      "manaCostInput": {
+                        "type": "string",
+                        "enum": [
+                          "primary_use",
+                          "alternate_use",
+                          "both"
+                        ],
+                        "description": "Which active input pays manaCost through native animation-start payment. The other input costs no base item mana. Omitted means both, preserving shared-cost behavior. This does not change explicit controller manaPayment.",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "both",
+                        "x-infini-neutral": "both"
+                      },
                       "rarity": {
                         "type": "integer",
                         "minimum": 0,
@@ -7840,7 +7852,7 @@
                           "authored_child",
                           "live_parent"
                         ],
-                        "description": "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)",
+                        "description": "Child damage magnitude: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes). Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "knockbackBasis": {
@@ -7984,6 +7996,33 @@
                           {
                             "type": "object",
                             "properties": {
+                              "on": {
+                                "type": "string",
+                                "enum": [
+                                  "on_use"
+                                ],
+                                "description": "Accepted item-use event"
+                              },
+                              "useInput": {
+                                "type": "string",
+                                "enum": [
+                                  "primary_use",
+                                  "alternate_use",
+                                  "both"
+                                ],
+                                "description": "Input that caused this use, captured before any delay; both selects either input, not two executions."
+                              }
+                            },
+                            "required": [
+                              "on",
+                              "useInput"
+                            ],
+                            "additionalProperties": false,
+                            "description": "Accepted item use from the selected input; both matches each use once."
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
                               "everySeconds": {
                                 "type": "number",
                                 "minimum": 0.09166666666666666,
@@ -8078,7 +8117,7 @@
                           "authored_child",
                           "live_parent"
                         ],
-                        "description": "Child damage source: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source",
+                        "description": "Child damage magnitude: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "knockbackBasis": {
@@ -8320,7 +8359,7 @@
                           "authored_child",
                           "live_parent"
                         ],
-                        "description": "Child damage source, selected independently of its velocity and knockback",
+                        "description": "Child damage magnitude, selected independently of its velocity and knockback. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "knockbackBasis": {

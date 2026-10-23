@@ -399,3 +399,28 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
         {key: value for key, value in accepted.items() if key != "debug"}, out_of_scope_response=True)
     assert repaired_wire["runtimeProgram"] == wire["runtimeProgram"]
     assert json.dumps(doc, sort_keys=True) == before
+
+
+def test_target_emission_wire_budget_preserves_disjoint_item_use_lanes_and_common_descendants():
+    doc = _doc(stepCount=1)
+    program = doc["runtimeProgram"]
+    item_id = next(e["id"] for e in program["entities"] if e["kind"] == "item_body")
+    child_id = _call(doc)["params"]["entity"]
+    alternate = deepcopy(program["bindings"][0])
+    alternate.update(id="alternate_use_binding", input="alternate_use")
+    program["bindings"].append(alternate)
+    for index, use_input in enumerate(("primary_use", "primary_use", "alternate_use", "alternate_use")):
+        program["calls"].append({"id": f"use_spawn_{index}", "fn": "spawn_entity_on_event", "target": item_id,
+            "params": {"when": {"on": "on_use", "useInput": use_input}, "entity": child_id,
+                       "count": 10, "spreadRadians": 0, "damageBasis": "authored_child",
+                       "knockbackBasis": "authored_child", "damageMultiplier": 1, "delaySeconds": 0}})
+    assert validate_runtime_program(doc)["stats"]["eventSpawnBudget"] == 21
+    wire = compile_runtime_program(doc)
+    wire.pop("runtimeContract")
+    assert validate_runtime_wire(wire)["ok"]
+    item = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == item_id)
+    for event in item["events"]:
+        event["useInput"] = "primary_use"
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(e["code"] == "event_spawn_budget_exceeded" for e in report["errors"])

@@ -687,7 +687,8 @@ public sealed partial class GeneratorClient
                 damageClass = DamageClassName(p.DamageType),
                 framesRaw = SafeProjFrames(projectileType),
                 setsRaw = ProjectileSetsRaw(projectileType),
-                motionReference = VerifiedSourceMotionReference(p)
+                motionReference = VerifiedSourceMotionReference(p),
+                onHitStatusReference = CaptureNativeHitStatusReference(p)
             };
         }
         catch

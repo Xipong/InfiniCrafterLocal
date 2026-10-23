@@ -202,4 +202,14 @@ def test_committed_native_fixture_preserves_compiler_delivery_in_headless_mode()
     for entity in actual["runtimeProgram"]["entities"]:
         entity["visual"]["assetMode"] = "no_asset"
     fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/inventory-seed-collection.json"
-    assert json.loads(fixture.read_text()) == actual
+    retained = json.loads(fixture.read_text())
+    # Inventory seed opt-in and its native ammo/input coexistence are the
+    # contract, not a snapshot of unrelated later optional item statistics.
+    for payload in (retained, actual):
+        assert validate_runtime_wire(payload)["ok"]
+        assert payload["gameplay"][FIELD] is True
+        assert payload["id"] == "g_1122334455667788"
+        assert payload["recipeKey"] == "inventory_seed_native_fixture"
+        assert payload["sourceMode"] == "test_fixture"
+        assert all(e["visual"]["assetMode"] == "no_asset" for e in payload["runtimeProgram"]["entities"])
+    assert retained["runtimeProgram"] == actual["runtimeProgram"]

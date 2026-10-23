@@ -72,3 +72,38 @@ Repair открывает только ошибочный leaf: invalid `maxTarg
 - [`RuntimeProgramExecutor.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs): прежний `ChainDamage` и authority.
 - [`GeneratedProjectile.Executors.cs`](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs): current `ApplyTargetAndFire`/`FindFiringTarget` и retained `FindNearestNpc`.
 - [`RuntimeProgramSpec.cs`](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs): прежние action 4 и обе DTO границы bias 0…1.
+
+## Выбор кнопки для on_use и маны
+
+`on_use` — одно принятое непостановочное использование предмета, а не нажатие
+клавиши до проверок. Для эффекта только на одной кнопке задаётся trigger:
+
+```json
+"when": {"on": "on_use", "useInput": "alternate_use"}
+```
+
+`useInput` принимает `primary_use`, `alternate_use` или `both`. `both` означает
+однократный запуск после каждого принятого использования любой из двух кнопок,
+не два запуска. Прежнее `"when": "on_use"` сохраняет смысл `both`. Фильтр
+относится только к `item_body.on_use`; попадания, периодические события и
+события снаряда не получают выдуманную «текущую кнопку». При задержке выбор
+фиксируется при постановке действия в очередь: переключение кнопки позже
+не меняет уже принятое действие.
+
+Отдельно `configure_item_stats.params.manaCostInput` выбирает, какая кнопка
+оплачивает заданный `manaCost`: те же `primary_use`, `alternate_use`, `both`.
+Пропуск явно эквивалентен `both`, поэтому старые предметы сохраняют общую цену.
+Например, `manaCost: 12, manaCostInput: "alternate_use"` не берёт базовую ману
+за основной удар и оставляет нативную оплату 12 базовых единиц для альтернативы.
+Модификаторы игрока продолжают действовать. Это не новая ручная транзакция:
+оплата остаётся нативной в начале анимации, не за каждый созданный снаряд или
+повторный вызов внутри той же анимации. Явные периодические `manaPayment`
+контроллеров этим полем не переопределяются.
+
+Выбор кнопки эффекта и выбор кнопки цены независимы: модель должна явно
+согласовать их с задуманным действием. Никакой выбор не выводится из названия,
+категории предмета или класса урона.
+
+## Раздельные input и бюджет spawn
+
+Для `item_body` события `on_use` с `useInput:primary_use` и `useInput:alternate_use` не происходят в одной активации. Статическая проверка складывает общие event counts (включая `both`, прежний строковый `on_use`, projectile events и descendants) и **большую** из двух input-only сумм. Например, по два события `count:10` на каждый input дают бюджет `20`, а не `40`; четыре события на один input дают `40` и отвергаются. Сам runtime-предел остаётся `32`, общая очередь сохраняет ledger исходной активации, а повторные события и контроллеры не получают бесплатного пополнения. Другие события не объявляются взаимоисключающими по имени или по предполагаемому сценарию использования.

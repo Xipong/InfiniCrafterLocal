@@ -161,3 +161,54 @@ def test_targeting_numeric_reject_guards_are_audited():
     for key in ("count", "spreadRadians"):
         assert rows[key]["preserved"]
         assert rows[key]["admission"] == "reject_without_clamp"
+
+
+@pytest.mark.parametrize("kind", ["temporary_helper", "stationary_projectile"])
+@pytest.mark.parametrize("movement", [None, "move_straight", "move_orbit"])
+def test_firing_controller_preserves_explicit_same_entity_movement_and_stationary_omission(kind, movement):
+    doc, controller = _fixture()
+    next(e for e in doc["runtimeProgram"]["entities"] if e["id"] == controller["target"])["kind"] = kind
+    if movement is not None:
+        motion = deepcopy(next(c for c in build_capability_witness(movement)["runtimeProgram"]["calls"] if c["fn"] == movement))
+        motion.update(id="controller_motion", target=controller["target"])
+        doc["runtimeProgram"]["calls"].append(motion)
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert report["ok"], report
+    wire = compile_runtime_program(doc)
+    assert doc == before  # No inferred movement or rewritten stationary substitute.
+    target = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == controller["target"])
+    assert target["controller"]["name"] == "target_and_fire"
+    if movement is None:
+        assert "movement" not in target
+    else:
+        assert target["movement"]["name"] == movement
+    shot = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == controller["params"]["shotEntity"])
+    assert shot["movement"]["name"] == "move_straight"
+    assert validate_runtime_wire(wire)["ok"]
+    wire.pop("runtimeContract")
+    assert validate_runtime_wire(wire)["ok"]
+
+
+def test_firing_controller_does_not_infer_a_movement_from_unknown_wire_driver():
+    doc, call = _fixture()
+    wire = compile_runtime_program(doc)
+    wire.pop("runtimeContract")
+    controller = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["target"])
+    controller["movement"] = {"name": "invented_orbit", "code": 999, "params": {}}
+    assert not validate_runtime_wire(wire)["ok"]
+
+
+def test_moving_firing_helper_does_not_expand_velocity_modifier_target_kinds():
+    doc, controller = _fixture()
+    next(e for e in doc["runtimeProgram"]["entities"] if e["id"] == controller["target"])["kind"] = "temporary_helper"
+    motion = deepcopy(next(c for c in build_capability_witness("move_straight")["runtimeProgram"]["calls"] if c["fn"] == "move_straight"))
+    motion.update(id="controller_motion", target=controller["target"])
+    doc["runtimeProgram"]["calls"].append(motion)
+    modifier_fn = next(name for name, cap in CAPABILITY_REGISTRY.items() if cap.category == "motion_modifier")
+    modifier = deepcopy(next(c for c in build_capability_witness(modifier_fn)["runtimeProgram"]["calls"] if c["fn"] == modifier_fn))
+    modifier.update(id="wrong_kind_modifier", target=controller["target"])
+    doc["runtimeProgram"]["calls"].append(modifier)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    assert any(e["code"] == "wrong_target_kind" for e in report["errors"])

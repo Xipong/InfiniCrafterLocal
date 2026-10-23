@@ -437,3 +437,40 @@ def test_item_contact_and_spawn_lane_do_not_infer_held_ownership():
     assert not validate_runtime_program(place)["ok"]
     binding["input"] = "hold"
     assert not validate_runtime_program(doc)["ok"]
+
+
+@pytest.mark.parametrize("inputs,expected,accepted", [
+    (("primary_use", "primary_use", "alternate_use", "alternate_use"), 20, True),
+    (("primary_use",) * 4, 40, False),
+    (("primary_use", "primary_use", "alternate_use", "both"), 30, True),
+    (("primary_use", "alternate_use", "both", "both"), 30, True),
+    (("both",) * 4, 40, False),
+])
+def test_spawn_budget_counts_disjoint_use_lanes_without_raising_activation_limit(inputs, expected, accepted):
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    doc = build_capability_witness("spawn_entity_on_event")
+    program = doc["runtimeProgram"]
+    event = next(c for c in program["calls"] if c["fn"] == "spawn_entity_on_event")
+    program["calls"].remove(event)
+    item_id = next(e["id"] for e in program["entities"] if e["kind"] == "item_body")
+    alternate = deepcopy(program["bindings"][0])
+    alternate.update(id="alternate_use_binding", input="alternate_use")
+    program["bindings"].append(alternate)
+    for index, use_input in enumerate(inputs):
+        action = deepcopy(event)
+        action.update(id=f"lane_spawn_{index}", target=item_id)
+        action["params"].update(when={"on": "on_use", "useInput": use_input}, count=10,
+                                damageBasis="authored_child", knockbackBasis="authored_child")
+        program["calls"].append(action)
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert report["stats"]["eventSpawnBudget"] == expected
+    assert report["ok"] is accepted, report
+    assert doc == before
+    if accepted:
+        wire = compile_runtime_program(doc)
+        assert validate_runtime_wire(wire)["ok"]
+        assert wire["runtimeProgram"]["limits"]["maxEventSpawnsPerActivation"] == 32
+    else:
+        assert "event_spawn_budget" in _codes(report)

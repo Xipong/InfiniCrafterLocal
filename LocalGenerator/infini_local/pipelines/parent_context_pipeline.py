@@ -170,6 +170,10 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
     # from names/aiStyle or compact/clip this optional read-only observation.
     if isinstance(proj.get("motionReference"), dict):
         out["motionReference"] = copy.deepcopy(proj["motionReference"])
+    # Exact native producer certificate and its limitations travel together.
+    # Item.buffType is a self-use buff, not this projectile's NPC-hit status.
+    if isinstance(proj.get("onHitStatusReference"), dict):
+        out["onHitStatusReference"] = copy.deepcopy(proj["onHitStatusReference"])
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
     return out

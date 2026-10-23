@@ -35,3 +35,76 @@
 Item/use/alternate/tool/placeable/equipment → ModItem; attached/channel/beam → held-projectile/beam patterns; flail/yoyo/whip → bounded custom AI; child/events/net → hooks + extra AI; collision/AoE → exact collision/event consumers. Последняя группа **не** blanket server collision proof: owner-hit отдельно использует [vanilla owner trust](../../development/architecture/ARCHITECTURE_RU.md#runtime-trust).
 
 Внешний пример не расширяет executable surface. Mapping/units/ranges/exclusions принадлежат [standardization](TERRARIA_TMODLOADER_STANDARDIZATION_RU.md#boundary), finite aliases/lowerings — [generated Lowery](../generated/LOWERY_RU.md), доказанный новый adapter — [vertical slice](../../development/ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md#vertical-slice).
+
+## Проверенные NPC-hit статусы родителей
+
+`Item.buffType` описывает buff от использования предмета, а не дебафф попадания
+снаряда. Нулевой `buffType` поэтому не доказывает отсутствие on-hit эффекта.
+Native `Projectile.StatusNPC` вызывается из hit path отдельно от `SetDefaults`:
+[официальный patch ветки 1.4.4](https://github.com/tModLoader/tModLoader/blob/1.4.4/patches/tModLoader/Terraria/Projectile.cs.patch).
+
+`directProjectileRaw` / `effectiveProjectileRaw.onHitStatusReference` передают
+узкую read-only справку, только если SHA256 IL метода и MVID модуля совпадают с проверенными.
+Она сохраняется целиком в Author parent dossier, включая scope и certificate.
+Тот же canonical capture используется для `/infinidump`: и внутри item projectile
+snapshot, и в отдельном projectile roster. Старые dumps не дополняются догадками.
+Это не автоматическое наследование эффекта и не маршрутизация generated AI.
+
+### Систематическое извлечение, а не список двух предметов
+
+`tools/generate/generate_native_hit_status.py` читает IL всей функции из
+официальной сборки и анализирует **каждый vanilla ProjectileID**. Он не загружает
+сборку как исполняемый код и не запускает игровые hooks. Bounded CFG-анализ
+знает только конкретный `this.type`; неизвестное состояние игрока, мира, AI и
+случайных условий рассматривается по обеим веткам. В справку попадают лишь
+`NPC.AddBuff` на целевом NPC, доказанные на каждом достижимом выходе. Неизвестные
+вызовы/opcodes, циклы и неверный control flow останавливают генератор, а не
+порождают догадку. Ветвящиеся buff IDs/durations исключаются.
+
+Результат: **64 типа снарядов, 65 запросов эффектов** из 1021 проанализированного
+типа в обеих проверенных сборках; покрыта 51 из 100 call sites `AddBuff`.
+Остальные sites и причины исключения доступны в
+[`native_hit_status_sources.generated.json`](../../../contracts/reports/native_hit_status_sources.generated.json).
+Это не означает, что у остальных снарядов нет эффектов: условные procs,
+player/world/AI-зависимые случаи, item hooks, PvP, child AI и mod hooks **неизвестны**.
+В частности, случайный шанс наложения не превращается в гарантированный эффект.
+
+Каждая справка содержит массив `effects` (не теряет второй эффект), `buffId`,
+`buffFullName`, точные inclusive min/max, **шаг** распределения и IL offset.
+Например, `GoldenShowerFriendly` → Ichor 600 ticks; `ShadowFlameKnife` →
+ShadowFlame равномерно 60–179 ticks; `PygmySpear` → Venom 300–600 ticks **шагом
+60**, а не любое целое между границами. `fixed` означает фиксированный срок,
+`uniform_integer_steps_inclusive` — равновероятные значения с указанным шагом.
+
+### Источники и воспроизводимость
+
+- [tML v2026.08.3.0](https://github.com/tModLoader/tModLoader/releases/tag/v2026.08.3.0):
+  ZIP SHA256 `61e865f3702b12ce4a26c5a90b9de99a12c65ffc228455eb3390ce54af1eab15`;
+  `StatusNPC` IL SHA256 `0409d6e8aeb6c41acc5454f7f818368639b041341d9eafff9dd1336cd42e2cf7`.
+- [tML v2026.06.3.6](https://github.com/tModLoader/tModLoader/releases/tag/v2026.06.3.6):
+  ZIP SHA256 `de501c82d25e8485a4c6174c64f8bcd6f4948e9fc4ee3d963745a7186e526674`;
+  `StatusNPC` IL SHA256 `ea30212888353eea100edc863b651f8ee1555b4f39891eb2de442ba3339dcb79`.
+
+Report также содержит SHA256 каждой DLL и MVID модуля (привязка metadata tokens
+к проверенной сборке, а не только к байтам метода). `assemblyVersion: 1.4.4.9` — версия
+Terraria из metadata, не номер релиза tML. Generated C# catalog и report
+строятся одной командой (developer-only зависимости, не runtime dependency):
+
+```bash
+python -m pip install -r tools/generate/native-hit-status-requirements.txt
+python tools/generate/generate_native_hit_status.py \
+  --assembly <2026.08.3.0>/tModLoader.dll \
+  --assembly <2026.06.3.6>/tModLoader.dll --check
+```
+
+Без `--check` команда обновляет оба generated файла. Передавать нужно обе
+поддерживаемые сборки; analyzer tests не требуют DLL или этих dependencies.
+
+IDs и имена берутся из metadata native constants. Имя предмета, tooltip и
+`aiStyle` не выбирают статус. Runtime принимает только certificate из generated
+catalog и совпадающий ModuleVersionId; другой IL/модуль, неизвестный тип или `ModProjectile` → справка отсутствует.
+Это vanilla NPC-hit **запрос**, не гарантия фактического наложения: иммунитет
+NPC и другие моды могут менять результат. Во время крафта hit hooks не
+запускаются. Native regression отдельно вызывает настоящий `StatusNPC` на
+изолированных NPC и проверяет fixed/integer/stepped durations; Python tests
+проверяют условные/dynamic exclusions, ветвления и отсутствие потери multiplicity.

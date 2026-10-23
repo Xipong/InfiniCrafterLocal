@@ -37,6 +37,7 @@ internal static partial class EngineRuntimeChecks
         {
             parent.Kind = RuntimeEntityKind.StationaryProjectile;
             parent.Visual.Role = parent.VisualRole = "deployed_entity";
+            parent.Movement = new RuntimeMovementSpec();
             parent.Controller.Name = "target_and_fire";
             parent.Controller.Code = RuntimeControllerCode.TargetAndFire;
             parent.Targeting = new RuntimeTargetingSpec {
@@ -164,12 +165,14 @@ internal static partial class EngineRuntimeChecks
             Equal(0, queries, "child inheritance never queries player/class modifiers again");
         }
         foreach (bool enabled in new[] { false, true })
+        foreach (int authoredChildDamage in new[] { 0, 23 })
         foreach (int parentDamage in new[] { 0, 137 })
         foreach (float multiplier in new[] { 0f, 1f })
         {
             using var scope = new SwarmRuntimeScope();
             var data = ChildCombatFixture(); var entity = data.RuntimeProgram.TryGetEntity("root")!;
             var child = data.RuntimeProgram.TryGetEntity("child")!; child.Damage.Enabled = enabled;
+            child.Damage.Damage = authoredChildDamage;
             entity.Events[0].DamageMultiplier = multiplier;
             var generated = SwarmHost(data, entity, damage: parentDamage, knockback: 0f);
             int expected = enabled && multiplier == 1f ? parentDamage : 0;

@@ -1,0 +1,3 @@
+# Offline IL extraction only; not generator/game runtime dependencies.
+dnfile==0.18.0
+dncil==1.0.2

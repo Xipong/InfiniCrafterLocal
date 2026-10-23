@@ -102,7 +102,7 @@ public partial class GeneratedItem
                     // Native velocity is applied on each projectile update; authored
                     // lifetime is world ticks, but extraUpdates multiplies launch speed.
                     float nominalSpeed = PlayerDisplayUnits.BlocksPerSecond(child!.Spawn.SpeedPxPerTick, child.Collision.ExtraUpdates + 1);
-                    if (!child.IsStationary && child.Spawn.VelocityDistribution is null
+                    if (child.UsesInitialVelocity && child.Spawn.VelocityDistribution is null
                         && (child.Spawn.Aim != "none" || action.HitTargetSpawn is not null)
                         && RuntimeTooltipFinite(nominalSpeed, 0f, float.MaxValue))
                         details += RuntimeTooltipText("SecondaryLaunchSpeed", RuntimeTooltipNumber(nominalSpeed));

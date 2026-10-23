@@ -61,11 +61,15 @@ public partial class GeneratedItem
         }
     }
 
-    private void RunItemEvent(Player player, RuntimeEntitySpec entity, string eventName, NPC? target, int damageDone)
+    private void RunItemEvent(Player player, RuntimeEntitySpec entity, string eventName, NPC? target, int damageDone, string? useInput = null)
     {
         Vector2 position = target?.Center ?? player.Center;
         Vector2 direction = new(player.direction, 0f);
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(eventName))
+        {
+            // Select from the originating accepted use before queue admission. The
+            // delayed action retains this decision, never a later mouse-button state.
+            if (eventName == RuntimeEventKind.OnUse && !RuntimeUseInputScope.Matches(action.UseInput, useInput)) continue;
             QueueOrExecuteItemAction(
                 player,
                 entity,
@@ -76,6 +80,7 @@ public partial class GeneratedItem
                 damageDone,
                 _itemEventBudget,
                 player.GetSource_ItemUse(Item));
+        }
     }
 
     private void QueueOrExecuteItemAction(

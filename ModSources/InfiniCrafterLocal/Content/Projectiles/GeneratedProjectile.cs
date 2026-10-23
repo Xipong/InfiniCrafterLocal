@@ -372,7 +372,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 float offset = count <= 1 ? 0f : MathHelper.Lerp(-spread * 0.5f, spread * 0.5f, i / (float)(count - 1));
                 Vector2 direction = baseDirection == Vector2.Zero ? Vector2.Zero : baseDirection.RotatedBy(offset);
                 Vector2 velocity = Vector2.Zero;
-                if (!entity.IsStationary)
+                if (entity.UsesInitialVelocity)
                 {
                     if (entity.Spawn.VelocityDistribution is null)
                         velocity = direction * (rootSpeedOverride ?? entity.Spawn.SpeedPxPerTick);

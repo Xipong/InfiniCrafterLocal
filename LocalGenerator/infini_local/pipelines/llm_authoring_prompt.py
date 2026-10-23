@@ -401,7 +401,7 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 def runtime_program_invariants_for_llm() -> dict[str, Any]:
     return {
         "primaryEntityOwnership": primary_entity_llm_invariant(),
-        "graphAndSpawnBudget": "Event references form an acyclic graph. From binding spawn roots, child depth <= catalog.limits.childDepth (3); each event spawn count <= 12, and the static sum of spawn_entity_on_event counts <= catalog.limits.eventSpawnsPerActivation (32). Periodic/controller repetitions use a runtime activation budget: the default lifetime allowance does not replenish. Explicit set_descendant_concurrency replaces a root's descendant ledger with a replenishable live-slot pool; nested pools retain ancestor limits. Owner/entity/depth caps still apply; no successful shot count is guaranteed.",
+        "graphAndSpawnBudget": "Event references form an acyclic graph. From binding spawn roots, child depth <= catalog.limits.childDepth (3); each event spawn count <= 12, and the static sum of spawn_entity_on_event counts <= catalog.limits.eventSpawnsPerActivation (32). Only item-body on_use primary-only and alternate-only counts are disjoint: count shared/both/other events plus the larger input-only subtotal, not both subtotals. Periodic/controller repetitions use a runtime activation budget: the default lifetime allowance does not replenish. Explicit set_descendant_concurrency replaces a root's descendant ledger with a replenishable live-slot pool; nested pools retain ancestor limits. Owner/entity/depth caps still apply; no successful shot count is guaranteed.",
     }
 
 def realization_execution_truth_for_llm() -> dict[str, str]:
