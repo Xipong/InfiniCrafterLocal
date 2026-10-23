@@ -20,7 +20,7 @@ using Terraria.UI;
 namespace InfiniCrafterLocal.Common.UI;
 
 [Autoload(Side = ModSide.Client)]
-public sealed class GeneratedUtilityBuffUISystem : ModSystem
+public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
 {
     // Read the installed native map pass's frame-owned offset, not inputs that
     // Inventory can mutate later in the same frame. Bind once; no reflection in Draw.
@@ -74,8 +74,8 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         if (mobility is not null)
             DrawStatus(player, TextureAssets.Buff[mobility.IconBuffType], mobility.Label,
                 mobility.Tooltip, mobility.RemainingTicks, append++, inventoryOffset);
-        foreach (GeneratedReactionCooldownStatusRow status in GeneratedReactionCooldownStatusView.Build(
-            owner.CaptureGeneratedReactionCooldowns(), Language.ActiveCulture.CultureInfo))
+        var reactions = GeneratedReactionCooldownStatusView.Build(owner.CaptureGeneratedReactionCooldowns(), Language.ActiveCulture.CultureInfo);
+        foreach (GeneratedReactionCooldownStatusRow status in reactions)
         {
             Texture2D? sprite = InfiniCrafterLocalMod.Sprites?.TryGet(status.SpritePath);
             // Only the accepted item's real PNG; asset hydration remains with the
@@ -96,6 +96,7 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         }
         if (Common.Runtime.RuntimeHealingFeedback.Capture(player, Main.GameUpdateCount, Language.ActiveCulture.CultureInfo) is { } healing)
             DrawStatus(player, TextureAssets.Buff[BuffID.Regeneration], healing.Label, healing.Tooltip, 0, append++, inventoryOffset);
+        DrawTimeline(GeneratedStatusTimelineView.Build(snapshot, exhausted, mobility, reactions, Language.ActiveCulture.CultureInfo));
         return true;
     }
 
@@ -133,6 +134,9 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
         // Native buffTooltip clamps the body without including the title height.
         // Submit one bounded multiline cursorText so native MouseTextInner measures
         // and keeps the WHOLE block inside the screen, including near the bottom.
+        if (TimelineKey) { if (!_timelineArmed) _timelineAnchor = new Point(Main.mouseX, Main.mouseY); _timelineArmed = true; return; }
+        tooltip += Language.ActiveCulture.CultureInfo.TwoLetterISOLanguageName == "ru"
+            ? "\nShift: шкала окончаний; колесо: прокрутка" : "\nShift: expiration timeline; wheel: scroll";
         string hoverText = label + "\n" + tooltip;
         if (FontAssets.MouseText?.IsLoaded == true)
             hoverText = GeneratedStatusTooltipView.Wrap(label, tooltip, Main.screenWidth, Main.screenHeight,
