@@ -303,8 +303,13 @@ public sealed partial class InfiniCraftPlayer
         {
             foreach (TagCompound row in tag.GetList<TagCompound>("infiniDeferredCraftRefundsV1"))
             {
-                Item item = ItemIO.Load(row);
-                if (item is not null && !item.IsAir && item.stack > 0) _deferredExitRefunds.Add(item);
+                // One malformed saved item must not discard later refunds or escrow metadata.
+                try
+                {
+                    Item item = ItemIO.Load(row);
+                    if (item is not null && !item.IsAir && item.stack > 0) _deferredExitRefunds.Add(item);
+                }
+                catch (Exception) { }
             }
             string clientId = tag.ContainsKey("infiniStationEscrowClientId")
                 ? tag.GetString("infiniStationEscrowClientId")

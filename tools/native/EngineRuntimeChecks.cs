@@ -47,6 +47,8 @@ internal static partial class EngineRuntimeChecks
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),
+        ("atlas focus ownership overlay resume and world cleanup", AtlasFocusAndOverlayResumeStayScoped),
+        ("deferred refund malformed row isolation", DeferredRefundLoadIsolatesMalformedRows),
             ("UI QoL compact tooltip critical inputs and Shift expansion", CompactTooltipsKeepInputsAndLockoutsAndExpandWithEitherShift),
             ("audit escrow take acknowledgement preserves changed cursor", EscrowTakeAcknowledgementPreservesChangedCursor),
             ("audit sentry original damage selected prefixed base", SentryOriginalDamageUsesSelectedPrefixedBase),
