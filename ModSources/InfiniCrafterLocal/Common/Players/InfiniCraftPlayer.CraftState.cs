@@ -211,6 +211,7 @@ public sealed partial class InfiniCraftPlayer
     public override void OnEnterWorld()
     {
         AcknowledgeAllCraftNotifications();
+        _lastGeneratedRecall = null;
         _preparationParents = null;
         ClearGeneratedItemExhaustion();
         if (InputA is null) InputA = NewAirItem();

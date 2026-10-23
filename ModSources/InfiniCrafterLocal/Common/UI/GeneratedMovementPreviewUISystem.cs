@@ -29,8 +29,13 @@ public sealed class GeneratedMovementPreviewUISystem : ModSystem
         var binding = item.Data.RuntimeProgram.BindingForInput(Main.mouseRight ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.ApplyItemEffects) return true;
         var effects = item.Data.EffectsForBinding(binding);
-        if (effects.MobilityMode != "blink_to_cursor") return true;
         var owner = player.GetModPlayer<InfiniCraftPlayer>();
+        if (effects.MobilityMode == "recall_home")
+        {
+            DrawHome(owner);
+            return true;
+        }
+        if (effects.MobilityMode != "blink_to_cursor") return true;
         var preview = owner.PreviewGeneratedBlink(effects, Main.MouseWorld);
         if (preview.Reason is "InvalidTarget" or "RangeMissing" or "Dead") return true;
         Vector2 point = preview.Destination - Main.screenPosition;
@@ -47,4 +52,18 @@ public sealed class GeneratedMovementPreviewUISystem : ModSystem
         Utils.DrawBorderString(Main.spriteBatch, label, labelPoint, color, .7f);
         return true;
     }
+    private static void DrawHome(InfiniCraftPlayer owner)
+    {
+        var home = owner.CaptureGeneratedHomeDestination();
+        const string prefix = "Mods.InfiniCrafterLocal.MovementPreview.";
+        string source = Language.GetTextValue(prefix + (!home.Available ? "HomeMissing" : home.UsesBed ? "HomeBed" : home.RemovedBed ? "HomeRemovedBed" : "HomeWorld"));
+        string label = source;
+        if (home.Available) label += " • " + Language.GetTextValue(prefix + "HomeDistance", (int)Math.Ceiling(home.DistanceTiles), home.TileX, home.TileY);
+        if (home.CooldownTicks > 0) label += " • " + Language.GetTextValue(prefix + "Cooldown", (home.CooldownTicks + 59) / 60);
+        Vector2 point = Main.LocalPlayer.Top - Main.screenPosition + new Vector2(0, -32);
+        point.X = Math.Clamp(point.X, 8, Math.Max(8, Main.screenWidth - 380));
+        point.Y = Math.Clamp(point.Y, 8, Math.Max(8, Main.screenHeight - 24));
+        Utils.DrawBorderString(Main.spriteBatch, label, point, home.Available && home.CooldownTicks == 0 ? Color.LightGreen : Color.Orange, .65f);
+    }
+
 }

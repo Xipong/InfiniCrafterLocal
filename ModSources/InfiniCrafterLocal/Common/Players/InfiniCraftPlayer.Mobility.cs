@@ -248,18 +248,20 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityAuthority");
             return false;
         }
-        bool validBed = Terraria.Player.CheckSpawn(Player.SpawnX, Player.SpawnY);
-        int sx = validBed ? Player.SpawnX : Main.spawnTileX;
-        int sy = validBed ? Player.SpawnY : Main.spawnTileY;
-        if (sx <= 0 || sy <= 0 || sx >= Main.maxTilesX - 1 || sy >= Main.maxTilesY - 1)
+        var home = CaptureGeneratedHomeDestination();
+        if (!home.Available)
         {
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilitySpawnMissing");
             return false;
         }
-        Vector2 destination = new(sx * 16f + 8f - Player.width / 2f, sy * 16f - Player.height);
-        Player.Teleport(destination, 0);
+        Vector2 departure = Player.position;
+        Player.Teleport(home.Destination, 0);
         Player.velocity = Vector2.Zero;
-        InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, destination);
+        // Native Teleport removes grapples and resets fallStart. Match its
+        // secondary fall sample as well; old airborne history cannot leak home.
+        Player.fallStart2 = Player.fallStart;
+        _lastGeneratedRecall = new(departure, Player.position, home.UsesBed, Main.GameUpdateCount);
+        InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, home.Destination);
         return true;
     }
 

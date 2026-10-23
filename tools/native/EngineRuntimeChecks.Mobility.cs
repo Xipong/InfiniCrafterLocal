@@ -98,11 +98,21 @@ internal static partial class EngineRuntimeChecks
                 WithPlayer((player, generated) => {
                     player.active = true; player.whoAmI = 1;
                     player.SpawnX = 200; player.SpawnY = 100; // empty world: removed bed
-                    player.velocity = new Vector2(18, 24);
+                    player.velocity = new Vector2(18, 24); player.fallStart2 = -100;
+                    var preview = generated.CaptureGeneratedHomeDestination();
+                    Equal(true, preview.Available, "live home preview available");
+                    Equal(true, preview.RemovedBed, "home preview explains removed bed fallback");
+                    Equal(false, preview.UsesBed, "home preview identifies world spawn");
+                    Equal(100, preview.TileX, "home preview uses current world spawn");
                     lastPositions[1] = player.position;
                     Equal(true, generated.TryRunGeneratedMobility(new GameplaySpec { MobilityMode = "recall_home", MobilityCooldownTicks = 60 }), "removed bed falls back to world spawn");
                     Equal(new Vector2(1608 - player.width / 2f, 1600 - player.height), player.position, "native bed validity selects actual destination");
                     Equal(Vector2.Zero, player.velocity, "recall stops previous falling/dash momentum");
+                    Equal(player.fallStart, player.fallStart2, "secondary fall sample reset on arrival");
+                    Equal(preview.Destination, generated.LastGeneratedRecall!.Value.Arrival, "journey receipt agrees with executed destination");
+                    Terraria.Main.spawnTileX = 110;
+                    Equal(110, generated.CaptureGeneratedHomeDestination().TileX, "destination inspection never caches old spawn");
+                    Terraria.Main.spawnTileX = 100;
                 });
             }
             finally { Terraria.Main.spawnTileX = previousX; Terraria.Main.spawnTileY = previousY; }
