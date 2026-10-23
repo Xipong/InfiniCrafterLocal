@@ -256,6 +256,13 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	HistoryMaterialsServerRetained: "При завершении материалы оставались у сервера."
+	HistoryMaterialsLocalRefund: "При завершении запрошен локальный возврат; проверьте инвентарь или статус возврата."
+	HistoryMaterialsUnobserved: "Возврат материалов для этого результата не зафиксирован."
+	HistoryNotice: "Записей: {0} · {1}/{2} · история не переносит предметы"
+	HistoryCurrentWorld: "Текущий мир"
+	HistoryAllWorlds: "Все миры"
+	History: "История"
 	PreparationProtectedStock: "Нужные предметы в избранном. Снимите защиту перед подготовкой."
 	PreparationMissingStock: "Нужны оба ингредиента в инвентаре; одинаковых нужно два. Предметы из банков не переносятся."
 	PreparationLaneOccupied: "Заберите оба предмета линии перед подготовкой."

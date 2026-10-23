@@ -47,7 +47,9 @@ public sealed partial class InfiniCraftPlayer
             && !Main.dedServ && Main.netMode != NetmodeID.Server && Player.whoAmI == Main.myPlayer
             && Terraria.ModLoader.ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>().PlayCraftCompletionSound)
             Terraria.Audio.SoundEngine.PlaySound(SoundID.ResearchComplete, Player.Center);
-        _craftLaneOutcomes[laneIndex] = new(kind, bounded[..Math.Min(bounded.Length, 240)], materials);
+        var outcome = new CraftLaneOutcome(kind, bounded[..Math.Min(bounded.Length, 240)], materials);
+        RecordCraftHistory(laneIndex, outcome);
+        _craftLaneOutcomes[laneIndex] = outcome;
         _craftLaneOutcomeTicks[laneIndex] = kind == CraftLaneOutcomeKind.None ? 0 : 30 * 60;
     }
 

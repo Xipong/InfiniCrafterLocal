@@ -50,14 +50,14 @@ public sealed partial class InfiniCraftStationUISystem
         (Main.mouseLeft, Main.mouseLeftRelease, Main.mouseRight, Main.mouseRightRelease) = (_modalLeft, _modalLeftRelease, _modalRight, _modalRightRelease);
         return true;
     }
-    internal static bool StationModalVisible => _pickerSlot >= 0 || _inspectedItem is not null;
+    internal static bool StationModalVisible => _pickerSlot >= 0 || _inspectedItem is not null || _historyOpen;
     internal static bool StationInteractionAvailable(Player? player)
         => player is { active: true, dead: false } && Main.playerInventory && Main.hasFocus
             && !Main.gameMenu && !Main.hideUI && !Main.mapFullscreen && !Main.ingameOptionsWindow
             && !Main.inFancyUI && !Main.drawingPlayerChat && !PlayerInput.CurrentlyRebinding
             && player.chest == -1 && Main.npcShop == 0 && !RecipeJournalUISystem.IsOpen;
     internal static void CloseStationModals()
-    { ClosePicker(); _pickerPage = 0; _pickerQuery = ""; _inspectedItem = null; _inspectionScroll = 0; }
+    { ClosePicker(); _pickerPage = 0; _pickerQuery = ""; _inspectedItem = null; _inspectionScroll = 0; _historyOpen = false; _historyPage = 0; }
     public override void PostUpdateInput()
     {
         if (!StationInteractionAvailable(Main.LocalPlayer)) { CloseStationModals(); return; }

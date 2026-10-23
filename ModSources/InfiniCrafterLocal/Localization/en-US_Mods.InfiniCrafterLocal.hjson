@@ -256,6 +256,13 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	HistoryMaterialsServerRetained: "Materials remained under server custody at completion."
+	HistoryMaterialsLocalRefund: "Local recovery was requested at completion; check current inventory or recovery status."
+	HistoryMaterialsUnobserved: "No material recovery was recorded for this outcome."
+	HistoryNotice: "{0} records · {1}/{2} · history never moves items"
+	HistoryCurrentWorld: "Current world"
+	HistoryAllWorlds: "All worlds"
+	History: "History"
 	PreparationProtectedStock: "The required stock is favorited. Remove its favorite protection before preparing."
 	PreparationMissingStock: "Carry enough of both ingredients; duplicate parents need two units. Bank items are not transferred."
 	PreparationLaneOccupied: "Retrieve both lane inputs before preparing this recipe."

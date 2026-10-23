@@ -232,6 +232,7 @@ public sealed partial class InfiniCraftPlayer
     public override void SaveData(TagCompound tag)
     {
         SaveJournal(tag);
+        SaveCraftHistory(tag);
         _pendingRefundSavedForWorldExit = false;
         _pendingRemoteCraftSavedForWorldExit = false;
         try
@@ -299,6 +300,7 @@ public sealed partial class InfiniCraftPlayer
     public override void LoadData(TagCompound tag)
     {
         LoadJournal(tag);
+        LoadCraftHistory(tag);
         _deferredExitRefunds.Clear();
         try
         {

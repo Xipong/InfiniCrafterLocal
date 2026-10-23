@@ -176,11 +176,17 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
             }
         }
 
+        var history = new Rectangle(panel.Right - 98, panel.Bottom - 27, 84, 22);
+        DrawButton(spriteBatch, history, true, ForgeText("History"));
+        if (!StationModalVisible && Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface
+            && history.Contains(Main.mouseX, Main.mouseY))
+        { _historyOpen = true; _historyPage = 0; Main.mouseLeftRelease = false; }
         string footer = craftPlayer.HasPendingCraftRefunds ? ForgeText("RefundPending")
             : ForgeText(laneCount > 1 ? "FooterMultiple" : "FooterSingle");
-        DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 28, 0.56f);
+        DrawFittedText(spriteBatch, footer, new Vector2(panel.X + 14, panel.Bottom - 23), Color.Gray, panel.Width - 116, 0.56f);
         if (_pickerSlot >= 0) DrawInventoryPicker(spriteBatch, panel, craftPlayer);
         if (_inspectedItem is not null) DrawInputInspection(spriteBatch, panel);
+        if (_historyOpen) DrawCraftHistory(spriteBatch, craftPlayer);
         if (!PlayerInput.IgnoreMouseInterface && panel.Contains(new Point(Main.mouseX, Main.mouseY)))
             Main.LocalPlayer.mouseInterface = true;
     }
