@@ -132,7 +132,7 @@ internal static class RuntimeProgramExecutor
                         syncNetwork: Main.netMode != Terraria.ID.NetmodeID.SinglePlayer, source: data);
                 break;
             case RuntimeEventActionCode.HealOwner:
-                HealOwner(action, owner, damageDone);
+                HealOwner(action, owner, damageDone, data.Name);
                 break;
             case RuntimeEventActionCode.MoveOwner:
                 MoveOwner(action, owner, eventPosition);
@@ -449,7 +449,7 @@ internal static class RuntimeProgramExecutor
         }
     }
 
-    private static void HealOwner(RuntimeEventActionSpec action, Player owner, int damageDone)
+    private static void HealOwner(RuntimeEventActionSpec action, Player owner, int damageDone, string sourceName)
     {
         // Lifesteal follows owner-local projectile proc authority. Running it on both
         // the server and owning client applies one authored hit heal twice in multiplayer.
@@ -458,8 +458,11 @@ internal static class RuntimeProgramExecutor
         int heal = Math.Clamp((int)MathF.Round(damageDone * action.DamageFraction), 0, action.MaxHeal);
         if (heal <= 0)
             return;
+        if (!owner.active || owner.dead || owner.statLife <= 0) return;
+        int before = owner.statLife;
         if (owner.statLife < owner.statLifeMax2)
             owner.Heal(Math.Min(heal, owner.statLifeMax2 - owner.statLife));
+        RuntimeHealingFeedback.Record(owner, sourceName, heal, Math.Max(0, owner.statLife - before), Main.GameUpdateCount);
     }
 
     private static void MoveOwner(RuntimeEventActionSpec action, Player owner, Vector2 eventPosition)

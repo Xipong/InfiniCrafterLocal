@@ -34,7 +34,8 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
             _exhaustionIcon = ModContent.Request<Texture2D>(GeneratedItemExhaustionStatusView.IconPath);
     }
 
-    public override void Unload() => _exhaustionIcon = null; // ModContent owns disposal.
+    public override void Unload() { _exhaustionIcon = null; Common.Runtime.RuntimeHealingFeedback.Clear(); } // ModContent owns disposal.
+    public override void OnWorldUnload() => Common.Runtime.RuntimeHealingFeedback.Clear();
 
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
     {
@@ -93,6 +94,8 @@ public sealed class GeneratedUtilityBuffUISystem : ModSystem
             DrawStatus(player, TextureAssets.Item[ItemID.WoodenBoomerang], status.Name, status.Tooltip, 0,
                 append++, inventoryOffset, InfiniCrafterLocalMod.Sprites?.TryGet(status.SpritePath));
         }
+        if (Common.Runtime.RuntimeHealingFeedback.Capture(player, Main.GameUpdateCount, Language.ActiveCulture.CultureInfo) is { } healing)
+            DrawStatus(player, TextureAssets.Buff[BuffID.Regeneration], healing.Label, healing.Tooltip, 0, append++, inventoryOffset);
         return true;
     }
 

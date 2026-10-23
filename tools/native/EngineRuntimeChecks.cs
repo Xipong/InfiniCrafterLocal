@@ -54,6 +54,7 @@ internal static partial class EngineRuntimeChecks
             ("Station expansion ModalLifecycle", StationModalLifecycle),
             ("Station expansion Picker", StationPicker),
             ("Station expansion Inspection", StationInspection),
+            ("Qol lifesteal native recovery receipts", QolHealingFeedback),
             ("Expansion RecipePreparation", RecipePreparation),
             ("Expansion InventoryDeposit", InventoryDeposit),
             ("Expansion ItemGuide", ItemGuide),
