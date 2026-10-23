@@ -334,6 +334,7 @@ public sealed partial class GeneratedProjectile
             case 18: Whip(p); break;
             case 19: ForwardRetract(p); break;
             case 20: MoveFrontHand(); break;
+            case 21: MoveSpringTether(p); break;
             default:
                 Projectile.friendly = false;
                 Projectile.Kill();

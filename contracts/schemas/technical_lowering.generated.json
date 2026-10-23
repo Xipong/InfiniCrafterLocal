@@ -697,6 +697,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "move_spring_tether",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.SpringTether.cs::MoveSpringTether",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.springRestRadius",
+        "runtimeProgram.entities[].movement.params.springStiffness",
+        "runtimeProgram.entities[].movement.params.springDamping",
+        "runtimeProgram.entities[].movement.params.springMaxSpeed"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "move_straight",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",

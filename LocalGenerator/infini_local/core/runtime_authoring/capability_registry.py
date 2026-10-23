@@ -2295,6 +2295,12 @@ def _movement(
 
 
 _CAPS.extend([
+    _movement("move_spring_tether", 'A bounded tension-only spring between projectile and owner mounted center. Inside rest radius the tether is slack; outside it applies displacement-proportional inward acceleration. Exponential world-time damping applies to velocity everywhere; an explicit speed cap prevents runaway integration. Owner movement changes the anchor naturally. Invalid/dead owner ends the projectile. No channel requirement, target selection, teleport, forced collision change or return-to-owner kill. Composes with timed vector forces, speed envelopes and homing. Stiffness is s^-2 and damping is s^-1, lowered against the explicit projectile clock.', 21, {
+        "restRadiusTiles": _p("number", "Slack radius around owner mounted center", minimum=0, maximum=80, units="tiles", consumer_storage="float32", wire_name="springRestRadius", neutral=0),
+        "stiffnessPerSecondSquared": _world_units(_p("number", "Inward acceleration per pixel of stretch", minimum=0.000001, maximum=1, units="update^-2", consumer_storage="float32"), "springStiffness", multiplier=1, divisor=3600, updates_power=2, units="s^-2"),
+        "dampingPerSecond": _world_units(_p("number", "Velocity decays by exp(-damping * elapsed seconds)", minimum=0, maximum=1, units="update^-1", consumer_storage="float32", neutral=0), "springDamping", multiplier=1, divisor=60, updates_power=1, units="s^-1"),
+        "maxSpeedBlocksPerSecond": _world_units(_p("number", "Magnitude cap after spring and damping", minimum=0.1, maximum=80, units="pixels/update", consumer_storage="float32"), "springMaxSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+    }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.SpringTether.cs::MoveSpringTether"),
     _movement("move_straight", "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.", 0),
     _movement("move_slow_homing", "Steer gradually toward a valid NPC.", 1, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
@@ -3409,6 +3415,7 @@ MOVEMENT_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "move_whip_lash": 18,
     "move_forward_then_retract": 19,
     "move_front_hand": 20,
+    "move_spring_tether": 21,
 })
 CONTROLLER_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "none": 0,

@@ -854,6 +854,7 @@ public sealed class RuntimeEntitySpec
             if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
                 || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true
+                || Movement.Params?.HasSpringTether == true || Controller.Params?.HasSpringTether == true
                 || Movement.Params?.HasFrontHandParams == true || Controller.Params?.HasFrontHandParams == true
                 || VectorAcceleration is not null || SpeedRamp is not null || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
@@ -1433,6 +1434,9 @@ public sealed class RuntimeMovementSpec
 
     public void NormalizeAndValidate(string entityKind)
     {
+        Params ??= new RuntimeParamsSpec();
+        Params.ValidateSpringTether(Code);
+        if (Code == 21 && (Name != "move_spring_tether" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_spring_tether requires exact name, opcode and free/child kind");
         if (Code == 6) throw new InvalidDataException("retired movement opcode 6");
         Params ??= new RuntimeParamsSpec();
         if (Code == 20) {
@@ -1462,7 +1466,7 @@ public sealed class RuntimeMovementSpec
         }
         if (Code < 0 || Code > InfiniRuntimeLimits.MaxSupportedMovementCode)
             throw new InvalidDataException($"unsupported movement opcode {Code}");
-        if (Code >= 16 && entityKind != RuntimeEntityKind.OwnerAttachedProjectile)
+        if (Code is >= 16 and <= 20 && entityKind != RuntimeEntityKind.OwnerAttachedProjectile)
             throw new InvalidDataException($"movement opcode {Code} requires owner_attached_projectile");
         if (!string.Equals(Name, RuntimeOpcodeNames.MovementName(Code), StringComparison.Ordinal))
             throw new InvalidDataException($"movement name/opcode mismatch '{Name}'/{Code}");
@@ -1480,6 +1484,7 @@ public sealed class RuntimeControllerSpec
     {
         Name = RuntimeText.Safe(Name, 64);
         Params ??= new RuntimeParamsSpec();
+        Params.ValidateSpringTether(-1);
         // Current independent controls must be admitted before retained-v5 clamping.
         if (Params.HasIndependentCharge && (Code != RuntimeControllerCode.ChargeThenRelease
             || !Params.ChargeDamageMultiplier.HasValue || !Params.KnockbackMultiplier.HasValue || !Params.SpeedMultiplier.HasValue
@@ -1507,6 +1512,42 @@ public sealed class RuntimeControllerSpec
 
 public sealed class RuntimeParamsSpec
 {
+    private float? _springRestRadius;
+    public sealed class SpringRestRadiusConverter : RawJsonNullableFloatDomainConverter { public SpringRestRadiusConverter() : base("0", "80", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringRestRadiusConverter))]
+    public float? SpringRestRadius { get => _springRestRadius; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0f || v > 80f) throw new InvalidDataException("springRestRadius requires finite 0..80");
+        _springRestRadius = v;
+    } }
+    private float? _springStiffness;
+    public sealed class SpringStiffnessConverter : RawJsonNullableFloatDomainConverter { public SpringStiffnessConverter() : base("1e-06", "1") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringStiffnessConverter))]
+    public float? SpringStiffness { get => _springStiffness; set {
+        if (value is not float v || !float.IsFinite(v) || v < 1e-06f || v > 1f) throw new InvalidDataException("springStiffness requires finite 1e-06..1");
+        _springStiffness = v;
+    } }
+    private float? _springDamping;
+    public sealed class SpringDampingConverter : RawJsonNullableFloatDomainConverter { public SpringDampingConverter() : base("0", "1", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringDampingConverter))]
+    public float? SpringDamping { get => _springDamping; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0f || v > 1f) throw new InvalidDataException("springDamping requires finite 0..1");
+        _springDamping = v;
+    } }
+    private float? _springMaxSpeed;
+    public sealed class SpringMaxSpeedConverter : RawJsonNullableFloatDomainConverter { public SpringMaxSpeedConverter() : base("0.1", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringMaxSpeedConverter))]
+    public float? SpringMaxSpeed { get => _springMaxSpeed; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.1f || v > 80f) throw new InvalidDataException("springMaxSpeed requires finite 0.1..80");
+        _springMaxSpeed = v;
+    } }
+    [JsonIgnore] public bool HasSpringTether => SpringRestRadius.HasValue || SpringStiffness.HasValue || SpringDamping.HasValue || SpringMaxSpeed.HasValue;
+    internal void ValidateSpringTether(int code)
+    {
+        if (code == 21) {
+            if (!SpringRestRadius.HasValue || !SpringStiffness.HasValue || !SpringDamping.HasValue || !SpringMaxSpeed.HasValue) throw new InvalidDataException("move_spring_tether requires every authored parameter");
+        } else if (HasSpringTether) throw new InvalidDataException("move_spring_tether parameters require their exact movement owner");
+    }
+
     private string? _aimMode, _startStretch, _peakStretch;
     private float? _hitboxOffsetPx;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -2204,6 +2245,7 @@ internal static class RuntimeOpcodeNames
         "move_spiral", "move_vortex_orb", "move_blackhole_pull", "move_proximity_missile",
         "move_returning_glaive", "move_expanding_wave", "move_flail_tether", "move_yoyo_hover",
         "move_whip_lash", "move_forward_then_retract", "move_front_hand",
+        "move_spring_tether",
     };
     private static readonly string[] ControllerNames = { "", "channel_beam", "charge_then_release", "target_and_fire" };
     private static readonly string[] EventNames =

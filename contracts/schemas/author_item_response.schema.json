@@ -6305,6 +6305,200 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "move_spring_tether"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "free_projectile",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "restRadiusTiles": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 80,
+                        "description": "Slack radius around owner mounted center",
+                        "x-infini-units": "blocks (tiles)",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "stiffnessPerSecondSquared": {
+                        "type": "number",
+                        "minimum": 0.0036,
+                        "maximum": 129600.0,
+                        "description": "Author units: s^-2. Native consumer: Inward acceleration per pixel of stretch",
+                        "x-infini-units": "s^-2",
+                        "x-infini-semanticType": "s^-2",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                        },
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "boundsAtUpdatesPerTick1To6": [
+                            [
+                              0.0036,
+                              3600.0
+                            ],
+                            [
+                              0.0144,
+                              14400.0
+                            ],
+                            [
+                              0.0324,
+                              32400.0
+                            ],
+                            [
+                              0.0576,
+                              57600.0
+                            ],
+                            [
+                              0.09,
+                              90000.0
+                            ],
+                            [
+                              0.1296,
+                              129600.0
+                            ]
+                          ]
+                        }
+                      },
+                      "dampingPerSecond": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 360.0,
+                        "description": "Author units: s^-1. Native consumer: Velocity decays by exp(-damping * elapsed seconds)",
+                        "x-infini-units": "s^-1",
+                        "x-infini-semanticType": "s^-1",
+                        "x-infini-neutral": 0.0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0.0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                        },
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "boundsAtUpdatesPerTick1To6": [
+                            [
+                              0.0,
+                              60.0
+                            ],
+                            [
+                              0.0,
+                              120.0
+                            ],
+                            [
+                              0.0,
+                              180.0
+                            ],
+                            [
+                              0.0,
+                              240.0
+                            ],
+                            [
+                              0.0,
+                              300.0
+                            ],
+                            [
+                              0.0,
+                              360.0
+                            ]
+                          ]
+                        }
+                      },
+                      "maxSpeedBlocksPerSecond": {
+                        "type": "number",
+                        "minimum": 0.375,
+                        "maximum": 1800.0,
+                        "description": "Author units: blocks/s. Native consumer: Magnitude cap after spring and damping",
+                        "x-infini-units": "blocks/s",
+                        "x-infini-semanticType": "blocks/s",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                        },
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "boundsAtUpdatesPerTick1To6": [
+                            [
+                              0.375,
+                              300.0
+                            ],
+                            [
+                              0.75,
+                              600.0
+                            ],
+                            [
+                              1.125,
+                              900.0
+                            ],
+                            [
+                              1.5,
+                              1200.0
+                            ],
+                            [
+                              1.875,
+                              1500.0
+                            ],
+                            [
+                              2.25,
+                              1800.0
+                            ]
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "restRadiusTiles",
+                      "stiffnessPerSecondSquared",
+                      "dampingPerSecond",
+                      "maxSpeedBlocksPerSecond"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "move_straight"
                   },
                   "target": {

@@ -1,0 +1,5 @@
+# move_spring_tether
+
+A bounded tension-only spring between projectile and owner mounted center. Inside rest radius the tether is slack; outside it applies displacement-proportional inward acceleration. Exponential world-time damping applies to velocity everywhere; an explicit speed cap prevents runaway integration. Owner movement changes the anchor naturally. Invalid/dead owner ends the projectile. No channel requirement, target selection, teleport, forced collision change or return-to-owner kill. Composes with timed vector forces, speed envelopes and homing. Stiffness is s^-2 and damping is s^-1, lowered against the explicit projectile clock.
+
+All parameters required. Exact code 21, free/child projectiles only. Author/Repair schemas, prompt cards, compiler receipts and strict wire derive from the registry. Shared synchronized active age and initial direction are used; no additional network payload, no reset at late hydration. Activation waiting is excluded. Normal projectile lifetime and independently authored collision/events apply unless explicitly stated above. Native CPU checks cover the actual executor. GPU/world/multiplayer-session validation: notRun.

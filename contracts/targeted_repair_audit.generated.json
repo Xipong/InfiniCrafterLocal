@@ -159,8 +159,8 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 202265,
-  "fullCapabilityCatalogCount": 75,
+  "fullAuthorPayloadChars": 204585,
+  "fullCapabilityCatalogCount": 76,
   "ok": true,
   "policyCoverage": {
     "declaredCodes": 54,

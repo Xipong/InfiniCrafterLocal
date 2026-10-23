@@ -3667,6 +3667,7 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
             "move_vortex_orb",
             "move_whip_lash",
@@ -3775,6 +3776,7 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
             "move_vortex_orb",
             "move_whip_lash",
@@ -3872,6 +3874,7 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
             "move_vortex_orb",
             "move_whip_lash",
@@ -3980,6 +3983,7 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
             "move_vortex_orb",
             "move_whip_lash",
@@ -4099,6 +4103,7 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
             "move_vortex_orb",
             "move_whip_lash",
@@ -4477,6 +4482,84 @@
         "child_projectile"
       ],
       "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_spring_tether",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.SpringTether.cs::MoveSpringTether",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.springRestRadius",
+        "runtimeProgram.entities[].movement.params.springStiffness",
+        "runtimeProgram.entities[].movement.params.springDamping",
+        "runtimeProgram.entities[].movement.params.springMaxSpeed"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "dampingPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "s^-1",
+          "units": "s^-1"
+        },
+        "maxSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.375,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        },
+        "restRadiusTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        },
+        "stiffnessPerSecondSquared": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 129600.0,
+          "minimum": 0.0036,
+          "reference": null,
+          "required": true,
+          "semanticType": "s^-2",
+          "units": "s^-2"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "purpose": "A bounded tension-only spring between projectile and owner mounted center. Inside rest radius the tether is slack; outside it applies displacement-proportional inward acceleration. Exponential world-time damping applies to velocity everywhere; an explicit speed cap prevents runaway integration. Owner movement changes the anchor naturally. Invalid/dead owner ends the projectile. No channel requirement, target selection, teleport, forced collision change or return-to-owner kill. Composes with timed vector forces, speed envelopes and homing. Stiffness is s^-2 and damping is s^-1, lowered against the explicit projectile clock.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
     },
     {
       "authorityByEffect": {},
@@ -6037,6 +6120,7 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
             "move_vortex_orb",
             "move_whip_lash",

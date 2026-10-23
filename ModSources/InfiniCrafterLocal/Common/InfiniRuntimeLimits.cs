@@ -9,7 +9,7 @@ namespace InfiniCrafterLocal.Common;
 public static class InfiniRuntimeLimits
 {
     public const string RuntimeApiCurrent = "infini.runtime-program.v5";
-    public const int MaxSupportedMovementCode = 20;
+    public const int MaxSupportedMovementCode = 21;
     public const int MaxSupportedControllerCode = 3;
     public const int MaxSupportedEventActionCode = 7;
 
