@@ -962,4 +962,3 @@ def test_http_valid_json_prefix_does_not_hide_truncated_body(monkeypatch, declar
                 transport.http_get_json(url)
         else:
             assert transport.http_get_json(url) == {}
-
