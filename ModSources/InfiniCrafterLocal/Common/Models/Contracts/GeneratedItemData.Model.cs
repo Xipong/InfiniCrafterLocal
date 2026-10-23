@@ -128,6 +128,17 @@ public sealed class GeneratedParentSummarySpec
 
 public sealed class GeneratedBuffSpec
 {
+    private GeneratedCombatBuffSpec? _combat;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public GeneratedCombatBuffSpec? Combat
+    {
+        get => _combat;
+        set
+        {
+            if (value is null) throw new InvalidDataException("present combat buff cannot be null");
+            value.Validate(); _combat = value;
+        }
+    }
     public int DurationTicks { get; set; } = 0;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(GeneratedBuffExhaustionTicksConverter))]
@@ -153,7 +164,7 @@ public sealed class GeneratedBuffSpec
 
     public bool HasAnyEffect => DurationTicks > 0 && (
         MiningSpeedMultiplier != 1f || EmitLightStrength > 0f || OreSenseEnabled ||
-        MovementSpeed != 0f || JumpBoost != 0f || ManaRegen != 0 || LifeRegen != 0);
+        MovementSpeed != 0f || JumpBoost != 0f || ManaRegen != 0 || LifeRegen != 0 || Combat?.HasEffect == true);
 
     public void Normalize()
     {

@@ -1218,7 +1218,34 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     errors = [issue.row() for issue in issues]
     for error in errors:
         error["path"] = re.sub(r"\$\.runtimeProgram\.(entities|bindings|calls)\[(\d+)\]", source_path, error["path"])
-    return {"schema": "infini.runtime-program-validation.v1", "ok": not issues, "errors": errors, "stats": stats}
+    return {"schema": "infini.runtime-program-validation.v1", "ok": not issues, "errors": errors, "stats": stats, "warnings": _composition_warnings(document)}
+
+
+def _composition_warnings(document: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Observable inactive lanes, never guesses about intended design or repair authority."""
+    program = document.get("runtimeProgram", {})
+    calls = program.get("calls") if isinstance(program.get("calls"), list) else []
+    by_target = _calls_by_target(program)
+    warnings = []
+    for index, call in enumerate(calls):
+        if not isinstance(call, Mapping):
+            continue
+        params = call.get("params") if isinstance(call.get("params"), Mapping) else {}
+        target = call.get("target")
+        siblings = by_target.get(str(target), [])
+        cap = CAPABILITY_REGISTRY.get(str(call.get("fn")))
+        if cap and (cap.category == "movement" or call.get("fn") in {
+                "set_projectile_turn_modifier", "set_projectile_speed_modifier", "set_projectile_homing_modifier"}) and any(
+                row.get("fn") == "channel_beam" for row in siblings):
+            warnings.append({"path": f"$.runtimeProgram.calls[{index}]", "code": "motion_owned_by_beam",
+                "message": "channel_beam owns position and velocity; this movement/modifier does not execute while that controller is active.", "relatedIds": [str(call.get("id"))]})
+        if params.get("damageBasis") == "live_parent":
+            child = params.get("entity") or params.get("shotEntity")
+            if child and not any(row.get("fn") == "set_projectile_damage" for row in by_target.get(str(child), [])):
+                warnings.append({"path": f"$.runtimeProgram.calls[{index}].params.damageBasis", "code": "inherited_damage_disabled",
+                    "message": "live_parent selects damage magnitude but the child has no set_projectile_damage lane; it remains harmless. An explicit damage=0 lane can still receive inherited damage. Harmless children remain valid.",
+                    "relatedIds": [str(call.get("id")), str(child)]})
+    return warnings
 
 
 def validate_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:

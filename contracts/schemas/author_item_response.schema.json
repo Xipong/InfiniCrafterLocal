@@ -1888,6 +1888,79 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
+                      "combat": {
+                        "type": "object",
+                        "properties": {
+                          "defensePoints": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "description": "Flat Player.statDefense points; aggregate generated-buff cap 100",
+                            "x-infini-neutral": 0
+                          },
+                          "attackSpeedPercent": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "description": "Add percent/100 to generic attack speed; aggregate generated-buff cap 100",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "critChancePoints": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "description": "Add percentage points to generic critical chance; aggregate generated-buff cap 100",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "damagePercent": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 200,
+                            "description": "Add percent/100 to the explicitly selected damage class; aggregate generated-buff cap 200 per selected class. Generic and specific bonuses may combine through native inheritance",
+                            "x-infini-neutral": 0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "damageClass": {
+                            "type": "string",
+                            "enum": [
+                              "generic",
+                              "melee",
+                              "ranged",
+                              "magic",
+                              "summon",
+                              "throwing"
+                            ],
+                            "description": "Exact class receiving damagePercent; generic also contributes through native class inheritance"
+                          }
+                        },
+                        "required": [
+                          "defensePoints",
+                          "attackSpeedPercent",
+                          "critChancePoints",
+                          "damagePercent",
+                          "damageClass"
+                        ],
+                        "additionalProperties": false,
+                        "description": "Optional temporary combat bonuses; all fields explicit when selected. Zero values have no effect. Same-effect refresh does not stack. No automatic active binding.",
+                        "x-infini-semanticType": "bounded_text"
+                      },
                       "durationSeconds": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
@@ -7788,8 +7861,10 @@
                     "x-infini-reference": {
                       "namespace": "entity",
                       "targetKinds": [
+                        "free_projectile",
                         "stationary_projectile",
-                        "temporary_helper"
+                        "temporary_helper",
+                        "child_projectile"
                       ],
                       "allowSelf": true,
                       "graphEdge": false

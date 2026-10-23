@@ -5,6 +5,14 @@ ChargeUI: {
 
 Keybinds: {
 	ToggleRecipeJournal: {
+            FilterAll: "Effects: all"
+            FilterHealing: "Effects: healing"
+            FilterMining: "Effects: mining"
+            FilterSummon: "Effects: summon"
+            FilterMobility: "Effects: mobility"
+            UsingIngredient: "Uses {0} ×"
+            Children: "Discovered fusions using this item: {0}"
+
 		DisplayName: "Toggle fusion atlas"
 	}
 }
@@ -239,6 +247,10 @@ RuntimeTooltip: {
 	MobilityCooldownRemaining: "Mobility cooldown remaining: {0}. Shared by generated mobility actions; only mobility is unavailable. Attacks, mining and generated buffs are unaffected. Failed attempts do not extend this timer."
 	EquipmentMaxLife: "{0}: maximum life contribution {1}"
 	EquipmentMaxMana: "{0}: maximum mana contribution {1}"
+	CombatDefense: "{0}: +{1} defense for {2} s"
+	CombatSpeed: "{0}: +{1}% attack speed for {2} s"
+	CombatCrit: "{0}: +{1} percentage points critical chance for {2} s"
+	CombatDamage: "{0}: damage {1} for {2} s"
 	EquipmentLifeRegen: "{0}: life regeneration {1} HP/s contribution"
 	EquipmentManaRegen: "{0}: mana regeneration {1} manaRegenBonus points (not mana/s)"
 	EquipmentMovement: "{0}: moveSpeed contribution {1}%"

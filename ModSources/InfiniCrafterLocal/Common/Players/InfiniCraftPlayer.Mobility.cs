@@ -30,6 +30,7 @@ public sealed partial class InfiniCraftPlayer
         public float JumpBoost;
         public int ManaRegen;
         public int LifeRegen;
+        public GeneratedCombatBuffSpec? Combat;
 
         public static ActiveGeneratedUtilityBuff From(GeneratedBuffSpec buff) => new()
         {
@@ -42,6 +43,7 @@ public sealed partial class InfiniCraftPlayer
             JumpBoost = Math.Clamp(buff.JumpBoost, 0f, 8f),
             ManaRegen = Math.Clamp(buff.ManaRegen, 0, 120),
             LifeRegen = Math.Clamp(buff.LifeRegen, 0, 120),
+            Combat = buff.Combat,
         };
 
         public bool SameEffect(ActiveGeneratedUtilityBuff other)
@@ -52,7 +54,8 @@ public sealed partial class InfiniCraftPlayer
             && MovementSpeed == other.MovementSpeed
             && JumpBoost == other.JumpBoost
             && ManaRegen == other.ManaRegen
-            && LifeRegen == other.LifeRegen;
+            && LifeRegen == other.LifeRegen
+            && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat);
     }
 
     public bool TryReserveGeneratedMobilityCooldown(int cooldownTicks)
@@ -121,6 +124,10 @@ public sealed partial class InfiniCraftPlayer
         return true;
     }
 
+    private int _generatedDefense;
+    private float _generatedAttackSpeed, _generatedCrit;
+    private readonly Dictionary<string, float> _generatedDamage = new(StringComparer.Ordinal);
+
     private void RebuildGeneratedUtilityBuffAggregate()
     {
         _generatedBuffTicks = 0;
@@ -132,6 +139,8 @@ public sealed partial class InfiniCraftPlayer
         _generatedJumpBoost = 0f;
         _generatedManaRegen = 0;
         _generatedLifeRegen = 0;
+        _generatedDefense = 0; _generatedAttackSpeed = 0; _generatedCrit = 0;
+        _generatedDamage.Clear();
 
         foreach (var active in _activeGeneratedUtilityBuffs)
         {
@@ -149,11 +158,24 @@ public sealed partial class InfiniCraftPlayer
             _generatedJumpBoost = Math.Clamp(_generatedJumpBoost + active.JumpBoost, 0f, 8f);
             _generatedManaRegen = Math.Clamp(_generatedManaRegen + active.ManaRegen, 0, 120);
             _generatedLifeRegen = Math.Clamp(_generatedLifeRegen + active.LifeRegen, 0, 120);
+            if (active.Combat is { } combat)
+            {
+                _generatedDefense += combat.DefensePoints;
+                _generatedAttackSpeed += combat.AttackSpeedPercent;
+                _generatedCrit += combat.CritChancePoints;
+                _generatedDamage.TryGetValue(combat.DamageClass, out float current);
+                _generatedDamage[combat.DamageClass] = current + combat.DamagePercent;
+            }
         }
         // Bound totals, not intermediate sums/products: speed-up and slow-down
         // contributions must not depend on the order effects were received.
         _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
         _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed, -0.5f, 2f);
+        _generatedDefense = Math.Min(100, _generatedDefense);
+        _generatedAttackSpeed = Math.Min(100f, _generatedAttackSpeed);
+        _generatedCrit = Math.Min(100f, _generatedCrit);
+        foreach (string damageClass in _generatedDamage.Keys.ToArray())
+            _generatedDamage[damageClass] = Math.Min(200f, _generatedDamage[damageClass]);
     }
 
     private void ResetGeneratedUtilityBuffAggregate()
@@ -167,6 +189,8 @@ public sealed partial class InfiniCraftPlayer
         _generatedJumpBoost = 0f;
         _generatedManaRegen = 0;
         _generatedLifeRegen = 0;
+        _generatedDefense = 0; _generatedAttackSpeed = 0; _generatedCrit = 0;
+        _generatedDamage.Clear();
     }
 
 
@@ -358,6 +382,11 @@ public sealed partial class InfiniCraftPlayer
             Player.lifeRegen += _generatedLifeRegen;
         if (_generatedOreSenseRadiusTiles > 0)
             Player.findTreasure = true;
+        Player.statDefense += _generatedDefense;
+        Player.GetAttackSpeed(DamageClass.Generic) += _generatedAttackSpeed / 100f;
+        Player.GetCritChance(DamageClass.Generic) += _generatedCrit;
+        foreach (var bonus in _generatedDamage)
+            Player.GetDamage(TerrariaRuntimeVocabulary.ResolveDamageClass(bonus.Key)) += bonus.Value / 100f;
     }
 
 }

@@ -11,6 +11,45 @@ namespace InfiniCrafterLocal.Common.UI;
 // Read-only discovery projection. Names never resolve identities or reveal unknown recipes.
 internal static class RecipeJournalView
 {
+    internal enum EffectFilter { All, Healing, Mining, Summon, Mobility }
+
+    internal static GeneratedItemData[] Children(GeneratedItemData parent, IEnumerable<GeneratedItemData> known)
+        => Entries(known, parent.RecipeMeta.WorldId, "", _ => false, false)
+            .Where(d => d.RecipeMeta.ParentIdentities?.Contains("generated:" + parent.Id, StringComparer.Ordinal) == true).ToArray();
+
+    internal static bool MatchesEffect(GeneratedItemData data, EffectFilter filter)
+    {
+        var program = data.RuntimeProgram;
+        var effects = new List<IItemEffectsSpec>();
+        foreach (var binding in program.Bindings)
+            if (binding.UsePolicy.Action.Kind == RuntimeBindingAction.ApplyItemEffects)
+            {
+                var selected = binding.UsePolicy.Action.EffectGroupId;
+                if (selected is null) effects.Add(data.Gameplay);
+                else if (program.TryGetEffectGroup(selected) is { } group) effects.Add(group);
+            }
+        if (program.TryGetEffectGroup(program.HeldEffectGroupId ?? "") is { } held) effects.Add(held);
+        foreach (var source in program.Entities)
+        foreach (var action in source.Events)
+            if (action.ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff
+                && program.TryGetEffectGroup(action.EffectGroupId ?? "") is { } reactive) effects.Add(reactive);
+        return filter switch
+        {
+            EffectFilter.All => true,
+            EffectFilter.Healing => effects.Any(e => e.HealLife > 0 || e.GeneratedBuff?.LifeRegen > 0)
+                || program.Entities.Any(e => e.Events.Any(a => a.ActionCode == RuntimeEventActionCode.HealOwner)),
+            EffectFilter.Mining => data.Gameplay.PickPower > 0 || data.Gameplay.AxePower > 0 || data.Gameplay.HammerPower > 0
+                || effects.Any(e => e.GeneratedBuff is { MiningSpeedMultiplier: > 1f }),
+            EffectFilter.Summon => program.Entities.Any(e => e.IsProjectileEntity && e.Damage.Enabled
+                && e.Damage.DamageClass is "summon" or "summon_melee_speed" or "magic_summon_hybrid"),
+            EffectFilter.Mobility => effects.Any(e => e.MobilityMode.Length > 0 || e.GeneratedBuff is { } b
+                    && (b.MovementSpeed != 0 || b.JumpBoost != 0))
+                || program.Entities.Any(e => e.Events.Any(a => a.ActionCode == RuntimeEventActionCode.MoveOwner
+                    || a.ActionCode == RuntimeEventActionCode.Pull && a.Mode == "owner_to_target")),
+            _ => false,
+        };
+    }
+
     internal static GeneratedItemData[] Entries(IEnumerable<GeneratedItemData> records, string world,
         string query, Func<string, bool> favorite, bool onlyFavorites)
         => records.Where(d => d is not null && d.RecipeMeta.WorldScoped && d.RecipeMeta.WorldId == world
@@ -55,7 +94,7 @@ internal static class RecipeJournalView
         int inset = Math.Min(12, w / 8);
         int pageWidth = Math.Max(0, w - inset * 2);
         int footer = Math.Min(32, h / 6);
-        int top = Math.Min(88, Math.Max(0, h - footer));
+        int top = Math.Min(120, Math.Max(0, h - footer));
         int contentHeight = Math.Max(0, h - top - footer);
         bool narrow = w < 700;
         int gutter = Math.Min(12, narrow ? contentHeight : pageWidth);

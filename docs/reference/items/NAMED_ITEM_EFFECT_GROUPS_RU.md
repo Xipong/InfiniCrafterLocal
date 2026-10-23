@@ -84,3 +84,18 @@ Validator не выбирает группу по названию или payloa
 [Native checks](../../../tools/native/EngineRuntimeChecks.NamedItemEffects.cs) подключены к `EngineRuntimeChecks.csproj`: реальный native generic-use tail и quick selectors, shared mobility cooldown/consumption, exact-held identity/authority/expiry, ограничение snapshot requests и native DTO roundtrip/refusals. Счётчик snapshot requests проверяет production sender boundary с подавленным socket send; он не подменяет end-to-end multiplayer smoke.
 
 При отсутствии .NET 8, stable tModLoader и внешних runtime dependencies C# build, запуск этих native checks и игровые SP/MP smoke записываются **`notRun`**. Успешные Python/static gates не означают выполненную игровую проверку.
+
+
+## Временные боевые бонусы
+
+Необязательный объект `combat` у `apply_generated_buff_on_use` содержит все пять явных полей: `defensePoints` (0–100), `attackSpeedPercent` (0–100), `critChancePoints` (0–100), `damagePercent` (0–200), `damageClass` (`generic`, `melee`, `ranged`, `magic`, `summon`, `throwing`). Нулевые числа сами по себе не образуют эффект. Отсутствующий объект не материализуется; явно переданный null или неполный объект недопустимы.
+
+Defense прибавляется в native `statDefense`, speed и damage делятся на 100 один раз, crit измеряется процентными пунктами. Damage применяется к выбранному native классу; generic наследуется классами по правилам Terraria. Совпадающий эффект обновляет длительность без повторного сложения. Разные эффекты суммируются с лимитами defense/speed/crit 100 и damage 200 на каждый класс. Истечение удаляет вклад. Активный HUD показывает значения и длительности; tooltip предмета показывает объявленные бонусы.
+
+Для активации достаточно одного из трёх путей: активная `apply_item_effects` кнопка с exact group; `refresh_generated_effect_group_while_held` для named generated-buff-only группы; equipment reaction `apply_generated_buff_on_event` с тем же effectGroupId. Held/reaction путь не требует добавлять активную кнопку.
+
+Utility snapshot protocol v6 передаёт combat внутри каждой записи, проверяет конечные диапазоны и передаёт класс ограниченным enum-byte. После полного успешного чтения агрегат пересобирается из записей. Подделанные клиентские числа продолжают отбрасываться сервером. Все peers должны использовать одну версию мода. Старые JSON определения без combat сохраняют отсутствие поля.
+
+## Событие от конкретной кнопки
+
+Используется единый контракт `when:{"on":"on_use","useInput":"primary_use"|"alternate_use"|"both"}`. Wire сохраняет `useInput`; прежний `when:"on_use"` означает обе кнопки. Executor фильтрует originating input до постановки delayed action в очередь. Второго поля `input`/`sourceInput` нет.

@@ -841,7 +841,7 @@ public sealed class RuntimeEntitySpec
             || !string.Equals(Visual.Role, expectedVisualRole, StringComparison.Ordinal))
             throw new InvalidDataException($"entity '{Id}' visual roles must equal '{expectedVisualRole}' for kind '{Kind}'");
         if (Targeting.HasVolleyOptions && (Controller.Code != RuntimeControllerCode.TargetAndFire
-            || Kind is not (RuntimeEntityKind.StationaryProjectile or RuntimeEntityKind.TemporaryHelper)))
+            || Kind is not (RuntimeEntityKind.StationaryProjectile or RuntimeEntityKind.TemporaryHelper or RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile)))
             throw new InvalidDataException("targeting options require the explicit target_and_fire owner");
         if (Kind == RuntimeEntityKind.ItemBody)
         {
@@ -869,7 +869,7 @@ public sealed class RuntimeEntitySpec
             TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
             NpcAttraction?.Validate(); VisualScaleCurve?.Validate();
             if ((TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
-                && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code is not (RuntimeControllerCode.None or RuntimeControllerCode.TargetAndFire)))
+                && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code is not (RuntimeControllerCode.None or RuntimeControllerCode.TargetAndFire) || !Movement.IsConfigured))
                 throw new InvalidDataException("velocity modifiers require a free/child projectile with explicit movement ownership");
             if (VisualScaleCurve is not null && (Movement.Code is 15 or 18 || Controller.Code == RuntimeControllerCode.ChannelBeam || HitboxCurve?.MirrorToSprite == true))
                 throw new InvalidDataException("dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry");
@@ -1490,8 +1490,8 @@ public sealed class RuntimeControllerSpec
             throw new InvalidDataException($"unsupported controller opcode {Code}");
         if (Code == RuntimeControllerCode.ChannelBeam && entityKind != RuntimeEntityKind.OwnerAttachedProjectile)
             throw new InvalidDataException("channel_beam requires owner_attached_projectile");
-        if (Code == RuntimeControllerCode.TargetAndFire && entityKind is not (RuntimeEntityKind.StationaryProjectile or RuntimeEntityKind.TemporaryHelper))
-            throw new InvalidDataException("target_and_fire requires stationary_projectile or temporary_helper");
+        if (Code == RuntimeControllerCode.TargetAndFire && entityKind is not (RuntimeEntityKind.StationaryProjectile or RuntimeEntityKind.TemporaryHelper or RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))
+            throw new InvalidDataException("target_and_fire requires stationary_projectile, temporary_helper, free_projectile or child_projectile");
         if (Code == RuntimeControllerCode.ChargeThenRelease && entityKind is not (RuntimeEntityKind.OwnerAttachedProjectile or RuntimeEntityKind.FreeProjectile))
             throw new InvalidDataException("charge_then_release requires owner_attached_projectile or free_projectile");
         if (!string.Equals(Name, RuntimeOpcodeNames.ControllerName(Code), StringComparison.Ordinal))

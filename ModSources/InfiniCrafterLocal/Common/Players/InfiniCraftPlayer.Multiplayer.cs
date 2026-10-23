@@ -509,7 +509,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)5); // includes per-source session exhaustion
+        writer.Write((byte)6); // includes exact combat bonuses in each active entry
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -533,7 +533,7 @@ public sealed partial class InfiniCraftPlayer
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 5)
+        if (version != 6)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         // Decode before replacing owner prediction; malformed packets do not
         // erase a valid timer table or leave half-read buff state behind.
@@ -555,6 +555,7 @@ public sealed partial class InfiniCraftPlayer
         _generatedMobilityCooldownTicks = mobility;
         ClampGeneratedBuffState();
         _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
+        RebuildGeneratedUtilityBuffAggregate();
         _generatedItemExhaustion.Clear(); _generatedItemExhaustion.AddRange(exhaustion);
         _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
     }
@@ -562,7 +563,7 @@ public sealed partial class InfiniCraftPlayer
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 5)
+        if (version != 6)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
@@ -591,6 +592,8 @@ public sealed partial class InfiniCraftPlayer
         writer.Write(buff.JumpBoost);
         writer.Write(buff.ManaRegen);
         writer.Write(buff.LifeRegen);
+        writer.Write(buff.Combat is not null);
+        buff.Combat?.Write(writer);
     }
 
     private static ActiveGeneratedUtilityBuff ReadGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
@@ -610,21 +613,12 @@ public sealed partial class InfiniCraftPlayer
             JumpBoost = Math.Clamp(reader.ReadSingle(), 0f, 8f),
             ManaRegen = Math.Clamp(reader.ReadInt32(), 0, 120),
             LifeRegen = Math.Clamp(reader.ReadInt32(), 0, 120),
+            Combat = reader.ReadBoolean() ? GeneratedCombatBuffSpec.Read(reader) : null,
         };
     }
 
     private static void DiscardGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
-    {
-        _ = reader.ReadInt32();
-        _ = reader.ReadSingle();
-        _ = reader.ReadSingle();
-        _ = ReadGeneratedBuffText(reader, 128);
-        _ = reader.ReadInt32();
-        _ = reader.ReadSingle();
-        _ = reader.ReadSingle();
-        _ = reader.ReadInt32();
-        _ = reader.ReadInt32();
-    }
+        => _ = ReadGeneratedUtilityBuffEntry(reader);
 
     private void ClampGeneratedBuffState()
     {
@@ -665,7 +659,12 @@ public sealed partial class InfiniCraftPlayer
             || Math.Abs(_generatedMovementSpeed - other._generatedMovementSpeed) > 0.001f
             || Math.Abs(_generatedJumpBoost - other._generatedJumpBoost) > 0.001f
             || _generatedManaRegen != other._generatedManaRegen
-            || _generatedLifeRegen != other._generatedLifeRegen;
+            || _generatedLifeRegen != other._generatedLifeRegen
+            || _generatedDefense != other._generatedDefense
+            || _generatedAttackSpeed != other._generatedAttackSpeed
+            || _generatedCrit != other._generatedCrit
+            || _generatedDamage.Count != other._generatedDamage.Count
+            || _generatedDamage.Any(pair => !other._generatedDamage.TryGetValue(pair.Key, out float value) || value != pair.Value);
     }
 
     private void SendGeneratedBuffState(int toWho = -1, int fromWho = -1)
@@ -696,6 +695,11 @@ public sealed partial class InfiniCraftPlayer
             clone._generatedJumpBoost = _generatedJumpBoost;
             clone._generatedManaRegen = _generatedManaRegen;
             clone._generatedLifeRegen = _generatedLifeRegen;
+            clone._generatedDefense = _generatedDefense;
+            clone._generatedAttackSpeed = _generatedAttackSpeed;
+            clone._generatedCrit = _generatedCrit;
+            clone._generatedDamage.Clear();
+            foreach (var pair in _generatedDamage) clone._generatedDamage.Add(pair.Key, pair.Value);
             clone._generatedMobilityCooldownTicks = _generatedMobilityCooldownTicks;
             clone._generatedBuffSnapshotRevision = _generatedBuffSnapshotRevision;
             clone._generatedItemExhaustion.Clear();

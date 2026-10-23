@@ -1723,6 +1723,79 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "combat": {
+                    "additionalProperties": false,
+                    "description": "Optional temporary combat bonuses; all fields explicit when selected. Zero values have no effect. Same-effect refresh does not stack. No automatic active binding.",
+                    "properties": {
+                      "attackSpeedPercent": {
+                        "description": "Add percent/100 to generic attack speed; aggregate generated-buff cap 100",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-consumerConstraint": {
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "storage": "float32"
+                        },
+                        "x-infini-neutral": 0
+                      },
+                      "critChancePoints": {
+                        "description": "Add percentage points to generic critical chance; aggregate generated-buff cap 100",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-consumerConstraint": {
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "storage": "float32"
+                        },
+                        "x-infini-neutral": 0
+                      },
+                      "damageClass": {
+                        "description": "Exact class receiving damagePercent; generic also contributes through native class inheritance",
+                        "enum": [
+                          "generic",
+                          "melee",
+                          "ranged",
+                          "magic",
+                          "summon",
+                          "throwing"
+                        ],
+                        "type": "string"
+                      },
+                      "damagePercent": {
+                        "description": "Add percent/100 to the explicitly selected damage class; aggregate generated-buff cap 200 per selected class. Generic and specific bonuses may combine through native inheritance",
+                        "maximum": 200,
+                        "minimum": 0,
+                        "type": "number",
+                        "x-infini-consumerConstraint": {
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "storage": "float32"
+                        },
+                        "x-infini-neutral": 0
+                      },
+                      "defensePoints": {
+                        "description": "Flat Player.statDefense points; aggregate generated-buff cap 100",
+                        "maximum": 100,
+                        "minimum": 0,
+                        "type": "integer",
+                        "x-infini-neutral": 0
+                      }
+                    },
+                    "required": [
+                      "defensePoints",
+                      "attackSpeedPercent",
+                      "critChancePoints",
+                      "damagePercent",
+                      "damageClass"
+                    ],
+                    "type": "object",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "durationSeconds": {
                     "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration",
                     "maximum": 360.0,
@@ -7777,8 +7850,10 @@
                   "graphEdge": false,
                   "namespace": "entity",
                   "targetKinds": [
+                    "free_projectile",
                     "stationary_projectile",
-                    "temporary_helper"
+                    "temporary_helper",
+                    "child_projectile"
                   ]
                 }
               }
