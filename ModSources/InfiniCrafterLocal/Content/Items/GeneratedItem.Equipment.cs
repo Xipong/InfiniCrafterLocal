@@ -71,6 +71,11 @@ public partial class GeneratedItem
         if (a.GravityControl == true) { player.gravControl = true; }
         if (a.FeatherFall == true) { player.slowFall = true; }
         player.extraFall += a.ExtraFallTiles ?? 0;
+        if (a.FishingLine == true) player.accFishingLine = true;
+        if (a.LavaFishing == true) player.accLavaFishing = true;
+        if (a.FishingSonar == true) player.sonarPotion = true;
+        if (a.FishingCrates == true) player.cratePotion = true;
+        if (a.FishingPower is { } fishing) player.fishingSkill += fishing;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

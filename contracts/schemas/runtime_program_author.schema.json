@@ -2990,6 +2990,33 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "fishingCrates": {
+                    "description": "Enable native Player.cratePotion while equipped: use the engine crate-chance modifier, not a guaranteed crate or custom loot table.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "fishingLine": {
+                    "description": "Enable native Player.accFishingLine while equipped: caught fish cannot be lost by the line-break roll. Does not preserve bait, select a rod or spawn fish.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "fishingPower": {
+                    "description": "Add raw Player.fishingSkill points while equipped; Terraria combines them with pole/bait and environment multipliers. Zero adds nothing; does not create a fishing rod, bait or projectile",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "fishing power points"
+                  },
+                  "fishingSonar": {
+                    "description": "Enable native Player.sonarPotion catch preview while equipped. Visual information only; does not select or improve the catch.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "frogJump": {
                     "description": "Native frog jump height and safe fall allowance. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
                     "type": "boolean",
@@ -3108,6 +3135,12 @@
                   },
                   "jumpTsunami": {
                     "description": "Tsunami bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "lavaFishing": {
+                    "description": "Enable native Player.accLavaFishing while equipped. Terraria still requires a usable pole and bait and owns biome/catch rules; this grants no lava damage immunity.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"

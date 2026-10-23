@@ -90,6 +90,11 @@ public partial class GeneratedItem
             Flag("GravityControl", a.GravityControl == true);
             Flag("FeatherFall", a.FeatherFall == true);
             Stat("ExtraFallTiles", "EquipmentExtraFallTiles", a.ExtraFallTiles ?? 0);
+            Flag("FishingLine", a.FishingLine == true);
+            Flag("LavaFishing", a.LavaFishing == true);
+            Flag("FishingSonar", a.FishingSonar == true);
+            Flag("FishingCrates", a.FishingCrates == true);
+            Stat("FishingPower", "EquipmentFishingPower", a.FishingPower ?? 0);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);

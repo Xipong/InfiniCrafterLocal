@@ -1942,11 +1942,16 @@
         "accessory.jumpSandstorm",
         "accessory.jumpFart",
         "accessory.jumpTsunami",
+        "accessory.fishingLine",
+        "accessory.lavaFishing",
+        "accessory.fishingSonar",
+        "accessory.fishingCrates",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
         "accessory.accRunSpeed",
         "accessory.rocketBoots",
+        "accessory.fishingPower",
         "accessory.wireVision"
       ],
       "multiplicity": "single_per_target",
@@ -2082,6 +2087,46 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "fishingCrates": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "fishingLine": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "fishingPower": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "fishing power points"
+        },
+        "fishingSonar": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "frogJump": {
           "enum": [],
           "kind": "boolean",
@@ -2203,6 +2248,16 @@
           "units": "blocks/s"
         },
         "jumpTsunami": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "lavaFishing": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2530,11 +2585,16 @@
             "jumpSandstorm",
             "jumpFart",
             "jumpTsunami",
+            "fishingLine",
+            "lavaFishing",
+            "fishingSonar",
+            "fishingCrates",
             "iceSkate",
             "noKnockback",
             "fireWalk",
             "accRunSpeedBlocksPerSecond",
             "rocketBoots",
+            "fishingPower",
             "wireVision"
           ],
           "target": "same_target"

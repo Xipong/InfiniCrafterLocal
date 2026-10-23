@@ -3484,6 +3484,30 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "fishingLine": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accFishingLine while equipped: caught fish cannot be lost by the line-break roll. Does not preserve bait, select a rod or spawn fish.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "lavaFishing": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accLavaFishing while equipped. Terraria still requires a usable pole and bait and owns biome/catch rules; this grants no lava damage immunity.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "fishingSonar": {
+                        "type": "boolean",
+                        "description": "Enable native Player.sonarPotion catch preview while equipped. Visual information only; does not select or improve the catch.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "fishingCrates": {
+                        "type": "boolean",
+                        "description": "Enable native Player.cratePotion while equipped: use the engine crate-chance modifier, not a guaranteed crate or custom loot table.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "iceSkate": {
                         "type": "boolean",
                         "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",
@@ -3526,6 +3550,15 @@
                         "maximum": 5,
                         "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight",
                         "x-infini-units": "native rocket flight mode",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
+                      "fishingPower": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add raw Player.fishingSkill points while equipped; Terraria combines them with pole/bait and environment multipliers. Zero adds nothing; does not create a fishing rod, bait or projectile",
+                        "x-infini-units": "fishing power points",
                         "x-infini-semanticType": "unitless_scalar",
                         "x-infini-neutral": 0
                       },
