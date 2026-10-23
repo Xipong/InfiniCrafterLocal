@@ -213,7 +213,15 @@ def build_handler(
             return _is_loopback_host(client_host)
 
         def _content_length_bytes(self) -> int:
-            raw_length = self.headers.get("Content-Length", "0")
+            if self.headers.get("Transfer-Encoding") is not None:
+                raise _InvalidJsonRequest("Transfer-Encoding is not supported")
+            lengths = (self.headers.get_all("Content-Length", []) if hasattr(self.headers, "get_all")
+                       else [self.headers["Content-Length"]] if "Content-Length" in self.headers else [])
+            if len(lengths) > 1:
+                raise _InvalidJsonRequest("multiple Content-Length headers")
+            raw_length = lengths[0].strip() if lengths else "0"
+            if not raw_length.isascii() or not raw_length.isdecimal():
+                raise _InvalidJsonRequest("invalid Content-Length")
             try:
                 length = int(raw_length)
             except (TypeError, ValueError) as e:

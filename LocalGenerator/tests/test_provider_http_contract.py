@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from email.message import Message
 import io
 import json
 from pathlib import Path
@@ -146,6 +147,24 @@ def utility_routes(root):
         normalize_asset_prompt=lambda *_a, **_k: "", generate_visual_asset=lambda *_a, **_k: ("", "", 0.0, {}),
         asset_negative_prompt=lambda _: "", alpha_stats=lambda _: {}, image_module=None,
     )
+
+
+@pytest.mark.parametrize("headers", [
+    [("Content-Length", "2"), ("Content-Length", "2")],
+    [("Content-Length", "2"), ("Content-Length", "3")],
+    [("Transfer-Encoding", "chunked")],
+    [("Transfer-Encoding", "identity"), ("Content-Length", "2")],
+    [("Content-Length", "+2")], [("Content-Length", "0_2")],
+])
+def test_ambiguous_request_framing_never_reaches_combine(headers):
+    body = ReadProbe(b"{}", forbidden=True)
+    handler, capture = boundary_handler(body=body, length=2)
+    handler.headers = Message()
+    for key, value in headers:
+        handler.headers[key] = value
+    handler.do_POST()
+    assert capture.code == 400 and capture.payload["error"] == "invalid_json"
+    assert body.read_calls == 0
 
 
 @pytest.mark.parametrize("method,path,address,status,payload,reads", [
