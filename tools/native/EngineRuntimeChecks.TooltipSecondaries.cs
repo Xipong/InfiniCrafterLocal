@@ -126,9 +126,9 @@ internal static partial class EngineRuntimeChecks
                     Equal(false, text.Contains(locale == "en-US" ? "radius" : "радиус"), "fragment spawn must not advertise inherited blast");
                 }
                 Equal(before, JsonSerializer.Serialize(data), "tooltip preserves admitted delivery JSON");
-                string[] shown = lines.Where(x => !x.Name.StartsWith("InfiniRecipeParents")).Select(x => x.Name + "=" + x.Text).ToArray();
+                string[] shown = lines.Where(x => !x.Name.StartsWith("InfiniRecipeParents") && x.Name != "InfiniSectionProvenance").Select(x => x.Name + "=" + x.Text).ToArray();
                 data.Name = "UNTRUSTED [i:1]"; data.Category = "potion"; data.ParentA = "UNTRUSTED";
-                Equal(true, shown.SequenceEqual(TooltipSecondaryLines(host).Where(x => !x.Name.StartsWith("InfiniRecipeParents")).Select(x => x.Name + "=" + x.Text)), "no name/category/parent/prose routing");
+                Equal(true, shown.SequenceEqual(TooltipSecondaryLines(host).Where(x => !x.Name.StartsWith("InfiniRecipeParents") && x.Name != "InfiniSectionProvenance").Select(x => x.Name + "=" + x.Text)), "no name/category/parent/prose routing");
                 source.Spawn.Enabled = false;
                 Equal(false, TooltipSecondaryLines(host).Any(x => x.Name.StartsWith("InfiniSecondary")), "disabled root cannot advertise secondary combat");
                 source.Spawn.Enabled = true;

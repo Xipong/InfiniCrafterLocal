@@ -17,6 +17,8 @@ public sealed partial class RecipeJournalUISystem
 {
     private static int _planQuantity = 1, _preparationLane;
     private static bool _planIncludeStorage;
+    private static Content.Items.GeneratedItem.GuideSection _guideSection;
+    private static string _guideQuery = "";
     private static bool DrawAnalysisPage(SpriteBatch sb, GeneratedItemData data, Rectangle area, bool click, Vector2 cursor)
     {
         if (_detailPage == DetailPage.Recipe) return false;
@@ -71,8 +73,32 @@ public sealed partial class RecipeJournalUISystem
         if (_detailPage == DetailPage.Help)
             content = Text("HelpBrowse") + "\n" + Text("KeyboardBrowse") + "\n\n" + Text("HelpSearch") + "\n\n" + Text("HelpPlan") + "\n\n" + Text("HelpOwnership");
         if (_detailPage == DetailPage.Guide)
+        {
+            if (area.Height < 100) { SetNoteFocus(false); return true; }
+            int copyWidth = Math.Min(75, area.Width / 3);
+            if (Button(sb, new Rectangle(area.X, area.Y, area.Width - copyWidth - 4, 25), Text("GuideSection" + _guideSection), click, cursor))
+            { _guideSection = (Content.Items.GeneratedItem.GuideSection)(((int)_guideSection + 1) % Enum.GetValues<Content.Items.GeneratedItem.GuideSection>().Length); _detailScroll = 0; }
+            var facts = Content.Items.GeneratedItem.RuntimeGuide(data, _guideSection, _guideQuery);
+            if (Button(sb, new Rectangle(area.Right - copyWidth, area.Y, copyWidth, 25), Text("GuideCopy"), click, cursor))
+            {
+                try { ReLogic.OS.Platform.Get<ReLogic.OS.IClipboard>().Value = data.Name + "\n" + string.Join("\n", facts); _hoverText = Text("GuideCopied"); }
+                catch { _hoverText = Text("GuideCopyUnavailable"); }
+            }
+            var search = new Rectangle(area.X, area.Y + 30, area.Width, 26);
+            Chassis(sb, search, _noteFocus ? Panel : Inset);
+            if (click) SetNoteFocus(search.Contains(cursor.ToPoint()));
+            if (_noteFocus)
+            {
+                PlayerInput.WritingText = true; Main.blockInput = true; Main.instance.HandleIME();
+                string typed = Main.GetInputText(_guideQuery).Replace('\n', ' ').Replace('\r', ' ');
+                _guideQuery = typed.Length > 80 ? typed[..80] : typed;
+                if (Main.keyState.IsKeyDown(Keys.Enter)) SetNoteFocus(false);
+            }
+            Label(sb, _guideQuery.Length == 0 && !_noteFocus ? Text("GuideSearchHint") : _guideQuery + (_noteFocus ? "|" : ""), search.TopLeft() + new Vector2(5, 3), Ink, .6f, search.Width - 10);
+            area.Y += 62; area.Height -= 62;
             content = data.Name + "\n" + Text("GuideHint") + "\n\n"
-                + string.Join("\n", Content.Items.GeneratedItem.RuntimeGuide(data));
+                + (facts.Count == 0 ? Text("GuideNoMatches") : string.Join("\n", facts));
+        }
         if (_detailPage == DetailPage.Plan)
         {
             if (area.Height < 60) return true;

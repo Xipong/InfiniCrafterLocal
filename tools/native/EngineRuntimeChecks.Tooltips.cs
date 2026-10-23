@@ -187,7 +187,8 @@ internal static partial class EngineRuntimeChecks
                             break;
                         case "inert-effects": Check(!lines.Any(x => x.Name.StartsWith("InfiniHeal") || x.Name.StartsWith("InfiniBuff") || x.Name.StartsWith("InfiniMining") || x.Name.StartsWith("InfiniMobility")), "inert gameplay effects advertised"); break;
                         case "bounded-hostile": Check(lines.Count(x => x.Name.StartsWith("InfiniBuffPrimary")) == 16 && Line("InfiniMobilityPrimary").Length == 0 && Line("InfiniMovementPrimary").Length == 0, "hostile bounded/unknown/nonfinite controls"); break;
-                        case "unresolved": Check(lines.Count == 2 && Line("InfiniDefinitionState").Length > 0
+                        case "unresolved": Check(lines.Count <= 5 && Line("InfiniDefinitionState").Length > 0
+                            && lines.Skip(1).All(x => x.Name is "InfiniDefinitionState" or "InfiniDefinitionRecovery" or "InfiniDefinitionRecoveryHelp" or "InfiniSectionReadiness")
                             && !lines.Any(x => x.Name.StartsWith("InfiniInput") || x.Name.StartsWith("InfiniHeal")), "unresolved reference shows only definition availability, no executable behavior"); break;
                     }
                     // Adversarial metadata cannot route inputs, effects or tooltip text.

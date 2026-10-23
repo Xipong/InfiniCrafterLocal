@@ -110,6 +110,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         _known = Array.Empty<GeneratedItemData>(); _snapshotTick = uint.MaxValue; History.Clear();
         _filteredEntries = Array.Empty<GeneratedItemData>(); BatchSelection.Clear(); RecentQueries.Clear();
         _queryRecall = -1; _queryDraft = ""; _workspaceMenu = false; _workspaceScroll = _collectionChoice = 0;
+        _guideQuery = ""; _guideSection = default;
         _sessionOwner = null; _sessionWorld = 0;
     }
     public static void Open()
@@ -128,7 +129,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         var snapshot = InfiniCrafterLocalMod.GeneratedItems?.Snapshot() ?? Array.Empty<GeneratedItemData>();
         if (!RecipeJournalView.Entries(snapshot, Main.worldID.ToString(), "", _ => false, false).Any(d => d.Id == id)) return false;
         Open(); _known = snapshot; _snapshotTick = Main.GameUpdateCount;
-        Select(id, revealOutsideFilters: true); _workspaceMenu = false; _detailPage = DetailPage.Guide;
+        Select(id, revealOutsideFilters: true); _workspaceMenu = false; _guideQuery = ""; _guideSection = default; _detailPage = DetailPage.Guide;
         return true;
     }
     private static void SetSearchFocus(bool focused) => SetTextFocus(focused ? 1 : _noteFocus ? 2 : 0);

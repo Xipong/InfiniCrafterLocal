@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Terraria.GameContent;
 using Microsoft.Xna.Framework.Input;
 using InfiniCrafterLocal.Common.Models;
@@ -29,20 +30,51 @@ public partial class GeneratedItem
         => ModifyRuntimeTooltips(tooltips, ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>()?.AlwaysExpandGeneratedTooltips == true
             || Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift));
 
+    internal enum GuideSection { All, Controls, Readiness, Equipment, Effects, Provenance }
+    internal readonly record struct GuideFact(string Name, string Text, GuideSection Section);
+
     internal void ModifyRuntimeTooltips(List<TooltipLine> tooltips, bool expanded)
     {
-        WriteRuntimeFacts(PresentationData(), expanded,
-            (name, text) => tooltips.Add(new TooltipLine(Mod, name, text)));
+        foreach (var fact in PresentRuntimeFacts(PresentationData(), expanded, GuideSection.All, "", MaxRuntimeTooltipLines))
+            tooltips.Add(new TooltipLine(Mod, fact.Name, fact.Text));
     }
 
-    internal static IReadOnlyList<string> RuntimeGuide(GeneratedItemData data)
+    internal static IReadOnlyList<string> RuntimeGuide(GeneratedItemData data, GuideSection section = GuideSection.All, string query = "")
+        => PresentRuntimeFacts(data, true, section, query, 512).Select(f => f.Text).ToArray();
+
+    internal static GuideSection RuntimeFactSection(string name)
     {
-        var rows = new List<string>();
-        WriteRuntimeFacts(data, true, (_, text) => rows.Add(text));
-        return rows;
+        if (name.StartsWith("InfiniEquipment", StringComparison.Ordinal)) return GuideSection.Equipment;
+        if (name.Contains("RecipeParents", StringComparison.Ordinal)) return GuideSection.Provenance;
+        if (name.Contains("Condition", StringComparison.Ordinal) || name.Contains("Cooldown", StringComparison.Ordinal)
+            || name.Contains("Exhaustion", StringComparison.Ordinal) || name.Contains("Definition", StringComparison.Ordinal)) return GuideSection.Readiness;
+        if (name.StartsWith("InfiniInput", StringComparison.Ordinal) || name.Contains("Placement", StringComparison.Ordinal)) return GuideSection.Controls;
+        return GuideSection.Effects;
     }
 
-    private static void WriteRuntimeFacts(GeneratedItemData data, bool expanded, Action<string, string> emit)
+    internal static IReadOnlyList<GuideFact> PresentRuntimeFacts(GeneratedItemData data, bool expanded, GuideSection section, string query, int limit)
+    {
+        var raw = new List<GuideFact>();
+        WriteRuntimeFacts(data, expanded, (name, text) => raw.Add(new(name, text, RuntimeFactSection(name))), limit);
+        if (!expanded) return raw;
+        query = (query ?? "").Trim();
+        var result = new List<GuideFact>();
+        foreach (GuideSection group in Enum.GetValues<GuideSection>().Where(g => g != GuideSection.All))
+        {
+            if (section != GuideSection.All && section != group) continue;
+            var selected = raw.Where(f => f.Section == group && (query.Length == 0 || f.Text.Contains(query, StringComparison.CurrentCultureIgnoreCase))).ToArray();
+            if (selected.Length == 0 || result.Count >= limit) continue;
+            result.Add(new("InfiniSection" + group, RuntimeTooltipText("Section" + group), group));
+            foreach (var fact in selected)
+            {
+                if (result.Count >= limit) break;
+                result.Add(fact);
+            }
+        }
+        return result;
+    }
+
+    private static void WriteRuntimeFacts(GeneratedItemData data, bool expanded, Action<string, string> emit, int limit = MaxRuntimeTooltipLines)
     {
         if (GeneratedItemData.IsPlayerSaveReferenceOnly(data))
         {
@@ -58,14 +90,14 @@ public partial class GeneratedItem
         void Detail(string name, string key, params object[] args) => details.Add((name, key, args));
         void Add(string name, string key, params object[] args)
         {
-            if (addedLines >= MaxRuntimeTooltipLines) return;
+            if (addedLines >= limit) return;
             string text = RuntimeTooltipText(key, args);
             IReadOnlyList<string> rows = Main.dedServ || FontAssets.MouseText?.IsLoaded != true
                 ? new[] { text }
                 : WrapRuntimeTooltipLines(text, RuntimeTooltipWidthLimit(Main.screenWidth, Main.UIScale),
                     value => FontAssets.MouseText.Value.MeasureString(value).X);
             // A wrapped fact occupies several native TooltipLine rows.
-            int admitted = RuntimeTooltipRowsToAdd(addedLines, rows.Count);
+            int admitted = Math.Min(Math.Max(0, limit - addedLines), rows.Count);
             for (int i = 0; i < admitted; i++)
                 emit("Infini" + name
                     + (i == 0 ? "" : "Wrap" + i.ToString(CultureInfo.InvariantCulture)), rows[i]);
