@@ -256,6 +256,13 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	PreparationProtectedStock: "The required stock is favorited. Remove its favorite protection before preparing."
+	PreparationMissingStock: "Carry enough of both ingredients; duplicate parents need two units. Bank items are not transferred."
+	PreparationLaneOccupied: "Retrieve both lane inputs before preparing this recipe."
+	PreparationCursorOccupied: "Put away the item held by the cursor."
+	PreparationBusy: "Wait for the current craft or station transfer."
+	PreparationInvalidRecipe: "This recipe is unavailable in the current world."
+	PreparationReady: "Ready: move one of each ingredient into this lane. Crafting starts only when you press Craft."
 	PickerResults: "{0} stacks · page {1}/{2}"
 	PickerSortName: "By name"
 	PickerSortStack: "By quantity"

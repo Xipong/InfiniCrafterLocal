@@ -109,7 +109,7 @@ public sealed partial class RecipeJournalUISystem
                 int laneWidth = Math.Min(85, area.Width / 3);
                 if (Button(sb, new Rectangle(area.X, area.Y, laneWidth, 25), Text("PrepareLane", _preparationLane + 1), click, cursor))
                     _preparationLane = (_preparationLane + 1) % owner.MultiDevWindowCount;
-                if (Button(sb, new Rectangle(area.X + laneWidth + 6, area.Y, area.Width - laneWidth - 6, 25), Text("PrepareRecipe"), click, cursor))
+                if (Button(sb, new Rectangle(area.X + laneWidth + 6, area.Y, area.Width - laneWidth - 6, 25), Text("PrepareRecipe"), click, cursor, enabled: owner.GetRecipePreparationReadiness(data, _preparationLane) == InfiniCraftPlayer.RecipePreparationReadiness.Ready))
                 {
                     if (owner.PrepareKnownRecipe(data, _preparationLane)) { Close(); return true; }
                     _hoverText = Text("PrepareRefused");
@@ -118,7 +118,7 @@ public sealed partial class RecipeJournalUISystem
             }
             var stock = RecipeInventoryView.Capture(Main.LocalPlayer, data.RecipeMeta.WorldId);
             var output = RecipeInventoryView.Find(stock, "generated:" + data.Id);
-            content = data.Name + "\n" + Text("StockRow", output.Carried, output.Stored, output.Protected) + "\n\n" + Text("Ingredients");
+            content = owner.RecipePreparationGuidance(data, _preparationLane) + "\n\n" + data.Name + "\n" + Text("StockRow", output.Carried, output.Stored, output.Protected) + "\n\n" + Text("Ingredients");
             for (int i = 0; i < data.RecipeMeta.ParentIdentities.Length; i++)
             {
                 var row = RecipeInventoryView.Find(stock, data.RecipeMeta.ParentIdentities[i]);

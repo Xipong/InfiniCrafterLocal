@@ -12,15 +12,7 @@ namespace InfiniCrafterLocal.Common.UI;
 internal static class RecipeInventoryView
 {
     internal readonly record struct Stock(string Identity, long Carried, long Stored, long Protected);
-    internal static string Identity(Item? item, string world)
-    {
-        if (item is null || item.IsAir) return "";
-        if (item.ModItem is GeneratedItem generated)
-            return generated.Data.RecipeMeta.WorldScoped && generated.Data.RecipeMeta.WorldId == world
-                && !GeneratedItemData.IsPlayerSaveReferenceOnly(generated.Data) ? "generated:" + generated.Data.Id : "";
-        string name = item.ModItem is { } mod ? mod.Mod.Name + "/" + mod.Name : "Terraria/" + ItemID.Search.GetName(item.type);
-        return "item:" + name + ":" + item.type;
-    }
+    internal static string Identity(Item? item, string world) => RecipeIngredientIdentity.Of(item, world);
     internal static IReadOnlyDictionary<string, Stock> Capture(Player player, string world)
     {
         var totals = new Dictionary<string, Stock>(StringComparer.Ordinal);

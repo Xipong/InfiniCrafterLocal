@@ -256,6 +256,13 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	PreparationProtectedStock: "Нужные предметы в избранном. Снимите защиту перед подготовкой."
+	PreparationMissingStock: "Нужны оба ингредиента в инвентаре; одинаковых нужно два. Предметы из банков не переносятся."
+	PreparationLaneOccupied: "Заберите оба предмета линии перед подготовкой."
+	PreparationCursorOccupied: "Уберите предмет с курсора."
+	PreparationBusy: "Дождитесь создания или переноса предметов."
+	PreparationInvalidRecipe: "Рецепт недоступен в этом мире."
+	PreparationReady: "Готово: положить по одному ингредиенту в линию. Создание начнётся только по нажатию «Создать»."
 	PickerResults: "Стопок: {0} · страница {1}/{2}"
 	PickerSortName: "По имени"
 	PickerSortStack: "По количеству"

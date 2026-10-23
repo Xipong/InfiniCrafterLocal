@@ -157,6 +157,7 @@ public sealed partial class InfiniCraftPlayer
         int normalized = Math.Clamp(requested, 1, 3);
         if (normalized < MultiDevWindowCount)
         {
+            if (HasRecipePreparation && _preparationLane >= normalized) return false;
             for (int lane = normalized; lane < 3; lane++)
             {
                 if (IsCraftLanePending(lane) || HasInputAt(lane * 2) || HasInputAt(lane * 2 + 1))
