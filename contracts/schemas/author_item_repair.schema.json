@@ -3000,6 +3000,12 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "autoManaPotion": {
+                    "description": "Enable native Player.manaFlower: engine may consume available mana potions when CheckMana needs them. Does not create potions, provide free mana, or reduce mana cost.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "autoPaint": {
                     "description": "Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
                     "type": "boolean",
@@ -3068,6 +3074,12 @@
                   },
                   "enemyInfo": {
                     "description": "Enable native Player.accThirdEye nearby enemy counter; does not reveal or attack enemies.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "extendedInvulnerability": {
+                    "description": "Enable native Player.longInvince hurt invulnerability timing. Does not make the player permanently immune, dodge hits or create custom on-hit actions.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -3437,8 +3449,20 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "potionCooldown": {
+                    "description": "Enable native Player.pStone healing potion delay modifier. Uses engine PhilosopherStoneDurationMultiplier, applied on the native update cadence; does not clear an existing potion sickness debuff.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "rareCreatureInfo": {
                     "description": "Enable native Player.accCritterGuide rare creature information; does not attract creatures.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "restingRecovery": {
+                    "description": "Enable native Player.shinyStone resting regeneration rules. Terraria owns motion and regeneration conditions; does not grant unconditional healing or damage resistance.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"

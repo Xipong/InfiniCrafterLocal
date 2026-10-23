@@ -92,6 +92,10 @@ public partial class GeneratedItem
         if (a.OreInfo == true) player.accOreFinder = true;
         if (a.RareCreatureInfo == true) player.accCritterGuide = true;
         if (a.KillCountInfo == true) player.accDreamCatcher = true;
+        if (a.PotionCooldown == true) player.pStone = true;
+        if (a.AutoManaPotion == true) player.manaFlower = true;
+        if (a.RestingRecovery == true) player.shinyStone = true;
+        if (a.ExtendedInvulnerability == true) player.longInvince = true;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

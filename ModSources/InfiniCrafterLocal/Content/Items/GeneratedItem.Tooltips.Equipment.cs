@@ -111,6 +111,10 @@ public partial class GeneratedItem
             Flag("OreInfo", a.OreInfo == true);
             Flag("RareCreatureInfo", a.RareCreatureInfo == true);
             Flag("KillCountInfo", a.KillCountInfo == true);
+            Flag("PotionCooldown", a.PotionCooldown == true);
+            Flag("AutoManaPotion", a.AutoManaPotion == true);
+            Flag("RestingRecovery", a.RestingRecovery == true);
+            Flag("ExtendedInvulnerability", a.ExtendedInvulnerability == true);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);

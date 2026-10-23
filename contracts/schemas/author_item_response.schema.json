@@ -3604,6 +3604,30 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "potionCooldown": {
+                        "type": "boolean",
+                        "description": "Enable native Player.pStone healing potion delay modifier. Uses engine PhilosopherStoneDurationMultiplier, applied on the native update cadence; does not clear an existing potion sickness debuff.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "autoManaPotion": {
+                        "type": "boolean",
+                        "description": "Enable native Player.manaFlower: engine may consume available mana potions when CheckMana needs them. Does not create potions, provide free mana, or reduce mana cost.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "restingRecovery": {
+                        "type": "boolean",
+                        "description": "Enable native Player.shinyStone resting regeneration rules. Terraria owns motion and regeneration conditions; does not grant unconditional healing or damage resistance.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "extendedInvulnerability": {
+                        "type": "boolean",
+                        "description": "Enable native Player.longInvince hurt invulnerability timing. Does not make the player permanently immune, dodge hits or create custom on-hit actions.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "iceSkate": {
                         "type": "boolean",
                         "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",

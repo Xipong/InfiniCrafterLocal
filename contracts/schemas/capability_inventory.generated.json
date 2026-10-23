@@ -1962,6 +1962,10 @@
         "accessory.oreInfo",
         "accessory.rareCreatureInfo",
         "accessory.killCountInfo",
+        "accessory.potionCooldown",
+        "accessory.autoManaPotion",
+        "accessory.restingRecovery",
+        "accessory.extendedInvulnerability",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
@@ -2004,6 +2008,16 @@
           "units": "probability_percent"
         },
         "autoJump": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "autoManaPotion": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2094,6 +2108,16 @@
           "units": ""
         },
         "enemyInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "extendedInvulnerability": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2525,7 +2549,27 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "potionCooldown": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "rareCreatureInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "restingRecovery": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2781,6 +2825,10 @@
             "oreInfo",
             "rareCreatureInfo",
             "killCountInfo",
+            "potionCooldown",
+            "autoManaPotion",
+            "restingRecovery",
+            "extendedInvulnerability",
             "iceSkate",
             "noKnockback",
             "fireWalk",

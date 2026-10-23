@@ -56,3 +56,14 @@ schema, compiler, receipts, strict wire и frozen Repair; native check
 Каждый флаг независим: выбор одного не включает остальные. Эффект выдаётся
 на нативном проходе экипировки и снимается ResetEffects после снятия предмета.
 Параметры отображаются в локализованных tooltip, проходят strict wire и exact receipts.
+
+## Survival
+
+`potionCooldown` → `Player.pStone`: нативное сокращение перезарядки лечения.
+`autoManaPotion` → `Player.manaFlower`: автоматическое зелье маны.
+`restingRecovery` → `Player.shinyStone`: нативное восстановление здоровья в покое.
+`extendedInvulnerability` → `Player.longInvince`: продлённая нативная неуязвимость.
+
+Каждый флаг независим: выбор одного не включает остальные. Эффект выдаётся
+на нативном проходе экипировки и снимается ResetEffects после снятия предмета.
+Параметры отображаются в локализованных tooltip, проходят strict wire и exact receipts.

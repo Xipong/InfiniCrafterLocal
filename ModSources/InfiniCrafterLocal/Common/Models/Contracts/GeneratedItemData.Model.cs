@@ -457,6 +457,38 @@ public sealed class AccessorySpec
         set => _jumpTsunami = value ?? throw new System.IO.InvalidDataException("jumpTsunami requires a boolean when present");
     }
 
+    private bool? _extendedInvulnerability;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ExtendedInvulnerability
+    {
+        get => _extendedInvulnerability;
+        set => _extendedInvulnerability = value ?? throw new InvalidDataException("extendedInvulnerability must be boolean when present");
+    }
+
+    private bool? _restingRecovery;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RestingRecovery
+    {
+        get => _restingRecovery;
+        set => _restingRecovery = value ?? throw new InvalidDataException("restingRecovery must be boolean when present");
+    }
+
+    private bool? _autoManaPotion;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoManaPotion
+    {
+        get => _autoManaPotion;
+        set => _autoManaPotion = value ?? throw new InvalidDataException("autoManaPotion must be boolean when present");
+    }
+
+    private bool? _potionCooldown;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? PotionCooldown
+    {
+        get => _potionCooldown;
+        set => _potionCooldown = value ?? throw new InvalidDataException("potionCooldown must be boolean when present");
+    }
+
     private bool? _killCountInfo;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? KillCountInfo
@@ -684,7 +716,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || AutoPaint == true || RulerGrid == true || BuildRangeTiles is > 0 || TileSpeedBonusPercent is > 0 || WallSpeedBonusPercent is > 0 || GravityControl == true || FeatherFall == true || ExtraFallTiles is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0 || FishingPower is > 0 || FishingCrates == true || FishingSonar == true || LavaFishing == true || FishingLine == true || TreasurePickup == true || CoinPickup == true || ManaPickup == true || LifePickup == true || NightVision == true || CreatureVision == true || DangerVision == true || TreasureVision == true || KillCountInfo == true || RareCreatureInfo == true || OreInfo == true || SpeedInfo == true || EnemyInfo == true || MoonInfo == true || WeatherInfo == true || FishingInfo == true
+    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || AutoPaint == true || RulerGrid == true || BuildRangeTiles is > 0 || TileSpeedBonusPercent is > 0 || WallSpeedBonusPercent is > 0 || GravityControl == true || FeatherFall == true || ExtraFallTiles is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0 || FishingPower is > 0 || FishingCrates == true || FishingSonar == true || LavaFishing == true || FishingLine == true || TreasurePickup == true || CoinPickup == true || ManaPickup == true || LifePickup == true || NightVision == true || CreatureVision == true || DangerVision == true || TreasureVision == true || KillCountInfo == true || RareCreatureInfo == true || OreInfo == true || SpeedInfo == true || EnemyInfo == true || MoonInfo == true || WeatherInfo == true || FishingInfo == true || ExtendedInvulnerability == true || RestingRecovery == true || AutoManaPotion == true || PotionCooldown == true
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f
