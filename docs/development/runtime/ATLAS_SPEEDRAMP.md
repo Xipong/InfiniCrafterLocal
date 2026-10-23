@@ -1,0 +1,5 @@
+# set_projectile_speed_ramp
+
+Absolute linear speed envelope over an authored active world-time interval. Unlike multiplicative speedModifier, speed at a given age is independent of prior magnitude and extraUpdates. After vector acceleration and before homing it preserves current heading and assigns a linearly interpolated start/end magnitude, reaching the endpoint on the last phase update. Outside the interval it releases velocity ownership. Zero velocity remains zero: this capability does not invent a launch direction. May compose with turn and targeting; a movement that replaces velocity each frame still receives the envelope in the fixed modifier pass.
+
+The capability registry owns all required fields and world-unit projections. The compiler uses the generic modifier projection with one receipt per field; Author, Repair and wire schemas derive from the same registry. Native phase clock uses active age, excluding activation delay. Late hydration retains that clock. GPU/world/multiplayer-session validation: notRun.

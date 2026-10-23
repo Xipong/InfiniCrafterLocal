@@ -20,6 +20,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import wire_transport
 
 PARAMS = {
+    "set_projectile_speed_ramp": dict(startSpeedBlocksPerSecond=75, endSpeedBlocksPerSecond=15, startDelaySeconds=0, durationSeconds=2),
     "set_projectile_vector_acceleration": dict(accelerationXBlocksPerSecondSquared=12, accelerationYBlocksPerSecondSquared=-6, startDelaySeconds=0, durationSeconds=2),
     "set_projectile_turn_modifier": dict(turnRadiansPerSecond=(.04) * 60, startDelaySeconds=(0) / 60, durationSeconds=(90) / 60),
     "set_projectile_speed_modifier": dict(speedMultiplierPerUpdate=1.01, maxSpeedBlocksPerSecond=75, startDelaySeconds=(0) / 60, durationSeconds=(40) / 60),
@@ -47,6 +48,7 @@ def entity(wire, fn):
 
 @pytest.mark.parametrize("fn,format_mode,repair", [
     ("set_projectile_vector_acceleration", "json_object", False),
+    ("set_projectile_speed_ramp", "json_schema", True),
     ("set_projectile_visual_scale_curve", "json_object", False),
     ("set_projectile_homing_modifier", "json_schema", True),
 ])

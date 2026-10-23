@@ -46,6 +46,7 @@ PROJECTILE_ENTITY_KIND_ORDER: Final[tuple[str, ...]] = ENTITY_KINDS[1:]
 PROJECTILE_ENTITY_KINDS: Final[frozenset[str]] = frozenset(PROJECTILE_ENTITY_KIND_ORDER)
 PROJECTILE_MODIFIER_COMPONENTS: Final[Mapping[str, str]] = MappingProxyType({
     "set_projectile_vector_acceleration": "vectorAcceleration",
+    "set_projectile_speed_ramp": "speedRamp",
     "set_projectile_turn_modifier": "turnModifier",
     "set_projectile_speed_modifier": "speedModifier",
     "set_projectile_homing_modifier": "homingModifier",
@@ -2146,9 +2147,17 @@ _CAPS: list[CapabilitySpec] = [
         }, component_slot="vectorAcceleration", authority="owner_execute_sync", py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplyVectorAcceleration",
         wire_presence_path="runtimeProgram.entities[].vectorAcceleration"),
+    _cap("set_projectile_speed_ramp", 'Absolute linear speed envelope over an authored active world-time interval. Unlike multiplicative speedModifier, speed at a given age is independent of prior magnitude and extraUpdates. After vector acceleration and before homing it preserves current heading and assigns a linearly interpolated start/end magnitude, reaching the endpoint on the last phase update. Outside the interval it releases velocity ownership. Zero velocity remains zero: this capability does not invent a launch direction. May compose with turn and targeting; a movement that replaces velocity each frame still receives the envelope in the fixed modifier pass.', "motion_modifier", ("free_projectile", "child_projectile"), {
+            "startSpeedBlocksPerSecond": _world_units(_p("number", "Absolute speed at the beginning of the interval", minimum=0.1, maximum=80, units="pixels/update", consumer_storage="float32"), "startSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+            "endSpeedBlocksPerSecond": _world_units(_p("number", "Absolute endpoint speed; zero stops on the last phase update", minimum=0, maximum=80, units="pixels/update", consumer_storage="float32", neutral=0), "endSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+            "startDelaySeconds": _seconds(_p("integer", "Start after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active world-time duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+        }, component_slot="speedRamp", authority="owner_execute_sync", py=_COMPILER_OWNER,
+        cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplySpeedRamp",
+        wire_presence_path="runtimeProgram.entities[].speedRamp"),
     _cap(
         "set_projectile_turn_modifier",
-        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, multiplicative speed, vector acceleration, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, multiplicative speed, vector acceleration, absolute speed ramp, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "turnRadiansPerSecond": _world_units(_p("number", "Signed world-time velocity rotation rate during the active phase", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0), "turnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
@@ -2175,7 +2184,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "set_projectile_homing_modifier",
-        "After movement, turn, multiplicative speed, vector acceleration, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+        "After movement, turn, multiplicative speed, vector acceleration and absolute speed ramp, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "rangeTiles": _p("number", "Hard target radius from this projectile center", minimum=1, maximum=120, units="tiles", consumer_storage="float32"),
