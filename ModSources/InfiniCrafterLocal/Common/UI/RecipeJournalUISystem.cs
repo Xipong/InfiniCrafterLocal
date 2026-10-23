@@ -55,7 +55,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     }
     private static string _query = "", _selected = "";
     private static string _comparisonId = "";
-    private enum DetailPage { Recipe, Comparison, Ancestors, Descendants, Inventory, Plan, Notebook, Discovery, Guide, Help, Organize }
+    private enum DetailPage { Recipe, Comparison, Ancestors, Descendants, Inventory, Plan, Notebook, Discovery, Guide, Help, Organize, Filters }
     private static DetailPage _detailPage;
     private static bool _workspaceMenu;
     private static int _workspaceScroll;
@@ -235,7 +235,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         {
             var reset = new Rectangle(effectButton.Right + 6, effectButton.Y, Math.Max(0, book.Right - effectButton.Right - 18), 26);
             if (Button(sb, reset, Text("ResetFilters"), click, cursor))
-            { _query = ""; _favoritesOnly = false; _unreadOnly = false; _effectFilter = RecipeJournalView.EffectFilter.All; _page = 0; SetSearchFocus(false); }
+            { ResetFilters(); }
         }
         Rectangle list = layout.List;
         int capacity = Math.Max(1, layout.Rows * layout.Columns);

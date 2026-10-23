@@ -20,6 +20,7 @@ public sealed partial class RecipeJournalUISystem
     private static bool DrawAnalysisPage(SpriteBatch sb, GeneratedItemData data, Rectangle area, bool click, Vector2 cursor)
     {
         if (_detailPage == DetailPage.Recipe) return false;
+        if (_detailPage == DetailPage.Filters) { DrawFilterPresets(sb, area, click, cursor); return true; }
         if (_detailPage is DetailPage.Ancestors or DetailPage.Descendants)
         {
             var rows = RecipeLineageView.Build(data, _known, _detailPage == DetailPage.Descendants);

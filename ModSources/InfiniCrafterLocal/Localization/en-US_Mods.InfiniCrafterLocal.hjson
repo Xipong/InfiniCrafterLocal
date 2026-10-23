@@ -53,6 +53,13 @@ UseFeedback: {
 	HelpBrowse: "Browse: select a discovery, use the workspace button to open comparison, ancestry, stock, planning, personal notes or the item guide. Right-click a grid item to favorite it. PgUp/PgDn change pages; Home/End go to the first/last page."
 	WorkspaceHelp: "Choose a workspace · scroll for more · Escape goes back"
 	ViewHelp: "View: atlas help"
+	ViewFilters: "View: saved filters"
+	UndoFilterReset: "Undo reset"
+	PresetHint: "Six saved searches per world. Save replaces this slot; × deletes."
+	PresetEmpty: "{0}: empty"
+	PresetLoad: "{0}: apply saved filters"
+	PresetSave: "Save"
+
 	PrepareRefused: "Needs two available inventory ingredients, an empty cursor and an idle lane with empty inputs. Favorites stay protected. This prepares inputs only; start crafting at the station."
 	PrepareRecipe: "Prepare this recipe"
 	PrepareLane: "Lane {0}"

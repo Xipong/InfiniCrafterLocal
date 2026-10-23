@@ -36,4 +36,29 @@ internal static partial class EngineRuntimeChecks
             } finally { ui.OnWorldUnload(); }
         });
     }
+    private static void JournalSavedFilters()
+    {
+        WithPlayer((player, owner) => {
+            int world = Terraria.Main.worldID;
+            var preset = new InfiniCrafterLocal.Common.Players.JournalFilterPreset("tag:magic -name:wood", true, true,
+                RecipeJournalView.EffectFilter.Equipment, "exact-parent", RecipeJournalView.SortOrder.Recent);
+            Equal(true, owner.SaveJournalPreset(2, preset), "save composed search");
+            var tag = new Terraria.ModLoader.IO.TagCompound(); owner.SaveData(tag);
+            owner.SaveJournalPreset(2, null); owner.LoadData(tag);
+            Equal(preset, owner.JournalPreset(2), "full search survives real save/load");
+            try { Terraria.Main.worldID = world + 1; Equal(true, owner.JournalPreset(2) is null, "presets world scoped"); }
+            finally { Terraria.Main.worldID = world; }
+            Equal(false, owner.SaveJournalPreset(6, preset), "bounded slots");
+            Equal(false, owner.SaveJournalPreset(1, preset with { Query = new string('x', 81) }), "bounded persisted query");
+            JournalField("_query").SetValue(null, "tag:magic");
+            JournalField("_ingredientFilter").SetValue(null, "exact-parent");
+            RecipeJournalUISystem.ResetFilters();
+            Equal("", (string)JournalField("_ingredientFilter").GetValue(null)!, "reset clears ingredient as well");
+            Equal(true, RecipeJournalUISystem.UndoFilterReset(), "reset is reversible");
+            Equal("tag:magic", (string)JournalField("_query").GetValue(null)!, "undo restores search");
+            Equal("exact-parent", (string)JournalField("_ingredientFilter").GetValue(null)!, "undo restores ingredient");
+            Equal(false, RecipeJournalUISystem.UndoFilterReset(), "undo consumed once");
+            new RecipeJournalUISystem().OnWorldUnload();
+        });
+    }
 }
