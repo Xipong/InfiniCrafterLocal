@@ -60,6 +60,9 @@ Author schema ограничивает значения всех примити�
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | accessory.waterWalk | ModItem.UpdateAccessory |
+| gravityControl | Native gravity potion control; up input flips gravity. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.gravityControl | ModItem.UpdateAccessory |
+| featherFall | Native feather fall with up/down descent controls. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.featherFall | ModItem.UpdateAccessory |
+| extraFallTiles | Additional native fall damage threshold in tiles; additive, not immunity | tiles | 0 | 0…100 | accessory.extraFallTiles | ModItem.UpdateAccessory |
 | autoPaint | Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.autoPaint | ModItem.UpdateAccessory |
 | rulerGrid | Native ruler grid controlled by builder toggles. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.rulerGrid | ModItem.UpdateAccessory |
 | buildRangeTiles | Additional native tile placement reach in tiles; additive | tiles | 0 | 0…20 | accessory.buildRangeTiles | ModItem.UpdateAccessory |

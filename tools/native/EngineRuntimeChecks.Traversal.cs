@@ -109,4 +109,34 @@ internal static partial class EngineRuntimeChecks
             }
         });
     }
+    private static void NativeTraversalGravity()
+    {
+        WithPlayer((player, _) => {
+            player.ResetEffects();
+            player.gravDir = -1f; player.fallStart = 123;
+            NativeUtilityItem("\"gravityControl\":true,\"featherFall\":true,\"extraFallTiles\":12").UpdateAccessory(player, false);
+            Equal(true, player.gravControl && player.slowFall, "native gravity and slow-fall grants");
+            Equal(12, player.extraFall, "authored fall threshold in tiles");
+            Equal(-1f, player.gravDir, "equip never forces orientation");
+            Equal(123, player.fallStart, "equip never erases actual fall distance");
+            Equal(false, player.noFallDmg, "finite fall allowance is not immunity");
+            NativeUtilityItem("\"extraFallTiles\":7").UpdateAccessory(player, true);
+            Equal(19, player.extraFall, "fall allowance composes additively");
+            player.ResetEffects();
+            Equal(false, player.gravControl || player.slowFall, "native reset removes control grants");
+            Equal(0, player.extraFall, "native reset removes fall allowance");
+            foreach (string invalid in new[] { "null", "101", "-1", "1.5" }) {
+                bool rejected = false;
+                try { NativeUtilityItem("\"extraFallTiles\":" + invalid); } catch (InvalidOperationException) { rejected = true; }
+                Equal(true, rejected, "strict fall allowance bound " + invalid);
+            }
+        });
+        WithForgePresentationLanguages(locale => {
+            var data = NativeUtilityItem("\"gravityControl\":true,\"featherFall\":true,\"extraFallTiles\":12").Data;
+            var host = TooltipSecondaryHost(data);
+            string guide = string.Join("\n", InfiniCrafterLocal.Content.Items.GeneratedItem.RuntimeGuide(host.Data));
+            Equal(false, guide.Contains("Mods.InfiniCrafterLocal"), "localized gravity guide " + locale);
+            Equal(true, guide.Contains("12"), "guide includes actual safe fall allowance");
+        });
+    }
 }

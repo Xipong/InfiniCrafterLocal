@@ -357,6 +357,7 @@ internal static partial class EngineRuntimeChecks
             ("VFUI20 stack ID recipe identity", VFUI20StackIdentityUsesIdAndRecipeNotName),
             ("VFX worker world retirement defers GPU disposal", DetachedVfxWorkerRetiresCpuBeforeGraphicsDisposal),
             ("VFX queued disposal preserves next-world generation", DetachedVfxQueuedDisposalCannotRetireNextWorld),
+            ("native traversal gravity", NativeTraversalGravity),
             ("native traversal building", NativeTraversalBuilding),
             ("native traversal climbing", NativeTraversalClimbing),
             ("native traversal aquatic", NativeTraversalAquatic),

@@ -3354,6 +3354,26 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "gravityControl": {
+                        "type": "boolean",
+                        "description": "Native gravity potion control; up input flips gravity. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "featherFall": {
+                        "type": "boolean",
+                        "description": "Native feather fall with up/down descent controls. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "extraFallTiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Additional native fall damage threshold in tiles; additive, not immunity",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-neutral": 0
+                      },
                       "autoPaint": {
                         "type": "boolean",
                         "description": "Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",

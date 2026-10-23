@@ -68,6 +68,9 @@ public partial class GeneratedItem
         player.blockRange += a.BuildRangeTiles ?? 0;
         player.tileSpeed += (a.TileSpeedBonusPercent ?? 0) / 100f;
         player.wallSpeed += (a.WallSpeedBonusPercent ?? 0) / 100f;
+        if (a.GravityControl == true) { player.gravControl = true; }
+        if (a.FeatherFall == true) { player.slowFall = true; }
+        player.extraFall += a.ExtraFallTiles ?? 0;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;
