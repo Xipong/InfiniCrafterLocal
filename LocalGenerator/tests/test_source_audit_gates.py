@@ -188,3 +188,11 @@ def test_runtime_consumers_import_defining_module(gates, source, valid, path):
     sources[path] = source
     issues = hygiene.python_source_issues(sources)
     assert any(issue.startswith("runtime_barrel_consumer:") for issue in issues) is not valid
+
+
+def test_localization_sections_do_not_require_unrelated_proxy_entries(gates):
+    _, scanner = gates
+    section = "Localization/en-US_Mods.InfiniCrafterLocal.CraftNotifications.hjson"
+    assert scanner.source_policy_issues({section: 'Title: "Craft complete"'}) == []
+    assert scanner.source_policy_issues({section: 'GeneratedItem: { Tooltip: "invented gameplay" }'})
+    assert scanner.source_policy_issues({"Localization/en-US_Mods.InfiniCrafterLocal.hjson": 'Title: "missing proxies"'})

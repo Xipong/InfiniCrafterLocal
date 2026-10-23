@@ -43,11 +43,9 @@ public sealed partial class InfiniCraftPlayer
         if (kind is CraftLaneOutcomeKind.Failed or CraftLaneOutcomeKind.Cancelled or CraftLaneOutcomeKind.TimedOut
             && IsCraftLanePending(laneIndex) && (Main.netMode == NetmodeID.Server || _stationEscrowUsesRemoteAuthority))
             materials = CraftLaneMaterialDisposition.ServerRetained;
-        if (kind == CraftLaneOutcomeKind.Succeeded && _craftLaneOutcomes[laneIndex].Kind != kind
-            && !Main.dedServ && Main.netMode != NetmodeID.Server && Player.whoAmI == Main.myPlayer
-            && Terraria.ModLoader.ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>().PlayCraftCompletionSound)
-            Terraria.Audio.SoundEngine.PlaySound(SoundID.ResearchComplete, Player.Center);
         var outcome = new CraftLaneOutcome(kind, bounded[..Math.Min(bounded.Length, 240)], materials);
+        if (kind != CraftLaneOutcomeKind.None && outcome != _craftLaneOutcomes[laneIndex])
+            EnqueueCraftNotification(laneIndex, outcome);
         RecordCraftHistory(laneIndex, outcome);
         _craftLaneOutcomes[laneIndex] = outcome;
         _craftLaneOutcomeTicks[laneIndex] = kind == CraftLaneOutcomeKind.None ? 0 : 30 * 60;

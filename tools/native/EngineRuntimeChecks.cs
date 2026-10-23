@@ -73,6 +73,7 @@ internal static partial class EngineRuntimeChecks
             ("QoL WordSearch", QolWordSearch),
             ("QoL FunctionalFilters", QolFunctionalFilters),
             ("QoL RetainOutcome", QolRetainOutcome),
+            ("Expansion CraftNotifications", CraftNotifications),
             ("QoL RefundStacks", QolRefundStacks),
             ("QoL BlinkGeometry", QolBlinkGeometry),
             ("QoL DeathBuffCleanup", QolDeathBuffCleanup),

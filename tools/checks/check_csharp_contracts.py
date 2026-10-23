@@ -70,7 +70,8 @@ def source_policy_issues(sources: dict[str, str]) -> list[str]:
         if path.startswith("Localization/") and path.endswith(".hjson"):
             for name in ("GeneratedItem", "GeneratedHeadArmor", "GeneratedBodyArmor", "GeneratedLegsArmor"):
                 blocks = re.findall(r"\b" + name + r":\s*\{([^}]*)\}", stripped(text, keep_strings=True))
-                if not blocks or any(re.search(r"\bTooltip\s*:", block) for block in blocks):
+                root_catalog = Path(path).name.endswith("_Mods.InfiniCrafterLocal.hjson")
+                if (root_catalog and not blocks) or any(re.search(r"\bTooltip\s*:", block) for block in blocks):
                     issues.append(f"proxy_tooltip:{path}:{name}")
         if path == "Common/Models/Runtime/GeneratedItemData.Apply.cs":
             patterns = [r"\b(?:item|Item)\s*\.\s*useStyle\s*=\s*0\s*;"]
