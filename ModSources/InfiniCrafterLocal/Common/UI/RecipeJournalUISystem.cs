@@ -62,6 +62,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static bool _searchFocus, _favoritesOnly, _noteFocus;
     private static RecipeJournalView.EffectFilter _effectFilter;
     private static string _ingredientFilter = "";
+    private static RecipeStockFilter.Mode _stockFilter;
     private static int _page, _detailScroll;
     private static bool _revealSelection, _unreadOnly;
     private static RecipeJournalView.SortOrder _sortOrder;
@@ -71,11 +72,11 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static GeneratedItemData[] _filteredEntries = Array.Empty<GeneratedItemData>();
     private static int _collectionChoice;
     private sealed record NavigationState(string Selected, string Query, bool Favorites, bool Unread,
-        RecipeJournalView.EffectFilter Effect, string Ingredient, RecipeJournalView.SortOrder Sort,
+        RecipeJournalView.EffectFilter Effect, string Ingredient, RecipeJournalView.SortOrder Sort, RecipeStockFilter.Mode Stock,
         int Page, DetailPage Workspace, int Scroll, string Comparison);
     private static readonly List<NavigationState> History = new();
     private static NavigationState CaptureNavigation() => new(_selected, _query, _favoritesOnly, _unreadOnly,
-        _effectFilter, _ingredientFilter, _sortOrder, _page, _detailPage, _detailScroll, _comparisonId);
+        _effectFilter, _ingredientFilter, _sortOrder, _stockFilter, _page, _detailPage, _detailScroll, _comparisonId);
     internal static bool NavigateBack()
     {
         while (History.Count > 0)
@@ -87,7 +88,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             _query = previous.Query; _favoritesOnly = previous.Favorites; _unreadOnly = previous.Unread;
             _effectFilter = previous.Effect; _ingredientFilter = previous.Ingredient; _sortOrder = previous.Sort;
             _page = previous.Page; _detailPage = previous.Workspace; _detailScroll = previous.Scroll;
-            _comparisonId = previous.Comparison; _revealSelection = false;
+            _stockFilter = previous.Stock; _comparisonId = previous.Comparison; _revealSelection = false;
             return true;
         }
         return false;
@@ -131,7 +132,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (Main.LocalPlayer is { active: true } local && _known.Any(d => d.Id == id && d.RecipeMeta.WorldId == Main.worldID.ToString()))
             local.GetModPlayer<InfiniCraftPlayer>().VisitJournalRecipe(id);
         if (revealOutsideFilters)
-        { _query = ""; _favoritesOnly = false; _unreadOnly = false; _ingredientFilter = ""; _effectFilter = RecipeJournalView.EffectFilter.All; _page = 0; }
+        { _stockFilter = RecipeStockFilter.Mode.All; _query = ""; _favoritesOnly = false; _unreadOnly = false; _ingredientFilter = ""; _effectFilter = RecipeJournalView.EffectFilter.All; _page = 0; }
         _selected = id; SetNoteFocus(false); _detailScroll = 0; _revealSelection = true; SetTextFocus(0);
     }
     private static bool Draw()
@@ -172,8 +173,9 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             if (query != _query) { _query = query; _page = 0; }
         }
         var discoveries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), "", player.IsJournalFavorite, false);
+        var stock = RecipeInventoryView.Capture(Main.LocalPlayer, Main.worldID.ToString());
         var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly, player.JournalNote, player.JournalCollection)
-            .Where(d => (!_unreadOnly || player.JournalLastVisited(d.Id) == 0) && RecipeJournalView.MatchesEffect(d, _effectFilter)
+            .Where(d => RecipeStockFilter.Matches(d, _stockFilter, stock) && (!_unreadOnly || player.JournalLastVisited(d.Id) == 0) && RecipeJournalView.MatchesEffect(d, _effectFilter)
                 && (_ingredientFilter.Length == 0 || d.RecipeMeta.ParentIdentities?.Contains("generated:" + _ingredientFilter, StringComparer.Ordinal) == true)).ToArray();
         entries = RecipeJournalView.Sort(entries, _sortOrder, player.IsJournalFavorite, player.JournalLastVisited);
         _filteredEntries = entries;
@@ -231,7 +233,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             if (Button(sb, clear, Text("UsingIngredient", ingredient?.Name ?? _ingredientFilter), click, cursor, selected: true))
             { _ingredientFilter = ""; _page = 0; }
         }
-        if (_ingredientFilter.Length == 0 && (_query.Length > 0 || _favoritesOnly || _unreadOnly || _effectFilter != RecipeJournalView.EffectFilter.All))
+        if (_ingredientFilter.Length == 0 && (_query.Length > 0 || _favoritesOnly || _unreadOnly || _stockFilter != RecipeStockFilter.Mode.All || _effectFilter != RecipeJournalView.EffectFilter.All))
         {
             var reset = new Rectangle(effectButton.Right + 6, effectButton.Y, Math.Max(0, book.Right - effectButton.Right - 18), 26);
             if (Button(sb, reset, Text("ResetFilters"), click, cursor))
@@ -316,7 +318,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         var children = RecipeJournalView.Children(data, _known);
         if (area.Bottom - y >= 26 && Button(sb, new Rectangle(x, y, w, 24), Text("Children", children.Length), click, cursor,
                 enabled: children.Length > 0))
-        { _ingredientFilter = data.Id; _effectFilter = RecipeJournalView.EffectFilter.All; _favoritesOnly = false; _query = ""; _page = 0; SetSearchFocus(false); }
+        { _stockFilter = RecipeStockFilter.Mode.All; _unreadOnly = false; _ingredientFilter = data.Id; _effectFilter = RecipeJournalView.EffectFilter.All; _favoritesOnly = false; _query = ""; _page = 0; SetSearchFocus(false); }
         y += 30;
         if (area.Bottom - y >= 60)
         {

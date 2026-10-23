@@ -8,15 +8,15 @@ using Terraria.ModLoader.IO;
 namespace InfiniCrafterLocal.Common.Players;
 
 internal sealed record JournalFilterPreset(string Query, bool Favorites, bool Unread,
-    RecipeJournalView.EffectFilter Effect, string Ingredient, RecipeJournalView.SortOrder Sort)
+    RecipeJournalView.EffectFilter Effect, string Ingredient, RecipeJournalView.SortOrder Sort, RecipeStockFilter.Mode Stock = RecipeStockFilter.Mode.All)
 {
-    internal bool Valid => Query.Length <= 80 && Ingredient.Length <= 120
-        && Enum.IsDefined(Effect) && Enum.IsDefined(Sort);
+    internal bool Valid => Query.Length <= 240 && Ingredient.Length <= 120
+        && Enum.IsDefined(Effect) && Enum.IsDefined(Sort) && Enum.IsDefined(Stock);
     internal TagCompound Save() => new() { ["query"] = Query, ["favorites"] = Favorites ? 1 : 0, ["unread"] = Unread ? 1 : 0,
-        ["effect"] = (int)Effect, ["ingredient"] = Ingredient, ["sort"] = (int)Sort };
+        ["effect"] = (int)Effect, ["ingredient"] = Ingredient, ["sort"] = (int)Sort, ["stock"] = (int)Stock };
     internal static JournalFilterPreset Read(TagCompound tag) => new(tag.GetString("query"), tag.GetInt("favorites") == 1,
         tag.GetInt("unread") == 1, (RecipeJournalView.EffectFilter)tag.GetInt("effect"), tag.GetString("ingredient"),
-        (RecipeJournalView.SortOrder)tag.GetInt("sort"));
+        (RecipeJournalView.SortOrder)tag.GetInt("sort"), (RecipeStockFilter.Mode)tag.GetInt("stock"));
 }
 
 public sealed partial class InfiniCraftPlayer
