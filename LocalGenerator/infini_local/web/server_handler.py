@@ -110,8 +110,8 @@ def build_handler(
                     self.json_error(403, "loopback_only", "This endpoint is only available on loopback")
                     return
 
-                if request_path in _CONTROL_ROUTES and not self._is_trusted_control_request():
-                    self.json_error(403, "untrusted_control_origin", "Control requests require a local host and same origin")
+                if self._route_requires_loopback(request_path, is_post=True) and not self._is_trusted_control_request():
+                    self.json_error(403, "untrusted_control_origin", "Local mutation requests require a local host and same origin")
                     return
 
                 if request_path not in {"/combine", *_CONTROL_ROUTES} and not request_path.startswith("/debug/vfx"):
