@@ -361,6 +361,17 @@ def test_json_extraction_preserves_authored_text_not_private_thought(operation, 
     assert result == expected
 
 
+@pytest.mark.parametrize("text", [
+    '{"damage":1,"damage":2}', '{"damage":NaN}', '{"damage":Infinity}',
+    '{"damage":1e999}', '{"child":{"damage":1,"damage":2}}',
+])
+def test_llm_json_rejects_ambiguous_or_nonfinite_candidates(text):
+    with pytest.raises(ValueError):
+        parse_first_valid_llm_json(text)
+    assert recover_object_with_syntax_only_repairs(text) is None
+    assert parse_first_valid_llm_json(text + '{"damage":3}') == {"damage": 3}
+
+
 @pytest.mark.parametrize("text,expected", [
     pytest.param('{"label":",}", "rows":[{"value":7,},],}', {"label": ",}", "rows": [{"value": 7}]}, id="trailing-comma-not-string"),
     pytest.param('{"calls":[{"damage":12,\n, "kind":"test"}],"attributes":{speed: 2, mode:true, mark:"speed:2"}}', {"calls": [{"damage": 12, "kind": "test"}], "attributes": {"speed": 2, "mode": True, "mark": "speed:2"}}, id="object-comma-and-unquoted-key"),
