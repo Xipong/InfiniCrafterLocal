@@ -19,3 +19,14 @@ schema, compiler, receipts, strict wire и frozen Repair; native check
 `Exploration Fishing` проходит DTO/network roundtrip и UpdateAccessory,
 проверяет GetFishingConditions, native reset и отказ неверных чисел.
 Это CPU-проверки, не запуск игрового мира или multiplayer.
+
+## Pickup
+
+`lifePickup` → `Player.lifeMagnet`: увеличенный сбор сердец.
+`manaPickup` → `Player.manaMagnet`: увеличенный сбор звёзд маны.
+`coinPickup` → `Player.goldRing`: увеличенный сбор монет.
+`treasurePickup` → `Player.treasureMagnet`: увеличенный сбор предметов.
+
+Каждый флаг независим: выбор одного не включает остальные. Эффект выдаётся
+на нативном проходе экипировки и снимается ResetEffects после снятия предмета.
+Параметры отображаются в локализованных tooltip, проходят strict wire и exact receipts.

@@ -1946,6 +1946,10 @@
         "accessory.lavaFishing",
         "accessory.fishingSonar",
         "accessory.fishingCrates",
+        "accessory.lifePickup",
+        "accessory.manaPickup",
+        "accessory.coinPickup",
+        "accessory.treasurePickup",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
@@ -2015,6 +2019,16 @@
           "reference": null,
           "required": false,
           "semanticType": "tiles",
+          "units": ""
+        },
+        "coinPickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
         "damageReductionPercentagePoints": {
@@ -2277,6 +2291,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "lifePickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "lifeRegenHpPerSecond": {
           "enum": [],
           "kind": "number",
@@ -2328,6 +2352,16 @@
           "required": false,
           "semanticType": "percentage_points",
           "units": "percentage_points"
+        },
+        "manaPickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "manaRegenBonusPoints": {
           "enum": [],
@@ -2457,6 +2491,16 @@
           "reference": null,
           "required": false,
           "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "treasurePickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
           "units": ""
         },
         "underwaterBreathing": {
@@ -2589,6 +2633,10 @@
             "lavaFishing",
             "fishingSonar",
             "fishingCrates",
+            "lifePickup",
+            "manaPickup",
+            "coinPickup",
+            "treasurePickup",
             "iceSkate",
             "noKnockback",
             "fireWalk",

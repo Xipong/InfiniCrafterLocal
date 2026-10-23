@@ -2930,6 +2930,12 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "tiles"
                   },
+                  "coinPickup": {
+                    "description": "Enable native Player.goldRing: extend pickup for coin items only. Does not increase coin drops.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "damageReductionPercentagePoints": {
                     "description": "Add percent/100 to Player.endurance damage reduction",
                     "maximum": 75,
@@ -3151,6 +3157,12 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "lifePickup": {
+                    "description": "Enable native Player.lifeMagnet: extend pickup for native heart variants only. Does not heal or create drops.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "lifeRegenHpPerSecond": {
                     "description": "Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing",
                     "maximum": 100,
@@ -3207,6 +3219,12 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
+                  },
+                  "manaPickup": {
+                    "description": "Enable native Player.manaMagnet: extend pickup for native mana star variants only. Does not restore mana directly.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "manaRegenBonusPoints": {
                     "description": "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
@@ -3343,6 +3361,12 @@
                     "type": "integer",
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "treasurePickup": {
+                    "description": "Enable native Player.treasureMagnet: add native treasure grab range to eligible world items, stacking with native specialized magnets. Does not bypass pickup eligibility or inventory space.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "underwaterBreathing": {
                     "description": "Native gills: breathe air and water; getGoodWorld reverses drowning and requires water. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",

@@ -76,6 +76,10 @@ public partial class GeneratedItem
         if (a.FishingSonar == true) player.sonarPotion = true;
         if (a.FishingCrates == true) player.cratePotion = true;
         if (a.FishingPower is { } fishing) player.fishingSkill += fishing;
+        if (a.LifePickup == true) player.lifeMagnet = true;
+        if (a.ManaPickup == true) player.manaMagnet = true;
+        if (a.CoinPickup == true) player.goldRing = true;
+        if (a.TreasurePickup == true) player.treasureMagnet = true;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

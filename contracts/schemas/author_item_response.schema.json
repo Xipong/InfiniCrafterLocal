@@ -3508,6 +3508,30 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "lifePickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.lifeMagnet: extend pickup for native heart variants only. Does not heal or create drops.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "manaPickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.manaMagnet: extend pickup for native mana star variants only. Does not restore mana directly.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "coinPickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.goldRing: extend pickup for coin items only. Does not increase coin drops.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "treasurePickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.treasureMagnet: add native treasure grab range to eligible world items, stacking with native specialized magnets. Does not bypass pickup eligibility or inventory space.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "iceSkate": {
                         "type": "boolean",
                         "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",
