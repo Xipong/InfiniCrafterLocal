@@ -87,6 +87,7 @@ public sealed partial class GeneratedProjectile
             _age = Math.Max(0, reader.ReadInt32());
             _remainingBounces = Math.Max(0, reader.ReadInt32());
             _activationDelayTicks = Math.Max(0, reader.ReadInt32());
+            bool localReturning = _returning;
             _returning = reader.ReadBoolean();
             _released = reader.ReadBoolean();
             _chargeTicks = Math.Max(0, reader.ReadInt32());
@@ -114,6 +115,8 @@ public sealed partial class GeneratedProjectile
                 && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
                 && Main.player[Projectile.owner] is { active: true } owner
                 && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner);
+            if (retainOwnerExclusion && _data?.Id == _generatedItemId && _entity?.Id == _entityId)
+                _returning |= localReturning;
             if (!retainOwnerExclusion) _initialNpcExclusion = receivedExclusion;
             if (!retainOwnerExclusion) _sampledInitialVelocity = receivedVelocity;
             if (!retainOwnerExclusion) _nativeShotInitialVelocity = receivedNativeLaunch;

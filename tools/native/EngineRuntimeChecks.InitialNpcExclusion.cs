@@ -106,8 +106,10 @@ internal static partial class EngineRuntimeChecks
             }
             Terraria.Main.netMode = NetmodeID.SinglePlayer; Terraria.Main.myPlayer = 0;
             owner.AI(); Equal(7, InitialNpcState(owner).RemainingUpdates, "local owner advanced after capture");
+            typeof(GeneratedProjectile).GetMethod("BeginReturn", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(owner, null);
             owner.ReceiveExtraAI(new BinaryReader(new MemoryStream(payload)));
             Equal(7, InitialNpcState(owner).RemainingUpdates, "same-source observation cannot extend local counter");
+            Equal(true, (bool)typeof(GeneratedProjectile).GetField("_returning", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(owner)!, "stale same-source observation cannot undo local return");
             byte[] invalid = (byte[])payload.Clone(); Array.Clear(invalid, invalid.Length - 7, 4);
             var rejected = Attach(new Projectile { owner = 0, active = true, friendly = true, timeLeft = 90, velocity = Vector2.UnitX });
             rejected.ReceiveExtraAI(new BinaryReader(new MemoryStream(invalid)));
