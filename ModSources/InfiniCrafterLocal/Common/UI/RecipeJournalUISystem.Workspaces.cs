@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameInput;
+using Microsoft.Xna.Framework.Input;
 
 namespace InfiniCrafterLocal.Common.UI;
 
@@ -26,6 +27,20 @@ public sealed partial class RecipeJournalUISystem
         var pages = Enum.GetValues<DetailPage>();
         var slots = WorkspaceButtons(area, pages.Length);
         if (slots.Length == 0) return true;
+        if (KeyboardAvailable)
+        {
+            int selected = (int)_detailPage;
+            int dx = KeyPressed(Keys.Left) ? -1 : KeyPressed(Keys.Right) ? 1 : 0;
+            int dy = KeyPressed(Keys.Up) ? -1 : KeyPressed(Keys.Down) ? 1 : 0;
+            if (dx != 0 || dy != 0)
+            {
+                _detailPage = pages[NavigateGrid(selected, dx, dy, area.Width >= 360 ? 2 : 1, pages.Length)];
+                _detailScroll = 0;
+                if ((int)_detailPage < _workspaceScroll) _workspaceScroll = (int)_detailPage;
+                if ((int)_detailPage >= _workspaceScroll + slots.Length) _workspaceScroll = (int)_detailPage - slots.Length + 1;
+            }
+            if (KeyPressed(Keys.Enter)) { _workspaceMenu = false; return true; }
+        }
         if (PlayerInput.ScrollWheelDeltaForUI != 0 && area.Contains(cursor.ToPoint()))
             _workspaceScroll += PlayerInput.ScrollWheelDeltaForUI < 0 ? slots.Length : -slots.Length;
         _workspaceScroll = Math.Clamp(_workspaceScroll, 0, Math.Max(0, pages.Length - slots.Length));

@@ -79,7 +79,7 @@ public sealed partial class RecipeJournalUISystem
         }
         string content = "";
         if (_detailPage == DetailPage.Help)
-            content = Text("HelpBrowse") + "\n\n" + Text("HelpSearch") + "\n\n" + Text("HelpPlan") + "\n\n" + Text("HelpOwnership");
+            content = Text("HelpBrowse") + "\n" + Text("KeyboardBrowse") + "\n\n" + Text("HelpSearch") + "\n\n" + Text("HelpPlan") + "\n\n" + Text("HelpOwnership");
         if (_detailPage == DetailPage.Guide)
             content = data.Name + "\n" + Text("GuideHint") + "\n\n"
                 + string.Join("\n", Content.Items.GeneratedItem.RuntimeGuide(data));

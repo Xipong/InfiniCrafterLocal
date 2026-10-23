@@ -33,6 +33,7 @@ UseFeedback: {
 
 
 		RecipeJournal: {
+	KeyboardBrowse: "Стрелки: выбор · PgUp/PgDn: страница · Home/End: начало/конец · Пробел: избранное · Ctrl+Пробел: выделение · Tab: разделы · Backspace: назад"
 	BatchHint: "Ctrl + щелчок — выделение; прокрутка — другие действия."
 	BatchCollection: "Назначить коллекцию выбранным"
 	BatchUnfavorite: "Убрать выбранные из избранного"

@@ -232,15 +232,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             _revealSelection = false;
         }
         _page = Math.Clamp(_page, 0, pages - 1);
-        if (!_searchFocus && Main.hasFocus && !Main.drawingPlayerChat && !Main.blockInput
-            && !PlayerInput.WritingText && !PlayerInput.CurrentlyRebinding)
-        {
-            bool Pressed(Keys key) => Main.keyState.IsKeyDown(key) && Main.oldKeyState.IsKeyUp(key);
-            if (Pressed(Keys.PageDown)) _page = Math.Min(pages - 1, _page + 1);
-            if (Pressed(Keys.PageUp)) _page = Math.Max(0, _page - 1);
-            if (Pressed(Keys.Home)) _page = 0;
-            if (Pressed(Keys.End)) _page = pages - 1;
-        }
+        BrowseWithKeyboard(entries, layout.Columns, capacity, player);
         for (int i = 0; i < layout.Rows * layout.Columns; i++)
         {
             var slot = new Rectangle(list.X + i % layout.Columns * 52, list.Y + i / layout.Columns * 52, 48, 48);
