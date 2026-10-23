@@ -1954,6 +1954,14 @@
         "accessory.dangerVision",
         "accessory.creatureVision",
         "accessory.nightVision",
+        "accessory.fishingInfo",
+        "accessory.weatherInfo",
+        "accessory.moonInfo",
+        "accessory.enemyInfo",
+        "accessory.speedInfo",
+        "accessory.oreInfo",
+        "accessory.rareCreatureInfo",
+        "accessory.killCountInfo",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
@@ -2085,6 +2093,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "enemyInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "extraFallTiles": {
           "enum": [],
           "kind": "integer",
@@ -2126,6 +2144,16 @@
           "units": ""
         },
         "fishingCrates": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "fishingInfo": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2295,6 +2323,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "killCountInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "lavaFishing": {
           "enum": [],
           "kind": "boolean",
@@ -2437,6 +2475,16 @@
           "semanticType": "slots",
           "units": "slots"
         },
+        "moonInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "moveSpeedBonusPercent": {
           "enum": [],
           "kind": "number",
@@ -2458,6 +2506,26 @@
           "units": ""
         },
         "noKnockback": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "oreInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "rareCreatureInfo": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2496,6 +2564,16 @@
           "required": false,
           "semanticType": "slots",
           "units": "slots"
+        },
+        "speedInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "swimFlipper": {
           "enum": [],
@@ -2597,6 +2675,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "weatherInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "whipRangeBonusPercent": {
           "enum": [],
           "kind": "number",
@@ -2685,6 +2773,14 @@
             "dangerVision",
             "creatureVision",
             "nightVision",
+            "fishingInfo",
+            "weatherInfo",
+            "moonInfo",
+            "enemyInfo",
+            "speedInfo",
+            "oreInfo",
+            "rareCreatureInfo",
+            "killCountInfo",
             "iceSkate",
             "noKnockback",
             "fireWalk",

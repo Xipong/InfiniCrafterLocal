@@ -2982,6 +2982,12 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "enemyInfo": {
+                    "description": "Enable native Player.accThirdEye nearby enemy counter; does not reveal or attack enemies.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "extraFallTiles": {
                     "description": "Additional native fall damage threshold in tiles; additive, not immunity",
                     "maximum": 100,
@@ -3010,6 +3016,12 @@
                   },
                   "fishingCrates": {
                     "description": "Enable native Player.cratePotion while equipped: use the engine crate-chance modifier, not a guaranteed crate or custom loot table.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "fishingInfo": {
+                    "description": "Enable native Player.accFishFinder fishing information display; does not increase fishing power.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -3157,6 +3169,12 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "killCountInfo": {
+                    "description": "Enable native Player.accDreamCatcher kill tally information; does not change counters.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "lavaFishing": {
                     "description": "Enable native Player.accLavaFishing while equipped. Terraria still requires a usable pole and bait and owns biome/catch rules; this grants no lava damage immunity.",
                     "type": "boolean",
@@ -3292,6 +3310,12 @@
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
                   },
+                  "moonInfo": {
+                    "description": "Enable native Player.accCalendar moon phase display; does not advance time.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "moveSpeedBonusPercent": {
                     "description": "Add percent/100 to Player.moveSpeed",
                     "maximum": 300,
@@ -3323,6 +3347,18 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "oreInfo": {
+                    "description": "Enable native Player.accOreFinder nearby valuable material display; no mining or ore creation.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "rareCreatureInfo": {
+                    "description": "Enable native Player.accCritterGuide rare creature information; does not attract creatures.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "rocketBoots": {
                     "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight",
                     "maximum": 5,
@@ -3346,6 +3382,12 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
+                  },
+                  "speedInfo": {
+                    "description": "Enable native Player.accStopwatch speed display; does not change movement speed.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "swimFlipper": {
                     "description": "Native flipper swimming jump while wet. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
@@ -3422,6 +3464,12 @@
                   },
                   "waterWalk": {
                     "description": "Walk on water while equipped",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "weatherInfo": {
+                    "description": "Enable native Player.accWeatherRadio weather information; does not change weather.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"

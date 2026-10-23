@@ -41,3 +41,18 @@ schema, compiler, receipts, strict wire и frozen Repair; native check
 Каждый флаг независим: выбор одного не включает остальные. Эффект выдаётся
 на нативном проходе экипировки и снимается ResetEffects после снятия предмета.
 Параметры отображаются в локализованных tooltip, проходят strict wire и exact receipts.
+
+## Instruments
+
+`fishingInfo` → `Player.accFishFinder`: индикатор силы рыбалки.
+`weatherInfo` → `Player.accWeatherRadio`: индикатор погоды.
+`moonInfo` → `Player.accCalendar`: индикатор фазы луны.
+`enemyInfo` → `Player.accThirdEye`: число врагов рядом.
+`speedInfo` → `Player.accStopwatch`: индикатор скорости.
+`oreInfo` → `Player.accOreFinder`: индикатор ценных ресурсов.
+`rareCreatureInfo` → `Player.accCritterGuide`: индикатор редких существ.
+`killCountInfo` → `Player.accDreamCatcher`: счётчик убийств.
+
+Каждый флаг независим: выбор одного не включает остальные. Эффект выдаётся
+на нативном проходе экипировки и снимается ResetEffects после снятия предмета.
+Параметры отображаются в локализованных tooltip, проходят strict wire и exact receipts.

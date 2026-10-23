@@ -84,6 +84,14 @@ public partial class GeneratedItem
         if (a.DangerVision == true) player.dangerSense = true;
         if (a.CreatureVision == true) player.detectCreature = true;
         if (a.NightVision == true) player.nightVision = true;
+        if (a.FishingInfo == true) player.accFishFinder = true;
+        if (a.WeatherInfo == true) player.accWeatherRadio = true;
+        if (a.MoonInfo == true) player.accCalendar = true;
+        if (a.EnemyInfo == true) player.accThirdEye = true;
+        if (a.SpeedInfo == true) player.accStopwatch = true;
+        if (a.OreInfo == true) player.accOreFinder = true;
+        if (a.RareCreatureInfo == true) player.accCritterGuide = true;
+        if (a.KillCountInfo == true) player.accDreamCatcher = true;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

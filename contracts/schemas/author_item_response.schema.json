@@ -3556,6 +3556,54 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "fishingInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accFishFinder fishing information display; does not increase fishing power.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "weatherInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accWeatherRadio weather information; does not change weather.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "moonInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accCalendar moon phase display; does not advance time.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "enemyInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accThirdEye nearby enemy counter; does not reveal or attack enemies.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "speedInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accStopwatch speed display; does not change movement speed.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "oreInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accOreFinder nearby valuable material display; no mining or ore creation.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "rareCreatureInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accCritterGuide rare creature information; does not attract creatures.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "killCountInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accDreamCatcher kill tally information; does not change counters.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "iceSkate": {
                         "type": "boolean",
                         "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",

@@ -92,6 +92,14 @@ Author schema ограничивает значения всех примити�
 | dangerVision | Enable native Player.dangerSense highlighting for engine-recognized dangerous tiles. Does not grant hazard immunity. | bounded_text | False | boolean | accessory.dangerVision | ModItem.UpdateAccessory |
 | creatureVision | Enable native Player.detectCreature highlighting. Information only; does not target, damage or summon creatures. | bounded_text | False | boolean | accessory.creatureVision | ModItem.UpdateAccessory |
 | nightVision | Enable native Player.nightVision lighting visibility. Does not create light sources, map reveal, treasure detection or danger detection. | bounded_text | False | boolean | accessory.nightVision | ModItem.UpdateAccessory |
+| fishingInfo | Enable native Player.accFishFinder fishing information display; does not increase fishing power. | bounded_text | False | boolean | accessory.fishingInfo | ModItem.UpdateAccessory |
+| weatherInfo | Enable native Player.accWeatherRadio weather information; does not change weather. | bounded_text | False | boolean | accessory.weatherInfo | ModItem.UpdateAccessory |
+| moonInfo | Enable native Player.accCalendar moon phase display; does not advance time. | bounded_text | False | boolean | accessory.moonInfo | ModItem.UpdateAccessory |
+| enemyInfo | Enable native Player.accThirdEye nearby enemy counter; does not reveal or attack enemies. | bounded_text | False | boolean | accessory.enemyInfo | ModItem.UpdateAccessory |
+| speedInfo | Enable native Player.accStopwatch speed display; does not change movement speed. | bounded_text | False | boolean | accessory.speedInfo | ModItem.UpdateAccessory |
+| oreInfo | Enable native Player.accOreFinder nearby valuable material display; no mining or ore creation. | bounded_text | False | boolean | accessory.oreInfo | ModItem.UpdateAccessory |
+| rareCreatureInfo | Enable native Player.accCritterGuide rare creature information; does not attract creatures. | bounded_text | False | boolean | accessory.rareCreatureInfo | ModItem.UpdateAccessory |
+| killCountInfo | Enable native Player.accDreamCatcher kill tally information; does not change counters. | bounded_text | False | boolean | accessory.killCountInfo | ModItem.UpdateAccessory |
 | iceSkate | Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed | bounded_text | False | boolean | accessory.iceSkate | ModItem.UpdateAccessory |
 | noKnockback | Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate | bounded_text | False | boolean | accessory.noKnockback | ModItem.UpdateAccessory |
 | fireWalk | Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles | bounded_text | False | boolean | accessory.fireWalk | ModItem.UpdateAccessory |

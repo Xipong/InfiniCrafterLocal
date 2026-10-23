@@ -457,6 +457,70 @@ public sealed class AccessorySpec
         set => _jumpTsunami = value ?? throw new System.IO.InvalidDataException("jumpTsunami requires a boolean when present");
     }
 
+    private bool? _killCountInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? KillCountInfo
+    {
+        get => _killCountInfo;
+        set => _killCountInfo = value ?? throw new InvalidDataException("killCountInfo must be boolean when present");
+    }
+
+    private bool? _rareCreatureInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RareCreatureInfo
+    {
+        get => _rareCreatureInfo;
+        set => _rareCreatureInfo = value ?? throw new InvalidDataException("rareCreatureInfo must be boolean when present");
+    }
+
+    private bool? _oreInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? OreInfo
+    {
+        get => _oreInfo;
+        set => _oreInfo = value ?? throw new InvalidDataException("oreInfo must be boolean when present");
+    }
+
+    private bool? _speedInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SpeedInfo
+    {
+        get => _speedInfo;
+        set => _speedInfo = value ?? throw new InvalidDataException("speedInfo must be boolean when present");
+    }
+
+    private bool? _enemyInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? EnemyInfo
+    {
+        get => _enemyInfo;
+        set => _enemyInfo = value ?? throw new InvalidDataException("enemyInfo must be boolean when present");
+    }
+
+    private bool? _moonInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? MoonInfo
+    {
+        get => _moonInfo;
+        set => _moonInfo = value ?? throw new InvalidDataException("moonInfo must be boolean when present");
+    }
+
+    private bool? _weatherInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WeatherInfo
+    {
+        get => _weatherInfo;
+        set => _weatherInfo = value ?? throw new InvalidDataException("weatherInfo must be boolean when present");
+    }
+
+    private bool? _fishingInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FishingInfo
+    {
+        get => _fishingInfo;
+        set => _fishingInfo = value ?? throw new InvalidDataException("fishingInfo must be boolean when present");
+    }
+
     private bool? _nightVision;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? NightVision
@@ -620,7 +684,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || AutoPaint == true || RulerGrid == true || BuildRangeTiles is > 0 || TileSpeedBonusPercent is > 0 || WallSpeedBonusPercent is > 0 || GravityControl == true || FeatherFall == true || ExtraFallTiles is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0 || FishingPower is > 0 || FishingCrates == true || FishingSonar == true || LavaFishing == true || FishingLine == true || TreasurePickup == true || CoinPickup == true || ManaPickup == true || LifePickup == true || NightVision == true || CreatureVision == true || DangerVision == true || TreasureVision == true
+    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || AutoPaint == true || RulerGrid == true || BuildRangeTiles is > 0 || TileSpeedBonusPercent is > 0 || WallSpeedBonusPercent is > 0 || GravityControl == true || FeatherFall == true || ExtraFallTiles is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0 || FishingPower is > 0 || FishingCrates == true || FishingSonar == true || LavaFishing == true || FishingLine == true || TreasurePickup == true || CoinPickup == true || ManaPickup == true || LifePickup == true || NightVision == true || CreatureVision == true || DangerVision == true || TreasureVision == true || KillCountInfo == true || RareCreatureInfo == true || OreInfo == true || SpeedInfo == true || EnemyInfo == true || MoonInfo == true || WeatherInfo == true || FishingInfo == true
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

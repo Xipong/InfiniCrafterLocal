@@ -103,6 +103,14 @@ public partial class GeneratedItem
             Flag("DangerVision", a.DangerVision == true);
             Flag("CreatureVision", a.CreatureVision == true);
             Flag("NightVision", a.NightVision == true);
+            Flag("FishingInfo", a.FishingInfo == true);
+            Flag("WeatherInfo", a.WeatherInfo == true);
+            Flag("MoonInfo", a.MoonInfo == true);
+            Flag("EnemyInfo", a.EnemyInfo == true);
+            Flag("SpeedInfo", a.SpeedInfo == true);
+            Flag("OreInfo", a.OreInfo == true);
+            Flag("RareCreatureInfo", a.RareCreatureInfo == true);
+            Flag("KillCountInfo", a.KillCountInfo == true);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);
