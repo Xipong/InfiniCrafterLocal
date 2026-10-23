@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import http.client
 import json
 from pathlib import Path
 import queue
@@ -66,6 +67,35 @@ def test_action_http_only_enqueues_and_never_executes_controller_on_worker_threa
     assert command['action'] == 'save' and command['values'] == payload['values']
     assert threading.get_ident() == owner
     assert bridge.commands.empty()
+
+
+@pytest.mark.parametrize('body', [b'{"action":"stop","action":"save"}',
+    b'{"action":"save","extra":{"value":NaN}}', b'[]'])
+def test_studio_rejects_ambiguous_action_json_without_enqueuing(bridge, body):
+    request = urllib.request.Request(bridge.base_url + '/api/action', data=body,
+        headers={'X-Infini-Token': bridge.token}, method='POST')
+    with pytest.raises(urllib.error.HTTPError) as error:
+        urllib.request.urlopen(request, timeout=3)
+    assert error.value.code == 400
+    assert bridge.commands.empty()
+
+
+def test_studio_incomplete_body_has_a_deadline(bridge, monkeypatch):
+    monkeypatch.setattr(bridge_module(), 'ACTION_BODY_TIMEOUT_SECONDS', 0.05)
+    connection = http.client.HTTPConnection('127.0.0.1', bridge.httpd.server_port, timeout=2)
+    try:
+        connection.request('POST', '/api/action', body=b'{',
+            headers={'X-Infini-Token': bridge.token, 'Content-Length': '100'})
+        assert connection.getresponse().status == 408
+    finally:
+        connection.close()
+    assert bridge.commands.empty()
+
+
+def test_non_ascii_studio_token_is_refused_cleanly(bridge):
+    with pytest.raises(urllib.error.HTTPError) as error:
+        urllib.request.urlopen(bridge.base_url + '/?token=%D1%8F', timeout=3)
+    assert error.value.code == 403
 
 
 def test_foreign_origin_unknown_actions_and_path_traversal_are_rejected(bridge):
