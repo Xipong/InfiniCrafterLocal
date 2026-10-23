@@ -2552,6 +2552,9 @@ _CAPS.extend([
             "targetPolicy": _p("string", "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses targetPriority; player_assigned_only refuses to fire without a valid exact assigned target", enum=("distance_score", "player_assigned_first", "player_assigned_only"), required=False, default="distance_score", neutral="distance_score"),
             "requireLineOfSight": _p("boolean", "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets", required=False, default=False, neutral=False),
             "hardRange": _p("boolean", "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit", required=False, default=False, neutral=False),
+            "maximumLeadTiles": _p("number", "Clamp predicted displacement length to this many tiles, preserving its direction. This bounds aim beyond the target acquisition radius without changing target admission", minimum=0, maximum=120, required=False, default=120, neutral=120, consumer_storage="float32"),
+            "leadSeconds": _p("number", "World-time horizon for velocity_lead, independent of projectile extra updates. Zero predicts current centre; this does not assume future target acceleration or guarantee a hit", minimum=0, maximum=2, required=False, default=0, neutral=0, consumer_storage="float32"),
+            "aimMode": _p("string", "direct aims at current centre; velocity_lead predicts centre using the target actual velocity, leadSeconds and maximumLeadTiles. Only child configure_spawn aim=velocity may consume prediction; child movement remains independently authored", enum=('direct', 'velocity_lead'), required=False, default='direct', neutral='direct'),
             "targetPriority": _p("string", "Rank admitted NPCs by discounted distance, lowest/highest life ratio, distance to the owner, or alignment with owner facing. Ties use distance score then NPC index. Assigned-first/assigned-only policies apply after identical admission filters", enum=('distance', 'lowest_health', 'highest_health', 'closest_to_owner', 'facing_alignment'), required=False, default='distance', neutral='distance'),
             "maximumHealthRatio": _p("number", "Maximum inclusive current life/lifeMax ratio; combines with minimumHealthRatio as a health band", minimum=0, maximum=1, required=False, default=1, neutral=1, consumer_storage="float32"),
             "minimumHealthRatio": _p("number", "Minimum inclusive current life/lifeMax ratio; candidates with invalid lifeMax cannot satisfy a health filter", minimum=0, maximum=1, required=False, default=0, neutral=0, consumer_storage="float32"),
@@ -3190,6 +3193,7 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
     """Project rules that depend on parameters, registry topology or shared categories."""
     if cap.name == "target_and_fire":
         return (
+            RequirementSpec("predictive_aim_child", param="aimMode", equals="velocity_lead", other_param="shotEntity", capability="configure_spawn", message="Velocity lead requires the referenced child configure_spawn aim=velocity; no child aim is rewritten."),
             RequirementSpec("ordered_params", param="minimumRangeTiles", other_param="rangeTiles", message="Inner target radius cannot exceed the outer target range."),
             RequirementSpec("ordered_params", param="minimumHealthRatio", other_param="maximumHealthRatio", message="Minimum target health ratio cannot exceed maximum."),
         )
@@ -3454,7 +3458,7 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         dependencies=tuple(dict.fromkeys(
             requirement.capability
             for requirement in requirements
-            if requirement.capability and requirement.kind not in {"capability_param_absent", "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value"}
+            if requirement.capability and requirement.kind not in {"capability_param_absent", "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value", "predictive_aim_child"}
         )),
         conflicts=(f"exclusive_group:{cap.exclusive_group}",) if cap.exclusive_group else (),
     )

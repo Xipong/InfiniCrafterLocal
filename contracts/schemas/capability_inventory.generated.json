@@ -6906,6 +6906,9 @@
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
         "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.maximumLeadTiles",
+        "runtimeProgram.entities[].targeting.leadSeconds",
+        "runtimeProgram.entities[].targeting.aimMode",
         "runtimeProgram.entities[].targeting.targetPriority",
         "runtimeProgram.entities[].targeting.maximumHealthRatio",
         "runtimeProgram.entities[].targeting.minimumHealthRatio",
@@ -6917,6 +6920,19 @@
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "aimMode": {
+          "enum": [
+            "direct",
+            "velocity_lead"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "bossFilter": {
           "enum": [
             "any",
@@ -7020,6 +7036,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "leadSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": ""
+        },
         "maximumHealthRatio": {
           "enum": [],
           "kind": "number",
@@ -7028,6 +7054,16 @@
           "reference": null,
           "required": false,
           "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "maximumLeadTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
           "units": ""
         },
         "minimumHealthRatio": {
@@ -7147,6 +7183,15 @@
       "purpose": "Acquire NPC targets and periodically spawn an authored shot entity from this entity's current position. Explicit same-entity movement executes before firing. Stationary/helper entities without movement remain stationary; free/child entities require explicit movement. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
+        {
+          "capability": "configure_spawn",
+          "equals": "velocity_lead",
+          "kind": "predictive_aim_child",
+          "message": "Velocity lead requires the referenced child configure_spawn aim=velocity; no child aim is rewritten.",
+          "otherParam": "shotEntity",
+          "param": "aimMode",
+          "target": "same_target"
+        },
         {
           "equals": null,
           "kind": "ordered_params",

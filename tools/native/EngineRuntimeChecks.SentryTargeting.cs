@@ -149,4 +149,42 @@ internal static partial class EngineRuntimeChecks
         Equal(12, budget.Remaining, "remote peer preserves owner ledger");
     }
 
+    private static void TargetPredictionReachesChildLaunch()
+    {
+        using var state = new SentryTargetScope();
+        var target = state.Target(0, 60f); target.velocity = new Vector2(0f, 2f);
+        var data = SentryTargetingFixture(); var root = data.RuntimeProgram.TryGetEntity("root")!;
+        root.Targeting.RequireLineOfSight = false;
+        root.Targeting.AimMode = "velocity_lead"; root.Targeting.LeadSeconds = .5; root.Targeting.MaximumLeadTiles = 10;
+        var projectile = new Projectile { owner = 0, active = true };
+        var generated = Attach(projectile); var budget = new RuntimeSpawnBudget(12);
+        generated.Configure(data, root, 0, 12, Vector2.UnitX, activationBudget: budget);
+        projectile.Center = new Vector2(1600f, 1600f);
+        var observed = new List<Vector2>();
+        // Observe real canonical spawn-loop arguments. Return an unregistered
+        // projectile, so no successful game spawn is claimed by this CPU check.
+        using var native = new Hook(NativeProjectileEntry(),
+            (Func<IEntitySource, Vector2, Vector2, int, int, float, int, float, float, float, Projectile>)
+            ((source, position, velocity, type, damage, knockback, owner, ai0, ai1, ai2) => {
+                Equal(projectile.Center, position, "child item_use_origin uses firing center");
+                Equal(0, owner, "owner authority is retained"); observed.Add(velocity); return new Projectile();
+            }));
+        MethodInfo fire = typeof(GeneratedProjectile).GetMethod("ApplyTargetAndFire", SentryPrivate)!;
+        FieldInfo timer = typeof(GeneratedProjectile).GetField("_controllerTimer", SentryPrivate)!;
+        void Volley() { timer.SetValue(generated, 5); fire.Invoke(generated, null); }
+        Volley();
+        Equal(4, observed.Count, "controller count overrides independently authored child count nine");
+        for (int i = 0; i < observed.Count; i++) {
+            float expected = MathF.PI / 4f - 0.3f + i * 0.2f;
+            Equal(true, Math.Abs(observed[i].ToRotation() - expected) < 1e-5f, "exact symmetric volley angle " + i);
+            Equal(true, Math.Abs(observed[i].Length() - 10f) < 1e-5f, "child authored launch speed remains literal");
+        }
+        Equal(12, budget.Remaining, "unregistered native results refund unused reservation");
+        observed.Clear(); root.Targeting.Count = 1; Volley();
+        Equal(1, observed.Count, "single-shot mode stays single"); Equal(true, Math.Abs(observed[0].ToRotation() - MathF.PI / 4f) < 1e-5f, "single shot preserves predicted centre");
+        observed.Clear(); Terraria.Main.netMode = NetmodeID.MultiplayerClient; Terraria.Main.myPlayer = 1; Volley();
+        Equal(0, observed.Count, "remote projectile cannot fire or acquire owner-local budget");
+        Equal(12, budget.Remaining, "remote peer preserves owner ledger");
+    }
+
 }

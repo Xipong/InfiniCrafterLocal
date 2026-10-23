@@ -34,6 +34,7 @@ from infini_local.qa.capability_witnesses import capability_vertical_slice_repor
 
 AUDIT_SCHEMA = "infini.capability-library-audit.v1"
 KNOWN_REQUIREMENT_KINDS = frozenset({
+    "predictive_aim_child",
     "ordered_params",
     "primary_target",
     "capability_param_absent",

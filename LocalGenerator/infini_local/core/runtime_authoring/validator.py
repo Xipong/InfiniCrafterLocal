@@ -341,6 +341,15 @@ def _validate_requirement(
             value = value.get(part) if isinstance(value, Mapping) else None
         return value
 
+    if requirement.kind == "predictive_aim_child":
+        if params.get(requirement.param) != requirement.equals:
+            return None
+        child = str(params.get(requirement.other_param) or "")
+        if not any(row.get("fn") == requirement.capability and isinstance(row.get("params"), Mapping)
+                   and row["params"].get("aim") == "velocity" for row in calls_by_target.get(child, [])):
+            return ValidationIssue(f"{path}.params.{requirement.param}", "incompatible_param_variant", requirement.message,
+                related_ids=(str(call.get("id") or ""), child))
+        return None
     if requirement.kind == "referenced_param_presence_requires_value":
         referenced_id = params.get(requirement.other_param)
         for row in calls_by_target.get(str(referenced_id), []):

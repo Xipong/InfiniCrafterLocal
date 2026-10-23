@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("target prediction native handoff", TargetPredictionReachesChildLaunch),
+            ("Station expansion TargetPrediction", StationTargetPrediction),
             ("Station expansion TargetPriority", StationTargetPriority),
             ("Station expansion TargetAdmission", StationTargetAdmission),
             ("Exploration Survival", ExplorationSurvival),

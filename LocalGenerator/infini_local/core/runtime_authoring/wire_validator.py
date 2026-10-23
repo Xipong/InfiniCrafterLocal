@@ -887,6 +887,10 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 if type(targeting.get(lower)) in (int, float) and type(targeting.get(upper)) in (int, float) and targeting[lower] > targeting[upper]:
                     errors.append({"path": f"{entity_path}.targeting.{lower}", "code": "reversed_target_filter", "message": "Target filter minimum exceeds its explicit maximum."})
             child = str(targeting.get("shotEntityId") or "")
+            if targeting.get("aimMode") == "velocity_lead":
+                child_row = entity_by_id.get(child) or next((e for e in entities if isinstance(e, Mapping) and e.get("id") == child), {})
+                if not isinstance(child_row.get("spawn"), Mapping) or child_row["spawn"].get("aim") != "velocity":
+                    errors.append({"path": f"{entity_path}.targeting.aimMode", "code": "predictive_aim_not_consumed", "message": "Velocity lead requires child aim=velocity."})
             if child and child not in entity_by_id and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting.shotEntityId", "code": "missing_entity_reference", "message": f"Unknown shot entity {child!r}."})
         events_raw = entity.get("events")

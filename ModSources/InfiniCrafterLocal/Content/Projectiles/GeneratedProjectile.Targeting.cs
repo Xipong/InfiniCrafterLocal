@@ -6,6 +6,18 @@ using Terraria;
 namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
+    internal Vector2 FiringDirection(NPC target, RuntimeTargetingSpec targeting)
+    {
+        Vector2 aim = target.Center;
+        if (targeting.AimMode == "velocity_lead")
+        {
+            Vector2 lead = target.velocity * (float)((targeting.LeadSeconds ?? 0d) * 60d);
+            float maximum = (float)((targeting.MaximumLeadTiles ?? 120d) * 16d);
+            if (lead.LengthSquared() > maximum * maximum) lead = Vector2.Normalize(lead) * maximum;
+            aim += lead;
+        }
+        return Projectile.DirectionTo(aim);
+    }
     internal double TargetPriorityScore(NPC npc, RuntimeTargetingSpec targeting, Player owner, float distanceScore)
     {
         if (targeting.TargetPriority is "lowest_health" or "highest_health")

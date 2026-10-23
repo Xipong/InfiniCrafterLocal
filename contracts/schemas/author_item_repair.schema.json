@@ -8884,6 +8884,17 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "aimMode": {
+                    "default": "direct",
+                    "description": "direct aims at current centre; velocity_lead predicts centre using the target actual velocity, leadSeconds and maximumLeadTiles. Only child configure_spawn aim=velocity may consume prediction; child movement remains independently authored",
+                    "enum": [
+                      "direct",
+                      "velocity_lead"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "direct",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "bossFilter": {
                     "default": "any",
                     "description": "Filter chaseable NPCs by their native boss flag before assigned/priority selection",
@@ -8976,6 +8987,21 @@
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "leadSeconds": {
+                    "default": 0,
+                    "description": "World-time horizon for velocity_lead, independent of projectile extra updates. Zero predicts current centre; this does not assume future target acceleration or guarantee a hit",
+                    "maximum": 2,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "seconds"
+                  },
                   "maximumHealthRatio": {
                     "default": 1,
                     "description": "Maximum inclusive current life/lifeMax ratio; combines with minimumHealthRatio as a health band",
@@ -8990,6 +9016,21 @@
                     },
                     "x-infini-neutral": 1,
                     "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "maximumLeadTiles": {
+                    "default": 120,
+                    "description": "Clamp predicted displacement length to this many tiles, preserving its direction. This bounds aim beyond the target acquisition radius without changing target admission",
+                    "maximum": 120,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 120,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 120,
+                    "x-infini-semanticType": "tiles"
                   },
                   "minimumHealthRatio": {
                     "default": 0,

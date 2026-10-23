@@ -300,6 +300,8 @@ public sealed class RuntimeProgramSpec
                 RuntimeEntitySpec? shot = TryGetEntity(entity.Targeting.ShotEntityId);
                 if (shot is null || !shot.IsProjectileEntity)
                     throw new InvalidDataException($"entity '{entity.Id}' targets invalid shot entity '{entity.Targeting.ShotEntityId}'");
+                if (entity.Targeting.AimMode == "velocity_lead" && shot.Spawn.Aim != "velocity")
+                    throw new InvalidDataException("velocity lead requires child aim=velocity");
                 graph[entity.Id].Add(shot.Id);
             }
             if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire
@@ -1925,7 +1927,16 @@ public sealed class RuntimeTargetingSpec
     private string? _targetPriority;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? TargetPriority { get => _targetPriority; set => _targetPriority = value ?? throw new InvalidDataException("present targeting targetPriority cannot be null"); }
-    [JsonIgnore] public bool HasVolleyOptions => TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
+    private string? _aimMode;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AimMode { get => _aimMode; set => _aimMode = value ?? throw new InvalidDataException("present targeting aimMode cannot be null"); }
+    private double? _leadSeconds;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? LeadSeconds { get => _leadSeconds; set => _leadSeconds = value ?? throw new InvalidDataException("present targeting leadSeconds cannot be null"); }
+    private double? _maximumLeadTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MaximumLeadTiles { get => _maximumLeadTiles; set => _maximumLeadTiles = value ?? throw new InvalidDataException("present targeting maximumLeadTiles cannot be null"); }
+    [JsonIgnore] public bool HasVolleyOptions => MaximumLeadTiles is not null || LeadSeconds is not null || AimMode is not null || TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
         || TargetPolicy is not null || RequireLineOfSight.HasValue || HardRange.HasValue;
     public void Normalize()
     {
@@ -1938,6 +1949,9 @@ public sealed class RuntimeTargetingSpec
         if (MinimumRangeTiles > RangeTiles || MinimumHealthRatio > MaximumHealthRatio)
             throw new InvalidDataException("targeting filter endpoints are reversed");
         if (TargetPriority is not null and not ("distance" or "lowest_health" or "highest_health" or "closest_to_owner" or "facing_alignment")) throw new InvalidDataException("invalid targeting targetPriority");
+        if (AimMode is not null and not ("direct" or "velocity_lead")) throw new InvalidDataException("invalid targeting aimMode");
+        if (LeadSeconds is double leadSeconds && (!double.IsFinite(leadSeconds) || leadSeconds < 0d || leadSeconds > 2d || (leadSeconds != 0d && (float)leadSeconds == 0f))) throw new InvalidDataException("invalid targeting leadSeconds");
+        if (MaximumLeadTiles is double maximumLeadTiles && (!double.IsFinite(maximumLeadTiles) || maximumLeadTiles < 0d || maximumLeadTiles > 120d || (maximumLeadTiles != 0d && (float)maximumLeadTiles == 0f))) throw new InvalidDataException("invalid targeting maximumLeadTiles");
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
         RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);

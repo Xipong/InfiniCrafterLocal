@@ -377,6 +377,9 @@ def _capability_dependency_closure(names: Iterable[str]) -> set[str]:
         for requirement in cap.requirements:
             if requirement.capability in CAPABILITY_REGISTRY and requirement.kind not in {
                 "capability_param_absent", "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value",
+                # An optional lead mode constrains an explicitly referenced child;
+                # it does not authorize creating child support on the blocker target.
+                "predictive_aim_child",
             }:
                 pending.append(requirement.capability)
             if requirement.kind == "capability_group_present":

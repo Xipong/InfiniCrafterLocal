@@ -32,6 +32,7 @@ DECLARED = {
                         "coneDirection": "owner_facing", "bossFilter": "any",
                         "minimumHealthRatio": 0, "maximumHealthRatio": 1,
                         "targetPriority": "distance",
+                        "aimMode": "direct", "leadSeconds": 0, "maximumLeadTiles": 120,
                         },
     "apply_generated_buff_on_use": {
         "miningSpeedMultiplier": 1,

@@ -249,7 +249,7 @@ public sealed partial class GeneratedProjectile
         if (target is null) return true;
         _lastTarget = target.whoAmI;
         string shotId = _entity.Targeting.ShotEntityId;
-        Vector2 direction = Projectile.DirectionTo(target.Center);
+        Vector2 direction = FiringDirection(target, _entity.Targeting);
         RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
         if (_entity.Targeting.DamageMultiplier is not float damageMultiplier)
             return true;

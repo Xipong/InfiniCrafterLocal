@@ -9092,6 +9092,47 @@
                         "default": false,
                         "x-infini-neutral": false
                       },
+                      "maximumLeadTiles": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 120,
+                        "description": "Clamp predicted displacement length to this many tiles, preserving its direction. This bounds aim beyond the target acquisition radius without changing target admission",
+                        "x-infini-semanticType": "tiles",
+                        "default": 120,
+                        "x-infini-neutral": 120,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 120,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "leadSeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 2,
+                        "description": "World-time horizon for velocity_lead, independent of projectile extra updates. Zero predicts current centre; this does not assume future target acceleration or guarantee a hit",
+                        "x-infini-semanticType": "seconds",
+                        "default": 0,
+                        "x-infini-neutral": 0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "aimMode": {
+                        "type": "string",
+                        "enum": [
+                          "direct",
+                          "velocity_lead"
+                        ],
+                        "description": "direct aims at current centre; velocity_lead predicts centre using the target actual velocity, leadSeconds and maximumLeadTiles. Only child configure_spawn aim=velocity may consume prediction; child movement remains independently authored",
+                        "x-infini-semanticType": "bounded_text",
+                        "default": "direct",
+                        "x-infini-neutral": "direct"
+                      },
                       "targetPriority": {
                         "type": "string",
                         "enum": [
