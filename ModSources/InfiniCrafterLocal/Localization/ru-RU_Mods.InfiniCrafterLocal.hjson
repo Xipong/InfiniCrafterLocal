@@ -256,6 +256,10 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	PickerResults: "Стопок: {0} · страница {1}/{2}"
+	PickerSortName: "По имени"
+	PickerSortStack: "По количеству"
+	PickerSearch: "Поиск в инвентаре…"
 	InspectionGuide: "Управление и базовые эффекты созданного предмета:"
 	InspectionStack: "Стак: {0} / {1}"
 	InspectionTools: "Сила кирки / топора / молота: {0} / {1}% / {2}"

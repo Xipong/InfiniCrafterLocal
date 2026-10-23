@@ -216,7 +216,7 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
                     craftPlayer.TryClearInputToInventory(lane * 2);
                 else if (!craftPlayer.TryTakeInputToMouse(lane * 2) && !craftPlayer.TryPutMouseItemIntoInput(lane * 2)
                     && Main.mouseItem.IsAir && craftPlayer.StationInput(lane * 2).IsAir && !craftPlayer.IsCraftLanePending(lane))
-                { _pickerSlot = lane * 2; _pickerPage = 0; }
+                { OpenPicker(lane * 2); }
                 Main.mouseLeftRelease = false;
                 return;
             }
@@ -226,7 +226,7 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
                     craftPlayer.TryClearInputToInventory(lane * 2 + 1);
                 else if (!craftPlayer.TryTakeInputToMouse(lane * 2 + 1) && !craftPlayer.TryPutMouseItemIntoInput(lane * 2 + 1)
                     && Main.mouseItem.IsAir && craftPlayer.StationInput(lane * 2 + 1).IsAir && !craftPlayer.IsCraftLanePending(lane))
-                { _pickerSlot = lane * 2 + 1; _pickerPage = 0; }
+                { OpenPicker(lane * 2 + 1); }
                 Main.mouseLeftRelease = false;
                 return;
             }

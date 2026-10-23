@@ -256,6 +256,10 @@ UseFeedback: {
 
 // The filename supplies Mods.InfiniCrafterLocal; do not repeat it here.
 StationUI: {
+	PickerResults: "{0} stacks · page {1}/{2}"
+	PickerSortName: "By name"
+	PickerSortStack: "By quantity"
+	PickerSearch: "Search inventory…"
 	InspectionGuide: "Generated item controls and base effects:"
 	InspectionStack: "Stack: {0} / {1}"
 	InspectionTools: "Pick / axe / hammer power: {0} / {1}% / {2}"
