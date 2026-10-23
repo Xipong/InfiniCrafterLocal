@@ -1097,7 +1097,13 @@
         "runtimeProgram.entities[].targeting.spreadRadians",
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
-        "runtimeProgram.entities[].targeting.hardRange"
+        "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.maximumHealthRatio",
+        "runtimeProgram.entities[].targeting.minimumHealthRatio",
+        "runtimeProgram.entities[].targeting.bossFilter",
+        "runtimeProgram.entities[].targeting.coneDirection",
+        "runtimeProgram.entities[].targeting.coneRadians",
+        "runtimeProgram.entities[].targeting.minimumRangeTiles"
       ]
     },
     {

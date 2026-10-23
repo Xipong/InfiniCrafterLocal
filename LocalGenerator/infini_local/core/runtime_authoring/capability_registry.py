@@ -2552,6 +2552,12 @@ _CAPS.extend([
             "targetPolicy": _p("string", "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score", enum=("distance_score", "player_assigned_first"), required=False, default="distance_score", neutral="distance_score"),
             "requireLineOfSight": _p("boolean", "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets", required=False, default=False, neutral=False),
             "hardRange": _p("boolean", "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit", required=False, default=False, neutral=False),
+            "maximumHealthRatio": _p("number", "Maximum inclusive current life/lifeMax ratio; combines with minimumHealthRatio as a health band", minimum=0, maximum=1, required=False, default=1, neutral=1, consumer_storage="float32"),
+            "minimumHealthRatio": _p("number", "Minimum inclusive current life/lifeMax ratio; candidates with invalid lifeMax cannot satisfy a health filter", minimum=0, maximum=1, required=False, default=0, neutral=0, consumer_storage="float32"),
+            "bossFilter": _p("string", "Filter chaseable NPCs by their native boss flag before assigned/priority selection", enum=('any', 'boss_only', 'non_boss_only'), required=False, default='any', neutral='any'),
+            "coneDirection": _p("string", "Cone axis: current owner horizontal facing or this projectile actual velocity; a zero velocity admits no targets when a restricted velocity cone is requested", enum=('owner_facing', 'projectile_velocity'), required=False, default='owner_facing', neutral='owner_facing'),
+            "coneRadians": _p("number", "Full targeting cone around the explicitly selected coneDirection. Full circle disables directional filtering", minimum=0, maximum=6.283185307179586, required=False, default=6.283185307179586, neutral=6.283185307179586, consumer_storage="float32"),
+            "minimumRangeTiles": _p("number", "Exclude targets closer than this geometric inner radius, before previous-target or assigned priority", minimum=0, maximum=120, required=False, default=0, neutral=0, consumer_storage="float32"),
         },
         component_slot="controller",
         authority="owner_execute_sync",
@@ -3181,6 +3187,11 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
 
 def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
     """Project rules that depend on parameters, registry topology or shared categories."""
+    if cap.name == "target_and_fire":
+        return (
+            RequirementSpec("ordered_params", param="minimumRangeTiles", other_param="rangeTiles", message="Inner target radius cannot exceed the outer target range."),
+            RequirementSpec("ordered_params", param="minimumHealthRatio", other_param="maximumHealthRatio", message="Minimum target health ratio cannot exceed maximum."),
+        )
     if cap.name == "configure_spawn":
         moving = ("owner_attached_projectile", "free_projectile", "child_projectile")
         rows = [RequirementSpec("present_param_requires_target_kind", param=f"velocity.{variant}", any_of=moving,

@@ -1904,10 +1904,36 @@ public sealed class RuntimeTargetingSpec
         get => _hardRange;
         set => _hardRange = value ?? throw new InvalidDataException("present targeting hard range must be boolean");
     }
-    [JsonIgnore] public bool HasVolleyOptions => Count.HasValue || SpreadRadians.HasValue
+    private double? _minimumRangeTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MinimumRangeTiles { get => _minimumRangeTiles; set => _minimumRangeTiles = value ?? throw new InvalidDataException("present targeting minimumRangeTiles cannot be null"); }
+    private double? _coneRadians;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? ConeRadians { get => _coneRadians; set => _coneRadians = value ?? throw new InvalidDataException("present targeting coneRadians cannot be null"); }
+    private string? _coneDirection;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConeDirection { get => _coneDirection; set => _coneDirection = value ?? throw new InvalidDataException("present targeting coneDirection cannot be null"); }
+    private string? _bossFilter;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BossFilter { get => _bossFilter; set => _bossFilter = value ?? throw new InvalidDataException("present targeting bossFilter cannot be null"); }
+    private double? _minimumHealthRatio;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MinimumHealthRatio { get => _minimumHealthRatio; set => _minimumHealthRatio = value ?? throw new InvalidDataException("present targeting minimumHealthRatio cannot be null"); }
+    private double? _maximumHealthRatio;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MaximumHealthRatio { get => _maximumHealthRatio; set => _maximumHealthRatio = value ?? throw new InvalidDataException("present targeting maximumHealthRatio cannot be null"); }
+    [JsonIgnore] public bool HasVolleyOptions => MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
         || TargetPolicy is not null || RequireLineOfSight.HasValue || HardRange.HasValue;
     public void Normalize()
     {
+        if (MinimumRangeTiles is double minimumRangeTiles && (!double.IsFinite(minimumRangeTiles) || minimumRangeTiles < 0d || minimumRangeTiles > 120d || (minimumRangeTiles != 0d && (float)minimumRangeTiles == 0f))) throw new InvalidDataException("invalid targeting minimumRangeTiles");
+        if (ConeRadians is double coneRadians && (!double.IsFinite(coneRadians) || coneRadians < 0d || coneRadians > 6.283185307179586d || (coneRadians != 0d && (float)coneRadians == 0f))) throw new InvalidDataException("invalid targeting coneRadians");
+        if (ConeDirection is not null and not ("owner_facing" or "projectile_velocity")) throw new InvalidDataException("invalid targeting coneDirection");
+        if (BossFilter is not null and not ("any" or "boss_only" or "non_boss_only")) throw new InvalidDataException("invalid targeting bossFilter");
+        if (MinimumHealthRatio is double minimumHealthRatio && (!double.IsFinite(minimumHealthRatio) || minimumHealthRatio < 0d || minimumHealthRatio > 1d || (minimumHealthRatio != 0d && (float)minimumHealthRatio == 0f))) throw new InvalidDataException("invalid targeting minimumHealthRatio");
+        if (MaximumHealthRatio is double maximumHealthRatio && (!double.IsFinite(maximumHealthRatio) || maximumHealthRatio < 0d || maximumHealthRatio > 1d || (maximumHealthRatio != 0d && (float)maximumHealthRatio == 0f))) throw new InvalidDataException("invalid targeting maximumHealthRatio");
+        if (MinimumRangeTiles > RangeTiles || MinimumHealthRatio > MaximumHealthRatio)
+            throw new InvalidDataException("targeting filter endpoints are reversed");
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
         RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);

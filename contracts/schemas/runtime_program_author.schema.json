@@ -8800,6 +8800,44 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "bossFilter": {
+                    "default": "any",
+                    "description": "Filter chaseable NPCs by their native boss flag before assigned/priority selection",
+                    "enum": [
+                      "any",
+                      "boss_only",
+                      "non_boss_only"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "any",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "coneDirection": {
+                    "default": "owner_facing",
+                    "description": "Cone axis: current owner horizontal facing or this projectile actual velocity; a zero velocity admits no targets when a restricted velocity cone is requested",
+                    "enum": [
+                      "owner_facing",
+                      "projectile_velocity"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "owner_facing",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "coneRadians": {
+                    "default": 6.283185307179586,
+                    "description": "Full targeting cone around the explicitly selected coneDirection. Full circle disables directional filtering",
+                    "maximum": 6.283185307179586,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 6.283185307179586,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 6.283185307179586,
+                    "x-infini-semanticType": "radians"
+                  },
                   "count": {
                     "default": 1,
                     "description": "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot",
@@ -8853,6 +8891,51 @@
                     ],
                     "type": "string",
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "maximumHealthRatio": {
+                    "default": 1,
+                    "description": "Maximum inclusive current life/lifeMax ratio; combines with minimumHealthRatio as a health band",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "minimumHealthRatio": {
+                    "default": 0,
+                    "description": "Minimum inclusive current life/lifeMax ratio; candidates with invalid lifeMax cannot satisfy a health filter",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "minimumRangeTiles": {
+                    "default": 0,
+                    "description": "Exclude targets closer than this geometric inner radius, before previous-target or assigned priority",
+                    "maximum": 120,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "tiles"
                   },
                   "rangeTiles": {
                     "description": "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount",

@@ -274,7 +274,7 @@ public sealed partial class GeneratedProjectile
         bool Admitted(NPC npc, out float score)
         {
             score = float.PositiveInfinity;
-            if (!npc.CanBeChasedBy(Projectile)) return false;
+            if (!npc.CanBeChasedBy(Projectile) || !AdmitsTargetFilter(npc, targeting, Owner())) return false;
             float distance = Vector2.Distance(Projectile.Center, npc.Center);
             // Geometric admission precedes the preference discount. A previous
             // or assigned target cannot turn a hard radius into a score radius.
