@@ -79,6 +79,11 @@ public sealed partial class InfiniCraftPlayer
         GeneratedItemData? source = null, uint? activationTick = null)
     {
         if (buff is null) return false;
+        if (Player.dead || !IsGeneratedUtilityActivationCurrent(activationTick))
+        {
+            if (syncNetwork) CorrectGeneratedBuffPrediction();
+            return false;
+        }
         buff.Normalize();
         if (!buff.HasAnyEffect) return false;
         uint elapsed = activationTick.HasValue
@@ -319,6 +324,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void TickGeneratedUtilityBuff()
     {
+        if (!Player.dead) _generatedUtilityDeathObserved = false;
         if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
         if (_generatedMobilityCooldownTicks > 0)
             _generatedMobilityCooldownTicks--;

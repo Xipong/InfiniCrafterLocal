@@ -77,6 +77,8 @@ internal static partial class EngineRuntimeChecks
             ("QoL RefundStacks", QolRefundStacks),
             ("QoL BlinkGeometry", QolBlinkGeometry),
             ("QoL DeathBuffCleanup", QolDeathBuffCleanup),
+            ("UtilityLifecycle Generation", UtilityLifeGeneration),
+            ("UtilityLifecycle DelayedAction", DelayedUtilityCannotCrossLife),
             ("QoL ReturnCatch", QolReturnCatch),
             ("QoL NativeParentIcons", QolNativeParentIcons),
             ("QoL AtlasSort", QolAtlasSort),

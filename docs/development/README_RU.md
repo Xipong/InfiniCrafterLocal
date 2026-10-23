@@ -30,6 +30,7 @@
 | Уведомления о завершении craft | [Completion notifications](swarm/181-craft-notifications.md) |
 | Предпросмотр blink | [Exact destination footprint](swarm/182-blink-preview.md) |
 | Назначение recall | [Live home destination](swarm/183-home-destination.md) |
+| Utility effects и смерть игрока | [Effect lifecycle and inspection](swarm/184-utility-lifecycle.md) |
 | Технические исправления текущего мира | [Границы и владельцы](runtime/CURRENT_WORLD_TECHNICAL_FIXES_RU.md) |
 | Engine execution/trust | [Runtime boundaries](architecture/ENGINE_RUNTIME_BOUNDARIES_RU.md) |
 | Где хранить и обновлять docs | [Организация и sources](DOCUMENTATION_RU.md), [generated refresh](../reference/GENERATED_RU.md) |

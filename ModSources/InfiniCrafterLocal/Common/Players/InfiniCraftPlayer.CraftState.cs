@@ -212,6 +212,8 @@ public sealed partial class InfiniCraftPlayer
     {
         AcknowledgeAllCraftNotifications();
         _lastGeneratedRecall = null;
+        ResetGeneratedUtilityNetworkLife();
+        RetireGeneratedUtilityState("world_entry");
         _preparationParents = null;
         ClearGeneratedItemExhaustion();
         if (InputA is null) InputA = NewAirItem();

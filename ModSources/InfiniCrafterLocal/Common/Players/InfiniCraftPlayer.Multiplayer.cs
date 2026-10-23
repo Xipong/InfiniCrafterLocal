@@ -509,7 +509,9 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)6); // includes exact combat bonuses in each active entry
+        writer.Write((byte)7); // authoritative life generation fences pre-death snapshots
+        writer.Write(_generatedUtilityLifeGeneration);
+        writer.Write(Player.dead);
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -533,8 +535,10 @@ public sealed partial class InfiniCraftPlayer
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 6)
+        if (version != 7)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
+        uint lifeGeneration = reader.ReadUInt32();
+        bool serverDead = reader.ReadBoolean();
         // Decode before replacing owner prediction; malformed packets do not
         // erase a valid timer table or leave half-read buff state behind.
         int ticks = reader.ReadInt32();
@@ -548,6 +552,17 @@ public sealed partial class InfiniCraftPlayer
         var buffs = new List<ActiveGeneratedUtilityBuff>(count);
         for (int i = 0; i < count; i++) buffs.Add(ReadGeneratedUtilityBuffEntry(reader));
         var exhaustion = ReadGeneratedItemExhaustion(reader);
+        if (Player.dead) ObserveGeneratedUtilityDeath();
+        if (UtilityGenerationBefore(lifeGeneration, _minimumGeneratedUtilityLifeGeneration)
+            || UtilityGenerationBefore(lifeGeneration, _generatedUtilityLifeGeneration)) return;
+        _generatedUtilityLifeGeneration = lifeGeneration;
+        _lastGeneratedUtilitySnapshotWasDead = serverDead;
+        if (Player.dead || serverDead)
+        {
+            RetireGeneratedUtilityState("authority_death");
+            _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
+            return;
+        }
         _generatedBuffTicks = ticks; _generatedMiningSpeedMultiplier = mining;
         _generatedLightStrength = light; _generatedLightColorName = color;
         _generatedOreSenseRadiusTiles = ore; _generatedMovementSpeed = movement;
@@ -563,8 +578,10 @@ public sealed partial class InfiniCraftPlayer
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 6)
+        if (version != 7)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
+        _ = reader.ReadUInt32();
+        _ = reader.ReadBoolean();
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
         _ = reader.ReadSingle();
@@ -671,6 +688,7 @@ public sealed partial class InfiniCraftPlayer
     {
         if (Main.netMode == NetmodeID.SinglePlayer)
             return;
+        if (Main.netMode == NetmodeID.Server && Player.dead) RetireGeneratedUtilityState("death");
         var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(PacketSyncGeneratedUtilityBuff);
         WriteGeneratedBuffState(packet);

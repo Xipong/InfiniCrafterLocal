@@ -214,9 +214,10 @@ internal static partial class EngineRuntimeChecks
 
     private static void EX06CapacityLifecycleAndActivationAnchor()
     {
-        using var scope = new MobilityConsumptionNativeScope();
+        using var scope = new SwarmRuntimeScope(myPlayer: 1);
         WithPlayer((player, mp) => {
-            PrepareMobilityConsumptionPlayer(player); MaterialClock(1000);
+            player.active = true; player.whoAmI = 1; Terraria.Main.player[1] = player;
+            MaterialClock(1000);
             var data = ExhaustionData("ex-anchor", 100);
             Equal(true, ExhaustionApply(mp, data.Gameplay.GeneratedBuff, data, 970), "accepted utility uses Prepare anchor");
             Equal(70, ExhaustionRows(mp).Single().Ticks, "fatigue elapsed deducted independently of remaining buff");
@@ -259,6 +260,13 @@ internal static partial class EngineRuntimeChecks
             }
             Equal(0, ExhaustionRows(mp).Count, "explicit world retirement clears after retired native roster slot");
             Equal(0, retiredLookupThrows, "retired native roster is queried without caught exception/log spam");
+        });
+        // Clock-wrap arithmetic is independent of the previous world's retirement
+        // fence. A fresh actor avoids inventing an activation before that retired
+        // life when this fixture deliberately changes the native clock epoch.
+        WithPlayer((player, mp) => {
+            player.active = true; player.whoAmI = 1; Terraria.Main.player[1] = player;
+            var data = ExhaustionData("ex-wrap", 100);
             MaterialClock(uint.MaxValue - 20);
             Equal(true, ExhaustionApply(mp, data.Gameplay.GeneratedBuff, data), "wrap timer accepted");
             MaterialClock(10); Equal(69, ExhaustionRows(mp).Single().Ticks, "uint world clock wraps without expiry restart");
@@ -310,7 +318,7 @@ internal static partial class EngineRuntimeChecks
         // Reader guard must reject length BEFORE ReadBytes allocates (all state
         // strings use the existing BinaryWriter 7-bit UTF8 string convention).
         using var malformed = new MemoryStream(); using var writer = new BinaryWriter(malformed);
-        writer.Write((byte)6); writer.Write(0); writer.Write(1f); writer.Write(0f);
+        writer.Write((byte)7); writer.Write(0u); writer.Write(false); writer.Write(0); writer.Write(1f); writer.Write(0f);
         writer.Write7BitEncodedInt(1000000); malformed.Position = 0;
         bool rejected = false;
         try { typeof(InfiniCraftPlayer).GetMethod("ReadGeneratedBuffState", MobilityConsumptionFlags)!.Invoke(f.RemoteBuff, new object[] { new BinaryReader(malformed) }); }

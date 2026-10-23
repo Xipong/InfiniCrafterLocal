@@ -100,13 +100,7 @@ public sealed partial class InfiniCraftPlayer
     }
 
     public override void UpdateDead()
-    {
-        bool changed = _generatedItemExhaustion.Count > 0 || _activeGeneratedUtilityBuffs.Count > 0 || _generatedBuffTicks > 0;
-        ClearGeneratedItemExhaustion();
-        _activeGeneratedUtilityBuffs.Clear();
-        ResetGeneratedUtilityBuffAggregate();
-        if (changed) CorrectGeneratedBuffPrediction();
-    }
+        => RetireGeneratedUtilityState("death", syncNetwork: true);
 
     // Existing utility snapshot, no second protocol. BinaryWriter strings use
     // a 7-bit UTF8 byte count; read the count BEFORE allocating the bounded bytes.
@@ -160,7 +154,7 @@ public sealed class GeneratedItemExhaustionLifecycleSystem : ModSystem
             // Try query checks the roster/index without throwing first-chance
             // exceptions which tML logs even when our caller catches them.
             if (player is not null && player.TryGetModPlayer<InfiniCraftPlayer>(out var craftPlayer))
-                craftPlayer.ClearGeneratedItemExhaustion();
+                craftPlayer.RetireGeneratedUtilityState("world_unload");
         }
     }
     public override void OnWorldUnload() => ClearPlayers();
