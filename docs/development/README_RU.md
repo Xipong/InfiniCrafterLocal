@@ -28,6 +28,7 @@
 | Image attempts/publication/delivery | [Image lifecycle](pipeline/IMAGE_ASSET_LIFECYCLE_RU.md) |
 | Craft/cancel/refund/world-exit | [Native craft lifecycle](runtime/NATIVE_CRAFT_LIFECYCLE_QOL.md), [retained refund recovery](swarm/180-refund-recovery.md) |
 | Уведомления о завершении craft | [Completion notifications](swarm/181-craft-notifications.md) |
+| Предпросмотр blink | [Exact destination footprint](swarm/182-blink-preview.md) |
 | Технические исправления текущего мира | [Границы и владельцы](runtime/CURRENT_WORLD_TECHNICAL_FIXES_RU.md) |
 | Engine execution/trust | [Runtime boundaries](architecture/ENGINE_RUNTIME_BOUNDARIES_RU.md) |
 | Где хранить и обновлять docs | [Организация и sources](DOCUMENTATION_RU.md), [generated refresh](../reference/GENERATED_RU.md) |

@@ -21,6 +21,19 @@ internal static partial class EngineRuntimeChecks
                 Equal(true, Safe(), "adjacent lava outside body is not a collision");
                 tile.LiquidType = Terraria.ID.LiquidID.Lava; tile.LiquidAmount = 255;
                 Equal(false, Safe(), "overlapping lava remains unsafe");
+                var effects = new GameplaySpec { MobilityMode = "blink_to_cursor", MobilityRangeTiles = 10, MobilitySafeTileOnly = true };
+                player.Center = new Microsoft.Xna.Framework.Vector2(600, 644);
+                var preview = owner.PreviewGeneratedBlink(effects, new Microsoft.Xna.Framework.Vector2(644, 644));
+                Equal("Lava", preview.Reason, "preview explains actual lava collision");
+                Equal(new Microsoft.Xna.Framework.Vector2(640, 640), preview.Destination, "preview uses exact player footprint");
+                tile.ClearEverything();
+                var start = player.position;
+                preview = owner.PreviewGeneratedBlink(effects, player.Center + new Microsoft.Xna.Framework.Vector2(500, 0));
+                Equal(true, preview.RangeLimited, "preview shows authored range clipping");
+                Equal(160f, (preview.Destination + new Microsoft.Xna.Framework.Vector2(4, 4) - player.Center).Length(), "preview clipped to authored range");
+                Equal(start, player.position, "inspection does not move player");
+                Equal(0, owner.GeneratedMobilityCooldownTicks, "inspection cannot reserve cooldown");
+                Equal("InvalidTarget", owner.PreviewGeneratedBlink(effects, new Microsoft.Xna.Framework.Vector2(float.NaN, 0)).Reason, "invalid target rejected without collision query");
             } finally { Terraria.Main.tileSolid[Terraria.ID.TileID.Stone] = oldSolid; }
         }); });
     }

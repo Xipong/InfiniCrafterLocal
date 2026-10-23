@@ -1,0 +1,6 @@
+Ready: "Blink destination"
+RangeLimited: "Blink destination • range limit"
+Cooldown: "Mobility ready in {0}s"
+WorldEdge: "Outside the world"
+Solid: "Blocked by solid tiles"
+Lava: "Landing body overlaps lava"

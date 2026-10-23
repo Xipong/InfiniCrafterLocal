@@ -285,27 +285,18 @@ public sealed partial class InfiniCraftPlayer
             _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityAuthority");
             return false;
         }
-        if (gameplay.MobilityRangeTiles <= 0)
+        var preview = PreviewGeneratedBlink(gameplay, target);
+        if (!preview.Allowed)
         {
-            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityRangeMissing");
+            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText(preview.Reason switch
+            {
+                "RangeMissing" => "MobilityRangeMissing",
+                "Dead" => "MobilityDead",
+                _ => "MobilityUnsafe",
+            });
             return false;
         }
-        if (!float.IsFinite(target.X) || !float.IsFinite(target.Y))
-        {
-            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
-            return false;
-        }
-        int rangeTiles = Math.Clamp(gameplay.MobilityRangeTiles, 1, 120);
-        Vector2 delta = target - Player.Center;
-        float max = rangeTiles * 16f;
-        if (delta.Length() > max)
-            target = Player.Center + delta.SafeNormalize(Vector2.UnitX * Player.direction) * max;
-        Vector2 destination = new(target.X - Player.width / 2f, target.Y - Player.height / 2f);
-        if (!IsBlinkWithinWorld(destination) || gameplay.MobilitySafeTileOnly && !IsSafeBlinkDestination(destination))
-        {
-            _lastGeneratedMobilityFailureMessage = GeneratedUseFeedbackText("MobilityUnsafe");
-            return false;
-        }
+        Vector2 destination = preview.Destination;
         Player.Teleport(destination, 0);
         InfiniCrafterLocal.Common.Services.InfiniRuntimeAuthority.SyncTeleport(Player, destination);
         return true;
