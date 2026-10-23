@@ -43,6 +43,13 @@ public sealed partial class InfiniCraftPlayer
     private readonly HashSet<string> _journalFavorites = new(StringComparer.Ordinal);
     private static string JournalKey(string id) => Main.worldID + ":" + id;
     internal bool IsJournalFavorite(string id) => _journalFavorites.Contains(JournalKey(id));
+    internal void SetJournalFavorite(string id, bool favorite)
+    {
+        if (id.Length is 0 or > 120) return;
+        string key = JournalKey(id);
+        if (!favorite) _journalFavorites.Remove(key);
+        else if (_journalFavorites.Count < 4096) _journalFavorites.Add(key);
+    }
     internal void ToggleJournalFavorite(string id)
     {
         string key = JournalKey(id);

@@ -33,6 +33,14 @@ UseFeedback: {
 
 
 		RecipeJournal: {
+	BatchHint: "Ctrl + щелчок — выделение; прокрутка — другие действия."
+	BatchCollection: "Назначить коллекцию выбранным"
+	BatchUnfavorite: "Убрать выбранные из избранного"
+	BatchFavorite: "В избранное выбранные"
+	BatchClear: "Снять выделение"
+	BatchSelectFiltered: "Выбрать все найденные: {0}"
+	BatchCount: "Выбрано открытий: {0}"
+	ViewOrganize: "Вид: организация"
 	SearchDepthInvalid: "Глубина — целое неотрицательное число; перед ним можно поставить =, <, >, <= или >=."
 	SearchUnclosedQuote: "Закройте фразу второй кавычкой."
 	SearchTooLong: "Поиск использует не более 240 символов."

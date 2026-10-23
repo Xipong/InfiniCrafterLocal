@@ -73,6 +73,10 @@ public sealed partial class RecipeJournalUISystem
                 { Select(recent[i].Id); return true; }
             return true;
         }
+        if (_detailPage == DetailPage.Organize)
+        {
+            DrawOrganization(sb, area, click, cursor); return true;
+        }
         string content = "";
         if (_detailPage == DetailPage.Help)
             content = Text("HelpBrowse") + "\n\n" + Text("HelpSearch") + "\n\n" + Text("HelpPlan") + "\n\n" + Text("HelpOwnership");

@@ -55,7 +55,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     }
     private static string _query = "", _selected = "";
     private static string _comparisonId = "";
-    private enum DetailPage { Recipe, Comparison, Ancestors, Descendants, Inventory, Plan, Notebook, Discovery, Guide, Help }
+    private enum DetailPage { Recipe, Comparison, Ancestors, Descendants, Inventory, Plan, Notebook, Discovery, Guide, Help, Organize }
     private static DetailPage _detailPage;
     private static bool _workspaceMenu;
     private static int _workspaceScroll;
@@ -68,6 +68,9 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static GeneratedItemData[] _known = Array.Empty<GeneratedItemData>();
     private static uint _snapshotTick;
     private static readonly Stack<string> History = new();
+    private static readonly HashSet<string> BatchSelection = new(StringComparer.Ordinal);
+    private static GeneratedItemData[] _filteredEntries = Array.Empty<GeneratedItemData>();
+    private static int _collectionChoice;
     // InfiniCore identity: cold forged metal, a warm fusion heart, quiet navigable blue.
     private static readonly Color Ink = new(243, 231, 209), Muted = new(161, 174, 193), Gold = new(241, 170, 77);
     private static readonly Color Panel = new(20, 24, 34), Inset = new(11, 16, 25);
@@ -99,7 +102,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     public override void OnWorldUnload()
     {
         Close(); _query = _selected = _comparisonId = ""; _detailPage = DetailPage.Recipe; _page = 0; _favoritesOnly = false; _revealSelection = false; _sortOrder = RecipeJournalView.SortOrder.Name;
-        _known = Array.Empty<GeneratedItemData>(); History.Clear(); _unreadOnly = false; _workspaceMenu = false; _workspaceScroll = 0;
+        _known = Array.Empty<GeneratedItemData>(); _filteredEntries = Array.Empty<GeneratedItemData>(); BatchSelection.Clear(); History.Clear(); _unreadOnly = false; _workspaceMenu = false; _workspaceScroll = 0;
         _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
     }
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
@@ -158,6 +161,9 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             .Where(d => (!_unreadOnly || player.JournalLastVisited(d.Id) == 0) && RecipeJournalView.MatchesEffect(d, _effectFilter)
                 && (_ingredientFilter.Length == 0 || d.RecipeMeta.ParentIdentities?.Contains("generated:" + _ingredientFilter, StringComparer.Ordinal) == true)).ToArray();
         entries = RecipeJournalView.Sort(entries, _sortOrder, player.IsJournalFavorite, player.JournalLastVisited);
+        _filteredEntries = entries;
+        var currentIds = discoveries.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+        BatchSelection.RemoveWhere(id => !currentIds.Contains(id));
         if (_selected.Length == 0 && entries.Length > 0)
         {
             // Hydration may finish while the player is typing; auto-selection must not steal focus.
@@ -253,7 +259,14 @@ public sealed partial class RecipeJournalUISystem : ModSystem
                 player.ToggleJournalFavorite(entry.Id);
                 Main.mouseRightRelease = false;
             }
-            if (click && hover) { Select(entry.Id); Main.mouseLeftRelease = false; }
+            if (BatchSelection.Contains(entry.Id)) CornerClamps(sb, new Rectangle(slot.X + 3, slot.Y + 3, slot.Width - 6, slot.Height - 6), Link);
+            if (click && hover)
+            {
+                if (Main.keyState.IsKeyDown(Keys.LeftControl) || Main.keyState.IsKeyDown(Keys.RightControl))
+                { if (!BatchSelection.Remove(entry.Id)) BatchSelection.Add(entry.Id); }
+                else Select(entry.Id);
+                Main.mouseLeftRelease = false;
+            }
         }
         int wheel = PlayerInput.ScrollWheelDeltaForUI;
         if (wheel != 0 && list.Contains(cursor.ToPoint())) _page = Math.Clamp(_page + (wheel < 0 ? 1 : -1), 0, pages - 1);

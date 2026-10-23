@@ -33,6 +33,14 @@ UseFeedback: {
 
 
 		RecipeJournal: {
+	BatchHint: "Ctrl-click grid entries to select; scroll for more actions."
+	BatchCollection: "Apply this collection to selected"
+	BatchUnfavorite: "Unfavorite selected"
+	BatchFavorite: "Favorite selected"
+	BatchClear: "Clear selection"
+	BatchSelectFiltered: "Select all {0} filtered discoveries"
+	BatchCount: "Selected discoveries: {0}"
+	ViewOrganize: "View: organize"
 	SearchDepthInvalid: "Depth needs a nonnegative whole number, optionally preceded by =, <, >, <= or >=."
 	SearchUnclosedQuote: "Close the quoted phrase with a second quotation mark."
 	SearchTooLong: "Search uses at most 240 characters."
