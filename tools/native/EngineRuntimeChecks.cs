@@ -52,6 +52,7 @@ internal static partial class EngineRuntimeChecks
             ("Expansion RecipePreparation", RecipePreparation),
             ("Expansion InventoryDeposit", InventoryDeposit),
             ("Expansion ItemGuide", ItemGuide),
+            ("journal workflow session", JournalSessionWorkflow),
             ("journal workflow direct open", JournalDirectOpenWorkflow),
             ("journal workflow stock", JournalStockWorkflow),
             ("journal workflow saved filters", JournalSavedFilters),

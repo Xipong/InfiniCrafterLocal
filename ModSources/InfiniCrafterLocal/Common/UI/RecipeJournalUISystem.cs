@@ -27,7 +27,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     public override void Load()
         => ToggleJournalKey = KeybindLoader.RegisterKeybind(Mod, "ToggleRecipeJournal", Keys.K);
 
-    public override void Unload() => ToggleJournalKey = null!;
+    public override void Unload() { ResetJournalSession(); ToggleJournalKey = null!; }
 
     internal static bool CanToggleFromKey(bool focused, bool menu, bool dead, bool writing,
         bool chat, bool blocked, bool rebinding)
@@ -97,8 +97,25 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     internal static string Text(string key, params object[] args)
         => Language.GetTextValue("Mods.InfiniCrafterLocal.RecipeJournal." + key, args);
 
+    private static Player? _sessionOwner;
+    private static int _sessionWorld;
+    private static bool _resumeReleaseRequired;
+    private static void ResetJournalSession()
+    {
+        Close(); _query = _selected = _comparisonId = ""; _detailPage = DetailPage.Recipe;
+        _page = _detailScroll = _preparationLane = 0; _planQuantity = 1;
+        _favoritesOnly = _unreadOnly = _revealSelection = _planIncludeStorage = _resumeReleaseRequired = false;
+        _sortOrder = RecipeJournalView.SortOrder.Name; _effectFilter = RecipeJournalView.EffectFilter.All;
+        _stockFilter = RecipeStockFilter.Mode.All; _ingredientFilter = ""; _beforeFilterReset = null;
+        _known = Array.Empty<GeneratedItemData>(); _snapshotTick = uint.MaxValue; History.Clear();
+        _filteredEntries = Array.Empty<GeneratedItemData>(); BatchSelection.Clear(); RecentQueries.Clear();
+        _queryRecall = -1; _queryDraft = ""; _workspaceMenu = false; _workspaceScroll = _collectionChoice = 0;
+        _sessionOwner = null; _sessionWorld = 0;
+    }
     public static void Open()
     {
+        if (!ReferenceEquals(_sessionOwner, Main.LocalPlayer) || _sessionWorld != Main.worldID)
+        { ResetJournalSession(); _sessionOwner = Main.LocalPlayer; _sessionWorld = Main.worldID; }
         IsOpen = true; SetSearchFocus(false); _snapshotTick = uint.MaxValue;
         Main.playerInventory = true;
         if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
@@ -117,12 +134,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static void SetSearchFocus(bool focused) => SetTextFocus(focused ? 1 : _noteFocus ? 2 : 0);
     private static void SetNoteFocus(bool focused) => SetTextFocus(focused ? 2 : _searchFocus ? 1 : 0);
     internal static void Close() { IsOpen = false; SetTextFocus(0); }
-    public override void OnWorldUnload()
-    {
-        Close(); _query = _selected = _comparisonId = ""; _detailPage = DetailPage.Recipe; _page = 0; _favoritesOnly = false; _revealSelection = false; _sortOrder = RecipeJournalView.SortOrder.Name;
-        _known = Array.Empty<GeneratedItemData>(); _filteredEntries = Array.Empty<GeneratedItemData>(); BatchSelection.Clear(); History.Clear(); RecentQueries.Clear(); _queryRecall = -1; _unreadOnly = false; _workspaceMenu = false; _workspaceScroll = 0;
-        _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
-    }
+    public override void OnWorldUnload() => ResetJournalSession();
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
     {
         int index = layers.FindIndex(layer => layer.Name == "Vanilla: Inventory");
@@ -144,10 +156,14 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static bool Draw()
     {
         if (!IsOpen) return true;
+        if (!ReferenceEquals(_sessionOwner, Main.LocalPlayer) || _sessionWorld != Main.worldID)
+        { ResetJournalSession(); return true; }
         if (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead) { Close(); return true; }
-        if (Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow || Main.inFancyUI || !Main.hasFocus)
-        { SetNoteFocus(false); SetSearchFocus(false); return true; }
-        if (Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding) { SetTextFocus(0); return true; }
+        if (Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow || Main.inFancyUI || !Main.hasFocus || Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding)
+        { _resumeReleaseRequired = true; SetTextFocus(0); return true; }
+        // A click that closed a covering UI cannot activate an atlas control underneath it.
+        if (_resumeReleaseRequired)
+        { if (Main.mouseLeft || Main.mouseRight) return true; _resumeReleaseRequired = false; }
         if (Main.hasFocus && Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape))
         {
             if (_workspaceMenu) { _workspaceMenu = false; return true; }
