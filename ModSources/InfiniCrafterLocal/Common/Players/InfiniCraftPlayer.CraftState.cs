@@ -233,6 +233,7 @@ public sealed partial class InfiniCraftPlayer
     {
         SaveJournal(tag);
         SaveCraftHistory(tag);
+        tag["infiniPauseCraftRefundDelivery"] = PauseCraftRefundDelivery ? 1 : 0;
         _pendingRefundSavedForWorldExit = false;
         _pendingRemoteCraftSavedForWorldExit = false;
         try
@@ -301,13 +302,18 @@ public sealed partial class InfiniCraftPlayer
     {
         LoadJournal(tag);
         LoadCraftHistory(tag);
+        PauseCraftRefundDelivery = tag.GetInt("infiniPauseCraftRefundDelivery") == 1;
         _deferredExitRefunds.Clear();
         try
         {
             foreach (TagCompound row in tag.GetList<TagCompound>("infiniDeferredCraftRefundsV1"))
             {
-                Item item = ItemIO.Load(row);
-                if (item is not null && !item.IsAir && item.stack > 0) _deferredExitRefunds.Add(item);
+                try
+                {
+                    Item item = ItemIO.Load(row);
+                    if (item is not null && !item.IsAir && item.stack > 0) _deferredExitRefunds.Add(item);
+                }
+                catch { /* One malformed claim cannot erase other saved materials. */ }
             }
             string clientId = tag.ContainsKey("infiniStationEscrowClientId")
                 ? tag.GetString("infiniStationEscrowClientId")
@@ -484,7 +490,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void RestoreDeferredExitRefunds()
     {
-        if (_deferredExitRefunds.Count <= 0)
+        if (PauseCraftRefundDelivery || _deferredExitRefunds.Count <= 0)
             return;
 
         for (int index = _deferredExitRefunds.Count - 1; index >= 0; index--)

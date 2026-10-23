@@ -280,11 +280,11 @@ public sealed partial class InfiniCraftPlayer
             return;
 
         Item owned = original.Clone();
-        if (!TryDeliverRefund(owned))
+        if (PauseCraftRefundDelivery || !TryDeliverRefund(owned))
             _deferredExitRefunds.Add(owned);
     }
 
-    private bool TryDeliverRefund(Item refund)
+    private bool TryDeliverRefund(Item refund, bool allowWorldDrop = true)
     {
 
         // Prefer exact inventory return. First merge into compatible stacks, then use
@@ -323,7 +323,7 @@ public sealed partial class InfiniCraftPlayer
         }
 
         // Never let the native allocator replace an occupied drop (or use its dummy).
-        if (Main.netMode == NetmodeID.MultiplayerClient || !HasReusableWorldItemSlot())
+        if (!allowWorldDrop || Main.netMode == NetmodeID.MultiplayerClient || !HasReusableWorldItemSlot())
             return false;
         // Let Terraria allocate and initialize its own world slot. The Item
         // overload preserves prefix and ModItem/GlobalItem data without replacing
