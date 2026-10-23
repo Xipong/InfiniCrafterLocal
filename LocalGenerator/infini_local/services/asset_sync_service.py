@@ -37,7 +37,10 @@ def is_complete_png_file(path: Path | str) -> bool:
     """Validate the complete gameplay PNG envelope before delivery or sync."""
 
     try:
-        raw = Path(path).read_bytes()
+        # Enforce the ceiling during I/O, before allocating a complete file.
+        # Read one extra byte to detect growth/overflow without trusting stat().
+        with Path(path).open("rb") as stream:
+            raw = stream.read(_MAX_PNG_BYTES + 1)
         if len(raw) > _MAX_PNG_BYTES or not raw.startswith(_PNG_SIGNATURE):
             return False
         offset = len(_PNG_SIGNATURE)

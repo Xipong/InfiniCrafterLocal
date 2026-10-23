@@ -102,9 +102,13 @@ def normalize_world_id_from_payload(payload: dict[str, Any]) -> str:
     raw = payload.get("worldId")
     if raw is None:
         raise WorldScopeMissing("worldId is null; InfiniCraft recipe cache is world-local and refuses global gameplay recipes")
+    if type(raw) not in (int, str):
+        raise WorldScopeMissing("worldId must be an integer or string identity")
     world_id = str(raw).strip()
     if not world_id or world_id.lower() in {"global", "none", "null"}:
         raise WorldScopeMissing("invalid worldId; InfiniCraft recipe cache is world-local and refuses global gameplay recipes")
+    if any(ord(char) < 32 or 0xD800 <= ord(char) <= 0xDFFF for char in world_id):
+        raise WorldScopeMissing("worldId contains invalid identity characters")
     return world_id
 
 
