@@ -29,3 +29,9 @@ Python regression проверяет все 32 комбинации крайни
 В среде подготовки PR нет .NET/tModLoader/ParticleLibrary/Luminance: C# build, выполнение EngineRuntimeChecks и игровой/MP smoke имеют статус **notRun**. Portable pytest и структурные gates перечислены в PR description. Эти ограничения нельзя считать доказательством native поведения.
 
 Исторический источник восстановления: `f04ee02`, `GeneratedProjectile.Sentry.cs` и `GeneratedItem.Sentry.cs`; canonical API: [tModLoader Projectile](https://docs.tmodloader.net/docs/stable/class_projectile.html).
+
+## Движение и стрельба одной entity
+
+`target_and_fire` отвечает за выбор цели и выстрел, а не заменяет явно выбранное движение. Для `temporary_helper` или `stationary_projectile` можно добавить обычный `move_orbit`, `move_straight` или другой допустимый для этого kind driver на ту же entity. Движение выполняется один раз перед проверкой выстрела; направление и origin выстрела берутся из текущего положения, без предсказания будущего положения после native интеграции скорости. Собственный movement дочернего снаряда остаётся независимым.
+
+Если movement не задан, прежняя stationary-семантика сохраняется: compiler не добавляет driver, spawn не получает начальную скорость. При явно выбранном movement используется явно заданная constant launch velocity; задержка активации сохраняется. Sampled velocity distributions и velocity modifiers не расширяют прежние ограничения по entity kind. Это исправление исполнения существующей комбинации, без нового selector и без автоматического выбора движения по имени предмета.

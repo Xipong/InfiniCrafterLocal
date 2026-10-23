@@ -2415,7 +2415,7 @@ _CAPS.extend([
     ),
     _cap(
         "target_and_fire",
-        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. This controller owns motion throughout its lifetime; same-entity movement drivers do not execute. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
+        "Acquire NPC targets and periodically spawn an authored shot entity from this entity's current position. Explicit same-entity movement executes before firing; without movement this entity remains stationary. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
         "controller",
         ("stationary_projectile", "temporary_helper"),
         {
@@ -2435,7 +2435,7 @@ _CAPS.extend([
         component_slot="controller",
         authority="owner_execute_sync",
         exclusive_group="controller",
-        position_ownership="owns_stationary_position",
+        position_ownership="none",
         meaningful_for_stationary=True,
         py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
@@ -3085,13 +3085,8 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         return tuple(rows)
 
 
-    if cap.name == "target_and_fire":
-        return (RequirementSpec(
-            "capability_absent", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement")),
-            message="target_and_fire owns stationary motion for its entire lifetime, so movement on the same entity cannot execute. Keep movement on an independent shot entity; a moving firing controller is not supported.",
-        ),)
     if cap.category == "motion_modifier":
-        return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release", "target_and_fire"), message="Velocity modifiers require the explicit movement driver to own motion throughout their active phase."),)
+        return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release"), message="Velocity modifiers require the explicit movement driver to own motion throughout their active phase."),)
     if cap.name in {"channel_beam", "charge_then_release"}:
         rows = [RequirementSpec("item_capability_param", capability="configure_item_use", target="item_body", param="channel", equals=True, message="channel controller requires channel=true on item_body")]
         if cap.name == "charge_then_release":

@@ -74,14 +74,16 @@ internal static partial class EngineRuntimeChecks
             DamageBasis = RuntimeChildCombatBasis.AuthoredChild, KnockbackBasis = RuntimeChildCombatBasis.AuthoredChild,
             UseInput = i < 2 ? RuntimeInputKind.PrimaryUse : RuntimeInputKind.AlternateUse,
         }).ToArray();
-        Equal(true, GeneratedItemData.FromJson(data.ToNetworkJson()) is not null, "20 on each separate use fits budget32");
-        foreach (var action in data.RuntimeProgram.Entities[0].Events) action.UseInput = RuntimeInputKind.PrimaryUse;
-        Equal(true, GeneratedItemData.FromJson(data.ToNetworkJson()) is null, "40 on one input exceeds unchanged budget32");
-        data.RuntimeProgram.Entities[0].Events[2].UseInput = RuntimeInputKind.AlternateUse;
-        data.RuntimeProgram.Entities[0].Events[3].UseInput = "both";
-        Equal(true, GeneratedItemData.FromJson(data.ToNetworkJson()) is not null, "shared10 plus primary20 fits32");
-        data.RuntimeProgram.Limits.MaxEventSpawnsPerActivation = 29;
-        Equal(true, GeneratedItemData.FromJson(data.ToNetworkJson()) is null, "both10 remains common rather than disappearing from budget");
+        var wire = JsonNode.Parse(data.ToNetworkJson())!;
+        Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is not null, "20 on each separate use fits budget32");
+        var events = wire["runtimeProgram"]!["entities"]![0]!["events"]!.AsArray();
+        foreach (var action in events) action!["useInput"] = RuntimeInputKind.PrimaryUse;
+        Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "40 on one input exceeds unchanged budget32");
+        events[2]!["useInput"] = RuntimeInputKind.AlternateUse;
+        events[3]!["useInput"] = "both";
+        Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is not null, "shared10 plus primary20 fits32");
+        wire["runtimeProgram"]!["limits"]!["maxEventSpawnsPerActivation"] = 29;
+        Equal(true, GeneratedItemData.FromJson(wire.ToJsonString()) is null, "both10 remains common rather than disappearing from budget");
     }
 
     private static void UseInputScopeRoutesOnceAndRetainsDelayedAdmission()
@@ -117,18 +119,6 @@ internal static partial class EngineRuntimeChecks
             }
             Equal(executes ? new Vector2(-2, 0) : Vector2.Zero, npc.velocity, "original input selects one effect and preserves network authority");
             RuntimeDelayedActionScheduler.Clear();
-        }
-    }
-
-    private static void TargetAndFireRejectsSuppressedMovement()
-    {
-        var source = ChildCombatFixture(targeting: true);
-        Equal(true, GeneratedItemData.FromJson(source.ToNetworkJson()) is not null, "stationary target controller retains empty movement placeholder");
-        foreach (var movement in new[] { new RuntimeMovementSpec { Name = "move_straight", Code = 0 },
-            new RuntimeMovementSpec { Name = "move_orbit", Code = 4 } })
-        {
-            source.RuntimeProgram.TryGetEntity("root")!.Movement = movement;
-            Equal(true, GeneratedItemData.FromJson(source.ToNetworkJson()) is null, "suppressed authored movement is not accepted as executable");
         }
     }
 

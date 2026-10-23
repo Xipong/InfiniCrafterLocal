@@ -52,7 +52,7 @@ public sealed partial class GeneratedProjectile
             // exact sampled/native-shot vector (or authored constant) only at first activation;
             // later hydration must not reset an already moving projectile.
             if (_age == 0 && _entity.Spawn.OverTarget.DelayTicks > 0
-                && !_entity.IsStationary)
+                && _entity.UsesInitialVelocity)
                 Projectile.velocity = _sampledInitialVelocity ?? _nativeShotInitialVelocity
                     ?? (_entity.Spawn.Aim != "none" ? _initialDirection * _entity.Spawn.SpeedPxPerTick : Vector2.Zero);
             _spawnEventRan = true;
@@ -63,8 +63,16 @@ public sealed partial class GeneratedProjectile
         _age++;
         RunPeriodicActions();
 
-        bool controllerOwnsMotion = RunController();
-        if (!controllerOwnsMotion)
+        if (_entity.Controller.Code == RuntimeControllerCode.TargetAndFire)
+        {
+            // Firing is independent of authored motion. Omitted movement keeps
+            // the legacy stationary helper; native position integration still
+            // occurs after AI, so shots use the current (not predicted) center.
+            RunMovement();
+            ApplyActiveModifiers();
+            if (Projectile.active) ApplyTargetAndFire();
+        }
+        else if (!RunController())
         {
             RunMovement();
             ApplyActiveModifiers();
@@ -229,8 +237,8 @@ public sealed partial class GeneratedProjectile
 
     private bool ApplyTargetAndFire()
     {
-        Projectile.velocity = Vector2.Zero;
-        if (_entity!.Targeting.IntervalTicks <= 0) return true;
+        if (!_entity!.Movement.IsConfigured) Projectile.velocity = Vector2.Zero;
+        if (_entity.Targeting.IntervalTicks <= 0) return true;
         _controllerTimer++;
         int interval = AuthoredTicksToProjectileUpdates(Math.Max(6, _entity.Targeting.IntervalTicks));
         if (_controllerTimer < interval || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))

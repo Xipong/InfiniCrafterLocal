@@ -57,14 +57,22 @@ def test_real_author_packet_explains_ammo_identity_without_forcing_projectile_de
     assert author_item_response_schema()["required"] == ["name", "category", "runtimeProgram"]
 
 
-def test_author_advisory_exposes_inheritance_tradeoffs_and_shared_active_cost():
+def test_author_advisory_exposes_inheritance_tradeoffs_and_explicit_cost_scope():
     from infini_local.pipelines.author_item_contract import author_item_response_schema
 
     request, _, _ = build_initial_author_request({}, {}, "source-tradeoffs", model_name="offline-test-model")
     payload = request_dossier(request)
     guidance = payload["requiredJsonShape"]["concept"]["coreMechanic"]
     assert "Compare the resulting primary action" in guidance
-    assert "manaCost is shared by primary and alternate active uses" in guidance
+    assert "manaCostInput" in guidance
+    stats = next(card for card in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
+                 if card["fn"] == "configure_item_stats")
+    scope = stats["params"]["manaCostInput"]
+    # The actual model-facing contract offers each cost scope and explicitly
+    # preserves old shared-cost semantics on omission; prose order is irrelevant.
+    assert set(scope["enum"]) == {"primary_use", "alternate_use", "both"}
+    assert scope["optional"] is True
+    assert scope["default"] == scope["neutral"] == "both"
     assert "no mandatory upgrade or inheritance" in guidance
     assert "dropSeedsIfInInventory" in guidance
     assert "only by explicit collect_seeds_from_grass selection" in guidance

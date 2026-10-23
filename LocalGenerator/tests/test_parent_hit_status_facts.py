@@ -18,11 +18,16 @@ def test_hit_status_certificate_and_limits_reach_author_without_mutating_parent(
         "source": "verified_native_StatusNPC_reference",
         "fullName": "Terraria/ShadowFlameKnife",
         "sourceMethodSha256": "literal-source-certificate",
+        "sourceModuleVersionId": "literal-module-identity",
+        "effects": [{
         "buffId": 153,
         "buffFullName": "Terraria/ShadowFlame",
         "durationTicksMin": 60,
         "durationTicksMax": 179,
-        "durationDistribution": "uniform_integer_inclusive",
+        "durationDistribution": "uniform_integer_steps_inclusive",
+        "durationTicksStep": 1,
+        "sourceIlOffset": 42,
+        }, {"buffId": 20, "durationTicksMin": 60, "durationTicksMax": 60, "durationTicksStep": 1}],
         "scope": "NPC-hit request only; target immunity/global mods may change outcome.",
     }
     projectile = {"type": 497, "onHitStatusReference": observation}

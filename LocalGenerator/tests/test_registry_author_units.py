@@ -390,7 +390,9 @@ def test_periodic_requires_explicit_period_ticks_and_repair_leaf(fn):
     if fn == "spawn_entity_on_event":
         from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
         schema = CAPABILITY_REGISTRY[fn].provider_variant_schema()["properties"]["params"]
-        assert next(row for row in schema["properties"]["when"]["oneOf"] if row.get("type") == "object")["required"] == ["everySeconds"]
+        trigger_schema = schema["properties"]["when"]
+        assert strict_schema_errors({}, trigger_schema)
+        assert not strict_schema_errors({"everySeconds": 0.1}, trigger_schema)
         missing = {key: value for key, value in params.items() if key != "count"}
         paths = [row["path"] for row in strict_schema_errors(missing, schema) if row["kind"] == "required"]
         assert paths.count("$.count") == 1

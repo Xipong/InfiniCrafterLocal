@@ -58,7 +58,12 @@ def test_equipped_only_periodic_spawn_reaches_strict_delivery(kind):
     assert validate_runtime_wire(wire)["ok"]
     if kind == "accessory":
         native_fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/equipment-periodic-compiled.json"
-        assert json.loads(native_fixture.read_text()) == wire
+        retained = json.loads(native_fixture.read_text())
+        assert validate_runtime_wire(retained)["ok"]
+        # Preserve the accepted equipment hook, spawned entity and utility
+        # fields; unrelated future item-stat defaults are not fixture identity.
+        for component in ("runtimeProgram", "accessory", "armor", "visual"):
+            assert retained[component] == wire[component]
 
 
 @pytest.mark.parametrize("field,valid,invalid", [

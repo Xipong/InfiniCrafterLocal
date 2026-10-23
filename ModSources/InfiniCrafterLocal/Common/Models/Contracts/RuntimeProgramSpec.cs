@@ -806,6 +806,9 @@ public sealed class RuntimeEntitySpec
     public bool IsProjectileEntity => RuntimeEntityKind.IsProjectile(Kind);
     public bool IsOwnerAttached => Kind == RuntimeEntityKind.OwnerAttachedProjectile;
     public bool IsStationary => Kind is RuntimeEntityKind.StationaryProjectile or RuntimeEntityKind.Field or RuntimeEntityKind.TemporaryHelper;
+    [JsonIgnore]
+    public bool UsesInitialVelocity => !IsStationary
+        || Controller.Code == RuntimeControllerCode.TargetAndFire && Movement.IsConfigured;
 
     public void NormalizeAndValidate(RuntimeLimitsSpec limits)
     {
@@ -858,9 +861,6 @@ public sealed class RuntimeEntitySpec
             LifetimeTicks = Math.Clamp(LifetimeTicks, 1, InfiniRuntimeLimits.MaxRuntimeLifetimeTicks);
             Hitbox.Normalize();
             Collision.Normalize();
-            if (Controller.Code == RuntimeControllerCode.TargetAndFire
-                && (!string.IsNullOrEmpty(Movement.Name) || Movement.Code != 0))
-                throw new InvalidDataException("target_and_fire owns stationary motion and cannot execute a movement component on the same entity");
             Movement.NormalizeAndValidate(Kind);
             Controller.NormalizeAndValidate(Kind);
             if (Spawn.VelocityDistribution is not null
@@ -869,7 +869,7 @@ public sealed class RuntimeEntitySpec
             TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
             NpcAttraction?.Validate(); VisualScaleCurve?.Validate();
             if ((TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
-                && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code != RuntimeControllerCode.None))
+                && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code is not (RuntimeControllerCode.None or RuntimeControllerCode.TargetAndFire)))
                 throw new InvalidDataException("velocity modifiers require a free/child projectile with explicit movement ownership");
             if (VisualScaleCurve is not null && (Movement.Code is 15 or 18 || Controller.Code == RuntimeControllerCode.ChannelBeam || HitboxCurve?.MirrorToSprite == true))
                 throw new InvalidDataException("dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry");
@@ -883,7 +883,7 @@ public sealed class RuntimeEntitySpec
                     throw new InvalidDataException("hitboxCurve cannot coexist with beam/whip collision or a second mirrored sprite-scale owner");
             }
             bool requiresPositionDriver = Kind is RuntimeEntityKind.OwnerAttachedProjectile or RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile;
-            bool controllerOwnsPosition = Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease or RuntimeControllerCode.TargetAndFire;
+            bool controllerOwnsPosition = Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease;
             if (requiresPositionDriver && !Movement.IsConfigured && !controllerOwnsPosition)
                 throw new InvalidDataException($"projectile entity '{Id}' requires explicit movement or a position-owning controller");
             Targeting.Normalize();

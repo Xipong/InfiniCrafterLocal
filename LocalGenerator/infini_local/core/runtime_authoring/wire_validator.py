@@ -629,10 +629,6 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"{entity_path}.events[{event_index}].reactionCooldownTicks", "code": "invalid_reaction_cooldown", "message": "Equipment reactions require an explicit supported action and bounded cooldown."})
         movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
         controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
-        if (controller.get("code") == CONTROLLER_OPCODE["target_and_fire"]
-                and (movement.get("name") or movement.get("code", 0) != 0)):
-            errors.append({"path": entity_path + ".movement", "code": "controller_movement_conflict",
-                           "message": "target_and_fire owns stationary motion; a movement driver on the same entity cannot execute."})
         for modifier_fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
             if member not in entity:
                 continue
@@ -642,7 +638,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if kind not in modifier_cap.target_kinds or shape:
                 errors.append({"path": modifier_path, "code": "invalid_projectile_modifier", "message": "Present modifier requires the exact target kind, all registry choices, finite ranges and no unknown fields."})
                 errors.extend(shape)
-            if modifier_cap.category == "motion_modifier" and controller.get("code", 0) != 0:
+            if modifier_cap.category == "motion_modifier" and controller.get("code", 0) in (CONTROLLER_OPCODE["channel_beam"], CONTROLLER_OPCODE["charge_then_release"]):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Velocity modifiers require movement to own motion."})
             if member == "visualScaleCurve" and (movement.get("code") in {15, 18} or controller.get("code") == 1 or isinstance(entity.get("hitboxCurve"), Mapping) and entity["hitboxCurve"].get("mirrorToSprite") is True):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry."})
