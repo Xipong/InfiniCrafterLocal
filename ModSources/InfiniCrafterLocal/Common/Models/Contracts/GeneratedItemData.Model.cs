@@ -287,6 +287,33 @@ public sealed class BuffEntrySpec
 
 public sealed class AccessorySpec
 {
+    private bool? _autoJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoJump
+    {
+        get => _autoJump;
+        set => _autoJump = value ?? throw new InvalidDataException("autoJump requires a boolean when present");
+    }
+    private bool? _frogJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FrogJump
+    {
+        get => _frogJump;
+        set => _frogJump = value ?? throw new InvalidDataException("frogJump requires a boolean when present");
+    }
+    private int? _wallGrip;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? WallGrip
+    {
+        get => _wallGrip;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 2)
+                throw new InvalidDataException("wallGrip requires integer 0..2 when present");
+            _wallGrip = scalar;
+        }
+    }
+
     private bool? _swimFlipper;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? SwimFlipper
@@ -406,7 +433,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

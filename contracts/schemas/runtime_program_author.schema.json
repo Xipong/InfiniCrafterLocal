@@ -2910,6 +2910,12 @@
                     "x-infini-semanticType": "probability_percent",
                     "x-infini-units": "probability_percent"
                   },
+                  "autoJump": {
+                    "description": "Native held-button auto jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "damageReductionPercentagePoints": {
                     "description": "Add percent/100 to Player.endurance damage reduction",
                     "maximum": 75,
@@ -2952,6 +2958,12 @@
                   },
                   "fireWalk": {
                     "description": "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "frogJump": {
+                    "description": "Native frog jump height and safe fall allowance. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -3256,6 +3268,14 @@
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "wallGrip": {
+                    "description": "Native spiked-boots level: 0 none, 1 wall slide/jump, 2 wall cling; combines by maximum",
+                    "maximum": 2,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
                   },
                   "waterFloat": {
                     "description": "Native water flotation, descend with down control. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",

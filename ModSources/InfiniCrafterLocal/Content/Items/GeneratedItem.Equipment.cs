@@ -60,6 +60,9 @@ public partial class GeneratedItem
         if (a.DivingHelm == true) { player.accDivingHelm = true; }
         if (a.UnderwaterBreathing == true) { player.gills = true; }
         if (a.WaterFloat == true) { player.canFloatInWater = true; }
+        if (a.AutoJump == true) { player.autoJump = true; }
+        if (a.FrogJump == true) { player.frogLegJumpBoost = true; }
+        player.spikedBoots = Math.Max(player.spikedBoots, a.WallGrip ?? 0);
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

@@ -79,6 +79,9 @@ public partial class GeneratedItem
             Flag("DivingHelm", a.DivingHelm == true);
             Flag("UnderwaterBreathing", a.UnderwaterBreathing == true);
             Flag("WaterFloat", a.WaterFloat == true);
+            Flag("AutoJump", a.AutoJump == true);
+            Flag("FrogJump", a.FrogJump == true);
+            Stat("WallGrip", "EquipmentWallGrip", a.WallGrip ?? 0);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);

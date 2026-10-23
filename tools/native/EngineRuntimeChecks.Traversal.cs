@@ -62,4 +62,27 @@ internal static partial class EngineRuntimeChecks
             Equal(99, player.breath, "native special-seed gills require water");
         }));
     }
+    private static void NativeTraversalClimbing()
+    {
+        WithPlayer((player, _) => {
+            player.ResetEffects();
+            NativeUtilityItem("\"wallGrip\":2,\"autoJump\":true,\"frogJump\":true").UpdateAccessory(player, false);
+            Equal(2, player.spikedBoots, "wall cling native level");
+            NativeUtilityItem("\"wallGrip\":1").UpdateAccessory(player, false);
+            Equal(2, player.spikedBoots, "weaker grip cannot erase cling");
+            Equal(true, player.autoJump, "held button native repeat");
+            int fall = player.extraFall; float jump = player.jumpSpeedBoost;
+            player.UpdateJumpHeight();
+            Equal(fall + 15, player.extraFall, "actual frog consumer adds safe fall");
+            Equal(jump + 2.4f, player.jumpSpeedBoost, "actual frog consumer raises jump");
+            player.ResetEffects();
+            Equal(0, player.spikedBoots, "unequip removes grip");
+            Equal(false, player.autoJump || player.frogLegJumpBoost, "unequip removes vertical grants");
+            foreach (string invalid in new[] { "null", "3", "-1", "1.5", "true" }) {
+                bool rejected = false;
+                try { NativeUtilityItem("\"wallGrip\":" + invalid); } catch (InvalidOperationException) { rejected = true; }
+                Equal(true, rejected, "wall grip strict native range " + invalid);
+            }
+        });
+    }
 }

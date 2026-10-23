@@ -1922,6 +1922,9 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.autoJump",
+        "accessory.frogJump",
+        "accessory.wallGrip",
         "accessory.swimFlipper",
         "accessory.divingHelm",
         "accessory.underwaterBreathing",
@@ -1971,6 +1974,16 @@
           "semanticType": "probability_percent",
           "units": "probability_percent"
         },
+        "autoJump": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "damageReductionPercentagePoints": {
           "enum": [],
           "kind": "number",
@@ -2012,6 +2025,16 @@
           "units": ""
         },
         "fireWalk": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "frogJump": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2313,6 +2336,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "wallGrip": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 2,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
         "waterFloat": {
           "enum": [],
           "kind": "boolean",
@@ -2389,6 +2422,9 @@
             "fallDamageImmune",
             "lavaImmune",
             "waterWalk",
+            "autoJump",
+            "frogJump",
+            "wallGrip",
             "swimFlipper",
             "divingHelm",
             "underwaterBreathing",
