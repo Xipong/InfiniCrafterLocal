@@ -129,6 +129,11 @@ def read_with_deadline(response, *, deadline: float, max_bytes: int | None = Non
             on_chunk(chunk)
         remaining_seconds(deadline)
         if not chunk:
+            # HTTPResponse.read1() does not raise on early EOF with an unmet
+            # Content-Length. A valid JSON prefix is still an incomplete body.
+            remaining = getattr(response, "length", None)
+            if isinstance(remaining, int) and remaining > 0:
+                raise http.client.IncompleteRead(b"".join(chunks), remaining)
             return b"".join(chunks)
         size += len(chunk)
         if max_bytes is not None and size > max_bytes:

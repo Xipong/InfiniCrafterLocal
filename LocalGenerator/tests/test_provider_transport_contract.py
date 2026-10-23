@@ -8,6 +8,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from http.server import BaseHTTPRequestHandler
+import http.client
 import time
 import copy
 from email.message import Message
@@ -30,6 +31,31 @@ from infini_local.pipelines import llm_transport as transport
 
 PIN = "ExactVendor/Endpoint-Turbo"
 STAGES = ("planner", "visual_director", "vfx_director")
+
+
+@pytest.mark.parametrize("declared_length", [None, 2, 3])
+def test_http_valid_json_prefix_does_not_hide_truncated_body(monkeypatch, declared_length):
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_GET(self):
+            self.send_response(200)
+            if declared_length is not None:
+                self.send_header("Content-Length", str(declared_length))
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+    with loopback_server(Handler) as server:
+        url = f"http://127.0.0.1:{server.server_port}/models"
+        if declared_length == 3:
+            with pytest.raises(http.client.IncompleteRead):
+                transport.http_get_json(url)
+        else:
+            assert transport.http_get_json(url) == {}
 
 
 def packet(stage="planner", *, schema=False):
