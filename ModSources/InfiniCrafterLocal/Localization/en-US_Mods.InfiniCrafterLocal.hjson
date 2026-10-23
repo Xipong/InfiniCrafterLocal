@@ -106,6 +106,8 @@ UseFeedback: {
 	RepeatedAncestor: "Already visited; the branch stops here."
 	UnknownAncestor: "Generated ancestor is not available in this world."
 	NoRelations: "No known relations in this world."
+	LineageVia: "Via {0}"
+	LineagePin: "Pin this known ingredient recipe as a crafting goal (up to three)."
 	LineageLimit: "Generation distance · scroll to browse (up to 256 links / 32 levels)"
 	ViewDescendants: "View: descendants"
 	ViewAncestors: "View: ancestors"

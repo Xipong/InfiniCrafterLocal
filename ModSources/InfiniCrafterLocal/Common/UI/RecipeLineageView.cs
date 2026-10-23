@@ -8,7 +8,7 @@ namespace InfiniCrafterLocal.Common.UI;
 
 internal static class RecipeLineageView
 {
-    internal readonly record struct Row(string Id, string Name, int Depth, bool Repeated, bool Unknown);
+    internal readonly record struct Row(string Id, string Name, int Depth, bool Repeated, bool Unknown, string Identity, string ViaName, int NativeType);
     internal static IReadOnlyList<Row> Build(GeneratedItemData root, IEnumerable<GeneratedItemData> known, bool descendants)
     {
         var items = RecipeJournalView.Entries(known, root.RecipeMeta.WorldId, "", _ => false, false)
@@ -22,24 +22,24 @@ internal static class RecipeLineageView
             if (descendants)
             {
                 foreach (var child in items.Values.Where(d => d.RecipeMeta.ParentIdentities.Contains("generated:" + item.Id, StringComparer.Ordinal))
-                    .OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(d => d.Id, StringComparer.Ordinal)) Add(child, depth + 1);
+                    .OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(d => d.Id, StringComparer.Ordinal)) Add(child, depth + 1, item.Name);
             }
             else
             {
                 for (int index = 0; index < item.RecipeMeta.ParentIdentities.Length && result.Count < 256; index++)
                 {
                     string identity = item.RecipeMeta.ParentIdentities[index];
-                    if (identity.StartsWith("generated:", StringComparison.Ordinal) && items.TryGetValue(identity[10..], out var parent)) Add(parent, depth + 1);
-                    else result.Add(new("", index == 0 ? item.ParentA : item.ParentB, depth + 1, false, identity.StartsWith("generated:", StringComparison.Ordinal)));
+                    if (identity.StartsWith("generated:", StringComparison.Ordinal) && items.TryGetValue(identity[10..], out var parent)) Add(parent, depth + 1, item.Name);
+                    else result.Add(new("", index == 0 ? item.ParentA : item.ParentB, depth + 1, false, identity.StartsWith("generated:", StringComparison.Ordinal), identity, item.Name, RecipeJournalView.NativeParentType(item, index)));
                 }
             }
         }
         return result;
-        void Add(GeneratedItemData next, int depth)
+        void Add(GeneratedItemData next, int depth, string viaName)
         {
             if (result.Count >= 256) return;
             bool repeated = !seen.Add(next.Id);
-            result.Add(new(next.Id, next.Name, depth, repeated, false));
+            result.Add(new(next.Id, next.Name, depth, repeated, false, "generated:" + next.Id, viaName, 0));
             if (!repeated) queue.Enqueue((next, depth));
         }
     }

@@ -23,21 +23,9 @@ public sealed partial class RecipeJournalUISystem
         if (_detailPage == DetailPage.Filters) { DrawFilterPresets(sb, area, click, cursor); return true; }
         if (_detailPage is DetailPage.Ancestors or DetailPage.Descendants)
         {
-            var rows = RecipeLineageView.Build(data, _known, _detailPage == DetailPage.Descendants);
-            int visible = Math.Max(1, (area.Height - 32) / 28);
-            _detailScroll = Math.Clamp(_detailScroll, 0, Math.Max(0, rows.Count - visible));
-            Label(sb, Text("LineageLimit"), area.TopLeft(), Muted, .55f, area.Width);
-            if (rows.Count == 0) Label(sb, Text("NoRelations"), area.TopLeft() + new Vector2(0, 32), Muted, .65f, area.Width);
-            for (int i = _detailScroll; i < Math.Min(rows.Count, _detailScroll + visible); i++)
-            {
-                var row = rows[i];
-                var rect = new Rectangle(area.X, area.Y + 30 + (i - _detailScroll) * 28, area.Width, 25);
-                string caption = row.Depth + ". " + row.Name + (row.Repeated ? " ↩" : row.Unknown ? " ?" : "");
-                if (Button(sb, rect, caption, click, cursor, enabled: row.Id.Length > 0)) { Select(row.Id, revealOutsideFilters: true); return true; }
-                if (rect.Contains(cursor.ToPoint())) _hoverText = row.Name + "\n" + Text(row.Unknown ? "UnknownAncestor" : row.Repeated ? "RepeatedAncestor" : "OpenParent");
-            }
-            return true;
+            return DrawLineagePage(sb, data, area, click, cursor);
         }
+
         if (_detailPage == DetailPage.Notebook)
         {
             var owner = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
