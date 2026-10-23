@@ -67,6 +67,8 @@ internal static partial class EngineRuntimeChecks
             ("target controller authored motion and firing", TargetAndFireCombinesMotionAndFiring),
             ("target controller explicit launch and delayed activation", TargetAndFireLaunchAndDelayKeepExplicitMotion),
             ("target controller cancelled movement cannot fire", TargetAndFireCancelledMovementDoesNotFire),
+            ("target controller free-child serialized composition", TargetAndFireAdmitsAndExecutesFreeAndChildMotion),
+            ("combat buff lifecycle native stats wire and HUD", GeneratedCombatBuffLifecycleAndWire),
             ("reactive equipment delayed admission authority and cooldown", EquipmentReactionsUseFunctionalHooksAndSharedCooldown),
             ("reaction cooldown presentation functional identity and read-only timers", ReactionCooldownPresentationKeepsFunctionalIdentityAndTimers),
             ("reaction cooldown presentation actual HUD fitted item sprite", ReactionCooldownPresentationReachesActualHudWithFittedSprite),

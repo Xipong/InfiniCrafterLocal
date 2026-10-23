@@ -145,6 +145,11 @@
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
         "gameplay.generatedBuff.lifeRegen",
+        "gameplay.generatedBuff.combat.defensePoints",
+        "gameplay.generatedBuff.combat.attackSpeedPercent",
+        "gameplay.generatedBuff.combat.critChancePoints",
+        "gameplay.generatedBuff.combat.damagePercent",
+        "gameplay.generatedBuff.combat.damageClass",
         "runtimeProgram.effectGroups[].id",
         "runtimeProgram.effectGroups[].generatedBuff.durationTicks",
         "runtimeProgram.effectGroups[].generatedBuff.exhaustionTicks",
@@ -155,7 +160,12 @@
         "runtimeProgram.effectGroups[].generatedBuff.movementSpeed",
         "runtimeProgram.effectGroups[].generatedBuff.jumpBoost",
         "runtimeProgram.effectGroups[].generatedBuff.manaRegen",
-        "runtimeProgram.effectGroups[].generatedBuff.lifeRegen"
+        "runtimeProgram.effectGroups[].generatedBuff.lifeRegen",
+        "runtimeProgram.effectGroups[].generatedBuff.combat.defensePoints",
+        "runtimeProgram.effectGroups[].generatedBuff.combat.attackSpeedPercent",
+        "runtimeProgram.effectGroups[].generatedBuff.combat.critChancePoints",
+        "runtimeProgram.effectGroups[].generatedBuff.combat.damagePercent",
+        "runtimeProgram.effectGroups[].generatedBuff.combat.damageClass"
       ]
     },
     {
@@ -1401,6 +1411,11 @@
         "gameplay.generatedBuff.jumpBoost",
         "gameplay.generatedBuff.manaRegen",
         "gameplay.generatedBuff.lifeRegen",
+        "gameplay.generatedBuff.combat.defensePoints",
+        "gameplay.generatedBuff.combat.attackSpeedPercent",
+        "gameplay.generatedBuff.combat.critChancePoints",
+        "gameplay.generatedBuff.combat.damagePercent",
+        "gameplay.generatedBuff.combat.damageClass",
         "gameplay.pickPower",
         "gameplay.axePower",
         "gameplay.hammerPower",

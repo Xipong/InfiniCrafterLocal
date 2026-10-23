@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using Microsoft.Xna.Framework;
 using Terraria.ID;
@@ -12,7 +13,8 @@ namespace InfiniCrafterLocal.Common.UI;
 internal readonly record struct GeneratedUtilityBuffValues(
     int RemainingTicks, float MiningSpeedMultiplier, float EmitLightStrength,
     string LightColorName, int OreSenseRadiusTiles, float MovementSpeed,
-    float JumpBoost, int ManaRegen, int LifeRegen);
+    float JumpBoost, int ManaRegen, int LifeRegen, int Defense = 0, float AttackSpeed = 0,
+    float CritChance = 0, IReadOnlyDictionary<string, float>? DamageBonuses = null);
 
 internal sealed record GeneratedUtilityBuffPresentation(
     GeneratedUtilityBuffValues Current, IReadOnlyList<GeneratedUtilityBuffValues> Entries);
@@ -20,7 +22,7 @@ internal sealed record GeneratedUtilityBuffPresentation(
 internal enum GeneratedUtilityBuffField
 {
     MiningSpeedMultiplier, EmitLightStrength, OreSenseRadiusTiles,
-    MovementSpeed, JumpBoost, ManaRegen, LifeRegen,
+    MovementSpeed, JumpBoost, ManaRegen, LifeRegen, Defense, AttackSpeed, CritChance, Damage,
 }
 
 internal sealed record GeneratedUtilityBuffStatus(
@@ -42,6 +44,10 @@ internal static class GeneratedUtilityBuffStatusView
         (GeneratedUtilityBuffField.JumpBoost, BuffID.Featherfall, "Generated jump boost", "Усиление прыжка"),
         (GeneratedUtilityBuffField.ManaRegen, BuffID.ManaRegeneration, "Generated mana regeneration", "Восстановление маны"),
         (GeneratedUtilityBuffField.LifeRegen, BuffID.Regeneration, "Generated life regeneration", "Восстановление здоровья"),
+        (GeneratedUtilityBuffField.Defense, BuffID.Ironskin, "Generated defense", "Защита"),
+        (GeneratedUtilityBuffField.AttackSpeed, BuffID.Tipsy, "Generated attack speed", "Скорость атаки"),
+        (GeneratedUtilityBuffField.CritChance, BuffID.Rage, "Generated critical chance", "Шанс критического удара"),
+        (GeneratedUtilityBuffField.Damage, BuffID.Wrath, "Generated damage", "Урон"),
     };
 
     internal static IReadOnlyList<GeneratedUtilityBuffStatus> Build(
@@ -79,6 +85,10 @@ internal static class GeneratedUtilityBuffStatusView
         GeneratedUtilityBuffField.JumpBoost => float.IsFinite(value.JumpBoost) && value.JumpBoost > 0f,
         GeneratedUtilityBuffField.ManaRegen => value.ManaRegen > 0,
         GeneratedUtilityBuffField.LifeRegen => value.LifeRegen > 0,
+        GeneratedUtilityBuffField.Defense => value.Defense > 0,
+        GeneratedUtilityBuffField.AttackSpeed => value.AttackSpeed > 0,
+        GeneratedUtilityBuffField.CritChance => value.CritChance > 0,
+        GeneratedUtilityBuffField.Damage => value.DamageBonuses?.Any(pair => pair.Value > 0) == true,
         _ => false,
     };
 
@@ -97,6 +107,12 @@ internal static class GeneratedUtilityBuffStatusView
             GeneratedUtilityBuffField.JumpBoost => Signed(PlayerDisplayUnits.BlocksPerSecond(value.JumpBoost)) + (russian ? " блоков/с к скорости прыжка" : " blocks/s jump-speed bonus"),
             GeneratedUtilityBuffField.ManaRegen => "+" + value.ManaRegen.ToString(culture) + (russian ? " единиц manaRegenBonus" : " manaRegenBonus points"),
             GeneratedUtilityBuffField.LifeRegen => "+" + Number(value.LifeRegen / 2f) + (russian ? " ОЗ/с — вклад в регенерацию" : " HP/s contribution"),
+            GeneratedUtilityBuffField.Defense => Signed(value.Defense) + (russian ? " защиты" : " defense"),
+            GeneratedUtilityBuffField.AttackSpeed => Signed(value.AttackSpeed) + (russian ? "% скорости атаки" : "% attack speed"),
+            GeneratedUtilityBuffField.CritChance => Signed(value.CritChance) + (russian ? " п.п. шанса критического удара" : " percentage points critical chance"),
+            GeneratedUtilityBuffField.Damage => string.Join(", ", (value.DamageBonuses ?? new Dictionary<string, float>())
+                .Where(pair => pair.Value > 0).OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => pair.Key + " " + Signed(pair.Value) + "%")),
             _ => "",
         };
     }

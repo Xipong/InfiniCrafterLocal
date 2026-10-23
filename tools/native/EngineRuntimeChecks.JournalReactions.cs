@@ -46,7 +46,16 @@ internal static partial class EngineRuntimeChecks
         Equal("b", RecipeJournalView.Entries(records, "17", "wooden", _ => false, false).Single().Id, "case insensitive name search");
         Equal("b", RecipeJournalView.Entries(records, "17", "", id => id == "b", true).Single().Id, "favorite filter");
         Equal("a", RecipeJournalView.Parent(b, 0, records)!.Id, "history follows exact generated parent identity");
+        foreign.RecipeMeta.ParentIdentities = new[] { "generated:a" };
+        Equal("b", RecipeJournalView.Children(a, records).Single().Id, "reverse recipes use exact identity and current world");
+        a.Name = "Healing mining summon mobility";
+        Equal(false, RecipeJournalView.MatchesEffect(a, RecipeJournalView.EffectFilter.Healing), "names never invent effects");
+        a.Gameplay.PickPower = 40;
+        Equal(true, RecipeJournalView.MatchesEffect(a, RecipeJournalView.EffectFilter.Mining), "mining reads actual tool power");
+        var heal = NamedItemEffectsFixture();
+        Equal(true, RecipeJournalView.MatchesEffect(heal, RecipeJournalView.EffectFilter.All), "all includes every discovery");
         b.RecipeMeta.ParentIdentities[0] = "generated:missing";
+        Equal(0, RecipeJournalView.Children(a, records).Length, "unresolved parent does not match name");
         Equal(true, RecipeJournalView.Parent(b, 0, records) is null, "matching name cannot invent a parent link");
         // Effective UI-space sizes include small displays and high UI-scale settings.
         foreach (int width in new[] { 0, 160, 240, 320, 400, 640, 700, 792, 1024, 1280, 1920 })

@@ -5,6 +5,14 @@ ChargeUI: {
 
 Keybinds: {
 	ToggleRecipeJournal: {
+            FilterAll: "Эффекты: все"
+            FilterHealing: "Эффекты: лечение"
+            FilterMining: "Эффекты: добыча"
+            FilterSummon: "Эффекты: призыв"
+            FilterMobility: "Эффекты: перемещение"
+            UsingIngredient: "Содержит {0} ×"
+            Children: "Открытые слияния с этим предметом: {0}"
+
 		DisplayName: "Открыть / закрыть атлас синтеза"
 	}
 }
@@ -239,6 +247,10 @@ RuntimeTooltip: {
 	MobilityCooldownRemaining: "До готовности перемещения: {0}. Общий таймер сгенерированных действий перемещения; недоступно только перемещение. Атаки, добыча и сгенерированные усиления не меняются. Неудачные попытки не продлевают таймер."
 	EquipmentMaxLife: "{0}: вклад в максимум здоровья: {1}"
 	EquipmentMaxMana: "{0}: вклад в максимум маны: {1}"
+	CombatDefense: "{0}: +{1} защиты на {2} с"
+	CombatSpeed: "{0}: +{1}% скорости атак на {2} с"
+	CombatCrit: "{0}: +{1} п.п. шанса крита на {2} с"
+	CombatDamage: "{0}: урон {1} на {2} с"
 	EquipmentLifeRegen: "{0}: вклад в регенерацию здоровья: {1} ОЗ/с"
 	EquipmentManaRegen: "{0}: регенерация маны: {1} единиц manaRegenBonus (не мана/с)"
 	EquipmentMovement: "{0}: вклад в moveSpeed: {1}%"

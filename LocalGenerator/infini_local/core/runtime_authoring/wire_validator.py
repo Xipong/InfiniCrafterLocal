@@ -247,7 +247,9 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
             continue
         value = wire.get(key, "")
         valid = False
-        if spec.wire_boolean_true_value is not None:
+        if spec.kind == "object":
+            valid = bool(_wire_projection_witness(spec, name, "buff", {"buff": wire}))
+        elif spec.wire_boolean_true_value is not None:
             valid = type(value) is int and value in (0, spec.wire_boolean_true_value)
         elif spec.kind == "string":
             valid = isinstance(value, str) and (value in spec.enum or (value == "" and no_light))
@@ -282,6 +284,9 @@ def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
     for name, spec in CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params.items():
         # Duration and color describe an effect; neither executes one. The
         # registry marks exactly the executable stats with neutral values.
+        if spec.kind == "object" and name in wire:
+            # Composite combat leaves retain their authored units on the wire.
+            params[name] = wire[name]
         if spec.neutral is None:
             continue
         value = wire.get(spec.wire_name or name)
@@ -638,7 +643,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if kind not in modifier_cap.target_kinds or shape:
                 errors.append({"path": modifier_path, "code": "invalid_projectile_modifier", "message": "Present modifier requires the exact target kind, all registry choices, finite ranges and no unknown fields."})
                 errors.extend(shape)
-            if modifier_cap.category == "motion_modifier" and controller.get("code", 0) in (CONTROLLER_OPCODE["channel_beam"], CONTROLLER_OPCODE["charge_then_release"]):
+            if modifier_cap.category == "motion_modifier" and (controller.get("code", 0) not in (0, CONTROLLER_OPCODE["target_and_fire"]) or not movement.get("name")):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Velocity modifiers require movement to own motion."})
             if member == "visualScaleCurve" and (movement.get("code") in {15, 18} or controller.get("code") == 1 or isinstance(entity.get("hitboxCurve"), Mapping) and entity["hitboxCurve"].get("mirrorToSprite") is True):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry."})
@@ -806,7 +811,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             controller_code = (entity.get("controller") or {}).get("code") if isinstance(entity.get("controller"), Mapping) else None
             controller_owns_position = (
                 isinstance(controller_code, int) and not isinstance(controller_code, bool)
-                and controller_code in {1, 2, 3}
+                and controller_code in {1, 2}
             )
             mobile_kind = kind in {"owner_attached_projectile", "free_projectile", "child_projectile"}
             if mobile_kind and "movement" not in entity and not controller_owns_position:

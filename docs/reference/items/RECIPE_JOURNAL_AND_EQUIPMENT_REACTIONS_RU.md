@@ -64,3 +64,10 @@ Compiler не придумывает группу: exact reference и opcode 9 �
 Owner сохраняет локальное предсказание и прежний cooldown для HUD. Сервер независимо применяет **только** generated-buff action при фактическом native `PostHurt` выжившего игрока и при серверном `GlobalNPC.OnKill`; остальные реакции по-прежнему исполняет owner. У установленного tML server receive vanilla player-hurt вызывает `Player.Hurt(info, quiet:true)`, затем `PlayerLoader.PostHurt`, поэтому дополнительный client→server claim не нужен. Это обычная native player-hurt trust boundary, не доказательство серверной симуляции столкновения. Сервер выбирает buff исключительно из своего функционально надетого generated-предмета и exact effect group, резервирует свой cooldown/exhaustion и рассылает существующий utility snapshot. Присланные клиентом числа по-прежнему отбрасываются. Kill notification остаётся прежним server→owner событием для предсказания и owner-only spawn/damage; она не выдаёт клиенту право записать серверный баф.
 
 Native packet regression проходит server hurt/kill callback → настоящий `ModPacket` utility snapshot → owner decoder, затем forged client prediction → server discard/correction → owner decoder. Проверяется, что canonical баф сохраняется, лишняя client contribution исчезает, а повторный callback внутри cooldown не продлевает баф.
+
+
+## Обратные связи и фильтры эффектов
+
+Кнопка «Использован в рецептах» показывает уже открытые результаты, у которых exact `generated:<id>` записан в parent identities. Чужие миры, неизвестные рецепты и совпадения названий не добавляют связей. Фильтр можно сбросить отдельно; выбор результата сохраняет обычную историю навигации.
+
+Переключатель эффектов перебирает все / лечение / добыча / призыв / мобильность. Он читает исполненные поля определения: выбранные активными кнопками группы, held/reaction группы, действующие tool powers, enabled projectile damage class и healing/movement event actions. Имя и описание предмета не используются как классификатор. Режим фильтра комбинируется с поиском и избранным. Новых запросов генерации или сети в Draw нет.

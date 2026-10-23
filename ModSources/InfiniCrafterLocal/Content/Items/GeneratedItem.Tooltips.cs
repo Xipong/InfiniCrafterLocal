@@ -309,6 +309,13 @@ public partial class GeneratedItem
                 Effect("Light", "Light", RuntimeTooltipNumber(generated.EmitLightStrength));
             // The executable effect sets findTreasure, not a radius-limited scan.
             if (generated.OreSenseEnabled) add("OreSense" + suffix, "OreSense", new object[] { input, duration });
+            if (generated.Combat is { HasEffect: true } combat)
+            {
+                if (combat.DefensePoints > 0) Effect("CombatDefense", "CombatDefense", combat.DefensePoints);
+                if (combat.AttackSpeedPercent > 0) Effect("CombatSpeed", "CombatSpeed", RuntimeTooltipNumber(combat.AttackSpeedPercent));
+                if (combat.CritChancePoints > 0) Effect("CombatCrit", "CombatCrit", RuntimeTooltipNumber(combat.CritChancePoints));
+                if (combat.DamagePercent > 0) Effect("CombatDamage", "CombatDamage", combat.DamageClass + " +" + RuntimeTooltipNumber(combat.DamagePercent) + "%");
+            }
         }
         string cooldown = RuntimeTooltipTime(Math.Clamp(gp.MobilityCooldownTicks, 0, 36000));
         switch (gp.MobilityMode)

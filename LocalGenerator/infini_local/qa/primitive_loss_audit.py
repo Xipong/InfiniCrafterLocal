@@ -36,7 +36,7 @@ def _nodes(node: Node, kind: str) -> Iterator[Node]:
 
 def _class_properties(data: bytes, class_name: str) -> set[str]:
     root = _PARSER.parse(data).root_node
-    for declaration in _nodes(root, "class_declaration"):
+    for declaration in (*_nodes(root, "class_declaration"), *_nodes(root, "record_declaration")):
         name = next((n for n in declaration.named_children if n.type == "identifier"), None)
         if name is None or data[name.start_byte:name.end_byte] != class_name.encode():
             continue
@@ -284,14 +284,17 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
 def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Ensure every gameplay/utility-buff DTO field is Author-facing or classified."""
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/GeneratedItemData.Model.cs").read_bytes()
+    dto += b"\n" + (_MODEL_ROOT / "Common/Models/Contracts/GeneratedCombatBuffSpec.cs").read_bytes()
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     groups = {
         "GameplaySpec": "gameplay.",
         "RuntimeUseConditionSpec": "gameplay.useConditions[].",
         "GeneratedBuffSpec": "gameplay.generatedBuff.",
+        "GeneratedCombatBuffSpec": "gameplay.generatedBuff.combat.",
         "BuffEntrySpec": "gameplay.extraBuffs[].",
     }
     hidden = {
+        "GeneratedBuffSpec": {"Combat": "Nested authored GeneratedCombatBuffSpec fields; audited individually below."},
         "GameplaySpec": {
             "Kind": "Display-only category; never a gameplay router.",
             "UseStyle": "Resolved Terraria ItemUseStyleID from authored useStyleName.",

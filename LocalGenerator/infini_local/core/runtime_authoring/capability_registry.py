@@ -971,6 +971,13 @@ class CapabilitySpec:
         once valid (for example a concrete vanilla buff or mobility action).
         No value is coerced or materialized by this predicate.
         """
+        def nested_effect(spec: ParamSpec, value: Any) -> bool:
+            if spec.kind == "object" and isinstance(value, Mapping):
+                return any(nested_effect(child, value.get(key)) for key, child in spec.properties.items())
+            return (spec.neutral is not None and type(value) in (int, float, bool)
+                    and (type(value) is not float or math.isfinite(value)) and value != spec.neutral)
+        if any(nested_effect(spec, params.get(name)) for name, spec in self.params.items() if spec.kind == "object"):
+            return True
         effect_params = {name: spec for name, spec in self.params.items() if spec.neutral is not None}
         if not effect_params:
             return True
@@ -1700,6 +1707,13 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
+            "combat": _p("object", "Optional temporary combat bonuses; all fields explicit when selected. Zero values have no effect. Same-effect refresh does not stack. No automatic active binding.", required=False, properties={
+                "defensePoints": _p("integer", "Flat Player.statDefense points; aggregate generated-buff cap 100", minimum=0, maximum=100, neutral=0, wire_name="combat.defensePoints"),
+                "attackSpeedPercent": _p("number", "Add percent/100 to generic attack speed; aggregate generated-buff cap 100", minimum=0, maximum=100, neutral=0, wire_name="combat.attackSpeedPercent", consumer_storage="float32"),
+                "critChancePoints": _p("number", "Add percentage points to generic critical chance; aggregate generated-buff cap 100", minimum=0, maximum=100, neutral=0, wire_name="combat.critChancePoints", consumer_storage="float32"),
+                "damagePercent": _p("number", "Add percent/100 to the explicitly selected damage class; aggregate generated-buff cap 200 per selected class. Generic and specific bonuses may combine through native inheritance", minimum=0, maximum=200, neutral=0, wire_name="combat.damagePercent", consumer_storage="float32"),
+                "damageClass": _p("string", "Exact class receiving damagePercent; generic also contributes through native class inheritance", enum=("generic", "melee", "ranged", "magic", "summon", "throwing"), wire_name="combat.damageClass"),
+            }),
             "durationSeconds": _seconds(_p("integer", "Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
             "exhaustionSeconds": _seconds(_p("integer", "Optional per-player/item-definition generated-buff lockout; copies/groups share it, including zero/omitted groups while active. Blocked attempts refresh neither timer. Omission stays absent; explicit zero stays zero; neither starts exhaustion. Policy only, not a buff stat or normal-attack cooldown.", minimum=0, maximum=21600, units="world ticks", required=False, wire_presence_requires_receipt=True), "exhaustionTicks"),
             "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1, consumer_storage="float32"),
@@ -1725,6 +1739,12 @@ _CAPS: list[CapabilitySpec] = [
             "gameplay.generatedBuff.jumpBoost",
             "gameplay.generatedBuff.manaRegen",
             "gameplay.generatedBuff.lifeRegen",
+            "gameplay.generatedBuff.combat.defensePoints",
+            "gameplay.generatedBuff.combat.attackSpeedPercent",
+            "gameplay.generatedBuff.combat.critChancePoints",
+            "gameplay.generatedBuff.combat.damagePercent",
+            "gameplay.generatedBuff.combat.damageClass",
+
         ),
         lowering=("gameplay.generatedBuff.*",),
         effect_groupable=True,
@@ -2415,9 +2435,9 @@ _CAPS.extend([
     ),
     _cap(
         "target_and_fire",
-        "Acquire NPC targets and periodically spawn an authored shot entity from this entity's current position. Explicit same-entity movement executes before firing; without movement this entity remains stationary. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
+        "Acquire NPC targets and periodically spawn an authored shot entity from this entity's current position. Explicit same-entity movement executes before firing. Stationary/helper entities without movement remain stationary; free/child entities require explicit movement. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
         "controller",
-        ("stationary_projectile", "temporary_helper"),
+        ("stationary_projectile", "temporary_helper", "free_projectile", "child_projectile"),
         {
             "shotEntity": _p("string", "Referenced projectile entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="shotEntityId"),
             "intervalSeconds": _seconds(_p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"), "intervalTicks"),
@@ -3086,7 +3106,8 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
 
 
     if cap.category == "motion_modifier":
-        return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release"), message="Velocity modifiers require the explicit movement driver to own motion throughout their active phase."),)
+        return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release"), message="Velocity modifiers require the explicit movement driver to own motion throughout their active phase."),
+                RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement")), message="Velocity modifiers require explicit movement, including on a target_and_fire entity."))
     if cap.name in {"channel_beam", "charge_then_release"}:
         rows = [RequirementSpec("item_capability_param", capability="configure_item_use", target="item_body", param="channel", equals=True, message="channel controller requires channel=true on item_body")]
         if cap.name == "charge_then_release":

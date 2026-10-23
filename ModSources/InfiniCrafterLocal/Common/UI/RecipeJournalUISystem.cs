@@ -42,6 +42,8 @@ public sealed class RecipeJournalUISystem : ModSystem
     }
     private static string _query = "", _selected = "";
     private static bool _searchFocus, _favoritesOnly;
+    private static RecipeJournalView.EffectFilter _effectFilter;
+    private static string _ingredientFilter = "";
     private static int _page, _detailScroll;
     private static GeneratedItemData[] _known = Array.Empty<GeneratedItemData>();
     private static uint _snapshotTick;
@@ -72,6 +74,7 @@ public sealed class RecipeJournalUISystem : ModSystem
     {
         Close(); _query = _selected = ""; _page = 0; _favoritesOnly = false;
         _known = Array.Empty<GeneratedItemData>(); History.Clear();
+        _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
     }
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
     {
@@ -112,7 +115,9 @@ public sealed class RecipeJournalUISystem : ModSystem
             if (query != _query) { _query = query; _page = 0; }
         }
         var discoveries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), "", player.IsJournalFavorite, false);
-        var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly);
+        var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly)
+            .Where(d => RecipeJournalView.MatchesEffect(d, _effectFilter)
+                && (_ingredientFilter.Length == 0 || d.RecipeMeta.ParentIdentities?.Contains("generated:" + _ingredientFilter, StringComparer.Ordinal) == true)).ToArray();
         if (_selected.Length == 0 && entries.Length > 0)
         {
             // Hydration may finish while the player is typing; auto-selection must not steal focus.
@@ -153,6 +158,16 @@ public sealed class RecipeJournalUISystem : ModSystem
         if (Button(sb, favorites, _favoritesOnly ? Text("All") : Text("Favorites"), click, cursor, selected: _favoritesOnly)) { _favoritesOnly = !_favoritesOnly; _page = 0; }
         if (layout.Detail.X > layout.List.Right)
             Label(sb, Text("Count", discoveries.Length), new Vector2(layout.Detail.X + 12, search.Y + 5), Muted, 0.65f, layout.Detail.Width - 24);
+        var effectButton = new Rectangle(book.X + 12, book.Y + 80, Math.Min(182, book.Width - 24), 26);
+        if (Button(sb, effectButton, Text("Filter" + _effectFilter), click, cursor))
+        { _effectFilter = (RecipeJournalView.EffectFilter)(((int)_effectFilter + 1) % 5); _page = 0; }
+        if (_ingredientFilter.Length > 0)
+        {
+            var clear = new Rectangle(effectButton.Right + 6, effectButton.Y, Math.Max(0, book.Right - effectButton.Right - 18), 26);
+            var ingredient = discoveries.FirstOrDefault(d => d.Id == _ingredientFilter);
+            if (Button(sb, clear, Text("UsingIngredient", ingredient?.Name ?? _ingredientFilter), click, cursor, selected: true))
+            { _ingredientFilter = ""; _page = 0; }
+        }
         Rectangle list = layout.List;
         int capacity = Math.Max(1, layout.Rows * layout.Columns);
         int pages = Math.Max(1, (entries.Length + capacity - 1) / capacity);
@@ -177,7 +192,7 @@ public sealed class RecipeJournalUISystem : ModSystem
         if (entries.Length == 0)
         {
             Chassis(sb, list, Inset);
-            Paragraph(sb, Text(_favoritesOnly ? "NoFavorites" : _query.Length == 0 ? "Empty" : "NoMatches"), new Rectangle(list.X + 10, list.Y + 10, list.Width - 20, list.Height - 20), Muted, 0.65f);
+            Paragraph(sb, Text(_ingredientFilter.Length > 0 || _effectFilter != RecipeJournalView.EffectFilter.All ? "NoMatches" : _favoritesOnly ? "NoFavorites" : _query.Length == 0 ? "Empty" : "NoMatches"), new Rectangle(list.X + 10, list.Y + 10, list.Width - 20, list.Height - 20), Muted, 0.65f);
         }
         GeneratedItemData? selected = discoveries.FirstOrDefault(d => d.Id == _selected);
         if (selected is not null) DrawDetail(sb, selected, layout.Detail, player, click, cursor);
@@ -204,15 +219,19 @@ public sealed class RecipeJournalUISystem : ModSystem
         var controls = RecipeJournalView.DetailControls(area);
         if (History.Count > 0 && Button(sb, controls.Back, Text("Back"), click, cursor)) { Select(History.Pop(), false); return; }
         if (Button(sb, controls.Save, player.IsJournalFavorite(data.Id) ? Text("Saved") : Text("Save"), click, cursor, selected: player.IsJournalFavorite(data.Id))) player.ToggleJournalFavorite(data.Id);
-        if (area.Height < 200)
+        y = controls.Save.Bottom + 6;
+        var children = RecipeJournalView.Children(data, _known);
+        if (area.Bottom - y >= 26 && Button(sb, new Rectangle(x, y, w, 24), Text("Children", children.Length), click, cursor,
+                enabled: children.Length > 0))
+        { _ingredientFilter = data.Id; _effectFilter = RecipeJournalView.EffectFilter.All; _favoritesOnly = false; _query = ""; _page = 0; SetSearchFocus(false); }
+        y += 30;
+        if (area.Height < 230)
         {
-            y = controls.Save.Bottom + 6;
             if (area.Bottom - y >= 20) Label(sb, data.Name, new Vector2(x, y), Ink, 0.7f, w);
             if (area.Bottom - y >= 45)
                 Paragraph(sb, data.ParentA + " + " + data.ParentB, new Rectangle(x, y + 25, w, Math.Max(0, area.Bottom - y - 30)), Muted, 0.6f);
             return;
         }
-        y += 36;
         Label(sb, data.Name, new Vector2(x, y), Ink, 0.85f, w);
         if (new Rectangle(x, y, w, 25).Contains(cursor.ToPoint())) _hoverText = data.Name;
         y += 26;
