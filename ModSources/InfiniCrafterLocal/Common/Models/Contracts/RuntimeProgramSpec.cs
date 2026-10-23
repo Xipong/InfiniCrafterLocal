@@ -855,6 +855,7 @@ public sealed class RuntimeEntitySpec
                 || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true
                 || Movement.Params?.HasSpringTether == true || Controller.Params?.HasSpringTether == true
+                || Movement.Params?.HasEllipticOrbit == true || Controller.Params?.HasEllipticOrbit == true
                 || Movement.Params?.HasFrontHandParams == true || Controller.Params?.HasFrontHandParams == true
                 || VectorAcceleration is not null || SpeedRamp is not null || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
@@ -869,6 +870,8 @@ public sealed class RuntimeEntitySpec
             Hitbox.Normalize();
             Collision.Normalize();
             Movement.NormalizeAndValidate(Kind);
+            if (Movement.Code == 22 && Spawn.Aim == "none")
+                throw new InvalidDataException("oriented trajectories require an explicit spawn axis");
             Controller.NormalizeAndValidate(Kind);
             if (Spawn.VelocityDistribution is not null
                 && (IsStationary || Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
@@ -1437,6 +1440,8 @@ public sealed class RuntimeMovementSpec
         Params ??= new RuntimeParamsSpec();
         Params.ValidateSpringTether(Code);
         if (Code == 21 && (Name != "move_spring_tether" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_spring_tether requires exact name, opcode and free/child kind");
+        Params.ValidateEllipticOrbit(Code);
+        if (Code == 22 && (Name != "move_elliptic_orbit" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_elliptic_orbit requires exact name, opcode and free/child kind");
         if (Code == 6) throw new InvalidDataException("retired movement opcode 6");
         Params ??= new RuntimeParamsSpec();
         if (Code == 20) {
@@ -1485,6 +1490,7 @@ public sealed class RuntimeControllerSpec
         Name = RuntimeText.Safe(Name, 64);
         Params ??= new RuntimeParamsSpec();
         Params.ValidateSpringTether(-1);
+        Params.ValidateEllipticOrbit(-1);
         // Current independent controls must be admitted before retained-v5 clamping.
         if (Params.HasIndependentCharge && (Code != RuntimeControllerCode.ChargeThenRelease
             || !Params.ChargeDamageMultiplier.HasValue || !Params.KnockbackMultiplier.HasValue || !Params.SpeedMultiplier.HasValue
@@ -1512,6 +1518,42 @@ public sealed class RuntimeControllerSpec
 
 public sealed class RuntimeParamsSpec
 {
+    private float? _ellipseRadiusAlong;
+    public sealed class EllipseRadiusAlongConverter : RawJsonNullableFloatDomainConverter { public EllipseRadiusAlongConverter() : base("0.25", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipseRadiusAlongConverter))]
+    public float? EllipseRadiusAlong { get => _ellipseRadiusAlong; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.25f || v > 80f) throw new InvalidDataException("ellipseRadiusAlong requires finite 0.25..80");
+        _ellipseRadiusAlong = v;
+    } }
+    private float? _ellipseRadiusAcross;
+    public sealed class EllipseRadiusAcrossConverter : RawJsonNullableFloatDomainConverter { public EllipseRadiusAcrossConverter() : base("0.25", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipseRadiusAcrossConverter))]
+    public float? EllipseRadiusAcross { get => _ellipseRadiusAcross; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.25f || v > 80f) throw new InvalidDataException("ellipseRadiusAcross requires finite 0.25..80");
+        _ellipseRadiusAcross = v;
+    } }
+    private float? _ellipseAngularRate;
+    public sealed class EllipseAngularRateConverter : RawJsonNullableFloatDomainConverter { public EllipseAngularRateConverter() : base("-0.5", "0.5", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipseAngularRateConverter))]
+    public float? EllipseAngularRate { get => _ellipseAngularRate; set {
+        if (value is not float v || !float.IsFinite(v) || v < -0.5f || v > 0.5f) throw new InvalidDataException("ellipseAngularRate requires finite -0.5..0.5");
+        _ellipseAngularRate = v;
+    } }
+    private float? _ellipsePhase;
+    public sealed class EllipsePhaseConverter : RawJsonNullableFloatDomainConverter { public EllipsePhaseConverter() : base("-3.1415927", "3.1415927", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipsePhaseConverter))]
+    public float? EllipsePhase { get => _ellipsePhase; set {
+        if (value is not float v || !float.IsFinite(v) || v < -3.1415927f || v > 3.1415927f) throw new InvalidDataException("ellipsePhase requires finite -3.1415927..3.1415927");
+        _ellipsePhase = v;
+    } }
+    [JsonIgnore] public bool HasEllipticOrbit => EllipseRadiusAlong.HasValue || EllipseRadiusAcross.HasValue || EllipseAngularRate.HasValue || EllipsePhase.HasValue;
+    internal void ValidateEllipticOrbit(int code)
+    {
+        if (code == 22) {
+            if (!EllipseRadiusAlong.HasValue || !EllipseRadiusAcross.HasValue || !EllipseAngularRate.HasValue || !EllipsePhase.HasValue) throw new InvalidDataException("move_elliptic_orbit requires every authored parameter");
+        } else if (HasEllipticOrbit) throw new InvalidDataException("move_elliptic_orbit parameters require their exact movement owner");
+    }
+
     private float? _springRestRadius;
     public sealed class SpringRestRadiusConverter : RawJsonNullableFloatDomainConverter { public SpringRestRadiusConverter() : base("0", "80", "0") { } }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringRestRadiusConverter))]
@@ -2245,7 +2287,7 @@ internal static class RuntimeOpcodeNames
         "move_spiral", "move_vortex_orb", "move_blackhole_pull", "move_proximity_missile",
         "move_returning_glaive", "move_expanding_wave", "move_flail_tether", "move_yoyo_hover",
         "move_whip_lash", "move_forward_then_retract", "move_front_hand",
-        "move_spring_tether",
+        "move_spring_tether", "move_elliptic_orbit",
     };
     private static readonly string[] ControllerNames = { "", "channel_beam", "charge_then_release", "target_and_fire" };
     private static readonly string[] EventNames =

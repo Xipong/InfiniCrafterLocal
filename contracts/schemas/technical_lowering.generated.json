@@ -712,6 +712,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "move_elliptic_orbit",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.EllipticOrbit.cs::MoveEllipticOrbit",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAlong",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAcross",
+        "runtimeProgram.entities[].movement.params.ellipseAngularRate",
+        "runtimeProgram.entities[].movement.params.ellipsePhase"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "move_straight",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",

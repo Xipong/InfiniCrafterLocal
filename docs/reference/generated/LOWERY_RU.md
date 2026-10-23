@@ -205,6 +205,7 @@ Movement:
 | move_whip_lash | 18 |
 | move_forward_then_retract | 19 |
 | move_front_hand | 20 |
+| move_elliptic_orbit | 22 |
 | move_spring_tether | 21 |
 
 Controllers:

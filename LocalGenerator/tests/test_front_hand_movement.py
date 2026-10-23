@@ -212,15 +212,34 @@ def test_front_hand_launch_axis_admission_joins_author_compiler_and_bare_wire(ai
 
 
 @pytest.mark.parametrize("fn", [name for name, cap in CAPABILITY_REGISTRY.items()
-    if cap.category == "movement" and name != "move_front_hand"])
-def test_other_movement_drivers_keep_explicit_spawn_aim_none(fn):
+    if cap.category == "movement"])
+def test_movement_spawn_aim_none_follows_declared_axis_requirements(fn):
     doc = build_capability_witness(fn)
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_spawn")["params"]["aim"] = "none"
     assert validate_runtime_program(doc)["ok"]
     wire = compile_runtime_program(doc)
-    assert validate_runtime_wire(wire)["ok"]
     wire.pop("runtimeContract")
     assert validate_runtime_wire(wire)["ok"]
+    requirements = [r for r in CAPABILITY_REGISTRY[fn].requirements
+                    if r.kind == "item_capability_param" and r.capability == "configure_spawn" and r.param == "aim"]
+    allows_none = all("none" in r.any_of if r.any_of else r.equals == "none" for r in requirements)
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_spawn")["params"]["aim"] = "none"
+    entity(wire)["spawn"]["aim"] = "none"
+    before = deepcopy(doc), deepcopy(wire)
+    report = validate_runtime_program(doc)
+    bare_report = validate_runtime_wire(wire)
+    assert report["ok"] == allows_none, report["errors"]
+    assert bare_report["ok"] == allows_none, bare_report["errors"]
+    if allows_none:
+        compiled = compile_runtime_program(doc)
+        assert entity(compiled)["spawn"]["aim"] == "none"
+        assert validate_runtime_wire(compiled)["ok"]
+    else:
+        assert any(e["code"] == "missing_dependency_param" and e["path"].endswith(".params.aim")
+                   for e in report["errors"])
+        assert any(e["code"] in {"movement_dependency", "missing_motion_axis"} for e in bare_report["errors"])
+        with pytest.raises(ValueError):
+            compile_runtime_program(doc)
+    assert (doc, wire) == before
 
 
 def test_registry_witness_uses_explicit_minimum_admission_support():

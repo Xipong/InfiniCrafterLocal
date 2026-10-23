@@ -6343,6 +6343,140 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "move_elliptic_orbit"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "angularSpeedRadiansPerSecond": {
+                    "description": "Author units: radians/s. Native consumer: Signed phase increment; zero follows owner at fixed phase",
+                    "maximum": 180.0,
+                    "minimum": -180.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -30.0,
+                          30.0
+                        ],
+                        [
+                          -60.0,
+                          60.0
+                        ],
+                        [
+                          -90.0,
+                          90.0
+                        ],
+                        [
+                          -120.0,
+                          120.0
+                        ],
+                        [
+                          -150.0,
+                          150.0
+                        ],
+                        [
+                          -180.0,
+                          180.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0.0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "radians/s",
+                    "x-infini-units": "radians/s"
+                  },
+                  "phaseRadians": {
+                    "description": "Explicit starting phase; no identity-derived offset",
+                    "maximum": 3.1415927,
+                    "minimum": -3.1415927,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "radiusAcrossTiles": {
+                    "description": "Ellipse semi-axis perpendicular to initial direction",
+                    "maximum": 80,
+                    "minimum": 0.25,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "blocks (tiles)"
+                  },
+                  "radiusAlongTiles": {
+                    "description": "Ellipse semi-axis along initial direction",
+                    "maximum": 80,
+                    "minimum": 0.25,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "blocks (tiles)"
+                  }
+                },
+                "required": [
+                  "radiusAlongTiles",
+                  "radiusAcrossTiles",
+                  "angularSpeedRadiansPerSecond",
+                  "phaseRadians"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "free_projectile",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "move_straight"
               },
               "id": {

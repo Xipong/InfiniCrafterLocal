@@ -3655,6 +3655,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -3764,6 +3765,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -3862,6 +3864,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -3971,6 +3974,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -4091,6 +4095,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -4551,6 +4556,99 @@
       "purpose": "A bounded tension-only spring between projectile and owner mounted center. Inside rest radius the tether is slack; outside it applies displacement-proportional inward acceleration. Exponential world-time damping applies to velocity everywhere; an explicit speed cap prevents runaway integration. Owner movement changes the anchor naturally. Invalid/dead owner ends the projectile. No channel requirement, target selection, teleport, forced collision change or return-to-owner kill. Composes with timed vector forces, speed envelopes and homing. Stiffness is s^-2 and damping is s^-1, lowered against the explicit projectile clock.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_elliptic_orbit",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.EllipticOrbit.cs::MoveEllipticOrbit",
+      "dependencies": [
+        "configure_spawn"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAlong",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAcross",
+        "runtimeProgram.entities[].movement.params.ellipseAngularRate",
+        "runtimeProgram.entities[].movement.params.ellipsePhase"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "angularSpeedRadiansPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 180.0,
+          "minimum": -180.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians/s",
+          "units": "radians/s"
+        },
+        "phaseRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3.1415927,
+          "minimum": -3.1415927,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians"
+        },
+        "radiusAcrossTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        },
+        "radiusAlongTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "purpose": "Owner-relative ellipse with independently authored major/minor radii, explicit phase and signed angular speed. The ellipse X axis follows the synchronized initial launch direction, not world X or current cursor; orbit phase uses synchronized active age. Unlike circular move_orbit, non-equal radii and orientation shape a true ellipse and the author chooses initial phase rather than projectile identity. Sets velocity to the next owner-relative point for native integration, and disables tile collision. Normal lifetime applies; invalid/dead owner ends the projectile. Rotation remains tangent to actual velocity. World angular rate is invariant under extraUpdates.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "cursor",
+            "facing",
+            "velocity"
+          ],
+          "capability": "configure_spawn",
+          "kind": "item_capability_param",
+          "message": "This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one.",
+          "param": "aim",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "targetKinds": [
         "free_projectile",
@@ -6108,6 +6206,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",

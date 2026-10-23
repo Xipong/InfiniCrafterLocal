@@ -2301,6 +2301,12 @@ _CAPS.extend([
         "dampingPerSecond": _world_units(_p("number", "Velocity decays by exp(-damping * elapsed seconds)", minimum=0, maximum=1, units="update^-1", consumer_storage="float32", neutral=0), "springDamping", multiplier=1, divisor=60, updates_power=1, units="s^-1"),
         "maxSpeedBlocksPerSecond": _world_units(_p("number", "Magnitude cap after spring and damping", minimum=0.1, maximum=80, units="pixels/update", consumer_storage="float32"), "springMaxSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
     }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.SpringTether.cs::MoveSpringTether"),
+    _movement("move_elliptic_orbit", 'Owner-relative ellipse with independently authored major/minor radii, explicit phase and signed angular speed. The ellipse X axis follows the synchronized initial launch direction, not world X or current cursor; orbit phase uses synchronized active age. Unlike circular move_orbit, non-equal radii and orientation shape a true ellipse and the author chooses initial phase rather than projectile identity. Sets velocity to the next owner-relative point for native integration, and disables tile collision. Normal lifetime applies; invalid/dead owner ends the projectile. Rotation remains tangent to actual velocity. World angular rate is invariant under extraUpdates.', 22, {
+        "radiusAlongTiles": _p("number", "Ellipse semi-axis along initial direction", minimum=0.25, maximum=80, units="tiles", consumer_storage="float32", wire_name="ellipseRadiusAlong"),
+        "radiusAcrossTiles": _p("number", "Ellipse semi-axis perpendicular to initial direction", minimum=0.25, maximum=80, units="tiles", consumer_storage="float32", wire_name="ellipseRadiusAcross"),
+        "angularSpeedRadiansPerSecond": _world_units(_p("number", "Signed phase increment; zero follows owner at fixed phase", minimum=-0.5, maximum=0.5, units="radians/update", consumer_storage="float32", neutral=0), "ellipseAngularRate", multiplier=1, divisor=60, updates_power=1, units="radians/s"),
+        "phaseRadians": _p("number", "Explicit starting phase; no identity-derived offset", minimum=-3.1415927, maximum=3.1415927, units="radians", consumer_storage="float32", wire_name="ellipsePhase", neutral=0),
+    }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.EllipticOrbit.cs::MoveEllipticOrbit", requirements=(RequirementSpec("item_capability_param", capability="configure_spawn", param="aim", any_of=("cursor", "facing", "velocity"), message="This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one."),)),
     _movement("move_straight", "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.", 0),
     _movement("move_slow_homing", "Steer gradually toward a valid NPC.", 1, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
@@ -3415,6 +3421,7 @@ MOVEMENT_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "move_whip_lash": 18,
     "move_forward_then_retract": 19,
     "move_front_hand": 20,
+    "move_elliptic_orbit": 22,
     "move_spring_tether": 21,
 })
 CONTROLLER_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
