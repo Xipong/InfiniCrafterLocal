@@ -63,6 +63,11 @@ public partial class GeneratedItem
         if (a.AutoJump == true) { player.autoJump = true; }
         if (a.FrogJump == true) { player.frogLegJumpBoost = true; }
         player.spikedBoots = Math.Max(player.spikedBoots, a.WallGrip ?? 0);
+        if (a.AutoPaint == true) { player.autoPaint = true; }
+        if (a.RulerGrid == true) { player.rulerGrid = true; }
+        player.blockRange += a.BuildRangeTiles ?? 0;
+        player.tileSpeed += (a.TileSpeedBonusPercent ?? 0) / 100f;
+        player.wallSpeed += (a.WallSpeedBonusPercent ?? 0) / 100f;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

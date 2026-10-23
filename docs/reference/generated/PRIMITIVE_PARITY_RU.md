@@ -60,6 +60,11 @@ Author schema ограничивает значения всех примити�
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | accessory.waterWalk | ModItem.UpdateAccessory |
+| autoPaint | Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.autoPaint | ModItem.UpdateAccessory |
+| rulerGrid | Native ruler grid controlled by builder toggles. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.rulerGrid | ModItem.UpdateAccessory |
+| buildRangeTiles | Additional native tile placement reach in tiles; additive | tiles | 0 | 0…20 | accessory.buildRangeTiles | ModItem.UpdateAccessory |
+| tileSpeedBonusPercent | Add percent/100 native tile placement speed; additive, native limits apply | unitless_scalar | 0 | 0…100 | accessory.tileSpeedBonusPercent | ModItem.UpdateAccessory |
+| wallSpeedBonusPercent | Add percent/100 native wall placement speed; additive, native limits apply | unitless_scalar | 0 | 0…100 | accessory.wallSpeedBonusPercent | ModItem.UpdateAccessory |
 | autoJump | Native held-button auto jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.autoJump | ModItem.UpdateAccessory |
 | frogJump | Native frog jump height and safe fall allowance. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. | bounded_text | False | boolean | accessory.frogJump | ModItem.UpdateAccessory |
 | wallGrip | Native spiked-boots level: 0 none, 1 wall slide/jump, 2 wall cling; combines by maximum | unitless_scalar | 0 | 0…2 | accessory.wallGrip | ModItem.UpdateAccessory |

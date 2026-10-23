@@ -85,4 +85,28 @@ internal static partial class EngineRuntimeChecks
             }
         });
     }
+    private static void NativeTraversalBuilding()
+    {
+        WithPlayer((player, _) => {
+            player.ResetEffects();
+            int range = player.blockRange; float tiles = player.tileSpeed, walls = player.wallSpeed;
+            NativeUtilityItem("\"buildRangeTiles\":3,\"tileSpeedBonusPercent\":25,\"wallSpeedBonusPercent\":50,\"autoPaint\":true,\"rulerGrid\":true").UpdateAccessory(player, true);
+            Equal(range + 3, player.blockRange, "reach composes with native tools");
+            Equal(tiles + .25f, player.tileSpeed, "tile speed is native additive bonus");
+            Equal(walls + .5f, player.wallSpeed, "wall speed independent");
+            Equal(true, player.autoPaint && player.rulerGrid, "paint and grid native consumers enabled");
+            Equal(true, player.rulerLine, "native baseline ruler remains untouched");
+            NativeUtilityItem("\"buildRangeTiles\":2").UpdateAccessory(player, false);
+            Equal(range + 5, player.blockRange, "range combines additively");
+            player.ResetEffects();
+            Equal(range, player.blockRange, "range expires on reset");
+            Equal(tiles, player.tileSpeed, "tile speed expires on reset");
+            Equal(false, player.autoPaint || player.rulerGrid, "builder flags expire");
+            foreach (string field in new[] { "buildRangeTiles", "tileSpeedBonusPercent", "wallSpeedBonusPercent" }) {
+                bool rejected = false;
+                try { NativeUtilityItem("\"" + field + "\":101"); } catch (InvalidOperationException) { rejected = true; }
+                Equal(true, rejected, "strict building bound " + field);
+            }
+        });
+    }
 }

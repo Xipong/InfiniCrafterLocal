@@ -82,6 +82,11 @@ public partial class GeneratedItem
             Flag("AutoJump", a.AutoJump == true);
             Flag("FrogJump", a.FrogJump == true);
             Stat("WallGrip", "EquipmentWallGrip", a.WallGrip ?? 0);
+            Flag("AutoPaint", a.AutoPaint == true);
+            Flag("RulerGrid", a.RulerGrid == true);
+            Stat("BuildRangeTiles", "EquipmentBuildRangeTiles", a.BuildRangeTiles ?? 0);
+            Stat("TileSpeedBonusPercent", "EquipmentTileSpeedBonusPercent", a.TileSpeedBonusPercent ?? 0);
+            Stat("WallSpeedBonusPercent", "EquipmentWallSpeedBonusPercent", a.WallSpeedBonusPercent ?? 0);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);

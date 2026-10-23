@@ -3000,6 +3000,20 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "autoPaint": {
+                    "description": "Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "buildRangeTiles": {
+                    "description": "Additional native tile placement reach in tiles; additive",
+                    "maximum": 20,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "tiles"
+                  },
                   "damageReductionPercentagePoints": {
                     "description": "Add percent/100 to Player.endurance damage reduction",
                     "maximum": 75,
@@ -3313,6 +3327,12 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "native rocket flight mode"
                   },
+                  "rulerGrid": {
+                    "description": "Native ruler grid controlled by builder toggles. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "sentrySlotsBonus": {
                     "description": "Add sentry slots",
                     "maximum": 20,
@@ -3347,6 +3367,14 @@
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
                   },
+                  "tileSpeedBonusPercent": {
+                    "description": "Add percent/100 native tile placement speed; additive, native limits apply",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
                   "underwaterBreathing": {
                     "description": "Native gills: breathe air and water; getGoodWorld reverses drowning and requires water. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
                     "type": "boolean",
@@ -3356,6 +3384,14 @@
                   "wallGrip": {
                     "description": "Native spiked-boots level: 0 none, 1 wall slide/jump, 2 wall cling; combines by maximum",
                     "maximum": 2,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "wallSpeedBonusPercent": {
+                    "description": "Add percent/100 native wall placement speed; additive, native limits apply",
+                    "maximum": 100,
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-neutral": 0,

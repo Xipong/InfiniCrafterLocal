@@ -3354,6 +3354,42 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "autoPaint": {
+                        "type": "boolean",
+                        "description": "Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "rulerGrid": {
+                        "type": "boolean",
+                        "description": "Native ruler grid controlled by builder toggles. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "buildRangeTiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Additional native tile placement reach in tiles; additive",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-neutral": 0
+                      },
+                      "tileSpeedBonusPercent": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add percent/100 native tile placement speed; additive, native limits apply",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
+                      "wallSpeedBonusPercent": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add percent/100 native wall placement speed; additive, native limits apply",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
                       "autoJump": {
                         "type": "boolean",
                         "description": "Native held-button auto jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",

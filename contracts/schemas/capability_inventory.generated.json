@@ -1922,6 +1922,11 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.autoPaint",
+        "accessory.rulerGrid",
+        "accessory.buildRangeTiles",
+        "accessory.tileSpeedBonusPercent",
+        "accessory.wallSpeedBonusPercent",
         "accessory.autoJump",
         "accessory.frogJump",
         "accessory.wallGrip",
@@ -1982,6 +1987,26 @@
           "reference": null,
           "required": false,
           "semanticType": "bounded_text",
+          "units": ""
+        },
+        "autoPaint": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "buildRangeTiles": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
           "units": ""
         },
         "damageReductionPercentagePoints": {
@@ -2296,6 +2321,16 @@
           "semanticType": "unitless_scalar",
           "units": "native rocket flight mode"
         },
+        "rulerGrid": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "sentrySlotsBonus": {
           "enum": [],
           "kind": "integer",
@@ -2326,6 +2361,16 @@
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
         },
+        "tileSpeedBonusPercent": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
         "underwaterBreathing": {
           "enum": [],
           "kind": "boolean",
@@ -2340,6 +2385,16 @@
           "enum": [],
           "kind": "integer",
           "maximum": 2,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "wallSpeedBonusPercent": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
           "minimum": 0,
           "reference": null,
           "required": false,
@@ -2422,6 +2477,11 @@
             "fallDamageImmune",
             "lavaImmune",
             "waterWalk",
+            "autoPaint",
+            "rulerGrid",
+            "buildRangeTiles",
+            "tileSpeedBonusPercent",
+            "wallSpeedBonusPercent",
             "autoJump",
             "frogJump",
             "wallGrip",

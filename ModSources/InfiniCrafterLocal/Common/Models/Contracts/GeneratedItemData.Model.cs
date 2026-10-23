@@ -287,6 +287,57 @@ public sealed class BuffEntrySpec
 
 public sealed class AccessorySpec
 {
+    private bool? _autoPaint;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoPaint
+    {
+        get => _autoPaint;
+        set => _autoPaint = value ?? throw new InvalidDataException("autoPaint requires a boolean when present");
+    }
+    private bool? _rulerGrid;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RulerGrid
+    {
+        get => _rulerGrid;
+        set => _rulerGrid = value ?? throw new InvalidDataException("rulerGrid requires a boolean when present");
+    }
+    private int? _buildRangeTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BuildRangeTiles
+    {
+        get => _buildRangeTiles;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 20)
+                throw new InvalidDataException("buildRangeTiles requires integer 0..20 when present");
+            _buildRangeTiles = scalar;
+        }
+    }
+    private int? _tileSpeedBonusPercent;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? TileSpeedBonusPercent
+    {
+        get => _tileSpeedBonusPercent;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 100)
+                throw new InvalidDataException("tileSpeedBonusPercent requires integer 0..100 when present");
+            _tileSpeedBonusPercent = scalar;
+        }
+    }
+    private int? _wallSpeedBonusPercent;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? WallSpeedBonusPercent
+    {
+        get => _wallSpeedBonusPercent;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 100)
+                throw new InvalidDataException("wallSpeedBonusPercent requires integer 0..100 when present");
+            _wallSpeedBonusPercent = scalar;
+        }
+    }
+
     private bool? _autoJump;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? AutoJump
@@ -433,7 +484,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || AutoPaint == true || RulerGrid == true || BuildRangeTiles is > 0 || TileSpeedBonusPercent is > 0 || WallSpeedBonusPercent is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f
