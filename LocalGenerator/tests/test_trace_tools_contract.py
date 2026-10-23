@@ -117,10 +117,19 @@ def _check_tail_and_recovery_ignore_broken_suffix(tmp_path: Path) -> None:
         b'{"partial":'
     )
 
-    assert trace_tools.tail_ndjson(trace_file, 10) == [{"sequence": 1}, {"sequence": 2}]
+    assert trace_tools.tail_ndjson(trace_file, 1) == [{"sequence": 2}]
     assert trace_tools.recover_ndjson(trace_file) is False
     assert trace_file.read_bytes() == b'{"sequence":1}\n{"sequence":2}\n'
     assert trace_tools.tail_ndjson(trace_file, 10) == [{"sequence": 1}, {"sequence": 2}]
+
+
+def test_trace_tail_counts_valid_records_across_chunks(tmp_path, monkeypatch):
+    path = tmp_path / "interleaved.ndjson"
+    raw = b'{"sequence":1}\ninvalid\n{"sequence":2}\n\xff\n{"sequence":3}\n'
+    path.write_bytes(raw)
+    monkeypatch.setattr(trace_tools, "_TAIL_READ_CHUNK_BYTES", 7)
+    assert trace_tools.tail_ndjson(path, 2) == [{"sequence": 2}, {"sequence": 3}]
+    assert path.read_bytes() == raw  # Interior corruption does not authorize rewriting history.
 
 
 def _check_recovery_reads_from_tail_without_materializing_whole_file(
