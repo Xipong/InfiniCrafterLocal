@@ -85,3 +85,14 @@ Hurt/knockback и весь rocket consumer cycle. Headless seams **не** док
 Player.Update/world collision loop, GPU wires/flames/shoe visuals, multiplayer match,
 inventory/void-bag activation, полный slot UI/content registration или измеренную
 продолжительность полёта. Game/network/model/install не запускались.
+
+## Jumps: независимая авторская композиция
+
+- `jumpCloud`: Дополнительный прыжок облака.
+- `jumpBlizzard`: Дополнительный прыжок метели.
+- `jumpSandstorm`: Дополнительный прыжок песчаной бури.
+- `jumpFart`: Дополнительный прыжок газа.
+- `jumpTsunami`: Дополнительный прыжок цунами.
+
+
+Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.

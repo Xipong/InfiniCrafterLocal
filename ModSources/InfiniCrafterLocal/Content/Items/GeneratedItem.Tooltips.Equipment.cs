@@ -70,6 +70,11 @@ public partial class GeneratedItem
         if (light > 0f) Stat("Light", "EquipmentLight", Math.Clamp(light, 0f, 1.5f));
         if (a is not null)
         {
+            Flag("JumpCloud", a.JumpCloud == true);
+            Flag("JumpBlizzard", a.JumpBlizzard == true);
+            Flag("JumpSandstorm", a.JumpSandstorm == true);
+            Flag("JumpFart", a.JumpFart == true);
+            Flag("JumpTsunami", a.JumpTsunami == true);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);

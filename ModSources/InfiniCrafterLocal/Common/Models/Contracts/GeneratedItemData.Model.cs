@@ -287,6 +287,42 @@ public sealed class BuffEntrySpec
 
 public sealed class AccessorySpec
 {
+    private bool? _jumpCloud;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpCloud
+    {
+        get => _jumpCloud;
+        set => _jumpCloud = value ?? throw new System.IO.InvalidDataException("jumpCloud requires a boolean when present");
+    }
+    private bool? _jumpBlizzard;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpBlizzard
+    {
+        get => _jumpBlizzard;
+        set => _jumpBlizzard = value ?? throw new System.IO.InvalidDataException("jumpBlizzard requires a boolean when present");
+    }
+    private bool? _jumpSandstorm;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpSandstorm
+    {
+        get => _jumpSandstorm;
+        set => _jumpSandstorm = value ?? throw new System.IO.InvalidDataException("jumpSandstorm requires a boolean when present");
+    }
+    private bool? _jumpFart;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpFart
+    {
+        get => _jumpFart;
+        set => _jumpFart = value ?? throw new System.IO.InvalidDataException("jumpFart requires a boolean when present");
+    }
+    private bool? _jumpTsunami;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpTsunami
+    {
+        get => _jumpTsunami;
+        set => _jumpTsunami = value ?? throw new System.IO.InvalidDataException("jumpTsunami requires a boolean when present");
+    }
+
     public bool Enabled { get; set; } = false;
     public bool WireVision { get; set; } = false;
     public bool IceSkate { get; set; } = false;
@@ -341,7 +377,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

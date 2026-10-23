@@ -51,6 +51,11 @@ public partial class GeneratedItem
         player.aggro += a.Aggro; player.endurance += a.Endurance; player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
         player.whipRangeMultiplier += a.WhipRange;
         if (a.FallDamageImmune) player.noFallDmg = true; if (a.LavaImmune) player.lavaImmune = true; if (a.WaterWalk) player.waterWalk = true;
+        if (a.JumpCloud == true) { player.GetJumpState(ExtraJump.CloudInABottle).Enable(); }
+        if (a.JumpBlizzard == true) { player.GetJumpState(ExtraJump.BlizzardInABottle).Enable(); }
+        if (a.JumpSandstorm == true) { player.GetJumpState(ExtraJump.SandstormInABottle).Enable(); }
+        if (a.JumpFart == true) { player.GetJumpState(ExtraJump.FartInAJar).Enable(); }
+        if (a.JumpTsunami == true) { player.GetJumpState(ExtraJump.TsunamiInABottle).Enable(); }
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

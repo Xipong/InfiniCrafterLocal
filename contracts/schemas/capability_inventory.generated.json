@@ -1922,6 +1922,11 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.jumpCloud",
+        "accessory.jumpBlizzard",
+        "accessory.jumpSandstorm",
+        "accessory.jumpFart",
+        "accessory.jumpTsunami",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
@@ -2052,6 +2057,46 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "jumpBlizzard": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "jumpCloud": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "jumpFart": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "jumpSandstorm": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "jumpSpeedBonusBlocksPerSecond": {
           "enum": [],
           "kind": "number",
@@ -2061,6 +2106,16 @@
           "required": false,
           "semanticType": "blocks/s",
           "units": "blocks/s"
+        },
+        "jumpTsunami": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "lavaImmune": {
           "enum": [],
@@ -2290,6 +2345,11 @@
             "fallDamageImmune",
             "lavaImmune",
             "waterWalk",
+            "jumpCloud",
+            "jumpBlizzard",
+            "jumpSandstorm",
+            "jumpFart",
+            "jumpTsunami",
             "iceSkate",
             "noKnockback",
             "fireWalk",
