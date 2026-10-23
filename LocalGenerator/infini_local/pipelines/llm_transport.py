@@ -377,16 +377,16 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
         models = http_get_json(profiles.llm_models_url(ctx), timeout=6, headers=profiles.llm_headers({"Accept": "application/json"}, context=ctx))
         data = models.get("data") if isinstance(models, dict) else None
         if isinstance(data, list) and data:
-            preferred = None
-            if provider == "openrouter":
-                for item in data:
-                    mid = str((item or {}).get("id") or (item or {}).get("name") or "").strip()
-                    if mid.endswith(":free"):
-                        preferred = mid
-                        break
-            first = data[0] or {}
-            mid = preferred or str(first.get("id") or first.get("name") or "").strip()
-            if mid:
+            model_ids = []
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                mid = item.get("id") or item.get("name")
+                if isinstance(mid, str) and mid.strip():
+                    model_ids.append(mid.strip())
+            if model_ids:
+                mid = (next((name for name in model_ids if name.endswith(":free")), model_ids[0])
+                       if provider == "openrouter" else model_ids[0])
                 _RESOLVED_LLM_MODELS[cache_key] = mid
                 log_event("info", "resolved LLM model", {"provider": provider, "model": mid, "label": ctx.get("label")})
                 return mid

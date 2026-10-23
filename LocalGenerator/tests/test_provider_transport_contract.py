@@ -53,6 +53,18 @@ def http_error(url, code, body="provider rejected request"):
     return urllib.error.HTTPError(url, code, "synthetic failure", Message(), io.BytesIO(body.encode()))
 
 
+@pytest.mark.parametrize("provider,expected", [("local", "Vendor/First"), ("openrouter", "Vendor/Free:free")])
+def test_model_discovery_skips_invalid_rows_and_caches_only_advertised_ids(loopback_transport, provider, expected):
+    endpoint, _events = loopback_transport
+    listing = {"data": [None, [], "invalid", {"id": 123}, {"id": "  "},
+        {"id": "Vendor/First"}, {"name": "Vendor/Free:free"}]}
+    base, observed = endpoint([{"body": listing}])
+    context = {"provider": provider, "base_url": base, "model": "auto", "api_key": ""}
+    assert transport.resolve_llm_model(context) == expected
+    assert transport.resolve_llm_model(context) == expected
+    assert len(observed) == 1
+
+
 def schema_error(url):
     body = json.dumps({"error": {"code": "unsupported_response_format", "param": "response_format",
                                "message": "INVALID_ARGUMENT: json_schema response_format is not supported"}})
