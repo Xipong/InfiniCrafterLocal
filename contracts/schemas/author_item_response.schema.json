@@ -5173,6 +5173,166 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "set_projectile_vector_acceleration"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "free_projectile",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "accelerationXBlocksPerSecondSquared": {
+                        "type": "number",
+                        "minimum": -16200.0,
+                        "maximum": 16200.0,
+                        "description": "Author units: blocks/s². Native consumer: Signed horizontal acceleration; positive right",
+                        "x-infini-units": "blocks/s²",
+                        "x-infini-semanticType": "blocks/s²",
+                        "x-infini-neutral": 0.0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0.0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                        },
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "boundsAtUpdatesPerTick1To6": [
+                            [
+                              -450.0,
+                              450.0
+                            ],
+                            [
+                              -1800.0,
+                              1800.0
+                            ],
+                            [
+                              -4050.0,
+                              4050.0
+                            ],
+                            [
+                              -7200.0,
+                              7200.0
+                            ],
+                            [
+                              -11250.0,
+                              11250.0
+                            ],
+                            [
+                              -16200.0,
+                              16200.0
+                            ]
+                          ]
+                        }
+                      },
+                      "accelerationYBlocksPerSecondSquared": {
+                        "type": "number",
+                        "minimum": -16200.0,
+                        "maximum": 16200.0,
+                        "description": "Author units: blocks/s². Native consumer: Signed vertical acceleration; positive down",
+                        "x-infini-units": "blocks/s²",
+                        "x-infini-semanticType": "blocks/s²",
+                        "x-infini-neutral": 0.0,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 0.0,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                        },
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "boundsAtUpdatesPerTick1To6": [
+                            [
+                              -450.0,
+                              450.0
+                            ],
+                            [
+                              -1800.0,
+                              1800.0
+                            ],
+                            [
+                              -4050.0,
+                              4050.0
+                            ],
+                            [
+                              -7200.0,
+                              7200.0
+                            ],
+                            [
+                              -11250.0,
+                              11250.0
+                            ],
+                            [
+                              -16200.0,
+                              16200.0
+                            ]
+                          ]
+                        }
+                      },
+                      "startDelaySeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 360.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Start after this active world-time delay; activation waiting is excluded",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      },
+                      "durationSeconds": {
+                        "type": "number",
+                        "minimum": 0.008333333333333333,
+                        "maximum": 360.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Active world-time duration",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      }
+                    },
+                    "required": [
+                      "accelerationXBlocksPerSecondSquared",
+                      "accelerationYBlocksPerSecondSquared",
+                      "startDelaySeconds",
+                      "durationSeconds"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "set_projectile_turn_modifier"
                   },
                   "target": {

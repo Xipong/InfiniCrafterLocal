@@ -565,6 +565,20 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_vector_acceleration",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplyVectorAcceleration",
+      "outputs": [
+        "runtimeProgram.entities[].vectorAcceleration.accelerationX",
+        "runtimeProgram.entities[].vectorAcceleration.accelerationY",
+        "runtimeProgram.entities[].vectorAcceleration.startDelayTicks",
+        "runtimeProgram.entities[].vectorAcceleration.durationTicks"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].vectorAcceleration"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "set_projectile_turn_modifier",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",

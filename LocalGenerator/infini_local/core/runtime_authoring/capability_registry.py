@@ -45,6 +45,7 @@ ENTITY_KINDS: Final[tuple[str, ...]] = (
 PROJECTILE_ENTITY_KIND_ORDER: Final[tuple[str, ...]] = ENTITY_KINDS[1:]
 PROJECTILE_ENTITY_KINDS: Final[frozenset[str]] = frozenset(PROJECTILE_ENTITY_KIND_ORDER)
 PROJECTILE_MODIFIER_COMPONENTS: Final[Mapping[str, str]] = MappingProxyType({
+    "set_projectile_vector_acceleration": "vectorAcceleration",
     "set_projectile_turn_modifier": "turnModifier",
     "set_projectile_speed_modifier": "speedModifier",
     "set_projectile_homing_modifier": "homingModifier",
@@ -2137,9 +2138,17 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
          wire_presence_path="runtimeProgram.entities[].hitboxCurve",
     ),
+    _cap("set_projectile_vector_acceleration", 'Timed signed two-axis world acceleration, independent of the selected trajectory. Adds the authored vector after movement, turn and multiplicative speed, before absolute speed ramp and homing; zero axes are explicit. The compiler divides acceleration by the square of updatesPerTick so the same world-time phase gives the same world velocity change. It can launch a stationary zero-velocity projectile without inventing a direction.', "motion_modifier", ("free_projectile", "child_projectile"), {
+            "accelerationXBlocksPerSecondSquared": _world_units(_p("number", "Signed horizontal acceleration; positive right", minimum=-2, maximum=2, units="pixels/update²", consumer_storage="float32", neutral=0), "accelerationX", multiplier=16, divisor=3600, updates_power=2, units="blocks/s²"),
+            "accelerationYBlocksPerSecondSquared": _world_units(_p("number", "Signed vertical acceleration; positive down", minimum=-2, maximum=2, units="pixels/update²", consumer_storage="float32", neutral=0), "accelerationY", multiplier=16, divisor=3600, updates_power=2, units="blocks/s²"),
+            "startDelaySeconds": _seconds(_p("integer", "Start after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active world-time duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+        }, component_slot="vectorAcceleration", authority="owner_execute_sync", py=_COMPILER_OWNER,
+        cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplyVectorAcceleration",
+        wire_presence_path="runtimeProgram.entities[].vectorAcceleration"),
     _cap(
         "set_projectile_turn_modifier",
-        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, multiplicative speed, vector acceleration, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "turnRadiansPerSecond": _world_units(_p("number", "Signed world-time velocity rotation rate during the active phase", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0), "turnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
@@ -2166,7 +2175,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "set_projectile_homing_modifier",
-        "After movement, turn and speed, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+        "After movement, turn, multiplicative speed, vector acceleration, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "rangeTiles": _p("number", "Hard target radius from this projectile center", minimum=1, maximum=120, units="tiles", consumer_storage="float32"),

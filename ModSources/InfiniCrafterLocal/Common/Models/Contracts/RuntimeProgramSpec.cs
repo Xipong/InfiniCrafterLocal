@@ -774,6 +774,9 @@ public sealed class RuntimeEntitySpec
         get => _hitboxCurve;
         set => _hitboxCurve = value ?? throw new InvalidDataException("present hitboxCurve cannot be null");
     }
+    private RuntimeVectorAccelerationSpec? _vectorAcceleration;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeVectorAccelerationSpec? VectorAcceleration { get => _vectorAcceleration; set => _vectorAcceleration = value ?? throw new InvalidDataException("present vectorAcceleration cannot be null"); }
     private RuntimeTurnModifierSpec? _turnModifier;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeTurnModifierSpec? TurnModifier { get => _turnModifier; set => _turnModifier = value ?? throw new InvalidDataException("present turnModifier cannot be null"); }
@@ -849,7 +852,7 @@ public sealed class RuntimeEntitySpec
                 || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true
                 || Movement.Params?.HasFrontHandParams == true || Controller.Params?.HasFrontHandParams == true
-                || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
+                || VectorAcceleration is not null || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
         else
@@ -866,9 +869,9 @@ public sealed class RuntimeEntitySpec
             if (Spawn.VelocityDistribution is not null
                 && (IsStationary || Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
                 throw new InvalidDataException($"entity '{Id}' does not execute sampled initial velocity");
-            TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
+            VectorAcceleration?.Validate(); TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
             NpcAttraction?.Validate(); VisualScaleCurve?.Validate();
-            if ((TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
+            if ((VectorAcceleration is not null || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
                 && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code is not (RuntimeControllerCode.None or RuntimeControllerCode.TargetAndFire) || !Movement.IsConfigured))
                 throw new InvalidDataException("velocity modifiers require a free/child projectile with explicit movement ownership");
             if (VisualScaleCurve is not null && (Movement.Code is 15 or 18 || Controller.Code == RuntimeControllerCode.ChannelBeam || HitboxCurve?.MirrorToSprite == true))
@@ -2242,5 +2245,22 @@ internal static class RuntimeText
     {
         string text = Safe(value, 48);
         return string.IsNullOrWhiteSpace(text) ? "" : Id(text);
+    }
+}
+
+public sealed class RuntimeVectorAccelerationSpec
+{
+    public sealed class AccelerationXConverter : RawJsonFloatDomainConverter { public AccelerationXConverter() : base("-2", "2", "0") { } }
+    [JsonConverter(typeof(AccelerationXConverter))] [JsonRequired] public float AccelerationX { get; set; }
+    public sealed class AccelerationYConverter : RawJsonFloatDomainConverter { public AccelerationYConverter() : base("-2", "2", "0") { } }
+    [JsonConverter(typeof(AccelerationYConverter))] [JsonRequired] public float AccelerationY { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(AccelerationX, -2f, 2f);
+        RuntimeModifierClock.RequireRange(AccelerationY, -2f, 2f);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }

@@ -229,7 +229,11 @@ internal static partial class EngineRuntimeChecks
             Equal(1,views.Length,"real exact-ledger placed projection");
             var body=(RuntimePlacedBodySpec)views[0].GetType().GetProperty("Body")!.GetValue(views[0])!;
             Equal("alpha_bounds",(string)prop!.GetValue(body)!,"projection retains explicit alpha choice");
-            byte[] before=PlacedLedgerSnapshot(ledger); string definition=JsonSerializer.Serialize(data);
+            // Mirror packets gzip the witness with a wall-clock header. Compare
+            // the complete authoritative NBT and its publication revision instead.
+            string before=PersistenceRawBytes(PlacedLedgerSaved(ledger)); string definition=JsonSerializer.Serialize(data);
+            var revisionField=typeof(GeneratedPlacementLedgerSystem).GetField("_placedBodyRevision",PersistenceStatic)!;
+            object revision=revisionField.GetValue(null)!;
             int width=player.inventory[player.selectedItem].width,height=player.inventory[player.selectedItem].height;
             float scale=player.inventory[player.selectedItem].scale;
             WithVfxGeometryQueue((batch,_,count,positions,colors)=>{
@@ -237,7 +241,8 @@ internal static partial class EngineRuntimeChecks
                 Equal(false,AlphaDraw(batch,CpuTexture(64,64),body,new Rectangle(640,640,16,16),Vector2.Zero,Rectangle.Empty),"empty PNG refuses cosmetic draw only");
                 Equal(index,count(),"empty refuses before queue submission");
             });
-            Equal(true,before.SequenceEqual(PlacedLedgerSnapshot(ledger)),"draw refusal preserves material ledger bytes");
+            Equal(before,PersistenceRawBytes(PlacedLedgerSaved(ledger)),"draw refusal preserves complete material ledger NBT");
+            Equal(revision,revisionField.GetValue(null)!,"draw refusal does not publish a material change");
             Equal(definition,JsonSerializer.Serialize(data),"definition unchanged");
             Equal(width,player.inventory[player.selectedItem].width,"item physics width unchanged");
             Equal(height,player.inventory[player.selectedItem].height,"item physics height unchanged");

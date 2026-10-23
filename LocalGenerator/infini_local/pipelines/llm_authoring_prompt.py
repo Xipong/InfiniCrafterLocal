@@ -30,10 +30,10 @@ from infini_local.core.item_identity_tools import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
 
-# Engineering character guard, not a model token limit: exactly 225000 Unicode
+# Engineering character guard, not a model token limit: exactly 300000 Unicode
 # characters in the complete compact JSON dossier. Preserve both source tooltips
 # and accepted generated graphs; never clip them to fit.
-PLANNER_PROMPT_LIMIT_CHARS = 225_000
+PLANNER_PROMPT_LIMIT_CHARS = 300_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "

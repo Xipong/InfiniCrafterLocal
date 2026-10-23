@@ -43,16 +43,16 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
 def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode_character(monkeypatch):
     from infini_local.pipelines import llm_authoring_prompt as prompt
 
-    assert prompt.PLANNER_PROMPT_LIMIT_CHARS == 225_000
+    assert prompt.PLANNER_PROMPT_LIMIT_CHARS == 300_000
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     _, initial, _ = build_initial_author_request({}, {}, "", model_name="offline")
-    key = "Ж" * (225_000 - len(initial))
+    key = "Ж" * (300_000 - len(initial))
     before = copy.deepcopy(key)
     request, text, _ = build_initial_author_request({}, {}, key, model_name="offline")
-    assert len(text) == 225_000
-    assert len(text.encode("utf-8")) > 225_000
+    assert len(text) == 300_000
+    assert len(text.encode("utf-8")) > 300_000
     assert request_dossier(request)["recipeKey"] == key == before
-    with pytest.raises(ValueError, match="225001 chars, above configured 225000"):
+    with pytest.raises(ValueError, match="300001 chars, above configured 300000"):
         build_initial_author_request({}, {}, key + "Ж", model_name="offline")
 
 
