@@ -171,7 +171,8 @@ def test_ingress_route_authority_precedes_body_read(method, path, address, statu
 @pytest.mark.parametrize("body,length,status,error,reads,timeout,internal", [
     pytest.param(body, len(body), 400, "invalid_json", 1, False, False, id=label)
     for label, body in [("array", b"[]"), ("null", b"null"), ("nan", b'{"value":NaN}'),
-        ("duplicate-key", b'{"value":1,"value":2}'), ("invalid-utf8", b'{"value":"\xff"}')]
+        ("duplicate-key", b'{"value":1,"value":2}'), ("invalid-utf8", b'{"value":"\xff"}'),
+        ("excessive-nesting", b'{"value":' + b'[' * 10000 + b'0' + b']' * 10000 + b'}')]
 ] + [
     pytest.param(b"{}", 8, 400, "invalid_json", 2, False, False, id="early-eof"),
     pytest.param(b"", MAX_JSON_BODY_BYTES + 1, 413, "request_too_large", 0, False, False, id="oversized-no-read"),

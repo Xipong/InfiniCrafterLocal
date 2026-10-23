@@ -71,6 +71,14 @@ def _assert_whole_record_quarantine(path: Path, raw: bytes, reason: str):
     return receipt
 
 
+def test_excessively_nested_cache_is_quarantined_instead_of_crashing_lookup(cache_record):
+    _, request, key, path, _ = cache_record
+    raw = b'{"value":' + b'[' * 10000 + b'0' + b']' * 10000 + b'}'
+    path.write_bytes(raw)
+    assert world_recipe_runtime.read_world_recipe_cache(key, request["worldId"]) is None
+    _assert_whole_record_quarantine(path, raw, "json_unreadable_or_empty")
+
+
 @pytest.mark.parametrize("identity", ["world", "recipe", "world-and-recipe"])
 def test_cache_only_endpoint_quarantines_contradictory_committed_identity(cache_record, identity):
     root, request, key, target, good = cache_record

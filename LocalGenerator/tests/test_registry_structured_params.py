@@ -16,6 +16,23 @@ from infini_local.core.runtime_authoring.program_schema import strict_schema_err
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
+@pytest.mark.parametrize("value,literal", [
+    (True, 1), (False, 0), ({"flag": True}, {"flag": 1}), ([False], [0]),
+    (1.0, 1), ({"a": [1.0], "b": False}, {"b": False, "a": [1]}),
+])
+def test_const_and_enum_follow_json_equality_instead_of_python_boolean_aliases(value, literal):
+    from jsonschema import Draft202012Validator
+    for schema in ({"const": literal}, {"enum": [literal]}):
+        assert (not strict_schema_errors(value, schema)) == Draft202012Validator(schema).is_valid(value)
+
+
+def test_boolean_and_numeric_const_union_selects_exactly_one_branch():
+    schema = {"oneOf": [{"const": True}, {"const": 1}]}
+    assert not strict_schema_errors(True, schema)
+    assert not strict_schema_errors(1, schema)
+    assert strict_schema_errors(False, schema)
+
+
 @pytest.mark.parametrize("reverse_properties", [False, True], ids=["declared-order", "reversed-order"])
 def test_object_keeps_exact_leaf_units_and_rejects_empty_group(reverse_properties):
     properties = {
