@@ -94,9 +94,12 @@ def _missing_movement(data: dict[str, Any]) -> None:
 
 
 def _channel_dependency(data: dict[str, Any]) -> None:
-    row = next(row for row in data["runtimeProgram"]["calls"] if row["id"] == "workbench_blade_motion")
-    row["fn"] = "channel_beam"
-    row["params"] = {"rangeTiles": 12.0, "widthPx": 12.0, "warmupTicks": 6}
+    # Keep the valid independent position owners frozen. Charge has an exact
+    # declared channel dependency; a retired bundle is not a fresh repair case.
+    data["runtimeProgram"]["calls"].append({
+        "id": "charge_input", "fn": "accumulate_projectile_charge",
+        "target": "workbench_blade", "params": {"durationSeconds": 0.2},
+    })
 
 
 
@@ -208,9 +211,10 @@ def render() -> dict[str, Any]:
         _case("existing_dependency_parameter_mismatch", _channel_dependency),
     ]
     full_count = len(CAPABILITY_REGISTRY)
+    author_count = sum(cap.author_visible for cap in CAPABILITY_REGISTRY.values())
     errors: list[str] = []
     for row in cases:
-        if row["capabilitySubsetCount"] >= full_count:
+        if row["capabilitySubsetCount"] >= author_count:
             errors.append(f"{row['name']}: repair received the full capability catalog")
         if not row["capabilityCardsMatchSubset"]:
             errors.append(f"{row['name']}: cards and deterministic subset differ")
@@ -250,6 +254,7 @@ def render() -> dict[str, Any]:
         "ok": not errors,
         "fullAuthorPayloadChars": len(full_author_payload),
         "fullCapabilityCatalogCount": full_count,
+        "authorVisibleCapabilityCount": author_count,
         "policyCoverage": policy_coverage,
         "frozenMerge": frozen_merge,
         "frozenCallsites": frozen_callsites,

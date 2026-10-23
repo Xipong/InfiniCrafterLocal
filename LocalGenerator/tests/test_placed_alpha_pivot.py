@@ -257,8 +257,17 @@ def test_real_final_delivery_sanitizer_keeps_alpha_choice_and_refuses_foreign_le
     # future item-stat defaults. Keep its bytes and validate both deliveries.
     assert validate_runtime_wire(expected)["ok"]
     assert placement(final_wire) == placement(expected)
-    for component in ("runtimeProgram", "visual", "vfxManifest"):
-        assert final_wire[component] == expected[component]
+    # Fresh motion composition is independent of the retained native placement
+    # witness. Keep complete sanitizer identity against the current input and
+    # compare every retained presentation owner, including identity/multiplicity.
+    from collections import Counter
+    assert final_wire["runtimeProgram"] == before["runtimeProgram"]
+    assert final_wire["visual"] == expected["visual"]
+    assert final_wire["vfxManifest"] == expected["vfxManifest"]
+    def presentations(payload):
+        return Counter((row["id"], row["kind"], json.dumps(row["visual"], sort_keys=True))
+                       for row in payload["runtimeProgram"]["entities"])
+    assert presentations(final_wire) == presentations(expected)
     assert validate_runtime_wire(json.loads(json.dumps(final_wire)))["ok"]
     assert wire == before
     for leaf, value in (("pivotSpace", None), ("foreignAlphaCrop", True)):

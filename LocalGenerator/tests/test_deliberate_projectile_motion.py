@@ -24,14 +24,30 @@ def test_actual_author_packet_explains_no_hidden_ballistics(monkeypatch, mode):
     assert "no gravity" in meaning and "never invokes native projectile AI" in meaning
     assert cards["move_straight"]["does"] == meaning
     guide = json.loads(user)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["projectileMotion"]
-    assert "straight" in guide and "falling" in guide and "intentional" in guide
+    assert "move_straight" in guide and "falling" in guide
+    assert "accelerate_projectile_vertical" in guide and "deliberate" in guide
+    assert "move_gravity_arc" not in cards
     assert parent == before
 
 
-@pytest.mark.parametrize("driver", ["move_straight", "move_gravity_arc"])
-def test_both_deliberate_motion_choices_remain_valid(driver):
-    document = build_capability_witness(driver)
+@pytest.mark.parametrize("falling", [False, True])
+def test_both_deliberate_motion_choices_remain_valid(falling):
+    document = build_capability_witness("move_straight")
+    if falling:
+        document["runtimeProgram"]["calls"].append({"id": "explicit_gravity", "fn": "accelerate_projectile_vertical",
+            "target": document["runtimeProgram"]["primaryEntityId"],
+            "params": {"accelerationYBlocksPerSecondSquared": 12}})
     before = copy.deepcopy(document)
     assert validate_runtime_program(document)["ok"]
-    compile_runtime_program(document)
+    wire = compile_runtime_program(document)
+    entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == document["runtimeProgram"]["primaryEntityId"])
+    assert entity["movement"] == {"name": "move_straight", "code": 0, "params": {}}
+    assert ("verticalAcceleration" in entity) is falling
+    assert "controller" not in entity
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    assert validate_runtime_wire(wire)["ok"]
+    for source in (document, None):
+        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                      authored_document=source, final_document=wire)["ok"]
     assert document == before

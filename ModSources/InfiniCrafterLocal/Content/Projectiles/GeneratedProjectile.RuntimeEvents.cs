@@ -16,7 +16,8 @@ public sealed partial class GeneratedProjectile
     // The explicit hand driver has zero translational velocity. Its authored
     // initial/cursor axis still owns event direction, including delayed captures.
     private Vector2 GameplayEventDirection()
-        => _entity?.Movement.Code == 20 ? FrontHandAxis() : Projectile.velocity.SafeNormalize(_initialDirection);
+        => _entity?.Aim is not null ? MotionAxis(Owner(), publish: false)
+            : _entity?.Movement.Code == 20 ? FrontHandAxis() : Projectile.velocity.SafeNormalize(_initialDirection);
 
     private void RunRuntimeEvent(string eventName, NPC? target, int damageDone)
     {
@@ -59,7 +60,7 @@ public sealed partial class GeneratedProjectile
         // Keep local simple-renderer callbacks and live path registration independent.
         InfiniVfxRuntime.OnEvent(Projectile, _data, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center,
             includeMaterialElements: Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient || Projectile.owner == Main.myPlayer);
-        SendOwnerHitVfxEvent(eventName,center);
+        SendOwnerProducedVfxEvent(eventName,center);
     }
 
     private void RunPeriodicActions()
@@ -100,14 +101,14 @@ public sealed partial class GeneratedProjectile
     public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
     {
         if (!_configured || _entity is null || _activationDelayTicks > 0) return false;
-        if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam)
+        if (HasBeamGeometry)
         {
             GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width);
             if ((end - start).LengthSquared() <= 0.01f) return false;
             float collisionPoint = 0f;
             return Collision.CheckAABBvLineCollision(targetHitbox.TopLeft(), targetHitbox.Size(), start, end, width, ref collisionPoint);
         }
-        if (_entity.Movement.Code == 18 && _whipPoints.Count > 1)
+        if (HasLashGeometry && _whipPoints.Count > 1)
         {
             float width = WhipCollisionWidth();
             for (int i = 1; i < _whipPoints.Count; i++)
@@ -124,14 +125,14 @@ public sealed partial class GeneratedProjectile
     // Shared by collision and runtime_geometry presentation; no sprite scale or pose offsets.
     private void GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width)
     {
-        Player owner = Owner();
         RuntimeParamsSpec p = _entity!.Controller.Params;
-        Vector2 direction = Projectile.velocity.SafeNormalize(_initialDirection);
-        start = owner.MountedCenter + direction * 18f;
-        double initialWidth = p.InitialWidthMultiplier ?? 1d;
-        width = (float)(Math.Max(2f, p.WidthPx) * (initialWidth + (1d - initialWidth) * ChannelBeamWarmupProgress()));
-        float length = Math.Max(16f, p.RangeTiles * 16f);
-        if (p.RaycastTiles == true)
+        var beam = _entity.BeamGeometry;
+        Vector2 direction = beam is not null ? MotionAxis(Owner(), publish: false) : Projectile.velocity.SafeNormalize(_initialDirection);
+        start = beam is not null ? Projectile.Center : Owner().MountedCenter + direction * 18f;
+        double initialWidth = _entity.BeamRamp?.InitialWidthMultiplier ?? (beam is not null ? 1d : p.InitialWidthMultiplier ?? 1d);
+        width = (float)((beam?.WidthPx ?? Math.Max(2f, p.WidthPx)) * (initialWidth + (1d - initialWidth) * BeamWarmupProgress()));
+        float length = beam?.LengthPx ?? Math.Max(16f, p.RangeTiles * 16f);
+        if (beam?.RaycastTiles ?? p.RaycastTiles == true)
         {
             Collision.LaserScan(start, direction, width, length, _beamScanSamples);
             foreach (float sample in _beamScanSamples)
@@ -148,8 +149,8 @@ public sealed partial class GeneratedProjectile
 
     public override void ModifyHitNPC(NPC target, ref NPC.HitModifiers modifiers)
     {
-        if (!_configured || _entity?.Controller.Code != RuntimeControllerCode.ChannelBeam) return;
-        double initial = _entity.Controller.Params.InitialDamageMultiplier ?? 1d;
+        if (!_configured || !HasBeamGeometry) return;
+        double initial = BeamInitialDamage;
         modifiers.SourceDamage *= (float)(initial + (1d - initial) * ChannelBeamWarmupProgress());
     }
 
@@ -194,11 +195,17 @@ public sealed partial class GeneratedProjectile
         EmitAndSyncVfxEvent(RuntimeEventKind.OnTileCollision, Projectile.Center);
         if (_entity.Movement.Code is 5 or 14 or 16)
         {
-            _returning = true;
+            LatchReturn(true);
             Projectile.tileCollide = false;
             Projectile.velocity = -oldVelocity * 0.25f;
             Projectile.netUpdate = true;
             return false;
+        }
+        if (_entity.ReturnTrigger is { OnTileCollision: true } trigger)
+        {
+            if (InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
+                LatchReturn(trigger.DisableTileCollisionOnReturn);
+            return false; // no implicit recoil, bounce, catch or seek
         }
         if (_remainingBounces <= 0) return true;
         _remainingBounces--;

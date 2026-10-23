@@ -64,12 +64,21 @@ def test_contact_geometry_names_native_basis_not_a_fixed_png_box(monkeypatch):
         assert phrase in text
 
 
-def test_boomerang_short_card_preserves_return_and_collision_facts(monkeypatch):
-    cards = packet(monkeypatch)['runtimeCapabilityContract']['catalog']['capabilities']
-    text = next(c['does'] for c in cards if c['fn'] == 'move_boomerang')
-    assert len(text) <= 185
-    for phrase in ('owner', 'wall collision', 'tileCollide', 'does not kill', 'tile bounces', 'NPC penetration'):
-        assert phrase in text
+def test_independent_return_cards_preserve_explicit_collision_and_arrival_choices(monkeypatch):
+    cards = {c['fn']: c for c in packet(monkeypatch)['runtimeCapabilityContract']['catalog']['capabilities']}
+    assert 'move_boomerang' not in cards
+    trigger = cards['set_projectile_return_trigger']
+    assert 'OR-latch returning exactly once' in trigger['does']
+    assert 'without seek, arrival, spin or implicit tile policy' in trigger['does']
+    assert 'actual tile collision' in trigger['params']['onTileCollision']['meaning']
+    policy = trigger['params']['disableTileCollisionOnReturn']
+    assert policy['default'] is False and policy['optional'] is True
+    assert 'omission does not disable collision' in policy['meaning']
+    assert 'independently of spin, return, lifetime or collision' in cards['seek_projectile']['does']
+    assert 'No return latch is implied' in cards['set_projectile_arrival']['does']
+    collision = cards['set_projectile_collision']['params']
+    assert 'next contact kills' in collision['bounceCount']['meaning']
+    assert 'does not kill from NPC contact' in collision['pierce']['meaning']
 
 
 def test_event_cards_do_not_borrow_other_operations_safety_or_payload(monkeypatch):

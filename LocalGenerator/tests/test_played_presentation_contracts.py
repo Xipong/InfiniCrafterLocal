@@ -139,15 +139,21 @@ def test_serialized_visual_packet_explains_hand_extent_without_moving_collision(
     visual._request_visual_kit(data, {}, {}, repair_errors=errors, previous={} if repair else None)
     presentation = request_dossier(requests[0])["spritePresentationReadOnly"]
     geometry = presentation["handContactGeometry"]
-    assert "6px" in geometry
-    assert "hitboxOffsetPx does not extend the visible body" in geometry
-    assert "signed distance from grip to the authored contact region" in geometry
-    assert "effective multiplier from formulas.body" in geometry
-    assert "clamp(P, .1, 8)" in geometry
-    assert "explicit curve/mirror exception" in geometry
+    assert "from 4 to 10px" in geometry and "not arbitrary reach" in geometry
+    assert "accepted attachment/reach displacement and hitbox literally" in geometry
+    assert "grip remains the hand-contact point" in geometry
+    assert "using formulas.body" in geometry
+    assert "clamp(P, .1, 8)" in presentation["formulas"]["body"]
+    assert "hitboxCurve.mirrorToSprite=true or visualScaleCurve is present" in presentation["formulas"]["body"]
+    assert "No new curve or mirror is inferred" in presentation["formulas"]["body"]
     assert "R/C and current P" not in geometry
     assert body["hitbox"]["drawScale"] == draw and body["visual"]["scale"] == entity_scale
-    assert "never move only the picture to pretend to extend collision reach" in geometry
+    assert "never extend mechanics by enlarging the PNG" in geometry
+    assert "Preserve all accepted offsets, pose, motion and unreported art during Repair" in geometry
+    runtime_rows = request_dossier(requests[0])["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
+    runtime_body = next(row for row in runtime_rows if row["id"] == body["id"])
+    for member in ("aim", "attachment", "reach", "rotation", "hitbox"):
+        assert runtime_body[member] == body[member]
     assert data == before
 
 

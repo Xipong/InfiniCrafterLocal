@@ -39,7 +39,7 @@ COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
     "movement/controllers, damage, collision, lifecycle and event links from the catalog."
 )
-VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(CAPABILITY_REGISTRY))
+VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(name for name, capability in CAPABILITY_REGISTRY.items() if capability.author_visible))
 
 
 def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
@@ -86,7 +86,7 @@ def planner_priority_header_for_llm() -> list[str]:
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
         "Source provenance constrains factual claims about the parents, not the mechanics you may invent. Create new purposeful mechanics from catalog primitives inspired by both parent identities; neither parent needs to have performed them. Do not present invented effects as observed parent abilities. No forced twist or unrelated gimmick is required.",
         "Use source tempo when available and useful to the composition; make deviations intentional.",
-        "Choose the physical contact and controls before the attack decoration. For a body intended to maintain continuous hand contact, use move_front_hand so native hand pose, visible grip and collision agree. owner_attached_projectile, held_body, handPose, grip and reuse_item_icon do not attach an arbitrary movement to the hand. Owner-center forward/retract and tether flight are deliberately detached alternatives, not substitutes for a gripped physical strike merely because a parent used them. A valid parent program is a source observation, not an upgrade recommendation: preserve useful reach and handling deliberately rather than copying an awkward origin. Evaluate the main attack's actual collision coverage; small secondary shots or a long painted blade do not extend it. Independent shots and deliberate transformations remain legal; choose them for coherent play rather than silently replacing the core interaction.",
+        "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. set_projectile_reach_curve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
     ]
 
@@ -119,17 +119,18 @@ def source_wire_units_for_llm(
     Final paths supply the scope; a bare legacy leaf name cannot establish its
     units. Boolean projections are excluded; alternative paths explain units, not original Author choices.
     """
-    scopes: dict[tuple[str, str], dict[str, list[str]]] = {}
+    scopes: dict[tuple[str, str, tuple[tuple[str, Any], ...]], dict[str, list[str]]] = {}
 
-    def leaves(spec: Any, path: str):
+    def leaves(spec: Any, path: str, conditions: tuple[tuple[str, Any], ...] = ()):
+        conditions = (*conditions, *spec.wire_literals.items())
         if spec.alternatives:
             for variant in spec.alternatives:
-                yield from leaves(variant, path)
+                yield from leaves(variant, path, conditions)
         elif spec.kind == "object":
             for name, child in spec.properties.items():
-                yield from leaves(child, f"{path}.{name}")
+                yield from leaves(child, f"{path}.{name}", conditions)
         elif spec.kind in {"integer", "number"}:
-            yield path, spec
+            yield path, spec, conditions
 
     def has_field(container: Mapping[str, Any], field_path: str) -> bool:
         parent, _, leaf = field_path.rpartition(".")
@@ -137,53 +138,67 @@ def source_wire_units_for_llm(
         return any(leaf in owner for owner in owners)
 
     for capability in CAPABILITY_REGISTRY.values():
-        for name, parameter in capability.params.items():
-            for author_path, spec in leaves(parameter, name):
-                projection = spec.wire_projection_card()
-                field_path = projection["wireName"]
-                if not field_path or spec.wire_enum or spec.wire_boolean_true_value is not None:
+        numeric = [leaf for name, parameter in capability.params.items() for leaf in leaves(parameter, name)]
+        readings: dict[str, set[tuple[Any, ...]]] = {}
+        for _, spec, _ in numeric:
+            readings.setdefault(spec.wire_name, set()).add((spec.wire_offset, spec.wire_multiplier,
+                spec.wire_divisor, spec.wire_updates_power, spec.units))
+        for author_path, spec, conditions in numeric:
+            # Different laws can store different physical quantities in the
+            # same native leaf. Keep their declared discriminator, never
+            # infer a law or collapse incompatible unit conversions.
+            condition = tuple(sorted(conditions)) if len(readings[spec.wire_name]) > 1 else ()
+            projection = spec.wire_projection_card()
+            field_path = projection["wireName"]
+            if not field_path or spec.wire_enum or spec.wire_boolean_true_value is not None:
+                continue
+            # The existing canonical projection owns both ratio terms and
+            # the target-update exponent; no capability-name unit table.
+            offset = spec.wire_offset
+            reading = (f"source - {offset}" if offset > 0 else f"source + {abs(offset)}") if offset else "source"
+            if projection["divisor"] != 1:
+                reading += f" * {projection['divisor']}"
+            power = projection["updatesPerTickPower"]
+            if power:
+                reading += " * updatesPerTick" + (f"^{power}" if power != 1 else "")
+            if projection["multiplier"] != 1:
+                reading += f" / {projection['multiplier']}"
+            suffix = "." + field_path
+            for path in capability.final_wire_paths:
+                if not path.endswith(suffix):
                     continue
-                # The existing canonical projection owns both ratio terms and
-                # the target-update exponent; no capability-name unit table.
-                offset = spec.wire_offset
-                reading = (f"source - {offset}" if offset > 0 else f"source + {abs(offset)}") if offset else "source"
-                if projection["divisor"] != 1:
-                    reading += f" * {projection['divisor']}"
-                power = projection["updatesPerTickPower"]
-                if power:
-                    reading += " * updatesPerTick" + (f"^{power}" if power != 1 else "")
-                if projection["multiplier"] != 1:
-                    reading += f" / {projection['multiplier']}"
-                suffix = "." + field_path
-                for path in capability.final_wire_paths:
-                    if not path.endswith(suffix):
-                        continue
-                    root = path[:-len(suffix)]
-                    roots = [f"raw.generatedParent.{root}"]
-                    if root == "gameplay" and field_path in LLM_ITEM_RAW_KEYS:
-                        roots.append("raw.item")
-                    for source in roots:
-                        fields = scopes.setdefault((source, capability.name), {})
-                        entry = [author_path, reading, spec.units]
-                        previous = fields.get(field_path)
-                        if previous is not None:
-                            if previous[1:] != entry[1:]:
-                                raise ValueError("one wire field has incompatible unit readings in declared variants")
-                            entry[0] = " | ".join(sorted(set(previous[0].split(" | ")) | {author_path}))
-                        fields[field_path] = entry
+                root = path[:-len(suffix)]
+                roots = [f"raw.generatedParent.{root}"]
+                if root == "gameplay" and field_path in LLM_ITEM_RAW_KEYS:
+                    roots.append("raw.item")
+                for source in roots:
+                    fields = scopes.setdefault((source, capability.name, condition), {})
+                    entry = [author_path, reading, spec.units]
+                    previous = fields.get(field_path)
+                    if previous is not None:
+                        if previous[1:] != entry[1:]:
+                            raise ValueError("one wire field has incompatible unit readings in declared variants")
+                        entry[0] = " | ".join(sorted(set(previous[0].split(" | ")) | {author_path}))
+                    fields[field_path] = entry
     scope_rows = []
-    for (source, fn), fields in scopes.items():
+    for (source, fn, condition), fields in scopes.items():
         if parent_packets is not None:
             containers = [row for packet in parent_packets for row in _source_path_objects(packet, source)]
+            containers = [row for row in containers if all(
+                any(owner.get(path.rsplit(".", 1)[-1]) == expected for owner in (
+                    _source_path_objects(row, path.rsplit(".", 1)[0]) if "." in path else [row]))
+                for path, expected in condition)]
             fields = {name: reading for name, reading in fields.items()
                       if any(has_field(row, name) for row in containers)}
         if fields:
-            scope_rows.append({"source": source, "fn": fn, "fields": fields})
+            scope_rows.append({"source": source, "fn": fn, **({"when": dict(condition)} if condition else {}), "fields": fields})
     return {
         "readingRule": (
             "Paths are relative to each parent packet; [] means each entry in that exact container. "
             "Read a source number in the listed Author param's units using sourceToAuthor; source means unchanged magnitude. "
-            "Dotted field keys are relative paths inside that exact source container. Only declared numeric projections are listed; "
+            "Dotted field keys are relative paths inside that exact source container. A scope's optional when maps "
+            "exact wire discriminator paths to required literal values; apply that reading only to matching source objects. "
+            "Only declared numeric projections are listed; "
             "no rule is implied for unlisted fields, boolean projections or a changed selector. "
             "For update-scaled readings, updatesPerTick is collision.extraUpdates + 1 of the same entity, never its emitter; "
             "if that context is absent, do not assume an update count. A list of alternative Author paths is a unit aid, "
@@ -283,13 +298,13 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         "that sentinel alone does not show weak trap power."
     )
     field_guide["projectileMotion"] = (
-        "Decide the trajectory of every moving entity deliberately. move_straight has no falling arc; "
-        "move_gravity_arc adds its explicit vertical velocity increment from the first projectile update. "
-        "Source projectile identity, arrow flags and aiStyle do not execute native AI in a generated entity. "
-        "Use observed source motion when provided; otherwise your domain knowledge may guide the authored "
-        "choice, but is not a verified source measurement. A straight or altered shot remains legal when "
-        "intentional and coherent with the concept. Do not accidentally promise ballistic motion while "
-        "authoring constant velocity. No host-selected movement or weapon preset is supplied."
+        "move_straight has no falling arc; accelerate_projectile_vertical adds signed world acceleration. "
+        "Retention, sine law, seek, orbit, attachment, rotation, return and arrival are independent choices; "
+        "none implies channel, collision policy or lifetime. Optional window admits a phase-only gate or "
+        "all timing fields together; since_release/since_return clocks are inactive before their latch. "
+        "Use each card's units and dependencies. Source projectile identity, arrow flags and aiStyle do not "
+        "execute native AI here; domain knowledge is not a verified source measurement. Altered motion is "
+        "legal when deliberate; never promise a ballistic arc with only constant velocity."
     )
     field_guide["damageClass"] = {
         "builtInTokens": list(DAMAGE_CLASS_TOKENS), "meaningByToken": dict(DAMAGE_CLASS_MEANINGS),
@@ -408,7 +423,7 @@ def realization_execution_truth_for_llm() -> dict[str, str]:
     return {
         "authority": "Optional realization.description, realization.playerExperience and realization.selfEvaluation are advisory context, never executable facts or required reports. Account for the chosen inputs, entities, subscribed events and terminal paths; report only behaviors supported by that exact topology, including their conditions and limits. A newly invented mechanic needs executable support, not parent precedent.",
         "placementUse": "The placement binding action performs the authored placement transaction and does not emit item_body.on_use; contactDamage must be false. If the result must both attack/use its body and place, author those as separate supported inputs. Never describe them as simultaneous on one placement binding.",
-        "terminationEvents": "on_expire fires on natural lifetime expiry and move_proximity_missile proximity detonation; a kill before the final lifetime update does not emit it. on_kill fires on projectile termination, including collision death, penetration exhaustion, proximity detonation, natural expiry, ordinary return-to-owner completion and controller cancellation. Only explicitly attached actions execute. on_hit needs actual collision, not proximity alone; on_tile_collision means each collision. An on_expire effect is not guaranteed at an earlier final bounce/collision. Area damage excludes the direct NPC only for on_hit/on_crit; on_kill has no remembered direct target.",
+        "terminationEvents": "on_expire fires on natural lifetime expiry or explicit set_projectile_proximity_action action=expire_then_kill; an earlier kill does not emit it. on_kill fires on projectile termination, including collision death, penetration exhaustion, natural expiry and explicit kill actions such as arrival. A return trigger alone does not kill or seek. Only attached actions execute; termination does not imply an explosion. on_hit needs actual collision, not proximity alone; on_tile_collision means each collision. Area damage excludes the direct NPC only for on_hit/on_crit; on_kill has no remembered direct target.",
         "entityTopology": "Stationary kind alone does not fire. Explicit periodic spawn_entity_on_event can shoot a referenced entity; target_and_fire separately provides NPC acquisition and timed shooting. An admitted free_projectile spawn creates independent projectiles; configure_spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive. Do not claim a singleton minion/companion, minion-slot behavior or a per-owner cap unless explicitly authored.",
         "activeEquipment": "equipped is passive only. Any raised/used/placed/heal action requires a primary_use or alternate_use binding and must be described as requiring the item to be actively used rather than merely worn.",
         "stackCost": "For a non-placement active use, stackCost=1 consumes one whole generated item. There is no hidden charge counter; do not call whole-item consumption a charge unless an explicit supported state mechanic exists.",
@@ -451,7 +466,7 @@ def planner_prompt_usability_report(a: dict[str, Any], b: dict[str, Any], key: s
     payload = build_llm_author_payload(a, b, key)
     encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     catalog_names = [row["fn"] for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]]
-    expected_names = set(CAPABILITY_REGISTRY)
+    expected_names = set(VISIBLE_ENGINE_FUNCTIONS)
     return {
         "schema": "infini.low-level-author-prompt-usability.v1",
         "ok": len(encoded) <= PLANNER_PROMPT_LIMIT_CHARS and set(catalog_names) == expected_names,

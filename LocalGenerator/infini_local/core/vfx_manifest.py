@@ -63,7 +63,12 @@ _ACCEPTED_GAMEPLAY_CONTEXT_RULE = (
     "useTime/useAnimation are base item cadence/animation in world ticks (60/s); itemScale is the "
     "held-root dimensionless multiplier, not a VFX slot scale or PNG frame size. Do not infer "
     "missing values, live attack-speed modifiers or event frequency from names/prose. "
-    "runtimePairs owns event availability; acceptedRuntimeProgramReadOnly owns exact bindings/events."
+    "runtimePairs owns event availability; acceptedRuntimeProgramReadOnly owns exact bindings/events and "
+    "independent motion fields, including ordered seek. attachment reads an anchor; armPose alone does not "
+    "attach a body. A window may be phase-only or include clock/startDelayTicks/durationTicks together. "
+    "Absent window means all active updates; since_release/since_return are inactive before their latch, "
+    "released may overlap returning. Native counts stay native counts. Read-only motion creates no slots, "
+    "events, textures or Repair permissions."
 )
 
 
@@ -244,9 +249,13 @@ def _textured_path_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
             continue
         sources = ["anchorHistory"]
         controller, movement = entity.get("controller"), entity.get("movement")
-        if isinstance(controller, Mapping) and controller.get("code") == 1:
+        if isinstance(entity.get("beamGeometry"), Mapping):
+            sources.append("beam")
+        elif isinstance(entity.get("lashGeometry"), Mapping):
+            sources.append("whip")
+        elif isinstance(controller, Mapping) and controller.get("code") == 1:
             if controller.get("name") == "channel_beam" and type(controller["code"]) is int:
-                sources.append("beam")  # Colliding gives ChannelBeam precedence over movement.
+                sources.append("beam")  # Retained accepted wire, no recompile.
         elif isinstance(movement, Mapping) and movement.get("name") == "move_whip_lash" and type(movement.get("code")) is int and movement["code"] == 18:
             sources.append("whip")
         sources.append("ownerLink")  # Generic explicit connector; no movement/preset selection.

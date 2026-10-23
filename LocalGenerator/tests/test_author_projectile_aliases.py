@@ -122,7 +122,6 @@ def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(
 
 @pytest.mark.parametrize("fn,name,wire_name,lo,hi", [
     ("damage_area_on_event", "radiusTiles", "radiusPx", 8, 768),
-    ("move_proximity_missile", "triggerRadiusTiles", "proximityRadiusPx", 4, 512),
 ])
 # Each owner retains both bounds, a non-boundary exact pixel, and every
 # rejection class. Extra interior pixels repeat the same exact projection.
@@ -249,7 +248,7 @@ def test_root_spawn_fields_are_omittable_only_for_exact_child_kind():
     assert not audit_compiler_receipts(receipts, final_document=forged_wire)["ok"]
 
 
-@pytest.mark.parametrize("movement", ["move_straight", "move_gravity_arc", "move_boomerang", "move_returning_glaive", "move_flail_tether"])
+@pytest.mark.parametrize("movement", ["move_straight", "accelerate_projectile_vertical", "set_projectile_return_trigger", "seek_projectile"])
 @pytest.mark.parametrize("tile_collide", [False, True])
 def test_bounce_omission_is_limited_to_exact_inactive_consumer_branches(movement, tile_collide):
     document = build_capability_witness(movement)
@@ -258,7 +257,7 @@ def test_bounce_omission_is_limited_to_exact_inactive_consumer_branches(movement
     _, explicit = compiled_entity(document, collision)
     assert explicit["collision"]["bounceCount"] == 17
     collision["params"].pop("bounceCount")
-    allowed = not tile_collide or movement in {"move_boomerang", "move_returning_glaive", "move_flail_tether"}
+    allowed = not tile_collide
     assert validate_runtime_program(document)["ok"] is allowed
     if allowed:
         _, entity = compiled_entity(document, collision)
@@ -305,8 +304,8 @@ def test_omitted_bounce_stays_absent_during_unrelated_repair():
 
 @pytest.mark.parametrize("delete_motion", ["witness_call", "other_motion"])
 @pytest.mark.parametrize("author_bounce", [False, True])
-def test_repair_resolves_movement_conflict_before_conditional_bounce_omission(delete_motion, author_bounce):
-    document = build_capability_witness("move_boomerang")
+def test_repair_movement_conflict_cannot_invent_an_active_collision_choice(delete_motion, author_bounce):
+    document = build_capability_witness("move_straight")
     collision = selected(document, "set_projectile_collision")
     collision["params"].pop("bounceCount")
     collision["params"]["tileCollide"] = True
@@ -315,34 +314,27 @@ def test_repair_resolves_movement_conflict_before_conditional_bounce_omission(de
         "id": "other_motion", "fn": "move_straight", "target": motion["target"],
     })
     errors = validate_runtime_program(document)["errors"]
-    assert {row["code"] for row in errors} == {"exclusive_component_conflict"}
+    assert {row["code"] for row in errors} == {"exclusive_component_conflict", "duplicate_single_component", "missing_dependency_param"}
     scope = build_runtime_repair_scope(document, errors)
     assert next(row["paths"] for row in scope["fieldPermissions"]["calls"]
                 if row["id"] == collision["id"]) == ["params.bounceCount"]
     candidate = deepcopy(collision)
     candidate["params"].update(pierce=99, **({"bounceCount": 7} if author_bounce else {}))
     filtered, audit = filter_repair_patch_scope(document, {
-        "note": "keep one chosen movement", "callsUpsert": [candidate], "callIdsDelete": [delete_motion],
+        "note": "keep one movement and choose collision", "callsUpsert": [candidate], "callIdsDelete": [delete_motion],
     }, scope)
-    missing_new_choice = delete_motion == "witness_call" and not author_bounce
-    assert audit["ok"] is not missing_new_choice, audit
+    assert audit["ok"] is author_bounce, audit
     repaired = apply_repair_patch(document, filtered)
     result = selected(repaired, "set_projectile_collision")["params"]
     assert result["pierce"] == collision["params"]["pierce"]
-    if delete_motion == "other_motion":
-        assert "bounceCount" not in result
-        if author_bounce:
-            assert any(row["reason"] == "inactive_omission_stays_frozen" for row in audit["ignoredChanges"])
-    elif author_bounce:
-        assert result["bounceCount"] == 7
+    if author_bounce:
+        _, entity = compiled_entity(repaired, selected(repaired, "set_projectile_collision"))
+        assert entity["collision"]["bounceCount"] == result["bounceCount"] == 7
     else:
-        assert any(row.get("actual", {}).get("code") == "missing_dependency_param" for row in audit["errors"])
+        assert "bounceCount" not in result
         assert {row["code"] for row in validate_runtime_program(repaired)["errors"]} == {"missing_dependency_param"}
         with pytest.raises(ValueError):
             compile_runtime_program(repaired)
-        return
-    _, entity = compiled_entity(repaired, selected(repaired, "set_projectile_collision"))
-    assert entity["collision"]["bounceCount"] == (7 if delete_motion == "witness_call" else 0)
 
 
 @pytest.mark.parametrize("fn,broken,value,frozen_key,hostile", [
@@ -375,13 +367,18 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     assert validate_runtime_program(repaired)["ok"]
 
 
-@pytest.mark.parametrize("fn", ["spawn_over_target", "move_bounce"])
-def test_retired_author_call_is_absent_from_schema_prompt_repair_and_registry(fn):
+@pytest.mark.parametrize("fn", ["spawn_over_target", "move_bounce", "move_gravity_arc", "move_orbit",
+                                  "move_boomerang", "move_proximity_missile", "channel_beam", "charge_then_release"])
+def test_retired_author_call_is_absent_from_schema_prompt_and_repair(fn):
     from infini_local.core.runtime_authoring.capability_registry import compact_capability_catalog, capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_gameplay_repair_dossier
+    if fn in CAPABILITY_REGISTRY:
+        assert CAPABILITY_REGISTRY[fn].author_visible is False
+        with pytest.raises(KeyError, match=fn):
+            build_capability_witness(fn)
     assert fn not in {row["fn"] for row in compact_capability_catalog()}
     assert fn not in {row["properties"]["fn"]["const"] for row in capability_provider_union()}
-    document = build_capability_witness("move_gravity_arc")
+    document = build_capability_witness("move_straight")
     selected(document)["fn"] = fn
     assert not validate_runtime_program(document)["ok"]
     scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
@@ -499,7 +496,7 @@ def test_retired_internal_capabilities_have_no_receipt_owner(fn):
 
 
 def test_reserved_movement_six_is_refused_without_renumbering_current_codes():
-    document = build_capability_witness("move_gravity_arc")
+    document = build_capability_witness("move_straight")
     wire = compile_runtime_program(document)
     wire.pop("runtimeContract")
     entity = next(e for e in wire["runtimeProgram"]["entities"] if "movement" in e)
@@ -520,3 +517,45 @@ def test_retired_receipt_owner_cannot_authenticate_current_mechanics(current, re
         if row.get("callId") == "witness_call":
             row["fn"] = retired
     assert not audit_compiler_receipts(receipts, final_document=wire)["ok"]
+
+
+@pytest.mark.parametrize("value,accepted", [
+    (0.0000625, True), (4.5 / 16, True), (32, True),
+    (0, False), (32.0001, False), (True, False), (None, False),
+])
+def test_independent_proximity_radius_uses_float_pixels_not_retired_integer_lattice(value, accepted):
+    fn = "set_projectile_proximity_action"
+    spec = CAPABILITY_REGISTRY[fn].params["triggerRadiusBlocks"]
+    assert (spec.minimum, spec.maximum, spec.multiple_of) == (0.0000625, 32, None)
+    document = build_capability_witness(fn)
+    call = selected(document)
+    call["params"]["triggerRadiusBlocks"] = value
+    before = deepcopy(document)
+    report = validate_runtime_program(document)
+    assert report["ok"] is accepted, report
+    if accepted:
+        wire, entity = compiled_entity(document, call)
+        assert entity["proximity"]["triggerRadiusPx"] == value * 16
+        assert "homing" not in entity and "seek" not in entity
+        rows = [r for r in wire["runtimeContract"]["finalWireReceipts"]
+                if r.get("callId") == call["id"] and r["authoredPath"].endswith(".params.triggerRadiusBlocks")]
+        assert len(rows) == 1 and rows[0]["value"] == value * 16
+        assert rows[0]["finalPath"].endswith(".proximity.triggerRadiusPx")
+    else:
+        assert any(e["path"].endswith(".params.triggerRadiusBlocks") for e in report["errors"])
+        with pytest.raises(ValueError):
+            compile_runtime_program(document)
+    assert document == before
+
+
+@pytest.mark.parametrize("pixels,accepted", [(4, True), (5, True), (512, True), (3, False), (513, False), (4.5, False), (True, False)])
+def test_retained_proximity_opcode_keeps_its_integer_pixel_domain(pixels, accepted):
+    # Explicit saved-wire control, not a compiler/importer for retired Author calls.
+    wire = compile_runtime_program(build_capability_witness("move_straight"))
+    wire.pop("runtimeContract")
+    entity = next(e for e in wire["runtimeProgram"]["entities"] if "movement" in e)
+    entity["movement"] = {"name": "move_proximity_missile", "code": 13,
+                          "params": {"rangeTiles": 20, "homingStrength": 0.1, "proximityRadiusPx": pixels}}
+    before = deepcopy(wire)
+    assert validate_runtime_wire(wire)["ok"] is accepted
+    assert wire == before

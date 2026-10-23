@@ -236,11 +236,19 @@ def test_nested_impact_requires_same_entity_existing_image_producer(renderer: st
 
 
 def test_beam_collision_precedence_does_not_advertise_dormant_whip() -> None:
-    data = _data("channel_beam")
+    data = _data("set_projectile_beam_geometry")
     entity = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
-    entity["movement"] = {"name": "move_whip_lash", "code": 18, "params": {"rangeTiles": 4, "segments": 10}}
+    lash = _data("set_projectile_lash_geometry")
+    lash_entity = next(row for row in lash["runtimeProgram"]["entities"] if row["kind"] != "item_body")
+    # Surface precedence mirrors the native collision reader, even for a dormant
+    # second geometry payload; this synthetic overlap is not fresh Author input.
+    entity["lashGeometry"] = copy.deepcopy(lash_entity["lashGeometry"])
+    before = copy.deepcopy(data)
     assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "beam", "ownerLink"]}]
-    entity["controller"]["name"] = "not_accepted_beam"
+    assert data == before
+    entity.pop("beamGeometry")
+    assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "whip", "ownerLink"]}]
+    entity.pop("lashGeometry")
     assert vfx.vfx_director_surface(data)["texturedPathSources"] == [{"entityId": entity["id"], "sources": ["anchorHistory", "ownerLink"]}]
 
 
@@ -250,7 +258,11 @@ BOUNDARY_TRANSPORTS = [pytest.param(case, id=case["id"]) for case in MATERIAL_BO
 
 @pytest.mark.parametrize("case", BOUNDARY_TRANSPORTS)
 def test_material_boundary_rejection(case):
-    data = _data(case["capability"])
+    # Historical boundary bytes/edits stay frozen; only the fresh mechanics
+    # producer changes to the explicit geometry primitive under test.
+    capability = {"channel_beam": "set_projectile_beam_geometry",
+                  "move_whip_lash": "set_projectile_lash_geometry"}.get(case["capability"], case["capability"])
+    data = _data(capability)
     kind = case["base"]
     if kind == "wire":
         target = _compiled()
@@ -281,8 +293,8 @@ def test_material_boundary_rejection(case):
 
 MATERIAL_PAYLOADS = (
     ("legacy", "", ""), ("sprite", "", ""), ("zero", "", ""), ("shared_asset", "", ""),
-    ("path", "anchorHistory", ""), ("path", "beam", "channel_beam"),
-    ("path", "whip", "move_whip_lash"), ("history_length", "anchorHistory", ""),
+    ("path", "anchorHistory", ""), ("path", "beam", "set_projectile_beam_geometry"),
+    ("path", "whip", "set_projectile_lash_geometry"), ("history_length", "anchorHistory", ""),
     ("screenShakeCue", "", ""), ("particle_zero", "", ""),
     ("particle_ordinary", "", ""), ("particle_maximum", "", ""),
 )

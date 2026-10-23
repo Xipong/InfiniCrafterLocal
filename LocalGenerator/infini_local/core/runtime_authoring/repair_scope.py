@@ -399,7 +399,7 @@ def _candidate_capability_viable(
     """
 
     cap = CAPABILITY_REGISTRY.get(name)
-    if cap is None:
+    if cap is None or not cap.author_visible:
         return False
     target_ids = tuple(str(value) for value in target_ids if str(value))
     target_kinds = {
@@ -1808,11 +1808,12 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             # A registry conditional conflict may also be resolved by changing
             # the exact selected leaf (for example disabling an explicit visual
             # mirror). Valid curve numbers and the other movement stay frozen.
+            causal_paths = _component_repair_paths(code, node_row, path=path, allowed=allowed)
             if node_namespace == "calls" and node_id:
-                for relative_path in _component_repair_paths(code, node_row, path=path, allowed=allowed):
+                for relative_path in causal_paths:
                     grant("calls", node_id, relative_path)
             for row_id in related:
-                if namespace_by_id.get(row_id) == "calls":
+                if namespace_by_id.get(row_id) == "calls" and not (row_id == node_id and causal_paths):
                     mark("calls", row_id, can_delete=True)
                     call_fn_change_ids.add(row_id)
                     grant("calls", row_id, "fn")
@@ -2954,6 +2955,10 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 mark("calls", call_id)
                 grant("calls", call_id, f"params.{name}")
                 context_id(target)
+    # Retained opcode/receipt metadata is not a fresh Author/Repair vocabulary.
+    create_call_fns.intersection_update(
+        name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible
+    )
     scope = _new_scope()
     scope["mutable"] = {
         "entityIds": sorted(mutable["entities"]),
@@ -3173,11 +3178,13 @@ def runtime_repair_schema_capabilities(scope: Mapping[str, Any]) -> list[str]:
     """Project finite request grammar without narrowing an authorized fn edit.
 
     capabilitySubset describes blocker cards, not every possible replacement
-    when fn/the complete call is mutable. Those scopes retain the registered
+    when fn/the complete call is mutable. Those scopes retain the Author-visible
     capability union; a parameter-only scope can use its exact blocker/support and
-    create-policy names. Grammar membership never grants a write permission.
+    create-policy names. Retained wire metadata is not a fresh patch vocabulary.
+    Grammar membership never grants a write permission.
     """
     registered = set(CAPABILITY_REGISTRY)
+    author_visible = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
     identity = _mapping(scope.get("identityChanges"))
     permissions = _mapping(scope.get("fieldPermissions"))
     fn_mutable = bool(identity.get("callFnIds")) or any(
@@ -3186,7 +3193,7 @@ def runtime_repair_schema_capabilities(scope: Mapping[str, Any]) -> list[str]:
         for path in _values(row.get("paths"))
     )
     if fn_mutable:
-        return sorted(registered)
+        return sorted(author_visible)
     names = set(_values(scope.get("capabilitySubset")))
     blockers = _mapping(scope.get("blockerPlan"))
     for key in ("directCapabilityNames", "supportingCapabilityNames", "existingBrokenCapabilityNames"):
@@ -3196,7 +3203,7 @@ def runtime_repair_schema_capabilities(scope: Mapping[str, Any]) -> list[str]:
         names.update(_values(create.get("allowedFns")))
     if names - registered:
         raise ValueError(f"Repair scope references unregistered capabilities: {sorted(names - registered)}")
-    return sorted(names)
+    return sorted(names & author_visible)
 
 
 def _scope_error(path: str, message: str, *, actual: Any = None) -> dict[str, Any]:

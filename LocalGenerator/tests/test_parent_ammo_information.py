@@ -81,20 +81,27 @@ def test_author_advisory_exposes_inheritance_tradeoffs_and_explicit_cost_scope()
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_actual_author_cards_explain_spawn_axes_event_origin_and_yoyo_rotation(monkeypatch, format_mode):
+def test_actual_author_cards_explain_spawn_axes_event_origin_and_independent_rotation(monkeypatch, format_mode):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
     request, _, _ = build_initial_author_request({}, {}, "emission-reading", model_name="offline-test-model")
     cards = {row["fn"]: row for row in request_dossier(request)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     spawn = json.dumps(cards["configure_spawn"], ensure_ascii=False)
-    yoyo = json.dumps(cards["move_yoyo_hover"], ensure_ascii=False)
+    rotation = cards["set_projectile_rotation"]
+    aim = cards["set_projectile_aim"]
+    assert "move_yoyo_hover" not in cards
     assert "on_hit/on_crit: struck NPC center" in spawn
     assert "periodic/on_spawn/on_kill: source projectile center" in spawn
     assert "facing uses current owner.direction" in spawn
     assert "velocity uses the producer-supplied gameplay axis" in spawn
     assert "cursor uses MouseWorld minus the shifted spawn position" in spawn
     assert "not the visible sprite's rotation" in spawn
-    assert "rotates the body by 0.35 radians per projectile update" in yoyo
-    assert "does not turn the player toward the cursor" in yoyo
+    assert "without changing velocity" in rotation["does"]
+    assert set(rotation["params"]["mode"]["enum"]) == {"axis", "velocity", "spin"}
+    assert rotation["params"]["radiansPerSecond"]["units"] == "radians/second"
+    assert "required for spin, exact zero for other modes" in rotation["params"]["radiansPerSecond"]["meaning"]
+    assert set(aim["params"]["source"]["enum"]) == {"initial", "cursor", "facing", "velocity"}
+    assert aim["params"]["turnOwner"]["default"] is False
+    assert "omission adds no turning side effect" in aim["params"]["turnOwner"]["meaning"]
 
 
 def test_author_distinguishes_weapon_shoot_field_from_an_observed_ammunition_shot():

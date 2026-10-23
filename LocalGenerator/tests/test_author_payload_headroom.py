@@ -3,6 +3,7 @@ from prompt_packet_helpers import request_dossier, dossier_text
 """Real builder admission, no provider calls or synthetic responses."""
 import copy
 import json
+from typing import Any
 
 import pytest
 
@@ -31,13 +32,174 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
         assert payload["parents"][label]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
     assert request_dossier(request) == payload
     assert len(user) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    assert sum(len(row["content"]) for row in request["messages"]) <= 220_000
     sent = _serialized_chat_request(monkeypatch, request)
     assert request_dossier(sent, declaration=request) == payload
+    assert sum(len(row["content"]) for row in sent["messages"]) <= 220_000
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expanded = _expand_constraint_references(catalog["capabilities"], catalog["fieldGuide"]["consumerConstraints"])
     assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
             for card in expanded] == compact_capability_catalog()
     assert source == before
+
+
+def test_fresh_cards_share_only_exact_parameter_metadata_and_dead_negative_clauses():
+    from dataclasses import replace
+    from infini_local.core.runtime_authoring.capability_registry import (
+        CAPABILITY_REGISTRY, RequirementSpec, runtime_authoring_prompt_field_guide,
+    )
+
+    before = {name: cap.audit_card() for name, cap in CAPABILITY_REGISTRY.items()}
+    cards = {card["fn"]: card for card in compact_capability_catalog()}
+    guide = runtime_authoring_prompt_field_guide()
+    assert len(cards) == 74
+    assert set(cards) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+    assert "paramRef" in guide["paramNotation"]
+    references = []
+    for name, card in cards.items():
+        cap = CAPABILITY_REGISTRY[name]
+        assert set(card["params"]) == set(cap.params)
+        for param, row in card["params"].items():
+            if "paramRef" not in row:
+                continue
+            assert set(row) == {"paramRef"}
+            fn, leaf = row["paramRef"].split(".")
+            assert fn in cards and leaf == param
+            assert "paramRef" not in cards[fn]["params"][leaf], "one direct lookup, not a reference chain"
+            assert CAPABILITY_REGISTRY[fn].params[leaf] == cap.params[param]
+            references.append((name, param))
+        expected = []
+        for rule in before[name].get("requires", []):
+            rule = copy.deepcopy(rule)
+            if rule["kind"] == "present_param_forbids_capability" and not CAPABILITY_REGISTRY[rule["capability"]].author_visible:
+                continue
+            if rule["kind"] == "capability_absent":
+                rule["anyOf"] = [fn for fn in rule["anyOf"] if CAPABILITY_REGISTRY[fn].author_visible]
+                if not rule["anyOf"]:
+                    continue
+            if rule.get("target") == "same_target":
+                rule.pop("target")
+            if "equals" in rule and rule["equals"] is None:
+                rule.pop("equals")
+            expected.append(rule)
+        assert card.get("requires", []) == expected, name
+    assert references
+    assert guide["requirementNotation"]["omittedMetadata"] == {"target": "same_target", "equals": None}
+    # A reference to an unknown/unregistered function is not proved unreachable.
+    unknown = RequirementSpec("present_param_forbids_capability", capability="future_function", param="count")
+    changed = replace(CAPABILITY_REGISTRY["configure_spawn"], requirements=(unknown,))
+    assert changed.author_prompt_card()["requires"][0]["capability"] == "future_function"
+    assert before == {name: cap.audit_card() for name, cap in CAPABILITY_REGISTRY.items()}
+
+
+@pytest.mark.parametrize("field,value", [("maximum", 9.0), ("units", "distinct units"),
+                                         ("description", "Distinct consumer meaning")])
+def test_shared_parameter_reference_never_hides_a_different_fact(field, value):
+    from dataclasses import replace
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
+    cap = CAPABILITY_REGISTRY["apply_status_on_event"]
+    assert cap.author_prompt_card()["params"]["delaySeconds"] == {
+        "paramRef": "apply_generated_buff_on_event.delaySeconds"}
+    changed = replace(cap, params={**cap.params, "delaySeconds": replace(cap.params["delaySeconds"], **{field: value})})
+    row = changed.author_prompt_card()["params"]["delaySeconds"]
+    assert "paramRef" not in row
+    key = {"maximum": "max", "description": "meaning", "units": "units"}[field]
+    assert row[key] == value
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode):
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    source = {"name": "literal zero/null source", "damage": 0, "generatedData": {
+        "gameplay": {"damage": 0, "generatedBuff": {"movementSpeed": 0, "lifeRegen": None}},
+        "accessory": {"movementSpeed": 0, "lifeRegen": None, "waterWalk": False},
+        "armor": {"movementSpeed": 0, "lifeRegen": None, "setBonusLifeRegen": 0},
+        "runtimeProgram": {"entities": [], "bindings": [], "calls": []},
+    }}
+    before = copy.deepcopy(source)
+    request, user, _ = build_initial_author_request(source, source, "canonical-card-parity", model_name="offline")
+    sent = _serialized_chat_request(monkeypatch, request)
+    packet = request_dossier(sent, declaration=request)
+    for label in ("A", "B"):
+        raw = packet["parents"][label]["packet"]["raw"]
+        assert raw["item"]["damage"] == 0
+        for key, value in source["generatedData"].items():
+            assert raw["generatedParent"][key] == value
+    assert source == before
+    catalog = packet["runtimeCapabilityContract"]["catalog"]
+    guide = catalog["fieldGuide"]
+    expanded: Any = _expand_constraint_references(catalog["capabilities"], guide["consumerConstraints"])
+    cards: dict[str, dict[str, Any]] = {row["fn"]: row for row in expanded}
+    seconds_primer = "World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
+    checked = 0
+    shared = 0
+
+    def normalize_meanings(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: child.removeprefix(seconds_primer)
+                    if key in {"meaning", "description"} and isinstance(child, str)
+                    else normalize_meanings(child) for key, child in value.items()}
+        if isinstance(value, list):
+            return [normalize_meanings(child) for child in value]
+        return value
+
+    def resolve_param(fn: str, param: str) -> dict[str, Any]:
+        row = copy.deepcopy(cards[fn]["params"][param])
+        if "paramRef" in row:
+            owner, leaf = row["paramRef"].split(".")
+            assert "paramRef" not in cards[owner]["params"][leaf]
+            row = copy.deepcopy(cards[owner]["params"][leaf])
+            fn = owner
+        if fn == "configure_armor" and "meaning" not in row:
+            row["meaning"] = resolve_param("configure_accessory", param)["meaning"]
+        return row
+
+    for fn, card in cards.items():
+        cap = CAPABILITY_REGISTRY[fn]
+        source = cap.audit_card()
+        for key in ("fn", "does", "targets", "exclusiveGroup", "acceptedEvents", "emitsEvents",
+                    "positionOwnership", "multiplicity", "maxPerTarget", "budget"):
+            if key in cap.prompt_card():
+                assert card[key] == source[key], (fn, key)
+        if cap.effect_groupable:
+            assert card["effectGroups"] == {"$ref": "#/fieldGuide/effectGroups"}
+            assert guide["effectGroups"] == source["effectGroups"]
+        for param, original in source["params"].items():
+            row = resolve_param(fn, param)
+            spec = cap.params[param]
+            if spec.shared_type:
+                assert row == {"typeRef": spec.shared_type, **({"optional": True} if not spec.required else {})}
+                assert guide["types"][spec.shared_type] == original["shape"] == spec.schema()
+                assert original["meaning"] == guide["types"][spec.shared_type]["description"]
+                shared += 1
+                continue
+            expected = normalize_meanings(copy.deepcopy(original))
+            expected.pop("required", None)
+            expected.pop("semanticType", None)  # Existing documented presentation-only omission.
+            if not spec.required:
+                expected["optional"] = True
+                if spec.neutral == 0:
+                    expected.pop("neutral", None)
+            for suffix, units in (("Seconds", "seconds"), ("Tiles", "blocks (tiles)"),
+                                  ("Px", "pixels"), ("Radians", "radians")):
+                if param.endswith(suffix) and spec.units == units:
+                    expected.pop("units", None)
+                    break
+            if fn == "configure_armor" and param.startswith("setBonus"):
+                expected["meaning"] = expected["meaning"].removeprefix(guide["setBonusParamPrefix"])
+            shape = expected.get("shape")
+            if isinstance(shape, dict) and shape.get("description") == expected["meaning"]:
+                shape.pop("description")
+            # Exact deep equality includes every nested bound, enum, unit,
+            # reference, ordering relation, omission rule, neutral and projection.
+            assert row == expected, (fn, param)
+            checked += 1
+    assert checked + shared == sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values() if cap.author_visible)
+    assert checked > 300 and shared > 0
+    assert request_dossier(request) == json.loads(user) == packet
 
 
 def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode_character(monkeypatch):

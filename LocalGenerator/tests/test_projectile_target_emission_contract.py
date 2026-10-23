@@ -17,7 +17,6 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.core.runtime_authoring.capability_registry import EVENT_ACTION_OPCODE
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from infini_local.pipelines import author_item_contract as contract
 from infini_local.pipelines import llm_authoring_pipeline as author
 from test_codex_subscription_contract import _encode_nullable_fixture
@@ -290,16 +289,21 @@ def test_receipt_forgery_cannot_change_selection_under_a_valid_author_claim():
 
 
 def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
-    doc = build_runtime_fixture("returning_potion")
-    wire = compile_runtime_program(doc)
-    for entity in wire["runtimeProgram"]["entities"]:
-        if "overTarget" in entity.get("spawn", {}):
-            assert entity["spawn"].pop("overTarget") == {"heightTiles": 0, "delayTicks": 0}
-    from captured_projectile_author import historical_returning_potion_program
-    historical = historical_returning_potion_program(wire["runtimeProgram"])
+    from pathlib import Path
+    path = Path(__file__).with_name("fixtures") / "runtime_program_v5_seed_corpus.json"
+    raw = path.read_bytes()
+    saved = next(row for row in json.loads(raw)["cases"] if row["caseId"] == "returning_potion")
+    wire = saved["expectedDeliveryWire"]
+    before = deepcopy(wire)
+    historical = wire["runtimeProgram"]
     fingerprint = hashlib.sha256(json.dumps(historical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
-    assert not any(key in json.dumps(wire["runtimeProgram"]) for key in ("stepCount", "selectionAnchor", "repeatPolicy"))
+    assert not any(key in json.dumps(historical) for key in ("stepCount", "selectionAnchor", "repeatPolicy"))
+    assert validate_runtime_wire({"runtimeProgram": historical})["ok"]
+    # The RAW archive's unrelated retired tooltip is still refused. Keep exact
+    # saved bytes separate from a current final delivery / PNG-ready claim.
+    assert [(e["path"], e["code"]) for e in validate_runtime_wire(wire)["errors"]] == [("$.tooltip", "unknown_final_wire_field")]
+    assert wire == before and path.read_bytes() == raw
     # The current exact fresh alias keeps the old radial runtime discriminator.
     old = compile_runtime_program(build_capability_witness("damage_nearest_on_event"))
     events = [e for row in old["runtimeProgram"]["entities"] for e in row["events"]]

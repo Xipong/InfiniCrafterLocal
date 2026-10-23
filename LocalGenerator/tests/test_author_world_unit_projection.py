@@ -49,10 +49,10 @@ def test_seconds_lower_to_world_ticks_without_mutating_author():
 
 
 def test_projection_metadata_and_target_update_context():
-    spec = CAPABILITY_REGISTRY["move_gravity_arc"].params["accelerationYBlocksPerSecondSquared"]
+    spec = CAPABILITY_REGISTRY["accelerate_projectile_vertical"].params["accelerationYBlocksPerSecondSquared"]
     assert spec.to_wire(900, updates_per_tick=2) == 1
     card = spec.wire_projection_card()
-    assert card["predecessorNames"] == ["accelY"]
+    assert card["wireName"] == "accelerationYPerUpdate"
     assert card["updatesPerTickPower"] == 2
     assert card["wireMinimum"] == -2 and card["wireMaximum"] == 2
     with pytest.raises(ValueError, match="updatesPerTick"):
@@ -75,7 +75,7 @@ def projectile_document(updates=2):
         call("set_projectile_collision", {"tileCollide": False, "ignoreWater": False,
             "pierce": 1, "updatesPerTick": updates, "immunity": {"localCooldown": 10}}, "shot"),
         call("set_projectile_damage", {"damageClass": "generic", "damage": 10, "knockback": 1, "ownerHitCheck": False}, "shot"),
-        call("move_gravity_arc", {"accelerationYBlocksPerSecondSquared": 900}, "shot"),
+        call("accelerate_projectile_vertical", {"accelerationYBlocksPerSecondSquared": 900}, "shot"),
     ]
     return source
 
@@ -91,7 +91,7 @@ def test_contextual_projectile_projection_and_strict_source_audit():
     assert shot["spawn"]["offsetPx"] == 8
     assert shot["spawn"]["overTarget"]["delayTicks"] == 2
     assert shot["lifetimeTicks"] == 150
-    assert shot["movement"]["params"]["gravityPerTick"] == 1
+    assert shot["verticalAcceleration"]["accelerationYPerUpdate"] == 1
     assert shot["collision"]["extraUpdates"] == 1
     assert shot["collision"]["localNpcHitCooldownTicks"] == 10
     assert validate_runtime_wire(wire)["ok"]
@@ -102,7 +102,6 @@ def test_contextual_projectile_projection_and_strict_source_audit():
         if "authoredPath" not in row:
             continue
         row["authoredPath"] = (row["authoredPath"]
-            .replace("accelerationYBlocksPerSecondSquared", "accelY")
             .replace("constantSpeedBlocksPerSecond", "constantSpeedPxPerUpdate")
             .replace("lifetimeSeconds", "lifetimeTicks")
             .replace("activationDelaySeconds", "activationDelayTicks")
@@ -128,7 +127,7 @@ def test_seconds_engine_bounds_and_nonzero_collapse_are_refused(seconds):
 def test_full_predecessor_speed_and_acceleration_range_remains_reachable(updates):
     cap = CAPABILITY_REGISTRY["configure_spawn"].params["velocity"]
     speed = cap.alternatives[0].properties["constantSpeedBlocksPerSecond"]
-    gravity = CAPABILITY_REGISTRY["move_gravity_arc"].params["accelerationYBlocksPerSecondSquared"]
+    gravity = CAPABILITY_REGISTRY["accelerate_projectile_vertical"].params["accelerationYBlocksPerSecondSquared"]
     for spec, engines in ((speed, (0, 80)), (gravity, (-2, 0, 2))):
         for engine in engines:
             author = spec.from_wire(engine, updates_per_tick=updates)
@@ -246,7 +245,7 @@ def test_child_velocity_uses_the_child_clock_including_nested_distributions():
     entities = {e["id"]: e for e in wire["runtimeProgram"]["entities"]}
     assert entities["shot"]["spawn"]["speedPxPerTick"] == 16
     assert entities["child"]["spawn"]["velocityDistribution"]["maxSpeedPxPerUpdate"] == 8
-    assert entities["child"]["movement"]["params"]["gravityPerTick"] == 0.25
+    assert entities["child"]["verticalAcceleration"]["accelerationYPerUpdate"] == 0.25
     assert entities["shot"]["events"][0]["periodTicks"] == 6
     assert entities["shot"]["events"][0]["delayTicks"] == 2
     report = validate_runtime_wire(wire)
@@ -293,7 +292,7 @@ def test_non_time_integer_lattices_and_float32_signed_neutrals_remain_exact():
     import math
     offset = CAPABILITY_REGISTRY["configure_spawn"].params["offsetBlocks"]
     regen = CAPABILITY_REGISTRY["configure_accessory"].params["lifeRegenHpPerSecond"]
-    gravity = CAPABILITY_REGISTRY["move_gravity_arc"].params["accelerationYBlocksPerSecondSquared"]
+    gravity = CAPABILITY_REGISTRY["accelerate_projectile_vertical"].params["accelerationYBlocksPerSecondSquared"]
     with pytest.raises(ValueError, match="non-integral"):
         offset.to_wire(0.01)
     with pytest.raises(ValueError, match="non-integral"):
@@ -387,15 +386,16 @@ def test_converted_native_float_rates_reject_float32_nonzero_collapse():
         assert spec.consumer_value_error(0.0, updates_per_tick=n) is None, spec
 
 
-def test_spiral_underflow_is_refused_at_author_leaf_without_mutation():
+def test_angular_oscillation_underflow_is_refused_at_author_leaf_without_mutation():
     source = projectile_document(2)
     source["runtimeProgram"]["calls"][-1] = call(
-        "move_spiral", {"turnRadiansPerSecond": 1e-45}, "shot")
+        "oscillate_projectile_velocity", {"law": {"angular_sine": {"amplitudeRadiansPerSecond": 1e-45}},
+            "frequencyRadiansPerSecond": 6, "phaseRadians": 0}, "shot")
     before = deepcopy(source)
     report = validate_runtime_program(source)
     assert not report["ok"]
     assert any(row["code"] == "consumer_representability"
-               and row["path"].endswith(".params.turnRadiansPerSecond")
+               and row["path"].endswith(".params.law.angular_sine.amplitudeRadiansPerSecond")
                for row in report["errors"])
     assert source == before
 

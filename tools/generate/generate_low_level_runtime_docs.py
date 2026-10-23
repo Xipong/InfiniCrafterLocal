@@ -39,8 +39,9 @@ EXTERNAL_REFERENCES = {
     "entity_combat": "tML ModProjectile damage/ownerHitCheck",
     "entity_lifecycle": "tML Projectile.timeLeft/Kill",
     "entity_collision": "tML ModProjectile.Colliding/OnTileCollide",
-    "movement": "ExampleMod flail/yoyo/whip and project custom AI",
-    "controller": "ExampleMod held projectile/Last Prism; Calamity holdout/beam",
+    "movement": "InfiniCrafterLocal retained custom movement kernels (saved wire)",
+    "controller": "InfiniCrafterLocal firing and retained position controllers",
+    "motion_primitive": "InfiniCrafterLocal composable motion kernels; native projectile/owner lifecycle",
     "event": "tML ModProjectile hooks + SendExtraAI/ReceiveExtraAI",
     "entity_utility": "tML Lighting.AddLight",
 }
@@ -67,6 +68,10 @@ def param_shape(spec: Any) -> str:
             shape += f"[{spec.minimum}..{spec.maximum}]"
     if spec.units:
         shape += f" {spec.units}"
+    if spec.exclusive_minimum is not None:
+        shape += f"; exclusiveMinimum={spec.exclusive_minimum}"
+    if spec.exclusive_maximum is not None:
+        shape += f"; exclusiveMaximum={spec.exclusive_maximum}"
     if spec.default is not None:
         shape += f"; optional, omitted = {json.dumps(spec.default)}"
     if spec.omission_condition is not None:
@@ -104,6 +109,7 @@ def event_input_cell(cap: Any) -> str:
 
 
 def inventory_markdown(audit: dict[str, Any]) -> str:
+    author_count = sum(cap.author_visible for cap in CAPABILITY_REGISTRY.values())
     lines = [
         "# Низкоуровневый capability inventory InfiniCrafterLocal",
         "",
@@ -114,7 +120,8 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "",
         f"Контракты: `{RUNTIME_PROGRAM_API_VERSION}` / `{RUNTIME_PROGRAM_SCHEMA}` / `{RUNTIME_WIRE_SCHEMA}`.",
         "",
-        f"Inventory: **{len(CAPABILITY_REGISTRY)} public capabilities**, "
+        f"Inventory: **{author_count} Author-visible capabilities**, "
+        f"**{len(CAPABILITY_REGISTRY) - author_count} saved-wire-only capabilities**, "
         f"**{len(ENTITY_KIND_REGISTRY)} entity kinds**, "
         f"**{len(INPUT_KIND_REGISTRY)} inputs**, **{len(BINDING_ACTION_REGISTRY)} binding actions**, "
         f"**{len(EVENT_KIND_REGISTRY)} events**. Machine audit: **{audit['score']}/{audit['scoreMax']}**, "
@@ -127,7 +134,7 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "",
         "## Текущий каталог",
         "",
-        "Все записи registry — публичные исполняемые capabilities. Каталог описывает current params, refs, units, consumers и safety bounds, не audit-only статусы/решения или историю экспозиции. Technical opcode/DTO projection не является скрытой gameplay capability.",
+        "Author-visible записи — текущие варианты свежего Author/Repair. Saved-wire-only записи сохраняют точное исполнение ранее принятых программ и их receipts, но не предлагаются модели как новая композиция. Колонка Author выводится из canonical author_visible; это действующая граница API, не история решений. Каталог сохраняет полный wire roster, params, refs, units, consumers и safety bounds.",
         "",
         '<a id="entities"></a>',
         "",
@@ -199,8 +206,8 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "`omissionAllowedOnlyWhen` задаёт точные ветви, где пропуск не выбирает механику. "
         "Типизированные projectile формы и старые wire-проекции: [PROJECTILE_AUTHOR_API_RU.md](../projectiles/PROJECTILE_AUTHOR_API_RU.md).",
         "",
-        "| capability | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | external reference |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| capability | Author | назначение | параметры и единицы | target/entity kinds | events/inputs | C# owner | Python owner | authority | safety/multiplicity | external reference |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for cap in CAPABILITY_REGISTRY.values():
         safety = f"{cap.multiplicity}; {cap.performance_budget}; slot={cap.component_slot}"
@@ -209,6 +216,7 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         lines.append(
             "| " + " | ".join([
                 f"`{esc(cap.name)}`",
+                "да" if cap.author_visible else "нет (saved wire)",
                 esc(cap.summary),
                 esc(params_cell(cap)),
                 esc(", ".join(cap.target_kinds)),
@@ -232,7 +240,7 @@ def inventory_markdown(audit: dict[str, Any]) -> str:
         "",
         "## Полнота",
         "",
-        "Каждая public capability имеет Python compiler callable, конкретные C# method symbols, exact final-wire paths и автоматически исполняемый vertical witness. "
+        "Каждая Author-visible capability имеет Python compiler callable, конкретные C# method symbols, exact final-wire paths и автоматически исполняемый vertical witness. Сохранённые compound opcodes проверяются как retained wire, а не повторно компилируются из retired Author. "
         "Структурная полнота registry не означает поддержку всего Terraria API: каталог намеренно конечный и включает только реализованные bounded executors.",
         "",
         '<a id="refresh"></a>',

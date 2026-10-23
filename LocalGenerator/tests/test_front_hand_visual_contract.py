@@ -9,7 +9,7 @@ import pytest
 from prompt_packet_helpers import request_dossier
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.pipelines import visual_generation_pipeline as visual
-from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_low_level_three_stage_pipeline import _visual_kit, wire_transport
 
@@ -18,9 +18,9 @@ ENTITY_GRIP = {"normalizedX": 0.23456789, "normalizedY": 0.67890123}
 
 
 def _visual_input(mode="baked_sprite"):
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data = compile_runtime_program(build_capability_witness("move_straight"))
     raw = _visual_kit(data)
-    body = next(row for row in raw["entities"] if row["entityId"] == "chained_door")
+    body = next(row for row in raw["entities"] if row["entityId"] == "witness_entity")
     body.update(assetMode=mode, visualProjectRef="entity" if mode == "baked_sprite" else "item" if mode == "reuse_item_icon" else "none")
     if mode == "baked_sprite":
         body.update(prompt="independent handle, brass rim and three oak panels", silhouette="three panels with rim and handle",
@@ -36,7 +36,7 @@ def test_distinct_grip_survives_fresh_director_and_delivery(wire_transport):
     responses.append(raw)
     projected = visual.apply_visual_director(data, {}, {})
     delivered = sanitize_recipe_for_delivery(projected)
-    entity = next(row for row in delivered["runtimeProgram"]["entities"] if row["id"] == "chained_door")
+    entity = next(row for row in delivered["runtimeProgram"]["entities"] if row["id"] == "witness_entity")
     assert entity["visual"]["grip"] == ENTITY_GRIP
     assert "grip" not in delivered["visual"]
     assert delivered["gameplay"] == before["gameplay"]
@@ -49,11 +49,13 @@ def _hand_input(mode="reuse_item_icon"):
     data, raw = _visual_input(mode)
     # Explicit accepted-input fixture at the Visual boundary, not a compiler or
     # gameplay admission assertion. The mechanical lane owns that vertical slice.
-    data["runtimeProgram"]["entities"][1]["movement"] = {
-        "name": "move_front_hand", "code": 20,
-        "params": {"aimMode": "cursor", "durationTicks": 13, "startStretch": "quarter",
-                   "peakStretch": "full", "hitboxOffsetPx": 11},
-    }
+    body = data["runtimeProgram"]["entities"][1]
+    body.pop("movement")
+    body["collision"]["tileCollide"] = False  # explicitly supported always-absolute motion
+    body["aim"] = {"source": "cursor", "turnOwner": False}
+    body["attachment"] = {"anchor": "front_hand", "axisOffsetPx": 11, "normalOffsetPx": 0}
+    body["armPose"] = {"durationTicks": 13, "startStretch": "quarter", "peakStretch": "full",
+                       "endStretch": "none", "peakProgress": .3}
     return data, raw
 
 
@@ -86,9 +88,10 @@ def test_missing_selected_grip_repairs_only_that_owner(wire_transport, mode):
     else:
         expected["entities"][1]["grip"] = ENTITY_GRIP
         assert scope["fieldPermissions"]["itemPaths"] == []
-        assert scope["fieldPermissions"]["entities"] == [{"entityId": "chained_door", "paths": ["grip"]}]
+        assert scope["fieldPermissions"]["entities"] == [{"entityId": "witness_entity", "paths": ["grip"]}]
     assert result["visualKit"] == expected
-    assert result["runtimeProgram"]["entities"][1]["movement"] == mechanics["entities"][1]["movement"]
+    for member in ("aim", "attachment", "armPose", "hitbox", "collision"):
+        assert result["runtimeProgram"]["entities"][1][member] == mechanics["entities"][1][member]
     assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
 
 
@@ -101,7 +104,7 @@ def test_delivery_and_director_reject_the_same_missing_selected_metadata(monkeyp
         raw["item"]["grip"] = copy.deepcopy(ROOT_GRIP)
     owner = raw["item"] if mode == "reuse_item_icon" else raw["entities"][1]
     owner.pop(field)
-    accepted, errors = visual._validate_kit(raw, ["item", "chained_door"], "item", accepted_data=data)
+    accepted, errors = visual._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
     path = "$.item." + field if mode == "reuse_item_icon" else "$.entities[1]." + field
     assert accepted is None and path in {row["path"] for row in errors}
     projected = visual._apply_kit(data, raw)
@@ -125,14 +128,19 @@ def test_director_and_frozen_repair_packets_explain_exact_hand_dependencies(wire
     for request, key in zip(requests, ("runtimeEntities", "runtimeEntitiesReadOnly")):
         assert request["response_format"]["type"] == format_name
         packet = request_dossier(request)
-        row = next(row for row in packet[key] if row["id"] == "chained_door")
-        assert row["movement"] == data["runtimeProgram"]["entities"][1]["movement"]
+        row = next(row for row in packet[key] if row["id"] == "witness_entity")
+        assert not row.get("movement")  # read-only summary may keep an empty bag
+        for member in ("aim", "attachment", "armPose"):
+            assert row[member] == data["runtimeProgram"]["entities"][1][member]
         dependency = row["spriteDependenciesReadOnly"]
         assert dependency["requiredFields"] == ["renderSizePx", "forwardAngleDegrees", "grip"]
         assert dependency["selectedOwnerByAssetMode"] == {"reuse_item_icon": "item", "baked_sprite": "entity",
                                                          "no_asset": None, "runtime_geometry": None}
         guidance = packet["spritePresentationReadOnly"]["frontHand"]
-        assert "H + aimedAxis * hitboxOffsetPx" in guidance
+        assert "attachment.anchor=front_hand" in guidance
+        assert "never derive them from art" in guidance
+        assert row["attachment"]["axisOffsetPx"] == 11
+        assert row["attachment"]["normalOffsetPx"] == 0
         assert "no duplicate" in guidance
         assert "never" in guidance
     assert not responses
@@ -149,7 +157,7 @@ def test_distinct_image_request_forwards_exact_grip_without_truncating_art(monke
     # Exercise the real image request adapter, with prompt-only policy: no PNG,
     # backend, GPU, image workspace or provider calls.
     outcome = images.generate_visual_asset(data, "runtime:held_body", raw["entities"][1]["prompt"], "",
-                                          "hand_body", 64, entity_id="chained_door")
+                                          "hand_body", 64, entity_id="witness_entity")
     assert outcome[3] == "prompt_only"
     prompt = data["debug"]["runtime:held_bodyFinalPrompt"]
     facts = json.JSONDecoder().raw_decode(prompt.split("Read-only final-frame facts: ", 1)[1])[0]
@@ -157,8 +165,10 @@ def test_distinct_image_request_forwards_exact_grip_without_truncating_art(monke
     assert facts["grip"] != ROOT_GRIP
     assert raw["entities"][1]["prompt"] in prompt
     assert "visible handle/hand-contact region must contain the declared final-space grip" in prompt
-    assert facts["movementReadOnly"] == data["runtimeProgram"]["entities"][1]["movement"]
-    assert not image_final_frame_prompt_clause(data, "impact", 32, entity_id="chained_door")
+    assert "movementReadOnly" not in facts
+    for member in ("aim", "attachment", "armPose"):
+        assert facts[member] == data["runtimeProgram"]["entities"][1][member]
+    assert not image_final_frame_prompt_clause(data, "impact", 32, entity_id="witness_entity")
 
 
 @pytest.mark.parametrize("mode", ["no_asset", "runtime_geometry"])
@@ -174,7 +184,7 @@ def test_non_png_hand_modes_do_not_require_grip(wire_transport, mode):
     assert len(requests) == 1 and not responses
 
 
-@pytest.mark.parametrize("fault", ["entity", "project", "duplicate", "opcode", "name"])
+@pytest.mark.parametrize("fault", ["entity", "project", "duplicate", "other_anchor", "pose_only"])
 def test_unresolved_identity_or_unselected_driver_never_diagnoses_grip(fault):
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors
     data, raw = _hand_input("reuse_item_icon")
@@ -184,8 +194,10 @@ def test_unresolved_identity_or_unselected_driver_never_diagnoses_grip(fault):
         raw["entities"][1]["visualProjectRef"] = "unknown"
     elif fault == "duplicate":
         raw["entities"].append(copy.deepcopy(raw["entities"][1]))
+    elif fault == "other_anchor":
+        data["runtimeProgram"]["entities"][1]["attachment"]["anchor"] = "owner_center"
     else:
-        data["runtimeProgram"]["entities"][1]["movement"]["code" if fault == "opcode" else "name"] = 19 if fault == "opcode" else "move_forward_then_retract"
+        data["runtimeProgram"]["entities"][1].pop("attachment")
     assert not front_hand_sprite_errors(data, kit=raw)
 
 
@@ -199,7 +211,7 @@ def test_distinct_atomic_grip_rejects_invalid_presence_at_exact_leaf(bad_grip, l
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors
     data, raw = _hand_input("baked_sprite")
     raw["entities"][1]["grip"] = bad_grip
-    accepted, errors = visual._validate_kit(raw, ["item", "chained_door"], "item", accepted_data=data)
+    accepted, errors = visual._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
     assert accepted is None and "$.entities[1]." + leaf in {row["path"] for row in errors}
     projected = visual._apply_kit(data, raw)
     assert "$.runtimeProgram.entities[1].visual." + leaf in {row["path"] for row in front_hand_sprite_errors(projected)}
@@ -217,7 +229,7 @@ def test_partial_distinct_grip_repair_preserves_valid_coordinate(wire_transport)
     result = visual.apply_visual_director(data, {}, {})
     assert result["visualKit"]["entities"][1]["grip"] == ENTITY_GRIP
     assert request_dossier(requests[1])["repairScope"]["fieldPermissions"]["entities"] == [
-        {"entityId": "chained_door", "paths": ["grip.normalizedY"]}]
+        {"entityId": "witness_entity", "paths": ["grip.normalizedY"]}]
     assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
 
 
@@ -261,20 +273,23 @@ def test_real_image_retry_keeps_selected_owner_grip_without_png_or_provider_call
     if mode == "reuse_item_icon":
         role, entity_id, canvas, authored = "item", "", 32, raw["item"]["prompt"]
     else:
-        role, entity_id, canvas, authored = "runtime:held_body", "chained_door", 64, raw["entities"][1]["prompt"]
+        role, entity_id, canvas, authored = "runtime:held_body", "witness_entity", 64, raw["entities"][1]["prompt"]
     images.generate_visual_asset(projected, role, authored, "", "retry_hand", canvas, entity_id=entity_id)
     assert len(calls) == 2
     frames = [json.JSONDecoder().raw_decode(prompt.split("Read-only final-frame facts: ", 1)[1])[0] for prompt in calls]
     assert frames[0] == frames[1]
     assert frames[0]["grip"] == (ROOT_GRIP if mode == "reuse_item_icon" else ENTITY_GRIP)
     if mode == "reuse_item_icon":
-        assert frames[0]["sharedEntityMultipliers"][0]["movementReadOnly"] == data["runtimeProgram"]["entities"][1]["movement"]
+        shared = frames[0]["sharedEntityMultipliers"][0]
+        assert "movementReadOnly" not in shared
+        for member in ("aim", "attachment", "armPose"):
+            assert shared[member] == data["runtimeProgram"]["entities"][1][member]
     assert not list(tmp_path.rglob("*.png"))
 
 
-def test_legacy_driver_omission_and_absent_grip_remain_unchanged(wire_transport):
+def test_plain_flight_does_not_gain_hand_requirements_or_grip(wire_transport):
     from infini_local.core.visual_contract_schema import front_hand_sprite_errors
-    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data = compile_runtime_program(build_capability_witness("move_straight"))
     raw = _visual_kit(data)
     responses, requests = wire_transport
     responses.append(raw)
@@ -290,7 +305,7 @@ def test_valid_selected_metadata_has_no_dependency_errors_in_either_stage():
     for mode in ("reuse_item_icon", "baked_sprite"):
         data, raw = _hand_input(mode)
         raw["item"]["grip"] = ROOT_GRIP
-        accepted, errors = visual._validate_kit(raw, ["item", "chained_door"], "item", accepted_data=data)
+        accepted, errors = visual._validate_kit(raw, ["item", "witness_entity"], "item", accepted_data=data)
         assert accepted is not None and not errors
         delivered = sanitize_recipe_for_delivery(visual._apply_kit(data, accepted))
         assert not front_hand_sprite_errors(delivered)

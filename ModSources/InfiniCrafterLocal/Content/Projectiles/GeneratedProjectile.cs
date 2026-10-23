@@ -132,6 +132,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int? originalDamageOverride = null)
     {
         int syncedTimeLeft = Projectile.timeLeft;
+        int syncedAlpha = Projectile.alpha;
+        float syncedScale = Projectile.scale;
         int syncedBounces = _remainingBounces;
         int syncedActivationDelay = _activationDelayTicks;
         _data = data;
@@ -187,6 +189,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         _remainingBounces = entity.Collision.BounceCount;
         _activationDelayTicks = entity.Spawn.OverTarget.DelayTicks;
         if (!preserveSyncedState) {
+            ResetComposableState();
             _initialNpcExclusion = RuntimeInitialNpcExclusion.None;
             _lastPublishedOwnerVector = null;
             _lastOwnerVectorSyncAge = -1000;
@@ -215,7 +218,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
             _activationDelayTicks = Math.Max(0, syncedActivationDelay);
             bool waitingForActivation = _activationDelayTicks > 0 || entity.Spawn.OverTarget.DelayTicks > 0 && _age == 0;
             Projectile.friendly = !waitingForActivation && entity.Damage.Enabled && Projectile.damage > 0;
-            Projectile.alpha = waitingForActivation ? 220 : 0;
+            Projectile.alpha = waitingForActivation ? 220 : HasComposableMotion ? syncedAlpha : 0;
+            if (entity.VisualScaleRate is not null) Projectile.scale = syncedScale;
         }
         _preserveSyncedStateOnHydrate = false;
         // Only fully configured native results convert a reservation to live
@@ -269,12 +273,14 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Projectile.netImportant = entity.IsOwnerAttached
             || entity.IsStationary
             || entity.NativeSentry == true
-            || entity.Controller.Code != RuntimeControllerCode.None;
+            || entity.Controller.Code != RuntimeControllerCode.None || HasComposableMotion;
         Projectile.sentry = entity.NativeSentry == true;
         Projectile.timeLeft = Math.Max(1, AuthoredTicksToProjectileUpdates(entity.LifetimeTicks) + _activationDelayTicks);
         // Charging is a lifecycle phase, not an entity-kind collision policy.
         // Released peers retain their explicitly authored collision on hydration.
         if (entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease && !_released)
+            Projectile.tileCollide = false;
+        if (_returning && entity.ReturnTrigger?.DisableTileCollisionOnReturn == true)
             Projectile.tileCollide = false;
     }
 
@@ -362,7 +368,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 return 0;
             float spread = Math.Clamp(spreadOverride ?? entity.Spawn.SpreadRadians, 0f, MathHelper.TwoPi);
             if (entity.Spawn.VelocityDistribution is not null
-                && (entity.IsStationary || entity.Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
+                && (entity.IsStationary && !entity.HasMotionPositionDriver || entity.Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
                 return 0;
             // One owner seed after batch admission. Peers observe the actual
             // chosen native vectors, and activation delay never rerolls them.

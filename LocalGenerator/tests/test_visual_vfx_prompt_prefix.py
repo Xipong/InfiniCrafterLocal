@@ -125,8 +125,18 @@ def test_visual_receives_authored_hitbox_curve_without_selecting_sprite_scale(wi
     assert data == before
 
 
-def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_transport):
-    beam = compile_runtime_program(build_capability_witness("channel_beam"))
+@pytest.mark.parametrize("base_flight", [False, True], ids=["attached-line", "moving-line"])
+def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_transport, base_flight):
+    source = build_capability_witness("set_projectile_beam_geometry")
+    if not base_flight:
+        calls = source["runtimeProgram"]["calls"]
+        calls[:] = [call for call in calls if call["fn"] != "move_straight"]
+        calls.append({"id": "explicit_anchor", "fn": "attach_projectile", "target": "witness_entity",
+                      "params": {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0}})
+        next(call for call in calls if call["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
+    next(call for call in source["runtimeProgram"]["calls"]
+         if call["fn"] == "set_projectile_beam_geometry")["params"]["lengthBlocks"] = 1.0
+    beam = compile_runtime_program(source)
     before = copy.deepcopy(beam)
     raw = _visual_kit(beam)
     body = next(row for row in raw["entities"] if row["entityId"] == "witness_entity")
@@ -137,15 +147,25 @@ def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_
     responses.extend([raw, authored])
     projected = visual.apply_visual_director(beam, {}, {})
     packet = request_dossier(sent[0])
-    entity = next(row for row in packet["runtimeEntities"] if row["controller"].get("name") == "channel_beam")
-    assert entity["controller"]["params"]["rangeTiles"] == 1.0
-    assert "collision" in entity["driverMeaningReadOnly"]["controller"]
+    entity = next(row for row in packet["runtimeEntities"] if "beamGeometry" in row)
+    assert entity["beamGeometry"]["lengthPx"] == 16.0
+    assert entity["beamGeometry"] == before["runtimeProgram"]["entities"][1]["beamGeometry"]
+    assert "collision" in entity["modifierMeaningReadOnly"]["beamGeometry"]
+    assert bool(entity["movement"]) is base_flight
+    assert entity["controller"] == {}
+    if not base_flight:
+        assert entity["attachment"] == before["runtimeProgram"]["entities"][1]["attachment"]
     final = vfx.attach_vfx_manifest(projected, "beam-geometry", llm_director=stage.call_llm_vfx_director)
     surface = request_dossier(sent[1])["runtimeSurface"]
     assert "beam" in next(row["sources"] for row in surface["texturedPathSources"] if row["entityId"] == "witness_entity")
     assert final["vfxManifest"]["slots"] == []
     assert final["runtimeProgram"]["entities"][1]["visual"]["assetMode"] == "runtime_geometry"
-    assert final["runtimeProgram"]["entities"][1]["controller"] == before["runtimeProgram"]["entities"][1]["controller"]
+    def mechanics(runtime):
+        result = copy.deepcopy(runtime)
+        for row in result["entities"]:
+            row.pop("visual", None)
+        return result
+    assert mechanics(final["runtimeProgram"]) == mechanics(before["runtimeProgram"])
     assert final["gameplay"] == before["gameplay"]
     assert not responses
 

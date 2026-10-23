@@ -164,7 +164,7 @@ def test_targeting_numeric_reject_guards_are_audited():
 
 
 @pytest.mark.parametrize("kind", ["temporary_helper", "stationary_projectile"])
-@pytest.mark.parametrize("movement", [None, "move_straight", "move_orbit"])
+@pytest.mark.parametrize("movement", [None, "move_straight", "orbit_projectile"])
 def test_firing_controller_preserves_explicit_same_entity_movement_and_stationary_omission(kind, movement):
     doc, controller = _fixture()
     next(e for e in doc["runtimeProgram"]["entities"] if e["id"] == controller["target"])["kind"] = kind
@@ -182,7 +182,12 @@ def test_firing_controller_preserves_explicit_same_entity_movement_and_stationar
     if movement is None:
         assert "movement" not in target
     else:
-        assert target["movement"]["name"] == movement
+        if movement == "orbit_projectile":
+            assert target["orbit"] == {"anchor": "owner_center", "radiusPx": .1, "radiansPerUpdate": .1,
+                "phaseRadians": .1, "identityPhaseRadians": .1}
+            assert "movement" not in target
+        else:
+            assert target["movement"]["name"] == movement
     shot = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == controller["params"]["shotEntity"])
     assert shot["movement"]["name"] == "move_straight"
     assert validate_runtime_wire(wire)["ok"]
@@ -199,7 +204,7 @@ def test_firing_controller_does_not_infer_a_movement_from_unknown_wire_driver():
     assert not validate_runtime_wire(wire)["ok"]
 
 
-def test_moving_firing_helper_does_not_expand_velocity_modifier_target_kinds():
+def test_moving_firing_helper_velocity_modifier_obeys_declared_kinds_and_position_exclusion():
     doc, controller = _fixture()
     next(e for e in doc["runtimeProgram"]["entities"] if e["id"] == controller["target"])["kind"] = "temporary_helper"
     motion = deepcopy(next(c for c in build_capability_witness("move_straight")["runtimeProgram"]["calls"] if c["fn"] == "move_straight"))
@@ -209,6 +214,14 @@ def test_moving_firing_helper_does_not_expand_velocity_modifier_target_kinds():
     modifier = deepcopy(next(c for c in build_capability_witness(modifier_fn)["runtimeProgram"]["calls"] if c["fn"] == modifier_fn))
     modifier.update(id="wrong_kind_modifier", target=controller["target"])
     doc["runtimeProgram"]["calls"].append(modifier)
+    assert "temporary_helper" in CAPABILITY_REGISTRY[modifier_fn].target_kinds
+    assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
+    modifier["target"] = next(e["id"] for e in doc["runtimeProgram"]["entities"] if e["kind"] == "item_body")
     report = validate_runtime_program(doc)
     assert not report["ok"]
     assert any(e["code"] == "wrong_target_kind" for e in report["errors"])
+    modifier["target"] = controller["target"]
+    orbit = deepcopy(next(c for c in build_capability_witness("orbit_projectile")["runtimeProgram"]["calls"] if c["fn"] == "orbit_projectile"))
+    orbit.update(id="absolute_orbit", target=controller["target"])
+    doc["runtimeProgram"]["calls"].append(orbit)
+    assert any(e["code"] == "exclusive_component_conflict" for e in validate_runtime_program(doc)["errors"])

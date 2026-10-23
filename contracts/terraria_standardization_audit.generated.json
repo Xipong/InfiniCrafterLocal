@@ -4,7 +4,7 @@
   "score": 88,
   "scoreMax": 88,
   "metrics": {
-    "capabilities": 73,
+    "capabilities": 96,
     "canonicalDamageClasses": 10,
     "canonicalUseStyles": 13,
     "canonicalAmmoCategories": 15,
@@ -382,9 +382,9 @@
       "detail": "root lowery.md must exist"
     },
     {
-      "name": "lowery:Gameplay Author-visible ",
+      "name": "lowery:Этот threshold не запрещ",
       "ok": true,
-      "detail": "lowery.md missing guardrail: Gameplay Author-visible semantic aliases: **нет**"
+      "detail": "lowery.md missing guardrail: Этот threshold не запрещает точный выбранный alias или one-to-one technical projection"
     },
     {
       "name": "lowery:Item.ammo",

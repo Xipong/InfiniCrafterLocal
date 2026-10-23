@@ -43,12 +43,14 @@ def test_serialized_author_keeps_spelling_once_and_preserves_mechanical_guides(m
     assert "runtimeProgram alone defines executable gameplay" in system
     header = " ".join(packet["priorityHeader"])
     assert "weapon archetype for execution" in header
+    assert "Deterministic code never infers gameplay" in header
+    assert "author every mechanic explicitly in runtimeProgram" in header
     assert "source tempo when available" in header
     assert "aiStyle" not in header and "Catalog membership" not in header
     motion = guide["projectileMotion"]
     assert all(phrase in motion for phrase in (
-        "aiStyle do not execute native AI", "domain knowledge may guide", "not a verified source measurement",
-        "intentional", "No host-selected movement or weapon preset",
+        "aiStyle do not execute native AI", "domain knowledge is not a verified source measurement",
+        "independent choices", "none implies channel, collision policy or lifetime", "legal when deliberate",
     ))
 
 

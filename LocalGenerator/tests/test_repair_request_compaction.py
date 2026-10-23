@@ -111,8 +111,21 @@ def test_single_function_schema_never_decodes_an_unknown_function_by_object_type
     pytest.param({"fieldPermissions": {"calls": [{"id": "move", "paths": ["fn"]}]}}, id="function-leaf"),
     pytest.param({"fieldPermissions": {"calls": [{"id": "move", "paths": [""]}]}}, id="whole-call"),
 ])
-def test_authorized_function_or_whole_call_edits_keep_every_registered_variant(scope):
-    assert set(runtime_repair_schema_capabilities(scope)) == {name for name, cap in CAPABILITY_REGISTRY.items() }
+def test_authorized_function_or_whole_call_edits_keep_every_author_visible_variant(scope):
+    before = copy.deepcopy(scope)
+    visible = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
+    hidden = set(CAPABILITY_REGISTRY) - visible
+    assert visible and hidden
+    assert set(runtime_repair_schema_capabilities(scope)) == visible
+    local = _local(scope)
+    variants = local["properties"]["callsUpsert"]["items"]["oneOf"]
+    assert {row["properties"]["fn"]["const"] for row in variants} == visible
+    # Function identity authority is not authority to resurrect saved-only bundles.
+    for name in hidden:
+        patch = {"note": "retained wire metadata is not Repair grammar", "callsUpsert": [
+            {"id": "retired_probe", "fn": name, "target": "move", "params": {}}]}
+        assert not Draft202012Validator(local).is_valid(patch)
+    assert scope == before
 
 
 @pytest.mark.parametrize("rows,valid", [
@@ -153,10 +166,27 @@ def test_create_policy_and_event_support_are_included_without_granting_permissio
     assert scope == before
     # Missing-component create alternatives remain a complete finite set.
     missing = build_runtime_fixture("workbench_blade")
-    missing["runtimeProgram"]["calls"].remove(_call(missing, "move_forward_then_retract"))
+    attachment = copy.deepcopy(_call(missing, "attach_projectile"))
+    missing["runtimeProgram"]["calls"].remove(_call(missing, "attach_projectile"))
     create_scope = build_runtime_repair_scope(missing, validate_runtime_program(missing)["errors"])
     assert create_scope["create"]["calls"]["allowed"]
     assert set(create_scope["create"]["calls"]["allowedFns"]) <= set(runtime_repair_schema_capabilities(create_scope))
+    assert all(CAPABILITY_REGISTRY[name].author_visible for name in create_scope["create"]["calls"]["allowedFns"])
+    restored, audit = filter_repair_patch_scope(missing, {"note": "restore exact missing attachment", "callsUpsert": [attachment]}, create_scope)
+    assert audit["ok"], audit
+    expected = copy.deepcopy(missing)
+    expected["runtimeProgram"]["calls"].append(attachment)
+    assert apply_repair_patch(missing, restored) == expected
+    assert validate_runtime_program(expected)["ok"]
+    before_missing, before_scope = copy.deepcopy(missing), copy.deepcopy(create_scope)
+    hidden = {"id": "hidden_bundle", "fn": "move_forward_then_retract", "target": attachment["target"],
+              "params": {"rangeTiles": 6, "durationSeconds": 0.4}}
+    hostile = {"note": "do not smuggle saved-only movement", "callsUpsert": [attachment, hidden]}
+    _, audit = filter_repair_patch_scope(missing, hostile, create_scope)
+    assert not audit["ok"], "a registered saved-only bundle must fail fresh Repair admission"
+    assert any(row["path"] == "$.callsUpsert[1]" for row in audit["errors"])
+    assert audit["acceptedPaths"] == []
+    assert missing == before_missing and create_scope == before_scope
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])

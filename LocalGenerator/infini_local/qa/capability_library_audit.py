@@ -61,6 +61,7 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "conditional_param",
     "conditional_omission",
     "non_neutral_param",
+    "enabled_trigger",
     "event_available",
     "referenced_entity_capability_params",
     "referenced_entity_without_capability",
@@ -353,13 +354,15 @@ def capability_library_audit() -> dict[str, Any]:
         issues.append(AuditIssue("warning", code, path, message))
 
     capability_names = set(CAPABILITY_REGISTRY)
+    author_names = {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
     provider_names = {row["properties"]["fn"]["const"] for row in capability_provider_union()}
     prompt_names = {row["fn"] for row in compact_capability_catalog()}
     manifest = runtime_authoring_registry_manifest()
     manifest_names = {row["fn"] for row in manifest["capabilities"]}
     for projection, names in (("provider", provider_names), ("prompt", prompt_names), ("manifest", manifest_names)):
-        if names != capability_names:
-            error("registry_projection_mismatch", projection, f"missing={sorted(capability_names - names)} extra={sorted(names - capability_names)}")
+        expected = capability_names if projection == "manifest" else author_names
+        if names != expected:
+            error("registry_projection_mismatch", projection, f"missing={sorted(expected - names)} extra={sorted(names - expected)}")
 
     known_slots: dict[str, list[str]] = {}
     reference_params = 0
@@ -401,6 +404,13 @@ def capability_library_audit() -> dict[str, Any]:
                 error("unknown_requirement_kind", f"{base}.requirements", requirement.kind)
             if requirement.capability and requirement.capability not in capability_names:
                 error("unknown_requirement_capability", f"{base}.requirements", requirement.capability)
+            if requirement.kind == "enabled_trigger":
+                if not requirement.any_of:
+                    error("empty_enabled_trigger", f"{base}.requirements", requirement.kind)
+                for name in requirement.any_of:
+                    trigger = cap.params.get(name)
+                    if trigger is None or trigger.kind not in {"boolean", "integer", "number"}:
+                        error("unknown_enabled_trigger_param", f"{base}.requirements", name)
             if requirement.kind in {"referenced_entity_capability_params", "referenced_entity_without_capability"}:
                 reference_param = cap.params.get(requirement.param)
                 if reference_param is None or reference_param.reference is None or reference_param.reference.namespace != "entity":
@@ -464,12 +474,14 @@ def capability_library_audit() -> dict[str, Any]:
             semantic_params += bool(spec.semantic_type)
             if spec.kind in {"integer", "number"}:
                 numeric_params += 1
-                if spec.minimum is None or spec.maximum is None:
+                lower = max((value for value in (spec.minimum, spec.exclusive_minimum) if value is not None), default=None)
+                upper = min((value for value in (spec.maximum, spec.exclusive_maximum) if value is not None), default=None)
+                if lower is None or upper is None or not math.isfinite(lower) or not math.isfinite(upper):
                     error("unbounded_numeric_param", ppath, "numeric params require min and max")
                 else:
                     bounded_numeric_params += 1
-                    if float(spec.minimum) > float(spec.maximum):
-                        error("reversed_numeric_bounds", ppath, f"{spec.minimum}>{spec.maximum}")
+                    if lower > upper or lower == upper and (spec.exclusive_minimum == lower or spec.exclusive_maximum == upper):
+                        error("reversed_numeric_bounds", ppath, f"empty interval: {lower}..{upper}")
             if spec.reference is not None:
                 ref = spec.reference
                 reference_params += ref.namespace == "entity"
@@ -555,7 +567,7 @@ def capability_library_audit() -> dict[str, Any]:
     criteria = {
         "registryIdentity": not any(issue.code in {"incomplete_capability_identity", "invalid_target_kinds"} for issue in issues),
         "typedParameters": not any(issue.code in {"incomplete_param_semantics", "unbounded_numeric_param", "untyped_entity_reference", "incomplete_typed_reference"} for issue in issues),
-        "compositionMetadata": not any(issue.code in {"unknown_requirement_kind", "input_action_asymmetry", "action_input_asymmetry", "invalid_entity_required_component", "binding_action_advertises_unspawnable_kind", "invalid_input_dependency", "invalid_action_dependency", "invalid_spawn_budget_param"} for issue in issues),
+        "compositionMetadata": not any(issue.code in {"unknown_requirement_kind", "empty_enabled_trigger", "unknown_enabled_trigger_param", "input_action_asymmetry", "action_input_asymmetry", "invalid_entity_required_component", "binding_action_advertises_unspawnable_kind", "invalid_input_dependency", "invalid_action_dependency", "invalid_spawn_budget_param"} for issue in issues),
         "exactDelivery": not any(issue.code in {"broad_wire_pattern", "missing_wire_obligation", "lowering_output_not_wire_output", "broad_global_lowerer_output", "incomplete_global_lowerer"} for issue in issues),
         "runtimeOwnership": not any(issue.code in {"missing_python_owner", "missing_csharp_owner", "unknown_network_authority"} for issue in issues),
         "rangeParity": not any(issue.code == "author_range_exceeds_csharp_clamp" for issue in issues),

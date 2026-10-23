@@ -416,7 +416,7 @@ def build_gameplay_repair_dossier(
         return [
             CAPABILITY_REGISTRY[name].prompt_card()
             for name in names or []
-            if name in CAPABILITY_REGISTRY
+            if name in CAPABILITY_REGISTRY and CAPABILITY_REGISTRY[name].author_visible
         ]
 
     return {

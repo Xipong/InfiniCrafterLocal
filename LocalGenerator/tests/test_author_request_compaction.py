@@ -180,7 +180,7 @@ def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutati
     expanded = _expand_constraint_references(catalog["capabilities"], profiles)
     assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
             for card in expanded] == [cap.author_prompt_card() for cap in CAPABILITY_REGISTRY.values()
-                                      ]
+                                      if cap.author_visible]
     # The double rule is retained separately; it is not recast as a float32 guard.
     doubles = [value for value in profiles.values() if value.get("storage") == "float64"]
     assert len(doubles) == 1 and doubles[0]["rule"] == "finite_double_no_normalization"
@@ -286,7 +286,7 @@ def test_source_units_keep_zero_null_and_exact_namespaces_without_selecting_capa
     }
     assert prompt.source_wire_units_for_llm([])["scopes"] == []
     assert packets == before
-    assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == {name for name, cap in CAPABILITY_REGISTRY.items() }
+    assert {row["fn"] for row in prompt.sharp_engine_fn_catalog_for_llm()["capabilities"]} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
 
 
 def test_author_card_compaction_keeps_every_constraint_and_consumer_description():
@@ -294,6 +294,29 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
     seconds_primer = "World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
     checked_descriptions = []
     omitted_root_copies = []
+    guide = prompt.sharp_engine_fn_catalog_for_llm()["fieldGuide"]
+    shared_types = guide["types"]
+    checked_shared_types = set()
+
+    def comparison_metadata(card):
+        result = copy.deepcopy({key: value for key, value in card.items() if key != "params"})
+        rules = []
+        for row in result.pop("requires", []):
+            if row["kind"] == "present_param_forbids_capability":
+                forbidden = CAPABILITY_REGISTRY.get(row.get("capability"))
+                if forbidden is not None and not forbidden.author_visible:
+                    continue
+            elif row["kind"] == "capability_absent" and "anyOf" in row:
+                row["anyOf"] = [fn for fn in row["anyOf"] if fn not in CAPABILITY_REGISTRY
+                                or CAPABILITY_REGISTRY[fn].author_visible]
+                if not row["anyOf"]:
+                    continue
+            rules.append({**guide["requirementNotation"]["omittedMetadata"], **row})
+        if rules:
+            result["requires"] = rules
+        if result.get("effectGroups") == {"$ref": "#/fieldGuide/effectGroups"}:
+            result["effectGroups"] = copy.deepcopy(guide["effectGroups"])
+        return result
 
     def compare_shape(source, sent, path, root_meaning=None):
         if isinstance(source, dict):
@@ -320,24 +343,62 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
             assert sent == source, path
 
     for name, cap in CAPABILITY_REGISTRY.items():
+        if not cap.author_visible:
+            continue  # Full machine/saved-wire coverage is not a fresh Author projection.
         raw = cap.prompt_card()
         sent = cap.author_prompt_card()
-        assert {k: v for k, v in raw.items() if k != "params"} == {
-            k: v for k, v in sent.items() if k != "params"}
+        assert comparison_metadata(raw) == comparison_metadata(sent)
         assert set(raw["params"]) == set(sent["params"])
         for param, source in raw["params"].items():
             target = sent["params"][param]
+            if "paramRef" in target:
+                owner, leaf = target["paramRef"].split(".")
+                assert leaf == param and CAPABILITY_REGISTRY[owner].params[leaf] == cap.params[param]
+                target = CAPABILITY_REGISTRY[owner].author_prompt_card()["params"][leaf]
+                assert "paramRef" not in target
+            spec = cap.params[param]
+            if spec.shared_type:
+                # Sharing replaces repeated metadata, not any branch, operator,
+                # units, description or latch dependency of the source schema.
+                expected: dict[str, object] = {"typeRef": spec.shared_type}
+                if not spec.required:
+                    expected["optional"] = True
+                assert target == expected, (name, param)
+                assert shared_types[spec.shared_type] == source["shape"] == spec.schema()
+                assert source["meaning"] == shared_types[spec.shared_type]["description"]
+                checked_shared_types.add(spec.shared_type)
+                continue
             # Previously documented card notation controls these presentation
             # columns; all actual domain/reference/storage/projection rules remain.
             for key in source.keys() - {"meaning", "required", "semanticType", "neutral", "units", "shape"}:
                 assert target[key] == source[key], (name, param, key)
-            if source["meaning"].startswith(seconds_primer):
-                assert target["meaning"] == source["meaning"][len(seconds_primer):], (name, param)
-                checked_descriptions.append(name + "." + param)
+            meaning = source["meaning"].removeprefix(seconds_primer)
+            if name == "configure_armor" and "meaning" not in target:
+                # Armor borrows only an identical accessory effect description.
+                assert CAPABILITY_REGISTRY["configure_accessory"].params[param].description == spec.description
+                assert CAPABILITY_REGISTRY["configure_accessory"].author_prompt_card()["params"][param]["meaning"] == meaning
+            else:
+                if name == "configure_armor" and param.startswith("setBonus"):
+                    meaning = meaning.removeprefix("Matching armor set (head piece only; matching head, body and legs must actually be equipped): ")
+                assert target["meaning"] == meaning, (name, param)
+            checked_descriptions.append(name + "." + param)
+            if "units" in source:
+                if "units" in target:
+                    assert target["units"] == source["units"], (name, param)
+                else:
+                    assert any(param.endswith(suffix) and source["units"] == units
+                               for suffix, units in (("Seconds", "seconds"), ("Tiles", "blocks (tiles)"),
+                                                     ("Px", "pixels"), ("Radians", "radians"))), (name, param)
+            assert target.get("optional", False) is not spec.required
+            if "neutral" in source and "neutral" not in target:
+                assert not spec.required and source["neutral"] == 0, (name, param)
+            elif "neutral" in source:
+                assert target["neutral"] == source["neutral"], (name, param)
             if "shape" in source:
                 compare_shape(source["shape"], target["shape"], name + "." + param,
                               root_meaning=target.get("meaning"))
     assert checked_descriptions and omitted_root_copies
+    assert checked_shared_types == set(shared_types)
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -352,10 +413,12 @@ def test_actual_author_and_scoped_repair_keep_shared_clock_semantics(monkeypatch
                  "nonzero-to-zero collapse is rejected", "target projectile’s unique explicit updatesPerTick",
                  "children use their own N", "algorithm counters, not seconds"):
         assert rule in guide
-    doc = build_capability_witness("charge_then_release")
-    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "charge_then_release")
-    call["params"]["chargeSeconds"] = -1
+    doc = build_capability_witness("accumulate_projectile_charge")
+    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "accumulate_projectile_charge")
+    call["params"]["durationSeconds"] = -1
     repair = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
     assert repair["runtimeExecutionTruth"]["units"]["paramNotation"] == guide
-    broken = next(row for row in repair["existingBrokenCapabilityCards"] if row["fn"] == "charge_then_release")
-    assert broken == CAPABILITY_REGISTRY["charge_then_release"].prompt_card()
+    broken = next(row for row in repair["existingBrokenCapabilityCards"] if row["fn"] == "accumulate_projectile_charge")
+    assert broken == CAPABILITY_REGISTRY["accumulate_projectile_charge"].prompt_card()
+    assert repair["repairScope"]["fieldPermissions"]["calls"] == [
+        {"id": call["id"], "paths": ["params.durationSeconds"]}]

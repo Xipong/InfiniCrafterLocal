@@ -157,7 +157,7 @@ def report() -> dict[str, Any]:
     if lowery.is_file():
         text = lowery.read_text(encoding="utf-8")
         for required in (
-            "Gameplay Author-visible semantic aliases: **нет**",
+            "Этот threshold не запрещает точный выбранный alias или one-to-one technical projection",
             "Item.ammo",
             "Item.useAmmo",
             "GeneratedItem` и `GeneratedProjectile` — proxy-типы",

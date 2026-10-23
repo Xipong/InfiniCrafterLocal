@@ -574,7 +574,7 @@ def test_vfx_exact_slot_closure_freezes_valid_document(scenario, paths):
     pytest.param("unwanted-binding", "configure_accessory", "binding_dependency", id="equipment-exact-binding-delete"),
     pytest.param("inert-accessory", "configure_accessory", "inert_component", id="accessory-nonzero-executable-effect"),
     pytest.param("collision", "workbench_blade", "event_not_emitted", id="event-existing-collision-parameter"),
-    pytest.param("channel", "workbench_blade", "missing_item_capability_param", id="beam-existing-channel-parameter"),
+    pytest.param("channel", "workbench_blade", "missing_item_capability_param", id="charge-existing-channel-parameter"),
 ])
 def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, code):
     current = build_runtime_fixture(fixture) if fixture == "workbench_blade" else build_capability_witness(fixture)
@@ -594,13 +594,22 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
         owner["params"] = {name: value if name == "lightColor" else 0 for name, value in owner["params"].items()}
         field, value = "defensePoints", 1
     elif scenario == "collision":
+        # Attachment deliberately requires tileCollide=false. Author a freely
+        # moving body here so enabling collision is an independent valid edit.
+        motion = next(row for row in calls if row["id"] == "workbench_blade_motion")
+        motion.update(fn="move_straight")
+        motion.pop("params")
+        calls.remove(next(row for row in calls if row["fn"] == "set_projectile_reach_curve"))
+        assert validate_runtime_program(current)["ok"]
         owner = next(row for row in calls if row["id"] == "workbench_blade_collision")
         owner["params"]["tileCollide"] = False
         next(row for row in calls if row["id"] == "shed_nails")["params"]["when"] = "on_tile_collision"
         field, value = "tileCollide", True
     else:
-        controller = next(row for row in calls if row["id"] == "workbench_blade_motion")
-        controller.update(fn="channel_beam", params={"rangeTiles": 12.0, "widthPx": 12.0, "warmupSeconds": 6 / 60})
+        # Beam geometry no longer implies a channel policy. An actual charge
+        # input producer retains the exact channel dependency being tested.
+        calls.append({"id": "workbench_blade_charge", "fn": "accumulate_projectile_charge",
+                      "target": "workbench_blade", "params": {"durationSeconds": 0.5}})
         owner = next(row for row in calls if row["id"] == "item_use")
         field, value = "channel", True
     report = validate_runtime_program(current)
@@ -640,7 +649,7 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
             assert permissions[owner["id"]] == ["params.channel"]
             fragments = runtime_repair_fragments(current, scope)
             assert [row["id"] for row in fragments["broken"]["calls"]] == ["item_use"]
-            assert [row["id"] for row in fragments["dependencyContext"]["calls"]] == ["workbench_blade_motion"]
+            assert [row["id"] for row in fragments["dependencyContext"]["calls"]] == ["workbench_blade_charge"]
             assert all(row["id"] != "item_stats" for row in fragments["dependencyContext"]["calls"])
             _, incomplete_audit = filter_repair_patch_scope(current, _empty_gameplay_patch(), scope)
             assert not incomplete_audit["ok"]

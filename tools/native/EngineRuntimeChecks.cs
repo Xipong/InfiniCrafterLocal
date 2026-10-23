@@ -44,6 +44,28 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("composable motion review manual release VFX roundtrip", ComposableMotionManualReleaseVfxRoundtrip),
+            ("composable motion review automatic completion VFX roundtrip", ComposableMotionAutomaticCompletionVfxRoundtrip),
+            ("composable motion review authenticated release source fences", ComposableMotionReleaseVfxKeepsAuthenticatedSourceFences),
+            ("composable motion review legacy charge server route", ComposableMotionLegacyChargeVfxKeepsServerRoute),
+            ("composable motion review impact event rotation", ComposableMotionImpactEventRotation),
+            ("composable motion review impact event hand attachment", ComposableMotionImpactEventHandAttachment),
+            ("composable motion review impact periodic rotation", ComposableMotionImpactPeriodicRotation),
+            ("composable motion review impact periodic hand attachment", ComposableMotionImpactPeriodicHandAttachment),
+            ("composable motion review impact periodic scale rate", ComposableMotionImpactPeriodicScaleRate),
+            ("composable motion review impact periodic hand curve", ComposableMotionImpactPeriodicHandCurve),
+            ("composable motion independent hand pose attachment and reach admission", ComposableMotionHandAttachmentAdmission),
+            ("composable motion ForcesAndIndependentPresentation", ComposableMotionForcesAndIndependentPresentation),
+            ("composable motion AttachmentPoseAndReach", ComposableMotionAttachmentPoseAndReach),
+            ("composable motion TimedReturnNoHiddenController", ComposableMotionTimedReturnNoHiddenController),
+            ("composable motion FreeBeamAndLashGeometry", ComposableMotionFreeBeamAndLashGeometry),
+            ("composable motion PhaseOnlyAttachmentAndReleasedModifiers", ComposableMotionPhaseOnlyAttachmentAndReleasedModifiers),
+            ("composable motion OrbitConsumesTilePolicyAndOwnerControl", ComposableMotionOrbitConsumesTilePolicyAndOwnerControl),
+            ("composable motion ProximityWithoutSteering", ComposableMotionProximityWithoutSteering),
+            ("composable motion ChargeReleaseAndHydration", ComposableMotionChargeReleaseAndHydration),
+            ("composable motion beam VFX snapshot uses actual line", ComposableMotionBeamVfxSnapshotUsesActualLine),
+            ("composable motion scale-rate snapshot preserves explicit scale", ComposableMotionScaleRateSnapshotPreservesSmallExplicitScale),
+            ("composable motion absolute tile policy requires reachable consumer", ComposableMotionAbsoluteTilePolicyRequiresReachableConsumer),
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),
@@ -440,6 +462,8 @@ internal static partial class EngineRuntimeChecks
             ("beam failed mana and control loss terminate", BeamManaFailureAndControlLossTerminateBeforeFurtherPayment),
             ("beam native scan clips collision body and VFX endpoints", BeamLaserScanClipsCollisionBodyAndVfxPathTogether),
         };
+        checks = System.Linq.Enumerable.ToArray(
+            System.Linq.Enumerable.Concat(checks, ComposableMotionAdmissionChecks()));
         if (filter is not null)
         {
             int fullCount = checks.Length;
