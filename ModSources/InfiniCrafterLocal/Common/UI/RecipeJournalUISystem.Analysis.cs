@@ -32,7 +32,7 @@ public sealed partial class RecipeJournalUISystem
                 var row = rows[i];
                 var rect = new Rectangle(area.X, area.Y + 30 + (i - _detailScroll) * 28, area.Width, 25);
                 string caption = row.Depth + ". " + row.Name + (row.Repeated ? " ↩" : row.Unknown ? " ?" : "");
-                if (Button(sb, rect, caption, click, cursor, enabled: row.Id.Length > 0)) { Select(row.Id); return true; }
+                if (Button(sb, rect, caption, click, cursor, enabled: row.Id.Length > 0)) { Select(row.Id, revealOutsideFilters: true); return true; }
                 if (rect.Contains(cursor.ToPoint())) _hoverText = row.Name + "\n" + Text(row.Unknown ? "UnknownAncestor" : row.Repeated ? "RepeatedAncestor" : "OpenParent");
             }
             return true;
@@ -71,7 +71,7 @@ public sealed partial class RecipeJournalUISystem
             int visible = Math.Max(0, (area.Height - 62) / 28); _detailScroll = Math.Clamp(_detailScroll, 0, Math.Max(0, recent.Length - visible));
             for (int i = _detailScroll; i < Math.Min(recent.Length, _detailScroll + visible); i++)
                 if (Button(sb, new Rectangle(area.X, area.Y + 60 + (i - _detailScroll) * 28, area.Width, 25), recent[i].Name, click, cursor))
-                { Select(recent[i].Id); return true; }
+                { Select(recent[i].Id, revealOutsideFilters: true); return true; }
             return true;
         }
         if (_detailPage == DetailPage.Organize)

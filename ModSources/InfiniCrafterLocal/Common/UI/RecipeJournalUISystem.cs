@@ -67,10 +67,31 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static RecipeJournalView.SortOrder _sortOrder;
     private static GeneratedItemData[] _known = Array.Empty<GeneratedItemData>();
     private static uint _snapshotTick;
-    private static readonly Stack<string> History = new();
     private static readonly HashSet<string> BatchSelection = new(StringComparer.Ordinal);
     private static GeneratedItemData[] _filteredEntries = Array.Empty<GeneratedItemData>();
     private static int _collectionChoice;
+    private sealed record NavigationState(string Selected, string Query, bool Favorites, bool Unread,
+        RecipeJournalView.EffectFilter Effect, string Ingredient, RecipeJournalView.SortOrder Sort,
+        int Page, DetailPage Workspace, int Scroll, string Comparison);
+    private static readonly List<NavigationState> History = new();
+    private static NavigationState CaptureNavigation() => new(_selected, _query, _favoritesOnly, _unreadOnly,
+        _effectFilter, _ingredientFilter, _sortOrder, _page, _detailPage, _detailScroll, _comparisonId);
+    internal static bool NavigateBack()
+    {
+        while (History.Count > 0)
+        {
+            var previous = History[^1]; History.RemoveAt(History.Count - 1);
+            if (!_known.Any(d => d.Id == previous.Selected && d.RecipeMeta.WorldId == Main.worldID.ToString()
+                && !GeneratedItemData.IsPlayerSaveReferenceOnly(d))) continue;
+            Select(previous.Selected, false);
+            _query = previous.Query; _favoritesOnly = previous.Favorites; _unreadOnly = previous.Unread;
+            _effectFilter = previous.Effect; _ingredientFilter = previous.Ingredient; _sortOrder = previous.Sort;
+            _page = previous.Page; _detailPage = previous.Workspace; _detailScroll = previous.Scroll;
+            _comparisonId = previous.Comparison; _revealSelection = false;
+            return true;
+        }
+        return false;
+    }
     // InfiniCore identity: cold forged metal, a warm fusion heart, quiet navigable blue.
     private static readonly Color Ink = new(243, 231, 209), Muted = new(161, 174, 193), Gold = new(241, 170, 77);
     private static readonly Color Panel = new(20, 24, 34), Inset = new(11, 16, 25);
@@ -100,15 +121,17 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         int index = layers.FindIndex(layer => layer.Name == "Vanilla: Inventory");
         if (index >= 0) layers.Insert(Math.Min(index + 2, layers.Count), new LegacyGameInterfaceLayer("InfiniCrafterLocal: Recipe Journal", Draw, InterfaceScaleType.UI));
     }
-    private static void Select(string id, bool remember = true)
+    private static void Select(string id, bool remember = true, bool revealOutsideFilters = false)
     {
         if (remember && _selected.Length != 0 && _selected != id)
         {
-            if (History.Count >= 32) History.Clear();
-            History.Push(_selected);
+            if (History.Count >= 32) History.RemoveAt(0);
+            History.Add(CaptureNavigation());
         }
         if (Main.LocalPlayer is { active: true } local && _known.Any(d => d.Id == id && d.RecipeMeta.WorldId == Main.worldID.ToString()))
             local.GetModPlayer<InfiniCraftPlayer>().VisitJournalRecipe(id);
+        if (revealOutsideFilters)
+        { _query = ""; _favoritesOnly = false; _unreadOnly = false; _ingredientFilter = ""; _effectFilter = RecipeJournalView.EffectFilter.All; _page = 0; }
         _selected = id; SetNoteFocus(false); _detailScroll = 0; _revealSelection = true; SetTextFocus(0);
     }
     private static bool Draw()
@@ -287,7 +310,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         int x = area.X + 12, y = area.Y + 10, w = area.Width - 24;
         // Keep navigation and save reachable even in the short stacked layout.
         var controls = RecipeJournalView.DetailControls(area);
-        if (History.Count > 0 && Button(sb, controls.Back, Text("Back"), click, cursor)) { Select(History.Pop(), false); return; }
+        if (History.Count > 0 && Button(sb, controls.Back, Text("Back"), click, cursor)) { NavigateBack(); return; }
         if (Button(sb, controls.Save, player.IsJournalFavorite(data.Id) ? Text("Saved") : Text("Save"), click, cursor, selected: player.IsJournalFavorite(data.Id))) player.ToggleJournalFavorite(data.Id);
         y = controls.Save.Bottom + 6;
         var children = RecipeJournalView.Children(data, _known);
@@ -381,7 +404,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
                 Label(sb, name, new Vector2(slot.Right + 10, slot.Y + 2), parent is null ? Muted : Link, 0.6f, nameWidth);
             }
             if (hover) _hoverText = (p == 0 ? data.ParentA : data.ParentB) + (parent is null ? "" : "\n" + Text("OpenParent"));
-            if (parent is not null && click && hover) { Select(parent.Id); return; }
+            if (parent is not null && click && hover) { Select(parent.Id, revealOutsideFilters: true); return; }
         }
         // Bracketed result cradle echoes the horns and ember heart of the real InfiniCore.
         Rectangle cradle = new(result.X - 6, result.Y - 6, result.Width + 12, result.Height + 12);

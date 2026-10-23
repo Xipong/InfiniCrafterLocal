@@ -40,6 +40,6 @@ public sealed partial class RecipeJournalUISystem
             if (ControlDown) { if (!BatchSelection.Add(id)) BatchSelection.Remove(id); }
             else player.ToggleJournalFavorite(id);
         }
-        if (KeyPressed(Keys.Back) && History.Count > 0) Select(History.Pop(), false);
+        if (KeyPressed(Keys.Back)) NavigateBack();
     }
 }
