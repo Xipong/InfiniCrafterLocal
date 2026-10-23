@@ -26,6 +26,10 @@
 
 Это выбор конкретного источника чисел. Compiler сохраняет selector и multiplier по literal identity с отдельными receipts; Author → wire относится к Alias Lowering и не выбирает отсутствующее решение. Runtime исполняет эту явную политику. В `item_body` нет live projectile: `live_parent` даёт `unsupported_param_target_kind` на соответствующем basis. Repair разрешает заменить только этот invalid leaf, сохраняя target, count, multiplier и другой валидный basis.
 
+## Величина урона и включение damage — разные решения
+
+`damageBasis` выбирает только число. Чтобы дочерняя entity наносила урон, Author отдельно выбирает для неё `set_projectile_damage`. С `live_parent` её authored `damage` может быть `0`: положительное текущее значение родителя придёт при spawn. Без `set_projectile_damage` дочерняя entity остаётся без damage, даже при положительном `live_parent` и multiplier. Это допустимо для декоративных частиц и helpers; compiler не включает урон автоматически и не требует положительный authored damage.
+
 ## Момент чтения и применение модификаторов
 
 Для immediate event snapshot берётся при выполнении события из его точного `EntitySource_Parent`. Для `target_and_fire` — при конкретном выстреле после выбора NPC. Для `delayTicks > 0` snapshot сохраняется при admission в очередь, до резервирования spawn budget; dispatch использует сохранённые значения, даже если parent позднее изменил damage/knockback.

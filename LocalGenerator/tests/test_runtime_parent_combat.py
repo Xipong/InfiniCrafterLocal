@@ -372,3 +372,28 @@ def test_archived_old_receipts_refuse_without_mutating_frozen_saved_wire():
         component["damageBasis"] = "live_parent"
         assert not validate_runtime_wire(current)["ok"]
     assert hashlib.sha256(_RETAINED.read_bytes()).digest() == hashlib.sha256(raw).digest()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_live_parent_magnitude_does_not_arm_a_decorative_child(enabled):
+    authored = build_capability_witness("target_and_fire")
+    controller = _call(authored, "target_and_fire")
+    controller["params"]["damageBasis"] = "live_parent"
+    child_id = controller["params"]["shotEntity"]
+    calls = authored["runtimeProgram"]["calls"]
+    damage = next(c for c in calls if c.get("target") == child_id and c["fn"] == "set_projectile_damage")
+    if enabled:
+        damage["params"]["damage"] = 0  # Explicit enable; live parent supplies magnitude at spawn.
+    else:
+        calls.remove(damage)
+    before = deepcopy(authored)
+    assert validate_runtime_program(authored)["ok"]
+    wire = compile_runtime_program(authored)
+    assert validate_runtime_wire(wire)["ok"]
+    child = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == child_id)
+    if enabled:
+        assert child["damage"]["enabled"] is True
+        assert child["damage"]["damage"] == 0
+    else:
+        assert "damage" not in child  # No authored damage component is synthesized.
+    assert authored == before

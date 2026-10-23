@@ -68,7 +68,24 @@ def test_retained_native_fixture_is_real_final_offline_projection(offline_backen
     import json
     outgoing, raw = _retained_delivery()
     root = Path(__file__).resolve().parents[2] / "tools/fixtures"
-    assert json.loads((root / "docx-image-ready-delivered.json").read_text(encoding="utf-8")) == outgoing
+    retained = json.loads((root / "docx-image-ready-delivered.json").read_text(encoding="utf-8"))
+    from collections import Counter
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+    from infini_local.core.vfx_manifest import validate_vfx_manifest_wire
+    # This native witness fixes image delivery, not every later gameplay field.
+    # Preserve its historical bytes and prove both payloads remain consumable.
+    for payload in (retained, outgoing):
+        assert validate_runtime_wire(payload)["ok"]
+        assert validate_vfx_manifest_wire(payload)["ok"]
+        assert delivery.visual_delivery_report(payload, check_backend_config=False)["ok"]
+    assert retained["visual"] == outgoing["visual"]
+    assert retained["vfxManifest"] == outgoing["vfxManifest"]
+    def entity_images(payload):
+        return Counter((entity["id"], entity["kind"], json.dumps(entity["visual"], sort_keys=True))
+                       for entity in payload["runtimeProgram"]["entities"])
+    # Include owner identity and multiplicity: dropping/duplicating a delivery or
+    # assigning the right image to the wrong entity must not pass.
+    assert entity_images(retained) == entity_images(outgoing)
     assert (root / "docx-image-ready.png").read_bytes() == raw
 
 

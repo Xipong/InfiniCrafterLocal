@@ -161,3 +161,43 @@ def test_targeting_numeric_reject_guards_are_audited():
     for key in ("count", "spreadRadians"):
         assert rows[key]["preserved"]
         assert rows[key]["admission"] == "reject_without_clamp"
+
+
+@pytest.mark.parametrize("movement", ["move_straight", "move_orbit"])
+def test_stationary_controller_rejects_only_its_own_unexecuted_movement(movement):
+    doc, controller = _fixture()
+    # A shot with independently authored movement remains executable.
+    assert validate_runtime_program(doc)["ok"]
+    next(e for e in doc["runtimeProgram"]["entities"] if e["id"] == controller["target"])["kind"] = "temporary_helper"
+    motion = deepcopy(next(c for c in build_capability_witness(movement)["runtimeProgram"]["calls"] if c["fn"] == movement))
+    motion.update(id="unexecuted_motion", target=controller["target"])
+    doc["runtimeProgram"]["calls"].append(motion)
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    conflicts = [e for e in report["errors"] if e["code"] == "exclusive_component_conflict"]
+    assert conflicts and not report["ok"]
+    assert doc == before  # No silent deletion/rewrite into a stationary substitute.
+    doc["runtimeProgram"]["calls"].remove(motion)
+    assert validate_runtime_program(doc)["ok"]
+    wire = compile_runtime_program(doc)
+    shot = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == controller["params"]["shotEntity"])
+    assert shot["movement"]["name"] == "move_straight"
+
+
+@pytest.mark.parametrize("movement,accepted", [
+    ({"name": "", "code": 0, "params": {}}, True),
+    ({"name": "move_straight", "code": 0, "params": {}}, False),
+    ({"name": "move_orbit", "code": 4, "params": {"radiusTiles": 2}}, False),
+])
+def test_stripped_wire_cannot_hide_a_suppressed_same_entity_movement(movement, accepted):
+    doc, call = _fixture()
+    wire = compile_runtime_program(doc)
+    wire.pop("runtimeContract")
+    controller = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["target"])
+    controller["movement"] = movement
+    report = validate_runtime_wire(wire)
+    if accepted:
+        assert report["ok"], report
+    else:
+        assert not report["ok"]
+        assert any(e["code"] == "controller_movement_conflict" for e in report["errors"])

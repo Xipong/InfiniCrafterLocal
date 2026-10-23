@@ -253,7 +253,7 @@ public sealed class RuntimeProgramSpec
             throw new InvalidDataException("active primary/alternate binding requires explicit configure_item_use");
 
         var graph = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-        int eventSpawnBudget = 0;
+        int eventSpawnBudget = 0, primaryUseSpawnBudget = 0, alternateUseSpawnBudget = 0;
         foreach (RuntimeEntitySpec entity in Entities)
         {
             graph[entity.Id] = new HashSet<string>(StringComparer.Ordinal);
@@ -261,6 +261,12 @@ public sealed class RuntimeProgramSpec
             {
                 RuntimeEventKind.ValidateProducer(entity, action.Event, hasItemContactBinding, hasEmittingItemUse,
                     Bindings.Any(b => b.Input == RuntimeInputKind.Equipped && b.UsePolicy.Action.Kind == RuntimeBindingAction.EquipPassive));
+                if (action.UseInput is not null
+                    && (entity.Kind != RuntimeEntityKind.ItemBody || action.Event != RuntimeEventKind.OnUse))
+                    throw new InvalidDataException("useInput is supported only on item_body on_use events");
+                if (action.UseInput is not null && !Bindings.Any(b => RuntimeUseInputScope.Matches(action.UseInput, b.Input)
+                    && b.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem))
+                    throw new InvalidDataException("useInput requires a matching non-placement active binding");
                 if (action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit)
                 {
                     if (!entity.IsProjectileEntity
@@ -277,8 +283,16 @@ public sealed class RuntimeProgramSpec
                         && !RuntimeEventActionSpec.SupportsTargetEmission(child))
                         throw new InvalidDataException($"event '{action.Id}' requires an independent projectile with explicit origin/velocity spawn, zero offset and no over-target adapter");
                     graph[entity.Id].Add(child.Id);
-                    eventSpawnBudget += action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                    int count = action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
                         ? action.StepCount!.Value : action.Count;
+                    // Distinct accepted input uses start distinct ledgers. Only their
+                    // immediate item on_use branches are mutually exclusive here;
+                    // descendants, other events and both/legacy scopes remain shared.
+                    if (entity.Kind == RuntimeEntityKind.ItemBody && action.Event == RuntimeEventKind.OnUse
+                        && action.UseInput == RuntimeInputKind.PrimaryUse) primaryUseSpawnBudget += count;
+                    else if (entity.Kind == RuntimeEntityKind.ItemBody && action.Event == RuntimeEventKind.OnUse
+                        && action.UseInput == RuntimeInputKind.AlternateUse) alternateUseSpawnBudget += count;
+                    else eventSpawnBudget += count;
                 }
             }
             if (!string.IsNullOrWhiteSpace(entity.Targeting.ShotEntityId))
@@ -302,7 +316,7 @@ public sealed class RuntimeProgramSpec
                     || entity.Targeting.DamageMultiplier is not null))
                 throw new InvalidDataException($"entity '{entity.Id}' child combat targeting fields require target_and_fire");
         }
-        if (eventSpawnBudget > Limits.MaxEventSpawnsPerActivation)
+        if (eventSpawnBudget + Math.Max(primaryUseSpawnBudget, alternateUseSpawnBudget) > Limits.MaxEventSpawnsPerActivation)
             throw new InvalidDataException("runtime event spawn budget exceeded");
         ValidateAcyclicBoundedGraph(graph, Limits.MaxChildDepth);
     }
@@ -399,6 +413,18 @@ public static class RuntimeInputKind
     public const string AlternateUse = "alternate_use";
     public const string Hold = "hold";
     public const string Equipped = "equipped";
+}
+
+// Optional scopes retain absence in saved/network definitions; omitted means both.
+public static class RuntimeUseInputScope
+{
+    public const string Both = "both";
+    public static string Require(string? value)
+        => value is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse or Both
+            ? value : throw new InvalidDataException("use input scope must be primary_use, alternate_use or both");
+    public static bool Matches(string? scope, string? input)
+        => input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse
+            && (scope is null or Both || scope == input);
 }
 
 public static class RuntimeBindingAction
@@ -832,6 +858,9 @@ public sealed class RuntimeEntitySpec
             LifetimeTicks = Math.Clamp(LifetimeTicks, 1, InfiniRuntimeLimits.MaxRuntimeLifetimeTicks);
             Hitbox.Normalize();
             Collision.Normalize();
+            if (Controller.Code == RuntimeControllerCode.TargetAndFire
+                && (!string.IsNullOrEmpty(Movement.Name) || Movement.Code != 0))
+                throw new InvalidDataException("target_and_fire owns stationary motion and cannot execute a movement component on the same entity");
             Movement.NormalizeAndValidate(Kind);
             Controller.NormalizeAndValidate(Kind);
             if (Spawn.VelocityDistribution is not null
@@ -1902,6 +1931,13 @@ public sealed class RuntimeEventActionSpec
 {
     public string Id { get; set; } = "";
     public string Event { get; set; } = "";
+    private string? _useInput;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UseInput
+    {
+        get => _useInput;
+        set => _useInput = RuntimeUseInputScope.Require(value);
+    }
     public string Action { get; set; } = "";
     public int ActionCode { get; set; }
     public string EntityId { get; set; } = "";

@@ -138,11 +138,11 @@ public partial class GeneratedItem
             }
             if (active)
             {
-                // Active-use projection installs Gameplay.ManaCost for either
+                // Active-use projection installs the selected authored mana cost for each
                 // input. Item.mana may still reflect a previous projection; the
                 // displayed base cost intentionally excludes player reductions.
                 Add("Input" + suffix, "ActiveBinding", label, description,
-                    RuntimeTooltipNumber(binding.UsePolicy.StackCost), RuntimeTooltipNumber(Math.Max(0, data.Gameplay.ManaCost)));
+                    RuntimeTooltipNumber(binding.UsePolicy.StackCost), RuntimeTooltipNumber(data.Gameplay.ManaCostForInput(binding.Input)));
                 AddRuntimeUseCondition(data.Gameplay, suffix, label, Add);
             }
             else

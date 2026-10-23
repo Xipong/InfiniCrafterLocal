@@ -96,7 +96,7 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
-    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId",
+    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput",
 }) | _TARGET_EMISSION_FIELDS
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
@@ -495,6 +495,7 @@ def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[M
         return
     graph = {str(entity.get("id") or ""): set() for entity in entities}
     total = 0
+    input_totals = {"primary_use": 0, "alternate_use": 0}
     for entity, event in actions:
         opcode = event.get("actionCode")
         if opcode not in (EVENT_ACTION_OPCODE["spawn_entity_on_event"], EVENT_ACTION_OPCODE[_TARGET_EMISSION]):
@@ -507,12 +508,18 @@ def _validate_target_emission_graph(runtime: Mapping[str, Any], entities: list[M
             errors.append({"path": "$.runtimeProgram.entities", "code": "invalid_graph_spawn_count",
                            "message": "Every counted spawn edge needs its declared integer count."})
             return
-        total += count
+        use_input = event.get("useInput")
+        if (entity.get("kind") == "item_body" and event.get("event") == "on_use"
+                and isinstance(use_input, str) and use_input in input_totals):
+            input_totals[use_input] += count
+        else:
+            total += count
     for entity in entities:
         targeting = entity.get("targeting")
         shot = targeting.get("shotEntityId") if isinstance(targeting, Mapping) else None
         if isinstance(shot, str) and shot in graph:
             graph[str(entity.get("id") or "")].add(shot)
+    total += max(input_totals.values())
     if total > limits["maxEventSpawnsPerActivation"]:
         errors.append({"path": "$.runtimeProgram.entities", "code": "event_spawn_budget_exceeded",
                        "message": "Aggregate physical event emissions exceed the shared activation limit."})
@@ -622,6 +629,10 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"{entity_path}.events[{event_index}].reactionCooldownTicks", "code": "invalid_reaction_cooldown", "message": "Equipment reactions require an explicit supported action and bounded cooldown."})
         movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
         controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
+        if (controller.get("code") == CONTROLLER_OPCODE["target_and_fire"]
+                and (movement.get("name") or movement.get("code", 0) != 0)):
+            errors.append({"path": entity_path + ".movement", "code": "controller_movement_conflict",
+                           "message": "target_and_fire owns stationary motion; a movement driver on the same entity cannot execute."})
         for modifier_fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
             if member not in entity:
                 continue
@@ -880,6 +891,19 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}]", "code": "required_object", "message": "Event entry must be an object."})
                 continue
             _reject_unknown(event, _EVENT_KEYS, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
+            if "useInput" in event and (kind != "item_body" or event.get("event") != "on_use"
+                    or event["useInput"] not in ("primary_use", "alternate_use", "both")):
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].useInput",
+                               "code": "invalid_use_input_scope", "message": "useInput selects primary_use, alternate_use or both on item_body.on_use only."})
+            if (event.get("event") == "on_use" and "useInput" in event
+                    and not any(isinstance(binding, Mapping)
+                                and binding.get("input") in ACTIVE_USE_INPUTS
+                                and (event["useInput"] == "both" or binding.get("input") == event["useInput"])
+                                and action_kind(binding) in ("spawn_entity", "use_item_body", "apply_item_effects")
+                                and (action_kind(binding) == "spawn_entity" or binding_target_id(binding) == entity.get("id"))
+                                for binding in (runtime.get("bindings", []) if isinstance(runtime.get("bindings"), list) else []))):
+                errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].useInput",
+                               "code": "event_not_produced", "message": "The selected on_use input requires an accepted non-placement binding."})
             _validate_target_emission(event, entities, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
             if event.get("actionCode") == EVENT_ACTION_OPCODE[_TARGET_EMISSION]:
                 damage = entity.get("damage")
@@ -1083,6 +1107,9 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             errors.append({"path": "$.runtimeProgram.weaponAmmo", "code": "missing_weapon_ammo_consumer", "message": "weaponAmmo requires an active spawn_entity binding."})
         if gameplay.get("ammoCategory"):
             errors.append({"path": "$.runtimeProgram.weaponAmmo", "code": "ammo_role_conflict", "message": "One generated item cannot be both an ammo consumer and a native ammo stack."})
+    if "manaCostInput" in gameplay and gameplay["manaCostInput"] not in ("primary_use", "alternate_use", "both"):
+        errors.append({"path": "$.gameplay.manaCostInput", "code": "invalid_use_input_scope",
+                       "message": "manaCostInput must select primary_use, alternate_use or both."})
     retired_use_policy_fields = {
         "consumable",
         "consumeChancePercent",

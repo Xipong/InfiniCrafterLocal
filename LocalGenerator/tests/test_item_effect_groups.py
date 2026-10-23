@@ -544,3 +544,17 @@ def test_combined_raw_wire_malformed_input_is_structured_nonmutating_refusal(inp
     assert not report["ok"]
     assert any(e["code"] == "unknown_runtime_input" for e in report["errors"])
     assert json.dumps(parsed, sort_keys=True) == raw
+
+
+@pytest.mark.parametrize("activation", ["apply_generated_buff_on_use", "refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"])
+def test_generated_buff_activation_requires_its_exact_group_not_an_unrelated_consumer(activation):
+    doc = build_capability_witness(activation)
+    assert validate_runtime_program(doc)["ok"]
+    assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
+    effect = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "apply_generated_buff_on_use")
+    effect["params"]["effectGroupId"] = "orphan_group"
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    assert any(e["code"] == "missing_binding_dependency" for e in report["errors"])
+    assert doc == before

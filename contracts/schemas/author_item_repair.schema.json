@@ -1150,6 +1150,18 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "mana_points"
                   },
+                  "manaCostInput": {
+                    "default": "both",
+                    "description": "Which active input pays manaCost through native animation-start payment. The other input costs no base item mana. Omitted means both, preserving shared-cost behavior. This does not change explicit controller manaPayment.",
+                    "enum": [
+                      "primary_use",
+                      "alternate_use",
+                      "both"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "both",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "maxStack": {
                     "description": "Maximum stack",
                     "maximum": 9999,
@@ -7716,7 +7728,7 @@
                     "x-infini-units": "projectiles/volley"
                   },
                   "damageBasis": {
-                    "description": "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)",
+                    "description": "Child damage magnitude: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes). Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
                     "enum": [
                       "authored_child",
                       "live_parent"
@@ -7885,7 +7897,7 @@
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
                   "damageBasis": {
-                    "description": "Child damage source: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source",
+                    "description": "Child damage magnitude: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
                     "enum": [
                       "authored_child",
                       "live_parent"
@@ -7965,6 +7977,33 @@
                           "channel_complete"
                         ],
                         "type": "string"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Accepted item use from the selected input; both matches each use once.",
+                        "properties": {
+                          "on": {
+                            "description": "Accepted item-use event",
+                            "enum": [
+                              "on_use"
+                            ],
+                            "type": "string"
+                          },
+                          "useInput": {
+                            "description": "Input that caused this use, captured before any delay; both selects either input, not two executions.",
+                            "enum": [
+                              "primary_use",
+                              "alternate_use",
+                              "both"
+                            ],
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "on",
+                          "useInput"
+                        ],
+                        "type": "object"
                       },
                       {
                         "additionalProperties": false,
@@ -8085,7 +8124,7 @@
                     "x-infini-semanticType": "spawn_or_target_count"
                   },
                   "damageBasis": {
-                    "description": "Child damage source, selected independently of its velocity and knockback",
+                    "description": "Child damage magnitude, selected independently of its velocity and knockback. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
                     "enum": [
                       "authored_child",
                       "live_parent"

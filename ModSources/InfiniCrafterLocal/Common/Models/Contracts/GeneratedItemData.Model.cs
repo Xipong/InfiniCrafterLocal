@@ -214,6 +214,15 @@ public sealed class GameplaySpec : IItemEffectsSpec
     public string HandPose { get; set; } = "";
     public string ReleaseTiming { get; set; } = "";
     public int ManaCost { get; set; } = 0;
+    private string? _manaCostInput;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ManaCostInput
+    {
+        get => _manaCostInput;
+        set => _manaCostInput = RuntimeUseInputScope.Require(value);
+    }
+    public int ManaCostForInput(string input)
+        => RuntimeUseInputScope.Matches(ManaCostInput, input) ? Math.Max(0, ManaCost) : 0;
     public int Rarity { get; set; } = ItemRarityID.White;
     public int Value { get; set; } = 100;
     public int MaxStack { get; set; } = 1;

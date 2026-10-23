@@ -1,6 +1,7 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
 using InfiniCrafterLocal.Common.Models;
+using InfiniCrafterLocal.Common.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -139,6 +140,7 @@ public sealed class InfiniDumpCommand : ModCommand
                         netImportant = p.netImportant,
                         framesRaw = SafeProjFrames(type),
                         setsRaw = ProjectileSetsRaw(type),
+                        onHitStatusReference = GeneratorClient.CaptureNativeHitStatusReference(p),
                         damageClass = p.DamageType == DamageClass.Melee ? "melee" : p.DamageType == DamageClass.Ranged ? "ranged" : p.DamageType == DamageClass.Magic ? "magic" : p.DamageType == DamageClass.Summon ? "summon" : p.DamageType == DamageClass.Generic ? "generic" : "modded"
                     }, options));
                 }
@@ -397,6 +399,7 @@ public sealed class InfiniDumpCommand : ModCommand
                 netImportant = p.netImportant,
                 framesRaw = SafeProjFrames(projectileType),
                 setsRaw = ProjectileSetsRaw(projectileType),
+                onHitStatusReference = GeneratorClient.CaptureNativeHitStatusReference(p),
                 damageClass = p.DamageType == DamageClass.Melee ? "melee" : p.DamageType == DamageClass.Ranged ? "ranged" : p.DamageType == DamageClass.Magic ? "magic" : p.DamageType == DamageClass.Summon ? "summon" : p.DamageType == DamageClass.Generic ? "generic" : "modded"
             };
         }

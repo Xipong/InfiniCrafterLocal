@@ -697,12 +697,16 @@ def _validate_requirement(
     if requirement.kind == "event_available":
         event = authored_event(params)
         kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
+        when = params.get("when")
+        selected_bindings = bindings
+        if event == "on_use" and isinstance(when, Mapping) and when.get("useInput") in ("primary_use", "alternate_use"):
+            selected_bindings = [binding for binding in bindings if binding.get("input") == when["useInput"]]
         ok, allowed, message = _event_available(
             event=event,
             target_id=target_id,
             kind=kind,
             calls_by_target=calls_by_target,
-            bindings=bindings,
+            bindings=selected_bindings,
         )
         if not ok:
             return ValidationIssue(f"{path}.params.{requirement.param}", "event_not_emitted", message, allowed, (target_id,))
@@ -831,6 +835,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     event_edges: dict[str, set[str]] = {entity_id: set() for entity_id in entities_by_id}
     event_referenced_entities: set[str] = set()
     event_spawn_budget = 0
+    input_spawn_budgets = {"primary_use": 0, "alternate_use": 0}
 
     for index, call in enumerate(calls):
         call_id = str(call.get("id") or "")
@@ -925,7 +930,15 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         if cap.activation_spawn_count_param:
             raw_spawn_count = params.get(cap.activation_spawn_count_param)
             if isinstance(raw_spawn_count, int) and not isinstance(raw_spawn_count, bool) and raw_spawn_count >= 0:
-                event_spawn_budget += raw_spawn_count
+                when = params.get("when")
+                use_input = when.get("useInput") if isinstance(when, Mapping) else None
+                # Only these item-use lanes are mutually exclusive per admission.
+                # Descendant and other event counts remain conservatively shared.
+                if (target_id == item_id and authored_event(params) == "on_use"
+                        and isinstance(use_input, str) and use_input in input_spawn_budgets):
+                    input_spawn_budgets[use_input] += raw_spawn_count
+                else:
+                    event_spawn_budget += raw_spawn_count
 
     seen_equipment_damage: dict[tuple[str, str, str], str] = {}
     for index, call in enumerate(calls):
@@ -1172,6 +1185,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         depth = _max_depth(event_edges, binding_spawn_roots)
         if depth > MAX_CHILD_DEPTH:
             issues.append(ValidationIssue("$.runtimeProgram.calls", "child_depth_budget", f"Runtime graph depth {depth} exceeds {MAX_CHILD_DEPTH}.", (f"depth <= {MAX_CHILD_DEPTH}",)))
+    event_spawn_budget += max(input_spawn_budgets.values())
     if event_spawn_budget > MAX_EVENT_SPAWNS_PER_ACTIVATION:
         issues.append(ValidationIssue("$.runtimeProgram.calls", "event_spawn_budget", f"Event spawn count {event_spawn_budget} exceeds {MAX_EVENT_SPAWNS_PER_ACTIVATION}.", (f"sum <= {MAX_EVENT_SPAWNS_PER_ACTIVATION}",)))
 

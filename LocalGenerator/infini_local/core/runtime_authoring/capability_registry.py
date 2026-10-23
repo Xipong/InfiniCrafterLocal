@@ -1444,6 +1444,11 @@ def _event_when_param(events: Iterable[str]) -> ParamSpec:
     allowed = tuple(events)
     ordinary = tuple(event for event in allowed if event not in {"periodic", "on_hurt", "on_enemy_kill"})
     variants = [_p("string", "Exact emitted event", enum=ordinary, wire_name="event")] if ordinary else []
+    if "on_use" in allowed:
+        variants.append(_p("object", "Accepted item use from the selected input; both matches each use once.", properties={
+            "on": _p("string", "Accepted item-use event", enum=("on_use",), wire_name="event"),
+            "useInput": _p("string", "Input that caused this use, captured before any delay; both selects either input, not two executions.", enum=("primary_use", "alternate_use", "both")),
+        }))
     if "periodic" in allowed:
         variants.append(_p("object", "Periodic event; call ID fixes the item phase", properties={
             "everySeconds": _seconds(_p("integer", "World-time interval; producer clocks retain their phase",
@@ -1465,7 +1470,7 @@ def authored_event(params: Mapping[str, Any]) -> str:
     if isinstance(when, str):
         return when
     if isinstance(when, Mapping):
-        if when.get("on") in ("on_hurt", "on_enemy_kill"): return str(when["on"])
+        if when.get("on") in ("on_use", "on_hurt", "on_enemy_kill"): return str(when["on"])
         return "periodic"
     return ""
 def _spawn_velocity() -> ParamSpec:
@@ -1531,6 +1536,7 @@ _CAPS: list[CapabilitySpec] = [
             "useTimeSeconds": _seconds(_p("integer", "Terraria use/reuse interval (60 ticks/s), not the animation length", minimum=1, maximum=600, units="ticks", wire_name="useTime"), "useTimeTicks"),
             "useAnimationSeconds": _seconds(_p("integer", "Duration of one use animation, independent of useTimeSeconds; differing values can allow multiple uses during one animation, not necessarily one projectile per click", minimum=1, maximum=600, units="ticks", wire_name="useAnimation"), "useAnimationTicks"),
             "manaCost": _p("integer", "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeSeconds can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.", minimum=0, maximum=500, required=False, default=0, neutral=0),
+            "manaCostInput": _p("string", "Which active input pays manaCost through native animation-start payment. The other input costs no base item mana. Omitted means both, preserving shared-cost behavior. This does not change explicit controller manaPayment.", enum=("primary_use", "alternate_use", "both"), required=False, default="both", neutral="both"),
             "rarity": _p("integer", "Exact loaded Item.rare ID; copy modded IDs from parent facts, do not guess", minimum=0, maximum=65535, semantic_type="loaded_rarity_id"),
             "valueCopper": _p("integer", "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount", minimum=0, maximum=100000000, units="copper", wire_name="value"),
             "maxStack": _p("integer", "Maximum stack", minimum=1, maximum=9999),
@@ -1542,7 +1548,7 @@ _CAPS: list[CapabilitySpec] = [
         component_slot="item_stats",
         py=_COMPILER_OWNER,
         cs="Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
-        lowering=("gameplay.damageClass", "gameplay.damage", "gameplay.knockback", "gameplay.useTime", "gameplay.useAnimation", "gameplay.manaCost", "gameplay.rarity", "gameplay.value", "gameplay.maxStack", "gameplay.craftYield", "gameplay.width", "gameplay.height", "gameplay.itemScale"),
+        lowering=("gameplay.damageClass", "gameplay.damage", "gameplay.knockback", "gameplay.useTime", "gameplay.useAnimation", "gameplay.manaCost", "gameplay.manaCostInput", "gameplay.rarity", "gameplay.value", "gameplay.maxStack", "gameplay.craftYield", "gameplay.width", "gameplay.height", "gameplay.itemScale"),
     ),
     _cap(
         "configure_item_use",
@@ -2409,7 +2415,7 @@ _CAPS.extend([
     ),
     _cap(
         "target_and_fire",
-        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
+        "Make a stationary entity acquire NPC targets and periodically spawn an authored shot entity. This controller owns motion throughout its lifetime; same-entity movement drivers do not execute. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
         "controller",
         ("stationary_projectile", "temporary_helper"),
         {
@@ -2417,7 +2423,7 @@ _CAPS.extend([
             "intervalSeconds": _seconds(_p("integer", "Firing interval", minimum=6, maximum=3600, units="ticks"), "intervalTicks"),
             "rangeTiles": _p("number", "Target range: hard geometric maximum when hardRange=true; otherwise previous target may be chosen outside it after distance discount", minimum=1, maximum=120, units="tiles"),
             "sameTargetBias": _p("number", "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below rangeTiles × 16; with hardRange=false the previous target may therefore lie outside that physical radius. With hardRange=true the geometric range is checked before discounting. This is a distance discount, not a hit probability", minimum=0, maximum=0.9, units="engine units: distance-score discount"),
-            "damageBasis": _p("string", "Child damage source: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes)", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "damageBasis": _p("string", "Child damage magnitude: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes). Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "knockbackBasis": _p("string", "Child knockback source: its authored knockback, or this parent projectile's actual knockBack at firing time", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4, wire_presence_requires_receipt=True),
             "count": _p("integer", "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot", minimum=1, maximum=4, units="projectiles/volley", required=False, default=1, neutral=1),
@@ -2444,7 +2450,7 @@ _CAPS.extend([
             "entity": _p("string", "Referenced entity id", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Spawn count", minimum=1, maximum=12),
             "spreadRadians": _p("number", "Total angular spread", minimum=0, maximum=6.283185307179586, units="radians"),
-            "damageBasis": _p("string", "Child damage source: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "damageBasis": _p("string", "Child damage magnitude: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "knockbackBasis": _p("string", "Child knockback source: its authored knockback, or this event-owning projectile's actual knockBack at event time; live_parent requires a projectile source", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
             "delaySeconds": _seconds(_p("integer", "Delay after event", minimum=0, maximum=600, units="ticks"), "delayTicks"),
@@ -2469,7 +2475,7 @@ _CAPS.extend([
             "entity": _p("string", "Referenced moving child; its spawn position must be {at:activation_origin}, aim velocity, offsetBlocks 0, with no above-position transform", pattern=r"^[a-z][a-z0-9_]{0,47}$", wire_name="entityId"),
             "count": _p("integer", "Number of independently placed children", minimum=1, maximum=12),
             "geometry": _hit_target_spawn_geometry(),
-            "damageBasis": _p("string", "Child damage source, selected independently of its velocity and knockback", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
+            "damageBasis": _p("string", "Child damage magnitude, selected independently of its velocity and knockback. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "knockbackBasis": _p("string", "Child knockback source, selected independently of damage", enum=("authored_child", "live_parent"), wire_presence_requires_receipt=True),
             "damageMultiplier": _p("number", "Multiply the selected damage exactly once; zero preserves a zero-damage child", minimum=0, maximum=4),
             "delaySeconds": _seconds(_p("integer", "World-time delay; target geometry, direction, exclusion incarnation and random seed are captured when admitted", minimum=0, maximum=600, units="ticks"), "delayTicks"),
@@ -3079,6 +3085,11 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
         return tuple(rows)
 
 
+    if cap.name == "target_and_fire":
+        return (RequirementSpec(
+            "capability_absent", any_of=tuple(sorted(row.name for row in _CAPS if row.category == "movement")),
+            message="target_and_fire owns stationary motion for its entire lifetime, so movement on the same entity cannot execute. Keep movement on an independent shot entity; a moving firing controller is not supported.",
+        ),)
     if cap.category == "motion_modifier":
         return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release", "target_and_fire"), message="Velocity modifiers require the explicit movement driver to own motion throughout their active phase."),)
     if cap.name in {"channel_beam", "charge_then_release"}:
@@ -3099,7 +3110,9 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
     if cap.name in BINDING_ACTION_REGISTRY["apply_item_effects"].required_item_capabilities_any_of:
         requirements = [RequirementSpec(
             kind="binding_action_present", target="item_body", any_of=("apply_item_effects",),
-            message="This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it.",
+            message=("This generated buff requires a matching effectGroupId in an apply_item_effects binding, refresh_generated_effect_group_while_held, or apply_generated_buff_on_event; an ungrouped buff requires an ungrouped apply_item_effects binding. A spawn_entity or use_item_body binding alone does not apply it."
+                     if cap.name == "apply_generated_buff_on_use" else
+                     "This item-use effect executes only through an explicit apply_item_effects binding on item_body; a spawn_entity or use_item_body binding alone does not apply it."),
         )]
         if cap.name == "restore_resources_on_use":
             requirements.append(RequirementSpec(

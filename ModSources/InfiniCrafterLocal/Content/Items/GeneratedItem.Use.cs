@@ -61,7 +61,8 @@ public partial class GeneratedItem
         Item.consumable = binding.UsePolicy.StackCost == 1
             || Data.Gameplay.AmmoCategory.Length > 0;
         Item.damage = Math.Max(0, Data.Gameplay.Damage); // zero placement damage only after native prefix application
-        // manaCost is the authored item-use cost for every active use binding.
+        // Prefix eligibility remains tied to the authored item identity, not a
+        // temporarily free input. Scope the final prefixed cost below.
         Item.mana = Math.Max(0, Data.Gameplay.ManaCost);
         bool applyingItemEffects = action.Kind == RuntimeBindingAction.ApplyItemEffects;
         Data.ApplyUseEffectFields(Item, applyingItemEffects, binding);
@@ -80,6 +81,8 @@ public partial class GeneratedItem
             Item.shootSpeed = Data.Gameplay.AmmoShootSpeedPxPerTick;
         }
         FinishNativePrefixProjection(nativePrefix, placing);
+        // Native CheckMana owns reductions, admission and the sole payment.
+        if (!RuntimeUseInputScope.Matches(Data.Gameplay.ManaCostInput, binding.Input)) Item.mana = 0;
     }
 
     /// <summary>
@@ -254,7 +257,7 @@ public partial class GeneratedItem
         // the attack/consume policy, so a tile placement must not fire them.
         if (binding.UsePolicy.Action.Kind != RuntimeBindingAction.PlaceItem)
         {
-            RunItemEvent(player, itemEntity, RuntimeEventKind.OnUse, null, 0);
+            RunItemEvent(player, itemEntity, RuntimeEventKind.OnUse, null, 0, binding.Input);
             InfiniItemVfxRuntime.EmitAndSyncEvent(player, Data, itemEntity.Id, RuntimeEventKind.OnUse);
             if (binding.UsePolicy.StackConsumeChancePercent is not null)
                 _stackChanceUseOutcome = (player, Item, Data, binding, Main.GameUpdateCount, true);
