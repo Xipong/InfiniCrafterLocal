@@ -15,23 +15,15 @@ from typing import Any
 
 def _visible_model_output(text: str) -> str:
     """Remove model-private thought channels before scanning authored JSON."""
-    visible = text or ""
-    for tag in ("thought", "analysis"):
-        visible = re.sub(
-            rf"<{tag}\b[^>]*>.*?</{tag}\s*>",
-            "",
-            visible,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-        # A truncated private channel has no authored answer. Dropping its tail is
-        # safer than parsing a JSON example embedded in unfinished reasoning.
-        visible = re.sub(
-            rf"<{tag}\b[^>]*>.*\Z",
-            "",
-            visible,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-    return visible
+    # Match strings first so literal tags in authored prompts/tooltips survive.
+    # A channel opening outside a string owns its complete body, including JSON
+    # examples, or the remaining tail when the closing tag was truncated.
+    return re.sub(
+        r'"(?:\\.|[^"\\])*"|<(thought|analysis)\b[^>]*>.*?(?:</\1\s*>|\Z)',
+        lambda match: "" if match.group(1) else match.group(0),
+        text or "",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
 
 
 def json_object_candidates(text: str) -> list[str]:
