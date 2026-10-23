@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Atlas motion AtlasMotionWireAdmission", AtlasMotionWireAdmission),
+            ("Atlas motion AtlasTravelingWave", AtlasTravelingWave),
             ("Atlas motion AtlasEllipticOrbit", AtlasEllipticOrbit),
             ("Atlas motion AtlasSpringTether", AtlasSpringTether),
             ("Atlas motion AtlasSpeedRamp", AtlasSpeedRamp),

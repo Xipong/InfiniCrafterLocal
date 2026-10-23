@@ -3670,6 +3670,7 @@
             "move_spiral",
             "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -3780,6 +3781,7 @@
             "move_spiral",
             "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -3879,6 +3881,7 @@
             "move_spiral",
             "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -3989,6 +3992,7 @@
             "move_spiral",
             "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -4110,6 +4114,7 @@
             "move_spiral",
             "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -4634,6 +4639,99 @@
       },
       "positionOwnership": "velocity_or_position_controller",
       "purpose": "Owner-relative ellipse with independently authored major/minor radii, explicit phase and signed angular speed. The ellipse X axis follows the synchronized initial launch direction, not world X or current cursor; orbit phase uses synchronized active age. Unlike circular move_orbit, non-equal radii and orientation shape a true ellipse and the author chooses initial phase rather than projectile identity. Sets velocity to the next owner-relative point for native integration, and disables tile collision. Normal lifetime applies; invalid/dead owner ends the projectile. Rotation remains tangent to actual velocity. World angular rate is invariant under extraUpdates.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "cursor",
+            "facing",
+            "velocity"
+          ],
+          "capability": "configure_spawn",
+          "kind": "item_capability_param",
+          "message": "This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one.",
+          "param": "aim",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_traveling_wave",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.TravelingWave.cs::MoveTravelingWave",
+      "dependencies": [
+        "configure_spawn"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.waveForwardSpeed",
+        "runtimeProgram.entities[].movement.params.waveDisplacementAmplitude",
+        "runtimeProgram.entities[].movement.params.wavePhaseRate",
+        "runtimeProgram.entities[].movement.params.waveStartPhase"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "amplitudeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 16,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        },
+        "forwardSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.375,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        },
+        "frequencyCyclesPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 57.29577951308232,
+          "minimum": 0.0009549296585513722,
+          "reference": null,
+          "required": true,
+          "semanticType": "cycles/s",
+          "units": "cycles/s"
+        },
+        "phaseRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3.1415927,
+          "minimum": -3.1415927,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "purpose": "A traveling sine displacement around the synchronized initial launch axis: constant authored forward speed plus the exact change of lateral sinusoidal offset across each active update. Amplitude is a world distance, frequency is cycles per second, and phase is explicit. Unlike sine_homing this never selects targets, rotates velocity cumulatively or depends on prior heading; its integrated lateral displacement is bounded by twice amplitude even across extraUpdates. Native integration/collision remains enabled; each next AI recomputes the trajectory velocity from active age. Modifiers may add independent deviations after this driver. Late hydration resumes the same differential step without snapping to a saved origin.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -6221,6 +6319,7 @@
             "move_spiral",
             "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"

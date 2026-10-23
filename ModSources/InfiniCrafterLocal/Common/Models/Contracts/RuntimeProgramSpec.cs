@@ -856,6 +856,7 @@ public sealed class RuntimeEntitySpec
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true
                 || Movement.Params?.HasSpringTether == true || Controller.Params?.HasSpringTether == true
                 || Movement.Params?.HasEllipticOrbit == true || Controller.Params?.HasEllipticOrbit == true
+                || Movement.Params?.HasTravelingWave == true || Controller.Params?.HasTravelingWave == true
                 || Movement.Params?.HasFrontHandParams == true || Controller.Params?.HasFrontHandParams == true
                 || VectorAcceleration is not null || SpeedRamp is not null || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
@@ -870,7 +871,7 @@ public sealed class RuntimeEntitySpec
             Hitbox.Normalize();
             Collision.Normalize();
             Movement.NormalizeAndValidate(Kind);
-            if (Movement.Code == 22 && Spawn.Aim == "none")
+            if (Movement.Code is 22 or 23 && Spawn.Aim == "none")
                 throw new InvalidDataException("oriented trajectories require an explicit spawn axis");
             Controller.NormalizeAndValidate(Kind);
             if (Spawn.VelocityDistribution is not null
@@ -1442,6 +1443,8 @@ public sealed class RuntimeMovementSpec
         if (Code == 21 && (Name != "move_spring_tether" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_spring_tether requires exact name, opcode and free/child kind");
         Params.ValidateEllipticOrbit(Code);
         if (Code == 22 && (Name != "move_elliptic_orbit" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_elliptic_orbit requires exact name, opcode and free/child kind");
+        Params.ValidateTravelingWave(Code);
+        if (Code == 23 && (Name != "move_traveling_wave" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_traveling_wave requires exact name, opcode and free/child kind");
         if (Code == 6) throw new InvalidDataException("retired movement opcode 6");
         Params ??= new RuntimeParamsSpec();
         if (Code == 20) {
@@ -1491,6 +1494,7 @@ public sealed class RuntimeControllerSpec
         Params ??= new RuntimeParamsSpec();
         Params.ValidateSpringTether(-1);
         Params.ValidateEllipticOrbit(-1);
+        Params.ValidateTravelingWave(-1);
         // Current independent controls must be admitted before retained-v5 clamping.
         if (Params.HasIndependentCharge && (Code != RuntimeControllerCode.ChargeThenRelease
             || !Params.ChargeDamageMultiplier.HasValue || !Params.KnockbackMultiplier.HasValue || !Params.SpeedMultiplier.HasValue
@@ -1518,6 +1522,42 @@ public sealed class RuntimeControllerSpec
 
 public sealed class RuntimeParamsSpec
 {
+    private float? _waveForwardSpeed;
+    public sealed class WaveForwardSpeedConverter : RawJsonNullableFloatDomainConverter { public WaveForwardSpeedConverter() : base("0.1", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WaveForwardSpeedConverter))]
+    public float? WaveForwardSpeed { get => _waveForwardSpeed; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.1f || v > 80f) throw new InvalidDataException("waveForwardSpeed requires finite 0.1..80");
+        _waveForwardSpeed = v;
+    } }
+    private float? _waveDisplacementAmplitude;
+    public sealed class WaveDisplacementAmplitudeConverter : RawJsonNullableFloatDomainConverter { public WaveDisplacementAmplitudeConverter() : base("0", "16", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WaveDisplacementAmplitudeConverter))]
+    public float? WaveDisplacementAmplitude { get => _waveDisplacementAmplitude; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0f || v > 16f) throw new InvalidDataException("waveDisplacementAmplitude requires finite 0..16");
+        _waveDisplacementAmplitude = v;
+    } }
+    private float? _wavePhaseRate;
+    public sealed class WavePhaseRateConverter : RawJsonNullableFloatDomainConverter { public WavePhaseRateConverter() : base("0.0001", "1") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WavePhaseRateConverter))]
+    public float? WavePhaseRate { get => _wavePhaseRate; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.0001f || v > 1f) throw new InvalidDataException("wavePhaseRate requires finite 0.0001..1");
+        _wavePhaseRate = v;
+    } }
+    private float? _waveStartPhase;
+    public sealed class WaveStartPhaseConverter : RawJsonNullableFloatDomainConverter { public WaveStartPhaseConverter() : base("-3.1415927", "3.1415927", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WaveStartPhaseConverter))]
+    public float? WaveStartPhase { get => _waveStartPhase; set {
+        if (value is not float v || !float.IsFinite(v) || v < -3.1415927f || v > 3.1415927f) throw new InvalidDataException("waveStartPhase requires finite -3.1415927..3.1415927");
+        _waveStartPhase = v;
+    } }
+    [JsonIgnore] public bool HasTravelingWave => WaveForwardSpeed.HasValue || WaveDisplacementAmplitude.HasValue || WavePhaseRate.HasValue || WaveStartPhase.HasValue;
+    internal void ValidateTravelingWave(int code)
+    {
+        if (code == 23) {
+            if (!WaveForwardSpeed.HasValue || !WaveDisplacementAmplitude.HasValue || !WavePhaseRate.HasValue || !WaveStartPhase.HasValue) throw new InvalidDataException("move_traveling_wave requires every authored parameter");
+        } else if (HasTravelingWave) throw new InvalidDataException("move_traveling_wave parameters require their exact movement owner");
+    }
+
     private float? _ellipseRadiusAlong;
     public sealed class EllipseRadiusAlongConverter : RawJsonNullableFloatDomainConverter { public EllipseRadiusAlongConverter() : base("0.25", "80") { } }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipseRadiusAlongConverter))]
@@ -2287,7 +2327,7 @@ internal static class RuntimeOpcodeNames
         "move_spiral", "move_vortex_orb", "move_blackhole_pull", "move_proximity_missile",
         "move_returning_glaive", "move_expanding_wave", "move_flail_tether", "move_yoyo_hover",
         "move_whip_lash", "move_forward_then_retract", "move_front_hand",
-        "move_spring_tether", "move_elliptic_orbit",
+        "move_spring_tether", "move_elliptic_orbit", "move_traveling_wave",
     };
     private static readonly string[] ControllerNames = { "", "channel_beam", "charge_then_release", "target_and_fire" };
     private static readonly string[] EventNames =

@@ -6561,6 +6561,170 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "move_traveling_wave"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "amplitudeTiles": {
+                    "description": "Lateral sine amplitude; zero is explicitly straight",
+                    "maximum": 16,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "blocks (tiles)"
+                  },
+                  "forwardSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/s. Native consumer: Constant forward speed along initial direction",
+                    "maximum": 1800.0,
+                    "minimum": 0.375,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.375,
+                          300.0
+                        ],
+                        [
+                          0.75,
+                          600.0
+                        ],
+                        [
+                          1.125,
+                          900.0
+                        ],
+                        [
+                          1.5,
+                          1200.0
+                        ],
+                        [
+                          1.875,
+                          1500.0
+                        ],
+                        [
+                          2.25,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/s",
+                    "x-infini-units": "blocks/s"
+                  },
+                  "frequencyCyclesPerSecond": {
+                    "description": "Author units: cycles/s. Native consumer: Oscillation frequency in world time",
+                    "maximum": 57.29577951308232,
+                    "minimum": 0.0009549296585513722,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.0009549296585513722,
+                          9.549296585513721
+                        ],
+                        [
+                          0.0019098593171027443,
+                          19.098593171027442
+                        ],
+                        [
+                          0.0028647889756541166,
+                          28.64788975654116
+                        ],
+                        [
+                          0.0038197186342054886,
+                          38.197186342054884
+                        ],
+                        [
+                          0.004774648292756861,
+                          47.7464829275686
+                        ],
+                        [
+                          0.005729577951308233,
+                          57.29577951308232
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "cycles/s",
+                    "x-infini-units": "cycles/s"
+                  },
+                  "phaseRadians": {
+                    "description": "Starting oscillator phase; no initial lateral teleport",
+                    "maximum": 3.1415927,
+                    "minimum": -3.1415927,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  }
+                },
+                "required": [
+                  "forwardSpeedBlocksPerSecond",
+                  "amplitudeTiles",
+                  "frequencyCyclesPerSecond",
+                  "phaseRadians"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "free_projectile",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "move_straight"
               },
               "id": {

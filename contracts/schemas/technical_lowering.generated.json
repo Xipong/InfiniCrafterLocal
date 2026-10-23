@@ -727,6 +727,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "move_traveling_wave",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.TravelingWave.cs::MoveTravelingWave",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.waveForwardSpeed",
+        "runtimeProgram.entities[].movement.params.waveDisplacementAmplitude",
+        "runtimeProgram.entities[].movement.params.wavePhaseRate",
+        "runtimeProgram.entities[].movement.params.waveStartPhase"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "move_straight",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",

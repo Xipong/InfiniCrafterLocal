@@ -359,7 +359,7 @@ class ParamSpec:
     default: Any = field(default=None, compare=False)
     wire_name: str = ""
     wire_divisor: int = 1
-    wire_multiplier: int = 1
+    wire_multiplier: int | float = 1
     multiple_of: float | int | None = None
     wire_boolean_true_value: int | None = None
     runtime_minimum: float | int | None = None
@@ -418,10 +418,9 @@ class ParamSpec:
         """Human bounds for one validated target clock; static schema covers their union."""
         if not self.wire_kind or not self.wire_updates_power:
             return {"minimum": self.minimum, "maximum": self.maximum}
-        factor = self._update_factor(updates_per_tick)
-        return {"minimum": self.wire_minimum * self.wire_divisor * factor / self.wire_multiplier
+        return {"minimum": self.from_wire(self.wire_minimum, updates_per_tick=updates_per_tick)
                     if self.wire_minimum is not None else None,
-                "maximum": self.wire_maximum * self.wire_divisor * factor / self.wire_multiplier
+                "maximum": self.from_wire(self.wire_maximum, updates_per_tick=updates_per_tick)
                     if self.wire_maximum is not None else None}
 
     @property
@@ -455,6 +454,16 @@ class ParamSpec:
             return value - self.wire_offset
         factor = self._update_factor(updates_per_tick)
         result = value * self.wire_divisor * factor / self.wire_multiplier
+        if self.wire_kind and not self.wire_rounding:
+            # The inverse's binary64 rounding can place an exact wire endpoint
+            # just outside its own domain on re-projection. Expose the adjacent
+            # representable Author endpoint inside that domain. Author admission
+            # and forward projection stay strict and never alter input values.
+            projected = self.to_wire(result, updates_per_tick=updates_per_tick)
+            if value == self.wire_minimum and projected < value:
+                result = math.nextafter(result, math.inf)
+            elif value == self.wire_maximum and projected > value:
+                result = math.nextafter(result, -math.inf)
         return int(result) if self.kind == "integer" and float(result).is_integer() else result
 
     def canonical_receipt_leaf_path(self, suffix: str) -> str | None:
@@ -1155,7 +1164,7 @@ def target_updates_per_tick(calls: Iterable[object], target: str) -> int:
     return value
 
 
-def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int, divisor: int = 1,
+def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int | float, divisor: int = 1,
                  updates_power: int = 0, units: str, seconds: bool = False) -> ParamSpec:
     """Declare changed Author units while freezing the pre-existing engine domain.
 
@@ -1181,7 +1190,7 @@ def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int, divisor:
     # make room for it. Keep each consumer's distinct execution meaning here.
     meaning = ("World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
                if seconds else f"Author units: {units}. Native consumer: ")
-    return replace(spec, kind="number", description=meaning + spec.description,
+    converted = replace(spec, kind="number", description=meaning + spec.description,
                    minimum=author_low, maximum=author_high, units=units, semantic_type=units,
                    default=inverse(spec.default), neutral=inverse(spec.neutral),
                    # Converted floating scalars are stored by native float32
@@ -1197,6 +1206,17 @@ def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int, divisor:
                    wire_rounding="nearest_world_tick_half_up" if seconds else "",
                    multiple_of=1 / multiplier if geometry_lattice else None,
                    predecessor_names=(predecessor,))
+    if not seconds:
+        # Publish the same representable endpoints as the target-clock inverse;
+        # the static schema is the union of the admitted N=1..6 domains.
+        low_clock = 6 if updates_power and low is not None and low < 0 else 1
+        high_clock = 6 if updates_power and high is not None and high > 0 else 1
+        if low is not None and converted.to_wire(author_low, updates_per_tick=low_clock) < low:
+            author_low = converted.from_wire(low, updates_per_tick=low_clock)
+        if high is not None and converted.to_wire(author_high, updates_per_tick=high_clock) > high:
+            author_high = converted.from_wire(high, updates_per_tick=high_clock)
+        converted = replace(converted, minimum=author_low, maximum=author_high)
+    return converted
 
 
 def _seconds(spec: ParamSpec, predecessor: str) -> ParamSpec:
@@ -2307,6 +2327,12 @@ _CAPS.extend([
         "angularSpeedRadiansPerSecond": _world_units(_p("number", "Signed phase increment; zero follows owner at fixed phase", minimum=-0.5, maximum=0.5, units="radians/update", consumer_storage="float32", neutral=0), "ellipseAngularRate", multiplier=1, divisor=60, updates_power=1, units="radians/s"),
         "phaseRadians": _p("number", "Explicit starting phase; no identity-derived offset", minimum=-3.1415927, maximum=3.1415927, units="radians", consumer_storage="float32", wire_name="ellipsePhase", neutral=0),
     }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.EllipticOrbit.cs::MoveEllipticOrbit", requirements=(RequirementSpec("item_capability_param", capability="configure_spawn", param="aim", any_of=("cursor", "facing", "velocity"), message="This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one."),)),
+    _movement("move_traveling_wave", 'A traveling sine displacement around the synchronized initial launch axis: constant authored forward speed plus the exact change of lateral sinusoidal offset across each active update. Amplitude is a world distance, frequency is cycles per second, and phase is explicit. Unlike sine_homing this never selects targets, rotates velocity cumulatively or depends on prior heading; its integrated lateral displacement is bounded by twice amplitude even across extraUpdates. Native integration/collision remains enabled; each next AI recomputes the trajectory velocity from active age. Modifiers may add independent deviations after this driver. Late hydration resumes the same differential step without snapping to a saved origin.', 23, {
+        "forwardSpeedBlocksPerSecond": _world_units(_p("number", "Constant forward speed along initial direction", minimum=0.1, maximum=80, units="pixels/update", consumer_storage="float32"), "waveForwardSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+        "amplitudeTiles": _p("number", "Lateral sine amplitude; zero is explicitly straight", minimum=0, maximum=16, units="tiles", consumer_storage="float32", wire_name="waveDisplacementAmplitude", neutral=0),
+        "frequencyCyclesPerSecond": _world_units(_p("number", "Oscillation frequency in world time", minimum=0.0001, maximum=1, units="radians/update", consumer_storage="float32"), "wavePhaseRate", multiplier=6.283185307179586, divisor=60, updates_power=1, units="cycles/s"),
+        "phaseRadians": _p("number", "Starting oscillator phase; no initial lateral teleport", minimum=-3.1415927, maximum=3.1415927, units="radians", consumer_storage="float32", wire_name="waveStartPhase", neutral=0),
+    }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.TravelingWave.cs::MoveTravelingWave", requirements=(RequirementSpec("item_capability_param", capability="configure_spawn", param="aim", any_of=("cursor", "facing", "velocity"), message="This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one."),)),
     _movement("move_straight", "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.", 0),
     _movement("move_slow_homing", "Steer gradually toward a valid NPC.", 1, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
@@ -3421,6 +3447,7 @@ MOVEMENT_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "move_whip_lash": 18,
     "move_forward_then_retract": 19,
     "move_front_hand": 20,
+    "move_traveling_wave": 23,
     "move_elliptic_orbit": 22,
     "move_spring_tether": 21,
 })
