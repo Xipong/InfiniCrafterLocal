@@ -99,6 +99,10 @@ public partial class GeneratedItem
             Flag("ManaPickup", a.ManaPickup == true);
             Flag("CoinPickup", a.CoinPickup == true);
             Flag("TreasurePickup", a.TreasurePickup == true);
+            Flag("TreasureVision", a.TreasureVision == true);
+            Flag("DangerVision", a.DangerVision == true);
+            Flag("CreatureVision", a.CreatureVision == true);
+            Flag("NightVision", a.NightVision == true);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);

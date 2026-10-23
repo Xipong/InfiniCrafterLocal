@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Exploration Vision", ExplorationVision),
             ("Exploration Pickup", ExplorationPickup),
             ("Exploration Fishing", ExplorationFishing),
             ("Atlas motion AtlasMotionWireAdmission", AtlasMotionWireAdmission),

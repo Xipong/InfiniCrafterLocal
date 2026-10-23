@@ -3020,6 +3020,12 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "creatureVision": {
+                    "description": "Enable native Player.detectCreature highlighting. Information only; does not target, damage or summon creatures.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "damageReductionPercentagePoints": {
                     "description": "Add percent/100 to Player.endurance damage reduction",
                     "maximum": 75,
@@ -3038,6 +3044,12 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
+                  },
+                  "dangerVision": {
+                    "description": "Enable native Player.dangerSense highlighting for engine-recognized dangerous tiles. Does not grant hazard immunity.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "defensePoints": {
                     "description": "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment",
@@ -3383,6 +3395,12 @@
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
                   },
+                  "nightVision": {
+                    "description": "Enable native Player.nightVision lighting visibility. Does not create light sources, map reveal, treasure detection or danger detection.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "noKnockback": {
                     "description": "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate",
                     "type": "boolean",
@@ -3448,6 +3466,12 @@
                   },
                   "treasurePickup": {
                     "description": "Enable native Player.treasureMagnet: add native treasure grab range to eligible world items, stacking with native specialized magnets. Does not bypass pickup eligibility or inventory space.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "treasureVision": {
+                    "description": "Enable native Player.findTreasure highlighting for engine-recognized treasure tiles. Does not reveal unexplored map or spawn treasure.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"

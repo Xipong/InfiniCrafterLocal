@@ -30,3 +30,14 @@ schema, compiler, receipts, strict wire и frozen Repair; native check
 Каждый флаг независим: выбор одного не включает остальные. Эффект выдаётся
 на нативном проходе экипировки и снимается ResetEffects после снятия предмета.
 Параметры отображаются в локализованных tooltip, проходят strict wire и exact receipts.
+
+## Vision
+
+`treasureVision` → `Player.findTreasure`: подсветка сокровищ.
+`dangerVision` → `Player.dangerSense`: подсветка опасностей.
+`creatureVision` → `Player.detectCreature`: подсветка существ.
+`nightVision` → `Player.nightVision`: ночное зрение.
+
+Каждый флаг независим: выбор одного не включает остальные. Эффект выдаётся
+на нативном проходе экипировки и снимается ResetEffects после снятия предмета.
+Параметры отображаются в локализованных tooltip, проходят strict wire и exact receipts.

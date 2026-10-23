@@ -3532,6 +3532,30 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "treasureVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.findTreasure highlighting for engine-recognized treasure tiles. Does not reveal unexplored map or spawn treasure.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "dangerVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.dangerSense highlighting for engine-recognized dangerous tiles. Does not grant hazard immunity.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "creatureVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.detectCreature highlighting. Information only; does not target, damage or summon creatures.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "nightVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.nightVision lighting visibility. Does not create light sources, map reveal, treasure detection or danger detection.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "iceSkate": {
                         "type": "boolean",
                         "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",

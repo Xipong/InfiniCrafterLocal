@@ -80,6 +80,10 @@ public partial class GeneratedItem
         if (a.ManaPickup == true) player.manaMagnet = true;
         if (a.CoinPickup == true) player.goldRing = true;
         if (a.TreasurePickup == true) player.treasureMagnet = true;
+        if (a.TreasureVision == true) player.findTreasure = true;
+        if (a.DangerVision == true) player.dangerSense = true;
+        if (a.CreatureVision == true) player.detectCreature = true;
+        if (a.NightVision == true) player.nightVision = true;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

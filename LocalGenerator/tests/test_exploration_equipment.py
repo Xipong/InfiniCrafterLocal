@@ -12,6 +12,7 @@ from infini_local.core.runtime_authoring.program_schema import apply_repair_patc
 from infini_local.pipelines.author_item_contract import author_item_response_schema
 
 SYSTEMS = [
+    {'treasureVision': True, 'dangerVision': True, 'creatureVision': True, 'nightVision': True},
     {'lifePickup': True, 'manaPickup': True, 'coinPickup': True, 'treasurePickup': True},
     {"fishingPower": 25, "fishingLine": True, "lavaFishing": True, "fishingSonar": True, "fishingCrates": True},
 ]

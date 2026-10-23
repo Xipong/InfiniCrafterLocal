@@ -1950,6 +1950,10 @@
         "accessory.manaPickup",
         "accessory.coinPickup",
         "accessory.treasurePickup",
+        "accessory.treasureVision",
+        "accessory.dangerVision",
+        "accessory.creatureVision",
+        "accessory.nightVision",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
@@ -2031,6 +2035,16 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "creatureVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "damageReductionPercentagePoints": {
           "enum": [],
           "kind": "number",
@@ -2040,6 +2054,16 @@
           "required": false,
           "semanticType": "percentage_points",
           "units": "percentage_points"
+        },
+        "dangerVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "defensePoints": {
           "enum": [],
@@ -2423,6 +2447,16 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
+        "nightVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "noKnockback": {
           "enum": [],
           "kind": "boolean",
@@ -2494,6 +2528,16 @@
           "units": ""
         },
         "treasurePickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureVision": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2637,6 +2681,10 @@
             "manaPickup",
             "coinPickup",
             "treasurePickup",
+            "treasureVision",
+            "dangerVision",
+            "creatureVision",
+            "nightVision",
             "iceSkate",
             "noKnockback",
             "fireWalk",
