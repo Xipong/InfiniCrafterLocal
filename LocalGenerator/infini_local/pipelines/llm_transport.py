@@ -33,6 +33,8 @@ _CURRENT_LLM_DEADLINE: ContextVar[float | None] = ContextVar("infini_llm_deadlin
 _CURRENT_LLM_DIAGNOSTICS: ContextVar[dict[str, Any] | None] = ContextVar("infini_llm_diagnostics", default=None)
 _CURRENT_LLM_ATTEMPT: ContextVar[dict[str, Any] | None] = ContextVar("infini_llm_attempt", default=None)
 _LLM_MAX_DIAGNOSTIC_ATTEMPTS = 16
+# Bound complete successful JSON bodies as well as provider error evidence.
+MAX_PROVIDER_JSON_BYTES = 16 * 1024 * 1024
 _LLM_CALL_SEQUENCE = 0
 _LLM_CALL_LOCK = threading.Lock()
 
@@ -349,7 +351,7 @@ def http_get_json(url: str, timeout: float = 5, headers: dict[str, str] | None =
     deadline = _request_deadline(timeout)
     try:
         with urlopen_no_redirect(req, deadline=deadline) as resp:
-            return json.loads(read_with_deadline(resp, deadline=deadline).decode("utf-8"))
+            return json.loads(read_with_deadline(resp, deadline=deadline, max_bytes=MAX_PROVIDER_JSON_BYTES).decode("utf-8"))
     except urlerror.HTTPError as error:
         error.close()
         raise
@@ -437,7 +439,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
                 row["httpStatus"] = resp.status
             read_started = time.monotonic()
             try:
-                raw = read_with_deadline(resp, deadline=deadline)
+                raw = read_with_deadline(resp, deadline=deadline, max_bytes=MAX_PROVIDER_JSON_BYTES)
             finally:
                 if row is not None:
                     row["readMs"] = round((time.monotonic() - read_started) * 1000, 3)

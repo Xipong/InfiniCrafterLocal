@@ -32,6 +32,22 @@ PIN = "ExactVendor/Endpoint-Turbo"
 STAGES = ("planner", "visual_director", "vfx_director")
 
 
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_provider_json_byte_limit_rejects_overflow_without_truncation(loopback_transport, monkeypatch, method):
+    from infini_local.core.http_io import HttpResponseTooLarge
+    endpoint, _events = loopback_transport
+    body = {"value": "x" * 256}
+    encoded = json.dumps(body).encode()
+    base, _observed = endpoint([{"body": body}, {"body": body}])
+    send = (lambda: transport.http_get_json(base + "/models")) if method == "GET" else (
+        lambda: transport.http_json(base + "/chat/completions", {"model": "test"}))
+    monkeypatch.setattr(transport, "MAX_PROVIDER_JSON_BYTES", len(encoded))
+    assert send() == body
+    monkeypatch.setattr(transport, "MAX_PROVIDER_JSON_BYTES", len(encoded) - 1)
+    with pytest.raises(HttpResponseTooLarge):
+        send()
+
+
 def packet(stage="planner", *, schema=False):
     response_format = {"type": "json_object"}
     if schema:
