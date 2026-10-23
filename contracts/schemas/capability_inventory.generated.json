@@ -6906,6 +6906,9 @@
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
         "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.burstSpacingTicks",
+        "runtimeProgram.entities[].targeting.burstCount",
+        "runtimeProgram.entities[].targeting.warmupTicks",
         "runtimeProgram.entities[].targeting.maximumLeadTiles",
         "runtimeProgram.entities[].targeting.leadSeconds",
         "runtimeProgram.entities[].targeting.aimMode",
@@ -6946,6 +6949,26 @@
           "required": false,
           "semanticType": "bounded_text",
           "units": ""
+        },
+        "burstCount": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 8,
+          "minimum": 1,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "burstSpacingSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
         },
         "coneDirection": {
           "enum": [
@@ -7177,6 +7200,16 @@
           "required": false,
           "semanticType": "bounded_text",
           "units": ""
+        },
+        "warmupSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 30.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
         }
       },
       "positionOwnership": "none",

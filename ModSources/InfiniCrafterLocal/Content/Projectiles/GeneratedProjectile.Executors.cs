@@ -239,11 +239,8 @@ public sealed partial class GeneratedProjectile
     {
         if (!_entity!.Movement.IsConfigured) Projectile.velocity = Vector2.Zero;
         if (_entity.Targeting.IntervalTicks <= 0) return true;
-        _controllerTimer++;
-        int interval = AuthoredTicksToProjectileUpdates(Math.Max(6, _entity.Targeting.IntervalTicks));
-        if (_controllerTimer < interval || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
-            return true;
-        _controllerTimer = 0;
+        if (!AdvanceFiringSchedule(ref _controllerTimer, _entity.Targeting, Math.Max(1, Projectile.extraUpdates + 1))
+            || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)) return true;
         float range = Math.Max(16f, (_entity.Targeting.RangeTiles > 0 ? _entity.Targeting.RangeTiles : _entity.Controller.Params.RangeTiles) * 16f);
         NPC? target = FindFiringTarget(range, _entity.Targeting);
         if (target is null) return true;

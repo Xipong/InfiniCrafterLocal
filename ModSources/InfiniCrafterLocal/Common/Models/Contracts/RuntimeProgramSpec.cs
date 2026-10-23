@@ -1936,7 +1936,16 @@ public sealed class RuntimeTargetingSpec
     private double? _maximumLeadTiles;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? MaximumLeadTiles { get => _maximumLeadTiles; set => _maximumLeadTiles = value ?? throw new InvalidDataException("present targeting maximumLeadTiles cannot be null"); }
-    [JsonIgnore] public bool HasVolleyOptions => MaximumLeadTiles is not null || LeadSeconds is not null || AimMode is not null || TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
+    private int? _warmupTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? WarmupTicks { get => _warmupTicks; set => _warmupTicks = value ?? throw new InvalidDataException("present targeting warmupTicks cannot be null"); }
+    private int? _burstCount;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BurstCount { get => _burstCount; set => _burstCount = value ?? throw new InvalidDataException("present targeting burstCount cannot be null"); }
+    private int? _burstSpacingTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BurstSpacingTicks { get => _burstSpacingTicks; set => _burstSpacingTicks = value ?? throw new InvalidDataException("present targeting burstSpacingTicks cannot be null"); }
+    [JsonIgnore] public bool HasVolleyOptions => BurstSpacingTicks is not null || BurstCount is not null || WarmupTicks is not null || MaximumLeadTiles is not null || LeadSeconds is not null || AimMode is not null || TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
         || TargetPolicy is not null || RequireLineOfSight.HasValue || HardRange.HasValue;
     public void Normalize()
     {
@@ -1952,6 +1961,9 @@ public sealed class RuntimeTargetingSpec
         if (AimMode is not null and not ("direct" or "velocity_lead")) throw new InvalidDataException("invalid targeting aimMode");
         if (LeadSeconds is double leadSeconds && (!double.IsFinite(leadSeconds) || leadSeconds < 0d || leadSeconds > 2d || (leadSeconds != 0d && (float)leadSeconds == 0f))) throw new InvalidDataException("invalid targeting leadSeconds");
         if (MaximumLeadTiles is double maximumLeadTiles && (!double.IsFinite(maximumLeadTiles) || maximumLeadTiles < 0d || maximumLeadTiles > 120d || (maximumLeadTiles != 0d && (float)maximumLeadTiles == 0f))) throw new InvalidDataException("invalid targeting maximumLeadTiles");
+        if (WarmupTicks is < 0 or > 1800) throw new InvalidDataException("invalid targeting warmupTicks");
+        if (BurstCount is < 1 or > 8) throw new InvalidDataException("invalid targeting burstCount");
+        if (BurstSpacingTicks is < 1 or > 600) throw new InvalidDataException("invalid targeting burstSpacingTicks");
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
         RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);

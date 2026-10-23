@@ -80,3 +80,16 @@ def test_predictive_aim_exact_delivery_scope_and_child_handoff_requirement():
     next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["params"]["shotEntity"])["spawn"]["aim"] = "cursor"
     assert not validate_runtime_wire(wire)["ok"]
     rejected(dict(aimMode="direct", leadSeconds=.5, maximumLeadTiles=4), dict(aimMode="guessed", leadSeconds=2.1, maximumLeadTiles=-1))
+
+
+def test_burst_schedule_world_time_projection_and_strict_delivery():
+    doc, call = _fixture(warmupSeconds=.5, burstCount=3, burstSpacingSeconds=.1)
+    assert validate_runtime_program(doc)["ok"]
+    wire = compile_runtime_program(doc); target = _targeting(wire)
+    assert (target["warmupTicks"], target["burstCount"], target["burstSpacingTicks"]) == (30, 3, 6)
+    assert validate_runtime_wire(wire)["ok"]
+    wire.pop("runtimeContract"); target["burstSpacingTicks"] = 0
+    assert not validate_runtime_wire(wire)["ok"]
+    call["params"]["warmupSeconds"] = 31
+    assert not validate_runtime_program(doc)["ok"]
+    rejected(dict(burstCount=3), dict(burstCount=9))

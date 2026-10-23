@@ -33,6 +33,7 @@ DECLARED = {
                         "minimumHealthRatio": 0, "maximumHealthRatio": 1,
                         "targetPriority": "distance",
                         "aimMode": "direct", "leadSeconds": 0, "maximumLeadTiles": 120,
+                        "warmupSeconds": 0.0, "burstCount": 1, "burstSpacingSeconds": 0.1,
                         },
     "apply_generated_buff_on_use": {
         "miningSpeedMultiplier": 1,

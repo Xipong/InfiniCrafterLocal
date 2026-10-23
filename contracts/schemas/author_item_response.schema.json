@@ -9092,6 +9092,43 @@
                         "default": false,
                         "x-infini-neutral": false
                       },
+                      "burstSpacingSeconds": {
+                        "type": "number",
+                        "minimum": 0.008333333333333333,
+                        "maximum": 10.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World ticks between volleys inside a burst. intervalSeconds is the pause from the last volley to the first volley of the next burst",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "default": 0.1,
+                        "x-infini-neutral": 0.1,
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      },
+                      "burstCount": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 8,
+                        "description": "Volleys per burst; every volley independently reacquires a target and consumes the shared activation budget. No target or failed spawn still advances the authored schedule",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 1,
+                        "x-infini-neutral": 1
+                      },
+                      "warmupSeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 30.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: One initial world-time delay before the normal first firing interval",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "default": 0.0,
+                        "x-infini-neutral": 0.0,
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      },
                       "maximumLeadTiles": {
                         "type": "number",
                         "minimum": 0,

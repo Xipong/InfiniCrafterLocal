@@ -8823,6 +8823,29 @@
                     "x-infini-neutral": "any",
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "burstCount": {
+                    "default": 1,
+                    "description": "Volleys per burst; every volley independently reacquires a target and consumes the shared activation budget. No target or failed spawn still advances the authored schedule",
+                    "maximum": 8,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "burstSpacingSeconds": {
+                    "default": 0.1,
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World ticks between volleys inside a burst. intervalSeconds is the pause from the last volley to the first volley of the next burst",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.1,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
                   "coneDirection": {
                     "default": "owner_facing",
                     "description": "Cone axis: current owner horizontal facing or this projectile actual velocity; a zero velocity admits no targets when a restricted velocity cone is requested",
@@ -9061,6 +9084,20 @@
                     "type": "string",
                     "x-infini-neutral": "distance",
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "warmupSeconds": {
+                    "default": 0.0,
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: One initial world-time delay before the normal first firing interval",
+                    "maximum": 30.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   }
                 },
                 "required": [

@@ -6,6 +6,21 @@ using Terraria;
 namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
+    internal static bool AdvanceFiringSchedule(ref int timer, RuntimeTargetingSpec targeting, int updatesPerTick)
+    {
+        int scale = Math.Clamp(updatesPerTick, 1, 6);
+        int warmup = (targeting.WarmupTicks ?? 0) * scale;
+        int first = warmup + Math.Max(6, targeting.IntervalTicks) * scale;
+        int spacing = (targeting.BurstSpacingTicks ?? 6) * scale;
+        int count = targeting.BurstCount ?? 1;
+        int last = first + (count - 1) * spacing;
+        // Bounded phase state uses the already synchronized controller timer.
+        // Reset to warmup after the last volley: warmup is paid once, not per burst.
+        timer = Math.Min(Math.Max(0, timer) + 1L, last) is long next ? (int)next : last;
+        bool due = timer >= first && (timer - first) % spacing == 0;
+        if (timer >= last) timer = warmup;
+        return due;
+    }
     internal Vector2 FiringDirection(NPC target, RuntimeTargetingSpec targeting)
     {
         Vector2 aim = target.Center;
