@@ -53,6 +53,14 @@ public sealed class InfiniGameplayQolConfig : ModConfig
     public bool PlayChargeReadySound = true;
 
     [DefaultValue(false)]
+    public bool AnchorChargeHud = false;
+
+    [DefaultValue(100)]
+    [Range(75, 150)]
+    [Slider]
+    public int ChargeHudScalePercent = 100;
+
+    [DefaultValue(false)]
     public bool AlwaysExpandGeneratedTooltips = false;
 
     [DefaultValue(true)]

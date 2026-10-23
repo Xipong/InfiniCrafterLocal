@@ -1,4 +1,6 @@
 ChargeUI: {
+	More: "Ещё источников заряда: {0}"
+	Remaining: "{0}% · осталось {1:0.0} с"
 	Progress: "Заряд: {0}%"
 	Ready: "Готово"
 }
@@ -203,6 +205,10 @@ UseFeedback: {
 			}
 
 			InfiniGameplayQolConfig: {
+	ChargeHudScalePercent.Tooltip: "Размер полос заряда и подписей."
+	ChargeHudScalePercent.Label: "Масштаб панели заряда"
+	AnchorChargeHud.Tooltip: "Показывать заряд в правом нижнем углу."
+	AnchorChargeHud.Label: "Закрепить панель заряда"
 			PlayCraftCompletionSound.Tooltip: "Один звуковой сигнал, когда готовый предмет доставлен."
 			PlayCraftCompletionSound.Label: "Звук завершения создания"
 			DetachedGeneratedStatusHud.Label: "Отдельная панель эффектов"

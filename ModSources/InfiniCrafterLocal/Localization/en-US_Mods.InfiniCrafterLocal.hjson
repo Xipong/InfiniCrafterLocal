@@ -1,4 +1,6 @@
 ChargeUI: {
+	More: "+{0} charging sources"
+	Remaining: "{0}% · {1:0.0}s remaining"
 	Progress: "Charge: {0}%"
 	Ready: "Ready"
 }
@@ -203,6 +205,10 @@ UseFeedback: {
 			}
 
 			InfiniGameplayQolConfig: {
+	ChargeHudScalePercent.Tooltip: "Resize charge bars and labels together."
+	ChargeHudScalePercent.Label: "Charge dashboard scale"
+	AnchorChargeHud.Tooltip: "Keep charge rows in the bottom-right corner."
+	AnchorChargeHud.Label: "Anchor charge dashboard"
 			PlayCraftCompletionSound.Tooltip: "Play one cue when your finished item is delivered."
 			PlayCraftCompletionSound.Label: "Craft completion sound"
 			DetachedGeneratedStatusHud.Label: "Independent generated status HUD"
