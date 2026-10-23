@@ -85,4 +85,35 @@ internal static partial class EngineRuntimeChecks
             Equal(preset, owner.JournalPreset(0), "stock mode survives native preset save/load");
         });
     }
+    private static void JournalDirectOpenWorkflow()
+    {
+        WithPlayer((player, owner) => {
+            var property = typeof(InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("GeneratedItems")!;
+            object? before = property.GetValue(null); int mode = Terraria.Main.netMode;
+            int local = Terraria.Main.myPlayer; Player oldActor = Terraria.Main.player[0];
+            bool menu = Terraria.Main.gameMenu, active = player.active, dead = player.dead;
+            using var registry = new InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService();
+            try {
+                property.SetValue(null, registry); Terraria.Main.myPlayer = 0; Terraria.Main.player[0] = player; Terraria.Main.netMode = 0; Terraria.Main.gameMenu = false; player.active = true; player.dead = false;
+                var data = AssetOwnerData("journal_open_known", "journal_open.png");
+                registry.RegisterLocal(data, false, false);
+                new RecipeJournalUISystem().OnWorldUnload();
+                Equal(false, RecipeJournalUISystem.OpenRecipe("unknown"), "unknown direct link refused");
+                Equal(false, RecipeJournalUISystem.IsOpen, "invalid link does not open UI");
+                JournalField("_query").SetValue(null, "impossible query");
+                Equal(true, RecipeJournalUISystem.OpenRecipe(data.Id), "known current-world exact ID opens");
+                Equal(data.Id, (string)JournalField("_selected").GetValue(null)!, "exact selection");
+                Equal("Guide", JournalField("_detailPage").GetValue(null)!.ToString(), "direct open presents actual item guide");
+                Equal("", (string)JournalField("_query").GetValue(null)!, "hidden target revealed");
+                Equal(true, owner.JournalLastVisited(data.Id) > 0, "direct link records reading history");
+                int world = Terraria.Main.worldID;
+                try { Terraria.Main.worldID = world + 1; Equal(false, RecipeJournalUISystem.OpenRecipe(data.Id), "foreign definition refused"); }
+                finally { Terraria.Main.worldID = world; }
+            } finally {
+                new RecipeJournalUISystem().OnWorldUnload(); property.SetValue(null, before);
+                Terraria.Main.myPlayer = local; Terraria.Main.player[0] = oldActor;
+                Terraria.Main.netMode = mode; Terraria.Main.gameMenu = menu; player.active = active; player.dead = dead;
+            }
+        });
+    }
 }

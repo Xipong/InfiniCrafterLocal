@@ -45,12 +45,8 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             if ((Main.keyState.IsKeyDown(Keys.LeftShift) || Main.keyState.IsKeyDown(Keys.RightShift))
                 && player.HeldItem?.ModItem is GeneratedItem held
                 && InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.IsCurrentWorldData(held.Data)
-                && !GeneratedItemData.IsPlayerSaveReferenceOnly(held.Data))
-            {
-                _query = ""; _favoritesOnly = false; _ingredientFilter = "";
-                _effectFilter = RecipeJournalView.EffectFilter.All; _page = 0;
-                Select(held.Data.Id);
-            }
+                && !GeneratedItemData.IsPlayerSaveReferenceOnly(held.Data)) OpenRecipe(held.Data.Id);
+
         }
     }
     private static string _query = "", _selected = "";
@@ -107,6 +103,16 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         Main.playerInventory = true;
         if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
             InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
+    }
+    // Shared station/held-item entry point: authoritative discoveries only, no name lookup or hydration.
+    public static bool OpenRecipe(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || Main.gameMenu || Main.LocalPlayer is not { active: true, dead: false }) return false;
+        var snapshot = InfiniCrafterLocalMod.GeneratedItems?.Snapshot() ?? Array.Empty<GeneratedItemData>();
+        if (!RecipeJournalView.Entries(snapshot, Main.worldID.ToString(), "", _ => false, false).Any(d => d.Id == id)) return false;
+        Open(); _known = snapshot; _snapshotTick = Main.GameUpdateCount;
+        Select(id, revealOutsideFilters: true); _workspaceMenu = false; _detailPage = DetailPage.Guide;
+        return true;
     }
     private static void SetSearchFocus(bool focused) => SetTextFocus(focused ? 1 : _noteFocus ? 2 : 0);
     private static void SetNoteFocus(bool focused) => SetTextFocus(focused ? 2 : _searchFocus ? 1 : 0);
