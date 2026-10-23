@@ -76,7 +76,7 @@ internal static class RecipeJournalView
 
     internal static bool MatchesQuery(GeneratedItemData data, string query, string note = "", int collection = 0)
     {
-        foreach (string raw in SearchTerms(query ?? ""))
+        foreach (string raw in ParseQuery(query ?? "").Terms)
         {
             bool excluded = raw.StartsWith('-') && raw.Length > 1;
             string term = excluded ? raw[1..] : raw;
@@ -98,23 +98,45 @@ internal static class RecipeJournalView
         return true;
     }
     private static bool DepthMatches(int depth, string value)
-    {
-        string op = value.StartsWith(">=") || value.StartsWith("<=") ? value[..2]
-            : value.StartsWith('>') || value.StartsWith('<') || value.StartsWith('=') ? value[..1] : "";
-        return int.TryParse(value[op.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+        => TryDepth(value, out string op, out int n)
             && (op switch { ">=" => depth >= n, "<=" => depth <= n, ">" => depth > n, "<" => depth < n, _ => depth == n });
-    }
-    private static IEnumerable<string> SearchTerms(string query)
+
+    private static bool TryDepth(string value, out string op, out int n)
     {
-        var word = new StringBuilder(); bool quote = false;
-        foreach (char c in query.Take(240))
+        op = value.StartsWith(">=") || value.StartsWith("<=") ? value[..2]
+            : value.StartsWith('>') || value.StartsWith('<') || value.StartsWith('=') ? value[..1] : "";
+        return int.TryParse(value[op.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out n);
+    }
+
+    internal readonly record struct SearchQuery(string[] Terms, bool UnclosedQuote, bool Truncated);
+    internal static SearchQuery ParseQuery(string query)
+    {
+        var words = new List<string>(); var word = new StringBuilder(); bool quote = false;
+        for (int index = 0; index < Math.Min(240, query.Length); index++)
         {
+            char c = query[index];
+            if (c == '\\' && index + 1 < Math.Min(240, query.Length) && query[index + 1] == '"')
+            { word.Append('"'); index++; continue; }
             if (c == '"') { quote = !quote; continue; }
             if (char.IsWhiteSpace(c) && !quote)
-            { if (word.Length > 0) { yield return word.ToString(); word.Clear(); } }
+            { if (word.Length > 0) { words.Add(word.ToString()); word.Clear(); } }
             else word.Append(c);
         }
-        if (word.Length > 0) yield return word.ToString();
+        if (word.Length > 0) words.Add(word.ToString());
+        return new(words.ToArray(), quote, query.Length > 240);
+    }
+
+    internal static string QueryIssue(string query)
+    {
+        var parsed = ParseQuery(query);
+        if (parsed.Truncated) return "SearchTooLong";
+        if (parsed.UnclosedQuote) return "SearchUnclosedQuote";
+        foreach (string raw in parsed.Terms)
+        {
+            string term = raw.StartsWith('-') ? raw[1..] : raw;
+            if (term.StartsWith("depth:", StringComparison.OrdinalIgnoreCase) && !TryDepth(term[6..], out _, out _)) return "SearchDepthInvalid";
+        }
+        return "";
     }
 
     internal static int NativeParentType(GeneratedItemData child, int index)

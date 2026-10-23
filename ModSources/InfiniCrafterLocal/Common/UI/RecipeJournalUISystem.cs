@@ -150,7 +150,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         {
             PlayerInput.WritingText = true; Main.instance.HandleIME();
             string query = Main.GetInputText(_query);
-            query = query[..Math.Min(query.Length, 80)];
+            query = query[..Math.Min(query.Length, 240)];
             if (query != _query) { _query = query; _page = 0; }
         }
         var discoveries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), "", player.IsJournalFavorite, false);
@@ -189,16 +189,17 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         Fill(sb, new Rectangle(book.X + 14, book.Y + 36, book.Width - 28, 1), Metal);
         if (Button(sb, new Rectangle(book.Right - 38, book.Y + 8, 26, 26), "×", click, cursor)) { Close(); return true; }
         Rectangle search = new(book.X + 12, book.Y + 44, Math.Max(60, layout.List.Width - 110), 30);
-        Chassis(sb, search, _searchFocus ? new Color(32, 45, 53) : Inset);
+        string queryIssue = RecipeJournalView.QueryIssue(_query);
+        Chassis(sb, search, queryIssue.Length > 0 ? new Color(61, 36, 28) : _searchFocus ? new Color(32, 45, 53) : Inset);
         Label(sb, _query.Length == 0 ? Text("Search") : _query + (_searchFocus && Main.GameUpdateCount % 60 < 30 ? "|" : ""), search.TopLeft() + new Vector2(8, 5), _query.Length == 0 ? Muted : Ink, 0.65f, search.Width - 16);
-        if (search.Contains(cursor.ToPoint())) _hoverText = Text("SearchKeys") + "\n" + Text("StructuredSearch");
+        if (search.Contains(cursor.ToPoint())) _hoverText = Text("SearchKeys") + "\n" + Text("StructuredSearch") + (queryIssue.Length > 0 ? "\n" + Text(queryIssue) : "");
         if (click && search.Contains(cursor.ToPoint())) { SetSearchFocus(true); Main.mouseLeftRelease = false; }
         else if (click) SetSearchFocus(false);
         if (_searchFocus && Main.keyState.IsKeyDown(Keys.Enter)) SetSearchFocus(false);
         Rectangle favorites = new(search.Right + 6, search.Y, 104, 30);
         if (Button(sb, favorites, _favoritesOnly ? Text("All") : Text("Favorites"), click, cursor, selected: _favoritesOnly)) { _favoritesOnly = !_favoritesOnly; _page = 0; }
         if (layout.Detail.X > layout.List.Right)
-            Label(sb, Text("Count", discoveries.Length), new Vector2(layout.Detail.X + 12, search.Y + 5), Muted, 0.65f, layout.Detail.Width - 24);
+            Label(sb, _query.Length == 0 ? Text("Count", discoveries.Length) : Text("SearchCount", entries.Length, discoveries.Length), new Vector2(layout.Detail.X + 12, search.Y + 5), Muted, 0.65f, layout.Detail.Width - 24);
         var effectButton = new Rectangle(book.X + 12, book.Y + 80, Math.Min(182, book.Width - 24), 26);
         if (Button(sb, effectButton, Text("Filter" + _effectFilter), click, cursor))
         { _effectFilter = (RecipeJournalView.EffectFilter)(((int)_effectFilter + 1) % Enum.GetValues<RecipeJournalView.EffectFilter>().Length); _page = 0; }

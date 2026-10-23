@@ -33,6 +33,10 @@ UseFeedback: {
 
 
 		RecipeJournal: {
+	SearchDepthInvalid: "Depth needs a nonnegative whole number, optionally preceded by =, <, >, <= or >=."
+	SearchUnclosedQuote: "Close the quoted phrase with a second quotation mark."
+	SearchTooLong: "Search uses at most 240 characters."
+	SearchCount: "Matches: {0} / {1}"
 	HelpOwnership: "Ownership: discoveries belong to the current world. Unknown ancestors stay unknown. Notes, collections, favorites and goals are personal character metadata. Inventory counts exclude the cursor and equipment; favorite ingredients stay protected."
 	HelpPlan: "Planning: choose the desired output amount. The plan uses the real recipe yield, shares available stock across branches and reuses crafting leftovers. Tracking a goal shows missing materials while exploring. Preparation fills station inputs; it never starts crafting."
 	HelpSearch: "Search: Ctrl+F focuses the field; Escape leaves editing first. Use quoted phrases and -excluded words, or qualifiers such as parent:wood, tag:fire, depth:>=2, note:boss and collection:combat. All terms must match."
