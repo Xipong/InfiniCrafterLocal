@@ -49,6 +49,22 @@ def packet(stage="planner", *, schema=False):
     }, stage)
 
 
+@pytest.mark.parametrize("host", ["127.0.0.2", "127.42.1.2", "[::1]", "[::ffff:127.0.0.2]", "localhost."])
+def test_all_numeric_loopback_endpoints_are_exempt_from_remote_quotas(monkeypatch, host):
+    monkeypatch.setattr(llm_admission.time, "sleep", lambda _delay: pytest.fail("local request was paced"))
+    attempt = {}
+    for _ in range(2):
+        llm_admission._reserve_remote_rate_slot(f"http://{host}:1234/v1/chat/completions",
+            {"model": "gemma-local"}, b"{}", max_wait_seconds=0, attempt=attempt)
+    assert attempt["rateAdmissionPolicy"] == "local_exempt"
+
+
+def test_remote_model_quota_identity_preserves_case():
+    url = "https://provider.example/v1/chat/completions"
+    assert llm_admission._remote_rate_key(url, {"model": "Model"}) != llm_admission._remote_rate_key(url, {"model": "model"})
+    assert llm_admission._remote_rate_key("http://192.168.1.2/v1", {"model": "Model"})
+
+
 def http_error(url, code, body="provider rejected request"):
     return urllib.error.HTTPError(url, code, "synthetic failure", Message(), io.BytesIO(body.encode()))
 
