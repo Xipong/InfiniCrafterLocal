@@ -8997,13 +8997,28 @@
                   },
                   "targetPolicy": {
                     "default": "distance_score",
-                    "description": "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score",
+                    "description": "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses targetPriority; player_assigned_only refuses to fire without a valid exact assigned target",
                     "enum": [
                       "distance_score",
-                      "player_assigned_first"
+                      "player_assigned_first",
+                      "player_assigned_only"
                     ],
                     "type": "string",
                     "x-infini-neutral": "distance_score",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "targetPriority": {
+                    "default": "distance",
+                    "description": "Rank admitted NPCs by discounted distance, lowest/highest life ratio, distance to the owner, or alignment with owner facing. Ties use distance score then NPC index. Assigned-first/assigned-only policies apply after identical admission filters",
+                    "enum": [
+                      "distance",
+                      "lowest_health",
+                      "highest_health",
+                      "closest_to_owner",
+                      "facing_alignment"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "distance",
                     "x-infini-semanticType": "bounded_text"
                   }
                 },

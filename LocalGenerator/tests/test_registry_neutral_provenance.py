@@ -31,6 +31,7 @@ DECLARED = {
                         "minimumRangeTiles": 0, "coneRadians": 6.283185307179586,
                         "coneDirection": "owner_facing", "bossFilter": "any",
                         "minimumHealthRatio": 0, "maximumHealthRatio": 1,
+                        "targetPriority": "distance",
                         },
     "apply_generated_buff_on_use": {
         "miningSpeedMultiplier": 1,

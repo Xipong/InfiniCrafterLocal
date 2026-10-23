@@ -6,6 +6,18 @@ using Terraria;
 namespace InfiniCrafterLocal.Content.Projectiles;
 public sealed partial class GeneratedProjectile
 {
+    internal double TargetPriorityScore(NPC npc, RuntimeTargetingSpec targeting, Player owner, float distanceScore)
+    {
+        if (targeting.TargetPriority is "lowest_health" or "highest_health")
+            return npc.lifeMax <= 0 ? double.PositiveInfinity : (double)npc.life / npc.lifeMax * (targeting.TargetPriority == "highest_health" ? -1d : 1d);
+        if (targeting.TargetPriority == "closest_to_owner") return Vector2.DistanceSquared(owner.Center, npc.Center);
+        if (targeting.TargetPriority == "facing_alignment")
+        {
+            Vector2 offset = npc.Center - Projectile.Center;
+            return offset.LengthSquared() == 0f ? -1d : -Vector2.Dot(Vector2.Normalize(offset), new Vector2(owner.direction, 0));
+        }
+        return distanceScore;
+    }
     internal bool AdmitsTargetFilter(NPC npc, RuntimeTargetingSpec targeting, Player owner)
     {
         if (targeting.BossFilter == "boss_only" && !npc.boss || targeting.BossFilter == "non_boss_only" && npc.boss) return false;

@@ -1922,7 +1922,10 @@ public sealed class RuntimeTargetingSpec
     private double? _maximumHealthRatio;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? MaximumHealthRatio { get => _maximumHealthRatio; set => _maximumHealthRatio = value ?? throw new InvalidDataException("present targeting maximumHealthRatio cannot be null"); }
-    [JsonIgnore] public bool HasVolleyOptions => MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
+    private string? _targetPriority;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TargetPriority { get => _targetPriority; set => _targetPriority = value ?? throw new InvalidDataException("present targeting targetPriority cannot be null"); }
+    [JsonIgnore] public bool HasVolleyOptions => TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
         || TargetPolicy is not null || RequireLineOfSight.HasValue || HardRange.HasValue;
     public void Normalize()
     {
@@ -1934,6 +1937,7 @@ public sealed class RuntimeTargetingSpec
         if (MaximumHealthRatio is double maximumHealthRatio && (!double.IsFinite(maximumHealthRatio) || maximumHealthRatio < 0d || maximumHealthRatio > 1d || (maximumHealthRatio != 0d && (float)maximumHealthRatio == 0f))) throw new InvalidDataException("invalid targeting maximumHealthRatio");
         if (MinimumRangeTiles > RangeTiles || MinimumHealthRatio > MaximumHealthRatio)
             throw new InvalidDataException("targeting filter endpoints are reversed");
+        if (TargetPriority is not null and not ("distance" or "lowest_health" or "highest_health" or "closest_to_owner" or "facing_alignment")) throw new InvalidDataException("invalid targeting targetPriority");
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
         RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
@@ -1944,7 +1948,7 @@ public sealed class RuntimeTargetingSpec
             throw new InvalidDataException("targeting spread is outside explicit accepted bounds");
         if (SpreadRadians.HasValue && (!double.IsFinite(SpreadRadians.Value)
             || SpreadRadians != 0d && (float)SpreadRadians.Value == 0f)
-            || TargetPolicy is not null and not ("distance_score" or "player_assigned_first"))
+            || TargetPolicy is not null and not ("distance_score" or "player_assigned_first" or "player_assigned_only"))
             throw new InvalidDataException("targeting volley/policy is outside explicit accepted bounds");
     }
 }

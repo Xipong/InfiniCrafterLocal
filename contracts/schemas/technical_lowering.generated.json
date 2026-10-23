@@ -1098,6 +1098,7 @@
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
         "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.targetPriority",
         "runtimeProgram.entities[].targeting.maximumHealthRatio",
         "runtimeProgram.entities[].targeting.minimumHealthRatio",
         "runtimeProgram.entities[].targeting.bossFilter",

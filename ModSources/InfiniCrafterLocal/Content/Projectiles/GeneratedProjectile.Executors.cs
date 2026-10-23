@@ -287,18 +287,22 @@ public sealed partial class GeneratedProjectile
                 Projectile.position, Projectile.width, Projectile.height, npc.position, npc.width, npc.height);
         }
 
-        if (targeting.TargetPolicy == "player_assigned_first")
+        if (targeting.TargetPolicy is "player_assigned_first" or "player_assigned_only")
         {
             NPC? assigned = Projectile.OwnerMinionAttackTargetNPC;
             if (assigned is not null && Admitted(assigned, out _)) return assigned;
+            if (targeting.TargetPolicy == "player_assigned_only") return null;
         }
         NPC? selected = null;
         float best = float.PositiveInfinity;
+        double bestPriority = double.PositiveInfinity;
         foreach (NPC npc in Main.ActiveNPCs)
-            if (Admitted(npc, out float score) && score < best)
+            if (Admitted(npc, out float score))
             {
-                selected = npc;
-                best = score;
+                double priority = TargetPriorityScore(npc, targeting, Owner(), score);
+                if (!double.IsFinite(priority) || priority > bestPriority
+                    || priority == bestPriority && (score > best || score == best && selected is not null && npc.whoAmI >= selected.whoAmI)) continue;
+                selected = npc; best = score; bestPriority = priority;
             }
         return selected;
     }

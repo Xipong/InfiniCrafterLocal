@@ -6906,6 +6906,7 @@
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
         "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.targetPriority",
         "runtimeProgram.entities[].targeting.maximumHealthRatio",
         "runtimeProgram.entities[].targeting.minimumHealthRatio",
         "runtimeProgram.entities[].targeting.bossFilter",
@@ -7114,7 +7115,24 @@
         "targetPolicy": {
           "enum": [
             "distance_score",
-            "player_assigned_first"
+            "player_assigned_first",
+            "player_assigned_only"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "targetPriority": {
+          "enum": [
+            "distance",
+            "lowest_health",
+            "highest_health",
+            "closest_to_owner",
+            "facing_alignment"
           ],
           "kind": "string",
           "maximum": null,

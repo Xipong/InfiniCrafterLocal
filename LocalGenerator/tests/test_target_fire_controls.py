@@ -43,3 +43,9 @@ def test_filter_joint_delivery_rejection_and_frozen_repair():
     rejected(FILTER, dict(minimumRangeTiles=121, coneRadians=-1, coneDirection="guessed", bossFilter=None, minimumHealthRatio=-.1, maximumHealthRatio=1.1))
     doc, call = _fixture(**{**FILTER, "minimumHealthRatio": .8})
     assert not validate_runtime_program(doc)["ok"]
+
+
+def test_priority_and_manual_target_delivery_rejection_repair():
+    for priority in ("distance", "lowest_health", "highest_health", "closest_to_owner", "facing_alignment"):
+        accepted({**FILTER, "targetPriority": priority, "targetPolicy": "player_assigned_only"})
+    rejected({"targetPriority": "lowest_health", "targetPolicy": "player_assigned_only"}, {"targetPriority": "boss_name", "targetPolicy": "automatic_guess"})
