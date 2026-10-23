@@ -31,6 +31,24 @@ public sealed class InfiniGameplayQolConfig : ModConfig
     [Slider]
     public int GeneratedStatusOpacityPercent = 40;
 
+    [DefaultValue(false)]
+    public bool DetachedGeneratedStatusHud = false;
+
+    [DefaultValue(5)] [Range(0, 100)] [Slider]
+    public int GeneratedStatusHudXPercent = 5;
+
+    [DefaultValue(20)] [Range(0, 100)] [Slider]
+    public int GeneratedStatusHudYPercent = 20;
+
+    [DefaultValue(8)] [Range(1, 20)] [Slider]
+    public int GeneratedStatusHudColumns = 8;
+
+    [DefaultValue(100)] [Range(75, 150)] [Slider]
+    public int GeneratedStatusHudScalePercent = 100;
+
+    [DefaultValue(false)]
+    public bool PreviewGeneratedStatusHud = false;
+
     [DefaultValue(true)]
     public bool PlayChargeReadySound = true;
 

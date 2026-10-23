@@ -205,6 +205,13 @@ UseFeedback: {
 			InfiniGameplayQolConfig: {
 			PlayCraftCompletionSound.Tooltip: "Один звуковой сигнал, когда готовый предмет доставлен."
 			PlayCraftCompletionSound.Label: "Звук завершения создания"
+			DetachedGeneratedStatusHud.Label: "Отдельная панель эффектов"
+			GeneratedStatusHudXPercent.Label: "Положение HUD по горизонтали (%)"
+			GeneratedStatusHudYPercent.Label: "Положение HUD по вертикали (%)"
+			GeneratedStatusHudColumns.Label: "Предпочтительное число столбцов"
+			GeneratedStatusHudScalePercent.Label: "Размер значков и таймеров (%)"
+			PreviewGeneratedStatusHud.Label: "Предпросмотр пустой панели"
+			DetachedGeneratedStatusHud.Tooltip: "Отделяет эффекты от обычных бафов. Положение задаётся в свободном пространстве экрана; строки перестраиваются под размер окна. Настройки сохраняются обычным редактором конфигурации."
 			GeneratedStatusOpacityPercent.Tooltip: "Улучшает читаемость бафов и перезарядок. При наведении значки всегда непрозрачны."
 			GeneratedStatusOpacityPercent.Label: "Непрозрачность значков эффектов (%)"
 			PlayChargeReadySound.Tooltip: "Отключает сигнал готовности, сохраняя полоску заряда и звуки оружия."

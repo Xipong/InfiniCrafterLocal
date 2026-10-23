@@ -205,6 +205,13 @@ UseFeedback: {
 			InfiniGameplayQolConfig: {
 			PlayCraftCompletionSound.Tooltip: "Play one cue when your finished item is delivered."
 			PlayCraftCompletionSound.Label: "Craft completion sound"
+			DetachedGeneratedStatusHud.Label: "Independent generated status HUD"
+			GeneratedStatusHudXPercent.Label: "Horizontal HUD position (%)"
+			GeneratedStatusHudYPercent.Label: "Vertical HUD position (%)"
+			GeneratedStatusHudColumns.Label: "Preferred status columns"
+			GeneratedStatusHudScalePercent.Label: "Status icon and timer size (%)"
+			PreviewGeneratedStatusHud.Label: "Preview empty status HUD"
+			DetachedGeneratedStatusHud.Tooltip: "Move generated effects away from native buffs. Position uses the remaining screen space; rows reflow to fit the viewport. Settings persist through the native config editor."
 			GeneratedStatusOpacityPercent.Tooltip: "Increase readability of generated buff and cooldown icons. Hovered icons remain fully opaque."
 			GeneratedStatusOpacityPercent.Label: "Generated status icon opacity (%)"
 			PlayChargeReadySound.Tooltip: "Disable the ready cue while keeping the charge bar and weapon sounds."

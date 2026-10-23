@@ -27,6 +27,7 @@ public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
     private static readonly Func<int> NativeInventoryTopOffset =
         Expression.Lambda<Func<int>>(Expression.Field(null, typeof(Main), "mH")).Compile();
     private static Asset<Texture2D>? _exhaustionIcon;
+    private static int _statusStartIndex, _statusTotal;
 
     public override void Load()
     {
@@ -52,8 +53,9 @@ public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
         if (Main.dedServ || Main.netMode == NetmodeID.Server || Main.gameMenu
             || Main.hideUI || Main.ingameOptionsWindow || Main.inFancyUI || Main.mapFullscreen)
             return true;
+        var settings = ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>();
         Player player = Main.LocalPlayer;
-        if (player is null || !player.active || (Main.playerInventory && Main.EquipPage != 2))
+        if (player is null || !player.active || (Main.playerInventory && Main.EquipPage != 2 && settings?.DetachedGeneratedStatusHud != true))
             return true;
         InfiniCraftPlayer owner = player.GetModPlayer<InfiniCraftPlayer>();
         GeneratedUtilityBuffPresentation snapshot = owner.CaptureGeneratedUtilityBuffPresentation();
@@ -63,7 +65,17 @@ public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
             owner.CaptureGeneratedItemExhaustion(), Language.ActiveCulture.CultureInfo);
         GeneratedMobilityCooldownStatus? mobility = GeneratedMobilityCooldownStatusView.Build(
             owner.GeneratedMobilityCooldownTicks, Language.ActiveCulture.CultureInfo);
+        var reactions = GeneratedReactionCooldownStatusView.Build(owner.CaptureGeneratedReactionCooldowns(), Language.ActiveCulture.CultureInfo);
+        var returning = GeneratedReturnStatusView.Build(Main.projectile
+            .Where(p => p is not null && p.active && p.owner == player.whoAmI)
+            .Select(p => (p.ModProjectile as GeneratedProjectile)?.CaptureReturnStatus(player.whoAmI, player.Center))
+            .Where(s => s is not null).Select(s => s!), Language.ActiveCulture.CultureInfo);
+        var healing = Common.Runtime.RuntimeHealingFeedback.Capture(player, Main.GameUpdateCount, Language.ActiveCulture.CultureInfo);
         int append = GeneratedUtilityBuffStatusView.GetAppendIndex(player.buffType, Main.playerInventory);
+        _statusStartIndex = append;
+        _statusTotal = statuses.Count + exhausted.Count + (mobility is null ? 0 : 1) + reactions.Count + returning.Count + (healing is null ? 0 : 1);
+        bool preview = settings?.DetachedGeneratedStatusHud == true && settings.PreviewGeneratedStatusHud && _statusTotal == 0;
+        if (preview) _statusTotal = 3;
         int inventoryOffset = Main.playerInventory ? NativeInventoryTopOffset() : 0;
         foreach (GeneratedUtilityBuffStatus status in statuses)
             DrawStatus(player, TextureAssets.Buff[status.IconBuffType], status.Label,
@@ -74,7 +86,7 @@ public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
         if (mobility is not null)
             DrawStatus(player, TextureAssets.Buff[mobility.IconBuffType], mobility.Label,
                 mobility.Tooltip, mobility.RemainingTicks, append++, inventoryOffset);
-        var reactions = GeneratedReactionCooldownStatusView.Build(owner.CaptureGeneratedReactionCooldowns(), Language.ActiveCulture.CultureInfo);
+
         foreach (GeneratedReactionCooldownStatusRow status in reactions)
         {
             Texture2D? sprite = InfiniCrafterLocalMod.Sprites?.TryGet(status.SpritePath);
@@ -84,18 +96,21 @@ public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
                 DrawStatus(player, null, status.Label, status.Tooltip, status.RemainingTicks,
                     append++, inventoryOffset, sprite);
         }
-        var returning = GeneratedReturnStatusView.Build(Main.projectile
-            .Where(p => p is not null && p.active && p.owner == player.whoAmI)
-            .Select(p => (p.ModProjectile as GeneratedProjectile)?.CaptureReturnStatus(player.whoAmI, player.Center))
-            .Where(s => s is not null).Select(s => s!), Language.ActiveCulture.CultureInfo);
+
         foreach (var status in returning)
         {
             Main.instance.LoadItem(ItemID.WoodenBoomerang);
             DrawStatus(player, TextureAssets.Item[ItemID.WoodenBoomerang], status.Name, status.Tooltip, 0,
                 append++, inventoryOffset, InfiniCrafterLocalMod.Sprites?.TryGet(status.SpritePath));
         }
-        if (Common.Runtime.RuntimeHealingFeedback.Capture(player, Main.GameUpdateCount, Language.ActiveCulture.CultureInfo) is { } healing)
+        if (healing is not null)
             DrawStatus(player, TextureAssets.Buff[BuffID.Regeneration], healing.Label, healing.Tooltip, 0, append++, inventoryOffset);
+        if (preview)
+        {
+            bool ru = Language.ActiveCulture.CultureInfo.TwoLetterISOLanguageName == "ru";
+            for (int i = 0; i < 3; i++) DrawStatus(player, TextureAssets.Buff[BuffID.Shine],
+                ru ? "Предпросмотр HUD" : "HUD preview", ru ? "Только положение и масштаб; эффект не активен." : "Layout preview only; no active effect.", 0, append++, inventoryOffset);
+        }
         DrawTimeline(GeneratedStatusTimelineView.Build(snapshot, exhausted, mobility, reactions, Language.ActiveCulture.CultureInfo));
         return true;
     }
@@ -107,12 +122,22 @@ public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
     {
         if (itemSprite is null && (asset is null || !asset.IsLoaded)) return;
         Texture2D texture = itemSprite ?? asset!.Value;
+        var settings = ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>();
+        bool detached = settings?.DetachedGeneratedStatusHud == true;
         Point point = GeneratedUtilityBuffStatusView.IconPosition(index, Main.playerInventory,
             Main.screenWidth, Main.screenHeight, inventoryOffset, Main.mapStyle);
         int width = itemSprite is null ? texture.Width : 32;
         int height = itemSprite is null ? texture.Height : 32;
-        var bounds = new Rectangle(point.X, point.Y, width, height);
         float scale = itemSprite is null ? 1f : Math.Min(32f / texture.Width, 32f / texture.Height);
+        if (detached)
+        {
+            Rectangle cell = GeneratedStatusLayoutView.Cell(index - _statusStartIndex, _statusTotal, Main.screenWidth, Main.screenHeight,
+                settings!.GeneratedStatusHudXPercent, settings.GeneratedStatusHudYPercent, settings.GeneratedStatusHudColumns, settings.GeneratedStatusHudScalePercent);
+            if (cell.IsEmpty) return;
+            point = cell.Location; width = cell.Width; height = cell.Height;
+            scale = Math.Min(width / (float)texture.Width, height / (float)texture.Height);
+        }
+        var bounds = new Rectangle(point.X, point.Y, width, height);
         Vector2 imagePoint = point.ToVector2() + new Vector2((width - texture.Width * scale) / 2f, (height - texture.Height * scale) / 2f);
         bool hovered = !PlayerInput.IgnoreMouseInterface && bounds.Contains(Main.mouseX, Main.mouseY);
         float opacity = Math.Clamp(ModContent.GetInstance<Common.Config.InfiniGameplayQolConfig>()?.GeneratedStatusOpacityPercent ?? 40, 25, 100) / 100f;
@@ -125,7 +150,7 @@ public sealed partial class GeneratedUtilityBuffUISystem : ModSystem
             string duration = Lang.LocalizedDuration(new TimeSpan(0, 0, (int)((remainingTicks + 59L) / 60)),
                 abbreviated: true, showAllAvailableUnits: false);
             Utils.DrawBorderString(Main.spriteBatch, duration,
-                new Vector2(point.X, point.Y + height), color, 0.8f);
+                new Vector2(point.X, point.Y + height), color, detached ? .8f * Math.Clamp(settings!.GeneratedStatusHudScalePercent, 75, 150) / 100f : .8f);
         }
         if (!hovered) return;
         player.mouseInterface = true;

@@ -30,6 +30,8 @@
 
 ## Изображение, размещение и эффекты
 
+- [Панель эффектов, таймеры и возвратное оружие](presentation/GENERATED_STATUS_HUD_RU.md).
+
 - [Описание внешности Visual Director](presentation/VISUAL_PRESENTATION_METADATA.md), [согласованность отображения](presentation/PRESENTATION_CONSISTENCY_RU.md).
 - [Отрисовка экипировки поверх персонажа](presentation/EQUIPMENT_OVERLAY_RENDERING.md).
 - [Размещённый предмет из его PNG](presentation/PRESENT_PLACED_ITEM_SPRITE_RU.md).
