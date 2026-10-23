@@ -103,8 +103,8 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static void ResetJournalSession()
     {
         Close(); _query = _selected = _comparisonId = ""; _detailPage = DetailPage.Recipe;
-        _page = _detailScroll = _preparationLane = 0; _planQuantity = 1;
-        _favoritesOnly = _unreadOnly = _revealSelection = _planIncludeStorage = _resumeReleaseRequired = false;
+        _page = _detailScroll = _preparationLane = 0;
+        _favoritesOnly = _unreadOnly = _revealSelection = _resumeReleaseRequired = false;
         _sortOrder = RecipeJournalView.SortOrder.Name; _effectFilter = RecipeJournalView.EffectFilter.All;
         _stockFilter = RecipeStockFilter.Mode.All; _ingredientFilter = ""; _beforeFilterReset = null;
         _known = Array.Empty<GeneratedItemData>(); _snapshotTick = uint.MaxValue; History.Clear();

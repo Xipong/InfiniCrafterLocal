@@ -15,8 +15,7 @@ namespace InfiniCrafterLocal.Common.UI;
 
 public sealed partial class RecipeJournalUISystem
 {
-    private static int _planQuantity = 1, _preparationLane;
-    private static bool _planIncludeStorage;
+    private static int _preparationLane;
     private static Content.Items.GeneratedItem.GuideSection _guideSection;
     private static string _guideQuery = "";
     private static bool DrawAnalysisPage(SpriteBatch sb, GeneratedItemData data, Rectangle area, bool click, Vector2 cursor)
@@ -101,14 +100,23 @@ public sealed partial class RecipeJournalUISystem
         }
         if (_detailPage == DetailPage.Plan)
         {
-            if (area.Height < 60) return true;
+            if (area.Height < 92) return true;
+            var owner = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
+            var objective = owner.JournalObjective(data.Id);
+            int _planQuantity = objective.Quantity;
+            bool _planIncludeStorage = objective.Storage;
             if (Button(sb, new Rectangle(area.X, area.Y, 30, 24), "−", click, cursor, enabled: _planQuantity > 1)) _planQuantity--;
             if (Button(sb, new Rectangle(area.X + 34, area.Y, 70, 24), _planQuantity + " +", click, cursor, enabled: _planQuantity < 999)) _planQuantity++;
             if (Button(sb, new Rectangle(area.X + 110, area.Y, Math.Max(0, area.Width - 110), 24), Text(_planIncludeStorage ? "PlanBanks" : "PlanCarried"), click, cursor)) _planIncludeStorage = !_planIncludeStorage;
-            area.Y += 30; area.Height -= 30;
+            owner.SetJournalObjective(data.Id, _planQuantity, _planIncludeStorage);
+            if (Button(sb, new Rectangle(area.X, area.Y + 29, area.Width / 2, 24), Text(owner.IsJournalPinned(data.Id) ? "UnpinObjective" : "PinObjective"), click, cursor))
+                owner.ToggleJournalPin(data.Id);
+            if (Button(sb, new Rectangle(area.X + area.Width / 2 + 4, area.Y + 29, Math.Max(0, area.Width / 2 - 4), 24), Text("GoalBatch"), click, cursor))
+            { _planQuantity = Math.Clamp(_planQuantity + Math.Max(1, data.Gameplay.CraftYield), 1, 999); owner.SetJournalObjective(data.Id, _planQuantity, _planIncludeStorage); }
+            area.Y += 60; area.Height -= 60;
             var plan = RecipePlanView.Build(data, _planQuantity, _known,
                 RecipeInventoryView.Capture(Main.LocalPlayer, data.RecipeMeta.WorldId), _planIncludeStorage);
-            content = Text("PlanNotice") + "\n" + (plan.Truncated ? Text("PlanTruncated") + "\n" : "") + Text("PlanMissing");
+            content = Text("GoalProgress", plan.OwnedTarget, plan.Quantity) + "\n" + Text("PlanNotice") + "\n" + (plan.Truncated ? Text("PlanTruncated") + "\n" : "") + Text("PlanMissing");
             foreach (var row in plan.Missing) content += "\n" + row.Count + " × " + row.Name;
             if (!plan.Truncated && plan.Missing.Count == 0) content += "\n" + Text(plan.Completed ? "GoalCompleted" : "PlanStockReady");
             content += "\n\n" + Text("PlanSteps");

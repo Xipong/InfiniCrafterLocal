@@ -36,8 +36,10 @@ public sealed class RecipeObjectiveUISystem : ModSystem
             var rows = new List<string>();
             foreach (var data in RecipeJournalView.Entries(known, Main.worldID.ToString(), "", owner.IsJournalPinned, true).Take(3))
             {
-                var plan = RecipePlanView.Build(data, 1, known, stock, false);
-                rows.Add(data.Name);
+                var objective = owner.JournalObjective(data.Id);
+                var plan = RecipePlanView.Build(data, objective.Quantity, known, stock, objective.Storage);
+                rows.Add(data.Name + " · " + plan.OwnedTarget + "/" + plan.Quantity);
+                rows.Add(RecipeJournalUISystem.Text(objective.Storage ? "PlanBanks" : "PlanCarried"));
                 if (plan.Truncated) rows.Add(RecipeJournalUISystem.Text("PlanTruncated"));
                 else if (plan.Completed) rows.Add(RecipeJournalUISystem.Text("GoalCompleted"));
                 else if (plan.Missing.Count == 0) rows.Add(RecipeJournalUISystem.Text("GoalReady"));

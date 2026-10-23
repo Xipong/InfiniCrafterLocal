@@ -67,6 +67,7 @@ public sealed partial class InfiniCraftPlayer
     private void SaveJournal(TagCompound tag)
     {
         SaveJournalPresets(tag);
+        SaveObjectives(tag);
         tag["infiniJournalVisits"] = _journalVisits.OrderBy(p => p.Value)
             .Select(p => new TagCompound { ["key"] = p.Key, ["order"] = p.Value }).ToList();
         tag["infiniJournalNotes"] = _journalNotes.OrderBy(p => p.Key, StringComparer.Ordinal)
@@ -79,6 +80,7 @@ public sealed partial class InfiniCraftPlayer
     private void LoadJournal(TagCompound tag)
     {
         LoadJournalPresets(tag);
+        LoadObjectives(tag);
         _journalVisits.Clear(); _journalVisitSequence = 0;
         foreach (var row in tag.GetList<TagCompound>("infiniJournalVisits").Take(4096))
         {

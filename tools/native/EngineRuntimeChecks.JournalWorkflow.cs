@@ -129,21 +129,21 @@ internal static partial class EngineRuntimeChecks
             try {
                 Terraria.Main.netMode = 0;
                 RecipeJournalUISystem.Open();
-                JournalField("_planQuantity").SetValue(null, 99);
+                JournalField("_collectionChoice").SetValue(null, 3);
                 JournalField("_preparationLane").SetValue(null, 2);
-                JournalField("_planIncludeStorage").SetValue(null, true);
+                JournalField("_workspaceMenu").SetValue(null, true);
                 JournalField("_query").SetValue(null, "previous world");
                 RecipeJournalUISystem.ResetFilters();
                 Terraria.Main.worldID = world + 1;
                 RecipeJournalUISystem.Open();
-                Equal(1, (int)JournalField("_planQuantity").GetValue(null)!, "world switch resets batch quantity");
+                Equal(0, (int)JournalField("_collectionChoice").GetValue(null)!, "world switch resets collection selection");
                 Equal(0, (int)JournalField("_preparationLane").GetValue(null)!, "world switch resets preparation lane");
-                Equal(false, (bool)JournalField("_planIncludeStorage").GetValue(null)!, "world switch resets bank plan");
+                Equal(false, (bool)JournalField("_workspaceMenu").GetValue(null)!, "world switch closes workspace chooser");
                 Equal(false, RecipeJournalUISystem.UndoFilterReset(), "old world filters cannot be restored");
-                JournalField("_planQuantity").SetValue(null, 7);
+                JournalField("_collectionChoice").SetValue(null, 7);
                 JournalField("_sessionOwner").SetValue(null, new Player());
                 RecipeJournalUISystem.Open();
-                Equal(1, (int)JournalField("_planQuantity").GetValue(null)!, "character switch resets private UI session");
+                Equal(0, (int)JournalField("_collectionChoice").GetValue(null)!, "character switch resets private UI session");
                 new RecipeJournalUISystem().OnWorldUnload();
                 Equal(false, RecipeJournalUISystem.IsOpen, "unload closes journal");
                 Equal(true, JournalField("_sessionOwner").GetValue(null) is null, "unload releases player reference");
