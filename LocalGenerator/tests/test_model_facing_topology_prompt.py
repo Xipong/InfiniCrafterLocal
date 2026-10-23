@@ -70,6 +70,12 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     assert "required unless marked optional" in catalog["fieldGuide"]["paramNotation"]
     for card in cards.values():
         for name, param in card["params"].items():
+            if "paramRef" in param:
+                owner, leaf = param["paramRef"].split(".")
+                assert leaf == name
+                assert CAPABILITY_REGISTRY[owner].params[leaf] == CAPABILITY_REGISTRY[card["fn"]].params[name]
+                param = cards[owner]["params"][leaf]
+                assert "paramRef" not in param
             assert param.get("optional", False) is not CAPABILITY_REGISTRY[card["fn"]].params[name].required
     assert "everySeconds" in json.dumps(cards["spawn_entity_on_event"]["params"]["when"]["shape"])
     assert "requires" in cards["spawn_entity_on_event"]
