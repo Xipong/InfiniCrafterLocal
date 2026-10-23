@@ -40,11 +40,28 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
             "InfiniCrafterLocal: Inventory Craft Station",
             delegate
             {
+                bool modalInput = RestoreStationModalMouse();
                 DrawInventoryStation(Main.spriteBatch);
+                if (modalInput) { Main.mouseLeftRelease = false; Main.mouseRightRelease = false; }
                 return true;
             },
             InterfaceScaleType.UI)
         );
+        // Native inventory calls ItemSlot.LeftClick before our panel draws. Reserve
+        // both buttons here, then restore only for the modal's own draw handler.
+        layers.Insert(inventoryIndex, new LegacyGameInterfaceLayer(
+            "InfiniCrafterLocal: Station Modal Input", () => {
+                if (StationInteractionAvailable(Main.LocalPlayer))
+                {
+                    var owner = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
+                    int lanes = owner.MultiDevWindowCount;
+                    if ((PlayerHasCore(Main.LocalPlayer) || owner.HasStationState) && Main.screenWidth >= 300
+                        && Main.screenHeight >= 44 + lanes * 112 + 30)
+                        ReserveStationModalMouse(StationPanelBounds(Main.screenWidth, Main.screenHeight, lanes).Contains(Main.mouseX, Main.mouseY));
+                }
+                else CloseStationModals();
+                return true;
+            }, InterfaceScaleType.UI));
     }
 
     internal static Rectangle StationPanelBounds(int viewportWidth, int viewportHeight, int laneCount)
@@ -76,18 +93,15 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
 
     private static void DrawInventoryStation(SpriteBatch spriteBatch)
     {
-        if (!Main.playerInventory || Main.LocalPlayer is null || !Main.LocalPlayer.active
-            || Main.LocalPlayer.dead || Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow
-            || Main.inFancyUI || !Main.hasFocus || Main.LocalPlayer.chest != -1 || Main.npcShop != 0)
-            return;
-
-        if (RecipeJournalUISystem.IsOpen) return;
+        if (!StationInteractionAvailable(Main.LocalPlayer)) { CloseStationModals(); return; }
         var craftPlayer = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
         bool hasCore = PlayerHasCore(Main.LocalPlayer);
         if (!hasCore && !craftPlayer.HasStationState)
             return;
 
         int laneCount = craftPlayer.MultiDevWindowCount;
+        if (Main.screenWidth < 300 || Main.screenHeight < 44 + laneCount * 112 + 30)
+        { CloseStationModals(); return; }
         const int headerHeight = 44;
         const int laneHeight = 112;
         var panel = StationPanelBounds(Main.screenWidth, Main.screenHeight, laneCount);
@@ -107,11 +121,11 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
         }
 
         var bookButton = new Rectangle(clearButton.X - 88, clearButton.Y, 80, 28);
-        if (Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface && bookButton.Contains(Main.mouseX, Main.mouseY))
+        if (!StationModalVisible && Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface && bookButton.Contains(Main.mouseX, Main.mouseY))
         {
             RecipeJournalUISystem.Open(); Main.mouseLeftRelease = false;
         }
-        if (_pickerSlot < 0 && _inspectedItem is null) HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
+        if (!StationModalVisible) HandleMouse(craftPlayer, slotA, slotB, craftButtons, cancelButtons, clearButton);
         DrawPanel(spriteBatch, panel);
         DrawFittedText(spriteBatch, ForgeText("Title"), new Vector2(panel.X + 14, panel.Y + 9), Color.Cyan,
             bookButton.X - panel.X - 24, 0.92f);
@@ -148,7 +162,7 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
             if (fill > 0)
                 DrawGradient(spriteBatch, new Rectangle(bar.X, bar.Y, fill, bar.Height), new Color(40, 190, 220, 235), laneColor * 0.9f);
             var detailsBounds = layout.Details;
-            if (!PlayerInput.IgnoreMouseInterface && detailsBounds.Contains(Main.mouseX, Main.mouseY)
+            if (!StationModalVisible && !PlayerInput.IgnoreMouseInterface && detailsBounds.Contains(Main.mouseX, Main.mouseY)
                 && !slotA[lane].Contains(Main.mouseX, Main.mouseY) && !slotB[lane].Contains(Main.mouseX, Main.mouseY))
             {
                 Main.hoverItemName = "";
@@ -263,12 +277,12 @@ public sealed partial class InfiniCraftStationUISystem : ModSystem
         Vector2 pos = rect.TopLeft();
         ItemSlot.Draw(spriteBatch, ref item, ItemSlot.Context.BankItem, pos);
         Main.inventoryScale = oldScale;
-        if (!PlayerInput.IgnoreMouseInterface && rect.Contains(Main.mouseX, Main.mouseY) && item is { IsAir: false })
+        if (!StationModalVisible && !PlayerInput.IgnoreMouseInterface && rect.Contains(Main.mouseX, Main.mouseY) && item is { IsAir: false })
         {
             Main.HoverItem = item.Clone();
             Main.hoverItemName = item.Name;
         }
-        if ((item is null || item.IsAir) && !PlayerInput.IgnoreMouseInterface && rect.Contains(Main.mouseX, Main.mouseY))
+        if (!StationModalVisible && (item is null || item.IsAir) && !PlayerInput.IgnoreMouseInterface && rect.Contains(Main.mouseX, Main.mouseY))
         {
             string hint = Main.mouseItem is { IsAir: false } carried && carried.favorited
                 ? ForgeText("FavoriteProtected") : ForgeText("DepositHint");

@@ -33,13 +33,44 @@ public sealed partial class InfiniCraftStationUISystem
     private static void ClosePicker() { _pickerSlot = -1; SetPickerSearchFocus(false); }
     private static void OpenPicker(int slot)
     { _pickerSlot = slot; _pickerPage = 0; _pickerQuery = ""; SetPickerSearchFocus(false); }
-    public override void OnWorldUnload() { _pickerSlot = -1; _pickerPage = 0; }
+    public override void OnWorldUnload() => CloseStationModals();
+    private static bool _modalInputReserved, _modalLeft, _modalLeftRelease, _modalRight, _modalRightRelease;
+    internal static void ReserveStationModalMouse(bool stationPanelHit = false)
+    {
+        if ((!StationModalVisible && !stationPanelHit) || _modalInputReserved) return;
+        _modalInputReserved = true;
+        (_modalLeft, _modalLeftRelease, _modalRight, _modalRightRelease) = (Main.mouseLeft, Main.mouseLeftRelease, Main.mouseRight, Main.mouseRightRelease);
+        Main.mouseLeft = Main.mouseLeftRelease = Main.mouseRight = Main.mouseRightRelease = false;
+        PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Station Modal");
+    }
+    internal static bool RestoreStationModalMouse()
+    {
+        if (!_modalInputReserved) return false;
+        _modalInputReserved = false;
+        (Main.mouseLeft, Main.mouseLeftRelease, Main.mouseRight, Main.mouseRightRelease) = (_modalLeft, _modalLeftRelease, _modalRight, _modalRightRelease);
+        return true;
+    }
+    internal static bool StationModalVisible => _pickerSlot >= 0 || _inspectedItem is not null;
+    internal static bool StationInteractionAvailable(Player? player)
+        => player is { active: true, dead: false } && Main.playerInventory && Main.hasFocus
+            && !Main.gameMenu && !Main.hideUI && !Main.mapFullscreen && !Main.ingameOptionsWindow
+            && !Main.inFancyUI && !Main.drawingPlayerChat && !PlayerInput.CurrentlyRebinding
+            && player.chest == -1 && Main.npcShop == 0 && !RecipeJournalUISystem.IsOpen;
+    internal static void CloseStationModals()
+    { ClosePicker(); _pickerPage = 0; _pickerQuery = ""; _inspectedItem = null; _inspectionScroll = 0; }
+    public override void PostUpdateInput()
+    {
+        if (!StationInteractionAvailable(Main.LocalPlayer)) { CloseStationModals(); return; }
+        if (StationModalVisible && Main.keyState.IsKeyDown(Keys.Escape)
+            && !Main.oldKeyState.IsKeyDown(Keys.Escape)) CloseStationModals();
+    }
     private static void DrawInventoryPicker(SpriteBatch sb, Rectangle station, InfiniCraftPlayer owner)
     {
         if (_pickerSlot >= owner.MultiDevWindowCount * 2 || owner.IsCraftLanePending(_pickerSlot / 2)
             || !owner.StationInput(_pickerSlot).IsAir || !Main.mouseItem.IsAir)
         { ClosePicker(); return; }
         int height = Math.Min(390, Main.screenHeight - 24);
+        if (height < 180 || station.Width < 280) { ClosePicker(); return; }
         var panel = new Rectangle(station.X, Math.Clamp(station.Y, 12, Math.Max(12, Main.screenHeight - height - 12)), station.Width, height);
         DrawPanel(sb, panel); Main.LocalPlayer.mouseInterface = true;
         PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Ingredient Picker");

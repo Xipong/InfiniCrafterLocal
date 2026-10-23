@@ -10,7 +10,13 @@ internal static partial class EngineRuntimeChecks
  {
         WithPlayer((player, owner) => {
             var old = Terraria.Main.mouseItem; bool inventory = Terraria.Main.playerInventory; int net = Terraria.Main.netMode;
-            try { Terraria.Main.mouseItem = new Terraria.Item(); Terraria.Main.playerInventory = true; Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
+            var ui = (Terraria.Main.hasFocus, Terraria.Main.gameMenu, Terraria.Main.hideUI, Terraria.Main.mapFullscreen,
+                Terraria.Main.ingameOptionsWindow, Terraria.Main.inFancyUI, Terraria.Main.drawingPlayerChat);
+            try {
+                player.active = true; player.chest = -1;
+                Terraria.Main.hasFocus = true; Terraria.Main.gameMenu = Terraria.Main.hideUI = Terraria.Main.mapFullscreen = false;
+                Terraria.Main.ingameOptionsWindow = Terraria.Main.inFancyUI = Terraria.Main.drawingPlayerChat = false;
+                Terraria.Main.mouseItem = new Terraria.Item(); Terraria.Main.playerInventory = true; Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
                 var data = GeneratedItemData.Placeholder(); data.Id = "recipe"; data.RecipeMeta.WorldId = Terraria.Main.worldID.ToString();
                 data.RecipeMeta.ParentIdentities = new[] { "item:Terraria/Wood:9", "item:Terraria/Wood:9" };
                 player.inventory[3] = new Terraria.Item(Terraria.ID.ItemID.Wood, 1);
@@ -21,7 +27,10 @@ internal static partial class EngineRuntimeChecks
                 Equal(1, player.inventory[3].stack, "two units transferred exactly");
                 Equal(1, owner.StationInput(0).stack, "A ready"); Equal(1, owner.StationInput(1).stack, "B ready");
                 Equal(false, owner.HasAnyCraftLanePending, "preparation never starts generation");
-            } finally { Terraria.Main.mouseItem=old; Terraria.Main.playerInventory=inventory; Terraria.Main.netMode=net; }
+            } finally {
+                (Terraria.Main.hasFocus, Terraria.Main.gameMenu, Terraria.Main.hideUI, Terraria.Main.mapFullscreen,
+                    Terraria.Main.ingameOptionsWindow, Terraria.Main.inFancyUI, Terraria.Main.drawingPlayerChat) = ui;
+                Terraria.Main.mouseItem=old; Terraria.Main.playerInventory=inventory; Terraria.Main.netMode=net; }
         });
  }
 }

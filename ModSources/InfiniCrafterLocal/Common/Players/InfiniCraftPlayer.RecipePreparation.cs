@@ -46,7 +46,7 @@ public sealed partial class InfiniCraftPlayer
     internal void TickRecipePreparation()
     {
         if (_preparationParents is null) return;
-        if (!Main.playerInventory || Player.dead || !Main.mouseItem.IsAir || IsCraftLanePending(_preparationLane))
+        if (!InfiniCraftStationUISystem.StationInteractionAvailable(Player) || !Main.mouseItem.IsAir || IsCraftLanePending(_preparationLane))
         { _preparationParents = null; return; }
         if (HasPendingStationEscrowOperation) return; // Exactly one durable MP operation at a time.
         if (_preparationNext >= 2) { _preparationParents = null; return; }
