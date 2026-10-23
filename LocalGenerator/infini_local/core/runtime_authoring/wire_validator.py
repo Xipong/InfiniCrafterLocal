@@ -647,6 +647,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.extend(shape)
             if modifier_cap.category == "motion_modifier" and (controller.get("code", 0) not in (0, CONTROLLER_OPCODE["target_and_fire"]) or not movement.get("name")):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Velocity modifiers require movement to own motion."})
+            if member == "contactGeometry" and (movement.get("code") == 18 or controller.get("code") == 1):
+                errors.append({"path": modifier_path, "code": "geometry_driver_conflict", "message": "Contact geometry excludes native beam and whip collision owners."})
             if member == "visualScaleCurve" and (movement.get("code") in {15, 18} or controller.get("code") == 1 or isinstance(entity.get("hitboxCurve"), Mapping) and entity["hitboxCurve"].get("mirrorToSprite") is True):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry."})
         if "whipUsesOwnerGravity" in entity:

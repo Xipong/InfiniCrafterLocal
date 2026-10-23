@@ -100,6 +100,7 @@ public sealed partial class GeneratedProjectile
     public override bool? Colliding(Rectangle projHitbox, Rectangle targetHitbox)
     {
         if (!_configured || _entity is null || _activationDelayTicks > 0) return false;
+        if (_entity.ContactGeometry is not null) return ContactGeometryCollides(targetHitbox);
         if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam)
         {
             GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float width);

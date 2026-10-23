@@ -2304,6 +2304,7 @@
                           "set_projectile_hitbox_curve",
                           "set_projectile_vector_acceleration",
                           "set_projectile_speed_ramp",
+                          "set_projectile_contact_geometry",
                           "set_projectile_turn_modifier",
                           "set_projectile_speed_modifier",
                           "set_projectile_homing_modifier",

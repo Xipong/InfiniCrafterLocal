@@ -638,6 +638,21 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_contact_geometry",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ContactGeometry.cs::ContactGeometryCollides",
+      "outputs": [
+        "runtimeProgram.entities[].contactGeometry.shape",
+        "runtimeProgram.entities[].contactGeometry.lengthPx",
+        "runtimeProgram.entities[].contactGeometry.widthPx",
+        "runtimeProgram.entities[].contactGeometry.orientation",
+        "runtimeProgram.entities[].contactGeometry.angleRadians"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].contactGeometry"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "set_projectile_turn_modifier",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",

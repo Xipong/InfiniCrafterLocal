@@ -14,12 +14,12 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_MODIFIER_COMPONENTS
+from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, PROJECTILE_MODIFIER_COMPONENTS
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import wire_transport
 
-PARAMS = {
+PHASE_OVERRIDES = {
     "set_projectile_speed_ramp": dict(startSpeedBlocksPerSecond=75, endSpeedBlocksPerSecond=15, startDelaySeconds=0, durationSeconds=2),
     "set_projectile_vector_acceleration": dict(accelerationXBlocksPerSecondSquared=12, accelerationYBlocksPerSecondSquared=-6, startDelaySeconds=0, durationSeconds=2),
     "set_projectile_turn_modifier": dict(turnRadiansPerSecond=(.04) * 60, startDelaySeconds=(0) / 60, durationSeconds=(90) / 60),
@@ -32,6 +32,21 @@ PARAMS = {
 
 def call(doc, fn):
     return next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == fn)
+
+
+def modifier_params(fn):
+    # Every registered component gets its own canonical valid witness. The
+    # explicit phase values below remain the independent Repair/phase controls.
+    params = deepcopy(call(build_capability_witness(fn), fn).get("params", {}))
+    params.update(deepcopy(PHASE_OVERRIDES.get(fn, {})))
+    return params
+
+
+PARAMS = {fn: modifier_params(fn)
+          for fn in (*PROJECTILE_MODIFIER_COMPONENTS, "orient_whip_to_owner_gravity")}
+PHASE_MODIFIERS = tuple(fn for fn in PROJECTILE_MODIFIER_COMPONENTS
+                        if {"startDelaySeconds", "durationSeconds"} <= CAPABILITY_REGISTRY[fn].params.keys())
+
 
 def source(fn):
     doc = build_capability_witness(fn)
@@ -77,11 +92,12 @@ def test_complete_vertical_witness_exact_identity_and_source_receipts(fn):
     doc = source(fn); before = deepcopy(doc)
     compiled = compile_runtime_program(doc)
     member = PROJECTILE_MODIFIER_COMPONENTS.get(fn, "whipUsesOwnerGravity")
-    assert entity(compiled, fn)[member] == (projected_params(fn, PARAMS[fn]) if fn in PROJECTILE_MODIFIER_COMPONENTS else True)
+    expected = projected_params(fn, PARAMS[fn]) if fn in PROJECTILE_MODIFIER_COMPONENTS else True
+    assert entity(compiled, fn)[member] == expected
     assert doc == before and validate_runtime_wire(compiled)["ok"]
     rows = compiled["runtimeContract"]["finalWireReceipts"]
     owned = [row for row in rows if row.get("fn") == fn]
-    assert len(owned) == (len(PARAMS[fn]) or 1)
+    assert len(owned) == (len(expected) if isinstance(expected, dict) else 1)
     assert audit_compiler_receipts(rows, final_document=compiled)["ok"]
 
 # Distinct scalar admissions at both Author and unreceipted persisted-wire boundaries.
@@ -144,7 +160,7 @@ def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutatio
     else: compiled["runtimeProgram"]["entities"][0][member] = entity(compiled, fn).pop(member)
     assert not validate_runtime_wire(compiled)["ok"]
 
-@pytest.mark.parametrize("fn", PROJECTILE_MODIFIER_COMPONENTS)
+@pytest.mark.parametrize("fn", PHASE_MODIFIERS)
 def test_frozen_repair_changes_only_invalid_phase_leaf(fn):
     doc = source(fn)
     call(doc, fn)["params"]['durationSeconds'] = (0) / 60

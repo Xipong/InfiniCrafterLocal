@@ -5703,6 +5703,118 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
+                "const": "set_projectile_contact_geometry"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "angleRadians": {
+                    "description": "World angle or velocity-relative angular offset",
+                    "maximum": 3.2,
+                    "minimum": -3.2,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "lengthPx": {
+                    "description": "Ellipse/rectangle full length or capsule central segment length",
+                    "maximum": 1024,
+                    "minimum": 2,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "pixels",
+                    "x-infini-units": "pixels"
+                  },
+                  "orientation": {
+                    "description": "fixed uses world angle; velocity adds current velocity direction (initial launch direction at rest)",
+                    "enum": [
+                      "fixed",
+                      "velocity"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "shape": {
+                    "description": "Exact convex contact shape",
+                    "enum": [
+                      "ellipse",
+                      "rectangle",
+                      "capsule"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "widthPx": {
+                    "description": "Full contact width perpendicular to length axis",
+                    "maximum": 1024,
+                    "minimum": 2,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "pixels",
+                    "x-infini-units": "pixels"
+                  }
+                },
+                "required": [
+                  "shape",
+                  "lengthPx",
+                  "widthPx",
+                  "orientation",
+                  "angleRadians"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
                 "const": "set_projectile_turn_modifier"
               },
               "id": {

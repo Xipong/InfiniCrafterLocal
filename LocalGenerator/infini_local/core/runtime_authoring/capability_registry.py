@@ -52,6 +52,7 @@ PROJECTILE_MODIFIER_COMPONENTS: Final[Mapping[str, str]] = MappingProxyType({
     "set_projectile_homing_modifier": "homingModifier",
     "attract_npcs_while_active": "npcAttraction",
     "set_projectile_visual_scale_curve": "visualScaleCurve",
+    "set_projectile_contact_geometry": "contactGeometry",
 })
 VISUAL_ROLE_BY_ENTITY_KIND: Final[Mapping[str, str]] = MappingProxyType({
     "item_body": "inventory_item",
@@ -2220,6 +2221,22 @@ _CAPS: list[CapabilitySpec] = [
         }, component_slot="speedRamp", authority="owner_execute_sync", py=_COMPILER_OWNER,
         cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplySpeedRamp",
         wire_presence_path="runtimeProgram.entities[].speedRamp"),
+    _cap(
+        "set_projectile_contact_geometry",
+        "Choose exact centered contact geometry independent of artwork. Ellipse and rectangle use full length/width; capsule uses length as its central segment plus two width/2 circular caps. Orientation follows velocity plus authored angle, or fixed world angle. Static hitboxScale and its active-age curve multiply all dimensions. Excludes native beam/whip collision owners.",
+        "entity_collision", PROJECTILE_ENTITY_KINDS,
+        {
+            "shape": _p("string", "Exact convex contact shape", enum=("ellipse", "rectangle", "capsule")),
+            "lengthPx": _p("number", "Ellipse/rectangle full length or capsule central segment length", minimum=2, maximum=1024, units="pixels", consumer_storage="float32"),
+            "widthPx": _p("number", "Full contact width perpendicular to length axis", minimum=2, maximum=1024, units="pixels", consumer_storage="float32"),
+            "orientation": _p("string", "fixed uses world angle; velocity adds current velocity direction (initial launch direction at rest)", enum=("fixed", "velocity")),
+            "angleRadians": _p("number", "World angle or velocity-relative angular offset", minimum=-3.2, maximum=3.2, units="radians", consumer_storage="float32"),
+        },
+        requirements=(RequirementSpec("capability_absent", any_of=("channel_beam", "move_whip_lash"), message="Contact geometry requires a single collision owner."),),
+        component_slot="contactGeometry", authority="owner_execute_sync", py=_COMPILER_OWNER,
+        cs="Content/Projectiles/GeneratedProjectile.ContactGeometry.cs::ContactGeometryCollides",
+        wire_presence_path="runtimeProgram.entities[].contactGeometry",
+    ),
     _cap(
         "set_projectile_turn_modifier",
         "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, multiplicative speed, vector acceleration, absolute speed ramp, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",

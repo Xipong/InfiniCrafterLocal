@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Combat contact geometry exact native collision", CombatContactGeometry),
             ("target mana native boundary", TargetManaRefusesAndRollsBackAtSpawnBoundary),
             ("Station expansion TargetMana", StationTargetMana),
             ("Station expansion TargetSchedule", StationTargetSchedule),

@@ -5775,6 +5775,118 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "set_projectile_contact_geometry"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "shape": {
+                        "type": "string",
+                        "enum": [
+                          "ellipse",
+                          "rectangle",
+                          "capsule"
+                        ],
+                        "description": "Exact convex contact shape",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "lengthPx": {
+                        "type": "number",
+                        "minimum": 2,
+                        "maximum": 1024,
+                        "description": "Ellipse/rectangle full length or capsule central segment length",
+                        "x-infini-units": "pixels",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "widthPx": {
+                        "type": "number",
+                        "minimum": 2,
+                        "maximum": 1024,
+                        "description": "Full contact width perpendicular to length axis",
+                        "x-infini-units": "pixels",
+                        "x-infini-semanticType": "pixels",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "orientation": {
+                        "type": "string",
+                        "enum": [
+                          "fixed",
+                          "velocity"
+                        ],
+                        "description": "fixed uses world angle; velocity adds current velocity direction (initial launch direction at rest)",
+                        "x-infini-semanticType": "bounded_text"
+                      },
+                      "angleRadians": {
+                        "type": "number",
+                        "minimum": -3.2,
+                        "maximum": 3.2,
+                        "description": "World angle or velocity-relative angular offset",
+                        "x-infini-units": "radians",
+                        "x-infini-semanticType": "radians",
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": null,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      }
+                    },
+                    "required": [
+                      "shape",
+                      "lengthPx",
+                      "widthPx",
+                      "orientation",
+                      "angleRadians"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "set_projectile_turn_modifier"
                   },
                   "target": {

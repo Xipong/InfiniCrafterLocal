@@ -769,6 +769,9 @@ public sealed class RuntimeEntitySpec
     public RuntimeDamageSpec Damage { get; set; } = new();
     public int LifetimeTicks { get; set; } = 1;
     public RuntimeHitboxSpec Hitbox { get; set; } = new();
+    private RuntimeContactGeometrySpec? _contactGeometry;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeContactGeometrySpec? ContactGeometry { get => _contactGeometry; set => _contactGeometry = value ?? throw new InvalidDataException("present contactGeometry cannot be null"); }
     private RuntimeHitboxCurveSpec? _hitboxCurve;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeHitboxCurveSpec? HitboxCurve
@@ -854,7 +857,7 @@ public sealed class RuntimeEntitySpec
         if (Kind == RuntimeEntityKind.ItemBody)
         {
             if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
-                || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null
+                || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null || ContactGeometry is not null
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true
                 || Movement.Params?.HasSpringTether == true || Controller.Params?.HasSpringTether == true
                 || Movement.Params?.HasEllipticOrbit == true || Controller.Params?.HasEllipticOrbit == true
@@ -888,6 +891,9 @@ public sealed class RuntimeEntitySpec
                 throw new InvalidDataException("dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry");
             if (WhipUsesOwnerGravity.HasValue && (Kind != RuntimeEntityKind.OwnerAttachedProjectile || Movement.Code != 18 || Controller.Code == RuntimeControllerCode.ChannelBeam))
                 throw new InvalidDataException("owner gravity orientation requires active whip geometry");
+            ContactGeometry?.Validate();
+            if (ContactGeometry is not null && (Movement.Code == 18 || Controller.Code == RuntimeControllerCode.ChannelBeam))
+                throw new InvalidDataException("contact geometry excludes beam and whip collision owners");
             if (HitboxCurve is { } curve)
             {
                 curve.Validate();
@@ -1184,6 +1190,29 @@ public sealed class RuntimeDamageSpec
         _ = TerrariaRuntimeVocabulary.ResolveDamageClass(DamageClass);
         Damage = Math.Clamp(Damage, 0, 2000);
         Knockback = Math.Clamp(Knockback, 0f, 20f);
+    }
+}
+
+public sealed class RuntimeContactGeometrySpec
+{
+    [JsonRequired] public string Shape { get; set; } = "";
+    public sealed class LengthPxJsonConverter : RawJsonFloatDomainConverter { public LengthPxJsonConverter() : base("2", "1024") { } }
+    [JsonConverter(typeof(LengthPxJsonConverter))]
+    [JsonRequired] public float LengthPx { get; set; }
+    public sealed class WidthPxJsonConverter : RawJsonFloatDomainConverter { public WidthPxJsonConverter() : base("2", "1024") { } }
+    [JsonConverter(typeof(WidthPxJsonConverter))]
+    [JsonRequired] public float WidthPx { get; set; }
+    [JsonRequired] public string Orientation { get; set; } = "";
+    public sealed class AngleRadiansJsonConverter : RawJsonFloatDomainConverter { public AngleRadiansJsonConverter() : base("-3.2", "3.2") { } }
+    [JsonConverter(typeof(AngleRadiansJsonConverter))]
+    [JsonRequired] public float AngleRadians { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(LengthPx, 2, 1024);
+        RuntimeModifierClock.RequireRange(WidthPx, 2, 1024);
+        RuntimeModifierClock.RequireRange(AngleRadians, -3.2f, 3.2f);
+        if (Shape is not ("ellipse" or "rectangle" or "capsule") || Orientation is not ("fixed" or "velocity"))
+            throw new InvalidDataException("contactGeometry requires exact shape and orientation");
     }
 }
 
