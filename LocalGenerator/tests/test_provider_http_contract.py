@@ -160,6 +160,8 @@ def test_ambiguous_request_framing_never_reaches_combine(headers):
     body = ReadProbe(b"{}", forbidden=True)
     handler, capture = boundary_handler(body=body, length=2)
     handler.headers = Message()
+    handler.headers["Host"] = "127.0.0.1:5055"
+    handler.server = SimpleNamespace(server_port=5055)
     for key, value in headers:
         handler.headers[key] = value
     handler.do_POST()
