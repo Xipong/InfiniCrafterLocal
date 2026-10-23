@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("HUD DefinitionRecovery", DefinitionRecovery),
             ("HUD ChargeDashboard", ChargeDashboard),
             ("Qol detached status layout reflows", QolStatusLayout),
             ("Qol status timeline reads owner clocks", QolStatusTimeline),

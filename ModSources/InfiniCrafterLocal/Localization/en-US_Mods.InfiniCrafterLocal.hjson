@@ -1,4 +1,18 @@
-ChargeUI: {
+DefinitionRecovery: {
+	Retried: "Recovery accepted for {0} items. Pending requests remain coalesced; foreign-world items are unchanged."
+	Identity: "Item {0}; originating world {1}."
+	Empty: "No generated items in this selection."
+	Help: "/ifcdefinitions: inventory status; held: selected item identity; retry: recover current-world definitions through the existing request throttle."
+	Transfer: "Received {0}/{1} chunks."
+	RetryAfter: "Retry available in {0}s."
+	Receiving: "Definition request pending."
+	MissingServer: "Definition needed from this server. Use /ifcdefinitions retry."
+	MissingLocal: "Definition absent locally. Restore the originating world/cache backup; a compact save reference cannot reconstruct the recipe."
+	Cached: "Definition is cached; retry applies it to this inventory item."
+	OtherWorld: "Belongs to another world: return to its originating world. Recovery cannot import world recipes."
+	Ready: "Definition ready."
+	}
+	ChargeUI: {
 	More: "+{0} charging sources"
 	Remaining: "{0}% · {1:0.0}s remaining"
 	Progress: "Charge: {0}%"

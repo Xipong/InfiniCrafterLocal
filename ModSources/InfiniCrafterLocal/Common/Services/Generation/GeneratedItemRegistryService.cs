@@ -151,6 +151,21 @@ public sealed class GeneratedItemRegistryService : IDisposable
         lock (_lock) return _byId.TryGetValue(id, out data!);
     }
 
+    internal readonly record struct DefinitionReadiness(bool Cached, bool Pending, int RetryTicks, int ReceivedChunks, int TotalChunks);
+    internal DefinitionReadiness ReadDefinitionReadiness(string id)
+    {
+        lock (_lock)
+        {
+            bool cached = _byId.TryGetValue(id, out var data) && IsCurrentWorldData(data)
+                && !GeneratedItemData.IsPlayerSaveReferenceOnly(data);
+            bool pending = _inFlightGeneratedItemHydration.ContainsKey(id);
+            int retry = _lastGeneratedItemHydrationRequestTick.TryGetValue(id, out int last)
+                ? Math.Clamp(HydrationRequestRetryTicks - unchecked((int)Main.GameUpdateCount - last), 0, HydrationRequestRetryTicks) : 0;
+            var transfer = _incomingDefinitions.Values.FirstOrDefault(t => t.ItemId == id);
+            return new(cached, pending, retry, transfer?.ReceivedCount ?? 0, transfer?.Chunks.Length ?? 0);
+        }
+    }
+
     public GeneratedHydrationDebugSnapshot GetHydrationDebugSnapshot()
     {
         lock (_lock)

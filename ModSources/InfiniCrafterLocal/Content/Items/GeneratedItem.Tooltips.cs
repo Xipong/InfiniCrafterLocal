@@ -80,6 +80,11 @@ public partial class GeneratedItem
         {
             bool current = GeneratedItemRegistryService.IsCurrentWorldData(data);
             emit("InfiniDefinitionState", RuntimeTooltipText(current ? "DefinitionSyncing" : "DefinitionOtherWorld"));
+            if (expanded)
+            {
+                emit("InfiniDefinitionRecovery", DefinitionRecoveryView.Describe(data));
+                emit("InfiniDefinitionRecoveryHelp", DefinitionRecoveryView.Text("Help"));
+            }
             return;
         }
         RuntimeProgramSpec program = data.RuntimeProgram;
