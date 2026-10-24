@@ -244,6 +244,7 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "RuntimeDamageSpec": ("runtimeProgram.entities[].damage.",),
         "RuntimeHitboxSpec": ("runtimeProgram.entities[].hitbox.",),
         "RuntimeHitboxCurveSpec": ("runtimeProgram.entities[].hitboxCurve.",),
+        "RuntimeContactGeometrySpec": ("runtimeProgram.entities[].contactGeometry.",),
         "RuntimeTurnModifierSpec": ("runtimeProgram.entities[].turnModifier.",),
         "RuntimeSpeedModifierSpec": ("runtimeProgram.entities[].speedModifier.",),
         "RuntimeHomingModifierSpec": ("runtimeProgram.entities[].homingModifier.",),

@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Gameplay ContactGeometry", CombatContactGeometry),
+
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),

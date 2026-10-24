@@ -3578,6 +3578,109 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "set_projectile_contact_geometry",
+      "componentSlot": "contactGeometry",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ContactGeometry.cs::ContactGeometryCollides",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].contactGeometry.shape",
+        "runtimeProgram.entities[].contactGeometry.lengthPx",
+        "runtimeProgram.entities[].contactGeometry.widthPx",
+        "runtimeProgram.entities[].contactGeometry.orientation",
+        "runtimeProgram.entities[].contactGeometry.angleRadians"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "angleRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3.2,
+          "minimum": -3.2,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians"
+        },
+        "lengthPx": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1024,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        },
+        "orientation": {
+          "enum": [
+            "fixed",
+            "velocity"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "shape": {
+          "enum": [
+            "ellipse",
+            "rectangle",
+            "capsule"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "widthPx": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1024,
+          "minimum": 2,
+          "reference": null,
+          "required": true,
+          "semanticType": "pixels",
+          "units": "pixels"
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Choose exact centered contact geometry independent of artwork. Ellipse and rectangle use full length/width; capsule uses length as its central segment plus two width/2 circular caps. Orientation follows velocity plus authored angle, or fixed world angle. Static hitboxScale and its active-age curve multiply all dimensions. Excludes native beam/whip collision owners.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "channel_beam",
+            "move_whip_lash"
+          ],
+          "kind": "capability_absent",
+          "message": "Contact geometry requires a single collision owner.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "set_projectile_turn_modifier",
       "componentSlot": "turnModifier",
       "conflicts": [],
