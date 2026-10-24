@@ -2994,6 +2994,26 @@
                     "x-infini-semanticType": "probability_percent",
                     "x-infini-units": "probability_percent"
                   },
+                  "autoJump": {
+                    "description": "Native held-button auto jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "autoPaint": {
+                    "description": "Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "buildRangeTiles": {
+                    "description": "Additional native tile placement reach in tiles; additive",
+                    "maximum": 20,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "tiles"
+                  },
                   "damageReductionPercentagePoints": {
                     "description": "Add percent/100 to Player.endurance damage reduction",
                     "maximum": 75,
@@ -3022,14 +3042,40 @@
                     "x-infini-semanticType": "defense_points",
                     "x-infini-units": "defense_points"
                   },
+                  "divingHelm": {
+                    "description": "Native diving helmet breath conservation. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "extraFallTiles": {
+                    "description": "Additional native fall damage threshold in tiles; additive, not immunity",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "tiles"
+                  },
                   "fallDamageImmune": {
                     "description": "Prevent fall damage while equipped",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "featherFall": {
+                    "description": "Native feather fall with up/down descent controls. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "fireWalk": {
                     "description": "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "frogJump": {
+                    "description": "Native frog jump height and safe fall allowance. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -3090,8 +3136,38 @@
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
                   },
+                  "gravityControl": {
+                    "description": "Native gravity potion control; up input flips gravity. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "iceSkate": {
                     "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "jumpBlizzard": {
+                    "description": "Blizzard bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "jumpCloud": {
+                    "description": "Cloud bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "jumpFart": {
+                    "description": "Fart jar extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "jumpSandstorm": {
+                    "description": "Sandstorm bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -3113,6 +3189,12 @@
                     "x-infini-neutral": 0.0,
                     "x-infini-semanticType": "blocks/s",
                     "x-infini-units": "blocks/s"
+                  },
+                  "jumpTsunami": {
+                    "description": "Tsunami bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "lavaImmune": {
                     "description": "Grant lava immunity while equipped",
@@ -3265,6 +3347,12 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "native rocket flight mode"
                   },
+                  "rulerGrid": {
+                    "description": "Native ruler grid controlled by builder toggles. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "sentrySlotsBonus": {
                     "description": "Add sentry slots",
                     "maximum": 20,
@@ -3273,6 +3361,12 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
+                  },
+                  "swimFlipper": {
+                    "description": "Native flipper swimming jump while wet. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "taggedSummonSourceDamageBonusPercent": {
                     "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
@@ -3292,6 +3386,42 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
+                  },
+                  "tileSpeedBonusPercent": {
+                    "description": "Add percent/100 native tile placement speed; additive, native limits apply",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "underwaterBreathing": {
+                    "description": "Native gills: breathe air and water; getGoodWorld reverses drowning and requires water. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "wallGrip": {
+                    "description": "Native spiked-boots level: 0 none, 1 wall slide/jump, 2 wall cling; combines by maximum",
+                    "maximum": 2,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "wallSpeedBonusPercent": {
+                    "description": "Add percent/100 native wall placement speed; additive, native limits apply",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "waterFloat": {
+                    "description": "Native water flotation, descend with down control. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "waterWalk": {
                     "description": "Walk on water while equipped",

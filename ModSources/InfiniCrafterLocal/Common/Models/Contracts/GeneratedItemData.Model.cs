@@ -287,6 +287,176 @@ public sealed class BuffEntrySpec
 
 public sealed class AccessorySpec
 {
+    private bool? _gravityControl;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? GravityControl
+    {
+        get => _gravityControl;
+        set => _gravityControl = value ?? throw new InvalidDataException("gravityControl requires a boolean when present");
+    }
+    private bool? _featherFall;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FeatherFall
+    {
+        get => _featherFall;
+        set => _featherFall = value ?? throw new InvalidDataException("featherFall requires a boolean when present");
+    }
+    private int? _extraFallTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ExtraFallTiles
+    {
+        get => _extraFallTiles;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 100)
+                throw new InvalidDataException("extraFallTiles requires integer 0..100 when present");
+            _extraFallTiles = scalar;
+        }
+    }
+
+    private bool? _autoPaint;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoPaint
+    {
+        get => _autoPaint;
+        set => _autoPaint = value ?? throw new InvalidDataException("autoPaint requires a boolean when present");
+    }
+    private bool? _rulerGrid;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RulerGrid
+    {
+        get => _rulerGrid;
+        set => _rulerGrid = value ?? throw new InvalidDataException("rulerGrid requires a boolean when present");
+    }
+    private int? _buildRangeTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BuildRangeTiles
+    {
+        get => _buildRangeTiles;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 20)
+                throw new InvalidDataException("buildRangeTiles requires integer 0..20 when present");
+            _buildRangeTiles = scalar;
+        }
+    }
+    private int? _tileSpeedBonusPercent;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? TileSpeedBonusPercent
+    {
+        get => _tileSpeedBonusPercent;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 100)
+                throw new InvalidDataException("tileSpeedBonusPercent requires integer 0..100 when present");
+            _tileSpeedBonusPercent = scalar;
+        }
+    }
+    private int? _wallSpeedBonusPercent;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? WallSpeedBonusPercent
+    {
+        get => _wallSpeedBonusPercent;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 100)
+                throw new InvalidDataException("wallSpeedBonusPercent requires integer 0..100 when present");
+            _wallSpeedBonusPercent = scalar;
+        }
+    }
+
+    private bool? _autoJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoJump
+    {
+        get => _autoJump;
+        set => _autoJump = value ?? throw new InvalidDataException("autoJump requires a boolean when present");
+    }
+    private bool? _frogJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FrogJump
+    {
+        get => _frogJump;
+        set => _frogJump = value ?? throw new InvalidDataException("frogJump requires a boolean when present");
+    }
+    private int? _wallGrip;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? WallGrip
+    {
+        get => _wallGrip;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 2)
+                throw new InvalidDataException("wallGrip requires integer 0..2 when present");
+            _wallGrip = scalar;
+        }
+    }
+
+    private bool? _swimFlipper;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SwimFlipper
+    {
+        get => _swimFlipper;
+        set => _swimFlipper = value ?? throw new System.IO.InvalidDataException("swimFlipper requires a boolean when present");
+    }
+    private bool? _divingHelm;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DivingHelm
+    {
+        get => _divingHelm;
+        set => _divingHelm = value ?? throw new System.IO.InvalidDataException("divingHelm requires a boolean when present");
+    }
+    private bool? _underwaterBreathing;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? UnderwaterBreathing
+    {
+        get => _underwaterBreathing;
+        set => _underwaterBreathing = value ?? throw new System.IO.InvalidDataException("underwaterBreathing requires a boolean when present");
+    }
+    private bool? _waterFloat;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WaterFloat
+    {
+        get => _waterFloat;
+        set => _waterFloat = value ?? throw new System.IO.InvalidDataException("waterFloat requires a boolean when present");
+    }
+
+    private bool? _jumpCloud;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpCloud
+    {
+        get => _jumpCloud;
+        set => _jumpCloud = value ?? throw new System.IO.InvalidDataException("jumpCloud requires a boolean when present");
+    }
+    private bool? _jumpBlizzard;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpBlizzard
+    {
+        get => _jumpBlizzard;
+        set => _jumpBlizzard = value ?? throw new System.IO.InvalidDataException("jumpBlizzard requires a boolean when present");
+    }
+    private bool? _jumpSandstorm;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpSandstorm
+    {
+        get => _jumpSandstorm;
+        set => _jumpSandstorm = value ?? throw new System.IO.InvalidDataException("jumpSandstorm requires a boolean when present");
+    }
+    private bool? _jumpFart;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpFart
+    {
+        get => _jumpFart;
+        set => _jumpFart = value ?? throw new System.IO.InvalidDataException("jumpFart requires a boolean when present");
+    }
+    private bool? _jumpTsunami;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? JumpTsunami
+    {
+        get => _jumpTsunami;
+        set => _jumpTsunami = value ?? throw new System.IO.InvalidDataException("jumpTsunami requires a boolean when present");
+    }
+
     public bool Enabled { get; set; } = false;
     public bool WireVision { get; set; } = false;
     public bool IceSkate { get; set; } = false;
@@ -341,7 +511,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => SwimFlipper == true || DivingHelm == true || UnderwaterBreathing == true || WaterFloat == true || JumpCloud == true || JumpBlizzard == true || JumpSandstorm == true || JumpFart == true || JumpTsunami == true || AutoJump == true || FrogJump == true || WallGrip is > 0 || AutoPaint == true || RulerGrid == true || BuildRangeTiles is > 0 || TileSpeedBonusPercent is > 0 || WallSpeedBonusPercent is > 0 || GravityControl == true || FeatherFall == true || ExtraFallTiles is > 0 || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

@@ -44,6 +44,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Native equipment NativeTraversalJumps", NativeTraversalJumps),
+            ("Native equipment NativeTraversalAquatic", NativeTraversalAquatic),
+            ("Native equipment NativeTraversalClimbing", NativeTraversalClimbing),
+            ("Native equipment NativeTraversalBuilding", NativeTraversalBuilding),
+            ("Native equipment NativeTraversalGravity", NativeTraversalGravity),
+
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),

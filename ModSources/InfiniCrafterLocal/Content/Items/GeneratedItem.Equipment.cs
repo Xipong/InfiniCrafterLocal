@@ -51,6 +51,26 @@ public partial class GeneratedItem
         player.aggro += a.Aggro; player.endurance += a.Endurance; player.GetArmorPenetration(DamageClass.Generic) += a.ArmorPenetration;
         player.whipRangeMultiplier += a.WhipRange;
         if (a.FallDamageImmune) player.noFallDmg = true; if (a.LavaImmune) player.lavaImmune = true; if (a.WaterWalk) player.waterWalk = true;
+        if (a.JumpCloud == true) { player.GetJumpState(ExtraJump.CloudInABottle).Enable(); }
+        if (a.JumpBlizzard == true) { player.GetJumpState(ExtraJump.BlizzardInABottle).Enable(); }
+        if (a.JumpSandstorm == true) { player.GetJumpState(ExtraJump.SandstormInABottle).Enable(); }
+        if (a.JumpFart == true) { player.GetJumpState(ExtraJump.FartInAJar).Enable(); }
+        if (a.JumpTsunami == true) { player.GetJumpState(ExtraJump.TsunamiInABottle).Enable(); }
+        if (a.SwimFlipper == true) { player.GetJumpState(ExtraJump.Flipper).Enable(); player.GetJumpState(ExtraJump.Flipper).Available = true; }
+        if (a.DivingHelm == true) { player.accDivingHelm = true; }
+        if (a.UnderwaterBreathing == true) { player.gills = true; }
+        if (a.WaterFloat == true) { player.canFloatInWater = true; }
+        if (a.AutoJump == true) { player.autoJump = true; }
+        if (a.FrogJump == true) { player.frogLegJumpBoost = true; }
+        player.spikedBoots = Math.Max(player.spikedBoots, a.WallGrip ?? 0);
+        if (a.AutoPaint == true) { player.autoPaint = true; }
+        if (a.RulerGrid == true) { player.rulerGrid = true; }
+        player.blockRange += a.BuildRangeTiles ?? 0;
+        player.tileSpeed += (a.TileSpeedBonusPercent ?? 0) / 100f;
+        player.wallSpeed += (a.WallSpeedBonusPercent ?? 0) / 100f;
+        if (a.GravityControl == true) { player.gravControl = true; }
+        if (a.FeatherFall == true) { player.slowFall = true; }
+        player.extraFall += a.ExtraFallTiles ?? 0;
         if (a.WireVision) player.InfoAccMechShowWires = true;
         if (a.IceSkate) player.iceSkate = true;
         if (a.NoKnockback) player.noKnockback = true;

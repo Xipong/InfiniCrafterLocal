@@ -70,6 +70,26 @@ public partial class GeneratedItem
         if (light > 0f) Stat("Light", "EquipmentLight", Math.Clamp(light, 0f, 1.5f));
         if (a is not null)
         {
+            Flag("JumpCloud", a.JumpCloud == true);
+            Flag("JumpBlizzard", a.JumpBlizzard == true);
+            Flag("JumpSandstorm", a.JumpSandstorm == true);
+            Flag("JumpFart", a.JumpFart == true);
+            Flag("JumpTsunami", a.JumpTsunami == true);
+            Flag("SwimFlipper", a.SwimFlipper == true);
+            Flag("DivingHelm", a.DivingHelm == true);
+            Flag("UnderwaterBreathing", a.UnderwaterBreathing == true);
+            Flag("WaterFloat", a.WaterFloat == true);
+            Flag("AutoJump", a.AutoJump == true);
+            Flag("FrogJump", a.FrogJump == true);
+            Stat("WallGrip", "EquipmentWallGrip", a.WallGrip ?? 0);
+            Flag("AutoPaint", a.AutoPaint == true);
+            Flag("RulerGrid", a.RulerGrid == true);
+            Stat("BuildRangeTiles", "EquipmentBuildRangeTiles", a.BuildRangeTiles ?? 0);
+            Stat("TileSpeedBonusPercent", "EquipmentTileSpeedBonusPercent", a.TileSpeedBonusPercent ?? 0);
+            Stat("WallSpeedBonusPercent", "EquipmentWallSpeedBonusPercent", a.WallSpeedBonusPercent ?? 0);
+            Flag("GravityControl", a.GravityControl == true);
+            Flag("FeatherFall", a.FeatherFall == true);
+            Stat("ExtraFallTiles", "EquipmentExtraFallTiles", a.ExtraFallTiles ?? 0);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);
