@@ -7790,6 +7790,78 @@
               "params": {
                 "additionalProperties": false,
                 "properties": {
+                  "aimMode": {
+                    "default": "direct",
+                    "description": "direct aims at current centre; velocity_lead predicts centre using the target actual velocity, leadSeconds and maximumLeadTiles. Only child configure_spawn aim=velocity may consume prediction; child movement remains independently authored",
+                    "enum": [
+                      "direct",
+                      "velocity_lead"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "direct",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "bossFilter": {
+                    "default": "any",
+                    "description": "Filter chaseable NPCs by their native boss flag before assigned/priority selection",
+                    "enum": [
+                      "any",
+                      "boss_only",
+                      "non_boss_only"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "any",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "burstCount": {
+                    "default": 1,
+                    "description": "Volleys per burst; every volley independently reacquires a target and consumes the shared activation budget. No target or failed spawn still advances the authored schedule",
+                    "maximum": 8,
+                    "minimum": 1,
+                    "type": "integer",
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "burstSpacingSeconds": {
+                    "default": 0.1,
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: World ticks between volleys inside a burst. intervalSeconds is the pause from the last volley to the first volley of the next burst",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.1,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "coneDirection": {
+                    "default": "owner_facing",
+                    "description": "Cone axis: current owner horizontal facing or this projectile actual velocity; a zero velocity admits no targets when a restricted velocity cone is requested",
+                    "enum": [
+                      "owner_facing",
+                      "projectile_velocity"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "owner_facing",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "coneRadians": {
+                    "default": 6.283185307179586,
+                    "description": "Full targeting cone around the explicitly selected coneDirection. Full circle disables directional filtering",
+                    "maximum": 6.283185307179586,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 6.283185307179586,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 6.283185307179586,
+                    "x-infini-semanticType": "radians"
+                  },
                   "count": {
                     "default": 1,
                     "description": "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot",
@@ -7842,6 +7914,121 @@
                       "live_parent"
                     ],
                     "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "leadSeconds": {
+                    "default": 0,
+                    "description": "World-time horizon for velocity_lead, independent of projectile extra updates. Zero predicts current centre; this does not assume future target acceleration or guarantee a hit",
+                    "maximum": 2,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "seconds"
+                  },
+                  "manaCost": {
+                    "default": 0,
+                    "description": "Base owner mana paid at each scheduled volley. Native manaCost multiplier is sampled once; no held-item hooks or automatic potions. Zero disables this payment and its reserve floor",
+                    "maximum": 200,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "mana_points"
+                  },
+                  "manaCostBasis": {
+                    "default": "volley",
+                    "description": "volley pays once if any child successfully spawns; shot pays for the actual successful child count. Reserve full requested cost before spawning and refund unused payment on failure or partial spawn",
+                    "enum": [
+                      "volley",
+                      "shot"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "volley",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "manaReserve": {
+                    "default": 0,
+                    "description": "Keep at least this much actual owner mana after reserving the requested volley; active only when manaCost is positive",
+                    "maximum": 400,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "maximumHealthRatio": {
+                    "default": 1,
+                    "description": "Maximum inclusive current life/lifeMax ratio; combines with minimumHealthRatio as a health band",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 1,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 1,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "maximumLeadTiles": {
+                    "default": 120,
+                    "description": "Clamp predicted displacement length to this many tiles, preserving its direction. This bounds aim beyond the target acquisition radius without changing target admission",
+                    "maximum": 120,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 120,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 120,
+                    "x-infini-semanticType": "tiles"
+                  },
+                  "minimumHealthRatio": {
+                    "default": 0,
+                    "description": "Minimum inclusive current life/lifeMax ratio; candidates with invalid lifeMax cannot satisfy a health filter",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "minimumRangeTiles": {
+                    "default": 0,
+                    "description": "Exclude targets closer than this geometric inner radius, before previous-target or assigned priority",
+                    "maximum": 120,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "tiles"
+                  },
+                  "onManaShortage": {
+                    "default": "hold_fire",
+                    "description": "hold_fire skips this scheduled volley and retries at later due times; retire kills this projectile through its normal lifecycle when mana payment cannot be reserved",
+                    "enum": [
+                      "hold_fire",
+                      "retire"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "hold_fire",
                     "x-infini-semanticType": "bounded_text"
                   },
                   "rangeTiles": {
@@ -7904,14 +8091,43 @@
                   },
                   "targetPolicy": {
                     "default": "distance_score",
-                    "description": "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score",
+                    "description": "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses targetPriority; player_assigned_only refuses to fire without a valid exact assigned target",
                     "enum": [
                       "distance_score",
-                      "player_assigned_first"
+                      "player_assigned_first",
+                      "player_assigned_only"
                     ],
                     "type": "string",
                     "x-infini-neutral": "distance_score",
                     "x-infini-semanticType": "bounded_text"
+                  },
+                  "targetPriority": {
+                    "default": "distance",
+                    "description": "Rank admitted NPCs by discounted distance, lowest/highest life ratio, distance to the owner, or alignment with owner facing. Ties use distance score then NPC index. Assigned-first/assigned-only policies apply after identical admission filters",
+                    "enum": [
+                      "distance",
+                      "lowest_health",
+                      "highest_health",
+                      "closest_to_owner",
+                      "facing_alignment"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "distance",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "warmupSeconds": {
+                    "default": 0.0,
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: One initial world-time delay before the normal first firing interval",
+                    "maximum": 30.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
                   }
                 },
                 "required": [

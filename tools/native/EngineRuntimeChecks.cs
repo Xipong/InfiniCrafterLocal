@@ -44,6 +44,14 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Gameplay StationTargetAdmission", StationTargetAdmission),
+            ("Gameplay StationTargetPriority", StationTargetPriority),
+            ("Gameplay StationTargetPrediction", StationTargetPrediction),
+            ("Gameplay StationTargetSchedule", StationTargetSchedule),
+            ("Gameplay StationTargetMana", StationTargetMana),
+            ("Gameplay TargetPredictionReachesChildLaunch", TargetPredictionReachesChildLaunch),
+            ("Gameplay TargetManaRefusesAndRollsBackAtSpawnBoundary", TargetManaRefusesAndRollsBackAtSpawnBoundary),
+
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),

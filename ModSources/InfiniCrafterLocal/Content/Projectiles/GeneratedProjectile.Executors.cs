@@ -238,33 +238,53 @@ public sealed partial class GeneratedProjectile
     private bool ApplyTargetAndFire()
     {
         if (!_entity!.Movement.IsConfigured) Projectile.velocity = Vector2.Zero;
-        if (_entity.Targeting.IntervalTicks <= 0) return true;
-        _controllerTimer++;
-        int interval = AuthoredTicksToProjectileUpdates(Math.Max(6, _entity.Targeting.IntervalTicks));
-        if (_controllerTimer < interval || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
-            return true;
-        _controllerTimer = 0;
+        if (_entity.Targeting.IntervalTicks <= 0 || !TryGetFiringOwner(out Player firingOwner)) return true;
+        if (!AdvanceFiringSchedule(ref _controllerTimer, _entity.Targeting, Math.Max(1, Projectile.extraUpdates + 1))
+            || !InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)) return true;
         float range = Math.Max(16f, (_entity.Targeting.RangeTiles > 0 ? _entity.Targeting.RangeTiles : _entity.Controller.Params.RangeTiles) * 16f);
         NPC? target = FindFiringTarget(range, _entity.Targeting);
         if (target is null) return true;
         _lastTarget = target.whoAmI;
         string shotId = _entity.Targeting.ShotEntityId;
-        Vector2 direction = Projectile.DirectionTo(target.Center);
+        Vector2 direction = FiringDirection(target, _entity.Targeting);
         RuntimeSpawnBudget budget = _activationSpawnBudget ?? new RuntimeSpawnBudget(0);
         if (_entity.Targeting.DamageMultiplier is not float damageMultiplier)
             return true;
         if (!RuntimeChildCombat.TryResolve(_entity.Targeting.DamageBasis, _entity.Targeting.KnockbackBasis,
-            damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), Owner()),
+            damageMultiplier, RuntimeParentCombat.Capture(Projectile.GetSource_FromThis(), firingOwner),
             out int? damageOverride, out float? knockbackOverride))
             return true;
         int requested = _entity.Targeting.Count ?? 1;
         int granted = budget.Reserve(requested);
-        int spawned = granted == requested ? SpawnRuntimeEntity(_data!, shotId, Owner(), Projectile.GetSource_FromThis(),
-            Projectile.Center, direction, _childDepth + 1, granted, requestedCount: requested,
-            spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
-            damageMultiplier: damageMultiplier, activationBudget: budget,
-            rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride) : 0;
-        budget.Return(granted - spawned);
+        if (granted != requested) { budget.Return(granted); return true; }
+        RuntimeVolleyManaPayment? payment = null;
+        if (_entity.Targeting.ManaCost is > 0 && !RuntimeVolleyManaPayment.TryReserve(firingOwner,
+            _entity.Targeting.ManaCost.Value, _entity.Targeting.ManaCostBasis == "shot", requested,
+            _entity.Targeting.ManaReserve ?? 0, out payment))
+        {
+            budget.Return(granted);
+            if (_entity.Targeting.OnManaShortage == "retire") Projectile.Kill();
+            return true;
+        }
+        int spawned = 0;
+        bool completed = false;
+        try
+        {
+            spawned = SpawnRuntimeEntity(_data!, shotId, firingOwner, Projectile.GetSource_FromThis(),
+                Projectile.Center, direction, _childDepth + 1, granted, requestedCount: requested,
+                spreadOverride: (float)(_entity.Targeting.SpreadRadians ?? 0d),
+                damageMultiplier: damageMultiplier, activationBudget: budget,
+                rootDamageOverride: damageOverride, rootKnockbackOverride: knockbackOverride,
+                onSpawnProgress: count => spawned = count);
+            completed = true;
+        }
+        finally
+        {
+            // SpawnRuntimeEntity already refunds unused child capacity on an
+            // exception. Mana still settles against each successfully admitted host.
+            if (completed) budget.Return(granted - spawned);
+            payment?.Complete(spawned);
+        }
         Projectile.netUpdate = true;
         return true;
     }
@@ -274,7 +294,7 @@ public sealed partial class GeneratedProjectile
         bool Admitted(NPC npc, out float score)
         {
             score = float.PositiveInfinity;
-            if (!npc.CanBeChasedBy(Projectile)) return false;
+            if (!npc.CanBeChasedBy(Projectile) || !AdmitsTargetFilter(npc, targeting, Owner())) return false;
             float distance = Vector2.Distance(Projectile.Center, npc.Center);
             // Geometric admission precedes the preference discount. A previous
             // or assigned target cannot turn a hard radius into a score radius.
@@ -287,18 +307,22 @@ public sealed partial class GeneratedProjectile
                 Projectile.position, Projectile.width, Projectile.height, npc.position, npc.width, npc.height);
         }
 
-        if (targeting.TargetPolicy == "player_assigned_first")
+        if (targeting.TargetPolicy is "player_assigned_first" or "player_assigned_only")
         {
             NPC? assigned = Projectile.OwnerMinionAttackTargetNPC;
             if (assigned is not null && Admitted(assigned, out _)) return assigned;
+            if (targeting.TargetPolicy == "player_assigned_only") return null;
         }
         NPC? selected = null;
         float best = float.PositiveInfinity;
+        double bestPriority = double.PositiveInfinity;
         foreach (NPC npc in Main.ActiveNPCs)
-            if (Admitted(npc, out float score) && score < best)
+            if (Admitted(npc, out float score))
             {
-                selected = npc;
-                best = score;
+                double priority = TargetPriorityScore(npc, targeting, Owner(), score);
+                if (!double.IsFinite(priority) || priority > bestPriority
+                    || priority == bestPriority && (score > best || score == best && selected is not null && npc.whoAmI >= selected.whoAmI)) continue;
+                selected = npc; best = score; bestPriority = priority;
             }
         return selected;
     }
