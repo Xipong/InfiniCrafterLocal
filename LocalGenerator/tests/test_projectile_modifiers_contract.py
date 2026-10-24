@@ -20,6 +20,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import wire_transport
 
 PARAMS = {
+    "set_projectile_contact_geometry": dict(shape="ellipse", lengthPx=80, widthPx=18, orientation="velocity", angleRadians=.5),
     "set_projectile_turn_modifier": dict(turnRadiansPerSecond=(.04) * 60, startDelaySeconds=(0) / 60, durationSeconds=(90) / 60),
     "set_projectile_speed_modifier": dict(speedMultiplierPerUpdate=1.01, maxSpeedBlocksPerSecond=75, startDelaySeconds=(0) / 60, durationSeconds=(40) / 60),
     "set_projectile_homing_modifier": dict(rangeTiles=40, maxTurnRadiansPerSecond=(.1) * 60, requireLineOfSight=True, startDelaySeconds=(40) / 60, durationSeconds=(50) / 60),
@@ -140,7 +141,7 @@ def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutatio
     else: compiled["runtimeProgram"]["entities"][0][member] = entity(compiled, fn).pop(member)
     assert not validate_runtime_wire(compiled)["ok"]
 
-@pytest.mark.parametrize("fn", PROJECTILE_MODIFIER_COMPONENTS)
+@pytest.mark.parametrize("fn", [fn for fn in PROJECTILE_MODIFIER_COMPONENTS if "durationSeconds" in PARAMS[fn]])
 def test_frozen_repair_changes_only_invalid_phase_leaf(fn):
     doc = source(fn)
     call(doc, fn)["params"]['durationSeconds'] = (0) / 60
