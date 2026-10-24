@@ -1922,11 +1922,36 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.fishingLine",
+        "accessory.lavaFishing",
+        "accessory.fishingSonar",
+        "accessory.fishingCrates",
+        "accessory.lifePickup",
+        "accessory.manaPickup",
+        "accessory.coinPickup",
+        "accessory.treasurePickup",
+        "accessory.treasureVision",
+        "accessory.dangerVision",
+        "accessory.creatureVision",
+        "accessory.nightVision",
+        "accessory.fishingInfo",
+        "accessory.weatherInfo",
+        "accessory.moonInfo",
+        "accessory.enemyInfo",
+        "accessory.speedInfo",
+        "accessory.oreInfo",
+        "accessory.rareCreatureInfo",
+        "accessory.killCountInfo",
+        "accessory.potionCooldown",
+        "accessory.autoManaPotion",
+        "accessory.restingRecovery",
+        "accessory.extendedInvulnerability",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
         "accessory.accRunSpeed",
         "accessory.rocketBoots",
+        "accessory.fishingPower",
         "accessory.wireVision"
       ],
       "multiplicity": "single_per_target",
@@ -1962,6 +1987,36 @@
           "semanticType": "probability_percent",
           "units": "probability_percent"
         },
+        "autoManaPotion": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "coinPickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "creatureVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "damageReductionPercentagePoints": {
           "enum": [],
           "kind": "number",
@@ -1972,6 +2027,16 @@
           "semanticType": "percentage_points",
           "units": "percentage_points"
         },
+        "dangerVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "defensePoints": {
           "enum": [],
           "kind": "integer",
@@ -1981,6 +2046,26 @@
           "required": false,
           "semanticType": "defense_points",
           "units": "defense_points"
+        },
+        "enemyInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "extendedInvulnerability": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "fallDamageImmune": {
           "enum": [],
@@ -1993,6 +2078,56 @@
           "units": ""
         },
         "fireWalk": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "fishingCrates": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "fishingInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "fishingLine": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "fishingPower": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "fishing power points"
+        },
+        "fishingSonar": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2062,7 +2197,37 @@
           "semanticType": "blocks/s",
           "units": "blocks/s"
         },
+        "killCountInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "lavaFishing": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "lavaImmune": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "lifePickup": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2124,6 +2289,16 @@
           "semanticType": "percentage_points",
           "units": "percentage_points"
         },
+        "manaPickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "manaRegenBonusPoints": {
           "enum": [],
           "kind": "integer",
@@ -2174,6 +2349,16 @@
           "semanticType": "slots",
           "units": "slots"
         },
+        "moonInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "moveSpeedBonusPercent": {
           "enum": [],
           "kind": "number",
@@ -2184,7 +2369,57 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
+        "nightVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "noKnockback": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "oreInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "potionCooldown": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "rareCreatureInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "restingRecovery": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2214,6 +2449,16 @@
           "semanticType": "slots",
           "units": "slots"
         },
+        "speedInfo": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "taggedSummonSourceDamageBonusPercent": {
           "enum": [],
           "kind": "number",
@@ -2224,7 +2469,37 @@
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
         },
+        "treasurePickup": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "treasureVision": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "waterWalk": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "weatherInfo": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2290,11 +2565,36 @@
             "fallDamageImmune",
             "lavaImmune",
             "waterWalk",
+            "fishingLine",
+            "lavaFishing",
+            "fishingSonar",
+            "fishingCrates",
+            "lifePickup",
+            "manaPickup",
+            "coinPickup",
+            "treasurePickup",
+            "treasureVision",
+            "dangerVision",
+            "creatureVision",
+            "nightVision",
+            "fishingInfo",
+            "weatherInfo",
+            "moonInfo",
+            "enemyInfo",
+            "speedInfo",
+            "oreInfo",
+            "rareCreatureInfo",
+            "killCountInfo",
+            "potionCooldown",
+            "autoManaPotion",
+            "restingRecovery",
+            "extendedInvulnerability",
             "iceSkate",
             "noKnockback",
             "fireWalk",
             "accRunSpeedBlocksPerSecond",
             "rocketBoots",
+            "fishingPower",
             "wireVision"
           ],
           "target": "same_target"

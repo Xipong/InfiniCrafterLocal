@@ -3354,6 +3354,150 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "fishingLine": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accFishingLine while equipped: caught fish cannot be lost by the line-break roll. Does not preserve bait, select a rod or spawn fish.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "lavaFishing": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accLavaFishing while equipped. Terraria still requires a usable pole and bait and owns biome/catch rules; this grants no lava damage immunity.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "fishingSonar": {
+                        "type": "boolean",
+                        "description": "Enable native Player.sonarPotion catch preview while equipped. Visual information only; does not select or improve the catch.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "fishingCrates": {
+                        "type": "boolean",
+                        "description": "Enable native Player.cratePotion while equipped: use the engine crate-chance modifier, not a guaranteed crate or custom loot table.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "lifePickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.lifeMagnet: extend pickup for native heart variants only. Does not heal or create drops.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "manaPickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.manaMagnet: extend pickup for native mana star variants only. Does not restore mana directly.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "coinPickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.goldRing: extend pickup for coin items only. Does not increase coin drops.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "treasurePickup": {
+                        "type": "boolean",
+                        "description": "Enable native Player.treasureMagnet: add native treasure grab range to eligible world items, stacking with native specialized magnets. Does not bypass pickup eligibility or inventory space.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "treasureVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.findTreasure highlighting for engine-recognized treasure tiles. Does not reveal unexplored map or spawn treasure.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "dangerVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.dangerSense highlighting for engine-recognized dangerous tiles. Does not grant hazard immunity.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "creatureVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.detectCreature highlighting. Information only; does not target, damage or summon creatures.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "nightVision": {
+                        "type": "boolean",
+                        "description": "Enable native Player.nightVision lighting visibility. Does not create light sources, map reveal, treasure detection or danger detection.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "fishingInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accFishFinder fishing information display; does not increase fishing power.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "weatherInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accWeatherRadio weather information; does not change weather.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "moonInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accCalendar moon phase display; does not advance time.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "enemyInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accThirdEye nearby enemy counter; does not reveal or attack enemies.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "speedInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accStopwatch speed display; does not change movement speed.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "oreInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accOreFinder nearby valuable material display; no mining or ore creation.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "rareCreatureInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accCritterGuide rare creature information; does not attract creatures.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "killCountInfo": {
+                        "type": "boolean",
+                        "description": "Enable native Player.accDreamCatcher kill tally information; does not change counters.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "potionCooldown": {
+                        "type": "boolean",
+                        "description": "Enable native Player.pStone healing potion delay modifier. Uses engine PhilosopherStoneDurationMultiplier, applied on the native update cadence; does not clear an existing potion sickness debuff.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "autoManaPotion": {
+                        "type": "boolean",
+                        "description": "Enable native Player.manaFlower: engine may consume available mana potions when CheckMana needs them. Does not create potions, provide free mana, or reduce mana cost.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "restingRecovery": {
+                        "type": "boolean",
+                        "description": "Enable native Player.shinyStone resting regeneration rules. Terraria owns motion and regeneration conditions; does not grant unconditional healing or damage resistance.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "extendedInvulnerability": {
+                        "type": "boolean",
+                        "description": "Enable native Player.longInvince hurt invulnerability timing. Does not make the player permanently immune, dodge hits or create custom on-hit actions.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "iceSkate": {
                         "type": "boolean",
                         "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",
@@ -3396,6 +3540,15 @@
                         "maximum": 5,
                         "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight",
                         "x-infini-units": "native rocket flight mode",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
+                      "fishingPower": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add raw Player.fishingSkill points while equipped; Terraria combines them with pole/bait and environment multipliers. Zero adds nothing; does not create a fishing rod, bait or projectile",
+                        "x-infini-units": "fishing power points",
                         "x-infini-semanticType": "unitless_scalar",
                         "x-infini-neutral": 0
                       },
