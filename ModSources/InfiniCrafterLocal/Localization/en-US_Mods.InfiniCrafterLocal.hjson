@@ -5,14 +5,6 @@ ChargeUI: {
 
 Keybinds: {
 	ToggleRecipeJournal: {
-            FilterAll: "Effects: all"
-            FilterHealing: "Effects: healing"
-            FilterMining: "Effects: mining"
-            FilterSummon: "Effects: summon"
-            FilterMobility: "Effects: mobility"
-            UsingIngredient: "Uses {0} ×"
-            Children: "Discovered fusions using this item: {0}"
-
 		DisplayName: "Toggle fusion atlas"
 	}
 }
@@ -37,36 +29,50 @@ UseFeedback: {
 	MobilityUnsafe: "Unsafe blink destination"
 }
 
+RecipeJournal: {
+	Lineage: "Lineage"
+	LineageMissing: "Recipe data or exact native item is unavailable."
+	LineageBrowserHint: "Use Recipe Browser’s configured hovered-item key (Mouse3 by default)."
+	LineageBrowserAbsent: "Install Recipe Browser to inspect native recipes."
+	LineageCycle: "Cyclic ancestry recorded; expansion stopped."
+	LineageTruncated: "This map reached its display limit; open an ancestor’s lineage to explore further."
+	FilterAll: "Effects: all"
+	FilterHealing: "Effects: healing"
+	FilterMining: "Effects: mining"
+	FilterSummon: "Effects: summon"
+	FilterMobility: "Effects: mobility"
+	UsingIngredient: "Uses {0} ×"
+	Children: "Discovered fusions using this item: {0}"
+	Result: "Result"
+	SpaceHint: "Reduce UI scale or enlarge the window to read the recipe pages."
+	ReadOnly: "Discovered recipes only"
+	Notes: "Description"
+	Close: "Close"
+
+	Button: "Journal"
+	Eyebrow: "INFINICRAFT • DISCOVERIES IN THIS WORLD"
+	Title: "Fusion atlas"
+	Search: "Search discoveries…"
+	All: "All"
+	Favorites: "Favorites"
+	NoFavorites: "Save discoveries with the star on their recipe page."
+	Empty: "Your first discovery belongs here. Combine two items at the station."
+	NoMatches: "No discoveries match. Try another name."
+	Welcome: "Every combination has a story. Choose a discovered recipe on the left."
+	Page: "{0} / {1}"
+	Count: "Discoveries: {0}"
+	Back: "‹ Back"
+	Saved: "★ Saved"
+	Save: "☆ Save"
+	Generation: "Generation {0}"
+	Ingredients: "Ingredients"
+	Ingredient: "Ingredient"
+	OpenParent: "View recipe →"
+}
+
 Mods: {
 	InfiniCrafterLocal: {
 
-		RecipeJournal: {
-			Result: "Result"
-			SpaceHint: "Reduce UI scale or enlarge the window to read the recipe pages."
-			ReadOnly: "Discovered recipes only"
-			Notes: "Description"
-			Close: "Close"
-
-			Button: "Journal"
-			Eyebrow: "INFINICRAFT • DISCOVERIES IN THIS WORLD"
-			Title: "Fusion atlas"
-			Search: "Search discoveries…"
-			All: "All"
-			Favorites: "Favorites"
-			NoFavorites: "Save discoveries with the star on their recipe page."
-			Empty: "Your first discovery belongs here. Combine two items at the station."
-			NoMatches: "No discoveries match. Try another name."
-			Welcome: "Every combination has a story. Choose a discovered recipe on the left."
-			Page: "{0} / {1}"
-			Count: "Discoveries: {0}"
-			Back: "‹ Back"
-			Saved: "★ Saved"
-			Save: "☆ Save"
-			Generation: "Generation {0}"
-			Ingredients: "Ingredients"
-			Ingredient: "Ingredient"
-			OpenParent: "View recipe →"
-		}
 
 		Items: {
 			InfiniCore: {

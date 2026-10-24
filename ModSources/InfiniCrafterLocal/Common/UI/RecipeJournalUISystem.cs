@@ -19,15 +19,18 @@ using Terraria.UI;
 namespace InfiniCrafterLocal.Common.UI;
 
 [Autoload(Side = ModSide.Client)]
-public sealed class RecipeJournalUISystem : ModSystem
+public sealed partial class RecipeJournalUISystem : ModSystem
 {
     public static bool IsOpen { get; private set; }
     public static ModKeybind ToggleJournalKey { get; private set; } = null!;
 
     public override void Load()
-        => ToggleJournalKey = KeybindLoader.RegisterKeybind(Mod, "ToggleRecipeJournal", Keys.K);
+    {
+        ToggleJournalKey = KeybindLoader.RegisterKeybind(Mod, "ToggleRecipeJournal", Keys.K);
+        LoadLineageSkin();
+    }
 
-    public override void Unload() { ResetSession(); ToggleJournalKey = null!; }
+    public override void Unload() { ResetSession(); UnloadLineageSkin(); ToggleJournalKey = null!; }
 
     internal static bool CanToggleFromKey(bool focused, bool menu, bool dead, bool writing,
         bool chat, bool blocked, bool rebinding)
@@ -38,6 +41,7 @@ public sealed class RecipeJournalUISystem : ModSystem
         // Hidden interface layers may not draw, but must still relinquish text focus.
         if (IsOpen && (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead)) Close();
         if (IsOpen) CanResumeInput(IsCovered(), Main.mouseLeft, Main.mouseRight);
+        UpdateLineageInput();
         if (ToggleJournalKey?.JustPressed != true || Main.LocalPlayer is not { active: true } player
             || !CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
                 Main.drawingPlayerChat, Main.blockInput, PlayerInput.CurrentlyRebinding)) return;
@@ -52,7 +56,8 @@ public sealed class RecipeJournalUISystem : ModSystem
     private static int _page, _detailScroll;
     private static GeneratedItemData[] _known = Array.Empty<GeneratedItemData>();
     private static uint _snapshotTick;
-    private static readonly Stack<string> History = new();
+    private readonly record struct JournalLocation(string Id, bool Lineage);
+    private static readonly Stack<JournalLocation> History = new();
     // InfiniCore identity: cold forged metal, a warm fusion heart, quiet navigable blue.
     private static readonly Color Ink = new(243, 231, 209), Muted = new(161, 174, 193), Gold = new(241, 170, 77);
     private static readonly Color Panel = new(20, 24, 34), Inset = new(11, 16, 25);
@@ -80,7 +85,7 @@ public sealed class RecipeJournalUISystem : ModSystem
         Main.blockInput = focused;
         PlayerInput.WritingText = focused;
     }
-    private static void Close() { IsOpen = false; SetSearchFocus(false); }
+    private static void Close() { IsOpen = false; SetSearchFocus(false); ClearLineageHover(); _lineageDragging = _lineageBrowserPending = false; }
     private static bool IsCovered()
         => !Main.hasFocus || Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow
             || Main.inFancyUI || Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding
@@ -89,7 +94,7 @@ public sealed class RecipeJournalUISystem : ModSystem
     {
         if (covered)
         {
-            SetSearchFocus(false);
+            SetSearchFocus(false); ClearLineageHover(); _lineageDragging = false;
             _awaitingMouseRelease = true;
             return false;
         }
@@ -102,7 +107,7 @@ public sealed class RecipeJournalUISystem : ModSystem
         Close(); _query = _selected = ""; _page = _detailScroll = 0; _favoritesOnly = false;
         _known = Array.Empty<GeneratedItemData>(); History.Clear();
         _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
-        _snapshotTick = uint.MaxValue; _hoverText = "";
+        _snapshotTick = uint.MaxValue; _hoverText = ""; ResetLineage();
         _sessionOwner = null; _sessionWorld = 0; _awaitingMouseRelease = false;
     }
     public override void OnWorldUnload() => ResetSession();
@@ -113,12 +118,12 @@ public sealed class RecipeJournalUISystem : ModSystem
     }
     private static void Select(string id, bool remember = true)
     {
-        if (remember && _selected.Length != 0 && _selected != id)
+        if (remember && _selected.Length != 0 && (_selected != id || _lineageOpen))
         {
             if (History.Count >= 32) History.Clear();
-            History.Push(_selected);
+            History.Push(new(_selected, _lineageOpen));
         }
-        _selected = id; _detailScroll = 0; SetSearchFocus(false);
+        _selected = id; _lineageOpen = _lineageBrowserPending = false; _detailScroll = 0; SetSearchFocus(false);
     }
     private static bool Draw()
     {
@@ -129,8 +134,7 @@ public sealed class RecipeJournalUISystem : ModSystem
         if (Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape)) { Close(); return true; }
         _hoverText = "";
         var player = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
-        Main.LocalPlayer.mouseInterface = true;
-        PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Recipe Journal");
+
         // Snapshot is refreshed outside per-entry drawing, never through generator HTTP.
         if (_snapshotTick == uint.MaxValue || unchecked(Main.GameUpdateCount - _snapshotTick) >= 60)
         {
@@ -144,6 +148,8 @@ public sealed class RecipeJournalUISystem : ModSystem
             query = query[..Math.Min(query.Length, 80)];
             if (query != _query) { _query = query; _page = 0; }
         }
+        if (_lineageOpen) return DrawLineage(Main.spriteBatch);
+        ClearLineageHover();
         var discoveries = RecipeJournalView.Entries(_known, Main.worldID.ToString(), "", player.IsJournalFavorite, false);
         var entries = RecipeJournalView.Entries(discoveries, Main.worldID.ToString(), _query, player.IsJournalFavorite, _favoritesOnly)
             .Where(d => RecipeJournalView.MatchesEffect(d, _effectFilter)
@@ -159,7 +165,9 @@ public sealed class RecipeJournalUISystem : ModSystem
         Rectangle book = layout.Book;
         Vector2 cursor = new Vector2(Main.mouseX, Main.mouseY);
         bool click = Main.mouseLeft && Main.mouseLeftRelease && !PlayerInput.IgnoreMouseInterface;
-        if (click && !book.Contains(cursor.ToPoint())) { SetSearchFocus(false); Main.mouseLeftRelease = false; }
+        if (book.Contains(cursor.ToPoint()))
+        { Main.LocalPlayer.mouseInterface = true; PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Recipe Journal"); }
+        if (click && !book.Contains(cursor.ToPoint())) SetSearchFocus(false);
         var sb = Main.spriteBatch;
         Fill(sb, new Rectangle(0, 0, width, height), new Color(0, 0, 0, 75));
         if (book.Width < 40 || book.Height < 80) { SetSearchFocus(false); if (click) Main.mouseLeftRelease = false; return true; }
@@ -247,13 +255,16 @@ public sealed class RecipeJournalUISystem : ModSystem
         int x = area.X + 12, y = area.Y + 10, w = area.Width - 24;
         // Keep navigation and save reachable even in the short stacked layout.
         var controls = RecipeJournalView.DetailControls(area);
-        if (History.Count > 0 && Button(sb, controls.Back, Text("Back"), click, cursor)) { Select(History.Pop(), false); return; }
+        if (History.Count > 0 && Button(sb, controls.Back, Text("Back"), click, cursor)) { GoBack(); return; }
         if (Button(sb, controls.Save, player.IsJournalFavorite(data.Id) ? Text("Saved") : Text("Save"), click, cursor, selected: player.IsJournalFavorite(data.Id))) player.ToggleJournalFavorite(data.Id);
         y = controls.Save.Bottom + 6;
         var children = RecipeJournalView.Children(data, _known);
         if (area.Bottom - y >= 26 && Button(sb, new Rectangle(x, y, w, 24), Text("Children", children.Length), click, cursor,
                 enabled: children.Length > 0))
         { _ingredientFilter = data.Id; _effectFilter = RecipeJournalView.EffectFilter.All; _favoritesOnly = false; _query = ""; _page = 0; SetSearchFocus(false); }
+        y += 30;
+        if (area.Bottom - y >= 26 && Button(sb, new Rectangle(x, y, w, 24), Text("Lineage"), click, cursor))
+        { OpenLineage(data); return; }
         y += 30;
         if (area.Height < 230)
         {
