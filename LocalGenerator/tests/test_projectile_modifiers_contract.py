@@ -25,7 +25,9 @@ PARAMS = {
     "set_projectile_homing_modifier": dict(rangeTiles=40, maxTurnRadiansPerSecond=(.1) * 60, requireLineOfSight=True, startDelaySeconds=(40) / 60, durationSeconds=(50) / 60),
     "attract_npcs_while_active": dict(rangeTiles=10, accelerationBlocksPerSecondSquared=(2) * 3600 / 16, falloff="linear", maxTargets=8, startDelaySeconds=(5) / 60, durationSeconds=(60) / 60),
     "set_projectile_visual_scale_curve": dict(startScale=.5, endScale=4, startDelaySeconds=(5) / 60, durationSeconds=(60) / 60, curve="exponential"),
-    "orient_whip_to_owner_gravity": {},
+    "set_projectile_lash_geometry": dict(clock="owner_animation", anchor="owner_center", reachBlocks=8,
+        segments=12, sweepStartRadians=-1, sweepEndRadians=1, bendRatio=.5,
+        useOwnerGravity=True, useOwnerWhipRangeMultiplier=False),
 }
 
 def call(doc, fn):
@@ -117,8 +119,8 @@ def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, ki
     ("set_projectile_homing_modifier", "duplicate"),
     ("attract_npcs_while_active", "receipt_deleted"),
     ("set_projectile_visual_scale_curve", "other_entity"),
-    ("orient_whip_to_owner_gravity", "item_target"),
-    ("orient_whip_to_owner_gravity", "unknown"),
+    ("set_projectile_lash_geometry", "item_target"),
+    ("set_projectile_lash_geometry", "unknown"),
 ])
 def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutation):
     doc = source(fn); compiled = compile_runtime_program(doc)
@@ -140,7 +142,7 @@ def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutatio
     else: compiled["runtimeProgram"]["entities"][0][member] = entity(compiled, fn).pop(member)
     assert not validate_runtime_wire(compiled)["ok"]
 
-@pytest.mark.parametrize("fn", PROJECTILE_MODIFIER_COMPONENTS)
+@pytest.mark.parametrize("fn", [fn for fn in PARAMS if fn != "set_projectile_lash_geometry"])
 def test_frozen_repair_changes_only_invalid_phase_leaf(fn):
     doc = source(fn)
     call(doc, fn)["params"]['durationSeconds'] = (0) / 60
@@ -156,14 +158,16 @@ def test_frozen_repair_changes_only_invalid_phase_leaf(fn):
 def test_simultaneous_and_delayed_modifiers_are_independent_of_the_movement_slot():
     doc = source("set_projectile_turn_modifier")
     target = call(doc, "set_projectile_turn_modifier")["target"]
-    for index, fn in enumerate(list(PROJECTILE_MODIFIER_COMPONENTS)[1:]):
+    for index, fn in enumerate([fn for fn in PARAMS if fn != "set_projectile_lash_geometry"][1:]):
         doc["runtimeProgram"]["calls"].append(dict(id=f"modifier_{index}", fn=fn, target=target, params=deepcopy(PARAMS[fn])))
     doc["runtimeProgram"]["calls"].append(dict(id="gameplay_curve", fn="set_projectile_hitbox_curve", target=target,
         params=dict(startScale=1, endScale=2, startDelaySeconds=0, durationSeconds=80 / 60, curve="linear", mirrorToSprite=False)))
     compiled = compile_runtime_program(doc)
     final = entity(compiled, "set_projectile_turn_modifier")
     assert final["movement"]["code"] == 0
-    for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items(): assert final[member] == projected_params(fn, PARAMS[fn])
+    for fn in PARAMS:
+        if fn != "set_projectile_lash_geometry":
+            assert final[PROJECTILE_MODIFIER_COMPONENTS[fn]] == projected_params(fn, PARAMS[fn])
     assert final["hitboxCurve"]["endScale"] == 2
     call(doc, "set_projectile_hitbox_curve")["params"]["mirrorToSprite"] = True
     errors = validate_runtime_program(doc)["errors"]
@@ -185,17 +189,17 @@ def test_npc_attraction_alone_is_meaningful_on_a_field_without_drag():
     assert "movement" not in final and "damage" not in final
     assert final["npcAttraction"] == projected_params("attract_npcs_while_active", PARAMS["attract_npcs_while_active"])
 
-def test_whip_marker_requires_executed_whip_geometry():
-    doc = source("orient_whip_to_owner_gravity")
-    motion = call(doc, "move_whip_lash")
-    motion.update(fn="move_straight", params={})
+def test_lash_gravity_is_explicit_and_requires_its_real_axis_dependency():
+    doc = source("set_projectile_lash_geometry")
+    compiled = compile_runtime_program(doc)
+    assert entity(compiled, "set_projectile_lash_geometry")["lashGeometry"]["useOwnerGravity"] is True
+    doc["runtimeProgram"]["calls"].remove(call(doc, "set_projectile_aim"))
     assert not validate_runtime_program(doc)["ok"]
-    compiled = compile_runtime_program(source("orient_whip_to_owner_gravity"))
-    entity(compiled, "orient_whip_to_owner_gravity")["movement"].update(name="move_straight", code=0, params={})
     compiled.pop("runtimeContract")
+    entity(compiled, "set_projectile_lash_geometry").pop("aim")
     assert not validate_runtime_wire(compiled)["ok"]
 
-@pytest.mark.parametrize("driver", ["channel_beam", "move_whip_lash", "move_expanding_wave"])
+@pytest.mark.parametrize("driver", ["set_projectile_beam_geometry", "set_projectile_lash_geometry", "add_projectile_visual_scale"])
 def test_visual_curve_cannot_be_ignored_by_line_geometry_or_overwritten_by_another_scale_owner(driver):
     doc = build_capability_witness(driver)
     target = call(doc, driver)["target"]

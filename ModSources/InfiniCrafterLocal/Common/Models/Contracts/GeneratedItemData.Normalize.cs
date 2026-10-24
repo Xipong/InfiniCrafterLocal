@@ -82,7 +82,8 @@ public sealed partial class GeneratedItemData
         RuntimeProgram.NormalizeAndValidate();
         foreach (RuntimeEntitySpec entity in RuntimeProgram.Entities)
         {
-            if (entity.Movement.Code != 20 || entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon")) continue;
+            bool frontHandSprite = entity.Movement.Code == 20 || entity.Attachment?.Anchor == "front_hand";
+            if (!frontHandSprite || entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon")) continue;
             SpritePresentationSelection selected = SpritePresentation.Entity(this, entity);
             if (selected.Grip is null || !selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue)
                 throw new InvalidDataException("move_front_hand selected sprite owner requires exact grip/renderSizePx/forwardAngleDegrees");
@@ -308,8 +309,10 @@ public sealed partial class GeneratedItemData
                 throw new InvalidDataException("item libraryParticle periodic requires startTick=0");
             if (slot.Path is { } path) {
                 if (!entity.IsProjectileEntity) throw new InvalidDataException("texturedPath is projectile-only");
-                if (path.Source == "beam" && entity.Controller.Code != RuntimeControllerCode.ChannelBeam
-                    || path.Source == "whip" && (entity.Movement.Code != 18 || entity.Controller.Code == RuntimeControllerCode.ChannelBeam)) throw new InvalidDataException("VFX path lacks exact collision geometry producer");
+                if (path.Source == "beam" && entity.Controller.Code != RuntimeControllerCode.ChannelBeam && entity.BeamGeometry is null
+                    || path.Source == "whip" && (entity.LashGeometry is null && entity.Movement.Code != 18
+                        || entity.Controller.Code == RuntimeControllerCode.ChannelBeam || entity.BeamGeometry is not null))
+                    throw new InvalidDataException("VFX path lacks exact collision geometry producer");
             }
             bool spriteTexture = VfxRendererRegistry.ConsumesSpriteTexture(VfxRendererRegistry.Resolve(slot));
             string? selected = texture?.Source ?? (spriteTexture ? slot.TextureRole : null);

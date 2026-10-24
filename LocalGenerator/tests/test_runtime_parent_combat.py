@@ -28,12 +28,23 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
 
     document = build_runtime_fixture("held_and_deployed")
     calls = document["runtimeProgram"]["calls"]
-    held = next(row for row in calls if row.get("target") == "held_lantern_pike" and row["fn"] == "move_forward_then_retract")
-    held.update(fn="channel_beam", params={
-        "rangeTiles": 20, "widthPx": 12, "warmupSeconds": 0.2, "manaPayment": "each_use_time",
-        "initialDamageMultiplier": 0.35, "initialWidthMultiplier": 0.22,
-        "damageStartProgress": 0.08, "raycastTiles": True,
-    })
+    # Author a sustained beam explicitly, retaining the fixture's aim/attachment
+    # and non-motion combat lanes. A reach curve is not a beam controller.
+    reach = _call(document, "set_projectile_reach_curve")
+    assert reach["target"] == "held_lantern_pike"
+    calls.remove(reach)
+    _call(document, "set_projectile_rotation")["params"] = {"mode": "axis", "offsetRadians": 0}
+    _call(document, "set_projectile_owner_control")["params"].update(
+        requireHeldItem=True, requireChannel=True, animation="keep_alive", lifetime="keep_alive",
+    )
+    calls.extend([
+        {"id": "held_beam_geometry", "fn": "set_projectile_beam_geometry", "target": "held_lantern_pike",
+         "params": {"lengthBlocks": 20, "widthBlocks": 0.75, "raycastTiles": True}},
+        {"id": "held_beam_ramp", "fn": "set_projectile_beam_ramp", "target": "held_lantern_pike",
+         "params": {"warmupSeconds": 0.2, "initialDamageMultiplier": 0.35,
+                    "initialWidthMultiplier": 0.22, "damageStartProgress": 0.08}},
+        {"id": "held_beam_mana", "fn": "sustain_projectile_mana", "target": "held_lantern_pike"},
+    ])
     _call(document, "configure_item_use")["params"]["channel"] = True
     _call(document, "target_and_fire")["params"].update(
         damageBasis=damage_basis, knockbackBasis=knockback_basis, damageMultiplier=multiplier,
@@ -68,7 +79,9 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
     packet = json.loads(user)
     names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     source = _accepted_main_combat_composition(damage_basis, knockback_basis, multiplier)
-    assert {"target_and_fire", "configure_weapon_ammo", "set_projectile_sentry", "set_descendant_concurrency", "channel_beam"} <= names
+    assert {"target_and_fire", "configure_weapon_ammo", "set_projectile_sentry", "set_descendant_concurrency",
+            "set_projectile_beam_geometry", "set_projectile_beam_ramp", "sustain_projectile_mana"} <= names
+    assert "channel_beam" not in names
     before = deepcopy(source)
     restored = provider_roundtrip(source, request["response_format"])
     wire = compile_runtime_program(restored)
@@ -84,8 +97,16 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
             "damageBasis": damage_basis, "knockbackBasis": knockback_basis, "damageMultiplier": multiplier,
         }
     beam = next(entity for entity in wire["runtimeProgram"]["entities"] if entity["id"] == "held_lantern_pike")
-    assert beam["controller"]["params"]["manaPayment"] == "each_use_time"
-    assert beam["controller"]["params"]["raycastTiles"] is True
+    assert beam["manaSustain"] == {"cadence": "held_item_use_time"}
+    assert beam["beamGeometry"] == {"lengthPx": 320, "widthPx": 12, "raycastTiles": True}
+    assert beam["beamRamp"] == {"warmupTicks": 12, "initialDamageMultiplier": 0.35,
+                                "initialWidthMultiplier": 0.22, "damageStartProgress": 0.08}
+    assert beam["ownerControl"]["requireHeldItem"] is True
+    assert beam["ownerControl"]["requireChannel"] is True
+    assert beam["ownerControl"]["lifetime"] == "keep_alive"
+    assert beam["aim"]["source"] == "cursor" and beam["attachment"]["anchor"] == "owner_mounted"
+    assert "controller" not in beam and "reach" not in beam
+    assert wire["runtimeProgram"]["itemUse"]["channel"] is True
     rows = wire["runtimeContract"]["finalWireReceipts"]
     assert audit_compiler_receipts(rows, final_document=wire)["ok"]
     assert source == before

@@ -1,4 +1,90 @@
 {
+  "$defs": {
+    "motionWindow": {
+      "description": "Phase gate: phase alone covers its whole phase. charging/released and since_release require accumulate_projectile_charge on this entity; returning and since_return require set_projectile_return_trigger. Seek/arrival do not produce these latches. Optional timing is all-or-none; relative clocks are inactive before their latch and sample start-of-step active age.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Whole selected phase, without invented timing.",
+          "properties": {
+            "phase": {
+              "description": "Native latch phase; released may overlap returning.",
+              "enum": [
+                "always",
+                "charging",
+                "released",
+                "outbound",
+                "returning"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "phase"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Selected phase intersected with a finite relative-clock interval.",
+          "properties": {
+            "clock": {
+              "description": "Native finite timestamp clock.",
+              "enum": [
+                "active",
+                "since_release",
+                "since_return"
+              ],
+              "type": "string"
+            },
+            "durationSeconds": {
+              "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Finite active duration.",
+              "maximum": 360.0,
+              "minimum": 0.008333333333333333,
+              "type": "number",
+              "x-infini-authorProjection": {
+                "nonzeroMustRemainNonzero": true,
+                "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+              },
+              "x-infini-semanticType": "seconds",
+              "x-infini-units": "seconds"
+            },
+            "phase": {
+              "description": "Native latch phase; released may overlap returning.",
+              "enum": [
+                "always",
+                "charging",
+                "released",
+                "outbound",
+                "returning"
+              ],
+              "type": "string"
+            },
+            "startDelaySeconds": {
+              "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay after selected clock starts.",
+              "maximum": 360.0,
+              "minimum": 0,
+              "type": "number",
+              "x-infini-authorProjection": {
+                "nonzeroMustRemainNonzero": true,
+                "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+              },
+              "x-infini-semanticType": "seconds",
+              "x-infini-units": "seconds"
+            }
+          },
+          "required": [
+            "phase",
+            "clock",
+            "startDelaySeconds",
+            "durationSeconds"
+          ],
+          "type": "object"
+        }
+      ],
+      "x-infini-semanticType": "bounded_text"
+    }
+  },
   "$id": "https://infinicrafter.local/contracts/runtime_program_author.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
@@ -1007,6 +1093,2515 @@
     "calls": {
       "items": {
         "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_owner_control"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "animation": {
+                    "default": "none",
+                    "description": "Explicit owner animation policy; none adds no override.",
+                    "enum": [
+                      "none",
+                      "keep_alive",
+                      "match_lifetime"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "none",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "claimHeldProjectile": {
+                    "default": false,
+                    "description": "Explicitly claim native held projectile.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "lifetime": {
+                    "default": "authored",
+                    "description": "Explicit projectile liveness policy; authored retains ordinary lifetime.",
+                    "enum": [
+                      "authored",
+                      "keep_alive"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "authored",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "requireChannel": {
+                    "default": false,
+                    "description": "Cancel if owner stops channeling.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "requireHeldItem": {
+                    "default": false,
+                    "description": "Cancel if owner no longer holds the source item.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "requireItemAnimation": {
+                    "default": false,
+                    "description": "Cancel if owner animation ends.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "accumulate_projectile_charge"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "autoReleaseAfterActiveSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Optional automatic release age.",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Time to full charge.",
+                    "maximum": 10.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  }
+                },
+                "required": [
+                  "durationSeconds"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "apply_projectile_charge_release"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "damageMultiplier": {
+                    "description": "Full-charge damage multiplier, interpolated from one.",
+                    "maximum": 4,
+                    "minimum": 1,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "knockbackMultiplier": {
+                    "description": "Full-charge knockback multiplier, interpolated from one.",
+                    "maximum": 4,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "launchSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/second. Native consumer: Nonnegative explicit base launch speed.",
+                    "maximum": 1800.0,
+                    "minimum": 0.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.0,
+                          300.0
+                        ],
+                        [
+                          0.0,
+                          600.0
+                        ],
+                        [
+                          0.0,
+                          900.0
+                        ],
+                        [
+                          0.0,
+                          1200.0
+                        ],
+                        [
+                          0.0,
+                          1500.0
+                        ],
+                        [
+                          0.0,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/second",
+                    "x-infini-units": "blocks/second"
+                  },
+                  "pauseLifetimeWhileCharging": {
+                    "description": "Whether charging pauses the authored projectile lifetime.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "speedMultiplier": {
+                    "description": "Full-charge speed multiplier, interpolated from one.",
+                    "maximum": 4,
+                    "minimum": 0.1,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  }
+                },
+                "required": [
+                  "damageMultiplier",
+                  "knockbackMultiplier",
+                  "speedMultiplier",
+                  "launchSpeedBlocksPerSecond",
+                  "pauseLifetimeWhileCharging"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "gate_projectile_contact"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "enabled": {
+                    "description": "Whether contact damage is eligible within the selected window.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "window"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_beam_geometry"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "lengthBlocks": {
+                    "description": "Author units: blocks. Native consumer: Positive line length.",
+                    "maximum": 120.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "raycastTiles": {
+                    "description": "Clip shared line against tiles; not projectile tile-collision policy.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "tiles"
+                  },
+                  "widthBlocks": {
+                    "description": "Author units: blocks. Native consumer: Positive collision line width.",
+                    "maximum": 8.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  }
+                },
+                "required": [
+                  "lengthBlocks",
+                  "widthBlocks",
+                  "raycastTiles"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_beam_ramp"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "damageStartProgress": {
+                    "description": "Inclusive damage eligibility threshold.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "initialDamageMultiplier": {
+                    "description": "Initial beam damage multiplier.",
+                    "maximum": 1,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "initialWidthMultiplier": {
+                    "description": "Initial beam width multiplier.",
+                    "maximum": 1,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "warmupSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Warmup; zero immediately reaches full progress.",
+                    "maximum": 10.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  }
+                },
+                "required": [
+                  "warmupSeconds",
+                  "initialWidthMultiplier",
+                  "initialDamageMultiplier",
+                  "damageStartProgress"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "sustain_projectile_mana"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {},
+                "required": [],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_lash_geometry"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "anchor": {
+                    "description": "Explicit native curve origin.",
+                    "enum": [
+                      "owner_center",
+                      "owner_mounted",
+                      "front_hand"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "bendRatio": {
+                    "description": "Signed bend relative to authored reach.",
+                    "maximum": 4,
+                    "minimum": -4,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "unitless"
+                  },
+                  "clock": {
+                    "description": "Explicit lash progress clock.",
+                    "enum": [
+                      "owner_animation",
+                      "active"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Required only for active clock.",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "reachBlocks": {
+                    "description": "Author units: blocks. Native consumer: Positive lash reach.",
+                    "maximum": 60.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "segments": {
+                    "description": "Bounded polyline collision segments.",
+                    "maximum": 48,
+                    "minimum": 3,
+                    "type": "integer",
+                    "x-infini-semanticType": "collision_segment_count"
+                  },
+                  "sweepEndRadians": {
+                    "description": "Signed final sweep angle.",
+                    "maximum": 100,
+                    "minimum": -100,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "sweepStartRadians": {
+                    "description": "Signed initial sweep angle.",
+                    "maximum": 100,
+                    "minimum": -100,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "useOwnerGravity": {
+                    "description": "Apply owner gravity to sweep orientation.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "useOwnerWhipRangeMultiplier": {
+                    "description": "Apply native owner whip range multiplier.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  }
+                },
+                "required": [
+                  "clock",
+                  "anchor",
+                  "reachBlocks",
+                  "segments",
+                  "sweepStartRadians",
+                  "sweepEndRadians",
+                  "bendRatio",
+                  "useOwnerGravity",
+                  "useOwnerWhipRangeMultiplier"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_aim"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "source": {
+                    "description": "Explicit axis source.",
+                    "enum": [
+                      "initial",
+                      "cursor",
+                      "facing",
+                      "velocity"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "turnOwner": {
+                    "default": false,
+                    "description": "Explicitly turn owner toward axis; omission adds no turning side effect.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  }
+                },
+                "required": [
+                  "source"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "attach_projectile"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "anchor": {
+                    "description": "Native anchor; reading front hand does not claim its pose writer.",
+                    "enum": [
+                      "owner_center",
+                      "owner_mounted",
+                      "front_hand"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "axisOffsetBlocks": {
+                    "default": 0,
+                    "description": "Author units: blocks. Native consumer: Signed axial offset.",
+                    "maximum": 256.0,
+                    "minimum": -256.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "normalOffsetBlocks": {
+                    "default": 0,
+                    "description": "Author units: blocks. Native consumer: Signed normal offset.",
+                    "maximum": 256.0,
+                    "minimum": -256.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "anchor"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_front_arm_pose"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Pose cycle duration.",
+                    "maximum": 4.0,
+                    "minimum": 0.025,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "endStretch": {
+                    "description": "Ending native stretch; independent of start.",
+                    "enum": [
+                      "none",
+                      "quarter",
+                      "three_quarters",
+                      "full"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "peakProgress": {
+                    "description": "Strictly between zero and one: asymmetric peak time.",
+                    "exclusiveMaximum": 1,
+                    "exclusiveMinimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "peakStretch": {
+                    "description": "Peak native stretch; may be smaller than endpoints.",
+                    "enum": [
+                      "none",
+                      "quarter",
+                      "three_quarters",
+                      "full"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "startStretch": {
+                    "description": "Starting native stretch.",
+                    "enum": [
+                      "none",
+                      "quarter",
+                      "three_quarters",
+                      "full"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "durationSeconds",
+                  "startStretch",
+                  "peakStretch",
+                  "endStretch",
+                  "peakProgress"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_reach_curve"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "durationSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Reach cycle duration.",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "endOffsetBlocks": {
+                    "description": "Author units: blocks. Native consumer: Signed final axial displacement.",
+                    "maximum": 256.0,
+                    "minimum": -256.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "peakOffsetBlocks": {
+                    "description": "Author units: blocks. Native consumer: Signed peak axial displacement.",
+                    "maximum": 256.0,
+                    "minimum": -256.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "peakProgress": {
+                    "description": "Strictly between zero and one: peak time.",
+                    "exclusiveMaximum": 1,
+                    "exclusiveMinimum": 0,
+                    "type": "number",
+                    "x-infini-consumerConstraint": {
+                      "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement.",
+                      "rule": "finite_double_no_normalization",
+                      "storage": "float64"
+                    },
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "startOffsetBlocks": {
+                    "description": "Author units: blocks. Native consumer: Signed initial axial displacement.",
+                    "maximum": 256.0,
+                    "minimum": -256.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "durationSeconds",
+                  "startOffsetBlocks",
+                  "peakOffsetBlocks",
+                  "endOffsetBlocks",
+                  "peakProgress"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "orbit_projectile"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "anchor": {
+                    "description": "Native orbit anchor.",
+                    "enum": [
+                      "owner_center",
+                      "owner_mounted",
+                      "front_hand"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "identityPhaseRadians": {
+                    "description": "Explicit phase per projectile identity; zero disables identity spreading.",
+                    "maximum": 100,
+                    "minimum": -100,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "phaseRadians": {
+                    "description": "Explicit base phase.",
+                    "maximum": 100,
+                    "minimum": -100,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "radiansPerSecond": {
+                    "description": "Author units: radians/second. Native consumer: Signed angular rate; zero holds phase.",
+                    "maximum": 2160.0,
+                    "minimum": -2160.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -360.0,
+                          360.0
+                        ],
+                        [
+                          -720.0,
+                          720.0
+                        ],
+                        [
+                          -1080.0,
+                          1080.0
+                        ],
+                        [
+                          -1440.0,
+                          1440.0
+                        ],
+                        [
+                          -1800.0,
+                          1800.0
+                        ],
+                        [
+                          -2160.0,
+                          2160.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians/second",
+                    "x-infini-units": "radians/second"
+                  },
+                  "radiusBlocks": {
+                    "description": "Author units: blocks. Native consumer: Positive orbit radius.",
+                    "maximum": 120.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "anchor",
+                  "radiusBlocks",
+                  "radiansPerSecond",
+                  "phaseRadians",
+                  "identityPhaseRadians"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "seek_projectile"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "cursorLeashBlocks": {
+                    "description": "Author units: blocks. Native consumer: Optional cursor leash about owner.",
+                    "maximum": 120.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "limitSpeedToDistance": {
+                    "description": "Cap desired speed to remaining distance before interpolation.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "maxSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/second. Native consumer: Positive desired speed.",
+                    "maximum": 1800.0,
+                    "minimum": 0.00375,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.00375,
+                          300.0
+                        ],
+                        [
+                          0.0075,
+                          600.0
+                        ],
+                        [
+                          0.01125,
+                          900.0
+                        ],
+                        [
+                          0.015,
+                          1200.0
+                        ],
+                        [
+                          0.01875,
+                          1500.0
+                        ],
+                        [
+                          0.0225,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/second",
+                    "x-infini-units": "blocks/second"
+                  },
+                  "minimumSpeedBlocksPerSecond": {
+                    "description": "Author units: blocks/second. Native consumer: Optional nonnegative desired-speed floor.",
+                    "maximum": 1800.0,
+                    "minimum": 0.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.0,
+                          300.0
+                        ],
+                        [
+                          0.0,
+                          600.0
+                        ],
+                        [
+                          0.0,
+                          900.0
+                        ],
+                        [
+                          0.0,
+                          1200.0
+                        ],
+                        [
+                          0.0,
+                          1500.0
+                        ],
+                        [
+                          0.0,
+                          1800.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/second",
+                    "x-infini-units": "blocks/second"
+                  },
+                  "requireLineOfSight": {
+                    "description": "Required only for nearest NPC selection.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "searchRangeTiles": {
+                    "description": "Required only for nearest NPC selection.",
+                    "maximum": 120,
+                    "minimum": 0.001,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "blocks"
+                  },
+                  "target": {
+                    "description": "Explicit destination; nearest_npc requires range and line-of-sight choice.",
+                    "enum": [
+                      "owner_center",
+                      "owner_mounted",
+                      "cursor",
+                      "nearest_npc"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "velocityLerpPerUpdate": {
+                    "description": "Velocity lerp factor; zero preserves current velocity.",
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "unitless"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "target",
+                  "maxSpeedBlocksPerSecond",
+                  "velocityLerpPerUpdate",
+                  "limitSpeedToDistance"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_return_trigger"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "afterSeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Optional active time trigger.",
+                    "maximum": 360.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "disableTileCollisionOnReturn": {
+                    "default": false,
+                    "description": "Explicit return tile-collision gameplay policy; omission does not disable collision.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "onOwnerRelease": {
+                    "default": false,
+                    "description": "Latch when owner releases channel; active use requires explicit channel=true.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "onTileCollision": {
+                    "default": false,
+                    "description": "Latch on an actual tile collision.",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "ownerDistanceBlocks": {
+                    "description": "Author units: blocks. Native consumer: Optional positive owner-distance trigger.",
+                    "maximum": 2000.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  }
+                },
+                "required": [],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_arrival"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "radiusBlocks": {
+                    "description": "Author units: blocks. Native consumer: Positive pre-integration arrival radius.",
+                    "maximum": 32.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "target": {
+                    "description": "Arrival anchor.",
+                    "enum": [
+                      "owner_center",
+                      "owner_mounted"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "target",
+                  "radiusBlocks"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_proximity_action"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "action": {
+                    "description": "Explicit lifecycle action.",
+                    "enum": [
+                      "kill",
+                      "expire_then_kill"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "requireLineOfSight": {
+                    "description": "Require a clear NPC line of sight.",
+                    "type": "boolean",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "searchRangeTiles": {
+                    "description": "Positive NPC search radius.",
+                    "maximum": 120,
+                    "minimum": 0.001,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "tiles",
+                    "x-infini-units": "blocks"
+                  },
+                  "triggerRadiusBlocks": {
+                    "description": "Author units: blocks. Native consumer: Positive proximity trigger radius.",
+                    "maximum": 32.0,
+                    "minimum": 6.25e-05,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks",
+                    "x-infini-units": "blocks"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "searchRangeTiles",
+                  "triggerRadiusBlocks",
+                  "requireLineOfSight",
+                  "action"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "accelerate_projectile_vertical"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "accelerationYBlocksPerSecondSquared": {
+                    "description": "Author units: blocks/second^2. Native consumer: Positive down, negative up; zero adds no acceleration.",
+                    "maximum": 16200.0,
+                    "minimum": -16200.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -450.0,
+                          450.0
+                        ],
+                        [
+                          -1800.0,
+                          1800.0
+                        ],
+                        [
+                          -4050.0,
+                          4050.0
+                        ],
+                        [
+                          -7200.0,
+                          7200.0
+                        ],
+                        [
+                          -11250.0,
+                          11250.0
+                        ],
+                        [
+                          -16200.0,
+                          16200.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "blocks/second^2",
+                    "x-infini-units": "blocks/second^2"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "accelerationYBlocksPerSecondSquared"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "multiply_projectile_velocity"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "multiplierPerUpdate": {
+                    "description": "Per projectile update multiplier, without a speed cap.",
+                    "maximum": 1.2,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "unitless"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "multiplierPerUpdate"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_rotation"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "mode": {
+                    "description": "Axis alignment, velocity alignment or independent spin.",
+                    "enum": [
+                      "axis",
+                      "velocity",
+                      "spin"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "offsetRadians": {
+                    "default": 0,
+                    "description": "Signed rotation offset.",
+                    "maximum": 100,
+                    "minimum": -100,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "radiansPerSecond": {
+                    "default": 0,
+                    "description": "Author units: radians/second. Native consumer: Signed spin rate; required for spin, exact zero for other modes.",
+                    "maximum": 2160.0,
+                    "minimum": -2160.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -360.0,
+                          360.0
+                        ],
+                        [
+                          -720.0,
+                          720.0
+                        ],
+                        [
+                          -1080.0,
+                          1080.0
+                        ],
+                        [
+                          -1440.0,
+                          1440.0
+                        ],
+                        [
+                          -1800.0,
+                          1800.0
+                        ],
+                        [
+                          -2160.0,
+                          2160.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": 0,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-neutral": 0,
+                    "x-infini-semanticType": "radians/second",
+                    "x-infini-units": "radians/second"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "oscillate_projectile_velocity"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "frequencyRadiansPerSecond": {
+                    "description": "Author units: radians/second. Native consumer: Nonnegative sine phase rate.",
+                    "maximum": 2160.0,
+                    "minimum": 0.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          0.0,
+                          360.0
+                        ],
+                        [
+                          0.0,
+                          720.0
+                        ],
+                        [
+                          0.0,
+                          1080.0
+                        ],
+                        [
+                          0.0,
+                          1440.0
+                        ],
+                        [
+                          0.0,
+                          1800.0
+                        ],
+                        [
+                          0.0,
+                          2160.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians/second",
+                    "x-infini-units": "radians/second"
+                  },
+                  "law": {
+                    "description": "Select one explicit sine law and its world-unit amplitude. The selected object uniquely lowers the native law discriminator.",
+                    "oneOf": [
+                      {
+                        "additionalProperties": false,
+                        "description": "Angular sine: rotate by amplitude*sin(age*frequency+phase).",
+                        "properties": {
+                          "angular_sine": {
+                            "additionalProperties": false,
+                            "description": "Angular amplitude in radians per world second.",
+                            "properties": {
+                              "amplitudeRadiansPerSecond": {
+                                "description": "Author units: radians/second. Native consumer: Nonnegative angular velocity amplitude.",
+                                "maximum": 36000.0,
+                                "minimum": 0.0,
+                                "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      6000.0
+                                    ],
+                                    [
+                                      0.0,
+                                      12000.0
+                                    ],
+                                    [
+                                      0.0,
+                                      18000.0
+                                    ],
+                                    [
+                                      0.0,
+                                      24000.0
+                                    ],
+                                    [
+                                      0.0,
+                                      30000.0
+                                    ],
+                                    [
+                                      0.0,
+                                      36000.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
+                                "x-infini-consumerConstraint": {
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": null,
+                                  "rule": "nonneutral_must_remain_nonneutral",
+                                  "storage": "float32"
+                                },
+                                "x-infini-semanticType": "radians/second",
+                                "x-infini-units": "radians/second"
+                              }
+                            },
+                            "required": [
+                              "amplitudeRadiansPerSecond"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "angular_sine"
+                        ],
+                        "type": "object"
+                      },
+                      {
+                        "additionalProperties": false,
+                        "description": "Lateral sine: add perpendicular velocity before preserving original speed.",
+                        "properties": {
+                          "lateral_velocity_sine": {
+                            "additionalProperties": false,
+                            "description": "Lateral amplitude in blocks per world second.",
+                            "properties": {
+                              "amplitudeBlocksPerSecond": {
+                                "description": "Author units: blocks/second. Native consumer: Nonnegative lateral velocity amplitude.",
+                                "maximum": 2250.0,
+                                "minimum": 0.0,
+                                "type": "number",
+                                "x-infini-authorProjection": {
+                                  "boundsAtUpdatesPerTick1To6": [
+                                    [
+                                      0.0,
+                                      375.0
+                                    ],
+                                    [
+                                      0.0,
+                                      750.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1125.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1500.0
+                                    ],
+                                    [
+                                      0.0,
+                                      1875.0
+                                    ],
+                                    [
+                                      0.0,
+                                      2250.0
+                                    ]
+                                  ],
+                                  "nonzeroMustRemainNonzero": true,
+                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                                },
+                                "x-infini-consumerConstraint": {
+                                  "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                                  "neutral": null,
+                                  "rule": "nonneutral_must_remain_nonneutral",
+                                  "storage": "float32"
+                                },
+                                "x-infini-semanticType": "blocks/second",
+                                "x-infini-units": "blocks/second"
+                              }
+                            },
+                            "required": [
+                              "amplitudeBlocksPerSecond"
+                            ],
+                            "type": "object"
+                          }
+                        },
+                        "required": [
+                          "lateral_velocity_sine"
+                        ],
+                        "type": "object"
+                      }
+                    ],
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "phaseRadians": {
+                    "description": "Explicit starting sine phase.",
+                    "maximum": 100,
+                    "minimum": -100,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "radians",
+                    "x-infini-units": "radians"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "law",
+                  "frequencyRadiansPerSecond",
+                  "phaseRadians"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "add_projectile_visual_scale"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "deltaPerSecond": {
+                    "description": "Author units: scale/second. Native consumer: Signed additive scale rate.",
+                    "maximum": 360.0,
+                    "minimum": -360.0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "boundsAtUpdatesPerTick1To6": [
+                        [
+                          -60.0,
+                          60.0
+                        ],
+                        [
+                          -120.0,
+                          120.0
+                        ],
+                        [
+                          -180.0,
+                          180.0
+                        ],
+                        [
+                          -240.0,
+                          240.0
+                        ],
+                        [
+                          -300.0,
+                          300.0
+                        ],
+                        [
+                          -360.0,
+                          360.0
+                        ]
+                      ],
+                      "nonzeroMustRemainNonzero": true,
+                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "scale/second",
+                    "x-infini-units": "scale/second"
+                  },
+                  "maxScale": {
+                    "description": "Positive visual scale ceiling.",
+                    "maximum": 20,
+                    "minimum": 0.01,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true
+                    },
+                    "x-infini-consumerConstraint": {
+                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                      "neutral": null,
+                      "rule": "nonneutral_must_remain_nonneutral",
+                      "storage": "float32"
+                    },
+                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-units": "unitless"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "deltaPerSecond",
+                  "maxScale"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "set_projectile_opacity"
+              },
+              "id": {
+                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "alpha": {
+                    "description": "Native alpha: 0 opaque, 255 transparent.",
+                    "maximum": 255,
+                    "minimum": 0,
+                    "type": "integer",
+                    "x-infini-semanticType": "unitless_scalar"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
+                  }
+                },
+                "required": [
+                  "alpha"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
           {
             "additionalProperties": false,
             "properties": {
@@ -3999,7 +6594,7 @@
                   },
                   "spreadRadians": {
                     "default": 0,
-                    "description": "Total angular spread. May be omitted only for child_projectile, whose producers override it",
+                    "description": "Total angular spread. May be omitted for explicit count=1 (inactive fan), or child_projectile whose producers override it; present valid values are preserved",
                     "maximum": 6.283185307179586,
                     "minimum": 0,
                     "type": "number",
@@ -5095,6 +7690,9 @@
                     "x-infini-neutral": 0.0,
                     "x-infini-semanticType": "radians/s",
                     "x-infini-units": "radians/s"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
                   }
                 },
                 "required": [
@@ -5113,7 +7711,11 @@
                   "graphEdge": false,
                   "namespace": "entity",
                   "targetKinds": [
+                    "owner_attached_projectile",
                     "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
                     "child_projectile"
                   ]
                 }
@@ -5223,6 +7825,9 @@
                     },
                     "x-infini-semanticType": "seconds",
                     "x-infini-units": "seconds"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
                   }
                 },
                 "required": [
@@ -5242,7 +7847,11 @@
                   "graphEdge": false,
                   "namespace": "entity",
                   "targetKinds": [
+                    "owner_attached_projectile",
                     "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
                     "child_projectile"
                   ]
                 }
@@ -5356,6 +7965,9 @@
                     },
                     "x-infini-semanticType": "seconds",
                     "x-infini-units": "seconds"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
                   }
                 },
                 "required": [
@@ -5376,7 +7988,11 @@
                   "graphEdge": false,
                   "namespace": "entity",
                   "targetKinds": [
+                    "owner_attached_projectile",
                     "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
                     "child_projectile"
                   ]
                 }
@@ -5501,6 +8117,9 @@
                     },
                     "x-infini-semanticType": "seconds",
                     "x-infini-units": "seconds"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
                   }
                 },
                 "required": [
@@ -5614,6 +8233,9 @@
                     },
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "dimensionless multiplier"
+                  },
+                  "window": {
+                    "$ref": "#/$defs/motionWindow"
                   }
                 },
                 "required": [
@@ -5649,44 +8271,6 @@
               "fn",
               "target",
               "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "orient_whip_to_owner_gravity"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {},
-                "required": [],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target"
             ],
             "type": "object"
           },
@@ -5866,1829 +8450,6 @@
               "id",
               "fn",
               "target"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_slow_homing"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "homingStrength": {
-                    "description": "Per movement-update linear interpolation fraction toward target velocity",
-                    "maximum": 1,
-                    "minimum": 0.001,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: velocity lerp fraction"
-                  },
-                  "rangeTiles": {
-                    "description": "Target search radius",
-                    "maximum": 120,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "homingStrength"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_gravity_arc"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "accelerationYBlocksPerSecondSquared": {
-                    "description": "Author units: blocks/s². Native consumer: Signed world vertical acceleration after activation; Terraria Y increases downward. Lowered over the explicitly authored target clock. Explicit zero adds no acceleration; missing is invalid. Not displacement or a speed cap",
-                    "maximum": 16200.0,
-                    "minimum": -16200.0,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          -450.0,
-                          450.0
-                        ],
-                        [
-                          -1800.0,
-                          1800.0
-                        ],
-                        [
-                          -4050.0,
-                          4050.0
-                        ],
-                        [
-                          -7200.0,
-                          7200.0
-                        ],
-                        [
-                          -11250.0,
-                          11250.0
-                        ],
-                        [
-                          -16200.0,
-                          16200.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": 0.0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-neutral": 0.0,
-                    "x-infini-semanticType": "blocks/s²",
-                    "x-infini-units": "blocks/s²"
-                  }
-                },
-                "required": [
-                  "accelerationYBlocksPerSecondSquared"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_drift"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "velocityRetention": {
-                    "description": "Multiply velocity each projectile update (updatesPerTick times per world tick); 1 preserves speed, below 1 slows, above 1 accelerates; not necessarily retention per 1/60 s",
-                    "maximum": 1.05,
-                    "minimum": 0.8,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: velocity multiplier per update"
-                  }
-                },
-                "required": [
-                  "velocityRetention"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_orbit"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "radiusTiles": {
-                    "description": "Fixed orbit radius around the owner",
-                    "maximum": 80,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  },
-                  "turnRadiansPerSecond": {
-                    "description": "Author units: radians/s. Native consumer: Signed orbit angular increment; positive clockwise, negative counterclockwise, zero fixed-angle owner following",
-                    "maximum": 180.0,
-                    "minimum": -180.0,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          -30.0,
-                          30.0
-                        ],
-                        [
-                          -60.0,
-                          60.0
-                        ],
-                        [
-                          -90.0,
-                          90.0
-                        ],
-                        [
-                          -120.0,
-                          120.0
-                        ],
-                        [
-                          -150.0,
-                          150.0
-                        ],
-                        [
-                          -180.0,
-                          180.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "radians/s",
-                    "x-infini-units": "radians/s"
-                  }
-                },
-                "required": [
-                  "radiusTiles",
-                  "turnRadiansPerSecond"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_boomerang"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "returnAfterSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Outbound duration",
-                    "maximum": 10.0,
-                    "minimum": 0.008333333333333333,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "nonzeroMustRemainNonzero": true,
-                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
-                    },
-                    "x-infini-semanticType": "seconds",
-                    "x-infini-units": "seconds"
-                  },
-                  "returnSpeedBlocksPerSecond": {
-                    "description": "Author units: blocks/s. Native consumer: Return speed",
-                    "maximum": 1800.0,
-                    "minimum": 3.75,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          3.75,
-                          300.0
-                        ],
-                        [
-                          7.5,
-                          600.0
-                        ],
-                        [
-                          11.25,
-                          900.0
-                        ],
-                        [
-                          15.0,
-                          1200.0
-                        ],
-                        [
-                          18.75,
-                          1500.0
-                        ],
-                        [
-                          22.5,
-                          1800.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "blocks/s",
-                    "x-infini-units": "blocks/s"
-                  }
-                },
-                "required": [
-                  "returnAfterSeconds",
-                  "returnSpeedBlocksPerSecond"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_sine_homing"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "homingStrength": {
-                    "description": "Per movement-update linear interpolation fraction toward target velocity",
-                    "maximum": 1,
-                    "minimum": 0.001,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: velocity lerp fraction"
-                  },
-                  "rangeTiles": {
-                    "description": "Target search radius",
-                    "maximum": 120,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  },
-                  "waveVelocityCoefficient": {
-                    "description": "Raw lateral velocity coefficient: sin(age×0.18) × waveVelocityCoefficient × 0.03 before velocity direction normalization; not displacement pixels",
-                    "maximum": 64,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: lateral velocity coefficient"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "homingStrength",
-                  "waveVelocityCoefficient"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_phase"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "phaseStrength": {
-                    "description": "Per-update velocity rotation = sin(age×0.1) × strength × 0.01 radians AND alpha = int(80×strength); not collision phasing",
-                    "maximum": 1,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: coupled rotation/alpha coefficient"
-                  }
-                },
-                "required": [
-                  "phaseStrength"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_accelerate"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "maxSpeedBlocksPerSecond": {
-                    "description": "Author units: blocks/s. Native consumer: Speed cap",
-                    "maximum": 1800.0,
-                    "minimum": 3.75,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          3.75,
-                          300.0
-                        ],
-                        [
-                          7.5,
-                          600.0
-                        ],
-                        [
-                          11.25,
-                          900.0
-                        ],
-                        [
-                          15.0,
-                          1200.0
-                        ],
-                        [
-                          18.75,
-                          1500.0
-                        ],
-                        [
-                          22.5,
-                          1800.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "blocks/s",
-                    "x-infini-units": "blocks/s"
-                  },
-                  "speedMultiplierPerUpdate": {
-                    "description": "Velocity multiplier per projectile update until maxSpeed cap; 1 unchanged",
-                    "maximum": 1.2,
-                    "minimum": 1.0,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: velocity multiplier per update"
-                  }
-                },
-                "required": [
-                  "speedMultiplierPerUpdate",
-                  "maxSpeedBlocksPerSecond"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_spiral"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "turnRadiansPerSecond": {
-                    "description": "Author units: radians/s. Native consumer: World-time angular velocity turn rate",
-                    "maximum": 180.0,
-                    "minimum": -180.0,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          -30.0,
-                          30.0
-                        ],
-                        [
-                          -60.0,
-                          60.0
-                        ],
-                        [
-                          -90.0,
-                          90.0
-                        ],
-                        [
-                          -120.0,
-                          120.0
-                        ],
-                        [
-                          -150.0,
-                          150.0
-                        ],
-                        [
-                          -180.0,
-                          180.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "radians/s",
-                    "x-infini-units": "radians/s"
-                  }
-                },
-                "required": [
-                  "turnRadiansPerSecond"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_vortex_orb"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "accelerationBlocksPerSecondSquared": {
-                    "description": "Author units: blocks/s² (NPC world-tick velocity). Native consumer: World acceleration toward the center, scaled by clamped NPC knockBackResist",
-                    "maximum": 5400.0,
-                    "minimum": 0.0,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          0.0,
-                          900.0
-                        ],
-                        [
-                          0.0,
-                          1800.0
-                        ],
-                        [
-                          0.0,
-                          2700.0
-                        ],
-                        [
-                          0.0,
-                          3600.0
-                        ],
-                        [
-                          0.0,
-                          4500.0
-                        ],
-                        [
-                          0.0,
-                          5400.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "blocks/s² (NPC world-tick velocity)",
-                    "x-infini-units": "blocks/s² (NPC world-tick velocity)"
-                  },
-                  "rangeTiles": {
-                    "description": "Pull radius",
-                    "maximum": 80,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  }
-                },
-                "required": [
-                  "accelerationBlocksPerSecondSquared",
-                  "rangeTiles"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_blackhole_pull"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "accelerationBlocksPerSecondSquared": {
-                    "description": "Author units: blocks/s² (NPC world-tick velocity). Native consumer: World acceleration toward the center, scaled by clamped NPC knockBackResist",
-                    "maximum": 5400.0,
-                    "minimum": 0.0,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          0.0,
-                          900.0
-                        ],
-                        [
-                          0.0,
-                          1800.0
-                        ],
-                        [
-                          0.0,
-                          2700.0
-                        ],
-                        [
-                          0.0,
-                          3600.0
-                        ],
-                        [
-                          0.0,
-                          4500.0
-                        ],
-                        [
-                          0.0,
-                          5400.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "blocks/s² (NPC world-tick velocity)",
-                    "x-infini-units": "blocks/s² (NPC world-tick velocity)"
-                  },
-                  "rangeTiles": {
-                    "description": "Pull radius",
-                    "maximum": 80,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  }
-                },
-                "required": [
-                  "accelerationBlocksPerSecondSquared",
-                  "rangeTiles"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_proximity_missile"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "homingStrength": {
-                    "description": "Per movement-update linear interpolation fraction toward target velocity",
-                    "maximum": 1,
-                    "minimum": 0.001,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: velocity lerp fraction"
-                  },
-                  "rangeTiles": {
-                    "description": "Detection/search radius",
-                    "maximum": 120,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  },
-                  "triggerRadiusTiles": {
-                    "description": "Trigger radius on the exact 1/16-tile pixel lattice",
-                    "maximum": 32,
-                    "minimum": 0.25,
-                    "multipleOf": 0.0625,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "homingStrength",
-                  "triggerRadiusTiles"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_returning_glaive"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "returnAfterSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Outbound duration",
-                    "maximum": 10.0,
-                    "minimum": 0.008333333333333333,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "nonzeroMustRemainNonzero": true,
-                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
-                    },
-                    "x-infini-semanticType": "seconds",
-                    "x-infini-units": "seconds"
-                  },
-                  "returnSpeedBlocksPerSecond": {
-                    "description": "Author units: blocks/s. Native consumer: Return speed",
-                    "maximum": 1800.0,
-                    "minimum": 3.75,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          3.75,
-                          300.0
-                        ],
-                        [
-                          7.5,
-                          600.0
-                        ],
-                        [
-                          11.25,
-                          900.0
-                        ],
-                        [
-                          15.0,
-                          1200.0
-                        ],
-                        [
-                          18.75,
-                          1500.0
-                        ],
-                        [
-                          22.5,
-                          1800.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "blocks/s",
-                    "x-infini-units": "blocks/s"
-                  }
-                },
-                "required": [
-                  "returnAfterSeconds",
-                  "returnSpeedBlocksPerSecond"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_expanding_wave"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "maxScale": {
-                    "description": "Projectile.scale cap (not a pixel radius)",
-                    "maximum": 4,
-                    "minimum": 0.25,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar"
-                  },
-                  "scaleGrowthPerUpdate": {
-                    "description": "Additive Projectile.scale delta per projectile update, capped by maxScale",
-                    "maximum": 0.5,
-                    "minimum": 0.001,
-                    "type": "number",
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "engine units: scale increment per update"
-                  }
-                },
-                "required": [
-                  "scaleGrowthPerUpdate",
-                  "maxScale"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile",
-                    "stationary_projectile",
-                    "temporary_helper",
-                    "field",
-                    "child_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_flail_tether"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "rangeTiles": {
-                    "description": "Maximum tether length",
-                    "maximum": 60,
-                    "minimum": 2,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  },
-                  "returnSpeedBlocksPerSecond": {
-                    "description": "Author units: blocks/s. Native consumer: Return speed",
-                    "maximum": 1800.0,
-                    "minimum": 3.75,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          3.75,
-                          300.0
-                        ],
-                        [
-                          7.5,
-                          600.0
-                        ],
-                        [
-                          11.25,
-                          900.0
-                        ],
-                        [
-                          15.0,
-                          1200.0
-                        ],
-                        [
-                          18.75,
-                          1500.0
-                        ],
-                        [
-                          22.5,
-                          1800.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "blocks/s",
-                    "x-infini-units": "blocks/s"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "returnSpeedBlocksPerSecond"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_yoyo_hover"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "rangeTiles": {
-                    "description": "Cursor leash",
-                    "maximum": 60,
-                    "minimum": 2,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  },
-                  "speedBlocksPerSecond": {
-                    "description": "Author units: blocks/s. Native consumer: Desired speed for both cursor tracking and return to owner; desired velocity is limited by target distance, then current velocity lerps 28% toward it per projectile update",
-                    "maximum": 1800.0,
-                    "minimum": 3.75,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "boundsAtUpdatesPerTick1To6": [
-                        [
-                          3.75,
-                          300.0
-                        ],
-                        [
-                          7.5,
-                          600.0
-                        ],
-                        [
-                          11.25,
-                          900.0
-                        ],
-                        [
-                          15.0,
-                          1200.0
-                        ],
-                        [
-                          18.75,
-                          1500.0
-                        ],
-                        [
-                          22.5,
-                          1800.0
-                        ]
-                      ],
-                      "nonzeroMustRemainNonzero": true,
-                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick"
-                    },
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "blocks/s",
-                    "x-infini-units": "blocks/s"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "speedBlocksPerSecond"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_whip_lash"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "rangeTiles": {
-                    "description": "Lash reach",
-                    "maximum": 60,
-                    "minimum": 2,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  },
-                  "segments": {
-                    "description": "Collision curve segments",
-                    "maximum": 48,
-                    "minimum": 3,
-                    "type": "integer",
-                    "x-infini-semanticType": "collision_segment_count"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "segments"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_forward_then_retract"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "durationSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Full forward/retract cycle",
-                    "maximum": 4.0,
-                    "minimum": 0.025,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "nonzeroMustRemainNonzero": true,
-                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
-                    },
-                    "x-infini-semanticType": "seconds",
-                    "x-infini-units": "seconds"
-                  },
-                  "rangeTiles": {
-                    "description": "Peak triangular displacement beyond the 18px owner-center baseline; not distance from the hand",
-                    "maximum": 20,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "durationSeconds"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "move_front_hand"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "aimMode": {
-                    "description": "initial keeps the configured spawn axis; cursor explicitly follows bounded synced owner aim",
-                    "enum": [
-                      "initial",
-                      "cursor"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "durationSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: One extension/retraction pose cycle in world seconds, lowered to whole active ticks. Native activeTicks=floor(activeAIUpdates/(extraUpdates+1)). Subupdates retain that tick's stretch. After completion hold startStretch; lifetime and item animation remain independent",
-                    "maximum": 4.0,
-                    "minimum": 0.025,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "nonzeroMustRemainNonzero": true,
-                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
-                    },
-                    "x-infini-semanticType": "seconds",
-                    "x-infini-units": "seconds"
-                  },
-                  "hitboxOffsetPx": {
-                    "description": "Signed collision-center offset from native hand along the aimed world axis. Explicit zero is valid; not inferred from art, scale or grip",
-                    "maximum": 192,
-                    "minimum": -192,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": null,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-semanticType": "pixels",
-                    "x-infini-units": "pixels"
-                  },
-                  "peakStretch": {
-                    "description": "Native peak stretch. Over the lowered whole-tick duration, use triangular extension/retraction progress; interpolate native lengths and select nearest, ties shorter. Equal endpoints keep a fixed stretch",
-                    "enum": [
-                      "none",
-                      "quarter",
-                      "three_quarters",
-                      "full"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "startStretch": {
-                    "description": "Native front-arm starting/ending stretch; none/quarter/three_quarters/full correspond to hand lengths 4/6/8/10px. Must not exceed peakStretch",
-                    "enum": [
-                      "none",
-                      "quarter",
-                      "three_quarters",
-                      "full"
-                    ],
-                    "type": "string",
-                    "x-infini-semanticType": "bounded_text"
-                  }
-                },
-                "required": [
-                  "aimMode",
-                  "durationSeconds",
-                  "startStretch",
-                  "peakStretch",
-                  "hitboxOffsetPx"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "channel_beam"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "damageStartProgress": {
-                    "default": 1.0,
-                    "description": "Minimum warmup progress that enables the native friendly hit lane, inclusive. 1 retains the full-warmup gate; 0 enables hits from the start. Progress and threshold use binary64 before native hit dispatch.",
-                    "maximum": 1,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-neutral": 1.0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "fraction of warmup"
-                  },
-                  "initialDamageMultiplier": {
-                    "default": 1.0,
-                    "description": "NPC source-damage multiplier at warmup progress zero, interpolated linearly to 1. Applied in ModifyHitNPC to the live projectile damage; does not overwrite Projectile.damage or redefine child inheritance. Native defense/crit/rounding follow the hit modifier.",
-                    "maximum": 1,
-                    "minimum": 0.01,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 1.0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-neutral": 1.0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "source damage multiplier"
-                  },
-                  "initialWidthMultiplier": {
-                    "default": 1.0,
-                    "description": "Multiplier of widthPx at warmup progress zero, interpolated linearly to 1 for collision and runtime_geometry width, including subpixel widths. VFX uses the shared segment with its separately authored textured-path width; PNG size is independent.",
-                    "maximum": 1,
-                    "minimum": 0.01,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 1.0,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-neutral": 1.0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "beam width multiplier"
-                  },
-                  "manaPayment": {
-                    "default": "initial_use_only",
-                    "description": "initial_use_only retains native initial item-use payment. each_use_time additionally makes each physical beam call owner.CheckMana(HeldItem, amount=-1, pay=true, blockQuickMana=false) every current HeldItem.useTime world ticks after first active update; uses native GetManaCost and missing-mana effects, and terminates the beam when payment fails. Owner peer only; extraUpdates never duplicates payment.",
-                    "enum": [
-                      "initial_use_only",
-                      "each_use_time"
-                    ],
-                    "type": "string",
-                    "x-infini-neutral": "initial_use_only",
-                    "x-infini-semanticType": "bounded_text",
-                    "x-infini-units": "native mana payment cadence"
-                  },
-                  "rangeTiles": {
-                    "description": "Beam length",
-                    "maximum": 120,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "blocks (tiles)"
-                  },
-                  "raycastTiles": {
-                    "default": false,
-                    "description": "When true, Collision.LaserScan samples three rays across current beam width and clips the shared segment to the shortest bounded sample without temporal smoothing. False retains full range. Does not set collision.tileCollide or damage.ownerHitCheck.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "tiles",
-                    "x-infini-units": "tile clipping enabled"
-                  },
-                  "warmupSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Warmup ramp duration in world seconds; progress is projectile age divided by duration with extraUpdates accounted for. Zero means immediately full width and damage.",
-                    "maximum": 10.0,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "nonzeroMustRemainNonzero": true,
-                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
-                    },
-                    "x-infini-semanticType": "seconds",
-                    "x-infini-units": "seconds"
-                  },
-                  "widthPx": {
-                    "description": "Beam collision width",
-                    "maximum": 128,
-                    "minimum": 2,
-                    "type": "number",
-                    "x-infini-semanticType": "pixels",
-                    "x-infini-units": "pixels"
-                  }
-                },
-                "required": [
-                  "rangeTiles",
-                  "widthPx",
-                  "warmupSeconds"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": false,
-            "properties": {
-              "fn": {
-                "const": "charge_then_release"
-              },
-              "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string"
-              },
-              "params": {
-                "additionalProperties": false,
-                "properties": {
-                  "chargeSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Full charge duration",
-                    "maximum": 10.0,
-                    "minimum": 0.008333333333333333,
-                    "type": "number",
-                    "x-infini-authorProjection": {
-                      "nonzeroMustRemainNonzero": true,
-                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
-                    },
-                    "x-infini-semanticType": "seconds",
-                    "x-infini-units": "seconds"
-                  },
-                  "damageMultiplier": {
-                    "description": "Full-charge multiplier of current native damage only, applied once at release; partial charge interpolates from 1. 1 preserves damage",
-                    "maximum": 4,
-                    "minimum": 1,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 1,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-neutral": 1,
-                    "x-infini-semanticType": "unitless_scalar"
-                  },
-                  "knockbackMultiplier": {
-                    "description": "Independent full-charge knockback multiplier; partial charge interpolates from 1. 1 preserves knockback",
-                    "maximum": 4,
-                    "minimum": 0,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 1,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-neutral": 1,
-                    "x-infini-semanticType": "unitless_scalar"
-                  },
-                  "speedMultiplier": {
-                    "description": "Independent full-charge release-speed multiplier; partial charge interpolates from 1. 1 preserves launch speed; values below 1 make a slower charged shot",
-                    "maximum": 4,
-                    "minimum": 0.1,
-                    "type": "number",
-                    "x-infini-consumerConstraint": {
-                      "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
-                      "neutral": 1,
-                      "rule": "nonneutral_must_remain_nonneutral",
-                      "storage": "float32"
-                    },
-                    "x-infini-neutral": 1,
-                    "x-infini-semanticType": "unitless_scalar"
-                  }
-                },
-                "required": [
-                  "chargeSeconds",
-                  "damageMultiplier",
-                  "knockbackMultiplier",
-                  "speedMultiplier"
-                ],
-                "type": "object"
-              },
-              "target": {
-                "description": "Authored entity id. Target kind is checked locally.",
-                "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                "type": "string",
-                "x-infini-reference": {
-                  "allowSelf": true,
-                  "graphEdge": false,
-                  "namespace": "entity",
-                  "targetKinds": [
-                    "owner_attached_projectile",
-                    "free_projectile"
-                  ]
-                }
-              }
-            },
-            "required": [
-              "id",
-              "fn",
-              "target",
-              "params"
             ],
             "type": "object"
           },
@@ -7944,10 +8705,12 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "spreadRadians": {
-                    "description": "Total angular spread",
+                    "default": 0,
+                    "description": "Total angular spread; explicit count=1 deactivates fan offset and permits omission as exact zero. Present valid nonzero spread is preserved",
                     "maximum": 6.283185307179586,
                     "minimum": 0,
                     "type": "number",
+                    "x-infini-neutral": 0,
                     "x-infini-semanticType": "radians",
                     "x-infini-units": "radians"
                   },
@@ -8057,7 +8820,6 @@
                   "when",
                   "entity",
                   "count",
-                  "spreadRadians",
                   "damageBasis",
                   "knockbackBasis",
                   "damageMultiplier",

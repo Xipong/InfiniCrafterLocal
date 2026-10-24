@@ -158,10 +158,28 @@ def test_replay_frozen_provenance():
             pending.extend((f"{path}[{index}]", child) for index, child in enumerate(value))
 
 
-@pytest.mark.parametrize("section,case", [pytest.param(section, case, id=case) for section in ("gameplayApplyCases", "gameplayDiagnosticCases") for case in _REPLAY[section]])
-def test_captured_gameplay_repair_replay(section, case):
-    replay = copy.deepcopy(_REPLAY[section][case])
+@pytest.mark.parametrize("section,case,fresh_motion", [
+    pytest.param(section, case, False, id=case)
+    for section in ("gameplayApplyCases", "gameplayDiagnosticCases") for case in _REPLAY[section]
+] + [pytest.param("gameplayApplyCases", "ropebound_spear", True, id="ropebound_spear-independent-composition")])
+def test_captured_gameplay_repair_replay(section, case, fresh_motion):
+    archive_before = copy.deepcopy(_REPLAY[section][case])
+    replay = copy.deepcopy(archive_before)
     initial = _historical_names(replay["initialAuthor"])
+    if fresh_motion:
+        # A separate future Author control, NOT a migration or recompile of the
+        # retired code19 capture. All choices are explicit and the RAW is frozen.
+        old = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "move_forward_then_retract")
+        initial["runtimeProgram"]["calls"].remove(old)
+        initial["runtimeProgram"]["calls"].extend([
+            {"id": "explicit_axis", "fn": "set_projectile_aim", "target": old["target"],
+             "params": {"source": "cursor", "turnOwner": False}},
+            {"id": "explicit_anchor", "fn": "attach_projectile", "target": old["target"],
+             "params": {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0}},
+            {"id": "explicit_reach", "fn": "set_projectile_reach_curve", "target": old["target"],
+             "params": {"durationSeconds": 31 / 60, "startOffsetBlocks": 1.125,
+                        "peakOffsetBlocks": 6.125, "endOffsetBlocks": 1.125, "peakProgress": 0.5}},
+        ])
     historical_patch = _historical_names(replay["repairPatch"]) if section == "gameplayApplyCases" else None
     if historical_patch is not None:
         # The old sparse-notation projector dropped valid fixed placement lanes.
@@ -184,8 +202,20 @@ def test_captured_gameplay_repair_replay(section, case):
             if row["fn"] == "configure_tool":
                 assert row["params"].pop("axePower") == old_axe
                 row["params"]["axePowerTooltipPercent"] = old_axe * 5
+    initial_before = copy.deepcopy(initial)
     report = validate_runtime_program(initial)
     expected_codes = set(replay["expectedInitialCodes"])
+    retired_motion = case == "ropebound_spear" and not fresh_motion
+    if retired_motion:
+        expected_codes.add("unknown_capability")
+        old = next(row for row in initial["runtimeProgram"]["calls"] if row["fn"] == "move_forward_then_retract")
+        index = initial["runtimeProgram"]["calls"].index(old)
+        assert [(row["path"], row["code"]) for row in report["errors"] if row["code"] == "unknown_capability"] == [
+            (f"$.runtimeProgram.calls[{index}].fn", "unknown_capability")]
+    if fresh_motion:
+        # The old shape_one_of was exclusively the captured conflicting binding;
+        # the explicit independent trajectory introduces no new diagnostic.
+        assert case == "ropebound_spear"
     if case == "obsidian_pickaxe":
         # Native tool admission no longer requires an independent combat lane.
         # Preserve captured bytes and every remaining historical refusal.
@@ -204,10 +234,42 @@ def test_captured_gameplay_repair_replay(section, case):
         # provider requirement; fixture/archive bytes remain untouched.
         assert historical_patch.pop("realizationReplacement") is not None
         filtered, audit = filter_repair_patch_scope(initial, historical_patch, scope)
-        assert audit["ok"], audit
+        if retired_motion:
+            assert not audit["ok"]
+            assert [(row["code"], row["actual"]["code"], row["actual"]["affectedIds"])
+                    for row in audit["errors"]] == [
+                ("repair_scope_violation", "shape_one_of", ["call_movement"]),
+                ("repair_scope_violation", "unknown_capability", ["call_movement"]),
+            ]
+        else:
+            assert audit["ok"], audit
         repaired = apply_repair_patch(initial, filtered)
         assert repaired["realization"] == initial["realization"]
-        assert validate_runtime_program(repaired)["ok"], validate_runtime_program(repaired)
+        final_report = validate_runtime_program(repaired)
+        if retired_motion:
+            # Binding repair still executes, but cannot turn a retired Author
+            # card back into a fresh capability. Preserve its exact RAW call.
+            assert {row["code"] for row in final_report["errors"]} == {"shape_one_of", "unknown_capability"}
+            retained_call = next(row for row in initial_before["runtimeProgram"]["calls"] if row["fn"] == "move_forward_then_retract")
+            retained_index = initial_before["runtimeProgram"]["calls"].index(retained_call)
+            assert next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == retained_call["id"]) == retained_call
+            assert all(row["path"].startswith(f"$.runtimeProgram.calls[{retained_index}]") for row in final_report["errors"])
+            with pytest.raises(ValueError):
+                compile_runtime_program(repaired)
+        else:
+            assert final_report["ok"], final_report
+        if case == "ropebound_spear":
+            lane = next(row for row in repaired["runtimeProgram"]["bindings"] if row["id"] == "bind_place_rope")
+            assert lane["input"] == "alternate_use" and lane["stackCost"] == 1
+            assert repaired["runtimeProgram"]["calls"] == initial_before["runtimeProgram"]["calls"]
+            if fresh_motion:
+                from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+                from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+                wire = compile_runtime_program(repaired)
+                assert validate_runtime_wire(wire)["ok"]
+                for source in (repaired, None):
+                    assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                        authored_document=source, final_document=wire)["ok"]
         if case == "obsidian_pickaxe":
             assert old_axe is not None
             assert compile_runtime_program(repaired)["gameplay"]["axePower"] == old_axe
@@ -231,6 +293,8 @@ def test_captured_gameplay_repair_replay(section, case):
             assert create["allowedTargetIds"] == replay["expectedCreateCallTargetIds"]
             assert set(create["allowedFns"]) == set(error["allowed"])
             assert {row["fn"] for row in dossier["blockerCapabilities"]} == set(error["allowed"]).union(replay.get("expectedAdditionalBlockerCapabilities", []))
+    assert initial == initial_before
+    assert _REPLAY[section][case] == archive_before
 
 
 @pytest.mark.parametrize("case", list(_REPLAY["visualApplyCases"]))

@@ -1,4 +1,5 @@
 {
+  "authorVisibleCapabilityCount": 74,
   "cases": [
     {
       "brokenCounts": {
@@ -9,7 +10,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 34012,
+      "dossierChars": 35169,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -41,7 +42,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 33444,
+      "dossierChars": 34601,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -65,47 +66,44 @@
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
-      "capabilitySubsetCount": 17,
+      "capabilitySubsetCount": 10,
       "directCapabilities": [
-        "move_accelerate",
-        "move_blackhole_pull",
-        "move_boomerang",
-        "move_drift",
-        "move_expanding_wave",
-        "move_forward_then_retract",
-        "move_gravity_arc",
-        "move_orbit",
-        "move_phase",
-        "move_proximity_missile",
-        "move_returning_glaive",
-        "move_sine_homing",
-        "move_slow_homing",
-        "move_spiral",
+        "accelerate_projectile_vertical",
+        "attach_projectile",
         "move_straight",
-        "move_vortex_orb",
-        "move_whip_lash"
+        "multiply_projectile_velocity",
+        "orbit_projectile",
+        "oscillate_projectile_velocity",
+        "seek_projectile",
+        "set_projectile_lash_geometry"
       ],
-      "dossierChars": 51666,
+      "dossierChars": 75405,
       "errorCodes": [
+        "missing_capability_dependency",
         "missing_movement_component"
       ],
       "errorPaths": [
+        "$.runtimeProgram.calls[14]",
         "$.runtimeProgram.calls"
       ],
-      "existingBrokenCapabilities": [],
+      "existingBrokenCapabilities": [
+        "set_projectile_reach_curve"
+      ],
       "name": "missing_position_driver",
       "nonRepairableCount": 0,
       "readOnlyDependencyCounts": {
         "bindings": 1,
-        "calls": 0,
+        "calls": 2,
         "entities": 1
       },
-      "supportingCapabilities": []
+      "supportingCapabilities": [
+        "set_projectile_aim"
+      ]
     },
     {
       "brokenCounts": {
         "bindings": 0,
-        "calls": 2,
+        "calls": 1,
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
@@ -113,29 +111,23 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 43795,
+      "dossierChars": 38397,
       "errorCodes": [
-        "shape_one_of",
-        "shape_required",
-        "shape_additional_property",
         "missing_item_capability_param"
       ],
       "errorPaths": [
-        "$.runtimeProgram.calls[8]",
-        "$.runtimeProgram.calls[8].params.warmupSeconds",
-        "$.runtimeProgram.calls[8].params.warmupTicks",
-        "$.runtimeProgram.calls[8]"
+        "$.runtimeProgram.calls[19]"
       ],
       "existingBrokenCapabilities": [
-        "channel_beam",
+        "accumulate_projectile_charge",
         "configure_item_use"
       ],
       "name": "existing_dependency_parameter_mismatch",
       "nonRepairableCount": 0,
       "readOnlyDependencyCounts": {
-        "bindings": 1,
-        "calls": 0,
-        "entities": 2
+        "bindings": 0,
+        "calls": 1,
+        "entities": 1
       },
       "supportingCapabilities": []
     }
@@ -159,8 +151,8 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 197571,
-  "fullCapabilityCatalogCount": 73,
+  "fullAuthorPayloadChars": 192850,
+  "fullCapabilityCatalogCount": 96,
   "ok": true,
   "policyCoverage": {
     "declaredCodes": 54,

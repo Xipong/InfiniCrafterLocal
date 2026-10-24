@@ -13,7 +13,6 @@ import struct
 from pathlib import Path
 
 import pytest
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import filter_repair_patch_scope, build_runtime_repair_scope
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
@@ -33,18 +32,18 @@ from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_r
 FN = "apply_generated_buff_on_use"
 
 RENAMES = (
-    ("move_gravity_arc", "gravityPerTick", "accelerationYBlocksPerSecondSquared", 0.1875, "movement.params"),
-    ("move_orbit", "rangeTiles", "radiusTiles", 7.125, "movement.params"),
-    ("move_yoyo_hover", "returnSpeed", "speedBlocksPerSecond", 7.125, "movement.params"),
-    ("configure_tool", "miningSpeedScale", "miningSpeedMultiplier", 1.125, "gameplay"),
-    ("move_spiral", "turnRadiansPerTick", "turnRadiansPerSecond", -0.1875, "movement.params"),
-    ("move_expanding_wave", "scalePerTick", "scaleGrowthPerUpdate", 0.1875, "movement.params"),
-    ("move_accelerate", "acceleration", "speedMultiplierPerUpdate", 1.125, "movement.params"),
-    ("move_sine_homing", "waveAmplitude", "waveVelocityCoefficient", 7.125, "movement.params"),
-    ("configure_vanilla_ammo_item", "shootSpeedPxPerTick", "shootSpeedContributionBlocksPerSecond", 7.125, "gameplay"),
-    ("restore_resources_on_use", "potionSickness", "usesPotionRules", True, "gameplay"),
-    ("apply_generated_buff_on_use", "jumpBoost", "jumpSpeedBonusBlocksPerSecond", 0.1875, "generatedBuff"),
-    ("apply_generated_buff_on_use", "manaRegen", "manaRegenBonusPoints", 7, "generatedBuff"),
+    ("move_gravity_arc", "gravityPerTick", "accelerationYBlocksPerSecondSquared", 0.1875, "movement.params", {}),
+    ("move_orbit", "rangeTiles", "radiusTiles", 7.125, "movement.params", {"turnRadiansPerSecond": 3.3}),
+    ("move_yoyo_hover", "returnSpeed", "speedBlocksPerSecond", 7.125, "movement.params", {"rangeTiles": 8}),
+    ("configure_tool", "miningSpeedScale", "miningSpeedMultiplier", 1.125, "gameplay", {}),
+    ("move_spiral", "turnRadiansPerTick", "turnRadiansPerSecond", -0.1875, "movement.params", {}),
+    ("move_expanding_wave", "scalePerTick", "scaleGrowthPerUpdate", 0.1875, "movement.params", {"maxScale": 3}),
+    ("move_accelerate", "acceleration", "speedMultiplierPerUpdate", 1.125, "movement.params", {"maxSpeedBlocksPerSecond": 30}),
+    ("move_sine_homing", "waveAmplitude", "waveVelocityCoefficient", 7.125, "movement.params", {"rangeTiles": 8, "homingStrength": 0.1}),
+    ("configure_vanilla_ammo_item", "shootSpeedPxPerTick", "shootSpeedContributionBlocksPerSecond", 7.125, "gameplay", {}),
+    ("restore_resources_on_use", "potionSickness", "usesPotionRules", True, "gameplay", {}),
+    ("apply_generated_buff_on_use", "jumpBoost", "jumpSpeedBonusBlocksPerSecond", 0.1875, "generatedBuff", {}),
+    ("apply_generated_buff_on_use", "manaRegen", "manaRegenBonusPoints", 7, "generatedBuff", {}),
 )
 
 
@@ -59,14 +58,61 @@ def _get(document, path):
 def author_cards():
     _, user, _ = build_initial_author_request({}, {}, "unit-proof", model_name="test-model")
     cards = {c["fn"]: c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    assert set(cards) == {cap.name for cap in CAPABILITY_REGISTRY.values()}
+    assert set(cards) == {cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
     return cards
 
 
-@pytest.mark.parametrize("fn,old,new,value,component", [pytest.param(*row, id=f"{row[0]}-{row[2]}") for row in RENAMES])
-def test_identity_rename_reaches_packet_projector_and_frozen_wire(author_cards, fn, old, new, value, component):
+def _retained_movement_wire(fn, params):
+    """Synthetic saved-wire control, never fresh Author admission of a retired fn.
+
+    Compile only the current straight-motion envelope, then replace its movement
+    with an explicit retained component and registry-declared source-free receipts.
+    No captured document is imported, normalized, or edited.
+    """
+    from infini_local.core.runtime_authoring.capability_registry import MOVEMENT_OPCODE
+
+    source = build_capability_witness("move_straight")
+    if fn == "move_yoyo_hover":
+        next(row for row in source["runtimeProgram"]["calls"]
+             if row["fn"] == "configure_item_use")["params"]["channel"] = True
+    wire = compile_runtime_program(source)
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    identity = [row for row in receipts if row.get("callId") == "witness_call"]
+    assert len(identity) == 2
+    prefix = identity[0]["finalPath"].removesuffix(".name")
+    movement = _get(wire, prefix)
+    movement.update(name=fn, code=MOVEMENT_OPCODE[fn], params={})
+    for row, key in zip(identity, ("name", "code")):
+        row.update(fn=fn, value=movement[key])
+    source_path = identity[0]["authoredPath"].removesuffix(".fn")
+    cap = CAPABILITY_REGISTRY[fn]
+    assert set(params) == {name for name, spec in cap.params.items() if spec.required}
+    for name, value in params.items():
+        for projection in cap.params[name].projected_fields(value, name, updates_per_tick=1):
+            assert "." not in projection.wire_path and not projection.literal
+            movement["params"][projection.wire_path] = projection.value
+            receipts.append({
+                "callId": "witness_call", "fn": fn,
+                "authoredPath": source_path + ".params." + projection.authored_path,
+                "finalPath": prefix + ".params." + projection.wire_path,
+                "value": projection.value, "status": "delivered",
+            })
+    assert validate_runtime_wire(wire)["ok"], validate_runtime_wire(wire)["errors"]
+    assert audit_compiler_receipts(receipts, final_document=wire)["ok"]
+    stripped = deepcopy(wire)
+    stripped.pop("runtimeContract")
+    assert validate_runtime_wire(stripped)["ok"]
+    return wire
+
+
+@pytest.mark.parametrize("fn,old,new,value,component,companions", [pytest.param(*row, id=f"{row[0]}-{row[2]}") for row in RENAMES])
+def test_identity_rename_reaches_packet_projector_and_frozen_wire(author_cards, fn, old, new, value, component, companions):
     cap, spec = CAPABILITY_REGISTRY[fn], CAPABILITY_REGISTRY[fn].params[new]
-    assert old not in cap.params and old not in author_cards[fn]["params"] and new in author_cards[fn]["params"]
+    assert old not in cap.params
+    if cap.author_visible:
+        assert old not in author_cards[fn]["params"] and new in author_cards[fn]["params"]
+    else:
+        assert fn not in author_cards
     assert spec.wire_name and any(path.endswith("." + spec.wire_name) for path in cap.final_wire_paths)
     if spec.predecessor_names:
         authored_value = spec.from_wire(value, updates_per_tick=1)
@@ -76,17 +122,21 @@ def test_identity_rename_reaches_packet_projector_and_frozen_wire(author_cards, 
         for boundary in (spec.minimum, spec.maximum, spec.neutral):
             if boundary is not None:
                 assert _bytes(spec.to_wire(boundary)) == _bytes(boundary)
-    authored = build_capability_witness(fn)
-    index, call = next((i, c) for i, c in enumerate(authored["runtimeProgram"]["calls"]) if c["id"] == "witness_call")
-    call["params"][new] = authored_value
-    wire = assert_delivered(authored, index, new, value)
+    if cap.author_visible:
+        authored = build_capability_witness(fn)
+        index, call = next((i, c) for i, c in enumerate(authored["runtimeProgram"]["calls"]) if c["id"] == "witness_call")
+        call["params"][new] = authored_value
+        wire = assert_delivered(authored, index, new, value)
+        alias = deepcopy(authored)
+        alias_call = alias["runtimeProgram"]["calls"][index]
+        alias_call["params"][old] = alias_call["params"].pop(new)
+        assert not validate_runtime_program(alias)["ok"]
+    else:
+        wire = _retained_movement_wire(fn, {**companions, new: authored_value})
     rows = [r for r in wire["runtimeContract"]["finalWireReceipts"]
             if r.get("callId") == "witness_call" and r.get("authoredPath", "").endswith(".params." + new)]
-    assert all(r["finalPath"].endswith("." + spec.wire_name) for r in rows)
-    alias = deepcopy(authored)
-    alias_call = alias["runtimeProgram"]["calls"][index]
-    alias_call["params"][old] = alias_call["params"].pop(new)
-    assert not validate_runtime_program(alias)["ok"]
+    assert rows and all(r["finalPath"].endswith("." + spec.wire_name) for r in rows)
+    assert all(_bytes(r["value"]) == _bytes(value) for r in rows)
     if component in {"spawn", "collision", "movement.params", "itemUse"}:
         row = next(r for r in rows if r["finalPath"].startswith("runtimeProgram."))
         prefix, _, wire_key = row["finalPath"].rpartition(".")
@@ -421,18 +471,11 @@ _SCALAR_NAME_CASES = _SCALAR_NAME_CAPTURE["cases"]
 
 
 def _scalar_name_current_source(case):
+    assert CAPABILITY_REGISTRY[case["fn"]].author_visible
     source = deepcopy(case["authored"])
     params = _scalar_name_call(source)["params"]
     assert case["canonicalParameter"] not in params
     params[case["canonicalParameter"]] = params.pop(case["oldParameter"])
-    if case["fn"] == "move_yoyo_hover":
-        # Current active yoyo authoring explicitly supplies native channel.
-        # The archived capture and its scalar receipt remain byte-for-byte intact.
-        next(row for row in source["runtimeProgram"]["calls"]
-             if row["fn"] == "configure_item_use")["params"]["channel"] = True
-    if case["fn"] == "move_orbit":
-        # Supplement the current explicit-rate contract without editing the archived capture.
-        params["turnRadiansPerSecond"] = 3.3
     from captured_projectile_author import project_captured_world_units
     return project_captured_world_units(source)
 
@@ -443,7 +486,15 @@ def _current_scalar_name(case):
 
 
 def _scalar_name_restored_wire(case):
-    wire = compile_runtime_program(_scalar_name_current_source(case))
+    if CAPABILITY_REGISTRY[case["fn"]].author_visible:
+        wire = compile_runtime_program(_scalar_name_current_source(case))
+    else:
+        companions = next(row[5] for row in RENAMES if row[0] == case["fn"])
+        name = _current_scalar_name(case)
+        spec = CAPABILITY_REGISTRY[case["fn"]].params[name]
+        wire = _retained_movement_wire(case["fn"], {
+            **companions, name: spec.from_wire(case["receipt"]["value"], updates_per_tick=1),
+        })
     receipt = next(row for row in wire["runtimeContract"]["finalWireReceipts"]
                    if row.get("callId") == "witness_call" and row.get("authoredPath", "").endswith(".params." + _current_scalar_name(case)))
     expected = {**case["receipt"], "authoredPath": case["receipt"]["authoredPath"].removesuffix(case["oldParameter"]) + _current_scalar_name(case)}
@@ -455,9 +506,12 @@ def _scalar_name_restored_wire(case):
 @pytest.mark.parametrize("case", _SCALAR_NAME_CASES, ids=lambda case: case["fn"])
 def test_scalar_names_pin_complete_capture_current_provenance_and_exact_repair(case):
     assert _SCALAR_NAME_CAPTURE["originCommit"] == "274d4c38849bff5b8f7ecde1c61d6276a4803712"
-    source = _scalar_name_current_source(case)
-    wire = compile_runtime_program(source)
-    assert validate_runtime_wire(wire)["ok"]
+    captured_before = _bytes(case)
+    visible = CAPABILITY_REGISTRY[case["fn"]].author_visible
+    source = _scalar_name_current_source(case) if visible else case["authored"]
+    if visible:
+        wire = compile_runtime_program(source)
+        assert validate_runtime_wire(wire)["ok"]
 
     retained, receipt = _scalar_name_restored_wire(case)
     retained_before = _bytes(retained)
@@ -467,7 +521,9 @@ def test_scalar_names_pin_complete_capture_current_provenance_and_exact_repair(c
     report = audit_compiler_receipts(saved, final_document=retained)
     assert not report["ok"] and report["authoredSourceChecked"] is False
     report = audit_compiler_receipts(saved, authored_document=source, final_document=retained)
-    assert not report["ok"] and any(row["reason"] == "compiler receipt used an undeclared authored parameter" for row in report["violations"])
+    reason = ("compiler receipt used an undeclared authored parameter" if visible
+              else "source provenance requires the sole current Author grammar")
+    assert not report["ok"] and any(row["reason"] == reason for row in report["violations"])
     assert _bytes(retained) == retained_before
     assert not validate_runtime_program(case["authored"])["ok"]
     with pytest.raises(ValueError):
@@ -481,6 +537,14 @@ def test_scalar_names_pin_complete_capture_current_provenance_and_exact_repair(c
         assert any(row["code"] == "unknown_final_wire_field" and row["path"].endswith("." + _current_scalar_name(case)) for row in errors)
     else:
         assert any(row["code"] == "undeclared_technical_lowering" for row in errors)
+    assert _bytes(case) == captured_before
+    if not visible:
+        # Retained wire remains auditable, but no spelling revives retired fresh
+        # Author/Repair admission. Do not compile or import that archived source.
+        stale = {"note": "retained wire is not a fresh capability", "callsUpsert": [deepcopy(_scalar_name_call(source))]}
+        assert not strict_repair_structure_report(stale)["ok"]
+        assert not strict_repair_shape_report(stale)["ok"]
+        return
     broken = deepcopy(source)
     current = _current_scalar_name(case)
     _scalar_name_call(broken)["params"][current] = CAPABILITY_REGISTRY[case["fn"]].params[current].maximum + 1

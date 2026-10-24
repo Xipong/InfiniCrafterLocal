@@ -101,7 +101,7 @@ internal static partial class EngineRuntimeChecks
                 AssertVfxNear(b, new Vector2(projectile.ai[0], projectile.ai[1]), "published native ai carries final B");
                 byte[] extra = ReviewExtra(generated); // real existing ExtraAI serializer, mid-cycle age
                 var peerProjectile = new Projectile { owner = 0, whoAmI = 8, identity = 71, active = true,
-                    Center = projectile.Center, timeLeft = projectile.timeLeft, damage = projectile.damage };
+                    position = projectile.position, timeLeft = projectile.timeLeft, damage = projectile.damage };
                 // Model native SyncProjectile field delivery only on receiver, never assign owner ai.
                 Array.Copy(projectile.ai, peerProjectile.ai, projectile.ai.Length);
                 var peer = Attach(peerProjectile); typeof(Projectile).GetProperty("ModProjectile")!.SetValue(peerProjectile, peer);
@@ -172,10 +172,10 @@ internal static partial class EngineRuntimeChecks
             Equal(true, Update(), label + " stationary B publishes at first eligible update");
             AssertVfxNear(b, LocalVector(), label + " published ai carries final B");
 
-            // Real ExtraAI hydration plus native ai field delivery, not a socket/network match.
+            // Real ExtraAI hydration plus native top-left/ai delivery, not a socket/network match.
             byte[] extra = ReviewExtra(generated);
             var peerProjectile = new Projectile { owner = 0, whoAmI = 8, identity = projectile.identity, active = true,
-                Center = projectile.Center, velocity = projectile.velocity, timeLeft = projectile.timeLeft, damage = projectile.damage };
+                position = projectile.position, velocity = projectile.velocity, timeLeft = projectile.timeLeft, damage = projectile.damage };
             Array.Copy(projectile.ai, peerProjectile.ai, projectile.ai.Length);
             var peer = Attach(peerProjectile); typeof(Projectile).GetProperty("ModProjectile")!.SetValue(peerProjectile, peer);
             Terraria.Main.projectile[8] = peerProjectile; Terraria.Main.myPlayer = 1; Terraria.Main.netMode = NetmodeID.MultiplayerClient;

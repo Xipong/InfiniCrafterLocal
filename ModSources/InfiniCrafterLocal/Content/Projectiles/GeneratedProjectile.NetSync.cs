@@ -16,6 +16,7 @@ public sealed partial class GeneratedProjectile
 {
     private const byte RuntimeNetVersion = 4;
     private const byte NativeShotRuntimeNetVersion = 5;
+    private const byte ComposableMotionRuntimeNetVersion = 6;
     private const byte VfxEventNetVersion = 5;
     private static long _nextVfxSourceToken;
     private long _vfxSourceToken;
@@ -32,13 +33,14 @@ public sealed partial class GeneratedProjectile
         InfiniVfxProjectileSnapshot Snapshot)
     {
         public ulong Occurrence { get; init; }
-        public byte Origin { get; init; } // 0 server producer, 1 owner-hit producer
+        public byte Origin { get; init; } // 0 server producer, 1 owner producer
     }
     private static readonly VfxOrderedPeerStream VfxEventStream = new();
 
     public override void SendExtraAI(BinaryWriter writer)
     {
-        writer.Write(_nativeShotInitialVelocity.HasValue ? NativeShotRuntimeNetVersion : RuntimeNetVersion);
+        bool composable = HasComposableMotion;
+        writer.Write(composable ? ComposableMotionRuntimeNetVersion : _nativeShotInitialVelocity.HasValue ? NativeShotRuntimeNetVersion : RuntimeNetVersion);
         writer.Write(_generatedItemId ?? "");
         writer.Write(_entityId ?? "");
         writer.Write((byte)Math.Clamp(_childDepth, 0, 255));
@@ -63,10 +65,19 @@ public sealed partial class GeneratedProjectile
         }
         // Keep v4 sampled/constant payloads byte-identical. Only an explicit
         // native-shot launch snapshot needs this additional transport variant.
+        if (composable) writer.Write(_nativeShotInitialVelocity.HasValue);
         if (_nativeShotInitialVelocity is { } nativeLaunch)
         {
             writer.Write(nativeLaunch.X);
             writer.Write(nativeLaunch.Y);
+        }
+        if (composable)
+        {
+            writer.Write(_releaseAge); writer.Write(_returnAge);
+            writer.Write(_spawnEventRan); writer.Write(_expireEventRan);
+            writer.Write(Projectile.localAI[0]); writer.Write(Projectile.localAI[1]);
+            writer.Write(_motionAxis.X); writer.Write(_motionAxis.Y);
+            writer.Write(_beamManaClockStarted); writer.Write(_beamLastManaTick);
         }
     }
 
@@ -74,8 +85,13 @@ public sealed partial class GeneratedProjectile
     {
         try
         {
+            int priorAge = _age, priorCharge = _chargeTicks, priorTimer = _controllerTimer;
+            int priorBounces = _remainingBounces, priorDelay = _activationDelayTicks, priorTarget = _lastTarget;
+            bool priorReleased = _released, priorReturning = _returning;
+            string priorItemId = _generatedItemId, priorEntityId = _entityId;
             byte runtimeVersion = reader.ReadByte();
-            if (runtimeVersion != RuntimeNetVersion && runtimeVersion != NativeShotRuntimeNetVersion)
+            bool composable = runtimeVersion == ComposableMotionRuntimeNetVersion;
+            if (runtimeVersion != RuntimeNetVersion && runtimeVersion != NativeShotRuntimeNetVersion && !composable)
                 throw new InvalidDataException("unsupported generated runtime projectile payload");
             _generatedItemId = (reader.ReadString() ?? "").Trim();
             _entityId = (reader.ReadString() ?? "").Trim();
@@ -102,8 +118,28 @@ public sealed partial class GeneratedProjectile
                 ? new Vector2(reader.ReadSingle(), reader.ReadSingle()) : null;
             if (receivedVelocity is { } sampled && (!float.IsFinite(sampled.X) || !float.IsFinite(sampled.Y)))
                 throw new InvalidDataException("non-finite sampled launch velocity");
-            Vector2? receivedNativeLaunch = runtimeVersion == NativeShotRuntimeNetVersion
+            byte nativePresence = composable ? reader.ReadByte() : (byte)(runtimeVersion == NativeShotRuntimeNetVersion ? 1 : 0);
+            if (nativePresence > 1) throw new InvalidDataException("invalid native launch presence");
+            Vector2? receivedNativeLaunch = nativePresence == 1
                 ? new Vector2(reader.ReadSingle(), reader.ReadSingle()) : null;
+            int releaseAge = -1, returnAge = -1;
+            bool spawned = false, expired = false, manaStarted = false;
+            uint manaTick = 0;
+            Vector2 cursor = Vector2.Zero, axis = Vector2.UnitX;
+            if (composable) {
+                releaseAge = reader.ReadInt32(); returnAge = reader.ReadInt32();
+                spawned = reader.ReadBoolean(); expired = reader.ReadBoolean();
+                cursor = new Vector2(reader.ReadSingle(), reader.ReadSingle());
+                axis = new Vector2(reader.ReadSingle(), reader.ReadSingle());
+                manaStarted = reader.ReadBoolean(); manaTick = reader.ReadUInt32();
+                // A tile callback after AI latches the following update as the
+                // return clock's origin; no other future phase age is admitted.
+                if (releaseAge < -1 || releaseAge > _age || returnAge < -1 || (long)returnAge > (long)_age + 1
+                    || (_released != (releaseAge >= 0)) || (_returning != (returnAge >= 0))
+                    || !float.IsFinite(cursor.X) || !float.IsFinite(cursor.Y)
+                    || !float.IsFinite(axis.X) || !float.IsFinite(axis.Y) || Math.Abs(axis.LengthSquared() - 1f) > .001f)
+                    throw new InvalidDataException("invalid composable motion phase snapshot");
+            }
             if (receivedNativeLaunch is { } nativeLaunch
                 && (!float.IsFinite(nativeLaunch.X) || !float.IsFinite(nativeLaunch.Y)))
                 throw new InvalidDataException("non-finite native shot launch velocity");
@@ -114,6 +150,45 @@ public sealed partial class GeneratedProjectile
                 && Projectile.owner >= 0 && Projectile.owner < Main.maxPlayers
                 && Main.player[Projectile.owner] is { active: true } owner
                 && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner);
+            bool sameGeneration = _vfxSourceToken == sourceToken && _data?.Id == _generatedItemId && _entity?.Id == _entityId;
+            bool sameSnapshotIdentity = _vfxSourceToken == sourceToken && priorItemId == _generatedItemId && priorEntityId == _entityId;
+            var expiryObservation = (_age, _released, _returning, releaseAge, returnAge, Projectile.position);
+            if (!composable || !sameSnapshotIdentity) { _motionExpiryObserved = false; _pendingMotionExpiry = null; }
+            if (composable && retainOwnerExclusion) {
+                // Relayed owner observations cannot rewind a local lifecycle or
+                // repeat its release/terminal events, even during metadata hydration.
+                _age = priorAge; _chargeTicks = priorCharge; _controllerTimer = priorTimer;
+                _released = priorReleased; _returning = priorReturning;
+                _remainingBounces = priorBounces; _activationDelayTicks = priorDelay; _lastTarget = priorTarget;
+            }
+            else if (composable) {
+                if (sameGeneration) {
+                    bool stale = _age < priorAge;
+                    _age = Math.Max(_age, priorAge); _chargeTicks = Math.Max(_chargeTicks, priorCharge);
+                    _released |= priorReleased; _returning |= priorReturning;
+                    if (priorReleased && _releaseAge >= 0) releaseAge = _releaseAge;
+                    if (priorReturning && _returnAge >= 0) returnAge = _returnAge;
+                    if (stale) _controllerTimer = priorTimer;
+                }
+                _releaseAge = releaseAge; _returnAge = returnAge;
+                if (InfiniRuntimeAuthority.IsServer) {
+                    // An owner's execution flag must not suppress the server's
+                    // own NPC-action/VFX lane, including first hydration.
+                    _spawnEventRan = sameSnapshotIdentity && _spawnEventRan;
+                    _expireEventRan = sameSnapshotIdentity && _expireEventRan;
+                    if (expired && !_motionExpiryObserved) {
+                        _motionExpiryObserved = true; _pendingMotionExpiry = expiryObservation;
+                    }
+                }
+                else {
+                    _spawnEventRan = spawned || sameGeneration && _spawnEventRan;
+                    _expireEventRan = expired || sameGeneration && _expireEventRan;
+                }
+                Projectile.localAI[0] = cursor.X; Projectile.localAI[1] = cursor.Y;
+                _motionAxis = axis;
+                _beamManaClockStarted = manaStarted; _beamLastManaTick = manaTick;
+            }
+            else { _releaseAge = -1; _returnAge = -1; }
             if (!retainOwnerExclusion) _initialNpcExclusion = receivedExclusion;
             if (!retainOwnerExclusion) _sampledInitialVelocity = receivedVelocity;
             if (!retainOwnerExclusion) _nativeShotInitialVelocity = receivedNativeLaunch;
@@ -142,6 +217,7 @@ public sealed partial class GeneratedProjectile
         _entity = null;
         _configured = false;
         _preserveSyncedStateOnHydrate = false;
+        _pendingMotionExpiry = null;
         Projectile.friendly = false;
         Projectile.velocity = Vector2.Zero;
         Projectile.timeLeft = Math.Min(Projectile.timeLeft, 30);
@@ -181,10 +257,18 @@ public sealed partial class GeneratedProjectile
         var packet=InfiniCrafterLocalMod.Instance.GetPacket();packet.Write(InfiniNetPacketIds.SyncGeneratedProjectileVfxEvent);
         WriteVfxEventPayload(packet,payload);packet.Send(to,ignore);
     }
-    private void SendOwnerHitVfxEvent(string eventName,Vector2 point)
+    // Shared sender/relay producer policy. New charge releases are owner-only
+    // gameplay facts; the retained charge controller already emits on the server.
+    // Never derive channel completion from a peer's observed charge counter.
+    private static bool IsOwnerProducedVfxEvent(RuntimeEntitySpec entity, string eventName)
+        => eventName is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
+            || entity.Charge is not null && entity.Controller.Code != RuntimeControllerCode.ChargeThenRelease
+                && eventName is RuntimeEventKind.OnRelease or RuntimeEventKind.ChannelComplete;
+
+    private void SendOwnerProducedVfxEvent(string eventName,Vector2 point)
     {
         if(Main.netMode!=NetmodeID.MultiplayerClient||Projectile.owner!=Main.myPlayer||_data is null||_entity is null
-            ||eventName is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)||!HasExactVfxSlot(_data,_entity.Id,eventName))return;
+            ||!IsOwnerProducedVfxEvent(_entity,eventName)||!HasExactVfxSlot(_data,_entity.Id,eventName))return;
         SendVfxPayload(CaptureVfxPayload(eventName,point,1),-1,-1);
     }
 
@@ -284,16 +368,18 @@ public sealed partial class GeneratedProjectile
         try { payload = ReadVfxEventPayload(reader); }
         catch { return; }
         if(Main.netMode==NetmodeID.Server) {
-            if(payload.Origin!=1||whoAmI!=payload.Owner||payload.EventName is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+            if(payload.Origin!=1||whoAmI!=payload.Owner
                 ||Main.player[payload.Owner] is not {active:true})return;
             var source=FindVfxPeerSource(payload,true);
             if(source is null||source._data is null||source._entity is null||!GeneratedItemRegistryService.IsCurrentWorldData(source._data)
+                ||!IsOwnerProducedVfxEvent(source._entity,payload.EventName)
                 ||!HasExactVfxSlot(source._data,payload.EntityId,payload.EventName)
                 ||!payload.Snapshot.IsValidFor(source._entity))return;
             try{RuntimeEventKind.ValidateProducer(source._entity,payload.EventName,false,false);}catch{return;}
             if(!AcceptVfxOccurrence(payload))return;
-            // Same vanilla-equivalent owner hit trust as the actual hook. This
-            // admits presentation facts only; no collision/damage/gameplay replay.
+            // Trust only the authenticated owner's actual hit/release event claim.
+            // Presentation relay never executes collision/damage/gameplay or
+            // reconstructs completion from ExtraAI or local charge counters.
             SendVfxPayload(payload with { Occurrence=VfxEventStream.NewRelayOccurrence() },-1,payload.Owner);return;
         }
         if (payload.Owner == Main.myPlayer) return;

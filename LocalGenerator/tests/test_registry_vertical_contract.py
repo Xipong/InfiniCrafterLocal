@@ -3,7 +3,6 @@
 from __future__ import annotations
 from dataclasses import replace
 from types import MappingProxyType
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from copy import deepcopy
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import (
@@ -52,7 +51,7 @@ def test_machine_manifest_has_exact_registry_identity(key, identity, registry):
         )
 
 
-@pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values()])
+@pytest.mark.parametrize("fn", [cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible])
 def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines.author_item_contract import author_item_response_schema
@@ -66,7 +65,7 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
 
 
 def test_registry_public_catalog_and_schema_remain_reachable():
-    expected = {cap.name for cap in CAPABILITY_REGISTRY.values()}
+    expected = {cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
     schema = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
     assert {row["properties"]["fn"]["const"] for row in schema} == expected
     assert {row["fn"] for row in compact_capability_catalog()} == expected

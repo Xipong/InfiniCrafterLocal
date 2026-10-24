@@ -15,7 +15,7 @@ from tests.test_low_level_three_stage_pipeline import wire_transport
 
 @pytest.mark.parametrize("anchor", ["mountedCenter", "frontHand"])
 def test_owner_link_requires_exact_anchor_choice_on_actual_sent_schemas(anchor):
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     raw = _owner_path(data, anchor)
     for repair in (False, True):
         schema = _sent(data, repair)["outputSchema"]["properties"]["slotsUpsert" if repair else "slots"]["items"]
@@ -28,18 +28,18 @@ def test_owner_link_requires_exact_anchor_choice_on_actual_sent_schemas(anchor):
 
 @pytest.mark.parametrize("choice", [None, "", "MountedCenter", "front_hand", " frontHand", True, 0])
 def test_owner_link_refuses_nonexact_or_null_anchor(choice):
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     raw = _owner_path(data, "mountedCenter")
     raw["slots"][0]["path"]["ownerAnchor"] = choice
     _assert_anchor_refused(data, raw)
 
 
 def test_owner_link_refuses_missing_anchor_without_mutation():
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     _assert_anchor_refused(data, _path(data, "ownerLink"))
 
 
-@pytest.mark.parametrize("source,capability", [("anchorHistory", ""), ("beam", "channel_beam"), ("whip", "move_whip_lash")])
+@pytest.mark.parametrize("source,capability", [("anchorHistory", ""), ("beam", "set_projectile_beam_geometry"), ("whip", "set_projectile_lash_geometry")])
 @pytest.mark.parametrize("choice", ["mountedCenter", "frontHand", None])
 def test_other_sources_forbid_even_null_owner_anchor(source, capability, choice):
     data = _data(capability)
@@ -67,7 +67,7 @@ def _owner_path(data, anchor):
 
 
 def test_owner_link_real_builder_schema_compiler_tracer():
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     raw = _owner_path(data, "mountedCenter")
     before = copy.deepcopy(data["runtimeProgram"])
     for repair in (False, True):
@@ -90,7 +90,7 @@ def test_sent_director_instructions_explain_explicit_connector_without_forcing_o
     from prompt_packet_helpers import request_dossier
     from tests.test_repair_vfx_contract import _offline_transport
     from infini_local.pipelines import vfx_generation_pipeline as stage
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     raw = {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": []}
     sent = _offline_transport(monkeypatch, "owner_link_guidance", [raw])
     final = vfx.attach_vfx_manifest(data, "owner-link-guidance", llm_director=stage.call_llm_vfx_director)
@@ -136,7 +136,7 @@ def test_owner_link_surface_is_generic_registry_derived_not_a_flail_preset(kind)
     ("path.texture.source", "entity"),
 ])
 def test_owner_link_rejects_foreign_controls_at_director_schema_and_wire(field, bad):
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     entity = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
     entity["visual"]["assetMode"] = "no_asset"
     raw = _owner_path(data, "mountedCenter")
@@ -160,7 +160,7 @@ def test_owner_link_actual_repair_freezes_valid_design_and_mechanics(monkeypatch
     from prompt_packet_helpers import request_dossier
     from tests.test_repair_vfx_contract import _offline_transport, _patch
     from infini_local.pipelines import vfx_generation_pipeline as stage
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     raw = _owner_path(data, "mountedCenter")
     raw["slots"][0]["path"][broken_field] = bad
     before, mechanics = copy.deepcopy(raw), copy.deepcopy(data["runtimeProgram"])
@@ -189,7 +189,7 @@ def test_owner_link_delivery_preserves_explicit_strip_and_existing_paths(tmp_pat
     from infini_local.pipelines import visual_delivery_gate
     from infini_local.qa.live_no_image_fixture import hydrate_no_image_fixture_assets, write_no_image_fixture_png, synthetic_no_image_execution_control
     from tests.vfx_material_fixtures import _asset
-    data = _data("move_flail_tether")
+    data = _data("seek_projectile")
     data.update(id="owner_link_synthetic_witness", schemaVersion=5, runtimeApiVersion=RUNTIME_PROGRAM_API_VERSION,
                 sourceMode="offline_contract_fixture")
     raw = _owner_path(data, "mountedCenter")
@@ -226,7 +226,7 @@ def test_owner_link_delivery_preserves_explicit_strip_and_existing_paths(tmp_pat
         assert {k: v for k, v in current.items() if k != "visual"} == {k: v for k, v in original.items() if k != "visual"}
 
 
-@pytest.mark.parametrize("source,capability", [("anchorHistory", ""), ("beam", "channel_beam"), ("whip", "move_whip_lash")])
+@pytest.mark.parametrize("source,capability", [("anchorHistory", ""), ("beam", "set_projectile_beam_geometry"), ("whip", "set_projectile_lash_geometry")])
 def test_existing_path_sources_compile_byte_semantics_unchanged(source, capability):
     data = _data(capability)
     raw = _path(data, source)

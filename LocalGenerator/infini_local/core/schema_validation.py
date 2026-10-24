@@ -325,6 +325,10 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
         if schema.get("maximum") is not None and value > schema["maximum"]:
             if not native_single or not _same_finite_single(value, schema["maximum"]):
                 add("maximum", path, schema["maximum"], value)
+        if schema.get("exclusiveMinimum") is not None and value <= schema["exclusiveMinimum"]:
+            add("exclusive_minimum", path, schema["exclusiveMinimum"], value)
+        if schema.get("exclusiveMaximum") is not None and value >= schema["exclusiveMaximum"]:
+            add("exclusive_maximum", path, schema["exclusiveMaximum"], value)
         step = schema.get("multipleOf")
         if isinstance(step, (int, float)) and step > 0 and finite:
             # The only authored fractional step is an exact binary half; check

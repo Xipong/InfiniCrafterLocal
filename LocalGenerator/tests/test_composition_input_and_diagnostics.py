@@ -71,11 +71,19 @@ def test_mobile_firing_requires_explicit_motion_without_inventing_stationary_beh
     assert not validate_runtime_wire(wire)['ok']
 
 
-def test_beam_warning_is_advisory_and_does_not_rewrite_motion():
-    doc = build_capability_witness('channel_beam')
-    doc['runtimeProgram']['calls'].append({'id': 'beam_motion', 'fn': 'move_straight', 'target': 'witness_entity'})
+def test_independent_beam_geometry_does_not_warn_away_or_rewrite_authored_motion():
+    doc = build_capability_witness('set_projectile_beam_geometry')
+    motion = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'move_straight')
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert report['ok'], report
-    assert any(w['code'] == 'motion_owned_by_beam' for w in report['warnings'])
+    assert not any(w['code'] == 'motion_owned_by_beam' for w in report['warnings'])
+    wire = compile_runtime_program(doc)
     assert doc == before
+    entity = next(e for e in wire['runtimeProgram']['entities'] if e['id'] == motion['target'])
+    assert entity['movement']['name'] == 'move_straight'
+    assert 'beamGeometry' in entity and 'aim' in entity
+    assert 'controller' not in entity and 'ownerControl' not in entity
+    assert validate_runtime_wire(wire)['ok'], validate_runtime_wire(wire)
+    wire.pop('runtimeContract')
+    assert validate_runtime_wire(wire)['ok'], validate_runtime_wire(wire)

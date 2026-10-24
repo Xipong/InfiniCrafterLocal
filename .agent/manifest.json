@@ -14,7 +14,7 @@
     "strictWireBoundary": "LocalGenerator/infini_local/core/runtime_authoring/wire_validator.py",
     "csharpDto": "ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs",
     "csharpItemProjection": "ModSources/InfiniCrafterLocal/Common/Models/Runtime/GeneratedItemData.Apply.cs",
-    "csharpProjectileRuntime": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs",
+    "csharpProjectileRuntime": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.ComposableMotion.cs",
     "csharpEventRuntime": "ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs",
     "projectileNetwork": "ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.NetSync.cs",
     "visualDirectorContract": "LocalGenerator/infini_local/pipelines/visual_asset_plan.py",

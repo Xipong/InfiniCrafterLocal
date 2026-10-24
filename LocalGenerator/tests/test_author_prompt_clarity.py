@@ -94,7 +94,9 @@ def test_primary_and_projectile_lifecycle_card_explains_choice_not_invented_fiel
     kill = next(c for c in cat['events'] if c['event'] == 'on_kill')['constructionMeaning']
     assert 'return-to-owner' in kill
     from infini_local.pipelines.llm_authoring_prompt import realization_execution_truth_for_llm
-    assert 'return-to-owner' in realization_execution_truth_for_llm()['terminationEvents']
+    termination = realization_execution_truth_for_llm()['terminationEvents']
+    assert 'explicit kill actions such as arrival' in termination
+    assert 'A return trigger alone does not kill or seek' in termination
     bounce = next(c for c in cat['capabilities'] if c['fn'] == 'set_projectile_collision')['params']['bounceCount']['meaning']
     for fn in ('move_boomerang', 'move_returning_glaive', 'move_flail_tether'):
         assert fn in bounce
@@ -224,21 +226,30 @@ def test_condition_card_describes_its_existing_union_and_placement_guide_matches
         assert f'{fn} selects {key}>=0' in notation
 
 
-@pytest.mark.parametrize('fn', ['move_phase', 'move_expanding_wave'])
-def test_movement_execution_meaning_reaches_initial_and_repair_cards(monkeypatch, fn):
+@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
+@pytest.mark.parametrize('fn', [name for name, cap in author.CAPABILITY_REGISTRY.items()
+                                if cap.author_visible and cap.category == 'motion_primitive'])
+def test_movement_execution_meaning_reaches_initial_and_repair_cards(monkeypatch, fn, mode):
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     from infini_local.core.runtime_authoring.validator import validate_runtime_program
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
     _, user, _ = author.build_initial_author_request({}, {}, 'movement-guidance', model_name='test-model')
     cards = {row['fn']: row for row in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
     assert cards[fn]['does'] == CAPABILITY_REGISTRY[fn].prompt_card()['does']
     doc = build_capability_witness(fn)
     call = next(row for row in doc['runtimeProgram']['calls'] if row['fn'] == fn)
-    del call['params'][next(name for name, spec in CAPABILITY_REGISTRY[fn].params.items() if spec.required)]
-    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
+    required = [name for name, spec in CAPABILITY_REGISTRY[fn].params.items() if spec.required]
+    if required:
+        del call['params'][required[0]]
+    else:
+        call['target'] = 'missing_entity'
+    report = validate_runtime_program(doc)
+    assert not report['ok'], (fn, report)
+    dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=report)
     repair_card = next(row for row in dossier['existingBrokenCapabilityCards'] if row['fn'] == fn)
+    assert repair_card == CAPABILITY_REGISTRY[fn].prompt_card()
     assert repair_card['does'] == cards[fn]['does']
 
 

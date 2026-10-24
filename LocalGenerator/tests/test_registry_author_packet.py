@@ -24,7 +24,6 @@ from infini_local.pipelines.llm_authoring_prompt import (
     PLANNER_PROMPT_LIMIT_CHARS,
     PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     planner_prompt_usability_report,
-    build_llm_author_payload,
 )
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
@@ -120,11 +119,30 @@ def test_author_shape_card_and_schema_share_public_members():
     assert set(repair_card) == set(author_item_repair_response_schema()["properties"])
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 @pytest.mark.parametrize("rich", [False, True], ids=["source-numeric-parents", "rich-generated-parents"])
-def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
+def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(monkeypatch, rich, mode):
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     a = build_runtime_fixture("held_and_deployed") if rich else {"id": "a", "name": "A", "damage": 10, "useTime": 20}
     b = a if rich else {"id": "b", "name": "B", "damage": 20, "useTime": 30}
-    catalog = build_llm_author_payload(a, b, "budget-proof")["runtimeCapabilityContract"]["catalog"]
+    request, text, _ = build_initial_author_request(a, b, "budget-proof", model_name="offline-test")
+    assert request["response_format"]["type"] == mode
+    assert dossier_text(request) == text
+    from infini_local.pipelines.llm_provider_wire import _clean_llm_payload
+
+    # Bound actual provider-ready messages, not a standalone schema/dossier.
+    # Unicode characters are not tokens; retain the complete response wrapper.
+    packet = json.loads(json.dumps(_clean_llm_payload(request), ensure_ascii=False, allow_nan=False))
+    assert packet["messages"] == request["messages"]
+    assert packet["response_format"] == request["response_format"]
+    assert sum(len(row["content"]) for row in packet["messages"]) <= 220_000
+    catalog = request_dossier(request)["runtimeCapabilityContract"]["catalog"]
+    visible = {cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
+    assert {row["fn"] for row in catalog["capabilities"]} == visible
+    assert len(catalog["capabilities"]) == len(visible)
+    if mode == "json_schema":
+        variants = packet["response_format"]["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
+        assert {row["properties"]["fn"]["const"] for row in variants} == visible
     guide = catalog["fieldGuide"]
     canonical = runtime_authoring_prompt_field_guide()
     assert {k: guide[k] for k in canonical if k not in {"stackCost", "bindingTarget"}} == {
@@ -135,7 +153,7 @@ def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
     report = planner_prompt_usability_report(a, b, "budget-proof")
     assert report["ok"] and report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
-    assert report["visibleCapabilities"] == len(CAPABILITY_REGISTRY.values())
+    assert report["visibleCapabilities"] == len(visible)
     assert report["missingCapabilities"] == report["extraCapabilities"] == []
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False
 

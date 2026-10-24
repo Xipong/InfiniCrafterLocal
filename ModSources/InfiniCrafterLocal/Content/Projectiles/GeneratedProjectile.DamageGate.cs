@@ -15,8 +15,9 @@ public sealed partial class GeneratedProjectile
         // the current controller phase, including NPC, PvP and tile-cut damage.
         if (_entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease && !_released)
             return false;
-        if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam
-            && ChannelBeamWarmupProgress() < (_entity.Controller.Params.DamageStartProgress ?? 1d))
+        if (_entity.ContactGate is { } gate && MotionWindowActive(gate.Window) && !gate.Enabled)
+            return false;
+        if (HasBeamGeometry && BeamWarmupProgress() < BeamDamageStart)
             return false;
 
         // Do not force a hit or bypass native blacklists, NPC immunity, the

@@ -257,7 +257,9 @@ def test_author_request_owns_optional_alternate_cost_and_source_motion_advisorie
     assert any('source tempo' in line and 'when available' in line and 'intentional' in line for line in header)
     motion = packet['runtimeCapabilityContract']['catalog']['fieldGuide']['projectileMotion']
     assert 'aiStyle do not execute native AI' in motion
-    assert 'domain knowledge may guide' in motion and 'not a verified source measurement' in motion, 'the model can choose physics creatively; source evidence must not become a blanket inference ban'
+    assert 'domain knowledge is not a verified source measurement' in motion
+    assert 'Altered motion is legal when deliberate' in motion, 'source facts do not forbid authored creative motion'
+    assert 'independent choices' in motion and 'none implies channel, collision policy or lifetime' in motion
     from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
     catalog = sharp_engine_fn_catalog_for_llm()
     cost = json.dumps(catalog)

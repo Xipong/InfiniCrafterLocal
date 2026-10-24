@@ -623,17 +623,25 @@ def test_repair_source_units_cover_every_registry_path_without_changing_scope(mo
     full = source_wire_units_for_llm()
     packet = {}
     # Synthetic path-coverage fixture, not an executable item: populate every
-    # declared source path, including nested arrays and dotted numeric leaves.
+    # declared source path, including retained saved-wire metadata, nested
+    # arrays and discriminator-specific readings of the same numeric leaf.
     for row in full["scopes"]:
-        for field in row["fields"]:
-            owner = packet
-            parts = (row["source"] + "." + field).split(".")
+        container = packet
+        for part in row["source"].split("."):
+            if part.endswith("[]"):
+                # Each row has its own source entity: incompatible laws must
+                # not overwrite one another or pretend a selector was absent.
+                child = {}
+                container.setdefault(part[:-2], []).append(child)
+                container = child
+            else:
+                container = container.setdefault(part, {})
+        for field, value in {**dict.fromkeys(row["fields"], 0), **row.get("when", {})}.items():
+            owner = container
+            parts = field.split(".")
             for part in parts[:-1]:
-                if part.endswith("[]"):
-                    owner = owner.setdefault(part[:-2], [{}])[0]
-                else:
-                    owner = owner.setdefault(part, {})
-            owner[parts[-1]] = 0
+                owner = owner.setdefault(part, {})
+            owner[parts[-1]] = value
     source = {**packet["raw"]["item"], "generatedData": packet["raw"]["generatedParent"]}
     item = _broken_item()
     _, with_sources = _repair_request(monkeypatch, mode, source, item)
@@ -646,6 +654,36 @@ def test_repair_source_units_cover_every_registry_path_without_changing_scope(mo
         dossier.pop("parents")
         dossier.pop("sourceWireUnits")
     assert with_sources == without_sources
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("law,author_param", [
+    ("angular_sine", "law.angular_sine.amplitudeRadiansPerSecond"),
+    ("lateral_velocity_sine", "law.lateral_velocity_sine.amplitudeBlocksPerSecond"),
+    (None, None),
+    ("not_a_law", None),
+])
+def test_repair_source_units_require_actual_discriminator_without_reauthoring_source(monkeypatch, mode, law, author_param):
+    source = {"generatedData": {"runtimeProgram": {"entities": [{
+        "id": "source_motion", "oscillation": {"amplitude": 0},
+    }]}}}
+    if law is not None:
+        source["generatedData"]["runtimeProgram"]["entities"][0]["oscillation"]["law"] = law
+    before = copy.deepcopy(source)
+    item = _broken_item()
+    _, packet = _repair_request(monkeypatch, mode, source, item)
+    readings = [row for row in packet["sourceWireUnits"]["scopes"]
+                if row["fn"] == "oscillate_projectile_velocity"]
+    if author_param is None:
+        assert readings == [], "missing/unknown law cannot select a numeric conversion"
+    else:
+        assert len(readings) == 1
+        assert readings[0]["when"] == {"law": law}
+        assert readings[0]["fields"]["amplitude"][0] == author_param
+    assert packet["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
+    assert packet["repairScope"]["fieldPermissions"]["calls"] == [
+        {"id": "held_lantern_pike_life", "paths": ["params.lifetimeSeconds"]}]
+    assert source == before
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])

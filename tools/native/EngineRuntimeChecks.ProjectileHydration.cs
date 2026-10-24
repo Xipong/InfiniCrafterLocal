@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Text.Json.Nodes;
 using System.IO;
 using System.Reflection;
 using InfiniCrafterLocal.Common.Models;
@@ -123,4 +125,39 @@ internal static partial class EngineRuntimeChecks
     private static bool ProjectileConfigured(GeneratedProjectile projectile)
         => (bool)typeof(GeneratedProjectile).GetField("_configured", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(projectile)!;
+    private static void FirstProjectileHydrationPreservesNativeTopLeft()
+    {
+        foreach (bool composable in new[] { false, true }) {
+        using var peers = new ReviewPeers();
+        var root = JsonNode.Parse(ReviewProjectileData("on_spawn").ToJson())!.AsObject();
+        root.Remove("runtimeContract");
+        var actor = root["runtimeProgram"]!["entities"]!.AsArray().Single(e => (string?)e!["id"] == "actor")!;
+        if (composable) actor["opacity"] = JsonNode.Parse("{\"alpha\":137}");
+        actor["hitbox"]!["widthPx"] = 40; actor["hitbox"]!["heightPx"] = 18;
+        var data = ParseMaterialElement(root); peers.Register(data);
+        peers.Mode(NetmodeID.MultiplayerClient, 0);
+        var owner = peers.Host(data);
+        owner.Projectile.Center = new Vector2(100.25f, 150.75f);
+        byte[] extra = ReviewExtra(owner);
+        Equal((byte)(composable ? 6 : 4), extra[0], "both retained and composable packets use native top-left");
+        Vector2 nativePosition = owner.Projectile.position;
+        peers.Mode(NetmodeID.Server, 255);
+        var body = Terraria.Main.projectile[11] = new Projectile {
+            active = true, whoAmI = 11, owner = 0, identity = owner.Projectile.identity,
+            damage = owner.Projectile.damage, knockBack = owner.Projectile.knockBack,
+        };
+        var receiver = Attach(body);
+        typeof(Projectile).GetProperty("ModProjectile")!.SetValue(body, receiver);
+        receiver.SetDefaults(); // actual fresh proxy dimensions before native Msg27 body fields
+        Equal(12, body.width, "fresh proxy default width is distinct from admitted authored width");
+        body.position = nativePosition; // exact native Msg27 contract: top-left, not center
+        body.velocity = owner.Projectile.velocity;
+        receiver.ReceiveExtraAI(new BinaryReader(new MemoryStream(extra)));
+        Equal(true, ProjectileConfigured(receiver), "fresh native snapshot hydrates the exact definition");
+        Equal(40, body.width, "authored hitbox width hydrates");
+        Equal(18, body.height, "authored hitbox height hydrates");
+        AssertVfxNear(nativePosition, body.position, "metadata must not reinterpret native top-left using old default dimensions");
+        AssertVfxNear(owner.Projectile.Center, body.Center, "first hydrated center matches actual owner fractional center");
+        }
+    }
 }

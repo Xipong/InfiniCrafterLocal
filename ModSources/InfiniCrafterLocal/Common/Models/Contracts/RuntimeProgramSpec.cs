@@ -136,6 +136,7 @@ public sealed class RuntimeProgramSpec
             if (entity.Kind == RuntimeEntityKind.ItemBody)
                 itemBodies++;
         }
+        RuntimeMotionAdmission.ValidateProgram(this);
         if (itemBodies != 1)
             throw new InvalidDataException("runtimeProgram must contain exactly one item_body");
         RuntimeEntitySpec? item = TryGetEntity(ItemEntityId);
@@ -491,7 +492,7 @@ public static class RuntimeEventKind
             OnHurt or OnEnemyKill => hasEquipment,
             OnHit or OnCrit => entity.Kind == RuntimeEntityKind.ItemBody ? itemContactEnabled : entity.Damage.Enabled,
             OnTileCollision => entity.Collision.TileCollide,
-            OnRelease or ChannelComplete => entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease,
+            OnRelease or ChannelComplete => entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease || entity.Charge is not null,
             OnSpawn or OnExpire or OnKill => projectile,
             Periodic => true,
             _ => false,
@@ -750,7 +751,7 @@ public static class RuntimeEntityRole
     public static bool IsKnown(string? value) => value is Primary or Secondary;
 }
 
-public sealed class RuntimeEntitySpec
+public sealed partial class RuntimeEntitySpec
 {
     private bool? _nativeSentry;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -807,7 +808,7 @@ public sealed class RuntimeEntitySpec
     public bool IsOwnerAttached => Kind == RuntimeEntityKind.OwnerAttachedProjectile;
     public bool IsStationary => Kind is RuntimeEntityKind.StationaryProjectile or RuntimeEntityKind.Field or RuntimeEntityKind.TemporaryHelper;
     [JsonIgnore]
-    public bool UsesInitialVelocity => !IsStationary
+    public bool UsesInitialVelocity => !IsStationary || HasMotionPositionDriver
         || Controller.Code == RuntimeControllerCode.TargetAndFire && Movement.IsConfigured;
 
     public void NormalizeAndValidate(RuntimeLimitsSpec limits)
@@ -830,6 +831,7 @@ public sealed class RuntimeEntitySpec
         if (Events.Length > InfiniRuntimeLimits.MaxRuntimeEventsPerEntity)
             throw new InvalidDataException($"entity '{Id}' has too many event actions");
 
+        ValidateMotionComponents();
         Visual.Normalize();
         // New metadata has exactly one texture owner. Alias/item-body rows may
         // not create a second authority; absent fields remain saved-v5 compatible.
@@ -864,12 +866,13 @@ public sealed class RuntimeEntitySpec
             Movement.NormalizeAndValidate(Kind);
             Controller.NormalizeAndValidate(Kind);
             if (Spawn.VelocityDistribution is not null
-                && (IsStationary || Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
+                && (IsStationary && !HasMotionPositionDriver || Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
                 throw new InvalidDataException($"entity '{Id}' does not execute sampled initial velocity");
             TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
             NpcAttraction?.Validate(); VisualScaleCurve?.Validate();
             if ((TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
-                && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code is not (RuntimeControllerCode.None or RuntimeControllerCode.TargetAndFire) || !Movement.IsConfigured))
+                && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) && !HasMotionPositionDriver
+                    || Controller.Code is not (RuntimeControllerCode.None or RuntimeControllerCode.TargetAndFire) || !(Movement.IsConfigured || HasMotionPositionDriver)))
                 throw new InvalidDataException("velocity modifiers require a free/child projectile with explicit movement ownership");
             if (VisualScaleCurve is not null && (Movement.Code is 15 or 18 || Controller.Code == RuntimeControllerCode.ChannelBeam || HitboxCurve?.MirrorToSprite == true))
                 throw new InvalidDataException("dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry");
@@ -884,7 +887,7 @@ public sealed class RuntimeEntitySpec
             }
             bool requiresPositionDriver = Kind is RuntimeEntityKind.OwnerAttachedProjectile or RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile;
             bool controllerOwnsPosition = Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease;
-            if (requiresPositionDriver && !Movement.IsConfigured && !controllerOwnsPosition)
+            if (requiresPositionDriver && !Movement.IsConfigured && !controllerOwnsPosition && !HasMotionPositionDriver)
                 throw new InvalidDataException($"projectile entity '{Id}' requires explicit movement or a position-owning controller");
             Targeting.Normalize();
             Light.Normalize();
@@ -1236,7 +1239,7 @@ public static class RuntimeModifierClock
     }
 }
 
-public sealed class RuntimeTurnModifierSpec
+public sealed class RuntimeTurnModifierSpec : RuntimeWindowedMotionSpec
 {
     public sealed class TurnRadiansPerUpdateJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1246,15 +1249,16 @@ public sealed class RuntimeTurnModifierSpec
     [JsonRequired] public float TurnRadiansPerUpdate { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
-    public void Validate()
+    public override void Validate()
     {
+        base.Validate();
         RuntimeModifierClock.RequireRange(TurnRadiansPerUpdate, -0.5f, 0.5f);
         RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
         RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }
 
-public sealed class RuntimeSpeedModifierSpec
+public sealed class RuntimeSpeedModifierSpec : RuntimeWindowedMotionSpec
 {
     public sealed class SpeedMultiplierPerUpdateJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1270,8 +1274,9 @@ public sealed class RuntimeSpeedModifierSpec
     [JsonRequired] public float MaxSpeed { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
-    public void Validate()
+    public override void Validate()
     {
+        base.Validate();
         RuntimeModifierClock.RequireRange(SpeedMultiplierPerUpdate, 0.8f, 1.2f);
         RuntimeModifierClock.RequireRange(MaxSpeed, 0.1f, 80f);
         RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
@@ -1279,7 +1284,7 @@ public sealed class RuntimeSpeedModifierSpec
     }
 }
 
-public sealed class RuntimeHomingModifierSpec
+public sealed class RuntimeHomingModifierSpec : RuntimeWindowedMotionSpec
 {
     public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1296,8 +1301,9 @@ public sealed class RuntimeHomingModifierSpec
     [JsonRequired] public bool RequireLineOfSight { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
-    public void Validate()
+    public override void Validate()
     {
+        base.Validate();
         RuntimeModifierClock.RequireRange(RangeTiles, 1f, 120f);
         RuntimeModifierClock.RequireRange(MaxTurnRadiansPerUpdate, 0.0001f, 3.2f);
         RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
@@ -1305,7 +1311,7 @@ public sealed class RuntimeHomingModifierSpec
     }
 }
 
-public sealed class RuntimeNpcAttractionSpec
+public sealed class RuntimeNpcAttractionSpec : RuntimeWindowedMotionSpec
 {
     public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1323,8 +1329,9 @@ public sealed class RuntimeNpcAttractionSpec
     [JsonRequired] public int MaxTargets { get; set; }
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
-    public void Validate()
+    public override void Validate()
     {
+        base.Validate();
         RuntimeModifierClock.RequireRange(RangeTiles, 1f, 80f);
         RuntimeModifierClock.RequireRange(StrengthPerUpdate, 0.001f, 4f);
         RuntimeModifierClock.RequireRange(MaxTargets, 1, 16);
@@ -1334,7 +1341,7 @@ public sealed class RuntimeNpcAttractionSpec
     }
 }
 
-public sealed class RuntimeVisualScaleCurveSpec
+public sealed class RuntimeVisualScaleCurveSpec : RuntimeWindowedMotionSpec
 {
     public sealed class StartScaleJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1351,8 +1358,9 @@ public sealed class RuntimeVisualScaleCurveSpec
     [JsonRequired] public int StartDelayTicks { get; set; }
     [JsonRequired] public int DurationTicks { get; set; }
     [JsonRequired] public string Curve { get; set; } = "";
-    public void Validate()
+    public override void Validate()
     {
+        base.Validate();
         RuntimeModifierClock.RequireRange(StartScale, 0.25f, 8f);
         RuntimeModifierClock.RequireRange(EndScale, 0.25f, 8f);
         RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);

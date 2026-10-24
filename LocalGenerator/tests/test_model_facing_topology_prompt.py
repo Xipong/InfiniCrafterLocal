@@ -2,7 +2,6 @@
 from __future__ import annotations
 from prompt_packet_helpers import request_dossier, dossier_text
 
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 import json
 
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, compact_capability_catalog
@@ -53,7 +52,9 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     cards = {card["fn"]: card for card in catalog["capabilities"]}
     canonical = {card["fn"]: card for card in compact_capability_catalog()}
-    assert set(cards) == {cap.name for cap in CAPABILITY_REGISTRY.values()}
+    visible = {cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
+    assert len(catalog["capabilities"]) == len(visible)
+    assert set(cards) == visible
     assert _expand_constraint_references(
         {fn: {key: value for key, value in card.items() if key != "constructionMeaning"}
          for fn, card in cards.items()}, catalog["fieldGuide"]["consumerConstraints"]) == canonical
@@ -69,6 +70,12 @@ def test_reference_budgets_and_complete_calls_use_registry_cards(monkeypatch) ->
     assert "required unless marked optional" in catalog["fieldGuide"]["paramNotation"]
     for card in cards.values():
         for name, param in card["params"].items():
+            if "paramRef" in param:
+                owner, leaf = param["paramRef"].split(".")
+                assert leaf == name
+                assert CAPABILITY_REGISTRY[owner].params[leaf] == CAPABILITY_REGISTRY[card["fn"]].params[name]
+                param = cards[owner]["params"][leaf]
+                assert "paramRef" not in param
             assert param.get("optional", False) is not CAPABILITY_REGISTRY[card["fn"]].params[name].required
     assert "everySeconds" in json.dumps(cards["spawn_entity_on_event"]["params"]["when"]["shape"])
     assert "requires" in cards["spawn_entity_on_event"]
@@ -82,8 +89,18 @@ def test_use_hold_charge_equipment_and_topology_are_at_owners(monkeypatch) -> No
     entities = {row["kind"]: row for row in catalog["entityKinds"]}
     use = cards["configure_item_use"]["constructionMeaning"]
     assert all(term in use for term in ("useTimeSeconds", "useAnimationSeconds", "autoReuse", "channel"))
-    charge = cards["charge_then_release"]["constructionMeaning"]
-    assert all(term in charge for term in ("channel=true", "charged entity", "chargeSeconds", "customHeldSprite", "presentation"))
+    charge = cards["accumulate_projectile_charge"]
+    assert "durationSeconds" in charge["params"]
+    assert "no position, aim, damage, contact gate or lifetime pause" in charge["does"]
+    assert any(rule["capability"] == "configure_item_use" and rule["param"] == "channel"
+               and rule["equals"] is True for rule in charge["requires"])
+    release = cards["apply_projectile_charge_release"]
+    assert "pauseLifetimeWhileCharging" in release["params"]
+    assert any(rule["capability"] == charge["fn"] for rule in release["requires"])
+    assert "contact remains independently authored" in release["does"]
+    assert "gate_projectile_contact" in cards
+    assert "customHeldSprite" in cards["configure_item_use"]["params"]
+    assert "charge_then_release" not in cards
     assert "While-selected HoldItem" in inputs["hold"]["constructionMeaning"]
     assert all(term in inputs["equipped"]["constructionMeaning"].lower() for term in ("passive", "runtime uses the first", "head only", "head/body/legs"))
     assert "requiredComponents" in entities["item_body"] and "configure_item_stats" in entities["item_body"]["requiredComponents"]

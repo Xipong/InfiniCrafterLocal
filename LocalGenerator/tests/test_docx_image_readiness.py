@@ -18,9 +18,18 @@ from tests.vfx_image_fixtures import _data, _request, _existing_texture_data, of
 def _retained_delivery():
     from infini_local.core.vfx_manifest import _compile_manifest, VFX_DIRECTOR_SCHEMA
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-    from tests.test_low_level_three_stage_pipeline import _accepted_visual_data
+    import json
+    from infini_local.pipelines import visual_generation_pipeline as visual
+    from tests.test_low_level_three_stage_pipeline import _visual_kit
 
-    data = _accepted_visual_data("workbench_blade")
+    # Replay unchanged saved wire through existing presentation adapters. Fresh
+    # Author now emits independent motion fields, which legitimately alter its
+    # read-only image facts; this control protects the historical delivery ABI.
+    fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/docx-image-ready-delivered.json"
+    saved = json.loads(fixture.read_text(encoding="utf-8"))
+    assert validate_runtime_wire(saved)["ok"]
+    mechanics = copy.deepcopy(saved["runtimeProgram"])
+    data = visual._apply_kit(saved, _visual_kit(saved))
     data.update(id="docx_image_ready_offline", sourceMode="generated", schemaVersion=5,
                 runtimeApiVersion="infini.runtime-program.v5", recipeKey="docx_readiness_offline")
     data["vfxManifest"] = _compile_manifest(data, {"schema": VFX_DIRECTOR_SCHEMA, "slots": []}, "offline_recipe")
@@ -39,6 +48,11 @@ def _retained_delivery():
     data["visual"].update(spriteRawPath="", assetManifestPath="")
     outgoing = sanitize_recipe_for_delivery(data)
     assert validate_runtime_wire(outgoing)["ok"]
+    delivered_mechanics = copy.deepcopy(outgoing["runtimeProgram"])
+    for runtime in (delivered_mechanics, mechanics):
+        for entity in runtime["entities"]:
+            entity.pop("visual", None)
+    assert delivered_mechanics == mechanics
     return outgoing, raw
 
 

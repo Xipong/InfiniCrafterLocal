@@ -10,7 +10,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     INPUT_KIND_REGISTRY,
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
-    capability_provider_union,
+    capability_provider_union, shared_parameter_schemas,
 )
 _ID_PATTERN = r"^[a-z][a-z0-9_]{0,47}$"
 ITEM_NAME_MAX_LENGTH = 80
@@ -129,8 +129,9 @@ def binding_schema() -> dict[str, Any]:
     }
 
 
-def runtime_program_author_schema() -> dict[str, Any]:
+def runtime_program_author_schema(*, include_definitions: bool = True) -> dict[str, Any]:
     return {
+        **({"$defs": shared_parameter_schemas()} if include_definitions else {}),
         "type": "object",
         "additionalProperties": False,
         "properties": {
@@ -155,7 +156,7 @@ def runtime_program_author_schema() -> dict[str, Any]:
             },
             "calls": {
                 "type": "array",
-                "items": {"oneOf": capability_provider_union()},
+                "items": {"oneOf": capability_provider_union(shared_refs=True)},
                 "minItems": 1,
                 "maxItems": 48,
             },
@@ -182,6 +183,7 @@ def realization_schema() -> dict[str, Any]:
 def author_item_response_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": shared_parameter_schemas(),
         "type": "object",
         "additionalProperties": False,
         "properties": {
@@ -223,7 +225,7 @@ def author_item_response_schema() -> dict[str, Any]:
                     "literalSynthesis", "coreMechanic", "parentAContribution", "parentBContribution", "playerExperience",
                 ],
             },
-            "runtimeProgram": runtime_program_author_schema(),
+            "runtimeProgram": runtime_program_author_schema(include_definitions=False),
             # Deliberately last: this is the same Author's post-program account
             # of what the accepted executable draft actually realizes.
             "realization": realization_schema(),
@@ -242,7 +244,7 @@ def author_item_repair_schema(
     and the frozen merge remain separate authorities after parsing. Optional
     realizationReplacement is advisory; omission leaves existing prose unchanged.
     """
-    variants = capability_provider_union()
+    variants = capability_provider_union(shared_refs=True)
     if capability_names is not None:
         requested = set(capability_names)
         registered = {row["properties"]["fn"]["const"] for row in variants}
@@ -255,6 +257,7 @@ def author_item_repair_schema(
     }
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$defs": shared_parameter_schemas(),
         "type": "object",
         "additionalProperties": False,
         "properties": {
@@ -329,7 +332,7 @@ def author_item_repair_schema(
 
 
 
-def _author_schema_work_bounds(schema: Mapping[str, Any]) -> tuple[int, int, int, int]:
+def _author_schema_work_bounds(schema: Mapping[str, Any], *, root: Mapping[str, Any] | None = None) -> tuple[int, int, int, int]:
     """Derive input nodes/depth/text width and assertion weight from Author schema.
 
     Union branches share one input value: size uses the largest branch, while
@@ -337,13 +340,21 @@ def _author_schema_work_bounds(schema: Mapping[str, Any]) -> tuple[int, int, int
     A bounded input has at most nodes * weight diagnostics, including missing
     properties, union wrappers and extra keys. This is not a display limit.
     """
+    root = schema if root is None else root
+    if "$ref" in schema:
+        prefix = "#/$defs/"
+        ref = schema["$ref"]
+        definitions = root.get("$defs", {})
+        if not isinstance(ref, str) or not ref.startswith(prefix) or ref[len(prefix):] not in definitions:
+            raise RuntimeError("Author schema contains an unresolved shared type")
+        return _author_schema_work_bounds(definitions[ref[len(prefix):]], root=root)
     nodes, depth = 1, 0
     weight = 1 + len(schema) + len(schema.get("required", []))
     text_width = max([schema.get("maxLength", 0), *(
         len(value) for value in [schema.get("const"), *schema.get("enum", [])]
         if isinstance(value, str)
     )])
-    children = [_author_schema_work_bounds(child) for child in schema.get("properties", {}).values()]
+    children = [_author_schema_work_bounds(child, root=root) for child in schema.get("properties", {}).values()]
     if children:
         nodes += sum(child[0] for child in children)
         depth = 1 + max(child[1] for child in children)
@@ -353,19 +364,19 @@ def _author_schema_work_bounds(schema: Mapping[str, Any]) -> tuple[int, int, int
         # Author collections must have a declared finite size. Never fall back
         # to a guessed error cap when the contract is extended.
         count = schema["maxItems"]
-        child = _author_schema_work_bounds(item)
+        child = _author_schema_work_bounds(item, root=root)
         nodes += count * child[0]
         depth = max(depth, 1 + child[1])
         children.append(child)
     for key in ("oneOf", "anyOf", "allOf"):
-        branches = [_author_schema_work_bounds(branch) for branch in schema.get(key, [])]
+        branches = [_author_schema_work_bounds(branch, root=root) for branch in schema.get(key, [])]
         if branches:
             nodes = max(nodes, max(branch[0] for branch in branches))
             depth = max(depth, max(branch[1] for branch in branches))
             children.extend(branches)
     for key in ("if", "then", "else"):
         if isinstance(schema.get(key), Mapping):
-            children.append(_author_schema_work_bounds(schema[key]))
+            children.append(_author_schema_work_bounds(schema[key], root=root))
     text_width = max([text_width, *(child[2] for child in children)])
     weight += sum(child[3] for child in children)
     return nodes, depth, text_width, weight

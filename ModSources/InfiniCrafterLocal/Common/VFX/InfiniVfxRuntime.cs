@@ -97,7 +97,7 @@ internal readonly record struct InfiniVfxProjectileSnapshot(
     internal bool IsValid => Finite(Center) && Finite(Tip) && Finite(Forward)
         && Math.Abs(Forward.LengthSquared() - 1f) < 0.001f
         && (!OwnerCenter.HasValue || Finite(OwnerCenter.Value)) && (!MaterialTip.HasValue || Finite(MaterialTip.Value))
-        && float.IsFinite(Pose.Rotation) && float.IsFinite(Pose.Scale) && Pose.Scale is >= 0.015625f and <= 128f
+        && float.IsFinite(Pose.Rotation) && float.IsFinite(Pose.Scale) && Pose.Scale is >= 0.01f and <= 128f
         && float.IsFinite(Pose.GfxOffY) && Pose.Effects is SpriteEffects.None or SpriteEffects.FlipHorizontally;
 
     // Reuse the existing pose.Scale float on the event wire, not a second
@@ -108,7 +108,8 @@ internal readonly record struct InfiniVfxProjectileSnapshot(
         => IsValid && (UsesExactFrontHandScale(entity) || Pose.Scale is >= 0.1f and <= 8f);
 
     private static bool UsesExactFrontHandScale(RuntimeEntitySpec? entity)
-        => entity?.Movement.Code == 20 && (entity.HitboxCurve?.MirrorToSprite == true || entity.VisualScaleCurve is not null);
+        => entity?.VisualScaleRate is not null || (entity?.Movement.Code == 20 || entity?.Attachment?.Anchor == "front_hand")
+            && (entity!.HitboxCurve?.MirrorToSprite == true || entity.VisualScaleCurve is not null);
 
     private static bool Finite(Vector2 value) => float.IsFinite(value.X) && float.IsFinite(value.Y);
 
@@ -179,7 +180,7 @@ public static class InfiniVfxRuntime
             EmitPrimitive(data, anchor, slot.Anchor == "velocity" ? projectile.velocity : snapshot.Forward, slot, manifest, state.SourceKey);
             if (VfxRendererRegistry.Resolve(slot) != InfiniVfxRendererKind.ImpactSprite)
                 EmitEventSprite(data, entityId, anchor, projectile.velocity, slot, manifest, state.SourceKey,
-                    snapshot.Pose);
+                    snapshot.Pose, snapshot.Forward);
             EmitSlot(data, entityId, anchor, projectile.velocity, slot, manifest, ref state, state.SourceKey);
         }
         return emitted;
@@ -226,10 +227,19 @@ public static class InfiniVfxRuntime
     }
 
     internal static Vector2 ForwardTip(Projectile projectile, GeneratedItemData data, string entityId)
-        => projectile.Center + ForwardAxis(projectile, data, entityId) * (projectile.width * projectile.scale * 0.5f);
+    {
+        var entity = data.RuntimeProgram.TryGetEntity(entityId);
+        if ((entity?.BeamGeometry is not null || entity?.LashGeometry is not null)
+            && projectile.ModProjectile is Content.Projectiles.GeneratedProjectile motion
+            && (motion.TryCapturePresentationGeometry("beam", out var points) || motion.TryCapturePresentationGeometry("whip", out points)))
+            return points[^1];
+        return projectile.Center + ForwardAxis(projectile, data, entityId) * (projectile.width * projectile.scale * 0.5f);
+    }
 
     internal static Vector2 ForwardAxis(Projectile projectile, GeneratedItemData data, string entityId)
     {
+        if (projectile.ModProjectile is Content.Projectiles.GeneratedProjectile motion
+            && motion.TryGetMotionPresentationAxis(out var motionAxis)) return motionAxis;
         foreach (RuntimeEntitySpec entity in data.RuntimeProgram.Entities)
             if (entity.Id == entityId && entity.Movement.Code is 14 or 16 or 17)
                 return projectile.rotation.ToRotationVector2();
@@ -340,7 +350,7 @@ public static class InfiniVfxRuntime
             EmitPrimitive(data, anchor, slot.Anchor != "velocity" ? snapshot.Forward : inheritedVelocity,
                 slot, manifest, sourceKey);
             if (VfxRendererRegistry.Resolve(slot) != InfiniVfxRendererKind.ImpactSprite)
-                EmitEventSprite(data, entityId, anchor, inheritedVelocity, slot, manifest, sourceKey, snapshot.Pose);
+                EmitEventSprite(data, entityId, anchor, inheritedVelocity, slot, manifest, sourceKey, snapshot.Pose, snapshot.Forward);
             EmitSlot(data, entityId, anchor, inheritedVelocity, slot, manifest, ref state, sourceKey, detachedParticleBudget: true);
         }
         return emitted;
@@ -404,7 +414,7 @@ public static class InfiniVfxRuntime
     // trajectory samples. Dust remains an independent choice at the caller.
     internal static bool EmitEventSprite(GeneratedItemData data, string entityId, Vector2 center,
         Vector2 inheritedVelocity, VfxSlotSpec slot, VfxManifestSpec manifest, string sourceKey,
-        InfiniVfxSpritePose? pose = null)
+        InfiniVfxSpritePose? pose = null, Vector2? forwardAxis = null)
     {
         if (VfxRendererRegistry.Resolve(slot) is not (InfiniVfxRendererKind.ImpactSprite
             or InfiniVfxRendererKind.SpriteStampTrail)) return false;
@@ -422,13 +432,15 @@ public static class InfiniVfxRuntime
             // Snapshot/network remains raw native pose + dimensionless body scale;
             // only explicit code20 curves bypass the historical capture clamp.
             // Capture the selected texture's corrected pose and base size only here.
-            var selectedPose = captured with { Rotation = selected.ProjectileRotation(data.RuntimeProgram.TryGetEntity(entityId), captured.Rotation, captured.Effects) };
+            var entity = data.RuntimeProgram.TryGetEntity(entityId);
+            var selectedPose = captured with { Rotation = entity is not null
+                ? Content.Projectiles.GeneratedProjectile.MotionSpriteRotation(entity, selected, captured.Rotation, captured.Effects)
+                : selected.ProjectileRotation(entity, captured.Rotation, captured.Effects) };
             InfiniDetachedVfxSystem.Enqueue(sourceKey, selected.Path, slot.Layer!, center + new Vector2(0, captured.GfxOffY),
                 selectedPose.Rotation, captured.Scale * slot.Scale!.Value, slot.Alpha!.Value, color,
                 slot.Duration!.Value, manifest.Budget.MaxDrawCalls, selectedPose, selected.RenderSizePx,
-                selected.FrontHandBody && selected.Grip is { } grip && selected.ForwardAngleDegrees is { } angle
-                    ? new InfiniVfxSpriteAnchor((float)grip.NormalizedX, (float)grip.NormalizedY, angle,
-                        data.RuntimeProgram.TryGetEntity(entityId)!.Movement.Params.HitboxOffsetPx!.Value) : null);
+                entity is not null ? Content.Projectiles.GeneratedProjectile.MotionSpriteAnchor(entity, selected,
+                    selectedPose.Rotation, selectedPose.Effects, forwardAxis ?? inheritedVelocity.SafeNormalize(Vector2.UnitX)) : null);
         }
         else
         {
@@ -495,12 +507,18 @@ public static class InfiniVfxRuntime
     {
         if (!selected.ImpactTexture && (!selected.RenderSizePx.HasValue || !selected.ForwardAngleDegrees.HasValue)) return;
         SpriteEffects effects = projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        float rotation = selected.ProjectileRotation(entity, projectile.rotation, effects);
+        float rotation = entity is not null ? Content.Projectiles.GeneratedProjectile.MotionSpriteRotation(entity, selected, projectile.rotation, effects)
+            : selected.ProjectileRotation(entity, projectile.rotation, effects);
         float drawScale = selected.ImpactTexture ? Math.Max(0.05f, projectile.scale * scale)
             : Math.Clamp(projectile.scale, 0.1f, 8f) * scale * selected.FrameScale(texture.Width, texture.Height);
-        if (selected.FrontHandBody && entity is not null && (entity.HitboxCurve?.MirrorToSprite == true || entity.VisualScaleCurve is not null))
+        if (!selected.ImpactTexture && (entity?.VisualScaleRate is not null || (selected.FrontHandBody || entity?.Attachment?.Anchor == "front_hand")
+            && entity is not null && (entity.HitboxCurve?.MirrorToSprite == true || entity.VisualScaleCurve is not null)))
             drawScale = projectile.scale * scale * selected.FrameScale(texture.Width, texture.Height);
-        Vector2 origin = selected.ProjectileOrigin(entity, texture.Width, texture.Height, drawScale, effects);
+        Vector2 origin = entity is not null ? Content.Projectiles.GeneratedProjectile.MotionSpriteOrigin(entity, selected,
+            texture.Width, texture.Height, drawScale, effects, rotation,
+            projectile.ModProjectile is Content.Projectiles.GeneratedProjectile source && source.TryGetMotionPresentationAxis(out var poseAxis)
+                ? poseAxis : projectile.velocity.SafeNormalize(Vector2.UnitX))
+            : selected.ProjectileOrigin(entity, texture.Width, texture.Height, drawScale, effects);
         for (int i = 2; i < state.HistoryCount; i += 3)
         {
             if (!SpendDraw(manifest, ref state, 1)) break;

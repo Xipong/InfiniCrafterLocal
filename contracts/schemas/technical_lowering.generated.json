@@ -3,6 +3,359 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_owner_control",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionOwnerControl",
+      "outputs": [
+        "runtimeProgram.entities[].ownerControl.requireHeldItem",
+        "runtimeProgram.entities[].ownerControl.requireChannel",
+        "runtimeProgram.entities[].ownerControl.requireItemAnimation",
+        "runtimeProgram.entities[].ownerControl.claimHeldProjectile",
+        "runtimeProgram.entities[].ownerControl.animation",
+        "runtimeProgram.entities[].ownerControl.lifetime"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "accumulate_projectile_charge",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge",
+      "outputs": [
+        "runtimeProgram.entities[].charge.durationTicks",
+        "runtimeProgram.entities[].charge.autoReleaseAfterActiveTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "apply_projectile_charge_release",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
+      "outputs": [
+        "runtimeProgram.entities[].chargeRelease.damageMultiplier",
+        "runtimeProgram.entities[].chargeRelease.knockbackMultiplier",
+        "runtimeProgram.entities[].chargeRelease.speedMultiplier",
+        "runtimeProgram.entities[].chargeRelease.launchSpeed",
+        "runtimeProgram.entities[].chargeRelease.pauseLifetimeWhileCharging"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "gate_projectile_contact",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.DamageGate.cs::CanDamage",
+      "outputs": [
+        "runtimeProgram.entities[].contactGate.enabled",
+        "runtimeProgram.entities[].contactGate.window.phase",
+        "runtimeProgram.entities[].contactGate.window.clock",
+        "runtimeProgram.entities[].contactGate.window.startDelayTicks",
+        "runtimeProgram.entities[].contactGate.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_beam_geometry",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry",
+      "outputs": [
+        "runtimeProgram.entities[].beamGeometry.lengthPx",
+        "runtimeProgram.entities[].beamGeometry.widthPx",
+        "runtimeProgram.entities[].beamGeometry.raycastTiles"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_beam_ramp",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
+      "outputs": [
+        "runtimeProgram.entities[].beamRamp.warmupTicks",
+        "runtimeProgram.entities[].beamRamp.initialWidthMultiplier",
+        "runtimeProgram.entities[].beamRamp.initialDamageMultiplier",
+        "runtimeProgram.entities[].beamRamp.damageStartProgress"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "sustain_projectile_mana",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::PaySustainedMana",
+      "outputs": [
+        "runtimeProgram.entities[].manaSustain.cadence"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_lash_geometry",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion|Content/Projectiles/GeneratedProjectile.ComposableMotion.Geometry.cs::BuildLashPoints",
+      "outputs": [
+        "runtimeProgram.entities[].lashGeometry.clock",
+        "runtimeProgram.entities[].lashGeometry.durationTicks",
+        "runtimeProgram.entities[].lashGeometry.anchor",
+        "runtimeProgram.entities[].lashGeometry.reachPx",
+        "runtimeProgram.entities[].lashGeometry.segments",
+        "runtimeProgram.entities[].lashGeometry.sweepStartRadians",
+        "runtimeProgram.entities[].lashGeometry.sweepEndRadians",
+        "runtimeProgram.entities[].lashGeometry.bendRatio",
+        "runtimeProgram.entities[].lashGeometry.useOwnerGravity",
+        "runtimeProgram.entities[].lashGeometry.useOwnerWhipRangeMultiplier"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_aim",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].aim.source",
+        "runtimeProgram.entities[].aim.turnOwner"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "attach_projectile",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].attachment.anchor",
+        "runtimeProgram.entities[].attachment.axisOffsetPx",
+        "runtimeProgram.entities[].attachment.normalOffsetPx",
+        "runtimeProgram.entities[].attachment.window.phase",
+        "runtimeProgram.entities[].attachment.window.clock",
+        "runtimeProgram.entities[].attachment.window.startDelayTicks",
+        "runtimeProgram.entities[].attachment.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_front_arm_pose",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].armPose.durationTicks",
+        "runtimeProgram.entities[].armPose.startStretch",
+        "runtimeProgram.entities[].armPose.peakStretch",
+        "runtimeProgram.entities[].armPose.endStretch",
+        "runtimeProgram.entities[].armPose.peakProgress",
+        "runtimeProgram.entities[].armPose.window.phase",
+        "runtimeProgram.entities[].armPose.window.clock",
+        "runtimeProgram.entities[].armPose.window.startDelayTicks",
+        "runtimeProgram.entities[].armPose.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_reach_curve",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].reach.durationTicks",
+        "runtimeProgram.entities[].reach.startOffsetPx",
+        "runtimeProgram.entities[].reach.peakOffsetPx",
+        "runtimeProgram.entities[].reach.endOffsetPx",
+        "runtimeProgram.entities[].reach.peakProgress",
+        "runtimeProgram.entities[].reach.window.phase",
+        "runtimeProgram.entities[].reach.window.clock",
+        "runtimeProgram.entities[].reach.window.startDelayTicks",
+        "runtimeProgram.entities[].reach.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "orbit_projectile",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].orbit.anchor",
+        "runtimeProgram.entities[].orbit.radiusPx",
+        "runtimeProgram.entities[].orbit.radiansPerUpdate",
+        "runtimeProgram.entities[].orbit.phaseRadians",
+        "runtimeProgram.entities[].orbit.identityPhaseRadians",
+        "runtimeProgram.entities[].orbit.window.phase",
+        "runtimeProgram.entities[].orbit.window.clock",
+        "runtimeProgram.entities[].orbit.window.startDelayTicks",
+        "runtimeProgram.entities[].orbit.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "seek_projectile",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].seek[].target",
+        "runtimeProgram.entities[].seek[].maxSpeed",
+        "runtimeProgram.entities[].seek[].velocityLerpPerUpdate",
+        "runtimeProgram.entities[].seek[].limitSpeedToDistance",
+        "runtimeProgram.entities[].seek[].cursorLeashPx",
+        "runtimeProgram.entities[].seek[].searchRangeTiles",
+        "runtimeProgram.entities[].seek[].requireLineOfSight",
+        "runtimeProgram.entities[].seek[].minimumSpeed",
+        "runtimeProgram.entities[].seek[].window.phase",
+        "runtimeProgram.entities[].seek[].window.clock",
+        "runtimeProgram.entities[].seek[].window.startDelayTicks",
+        "runtimeProgram.entities[].seek[].window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_return_trigger",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionReturnTrigger|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::OnTileCollide",
+      "outputs": [
+        "runtimeProgram.entities[].returnTrigger.afterTicks",
+        "runtimeProgram.entities[].returnTrigger.ownerDistancePx",
+        "runtimeProgram.entities[].returnTrigger.onOwnerRelease",
+        "runtimeProgram.entities[].returnTrigger.onTileCollision",
+        "runtimeProgram.entities[].returnTrigger.disableTileCollisionOnReturn"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_arrival",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].arrival.target",
+        "runtimeProgram.entities[].arrival.radiusPx",
+        "runtimeProgram.entities[].arrival.window.phase",
+        "runtimeProgram.entities[].arrival.window.clock",
+        "runtimeProgram.entities[].arrival.window.startDelayTicks",
+        "runtimeProgram.entities[].arrival.window.durationTicks",
+        "runtimeProgram.entities[].arrival.action"
+      ],
+      "technicalProjectionInputs": [
+        "runtimeProgram.calls[].fn"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_proximity_action",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].proximity.searchRangeTiles",
+        "runtimeProgram.entities[].proximity.triggerRadiusPx",
+        "runtimeProgram.entities[].proximity.requireLineOfSight",
+        "runtimeProgram.entities[].proximity.action",
+        "runtimeProgram.entities[].proximity.window.phase",
+        "runtimeProgram.entities[].proximity.window.clock",
+        "runtimeProgram.entities[].proximity.window.startDelayTicks",
+        "runtimeProgram.entities[].proximity.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "accelerate_projectile_vertical",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].verticalAcceleration.accelerationYPerUpdate",
+        "runtimeProgram.entities[].verticalAcceleration.window.phase",
+        "runtimeProgram.entities[].verticalAcceleration.window.clock",
+        "runtimeProgram.entities[].verticalAcceleration.window.startDelayTicks",
+        "runtimeProgram.entities[].verticalAcceleration.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "multiply_projectile_velocity",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].velocityRetention.multiplierPerUpdate",
+        "runtimeProgram.entities[].velocityRetention.window.phase",
+        "runtimeProgram.entities[].velocityRetention.window.clock",
+        "runtimeProgram.entities[].velocityRetention.window.startDelayTicks",
+        "runtimeProgram.entities[].velocityRetention.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_rotation",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionRotation",
+      "outputs": [
+        "runtimeProgram.entities[].rotation.mode",
+        "runtimeProgram.entities[].rotation.offsetRadians",
+        "runtimeProgram.entities[].rotation.radiansPerUpdate",
+        "runtimeProgram.entities[].rotation.window.phase",
+        "runtimeProgram.entities[].rotation.window.clock",
+        "runtimeProgram.entities[].rotation.window.startDelayTicks",
+        "runtimeProgram.entities[].rotation.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "oscillate_projectile_velocity",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].oscillation.law",
+        "runtimeProgram.entities[].oscillation.amplitude",
+        "runtimeProgram.entities[].oscillation.frequencyRadiansPerUpdate",
+        "runtimeProgram.entities[].oscillation.phaseRadians",
+        "runtimeProgram.entities[].oscillation.window.phase",
+        "runtimeProgram.entities[].oscillation.window.clock",
+        "runtimeProgram.entities[].oscillation.window.startDelayTicks",
+        "runtimeProgram.entities[].oscillation.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "add_projectile_visual_scale",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].visualScaleRate.deltaPerUpdate",
+        "runtimeProgram.entities[].visualScaleRate.maxScale",
+        "runtimeProgram.entities[].visualScaleRate.window.phase",
+        "runtimeProgram.entities[].visualScaleRate.window.clock",
+        "runtimeProgram.entities[].visualScaleRate.window.startDelayTicks",
+        "runtimeProgram.entities[].visualScaleRate.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_opacity",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
+      "outputs": [
+        "runtimeProgram.entities[].opacity.alpha",
+        "runtimeProgram.entities[].opacity.window.phase",
+        "runtimeProgram.entities[].opacity.window.clock",
+        "runtimeProgram.entities[].opacity.window.startDelayTicks",
+        "runtimeProgram.entities[].opacity.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "configure_item_stats",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Models/Runtime/GeneratedItemData.Apply.cs::ApplyToItem",
@@ -571,7 +924,11 @@
       "outputs": [
         "runtimeProgram.entities[].turnModifier.turnRadiansPerUpdate",
         "runtimeProgram.entities[].turnModifier.startDelayTicks",
-        "runtimeProgram.entities[].turnModifier.durationTicks"
+        "runtimeProgram.entities[].turnModifier.durationTicks",
+        "runtimeProgram.entities[].turnModifier.window.phase",
+        "runtimeProgram.entities[].turnModifier.window.clock",
+        "runtimeProgram.entities[].turnModifier.window.startDelayTicks",
+        "runtimeProgram.entities[].turnModifier.window.durationTicks"
       ],
       "wirePresencePath": "runtimeProgram.entities[].turnModifier"
     },
@@ -585,7 +942,11 @@
         "runtimeProgram.entities[].speedModifier.speedMultiplierPerUpdate",
         "runtimeProgram.entities[].speedModifier.maxSpeed",
         "runtimeProgram.entities[].speedModifier.startDelayTicks",
-        "runtimeProgram.entities[].speedModifier.durationTicks"
+        "runtimeProgram.entities[].speedModifier.durationTicks",
+        "runtimeProgram.entities[].speedModifier.window.phase",
+        "runtimeProgram.entities[].speedModifier.window.clock",
+        "runtimeProgram.entities[].speedModifier.window.startDelayTicks",
+        "runtimeProgram.entities[].speedModifier.window.durationTicks"
       ],
       "wirePresencePath": "runtimeProgram.entities[].speedModifier"
     },
@@ -600,7 +961,11 @@
         "runtimeProgram.entities[].homingModifier.maxTurnRadiansPerUpdate",
         "runtimeProgram.entities[].homingModifier.requireLineOfSight",
         "runtimeProgram.entities[].homingModifier.startDelayTicks",
-        "runtimeProgram.entities[].homingModifier.durationTicks"
+        "runtimeProgram.entities[].homingModifier.durationTicks",
+        "runtimeProgram.entities[].homingModifier.window.phase",
+        "runtimeProgram.entities[].homingModifier.window.clock",
+        "runtimeProgram.entities[].homingModifier.window.startDelayTicks",
+        "runtimeProgram.entities[].homingModifier.window.durationTicks"
       ],
       "wirePresencePath": "runtimeProgram.entities[].homingModifier"
     },
@@ -616,7 +981,11 @@
         "runtimeProgram.entities[].npcAttraction.falloff",
         "runtimeProgram.entities[].npcAttraction.maxTargets",
         "runtimeProgram.entities[].npcAttraction.startDelayTicks",
-        "runtimeProgram.entities[].npcAttraction.durationTicks"
+        "runtimeProgram.entities[].npcAttraction.durationTicks",
+        "runtimeProgram.entities[].npcAttraction.window.phase",
+        "runtimeProgram.entities[].npcAttraction.window.clock",
+        "runtimeProgram.entities[].npcAttraction.window.startDelayTicks",
+        "runtimeProgram.entities[].npcAttraction.window.durationTicks"
       ],
       "wirePresencePath": "runtimeProgram.entities[].npcAttraction"
     },
@@ -631,7 +1000,11 @@
         "runtimeProgram.entities[].visualScaleCurve.endScale",
         "runtimeProgram.entities[].visualScaleCurve.startDelayTicks",
         "runtimeProgram.entities[].visualScaleCurve.durationTicks",
-        "runtimeProgram.entities[].visualScaleCurve.curve"
+        "runtimeProgram.entities[].visualScaleCurve.curve",
+        "runtimeProgram.entities[].visualScaleCurve.window.phase",
+        "runtimeProgram.entities[].visualScaleCurve.window.clock",
+        "runtimeProgram.entities[].visualScaleCurve.window.startDelayTicks",
+        "runtimeProgram.entities[].visualScaleCurve.window.durationTicks"
       ],
       "wirePresencePath": "runtimeProgram.entities[].visualScaleCurve"
     },
@@ -671,7 +1044,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_straight",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code"
@@ -682,7 +1055,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_slow_homing",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -695,7 +1068,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_gravity_arc",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -707,7 +1080,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_drift",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -719,7 +1092,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_orbit",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -732,7 +1105,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_boomerang",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -745,7 +1118,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_sine_homing",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -759,7 +1132,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_phase",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -771,7 +1144,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_accelerate",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -784,7 +1157,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_spiral",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -796,7 +1169,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_vortex_orb",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -809,7 +1182,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_blackhole_pull",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -822,7 +1195,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_proximity_missile",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -836,7 +1209,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_returning_glaive",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -849,7 +1222,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_expanding_wave",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -862,7 +1235,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_flail_tether",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -875,7 +1248,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_yoyo_hover",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -888,7 +1261,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_whip_lash",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -901,7 +1274,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_forward_then_retract",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -914,7 +1287,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "move_front_hand",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::RunResolvedMotion",
       "outputs": [
         "runtimeProgram.entities[].movement.name",
         "runtimeProgram.entities[].movement.code",
@@ -949,7 +1322,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "charge_then_release",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyChargeThenRelease",
       "outputs": [
         "runtimeProgram.entities[].controller.name",
         "runtimeProgram.entities[].controller.code",
@@ -964,7 +1337,7 @@
       "authoredDecisionsPreserved": true,
       "capability": "target_and_fire",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::RunMovement/RunController",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyTargetAndFire",
       "outputs": [
         "runtimeProgram.entities[].controller.name",
         "runtimeProgram.entities[].controller.code",

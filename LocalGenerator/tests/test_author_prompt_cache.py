@@ -87,8 +87,9 @@ def _marked_prefix(request):
     return static, message["content"], request_dossier(request)
 
 
-def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_author_declares_exact_recipe_independent_prefix(monkeypatch, mode):
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     first, first_user, _ = author.build_initial_author_request(
         {"name": "Workbench"}, {"name": "Sword"}, "workbench+sword", model_name="test-model",
     )
@@ -104,8 +105,11 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch):
     assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
     assert full["recipeKey"] != other_full["recipeKey"]
     capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    assert len(capabilities) == len(author.CAPABILITY_REGISTRY)
-    assert {card["fn"] for card in capabilities} == {name for name, cap in author.CAPABILITY_REGISTRY.items() }
+    visible = {name for name, cap in author.CAPABILITY_REGISTRY.items() if cap.author_visible}
+    assert len(capabilities) == len(visible)  # Missing and duplicate cards both fail.
+    assert {card["fn"] for card in capabilities} == visible
+    assert first["messages"][:2] == second["messages"][:2]
+    assert first.get("response_format") == second.get("response_format")
     assert "present_placed_item_sprite" in {card["fn"] for card in capabilities}
     assert dossier_text(first) == first_user
     assert dossier_text(second) == second_user

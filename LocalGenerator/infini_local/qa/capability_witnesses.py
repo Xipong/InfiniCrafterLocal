@@ -94,6 +94,7 @@ def _params(fn: str) -> dict[str, Any]:
         "set_projectile_hitbox": deepcopy(_HITBOX),
         "set_projectile_collision": deepcopy(_COLLISION),
         "move_straight": {},
+        "set_projectile_owner_control": {"requireHeldItem": True},
         "target_and_fire": {"shotEntity": "witness_shot", "intervalSeconds": 0.5, "rangeTiles": 20, "sameTargetBias": 0.2, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0},
         "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delaySeconds": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
         "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationSeconds": 1},
@@ -157,7 +158,7 @@ def _binding(
 
 
 def build_capability_witness(fn: str) -> dict[str, Any]:
-    if fn not in CAPABILITY_REGISTRY:
+    if fn not in CAPABILITY_REGISTRY or not CAPABILITY_REGISTRY[fn].author_visible:
         raise KeyError(fn)
     if fn == "configure_weapon_ammo":
         doc = build_capability_witness("move_straight")
@@ -301,6 +302,33 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
         base_motion = next(row for row in calls if row["id"] == "base_motion")
         base_motion.update(fn="move_whip_lash", params={"rangeTiles": 8, "segments": 12})
 
+    if cap.category == "motion_primitive":
+        pending = [cap]
+        while pending:
+            selected = pending.pop()
+            for requirement in selected.requirements:
+                if requirement.kind != "capability_present" or any(row["fn"] == requirement.capability for row in calls):
+                    continue
+                dependency = CAPABILITY_REGISTRY[requirement.capability]
+                calls.append(_call("dep_" + dependency.name, dependency.name, witness_target))
+                pending.append(dependency)
+        selected_fns = {row["fn"] for row in calls}
+        item_use = next(row["params"] for row in calls if row["fn"] == "configure_item_use")
+        if selected_fns.intersection({"attach_projectile", "set_projectile_lash_geometry"}):
+            # This QA composition explicitly chooses a supported tile policy;
+            # production never infers it from the selected geometry.
+            next(row["params"] for row in calls if row["fn"] == "set_projectile_collision")["tileCollide"] = False
+        if "accumulate_projectile_charge" in selected_fns:
+            item_use["channel"] = True
+        if "set_front_arm_pose" in selected_fns:
+            item_use.pop("handPose", None)
+        if "sustain_projectile_mana" in selected_fns:
+            item_use["channel"] = True
+            next(row["params"] for row in calls if row["fn"] == "set_projectile_owner_control").update(
+                requireHeldItem=True, requireChannel=True)
+        if fn == "set_projectile_return_trigger":
+            next(row["params"] for row in calls if row["id"] == "witness_call")["onTileCollision"] = True
+
     primary_target = "item" if item_target and not projectile_target else witness_target
 
     return {
@@ -336,7 +364,9 @@ def build_capability_witness(fn: str) -> dict[str, Any]:
 def capability_vertical_slice_report() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     ok = True
-    for fn in CAPABILITY_REGISTRY:
+    for fn, spec in CAPABILITY_REGISTRY.items():
+        if not spec.author_visible:
+            continue
         authored = build_capability_witness(fn)
         author = validate_runtime_program(authored)
         row: dict[str, Any] = {"fn": fn, "authorValid": bool(author.get("ok")), "authorErrors": author.get("errors") or []}

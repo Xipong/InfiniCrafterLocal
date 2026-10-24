@@ -33,7 +33,7 @@ from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, _wire_projection_witness
 from infini_local.core.runtime_authoring.validator import (
     MAX_CHILD_DEPTH, MAX_EVENT_SPAWNS_PER_ACTIVATION, MAX_RUNTIME_ENTITIES,
-    _graph_cycle, _has_non_neutral_generated_buff, _max_depth,
+    _graph_cycle, _has_non_neutral_generated_buff, _max_depth, _motion_composition_issues,
 )
 
 _MAX_MOVEMENT_CODE = max(MOVEMENT_OPCODE.values())
@@ -639,14 +639,55 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 continue
             modifier_cap = CAPABILITY_REGISTRY[modifier_fn]
             modifier_path = entity_path + "." + member
-            shape = strict_schema_errors(entity[member], modifier_cap.flat_wire_params_schema(), path=modifier_path)
+            schema = modifier_cap.flat_wire_params_schema()
+            if modifier_cap.multiplicity == "many_per_target":
+                schema = {"type": "array", "minItems": 1, "maxItems": modifier_cap.max_per_target, "items": schema}
+            shape = strict_schema_errors(entity[member], schema, path=modifier_path)
             if kind not in modifier_cap.target_kinds or shape:
                 errors.append({"path": modifier_path, "code": "invalid_projectile_modifier", "message": "Present modifier requires the exact target kind, all registry choices, finite ranges and no unknown fields."})
                 errors.extend(shape)
-            if modifier_cap.category == "motion_modifier" and (controller.get("code", 0) not in (0, CONTROLLER_OPCODE["target_and_fire"]) or not movement.get("name")):
+            records = entity[member] if isinstance(entity[member], list) else [entity[member]]
+            for n, record in enumerate(records):
+                if not isinstance(record, Mapping):
+                    continue
+                for param_name, spec in modifier_cap.params.items():
+                    if modifier_cap.category != "motion_primitive" and param_name != "window":
+                        continue  # Retained components keep their scalar admission.
+                    if any(name.split(".", 1)[0] in record for name in spec.wire_field_names(param_name)) and not _wire_projection_witness(spec, param_name, "component", {"component": record}):
+                        errors.append({"path": modifier_path + (f"[{n}]" if isinstance(entity[member], list) else ""),
+                                       "code": "invalid_projectile_modifier", "message": "Present primitive leaf must satisfy its exact registry projection and consumer storage domain."})
+            if modifier_cap.category == "motion_modifier" and (controller.get("code", 0) not in (0, CONTROLLER_OPCODE["target_and_fire"]) or not (movement.get("name") or any(key in entity and CAPABILITY_REGISTRY[fn].position_ownership != "none" for fn, key in PROJECTILE_MODIFIER_COMPONENTS.items()))):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Velocity modifiers require movement to own motion."})
             if member == "visualScaleCurve" and (movement.get("code") in {15, 18} or controller.get("code") == 1 or isinstance(entity.get("hitboxCurve"), Mapping) and entity["hitboxCurve"].get("mirrorToSprite") is True):
                 errors.append({"path": modifier_path, "code": "modifier_driver_conflict", "message": "Dynamic sprite scale has exactly one authored owner and excludes special beam/whip line geometry."})
+        motion_rows = []
+        for member, driver, opcodes in (("movement", movement, MOVEMENT_OPCODE), ("controller", controller, CONTROLLER_OPCODE)):
+            if not isinstance(driver, Mapping):
+                continue
+            for fn, code in opcodes.items():
+                if fn in CAPABILITY_REGISTRY and type(driver.get("code")) is int and driver["code"] == code:
+                    motion_rows.append({"fn": fn, "params": driver.get("params", {}), "_path": f"{entity_path}.{member}"})
+                    break
+        for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
+            value = entity.get(member)
+            values = value if isinstance(value, list) else [value]
+            for n, record in enumerate(values):
+                if isinstance(record, Mapping):
+                    suffix = f"[{n}]" if isinstance(value, list) else ""
+                    motion_rows.append({"fn": fn, "params": record, "_path": f"{entity_path}.{member}{suffix}"})
+        if isinstance(entity.get("hitboxCurve"), Mapping):
+            motion_rows.append({"fn": "set_projectile_hitbox_curve", "params": entity["hitboxCurve"], "_path": entity_path + ".hitboxCurve"})
+        if isinstance(entity.get("collision"), Mapping):
+            motion_rows.append({"fn": "set_projectile_collision", "params": entity["collision"], "_path": entity_path + ".collision"})
+        active = any(isinstance(binding.get("input"), str) and binding.get("input") in ACTIVE_USE_INPUTS
+                     and action_kind(binding) == "spawn_entity"
+                     and binding_target_id(binding) == entity.get("id")
+                     for binding in condition_bindings if isinstance(binding, Mapping))
+        item_use = runtime.get("itemUse", {})
+        errors.extend(issue.row() for issue in _motion_composition_issues(motion_rows, wire=True,
+            active=active, channel=isinstance(item_use, Mapping) and item_use.get("channel") is True,
+            primary=entity.get("id") == runtime.get("primaryEntityId"),
+            hand_pose=item_use.get("handPose") if isinstance(item_use, Mapping) else None))
         if "whipUsesOwnerGravity" in entity:
             path = entity_path + ".whipUsesOwnerGravity"
             if entity["whipUsesOwnerGravity"] is not True or kind != "owner_attached_projectile" or movement.get("code") != 18 or controller.get("code") == 1:
@@ -730,6 +771,19 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                             errors.append({"path": f"{entity_path}.{component_name}.params.{name}", "code": "inactive_movement_param",
                                            "message": "This present parameter belongs only to its exact registered movement."})
                 if params is not None:
+                    # A retained driver's projected lattice remains authoritative
+                    # even when delivery omits compiler provenance. Read the
+                    # executed opcode, not an optional display/receipt name.
+                    opcodes = MOVEMENT_OPCODE if component_name == "movement" else CONTROLLER_OPCODE
+                    for fn, opcode in opcodes.items():
+                        if fn not in CAPABILITY_REGISTRY or type(component.get("code")) is not int or component["code"] != opcode:
+                            continue
+                        for name, spec in CAPABILITY_REGISTRY[fn].params.items():
+                            field = spec.wire_name or name
+                            if spec.multiple_of is not None and field in params and not spec.matches_scalar_projection(params[field]):
+                                errors.append({"path": f"{entity_path}.{component_name}.params.{field}",
+                                               "code": "invalid_movement_param", "message": "Present projected value must preserve its declared exact lattice, type and bounds."})
+                        break
                     charge_fields = {"chargeDamageMultiplier", "knockbackMultiplier", "speedMultiplier"}
                     present_charge = charge_fields.intersection(params)
                     selected_charge = (component_name == "controller" and component.get("name") == "charge_then_release"
@@ -814,7 +868,9 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 and controller_code in {1, 2}
             )
             mobile_kind = kind in {"owner_attached_projectile", "free_projectile", "child_projectile"}
-            if mobile_kind and "movement" not in entity and not controller_owns_position:
+            primitive_owns_position = any(member in entity and CAPABILITY_REGISTRY[fn].position_ownership != "none"
+                                          for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items())
+            if mobile_kind and "movement" not in entity and not controller_owns_position and not primitive_owns_position:
                 errors.append({
                     "path": f"$.runtimeProgram.entities[{index}].movement",
                     "code": "missing_compiled_component",
