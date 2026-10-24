@@ -3354,6 +3354,136 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
+                      "gravityControl": {
+                        "type": "boolean",
+                        "description": "Native gravity potion control; up input flips gravity. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "featherFall": {
+                        "type": "boolean",
+                        "description": "Native feather fall with up/down descent controls. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "extraFallTiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Additional native fall damage threshold in tiles; additive, not immunity",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-neutral": 0
+                      },
+                      "autoPaint": {
+                        "type": "boolean",
+                        "description": "Native automatic painting consumes carried paint with placement. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "rulerGrid": {
+                        "type": "boolean",
+                        "description": "Native ruler grid controlled by builder toggles. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "buildRangeTiles": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 20,
+                        "description": "Additional native tile placement reach in tiles; additive",
+                        "x-infini-semanticType": "tiles",
+                        "x-infini-neutral": 0
+                      },
+                      "tileSpeedBonusPercent": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add percent/100 native tile placement speed; additive, native limits apply",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
+                      "wallSpeedBonusPercent": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Add percent/100 native wall placement speed; additive, native limits apply",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
+                      "autoJump": {
+                        "type": "boolean",
+                        "description": "Native held-button auto jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "frogJump": {
+                        "type": "boolean",
+                        "description": "Native frog jump height and safe fall allowance. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "wallGrip": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 2,
+                        "description": "Native spiked-boots level: 0 none, 1 wall slide/jump, 2 wall cling; combines by maximum",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-neutral": 0
+                      },
+                      "swimFlipper": {
+                        "type": "boolean",
+                        "description": "Native flipper swimming jump while wet. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "divingHelm": {
+                        "type": "boolean",
+                        "description": "Native diving helmet breath conservation. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "underwaterBreathing": {
+                        "type": "boolean",
+                        "description": "Native gills: breathe air and water; getGoodWorld reverses drowning and requires water. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "waterFloat": {
+                        "type": "boolean",
+                        "description": "Native water flotation, descend with down control. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "jumpCloud": {
+                        "type": "boolean",
+                        "description": "Cloud bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "jumpBlizzard": {
+                        "type": "boolean",
+                        "description": "Blizzard bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "jumpSandstorm": {
+                        "type": "boolean",
+                        "description": "Sandstorm bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "jumpFart": {
+                        "type": "boolean",
+                        "description": "Fart jar extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
+                      "jumpTsunami": {
+                        "type": "boolean",
+                        "description": "Tsunami bottle extra jump. Independently authored; false grants nothing. Native ResetEffects/extra-jump reset removes on unequip; no automatic sibling grants. Only enables this native jump; native order, movement restrictions and landing recharge apply; equip never refreshes spent jumps.",
+                        "x-infini-semanticType": "bounded_text",
+                        "x-infini-neutral": false
+                      },
                       "iceSkate": {
                         "type": "boolean",
                         "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",

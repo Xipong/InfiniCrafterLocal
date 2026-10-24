@@ -1922,6 +1922,26 @@
         "accessory.fallDamageImmune",
         "accessory.lavaImmune",
         "accessory.waterWalk",
+        "accessory.gravityControl",
+        "accessory.featherFall",
+        "accessory.extraFallTiles",
+        "accessory.autoPaint",
+        "accessory.rulerGrid",
+        "accessory.buildRangeTiles",
+        "accessory.tileSpeedBonusPercent",
+        "accessory.wallSpeedBonusPercent",
+        "accessory.autoJump",
+        "accessory.frogJump",
+        "accessory.wallGrip",
+        "accessory.swimFlipper",
+        "accessory.divingHelm",
+        "accessory.underwaterBreathing",
+        "accessory.waterFloat",
+        "accessory.jumpCloud",
+        "accessory.jumpBlizzard",
+        "accessory.jumpSandstorm",
+        "accessory.jumpFart",
+        "accessory.jumpTsunami",
         "accessory.iceSkate",
         "accessory.noKnockback",
         "accessory.fireWalk",
@@ -1962,6 +1982,36 @@
           "semanticType": "probability_percent",
           "units": "probability_percent"
         },
+        "autoJump": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "autoPaint": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "buildRangeTiles": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 20,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
+          "units": ""
+        },
         "damageReductionPercentagePoints": {
           "enum": [],
           "kind": "number",
@@ -1982,6 +2032,26 @@
           "semanticType": "defense_points",
           "units": "defense_points"
         },
+        "divingHelm": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "extraFallTiles": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
+          "units": ""
+        },
         "fallDamageImmune": {
           "enum": [],
           "kind": "boolean",
@@ -1992,7 +2062,27 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "featherFall": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "fireWalk": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "frogJump": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2042,7 +2132,57 @@
           "semanticType": "additive_percent",
           "units": "additive_percent"
         },
+        "gravityControl": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "iceSkate": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "jumpBlizzard": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "jumpCloud": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "jumpFart": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "jumpSandstorm": {
           "enum": [],
           "kind": "boolean",
           "maximum": null,
@@ -2061,6 +2201,16 @@
           "required": false,
           "semanticType": "blocks/s",
           "units": "blocks/s"
+        },
+        "jumpTsunami": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "lavaImmune": {
           "enum": [],
@@ -2204,6 +2354,16 @@
           "semanticType": "unitless_scalar",
           "units": "native rocket flight mode"
         },
+        "rulerGrid": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "sentrySlotsBonus": {
           "enum": [],
           "kind": "integer",
@@ -2214,6 +2374,16 @@
           "semanticType": "slots",
           "units": "slots"
         },
+        "swimFlipper": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
         "taggedSummonSourceDamageBonusPercent": {
           "enum": [],
           "kind": "number",
@@ -2223,6 +2393,56 @@
           "required": false,
           "semanticType": "source_damage_percent",
           "units": "source_damage_percent"
+        },
+        "tileSpeedBonusPercent": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "underwaterBreathing": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "wallGrip": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 2,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "wallSpeedBonusPercent": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "waterFloat": {
+          "enum": [],
+          "kind": "boolean",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "waterWalk": {
           "enum": [],
@@ -2290,6 +2510,26 @@
             "fallDamageImmune",
             "lavaImmune",
             "waterWalk",
+            "gravityControl",
+            "featherFall",
+            "extraFallTiles",
+            "autoPaint",
+            "rulerGrid",
+            "buildRangeTiles",
+            "tileSpeedBonusPercent",
+            "wallSpeedBonusPercent",
+            "autoJump",
+            "frogJump",
+            "wallGrip",
+            "swimFlipper",
+            "divingHelm",
+            "underwaterBreathing",
+            "waterFloat",
+            "jumpCloud",
+            "jumpBlizzard",
+            "jumpSandstorm",
+            "jumpFart",
+            "jumpTsunami",
             "iceSkate",
             "noKnockback",
             "fireWalk",
