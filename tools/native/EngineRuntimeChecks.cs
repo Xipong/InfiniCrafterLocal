@@ -44,6 +44,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("Native equipment ExplorationFishing", ExplorationFishing),
+            ("Native equipment ExplorationPickup", ExplorationPickup),
+            ("Native equipment ExplorationVision", ExplorationVision),
+            ("Native equipment ExplorationInstruments", ExplorationInstruments),
+            ("Native equipment ExplorationSurvival", ExplorationSurvival),
+
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),

@@ -287,6 +287,212 @@ public sealed class BuffEntrySpec
 
 public sealed class AccessorySpec
 {
+    private bool? _extendedInvulnerability;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ExtendedInvulnerability
+    {
+        get => _extendedInvulnerability;
+        set => _extendedInvulnerability = value ?? throw new InvalidDataException("extendedInvulnerability must be boolean when present");
+    }
+
+    private bool? _restingRecovery;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RestingRecovery
+    {
+        get => _restingRecovery;
+        set => _restingRecovery = value ?? throw new InvalidDataException("restingRecovery must be boolean when present");
+    }
+
+    private bool? _autoManaPotion;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoManaPotion
+    {
+        get => _autoManaPotion;
+        set => _autoManaPotion = value ?? throw new InvalidDataException("autoManaPotion must be boolean when present");
+    }
+
+    private bool? _potionCooldown;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? PotionCooldown
+    {
+        get => _potionCooldown;
+        set => _potionCooldown = value ?? throw new InvalidDataException("potionCooldown must be boolean when present");
+    }
+
+    private bool? _killCountInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? KillCountInfo
+    {
+        get => _killCountInfo;
+        set => _killCountInfo = value ?? throw new InvalidDataException("killCountInfo must be boolean when present");
+    }
+
+    private bool? _rareCreatureInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? RareCreatureInfo
+    {
+        get => _rareCreatureInfo;
+        set => _rareCreatureInfo = value ?? throw new InvalidDataException("rareCreatureInfo must be boolean when present");
+    }
+
+    private bool? _oreInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? OreInfo
+    {
+        get => _oreInfo;
+        set => _oreInfo = value ?? throw new InvalidDataException("oreInfo must be boolean when present");
+    }
+
+    private bool? _speedInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SpeedInfo
+    {
+        get => _speedInfo;
+        set => _speedInfo = value ?? throw new InvalidDataException("speedInfo must be boolean when present");
+    }
+
+    private bool? _enemyInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? EnemyInfo
+    {
+        get => _enemyInfo;
+        set => _enemyInfo = value ?? throw new InvalidDataException("enemyInfo must be boolean when present");
+    }
+
+    private bool? _moonInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? MoonInfo
+    {
+        get => _moonInfo;
+        set => _moonInfo = value ?? throw new InvalidDataException("moonInfo must be boolean when present");
+    }
+
+    private bool? _weatherInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WeatherInfo
+    {
+        get => _weatherInfo;
+        set => _weatherInfo = value ?? throw new InvalidDataException("weatherInfo must be boolean when present");
+    }
+
+    private bool? _fishingInfo;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FishingInfo
+    {
+        get => _fishingInfo;
+        set => _fishingInfo = value ?? throw new InvalidDataException("fishingInfo must be boolean when present");
+    }
+
+    private bool? _nightVision;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? NightVision
+    {
+        get => _nightVision;
+        set => _nightVision = value ?? throw new InvalidDataException("nightVision must be boolean when present");
+    }
+
+    private bool? _creatureVision;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CreatureVision
+    {
+        get => _creatureVision;
+        set => _creatureVision = value ?? throw new InvalidDataException("creatureVision must be boolean when present");
+    }
+
+    private bool? _dangerVision;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DangerVision
+    {
+        get => _dangerVision;
+        set => _dangerVision = value ?? throw new InvalidDataException("dangerVision must be boolean when present");
+    }
+
+    private bool? _treasureVision;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? TreasureVision
+    {
+        get => _treasureVision;
+        set => _treasureVision = value ?? throw new InvalidDataException("treasureVision must be boolean when present");
+    }
+
+    private bool? _treasurePickup;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? TreasurePickup
+    {
+        get => _treasurePickup;
+        set => _treasurePickup = value ?? throw new InvalidDataException("treasurePickup must be boolean when present");
+    }
+
+    private bool? _coinPickup;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? CoinPickup
+    {
+        get => _coinPickup;
+        set => _coinPickup = value ?? throw new InvalidDataException("coinPickup must be boolean when present");
+    }
+
+    private bool? _manaPickup;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ManaPickup
+    {
+        get => _manaPickup;
+        set => _manaPickup = value ?? throw new InvalidDataException("manaPickup must be boolean when present");
+    }
+
+    private bool? _lifePickup;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LifePickup
+    {
+        get => _lifePickup;
+        set => _lifePickup = value ?? throw new InvalidDataException("lifePickup must be boolean when present");
+    }
+
+    private int? _fishingPower;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? FishingPower
+    {
+        get => _fishingPower;
+        set
+        {
+            if (value is not int scalar || scalar < 0 || scalar > 100)
+                throw new InvalidDataException("fishingPower must be an integer in 0..100 when present");
+            _fishingPower = scalar;
+        }
+    }
+
+    private bool? _fishingCrates;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FishingCrates
+    {
+        get => _fishingCrates;
+        set => _fishingCrates = value ?? throw new InvalidDataException("fishingCrates must be boolean when present");
+    }
+
+    private bool? _fishingSonar;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FishingSonar
+    {
+        get => _fishingSonar;
+        set => _fishingSonar = value ?? throw new InvalidDataException("fishingSonar must be boolean when present");
+    }
+
+    private bool? _lavaFishing;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? LavaFishing
+    {
+        get => _lavaFishing;
+        set => _lavaFishing = value ?? throw new InvalidDataException("lavaFishing must be boolean when present");
+    }
+
+    private bool? _fishingLine;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? FishingLine
+    {
+        get => _fishingLine;
+        set => _fishingLine = value ?? throw new InvalidDataException("fishingLine must be boolean when present");
+    }
+
+
     public bool Enabled { get; set; } = false;
     public bool WireVision { get; set; } = false;
     public bool IceSkate { get; set; } = false;
@@ -341,7 +547,7 @@ public sealed class AccessorySpec
     public float SummonTagDamage { get; set; } = 0f;
     public float LightStrength { get; set; } = 0f;
     public string LightColorName { get; set; } = "";
-    public bool HasAnyEffect => WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
+    public bool HasAnyEffect => FishingPower is > 0 || FishingCrates == true || FishingSonar == true || LavaFishing == true || FishingLine == true || TreasurePickup == true || CoinPickup == true || ManaPickup == true || LifePickup == true || NightVision == true || CreatureVision == true || DangerVision == true || TreasureVision == true || KillCountInfo == true || RareCreatureInfo == true || OreInfo == true || SpeedInfo == true || EnemyInfo == true || MoonInfo == true || WeatherInfo == true || FishingInfo == true || ExtendedInvulnerability == true || RestingRecovery == true || AutoManaPotion == true || PotionCooldown == true || WireVision || IceSkate || NoKnockback || FireWalk || RocketBoots != 0 || AccRunSpeed != 0f || Defense != 0 || MaxLife != 0 || MaxMana != 0 || LifeRegen != 0 || ManaRegen != 0
         || MovementSpeed != 0f || MaxRunSpeed != 0f || JumpSpeed != 0f
         || GenericDamage != 0f || MeleeDamage != 0f || RangedDamage != 0f || MagicDamage != 0f || SummonDamage != 0f
         || GenericCrit != 0f || AttackSpeed != 0f || Knockback != 0f

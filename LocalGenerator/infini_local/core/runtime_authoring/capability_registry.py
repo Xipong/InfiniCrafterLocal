@@ -1367,6 +1367,30 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                      neutral=False, execution_phase=phase)
     if not armor:
         for name, meaning in (
+            ("fishingLine", "Enable native Player.accFishingLine while equipped: caught fish cannot be lost by the line-break roll. Does not preserve bait, select a rod or spawn fish."),
+            ("lavaFishing", "Enable native Player.accLavaFishing while equipped. Terraria still requires a usable pole and bait and owns biome/catch rules; this grants no lava damage immunity."),
+            ("fishingSonar", "Enable native Player.sonarPotion catch preview while equipped. Visual information only; does not select or improve the catch."),
+            ("fishingCrates", "Enable native Player.cratePotion while equipped: use the engine crate-chance modifier, not a guaranteed crate or custom loot table."),
+            ("lifePickup", "Enable native Player.lifeMagnet: extend pickup for native heart variants only. Does not heal or create drops."),
+            ("manaPickup", "Enable native Player.manaMagnet: extend pickup for native mana star variants only. Does not restore mana directly."),
+            ("coinPickup", "Enable native Player.goldRing: extend pickup for coin items only. Does not increase coin drops."),
+            ("treasurePickup", "Enable native Player.treasureMagnet: add native treasure grab range to eligible world items, stacking with native specialized magnets. Does not bypass pickup eligibility or inventory space."),
+            ("treasureVision", "Enable native Player.findTreasure highlighting for engine-recognized treasure tiles. Does not reveal unexplored map or spawn treasure."),
+            ("dangerVision", "Enable native Player.dangerSense highlighting for engine-recognized dangerous tiles. Does not grant hazard immunity."),
+            ("creatureVision", "Enable native Player.detectCreature highlighting. Information only; does not target, damage or summon creatures."),
+            ("nightVision", "Enable native Player.nightVision lighting visibility. Does not create light sources, map reveal, treasure detection or danger detection."),
+            ("fishingInfo", "Enable native Player.accFishFinder fishing information display; does not increase fishing power."),
+            ("weatherInfo", "Enable native Player.accWeatherRadio weather information; does not change weather."),
+            ("moonInfo", "Enable native Player.accCalendar moon phase display; does not advance time."),
+            ("enemyInfo", "Enable native Player.accThirdEye nearby enemy counter; does not reveal or attack enemies."),
+            ("speedInfo", "Enable native Player.accStopwatch speed display; does not change movement speed."),
+            ("oreInfo", "Enable native Player.accOreFinder nearby valuable material display; no mining or ore creation."),
+            ("rareCreatureInfo", "Enable native Player.accCritterGuide rare creature information; does not attract creatures."),
+            ("killCountInfo", "Enable native Player.accDreamCatcher kill tally information; does not change counters."),
+            ("potionCooldown", "Enable native Player.pStone healing potion delay modifier. Uses engine PhilosopherStoneDurationMultiplier, applied on the native update cadence; does not clear an existing potion sickness debuff."),
+            ("autoManaPotion", "Enable native Player.manaFlower: engine may consume available mana potions when CheckMana needs them. Does not create potions, provide free mana, or reduce mana cost."),
+            ("restingRecovery", "Enable native Player.shinyStone resting regeneration rules. Terraria owns motion and regeneration conditions; does not grant unconditional healing or damage resistance."),
+            ("extendedInvulnerability", "Enable native Player.longInvince hurt invulnerability timing. Does not make the player permanently immune, dodge hits or create custom on-hit actions."),
             ("iceSkate", "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed"),
             ("noKnockback", "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate"),
             ("fireWalk", "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles"),
@@ -1375,6 +1399,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                          execution_phase=phase, wire_presence_requires_receipt=True)
         p["accRunSpeedBlocksPerSecond"] = _world_units(_p("number", "Native sprint-speed floor: max(Player.accRunSpeed, lowered value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus", required=False, minimum=0, maximum=20, units="pixels_per_tick", wire_name="accRunSpeed", neutral=0, consumer_storage="float32", execution_phase=phase, wire_presence_requires_receipt=True), "accRunSpeedPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s')
         p["rocketBoots"] = _p("integer", "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight", required=False, minimum=0, maximum=5, units="native rocket flight mode", wire_name="rocketBoots", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
+        p["fishingPower"] = _p("integer", "Add raw Player.fishingSkill points while equipped; Terraria combines them with pole/bait and environment multipliers. Zero adds nothing; does not create a fishing rod, bait or projectile", required=False, minimum=0, maximum=100, units="fishing power points", wire_name="fishingPower", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
         p["wireVision"] = _p("boolean", "Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation", required=False, wire_name="wireVision", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
     if armor:
         set_phase = "ModItem.UpdateArmorSet; exact setKey on head, body and legs"
