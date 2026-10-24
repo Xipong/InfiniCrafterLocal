@@ -44,6 +44,12 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("motion primitive MotionWireAdmission", AtlasMotionWireAdmission),
+            ("motion primitive TravelingWave", AtlasTravelingWave),
+            ("motion primitive EllipticOrbit", AtlasEllipticOrbit),
+            ("motion primitive SpringTether", AtlasSpringTether),
+            ("motion primitive SpeedRamp", AtlasSpeedRamp),
+            ("motion primitive VectorAcceleration", AtlasVectorAcceleration),
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),

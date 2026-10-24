@@ -774,6 +774,12 @@ public sealed class RuntimeEntitySpec
         get => _hitboxCurve;
         set => _hitboxCurve = value ?? throw new InvalidDataException("present hitboxCurve cannot be null");
     }
+    private RuntimeVectorAccelerationSpec? _vectorAcceleration;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeVectorAccelerationSpec? VectorAcceleration { get => _vectorAcceleration; set => _vectorAcceleration = value ?? throw new InvalidDataException("present vectorAcceleration cannot be null"); }
+    private RuntimeSpeedRampSpec? _speedRamp;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeSpeedRampSpec? SpeedRamp { get => _speedRamp; set => _speedRamp = value ?? throw new InvalidDataException("present speedRamp cannot be null"); }
     private RuntimeTurnModifierSpec? _turnModifier;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeTurnModifierSpec? TurnModifier { get => _turnModifier; set => _turnModifier = value ?? throw new InvalidDataException("present turnModifier cannot be null"); }
@@ -848,8 +854,11 @@ public sealed class RuntimeEntitySpec
             if (Spawn.Enabled || Spawn.MaxActive.HasValue || Spawn.DescendantMaxActive.HasValue || NativeSentry.HasValue
                 || Damage.Enabled || Movement.IsConfigured || Controller.IsConfigured || HitboxCurve is not null
                 || Movement.Params?.HasBeamExtensions == true || Controller.Params?.HasBeamExtensions == true
+                || Movement.Params?.HasSpringTether == true || Controller.Params?.HasSpringTether == true
+                || Movement.Params?.HasEllipticOrbit == true || Controller.Params?.HasEllipticOrbit == true
+                || Movement.Params?.HasTravelingWave == true || Controller.Params?.HasTravelingWave == true
                 || Movement.Params?.HasFrontHandParams == true || Controller.Params?.HasFrontHandParams == true
-                || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
+                || VectorAcceleration is not null || SpeedRamp is not null || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null || NpcAttraction is not null || VisualScaleCurve is not null || WhipUsesOwnerGravity.HasValue)
                 throw new InvalidDataException($"item_body '{Id}' cannot carry projectile components");
         }
         else
@@ -862,13 +871,15 @@ public sealed class RuntimeEntitySpec
             Hitbox.Normalize();
             Collision.Normalize();
             Movement.NormalizeAndValidate(Kind);
+            if (Movement.Code is 22 or 23 && Spawn.Aim == "none")
+                throw new InvalidDataException("oriented trajectories require an explicit spawn axis");
             Controller.NormalizeAndValidate(Kind);
             if (Spawn.VelocityDistribution is not null
                 && (IsStationary || Controller.Code is RuntimeControllerCode.ChannelBeam or RuntimeControllerCode.ChargeThenRelease))
                 throw new InvalidDataException($"entity '{Id}' does not execute sampled initial velocity");
-            TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
+            VectorAcceleration?.Validate(); TurnModifier?.Validate(); SpeedModifier?.Validate(); HomingModifier?.Validate();
             NpcAttraction?.Validate(); VisualScaleCurve?.Validate();
-            if ((TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
+            if ((VectorAcceleration is not null || SpeedRamp is not null || TurnModifier is not null || SpeedModifier is not null || HomingModifier is not null)
                 && (Kind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile) || Controller.Code is not (RuntimeControllerCode.None or RuntimeControllerCode.TargetAndFire) || !Movement.IsConfigured))
                 throw new InvalidDataException("velocity modifiers require a free/child projectile with explicit movement ownership");
             if (VisualScaleCurve is not null && (Movement.Code is 15 or 18 || Controller.Code == RuntimeControllerCode.ChannelBeam || HitboxCurve?.MirrorToSprite == true))
@@ -1427,6 +1438,13 @@ public sealed class RuntimeMovementSpec
 
     public void NormalizeAndValidate(string entityKind)
     {
+        Params ??= new RuntimeParamsSpec();
+        Params.ValidateSpringTether(Code);
+        if (Code == 21 && (Name != "move_spring_tether" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_spring_tether requires exact name, opcode and free/child kind");
+        Params.ValidateEllipticOrbit(Code);
+        if (Code == 22 && (Name != "move_elliptic_orbit" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_elliptic_orbit requires exact name, opcode and free/child kind");
+        Params.ValidateTravelingWave(Code);
+        if (Code == 23 && (Name != "move_traveling_wave" || entityKind is not (RuntimeEntityKind.FreeProjectile or RuntimeEntityKind.ChildProjectile))) throw new InvalidDataException("move_traveling_wave requires exact name, opcode and free/child kind");
         if (Code == 6) throw new InvalidDataException("retired movement opcode 6");
         Params ??= new RuntimeParamsSpec();
         if (Code == 20) {
@@ -1456,7 +1474,7 @@ public sealed class RuntimeMovementSpec
         }
         if (Code < 0 || Code > InfiniRuntimeLimits.MaxSupportedMovementCode)
             throw new InvalidDataException($"unsupported movement opcode {Code}");
-        if (Code >= 16 && entityKind != RuntimeEntityKind.OwnerAttachedProjectile)
+        if (Code is >= 16 and <= 20 && entityKind != RuntimeEntityKind.OwnerAttachedProjectile)
             throw new InvalidDataException($"movement opcode {Code} requires owner_attached_projectile");
         if (!string.Equals(Name, RuntimeOpcodeNames.MovementName(Code), StringComparison.Ordinal))
             throw new InvalidDataException($"movement name/opcode mismatch '{Name}'/{Code}");
@@ -1474,6 +1492,9 @@ public sealed class RuntimeControllerSpec
     {
         Name = RuntimeText.Safe(Name, 64);
         Params ??= new RuntimeParamsSpec();
+        Params.ValidateSpringTether(-1);
+        Params.ValidateEllipticOrbit(-1);
+        Params.ValidateTravelingWave(-1);
         // Current independent controls must be admitted before retained-v5 clamping.
         if (Params.HasIndependentCharge && (Code != RuntimeControllerCode.ChargeThenRelease
             || !Params.ChargeDamageMultiplier.HasValue || !Params.KnockbackMultiplier.HasValue || !Params.SpeedMultiplier.HasValue
@@ -1501,6 +1522,114 @@ public sealed class RuntimeControllerSpec
 
 public sealed class RuntimeParamsSpec
 {
+    private float? _waveForwardSpeed;
+    public sealed class WaveForwardSpeedConverter : RawJsonNullableFloatDomainConverter { public WaveForwardSpeedConverter() : base("0.1", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WaveForwardSpeedConverter))]
+    public float? WaveForwardSpeed { get => _waveForwardSpeed; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.1f || v > 80f) throw new InvalidDataException("waveForwardSpeed requires finite 0.1..80");
+        _waveForwardSpeed = v;
+    } }
+    private float? _waveDisplacementAmplitude;
+    public sealed class WaveDisplacementAmplitudeConverter : RawJsonNullableFloatDomainConverter { public WaveDisplacementAmplitudeConverter() : base("0", "16", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WaveDisplacementAmplitudeConverter))]
+    public float? WaveDisplacementAmplitude { get => _waveDisplacementAmplitude; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0f || v > 16f) throw new InvalidDataException("waveDisplacementAmplitude requires finite 0..16");
+        _waveDisplacementAmplitude = v;
+    } }
+    private float? _wavePhaseRate;
+    public sealed class WavePhaseRateConverter : RawJsonNullableFloatDomainConverter { public WavePhaseRateConverter() : base("0.0001", "1") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WavePhaseRateConverter))]
+    public float? WavePhaseRate { get => _wavePhaseRate; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.0001f || v > 1f) throw new InvalidDataException("wavePhaseRate requires finite 0.0001..1");
+        _wavePhaseRate = v;
+    } }
+    private float? _waveStartPhase;
+    public sealed class WaveStartPhaseConverter : RawJsonNullableFloatDomainConverter { public WaveStartPhaseConverter() : base("-3.1415927", "3.1415927", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(WaveStartPhaseConverter))]
+    public float? WaveStartPhase { get => _waveStartPhase; set {
+        if (value is not float v || !float.IsFinite(v) || v < -3.1415927f || v > 3.1415927f) throw new InvalidDataException("waveStartPhase requires finite -3.1415927..3.1415927");
+        _waveStartPhase = v;
+    } }
+    [JsonIgnore] public bool HasTravelingWave => WaveForwardSpeed.HasValue || WaveDisplacementAmplitude.HasValue || WavePhaseRate.HasValue || WaveStartPhase.HasValue;
+    internal void ValidateTravelingWave(int code)
+    {
+        if (code == 23) {
+            if (!WaveForwardSpeed.HasValue || !WaveDisplacementAmplitude.HasValue || !WavePhaseRate.HasValue || !WaveStartPhase.HasValue) throw new InvalidDataException("move_traveling_wave requires every authored parameter");
+        } else if (HasTravelingWave) throw new InvalidDataException("move_traveling_wave parameters require their exact movement owner");
+    }
+
+    private float? _ellipseRadiusAlong;
+    public sealed class EllipseRadiusAlongConverter : RawJsonNullableFloatDomainConverter { public EllipseRadiusAlongConverter() : base("0.25", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipseRadiusAlongConverter))]
+    public float? EllipseRadiusAlong { get => _ellipseRadiusAlong; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.25f || v > 80f) throw new InvalidDataException("ellipseRadiusAlong requires finite 0.25..80");
+        _ellipseRadiusAlong = v;
+    } }
+    private float? _ellipseRadiusAcross;
+    public sealed class EllipseRadiusAcrossConverter : RawJsonNullableFloatDomainConverter { public EllipseRadiusAcrossConverter() : base("0.25", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipseRadiusAcrossConverter))]
+    public float? EllipseRadiusAcross { get => _ellipseRadiusAcross; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.25f || v > 80f) throw new InvalidDataException("ellipseRadiusAcross requires finite 0.25..80");
+        _ellipseRadiusAcross = v;
+    } }
+    private float? _ellipseAngularRate;
+    public sealed class EllipseAngularRateConverter : RawJsonNullableFloatDomainConverter { public EllipseAngularRateConverter() : base("-0.5", "0.5", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipseAngularRateConverter))]
+    public float? EllipseAngularRate { get => _ellipseAngularRate; set {
+        if (value is not float v || !float.IsFinite(v) || v < -0.5f || v > 0.5f) throw new InvalidDataException("ellipseAngularRate requires finite -0.5..0.5");
+        _ellipseAngularRate = v;
+    } }
+    private float? _ellipsePhase;
+    public sealed class EllipsePhaseConverter : RawJsonNullableFloatDomainConverter { public EllipsePhaseConverter() : base("-3.1415927", "3.1415927", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(EllipsePhaseConverter))]
+    public float? EllipsePhase { get => _ellipsePhase; set {
+        if (value is not float v || !float.IsFinite(v) || v < -3.1415927f || v > 3.1415927f) throw new InvalidDataException("ellipsePhase requires finite -3.1415927..3.1415927");
+        _ellipsePhase = v;
+    } }
+    [JsonIgnore] public bool HasEllipticOrbit => EllipseRadiusAlong.HasValue || EllipseRadiusAcross.HasValue || EllipseAngularRate.HasValue || EllipsePhase.HasValue;
+    internal void ValidateEllipticOrbit(int code)
+    {
+        if (code == 22) {
+            if (!EllipseRadiusAlong.HasValue || !EllipseRadiusAcross.HasValue || !EllipseAngularRate.HasValue || !EllipsePhase.HasValue) throw new InvalidDataException("move_elliptic_orbit requires every authored parameter");
+        } else if (HasEllipticOrbit) throw new InvalidDataException("move_elliptic_orbit parameters require their exact movement owner");
+    }
+
+    private float? _springRestRadius;
+    public sealed class SpringRestRadiusConverter : RawJsonNullableFloatDomainConverter { public SpringRestRadiusConverter() : base("0", "80", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringRestRadiusConverter))]
+    public float? SpringRestRadius { get => _springRestRadius; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0f || v > 80f) throw new InvalidDataException("springRestRadius requires finite 0..80");
+        _springRestRadius = v;
+    } }
+    private float? _springStiffness;
+    public sealed class SpringStiffnessConverter : RawJsonNullableFloatDomainConverter { public SpringStiffnessConverter() : base("1e-06", "1") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringStiffnessConverter))]
+    public float? SpringStiffness { get => _springStiffness; set {
+        if (value is not float v || !float.IsFinite(v) || v < 1e-06f || v > 1f) throw new InvalidDataException("springStiffness requires finite 1e-06..1");
+        _springStiffness = v;
+    } }
+    private float? _springDamping;
+    public sealed class SpringDampingConverter : RawJsonNullableFloatDomainConverter { public SpringDampingConverter() : base("0", "1", "0") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringDampingConverter))]
+    public float? SpringDamping { get => _springDamping; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0f || v > 1f) throw new InvalidDataException("springDamping requires finite 0..1");
+        _springDamping = v;
+    } }
+    private float? _springMaxSpeed;
+    public sealed class SpringMaxSpeedConverter : RawJsonNullableFloatDomainConverter { public SpringMaxSpeedConverter() : base("0.1", "80") { } }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] [JsonConverter(typeof(SpringMaxSpeedConverter))]
+    public float? SpringMaxSpeed { get => _springMaxSpeed; set {
+        if (value is not float v || !float.IsFinite(v) || v < 0.1f || v > 80f) throw new InvalidDataException("springMaxSpeed requires finite 0.1..80");
+        _springMaxSpeed = v;
+    } }
+    [JsonIgnore] public bool HasSpringTether => SpringRestRadius.HasValue || SpringStiffness.HasValue || SpringDamping.HasValue || SpringMaxSpeed.HasValue;
+    internal void ValidateSpringTether(int code)
+    {
+        if (code == 21) {
+            if (!SpringRestRadius.HasValue || !SpringStiffness.HasValue || !SpringDamping.HasValue || !SpringMaxSpeed.HasValue) throw new InvalidDataException("move_spring_tether requires every authored parameter");
+        } else if (HasSpringTether) throw new InvalidDataException("move_spring_tether parameters require their exact movement owner");
+    }
+
     private string? _aimMode, _startStretch, _peakStretch;
     private float? _hitboxOffsetPx;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -2198,6 +2327,7 @@ internal static class RuntimeOpcodeNames
         "move_spiral", "move_vortex_orb", "move_blackhole_pull", "move_proximity_missile",
         "move_returning_glaive", "move_expanding_wave", "move_flail_tether", "move_yoyo_hover",
         "move_whip_lash", "move_forward_then_retract", "move_front_hand",
+        "move_spring_tether", "move_elliptic_orbit", "move_traveling_wave",
     };
     private static readonly string[] ControllerNames = { "", "channel_beam", "charge_then_release", "target_and_fire" };
     private static readonly string[] EventNames =
@@ -2242,5 +2372,39 @@ internal static class RuntimeText
     {
         string text = Safe(value, 48);
         return string.IsNullOrWhiteSpace(text) ? "" : Id(text);
+    }
+}
+
+public sealed class RuntimeVectorAccelerationSpec
+{
+    public sealed class AccelerationXConverter : RawJsonFloatDomainConverter { public AccelerationXConverter() : base("-2", "2", "0") { } }
+    [JsonConverter(typeof(AccelerationXConverter))] [JsonRequired] public float AccelerationX { get; set; }
+    public sealed class AccelerationYConverter : RawJsonFloatDomainConverter { public AccelerationYConverter() : base("-2", "2", "0") { } }
+    [JsonConverter(typeof(AccelerationYConverter))] [JsonRequired] public float AccelerationY { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(AccelerationX, -2f, 2f);
+        RuntimeModifierClock.RequireRange(AccelerationY, -2f, 2f);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
+    }
+}
+
+public sealed class RuntimeSpeedRampSpec
+{
+    public sealed class StartSpeedConverter : RawJsonFloatDomainConverter { public StartSpeedConverter() : base("0.1", "80") { } }
+    [JsonConverter(typeof(StartSpeedConverter))] [JsonRequired] public float StartSpeed { get; set; }
+    public sealed class EndSpeedConverter : RawJsonFloatDomainConverter { public EndSpeedConverter() : base("0", "80", "0") { } }
+    [JsonConverter(typeof(EndSpeedConverter))] [JsonRequired] public float EndSpeed { get; set; }
+    [JsonRequired] public int StartDelayTicks { get; set; }
+    [JsonRequired] public int DurationTicks { get; set; }
+    public void Validate()
+    {
+        RuntimeModifierClock.RequireRange(StartSpeed, 0.1f, 80f);
+        RuntimeModifierClock.RequireRange(EndSpeed, 0f, 80f);
+        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }

@@ -177,7 +177,17 @@ def test_all_declared_engine_endpoints_remain_reachable_for_every_target_clock()
     for cap in CAPABILITY_REGISTRY.values():
         for root in cap.params.values():
             for spec in world_leaves(root):
+                for endpoint in (spec.minimum, spec.maximum):
+                    if endpoint is not None:
+                        assert any(spec.consumer_value_error(endpoint, updates_per_tick=clock) is None
+                                   for clock in range(1, 7)), (cap.name, endpoint)
                 for updates in range(1, 7):
+                    if spec.wire_updates_power:
+                        # The model-facing clock card must expose admissible
+                        # endpoints too, not only the fixture inverse below.
+                        for endpoint in spec.contextual_author_bounds(updates_per_tick=updates).values():
+                            if endpoint is not None:
+                                assert spec.consumer_value_error(endpoint, updates_per_tick=updates) is None, (cap.name, updates, endpoint)
                     for engine in (spec.wire_minimum, spec.wire_maximum):
                         if engine is None:
                             continue

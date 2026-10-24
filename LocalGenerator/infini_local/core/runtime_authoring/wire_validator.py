@@ -634,6 +634,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 errors.append({"path": f"{entity_path}.events[{event_index}].reactionCooldownTicks", "code": "invalid_reaction_cooldown", "message": "Equipment reactions require an explicit supported action and bounded cooldown."})
         movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
         controller = entity.get("controller") if isinstance(entity.get("controller"), Mapping) else {}
+        if movement.get("code") in {22, 23} and isinstance(entity.get("spawn"), Mapping) and entity["spawn"].get("aim") == "none":
+            errors.append({"path": entity_path + ".spawn.aim", "code": "missing_motion_axis", "message": "Oriented trajectories require an explicit launch axis."})
         for modifier_fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
             if member not in entity:
                 continue

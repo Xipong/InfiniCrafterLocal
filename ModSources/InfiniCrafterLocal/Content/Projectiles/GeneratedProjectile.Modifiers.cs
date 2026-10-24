@@ -24,6 +24,8 @@ public sealed partial class GeneratedProjectile
             if (magnitude > speed.MaxSpeed)
                 Projectile.velocity *= speed.MaxSpeed / magnitude;
         }
+        ApplyVectorAcceleration();
+        ApplySpeedRamp();
         ApplyHomingModifier();
     }
 

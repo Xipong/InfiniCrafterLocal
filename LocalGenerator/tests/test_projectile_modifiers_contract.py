@@ -20,6 +20,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import wire_transport
 
 PARAMS = {
+    "set_projectile_speed_ramp": dict(startSpeedBlocksPerSecond=75, endSpeedBlocksPerSecond=15, startDelaySeconds=0, durationSeconds=2),
+    "set_projectile_vector_acceleration": dict(accelerationXBlocksPerSecondSquared=12, accelerationYBlocksPerSecondSquared=-6, startDelaySeconds=0, durationSeconds=2),
     "set_projectile_turn_modifier": dict(turnRadiansPerSecond=(.04) * 60, startDelaySeconds=(0) / 60, durationSeconds=(90) / 60),
     "set_projectile_speed_modifier": dict(speedMultiplierPerUpdate=1.01, maxSpeedBlocksPerSecond=75, startDelaySeconds=(0) / 60, durationSeconds=(40) / 60),
     "set_projectile_homing_modifier": dict(rangeTiles=40, maxTurnRadiansPerSecond=(.1) * 60, requireLineOfSight=True, startDelaySeconds=(40) / 60, durationSeconds=(50) / 60),
@@ -45,6 +47,8 @@ def entity(wire, fn):
 
 
 @pytest.mark.parametrize("fn,format_mode,repair", [
+    ("set_projectile_vector_acceleration", "json_object", False),
+    ("set_projectile_speed_ramp", "json_schema", True),
     ("set_projectile_visual_scale_curve", "json_object", False),
     ("set_projectile_homing_modifier", "json_schema", True),
 ])
@@ -156,7 +160,7 @@ def test_frozen_repair_changes_only_invalid_phase_leaf(fn):
 def test_simultaneous_and_delayed_modifiers_are_independent_of_the_movement_slot():
     doc = source("set_projectile_turn_modifier")
     target = call(doc, "set_projectile_turn_modifier")["target"]
-    for index, fn in enumerate(list(PROJECTILE_MODIFIER_COMPONENTS)[1:]):
+    for index, fn in enumerate(fn for fn in PROJECTILE_MODIFIER_COMPONENTS if fn != "set_projectile_turn_modifier"):
         doc["runtimeProgram"]["calls"].append(dict(id=f"modifier_{index}", fn=fn, target=target, params=deepcopy(PARAMS[fn])))
     doc["runtimeProgram"]["calls"].append(dict(id="gameplay_curve", fn="set_projectile_hitbox_curve", target=target,
         params=dict(startScale=1, endScale=2, startDelaySeconds=0, durationSeconds=80 / 60, curve="linear", mirrorToSprite=False)))
