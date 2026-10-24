@@ -65,6 +65,12 @@ def _value(spec: ParamSpec, name: str) -> Any:
 def _params(fn: str) -> dict[str, Any]:
     spec = CAPABILITY_REGISTRY[fn]
     out = {name: _value(param, name) for name, param in spec.params.items() if param.required}
+    for requirement in spec.requirements:
+        if requirement.kind == "timing_pair_or_window":
+            # Keep this canonical witness's already-established finite interval.
+            # Dedicated timing tests also exercise the new window-only shape.
+            for name in (requirement.param, requirement.other_param):
+                out[name] = _value(spec.params[name], name)
     special: dict[str, dict[str, Any]] = {
         "configure_item_stats": deepcopy(_ITEM_BASE_STATS),
         "configure_item_use": deepcopy(_ITEM_BASE_USE),

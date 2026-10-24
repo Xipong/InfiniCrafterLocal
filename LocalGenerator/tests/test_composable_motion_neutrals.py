@@ -111,3 +111,102 @@ def test_valid_absent_side_control_is_frozen_while_repairing_core_choice():
     repaired = next(c for c in fixed["runtimeProgram"]["calls"] if c["id"] == call["id"])
     assert repaired["params"] == {"source": "initial"}
     assert validate_runtime_program(fixed)["ok"]
+
+
+RAMP_NEUTRALS = [
+    ("apply_projectile_charge_release", "chargeRelease", "launchSpeedBlocksPerSecond", 30,
+     {"damageMultiplier": 1, "knockbackMultiplier": 1, "speedMultiplier": 1,
+      "pauseLifetimeWhileCharging": False}),
+    ("set_projectile_beam_ramp", "beamRamp", "warmupSeconds", 1,
+     {"initialWidthMultiplier": 1, "initialDamageMultiplier": 1, "damageStartProgress": 0}),
+]
+
+
+def ramp_document(fn, neutrals):
+    from infini_local.qa.capability_witnesses import build_capability_witness
+    doc = build_capability_witness(fn)
+    call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
+    for name in neutrals:
+        call["params"].pop(name, None)
+    return doc, call
+
+
+@pytest.mark.parametrize("fn,member,core,value,neutrals", RAMP_NEUTRALS)
+def test_ramp_neutrals_have_exact_full_and_stripped_wire_with_complete_provenance(fn, member, core, value, neutrals):
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+    doc, call = ramp_document(fn, neutrals)
+    call["params"][core] = value
+    before = deepcopy(doc)
+    wire, sparse = compile_ok(doc)
+    call["params"].update(neutrals)
+    _, explicit = compile_ok(doc)
+    assert sparse == explicit
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    omitted = [r for r in rows if r.get("callId") == call["id"] and r["status"] == "declared_neutral_omission"]
+    assert len(omitted) == len(neutrals)
+    assert {r["authoredPath"].rsplit(".", 1)[-1]: r["value"] for r in omitted} == neutrals
+    for authored in (before, None):
+        assert audit_compiler_receipts(rows, authored_document=authored, final_document=wire)["ok"]
+    stripped = deepcopy(wire)
+    stripped.pop("runtimeContract")
+    assert validate_runtime_wire(stripped)["ok"]
+    for proof in omitted:
+        incomplete = [r for r in rows if r is not proof]
+        for authored in (before, None):
+            assert not audit_compiler_receipts(incomplete, authored_document=authored, final_document=wire)["ok"]
+        missing = deepcopy(stripped)
+        entity = next(e for e in missing["runtimeProgram"]["entities"] if e["id"] == call["target"])
+        del entity[member][proof["finalPath"].rsplit(".", 1)[-1]]
+        assert not validate_runtime_wire(missing)["ok"], "Wire requires the materialized neutral, not a second fallback"
+
+
+@pytest.mark.parametrize("fn,member,core,value,neutrals", RAMP_NEUTRALS)
+def test_ramp_omissions_do_not_supply_core_values_or_missing_dependencies(fn, member, core, value, neutrals):
+    doc, call = ramp_document(fn, neutrals)
+    call["params"].pop(core, None)
+    assert not validate_runtime_program(doc)["ok"]
+    call["params"][core] = value
+    required = "accumulate_projectile_charge" if member == "chargeRelease" else "set_projectile_beam_geometry"
+    doc["runtimeProgram"]["calls"] = [c for c in doc["runtimeProgram"]["calls"] if c["fn"] != required]
+    assert not validate_runtime_program(doc)["ok"]
+
+
+@pytest.mark.parametrize("fn,member,core,value,neutrals", RAMP_NEUTRALS)
+def test_ramp_invalid_present_neutrals_refused_and_valid_changes_preserved(fn, member, core, value, neutrals):
+    for name, neutral in neutrals.items():
+        for bad in (None, "1", float("nan"), float("inf"), -1, True if type(neutral) is int else 0):
+            doc, call = ramp_document(fn, neutrals)
+            call["params"][name] = bad
+            assert not validate_runtime_program(doc)["ok"], (name, bad)
+        doc, call = ramp_document(fn, neutrals)
+        chosen = True if type(neutral) is bool else (2 if member == "chargeRelease" else 0.5)
+        call["params"][name] = chosen
+        wire, entity = compile_ok(doc)
+        assert entity[member][name] == chosen
+        proof = next(r for r in wire["runtimeContract"]["finalWireReceipts"]
+                     if r.get("callId") == call["id"] and r["authoredPath"].endswith(".params." + name))
+        assert proof["status"] == "delivered"
+
+
+@pytest.mark.parametrize("fn,member,core,value,neutrals", RAMP_NEUTRALS)
+@pytest.mark.parametrize("explicit", [False, True])
+def test_ramp_repair_freezes_neutral_presence_and_values(fn, member, core, value, neutrals, explicit):
+    from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
+    from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
+    doc, call = ramp_document(fn, neutrals)
+    if explicit:
+        call["params"].update(neutrals)
+    call["params"][core] = -1
+    before = deepcopy(doc)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    proposed = deepcopy(call)
+    proposed["params"][core] = value
+    proposed["params"].update({name: True if type(neutral) is bool else 0.5
+                              for name, neutral in neutrals.items()})
+    patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [proposed], "note": "repair timing or launch only"}, scope)
+    assert audit["ok"] and audit["ignoredChanges"]
+    fixed = apply_repair_patch(doc, patch)
+    expected = deepcopy(before)
+    next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"][core] = value
+    assert fixed == expected and doc == before
+    compile_ok(fixed)

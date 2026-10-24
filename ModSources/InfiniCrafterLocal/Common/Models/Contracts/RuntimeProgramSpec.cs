@@ -1239,7 +1239,40 @@ public static class RuntimeModifierClock
     }
 }
 
-public sealed class RuntimeTurnModifierSpec : RuntimeWindowedMotionSpec
+// A selected motion window can own all timing. Retained scalar pairs still
+// intersect that window exactly; absent scalars never invent a finite cutoff.
+public abstract class RuntimeTimedModifierSpec : RuntimeWindowedMotionSpec
+{
+    private int? _startDelayTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StartDelayTicks
+    {
+        get => _startDelayTicks;
+        set => _startDelayTicks = value ?? throw new InvalidDataException("present modifier delay cannot be null");
+    }
+    private int? _durationTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DurationTicks
+    {
+        get => _durationTicks;
+        set => _durationTicks = value ?? throw new InvalidDataException("present modifier duration cannot be null");
+    }
+    public override void Validate()
+    {
+        base.Validate();
+        if (StartDelayTicks.HasValue != DurationTicks.HasValue)
+            throw new InvalidDataException("modifier scalar timing requires both delay and duration");
+        if (!StartDelayTicks.HasValue) {
+            if (Window is null)
+                throw new InvalidDataException("modifier requires an explicit window or scalar timing pair");
+            return;
+        }
+        RuntimeModifierClock.RequireRange(StartDelayTicks.Value, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks!.Value, 1, 21600);
+    }
+}
+
+public sealed class RuntimeTurnModifierSpec : RuntimeTimedModifierSpec
 {
     public sealed class TurnRadiansPerUpdateJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1247,18 +1280,14 @@ public sealed class RuntimeTurnModifierSpec : RuntimeWindowedMotionSpec
     }
     [JsonConverter(typeof(TurnRadiansPerUpdateJsonConverter))]
     [JsonRequired] public float TurnRadiansPerUpdate { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(TurnRadiansPerUpdate, -0.5f, 0.5f);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }
 
-public sealed class RuntimeSpeedModifierSpec : RuntimeWindowedMotionSpec
+public sealed class RuntimeSpeedModifierSpec : RuntimeTimedModifierSpec
 {
     public sealed class SpeedMultiplierPerUpdateJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1272,19 +1301,15 @@ public sealed class RuntimeSpeedModifierSpec : RuntimeWindowedMotionSpec
     }
     [JsonConverter(typeof(MaxSpeedJsonConverter))]
     [JsonRequired] public float MaxSpeed { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(SpeedMultiplierPerUpdate, 0.8f, 1.2f);
         RuntimeModifierClock.RequireRange(MaxSpeed, 0.1f, 80f);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }
 
-public sealed class RuntimeHomingModifierSpec : RuntimeWindowedMotionSpec
+public sealed class RuntimeHomingModifierSpec : RuntimeTimedModifierSpec
 {
     public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1299,19 +1324,15 @@ public sealed class RuntimeHomingModifierSpec : RuntimeWindowedMotionSpec
     [JsonConverter(typeof(MaxTurnRadiansPerUpdateJsonConverter))]
     [JsonRequired] public float MaxTurnRadiansPerUpdate { get; set; }
     [JsonRequired] public bool RequireLineOfSight { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(RangeTiles, 1f, 120f);
         RuntimeModifierClock.RequireRange(MaxTurnRadiansPerUpdate, 0.0001f, 3.2f);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }
 
-public sealed class RuntimeNpcAttractionSpec : RuntimeWindowedMotionSpec
+public sealed class RuntimeNpcAttractionSpec : RuntimeTimedModifierSpec
 {
     public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1327,16 +1348,12 @@ public sealed class RuntimeNpcAttractionSpec : RuntimeWindowedMotionSpec
     [JsonRequired] public float StrengthPerUpdate { get; set; }
     [JsonRequired] public string Falloff { get; set; } = "";
     [JsonRequired] public int MaxTargets { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(RangeTiles, 1f, 80f);
         RuntimeModifierClock.RequireRange(StrengthPerUpdate, 0.001f, 4f);
         RuntimeModifierClock.RequireRange(MaxTargets, 1, 16);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
         if (Falloff is not ("constant" or "linear")) throw new InvalidDataException("unknown NPC attraction falloff");
     }
 }

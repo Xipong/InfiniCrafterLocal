@@ -155,10 +155,16 @@ Call IDs, порядок actions, producer dependencies, фаза item/projectil
 | `set_projectile_owner_control` guard/claim flags, animation/lifetime overrides | соответствующий эффект не выбран; полностью пустой control запрещён | `false`, `none`, `authored` |
 | `set_projectile_rotation.offsetRadians` | дополнительный offset не выбран | `0` |
 | `set_projectile_rotation.radiansPerSecond` | exact mode не `spin` | `0` |
+| `apply_projectile_charge_release` damage/knockback/speed multipliers | усиление соответствующего значения зарядом не выбрано | `1` |
+| `apply_projectile_charge_release.pauseLifetimeWhileCharging` | пауза lifetime не выбрана | `false` |
+| `set_projectile_beam_ramp` initial width/damage multipliers | соответствующий ramp не выбран | `1` |
+| `set_projectile_beam_ramp.damageStartProgress` | дополнительная задержка eligibility не выбрана | `0` |
 
 `child_projectile` получает count/spread от своего producer; root `free_projectile` не становится child из-за ссылки event. При `count>1` fan spread остаётся явным выбором. Radial/disk velocity по-прежнему несовместима с ненулевым fan spread: допустимый пропуск удовлетворяет exact zero, но present nonzero не стирается. У обычного движущегося projectile с `tileCollide=true` bounce count обязателен: N контактов отражаются, следующий убивает. Старые return opcodes сохраняют прежний early-return branch; это не общее правило новых return primitives. Пустой ReturnTrigger невалиден: должны быть выбраны хотя бы время, расстояние, release или tile contact.
 
 Единственные варианты `arrival.action=kill` и `manaSustain.cadence=held_item_use_time` выбраны точным `fn` и материализуются Lowery, а не повторяются обязательными source-полями. Это не нейтраль `kill`: смысл выбранной операции явно описан её карточкой. Native wire сохраняет оба discriminators.
+
+Нейтральные множители charge release не означают «сохранить текущую velocity»: выбранный release по-прежнему запускает снаряд по своему направлению с обязательной явно заданной `launchSpeedBlocksPerSecond`. `warmupSeconds` beam ramp также остаётся явным. Ни пропуски, ни Repair не создают отсутствующие charge/beam capabilities и не меняют их зависимости.
 
 Compiler не переписывает Author: каждый разрешённый пропуск получает `declared_neutral_omission` receipt. Audit заново проверяет контекст и exact output/value по Author, а при его отсутствии — по доступным final-wire discriminator/kind. Source-free proof не удостоверяет отсутствующий Author. Fn-selected технические literals, включая executor identity и activation flags, также требуют точного значения и уникального покрытия; согласованная подмена значения вместе с receipt не доказывает его правильность.
 
@@ -182,6 +188,10 @@ Repair сохраняет принятое отсутствие frozen. Разр
 `target_and_fire` уже независим от движения и не заменяется новым контроллером. Поиск цели для firing не выбирает цель steering. Старый velocity-lerp seek не объявлен эквивалентом capped-angular homing: это разные явно выбранные законы.
 
 Optional `window` задаёт конечные native phases `always`, `charging`, `released`, `outbound`, `returning`, а не произвольную state graph. Форма `{phase}` означает всю фазу без выдуманного максимального duration. Timing задаётся целиком: `clock`, `startDelaySeconds`, `durationSeconds`; частичная группа и present null отвергаются. `released` — latch, который может пересекаться с `returning`, а не отдельная взаимоисключающая стадия. Relative clock не активен до соответствующего release/return. Отсутствие window не добавляет фазу или таймер.
+
+Для `set_projectile_turn_modifier`, `set_projectile_speed_modifier`, `set_projectile_homing_modifier` и `attract_npcs_while_active` предпочтительно задавать время одним явным `window`. Отдельные `startDelaySeconds` и `durationSeconds` тогда не нужны: окно полностью определяет, когда исполняется модификатор, без скрытого абсолютного cutoff. `{phase: "always"}` явно выбирает всё время жизни; окно с `since_release` или `since_return` начинается от соответствующего latch.
+
+Прежняя полная пара `startDelaySeconds` + `durationSeconds` остаётся допустимой и сохраняет active-age интервал. Если явно переданы и эта пара, и `window`, исполняется их **пересечение**, как прежде. Одинокое поле пары, `null` и отсутствие одновременно пары и окна отвергаются; compiler не подставляет фиктивную максимальную длительность. Сохранённые определения с парой не мигрируются, а Repair не удаляет их валидный интервал ради новой формы. Времена reach/arm/visual/hitbox curves по-прежнему задают саму интерполяцию, а не только gate, поэтому не заменяются этим правилом.
 
 Relative interval включает первый исполняемый AI subupdate: для release/timed return это текущий update, для tile callback после AI — следующий. Окно длиной один tick сохраняет все `updatesPerTick` шаги. Phase-only spin применяет выбранную скорость на каждом шаге, без повторения первого угла после latch.
 
