@@ -77,7 +77,7 @@
         "seek_projectile",
         "set_projectile_lash_geometry"
       ],
-      "dossierChars": 74692,
+      "dossierChars": 75405,
       "errorCodes": [
         "missing_capability_dependency",
         "missing_movement_component"
@@ -151,7 +151,7 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 192229,
+  "fullAuthorPayloadChars": 192850,
   "fullCapabilityCatalogCount": 96,
   "ok": true,
   "policyCoverage": {

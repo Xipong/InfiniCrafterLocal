@@ -59,6 +59,7 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "executed_tile_placement_reference",
     "unique_call_reference",
     "conditional_param",
+    "param_only_when",
     "conditional_omission",
     "non_neutral_param",
     "enabled_trigger",

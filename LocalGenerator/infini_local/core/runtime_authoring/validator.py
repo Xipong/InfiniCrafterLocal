@@ -558,6 +558,13 @@ def _validate_requirement(
             if mode == expected and required_param not in params:
                 return ValidationIssue(f"{path}.params.{required_param}", "missing_dependency_param", requirement.message, (required_param,))
         return None
+    if requirement.kind == "param_only_when":
+        selector = params.get(requirement.other_param)
+        if (requirement.param in params and selector in cap.params[requirement.other_param].enum
+                and selector != requirement.equals):
+            return ValidationIssue(f"{path}.params.{requirement.param}", "incompatible_param_variant",
+                                   requirement.message, related_ids=(str(call.get("id") or ""),))
+        return None
     if requirement.kind == "conditional_omission":
         condition = cap.params[requirement.param].omission_condition
         kind = str(entities_by_id.get(target_id, {}).get("kind") or "")
@@ -1387,8 +1394,6 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
                 (str(row.get("id") or ""),) if wire else (item_owner_id,)))
         if fn == "set_projectile_rotation" and p.get("mode") != "spin" and leaf(row, "radiansPerSecond") not in (0, None):
             reject(row, "radiansPerSecond", "incompatible_param_variant", "Non-spin rotation has exact zero angular rate.")
-        if fn == "set_projectile_lash_geometry" and p.get("clock") == "owner_animation" and leaf(row, "durationSeconds") is not None:
-            reject(row, "durationSeconds", "incompatible_param_variant", "Only the active lash clock accepts duration.")
         if fn == "sustain_projectile_mana":
             owner = next((params(other) for other in rows if other["fn"] == "set_projectile_owner_control"), {})
             if owner.get("requireHeldItem") is not True or owner.get("requireChannel") is not True:
@@ -1407,6 +1412,10 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
                     choice, required = encoded.split(":", 1)
                     if value == choice and leaf(row, required) is None:
                         reject(row, required, "missing_dependency_param", rule.message, (required,))
+            elif (rule.kind == "param_only_when" and value is not None
+                  and leaf(row, rule.other_param) in cap.params[rule.other_param].enum
+                  and leaf(row, rule.other_param) != rule.equals):
+                reject(row, rule.param, "incompatible_param_variant", rule.message)
             elif rule.kind == "ordered_params":
                 other = leaf(row, rule.other_param)
                 if value is not None and other is not None and not rule.ordered_values(value, other):

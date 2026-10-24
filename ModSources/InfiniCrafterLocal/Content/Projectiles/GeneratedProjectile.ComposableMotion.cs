@@ -12,6 +12,10 @@ public sealed partial class GeneratedProjectile
     private int _releaseAge = -1;
     private int _returnAge = -1;
     private Vector2 _motionAxis = Vector2.UnitX;
+    // Received terminal claims and locally executed events are different facts.
+    // A server may validate a claim once; repeating it cannot retry rejected work.
+    private bool _motionExpiryObserved;
+    private (int Age, bool Released, bool Returning, int ReleaseAge, int ReturnAge, Vector2 Position)? _pendingMotionExpiry;
 
     // Read-only native resolution: old saved opcodes remain stored exactly as authored.
     // They select compatibility stage parameters, NOT another serialized program/engine.
@@ -33,24 +37,30 @@ public sealed partial class GeneratedProjectile
         || e.VisualScaleCurve?.Window is not null);
 
     private bool MotionWindowActive(RuntimeMotionWindowSpec? window)
+        => MotionWindowActive(window, _age, _released, _returning, _releaseAge, _returnAge);
+
+    private bool MotionWindowActive(RuntimeMotionWindowSpec? window, int activeAge,
+        bool released, bool returning, int releaseAge, int returnAge)
     {
         if (window is null) return true;
-        bool charging = (_entity?.Charge is not null || _entity?.Controller.Code == RuntimeControllerCode.ChargeThenRelease) && !_released;
+        bool charging = (_entity?.Charge is not null || _entity?.Controller.Code == RuntimeControllerCode.ChargeThenRelease) && !released;
         if (window.Phase switch {
-            "charging" => !charging, "released" => !_released,
-            "outbound" => charging || _returning, "returning" => !_returning, _ => false }) return false;
+            "charging" => !charging, "released" => !released,
+            "outbound" => charging || returning, "returning" => !returning, _ => false }) return false;
         if (!window.HasTimingWindow) return true;
-        int origin = window.Clock switch { "since_release" => _releaseAge, "since_return" => _returnAge, _ => 0 };
-        if (origin < 0) return false;
+        int origin = window.Clock switch { "since_release" => releaseAge, "since_return" => returnAge, _ => 0 };
+        if (origin < 0 || origin > activeAge) return false;
         // Relative clock starts on the transition update; every window samples
         // the same start-of-update convention as PR148's Active clock.
-        int age = window.Clock == "active" ? _age : _age - origin + 1;
+        int age = window.Clock == "active" ? activeAge : activeAge - origin + 1;
         return RuntimeModifierClock.Active(age, Projectile.extraUpdates + 1, window.StartDelayTicks!.Value, window.DurationTicks!.Value);
     }
 
-    private void LatchReturn(bool disableTileCollision)
+    private void LatchReturn(bool disableTileCollision, bool startsNextUpdate = false)
     {
-        if (!_returning) { _returning = true; _returnAge = _age; Projectile.netUpdate = true; }
+        // Tile collision runs after AI; its first motion step is the next AI,
+        // unlike a timer/distance trigger sampled before this update's stages.
+        if (!_returning) { _returning = true; _returnAge = _age + (startsNextUpdate ? 1 : 0); Projectile.netUpdate = true; }
         if (disableTileCollision) Projectile.tileCollide = false;
     }
     private Vector2 MotionAxis(Player owner, bool publish = true)
@@ -156,13 +166,15 @@ public sealed partial class GeneratedProjectile
         }
         if (!Projectile.active || !HasComposableMotion) return;
         Player owner = Owner();
-        if (!OwnerCanControl(owner)) { Projectile.friendly = false; Projectile.Kill(); return; }
+        // A free force/presentation primitive does not acquire held-item
+        // cancellation. Only owner control owns input/death cancellation.
+        if (owner is null || !owner.active) { Projectile.friendly = false; Projectile.Kill(); return; }
         _motionAxis = MotionAxis(owner);
         if (!ApplyMotionOwnerControl(owner)) return;
         ApplyMotionCharge(owner);
         if (!Projectile.active) return;
         ApplyMotionReturnTrigger(owner);
-        if (_entity!.ArmPose is { } pose && MotionWindowActive(pose.Window) && IsPrimaryRuntimeEntity
+        if (_entity!.ArmPose is { } pose && MotionWindowActive(pose.Window) && IsPrimaryRuntimeEntity && OwnerCanControl(owner)
             && ReferenceEquals(FindMotionPoseWriter(owner), this)) {
             CalculateMotionFrontHand(owner, _motionAxis, pose.DurationTicks, pose.StartStretch, pose.PeakStretch,
                 pose.EndStretch, pose.PeakProgress, out var stretch, out float rotation, out _);
@@ -261,6 +273,31 @@ public sealed partial class GeneratedProjectile
         _expireEventRan = true;
         RunRuntimeEvent(RuntimeEventKind.OnExpire, target, Projectile.damage);
         EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
+        // Native Kill sends its packet before mod OnKill. Publish the existing
+        // ExtraAI terminal observation first so the server sees the actual cause,
+        // rather than guessing expiry from an unrelated tile/contact kill.
+        if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient && Projectile.owner == Main.myPlayer)
+            NetMessage.SendData(Terraria.ID.MessageID.SyncProjectile, -1, -1, null, Projectile.whoAmI);
+    }
+    private void DispatchReceivedMotionExpiry()
+    {
+        if (_pendingMotionExpiry is not { } observation || !_configured) return;
+        _pendingMotionExpiry = null;
+        if (!InfiniRuntimeAuthority.IsServer || _expireEventRan || !Projectile.active
+            || !float.IsFinite(observation.Position.X) || !float.IsFinite(observation.Position.Y)
+            || Projectile.position != observation.Position || observation.Age <= 0 || _activationDelayTicks > 0
+            || _data is null || !GeneratedItemRegistryService.IsCurrentWorldData(_data)
+            || _entity?.Proximity is not { Action: "expire_then_kill" } proximity
+            || !MotionWindowActive(proximity.Window, observation.Age, observation.Released, observation.Returning,
+                observation.ReleaseAge, observation.ReturnAge)) return;
+        NPC? target = ResolveMotionNpc(proximity.SearchRangeTiles * 16f, proximity.RequireLineOfSight);
+        if (target is null || Projectile.Distance(target.Center) > proximity.TriggerRadiusPx) return;
+        // The authenticated native source snapshot is only a claim. Actual
+        // admitted geometry/window/NPC checks above still own server execution.
+        // Missing metadata never authorizes replay at a later source position
+        // or after retirement; no live actor is rewound to reconstruct the event.
+        EmitSpawnEvent();
+        ExpireMotion(target);
     }
     private void ApplyMotionRotation()
     {
@@ -275,7 +312,9 @@ public sealed partial class GeneratedProjectile
                     : window?.Phase switch { "released" => _releaseAge, "returning" => _returnAge,
                         "outbound" when _released => _releaseAge, _ => 0 };
                 int steps = Math.Max(1, _age - origin - AuthoredTicksToProjectileUpdates(window?.StartDelayTicks ?? 0)
-                    + (window?.Clock is "since_release" or "since_return" ? 1 : 0));
+                    + (window?.Clock is "since_release" or "since_return"
+                        || window?.HasTimingWindow != true && (window?.Phase is "released" or "returning"
+                            || window?.Phase == "outbound" && _released) ? 1 : 0));
                 Projectile.rotation = rotation.OffsetRadians + (steps - 1) * rotation.RadiansPerUpdate!.Value;
                 SpinBody(rotation.RadiansPerUpdate.Value);
                 break;

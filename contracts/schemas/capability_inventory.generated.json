@@ -715,6 +715,14 @@
           "message": "Active lash clock requires an explicit duration.",
           "param": "clock",
           "target": "same_target"
+        },
+        {
+          "equals": "active",
+          "kind": "param_only_when",
+          "message": "Only the active lash clock accepts duration.",
+          "otherParam": "clock",
+          "param": "durationSeconds",
+          "target": "same_target"
         }
       ],
       "safetyLimits": "bounded by runtime program limits",
@@ -1374,6 +1382,30 @@
           "kind": "conditional_param",
           "message": "Nearest NPC selection requires both range and line-of-sight choices.",
           "param": "target",
+          "target": "same_target"
+        },
+        {
+          "equals": "cursor",
+          "kind": "param_only_when",
+          "message": "Only cursor seek accepts a cursor leash.",
+          "otherParam": "target",
+          "param": "cursorLeashBlocks",
+          "target": "same_target"
+        },
+        {
+          "equals": "nearest_npc",
+          "kind": "param_only_when",
+          "message": "Only nearest NPC seek accepts a search range.",
+          "otherParam": "target",
+          "param": "searchRangeTiles",
+          "target": "same_target"
+        },
+        {
+          "equals": "nearest_npc",
+          "kind": "param_only_when",
+          "message": "Only nearest NPC seek accepts a line-of-sight choice.",
+          "otherParam": "target",
+          "param": "requireLineOfSight",
           "target": "same_target"
         },
         {

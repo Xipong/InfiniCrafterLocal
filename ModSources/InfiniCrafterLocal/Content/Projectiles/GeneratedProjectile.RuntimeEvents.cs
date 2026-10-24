@@ -195,7 +195,7 @@ public sealed partial class GeneratedProjectile
         EmitAndSyncVfxEvent(RuntimeEventKind.OnTileCollision, Projectile.Center);
         if (_entity.Movement.Code is 5 or 14 or 16)
         {
-            LatchReturn(true);
+            LatchReturn(true, startsNextUpdate: true);
             Projectile.tileCollide = false;
             Projectile.velocity = -oldVelocity * 0.25f;
             Projectile.netUpdate = true;
@@ -204,7 +204,7 @@ public sealed partial class GeneratedProjectile
         if (_entity.ReturnTrigger is { OnTileCollision: true } trigger)
         {
             if (InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
-                LatchReturn(trigger.DisableTileCollisionOnReturn);
+                LatchReturn(trigger.DisableTileCollisionOnReturn, startsNextUpdate: true);
             return false; // no implicit recoil, bounce, catch or seek
         }
         if (_remainingBounces <= 0) return true;

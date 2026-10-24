@@ -56,9 +56,7 @@ public sealed partial class GeneratedProjectile
                 && _entity.UsesInitialVelocity)
                 Projectile.velocity = _sampledInitialVelocity ?? _nativeShotInitialVelocity
                     ?? (_entity.Spawn.Aim != "none" ? _initialDirection * _entity.Spawn.SpeedPxPerTick : Vector2.Zero);
-            _spawnEventRan = true;
-            RunRuntimeEvent(RuntimeEventKind.OnSpawn, null, 0);
-            EmitAndSyncVfxEvent(RuntimeEventKind.OnSpawn, Projectile.Center);
+            EmitSpawnEvent();
         }
 
         _age++;
@@ -103,6 +101,14 @@ public sealed partial class GeneratedProjectile
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
         }
+    }
+
+    private void EmitSpawnEvent()
+    {
+        if (_spawnEventRan) return;
+        _spawnEventRan = true;
+        RunRuntimeEvent(RuntimeEventKind.OnSpawn, null, 0);
+        EmitAndSyncVfxEvent(RuntimeEventKind.OnSpawn, Projectile.Center);
     }
 
     private float HitboxCurveScale()

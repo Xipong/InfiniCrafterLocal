@@ -1762,6 +1762,7 @@ _CAPS: list[CapabilitySpec] = [
         RequirementSpec("capability_present", capability="set_projectile_aim", message="Lash geometry requires explicit Aim."),
         RequirementSpec("capability_absent", any_of=("set_projectile_hitbox_curve", "set_projectile_visual_scale_curve", "add_projectile_visual_scale"), message="Beam/lash line geometry excludes dynamic body hitbox and visual-scale owners; its shared line is the collision/draw authority."),
         RequirementSpec("conditional_param", param="clock", any_of=("active:durationSeconds",), message="Active lash clock requires an explicit duration."),
+        RequirementSpec("param_only_when", param="durationSeconds", other_param="clock", equals="active", message="Only the active lash clock accepts duration."),
     )),
     _motion_cap("set_projectile_aim", "Define a world unit axis, without translation.", {
         "source": _p("string", "Explicit axis source.", enum=("initial", "cursor", "facing", "velocity")),
@@ -1811,6 +1812,9 @@ _CAPS: list[CapabilitySpec] = [
         "minimumSpeedBlocksPerSecond": _motion_number("minimumSpeed", "Optional nonnegative desired-speed floor.", 0, 80, multiplier=16, divisor=60, updates=1, units="blocks/second", required=False),
     }, multiplicity="many_per_target", max_per_target=2, position="velocity_or_position_controller", requirements=(
         RequirementSpec("conditional_param", param="target", any_of=("nearest_npc:searchRangeTiles", "nearest_npc:requireLineOfSight"), message="Nearest NPC selection requires both range and line-of-sight choices."),
+        RequirementSpec("param_only_when", param="cursorLeashBlocks", other_param="target", equals="cursor", message="Only cursor seek accepts a cursor leash."),
+        RequirementSpec("param_only_when", param="searchRangeTiles", other_param="target", equals="nearest_npc", message="Only nearest NPC seek accepts a search range."),
+        RequirementSpec("param_only_when", param="requireLineOfSight", other_param="target", equals="nearest_npc", message="Only nearest NPC seek accepts a line-of-sight choice."),
         RequirementSpec("ordered_params", param="minimumSpeedBlocksPerSecond", other_param="maxSpeedBlocksPerSecond", message="Minimum desired speed may not exceed maximum."),
     )),
     _motion_cap("set_projectile_return_trigger", "OR-latch returning exactly once, without seek, arrival, spin or implicit tile policy.", {

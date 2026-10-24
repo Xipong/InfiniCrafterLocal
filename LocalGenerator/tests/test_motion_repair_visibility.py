@@ -57,3 +57,61 @@ def test_channel_dependency_repairs_only_item_leaf_not_the_accepted_motion_choic
     assert audit["ok"] and audit["ignoredChanges"]
     assert repaired == expected and doc == before
     assert validate_runtime_program(repaired)["ok"]
+
+
+@pytest.mark.parametrize("fn,selector,choice,field,value", [
+    ("seek_projectile", "target", "cursor", "searchRangeTiles", 20),
+    ("seek_projectile", "target", "owner_center", "cursorLeashBlocks", 4),
+    ("set_projectile_lash_geometry", "clock", "owner_animation", "durationSeconds", 1),
+])
+@pytest.mark.parametrize("explicit_delete", [False, True])
+def test_inactive_optional_motion_leaf_can_be_removed_without_reauthoring_its_selector(
+        fn, selector, choice, field, value, explicit_delete):
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+
+    doc = build_capability_witness(fn)
+    selected = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
+    selected["params"][selector] = choice
+    selected["params"][field] = value
+    before = deepcopy(doc)
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["deletable"]["callParamKeys"] == [{"callId": selected["id"], "key": field}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": selected["id"], "paths": ["params." + field]}]
+    hostile = deepcopy(selected)
+    hostile["params"].pop(field)
+    hostile["params"][selector] = "nearest_npc" if fn == "seek_projectile" else "active"
+    proposed = {"callsUpsert": [hostile], "note": "remove only the inactive optional leaf"}
+    if explicit_delete:
+        proposed["callParamKeysDelete"] = [{"callId": selected["id"], "key": field},
+                                           {"callId": selected["id"], "key": selector}]
+    patch, audit = filter_repair_patch_scope(doc, proposed, scope)
+    repaired = apply_repair_patch(doc, patch)
+    expected = deepcopy(before)
+    next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == selected["id"])["params"].pop(field)
+    assert audit["ok"] and audit["ignoredChanges"], audit
+    assert repaired == expected and doc == before
+    assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
+
+
+@pytest.mark.parametrize("fn,selector,field,value", [
+    ("seek_projectile", "target", "cursorLeashBlocks", 4),
+    ("set_projectile_lash_geometry", "clock", "durationSeconds", 1),
+])
+@pytest.mark.parametrize("choice", [None, "not_a_registered_choice", {"invalid": "selector"}])
+def test_undecided_motion_selector_does_not_thaw_its_valid_optional_leaf(fn, selector, field, value, choice):
+    doc = build_capability_witness(fn)
+    selected = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
+    selected["params"][field] = value
+    if choice is None:
+        selected["params"].pop(selector)
+    else:
+        selected["params"][selector] = choice
+    report = validate_runtime_program(doc)
+    assert not report["ok"]
+    assert not any(e["code"] == "incompatible_param_variant" for e in report["errors"]), report
+    scope = build_runtime_repair_scope(doc, report["errors"])
+    assert scope["deletable"]["callParamKeys"] == []
+    assert not any("params." + field in row["paths"] for row in scope["fieldPermissions"]["calls"])

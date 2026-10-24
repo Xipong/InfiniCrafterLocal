@@ -131,6 +131,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         Vector2? nativeShotInitialVelocity = null,
         int? originalDamageOverride = null)
     {
+        Vector2 syncedPosition = Projectile.position;
         int syncedTimeLeft = Projectile.timeLeft;
         int syncedAlpha = Projectile.alpha;
         float syncedScale = Projectile.scale;
@@ -213,6 +214,10 @@ public sealed partial class GeneratedProjectile : ModProjectile
             Projectile.originalDamage = originalDamageOverride ?? Projectile.damage;
         if (preserveSyncedState)
         {
+            // Native SyncProjectile carries top-left position, not Center.
+            // Fresh proxies still have default dimensions until this metadata
+            // arrives; resizing must not shift the received physical frame.
+            Projectile.position = syncedPosition;
             Projectile.timeLeft = Math.Max(1, syncedTimeLeft);
             _remainingBounces = Math.Clamp(syncedBounces, 0, entity.Collision.BounceCount);
             _activationDelayTicks = Math.Max(0, syncedActivationDelay);
@@ -233,6 +238,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                     && ReferenceEquals(Main.projectile[Projectile.whoAmI], Projectile));
             _spawnBudgetLease = lease;
         }
+        DispatchReceivedMotionExpiry();
     }
 
     private void ApplyEntityStats()

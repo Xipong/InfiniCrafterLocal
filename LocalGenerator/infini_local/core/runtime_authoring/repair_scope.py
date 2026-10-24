@@ -1725,6 +1725,15 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                         grant(node_namespace, node_id, f"params.{param_name}")
                         context[node_namespace].add(node_id)
                     cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
+                    if (code == "incompatible_param_variant" and cap is not None
+                            and param_name in cap.params and not cap.params[param_name].required
+                            and any(rule.kind == "param_only_when" and rule.param == param_name
+                                    and _mapping(node_row.get("params")).get(rule.other_param) in cap.params[rule.other_param].enum
+                                    and _mapping(node_row.get("params")).get(rule.other_param) != rule.equals
+                                    for rule in cap.requirements)):
+                        # The selected branch is valid; only its inactive optional
+                        # leaf may be removed. Do not thaw the selector or siblings.
+                        deletable_call_param_keys.add((node_id, param_name))
                     if param_name == "when" and not (
                         code == "shape_one_of" and any(json_path_relative(other, path) for other in error_paths_all)
                     ):

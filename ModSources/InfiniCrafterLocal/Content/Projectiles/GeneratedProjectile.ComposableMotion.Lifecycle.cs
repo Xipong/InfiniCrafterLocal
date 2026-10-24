@@ -13,7 +13,7 @@ public sealed partial class GeneratedProjectile
     {
         if (_entity?.OwnerControl is not { } control) return true;
         if (InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile)
-            && (control.RequireHeldItem && !HoldingGeneratedItem(owner)
+            && (!OwnerCanControl(owner) || control.RequireHeldItem && !HoldingGeneratedItem(owner)
             || control.RequireChannel && !owner.channel
             || control.RequireItemAnimation && owner.itemAnimation <= 0)) {
             Projectile.friendly = false; Projectile.Kill(); return false;
@@ -112,6 +112,7 @@ public sealed partial class GeneratedProjectile
     private void ResetComposableState()
     {
         _releaseAge = -1; _returnAge = -1; _motionAxis = _initialDirection;
+        _motionExpiryObserved = false; _pendingMotionExpiry = null;
         _publishedMotionCursor = null; _motionCursorSyncAge = -1000;
         if (HasComposableMotion) {
             _age = 0; _chargeTicks = 0; _controllerTimer = 0;

@@ -22,6 +22,34 @@ def test_incomplete_selected_modes_are_red(fn, params):
     assert not validate_runtime_program(doc)["ok"]
 
 
+@pytest.mark.parametrize("target,field,value,wire_field,wire_value", [
+    ("nearest_npc", "cursorLeashBlocks", 4, "cursorLeashPx", 64),
+    ("owner_center", "cursorLeashBlocks", 4, "cursorLeashPx", 64),
+    ("owner_mounted", "cursorLeashBlocks", 4, "cursorLeashPx", 64),
+    ("cursor", "searchRangeTiles", 20, "searchRangeTiles", 20),
+    ("cursor", "requireLineOfSight", False, "requireLineOfSight", False),
+    ("owner_center", "searchRangeTiles", 20, "searchRangeTiles", 20),
+    ("owner_mounted", "requireLineOfSight", True, "requireLineOfSight", True),
+])
+def test_seek_rejects_fields_outside_selected_target_in_author_and_wire(target, field, value, wire_field, wire_value):
+    doc = base_document()
+    params = {"target": target, "maxSpeedBlocksPerSecond": 30,
+              "velocityLerpPerUpdate": 1, "limitSpeedToDistance": False}
+    if target == "nearest_npc":
+        params.update(searchRangeTiles=20, requireLineOfSight=False)
+    call = add(doc, "seek_projectile", params)
+    wire, entity = compile_ok(doc)
+    wire.pop("runtimeContract")
+    call["params"][field] = value
+    entity["seek"][0][wire_field] = wire_value
+    author_before, wire_before = deepcopy(doc), deepcopy(wire)
+    report = validate_runtime_program(doc)
+    assert any(e["path"].endswith(".params." + field) for e in report["errors"]), report
+    report = validate_runtime_wire(wire)
+    assert any(e["path"].endswith(".seek[0]." + wire_field) for e in report["errors"]), report
+    assert doc == author_before and wire == wire_before
+
+
 @pytest.mark.parametrize("fn,params", [
     ("set_projectile_return_trigger", {"onOwnerRelease": True, "onTileCollision": False, "disableTileCollisionOnReturn": True}),
     ("set_projectile_owner_control", {"requireHeldItem": True, "requireChannel": True, "requireItemAnimation": False, "claimHeldProjectile": False, "animation": "none", "lifetime": "authored"}),

@@ -88,6 +88,7 @@ public sealed partial class GeneratedProjectile
             int priorAge = _age, priorCharge = _chargeTicks, priorTimer = _controllerTimer;
             int priorBounces = _remainingBounces, priorDelay = _activationDelayTicks, priorTarget = _lastTarget;
             bool priorReleased = _released, priorReturning = _returning;
+            string priorItemId = _generatedItemId, priorEntityId = _entityId;
             byte runtimeVersion = reader.ReadByte();
             bool composable = runtimeVersion == ComposableMotionRuntimeNetVersion;
             if (runtimeVersion != RuntimeNetVersion && runtimeVersion != NativeShotRuntimeNetVersion && !composable)
@@ -131,7 +132,9 @@ public sealed partial class GeneratedProjectile
                 cursor = new Vector2(reader.ReadSingle(), reader.ReadSingle());
                 axis = new Vector2(reader.ReadSingle(), reader.ReadSingle());
                 manaStarted = reader.ReadBoolean(); manaTick = reader.ReadUInt32();
-                if (releaseAge < -1 || releaseAge > _age || returnAge < -1 || returnAge > _age
+                // A tile callback after AI latches the following update as the
+                // return clock's origin; no other future phase age is admitted.
+                if (releaseAge < -1 || releaseAge > _age || returnAge < -1 || (long)returnAge > (long)_age + 1
                     || (_released != (releaseAge >= 0)) || (_returning != (returnAge >= 0))
                     || !float.IsFinite(cursor.X) || !float.IsFinite(cursor.Y)
                     || !float.IsFinite(axis.X) || !float.IsFinite(axis.Y) || Math.Abs(axis.LengthSquared() - 1f) > .001f)
@@ -148,6 +151,9 @@ public sealed partial class GeneratedProjectile
                 && Main.player[Projectile.owner] is { active: true } owner
                 && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner);
             bool sameGeneration = _vfxSourceToken == sourceToken && _data?.Id == _generatedItemId && _entity?.Id == _entityId;
+            bool sameSnapshotIdentity = _vfxSourceToken == sourceToken && priorItemId == _generatedItemId && priorEntityId == _entityId;
+            var expiryObservation = (_age, _released, _returning, releaseAge, returnAge, Projectile.position);
+            if (!composable || !sameSnapshotIdentity) { _motionExpiryObserved = false; _pendingMotionExpiry = null; }
             if (composable && retainOwnerExclusion) {
                 // Relayed owner observations cannot rewind a local lifecycle or
                 // repeat its release/terminal events, even during metadata hydration.
@@ -165,8 +171,19 @@ public sealed partial class GeneratedProjectile
                     if (stale) _controllerTimer = priorTimer;
                 }
                 _releaseAge = releaseAge; _returnAge = returnAge;
-                _spawnEventRan = spawned || sameGeneration && _spawnEventRan;
-                _expireEventRan = expired || sameGeneration && _expireEventRan;
+                if (InfiniRuntimeAuthority.IsServer) {
+                    // An owner's execution flag must not suppress the server's
+                    // own NPC-action/VFX lane, including first hydration.
+                    _spawnEventRan = sameSnapshotIdentity && _spawnEventRan;
+                    _expireEventRan = sameSnapshotIdentity && _expireEventRan;
+                    if (expired && !_motionExpiryObserved) {
+                        _motionExpiryObserved = true; _pendingMotionExpiry = expiryObservation;
+                    }
+                }
+                else {
+                    _spawnEventRan = spawned || sameGeneration && _spawnEventRan;
+                    _expireEventRan = expired || sameGeneration && _expireEventRan;
+                }
                 Projectile.localAI[0] = cursor.X; Projectile.localAI[1] = cursor.Y;
                 _motionAxis = axis;
                 _beamManaClockStarted = manaStarted; _beamLastManaTick = manaTick;
@@ -200,6 +217,7 @@ public sealed partial class GeneratedProjectile
         _entity = null;
         _configured = false;
         _preserveSyncedStateOnHydrate = false;
+        _pendingMotionExpiry = null;
         Projectile.friendly = false;
         Projectile.velocity = Vector2.Zero;
         Projectile.timeLeft = Math.Min(Projectile.timeLeft, 30);
