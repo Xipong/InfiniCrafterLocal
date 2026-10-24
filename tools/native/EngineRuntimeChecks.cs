@@ -80,6 +80,8 @@ internal static partial class EngineRuntimeChecks
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),
         ("atlas focus ownership overlay resume and world cleanup", AtlasFocusAndOverlayResumeStayScoped),
         ("deferred refund malformed row isolation", DeferredRefundLoadIsolatesMalformedRows),
+            ("utility death contributions and dead snapshot rejection", UtilityDeathClearsContributions),
+            ("utility death delayed action retirement", DelayedUtilityCannotCrossLife),
             ("UI QoL compact tooltip critical inputs and Shift expansion", CompactTooltipsKeepInputsAndLockoutsAndExpandWithEitherShift),
             ("audit escrow take acknowledgement preserves changed cursor", EscrowTakeAcknowledgementPreservesChangedCursor),
             ("audit sentry original damage selected prefixed base", SentryOriginalDamageUsesSelectedPrefixedBase),
