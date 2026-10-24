@@ -24,6 +24,12 @@ internal static partial class EngineRuntimeChecks
         var root = MotionAdmissionWire("opacity");
         var body = FrontHandEntity(root);
         body.Remove("opacity");
+        // The shared admission seed is a held body. These retained velocity
+        // modifiers instead choose a free body with the seed's explicit straight
+        // trajectory; changing timing must not bypass that ownership contract.
+        body["kind"] = "free_projectile";
+        body["visualRole"] = "projectile";
+        body["visual"]!["role"] = "projectile";
         var value = JsonNode.Parse(TimedModifierExamples[member])!.AsObject();
         if (scalars) { value["startDelayTicks"] = 2; value["durationTicks"] = 3; }
         if (window) value["window"] = JsonNode.Parse("{\"phase\":\"always\"}");
@@ -64,6 +70,17 @@ internal static partial class EngineRuntimeChecks
                 var nullLeaf = finite.DeepClone().AsObject();
                 FrontHandEntity(nullLeaf)[member]!["window"]![field] = null;
                 MotionRefuses(nullLeaf, member + " null window leaf refuses " + field);
+            }
+            if (member != "npcAttraction") {
+                var wrongOwner = TimedModifierWire(member, false, true);
+                var held = FrontHandEntity(wrongOwner);
+                held["kind"] = "owner_attached_projectile";
+                held["visualRole"] = "held_body";
+                held["visual"]!["role"] = "held_body";
+                MotionRefuses(wrongOwner, member + " unified timing does not bypass velocity owner admission");
+                var missingDriver = TimedModifierWire(member, false, true);
+                FrontHandEntity(missingDriver).Remove("movement");
+                MotionRefuses(missingDriver, member + " unified timing does not invent a trajectory");
             }
             MotionRefuses(TimedModifierWire(member, false, false), member + " missing entire timing refuses");
             foreach (string field in new[] { "startDelayTicks", "durationTicks" })
