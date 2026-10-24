@@ -4,7 +4,6 @@ using System.Linq;
 using InfiniCrafterLocal.Common.Models;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using ReLogic.Content;
 using ReLogic.Graphics;
 using Terraria;
 using Terraria.GameContent;
@@ -31,22 +30,6 @@ public sealed partial class RecipeJournalUISystem
     private static float _lineageZoom = 1f;
     private static Rectangle _lineageCanvas;
     private static RasterizerState? LineageClip;
-    private static Asset<Texture2D>? _bookSkin, _wellSkin, _waxSkin, _bookmarkSkin, _foldSkin;
-    private static void LoadLineageSkin()
-    {
-        LineageClip = new RasterizerState { ScissorTestEnable = true, CullMode = CullMode.None };
-        const string path = "InfiniCrafterLocal/Assets/UI/Lineage/";
-        _bookSkin = ModContent.Request<Texture2D>(path + "BookFrame");
-        _wellSkin = ModContent.Request<Texture2D>(path + "NodeWell");
-        _waxSkin = ModContent.Request<Texture2D>(path + "WaxSeal");
-        _bookmarkSkin = ModContent.Request<Texture2D>(path + "Bookmark");
-        _foldSkin = ModContent.Request<Texture2D>(path + "PaperFold");
-    }
-    private static void UnloadLineageSkin()
-    {
-        LineageClip?.Dispose(); LineageClip = null;
-        _bookSkin = _wellSkin = _waxSkin = _bookmarkSkin = _foldSkin = null;
-    }
     private static readonly Color MapInk = new(79, 57, 34);
 
     private static void ResetLineage()
@@ -172,7 +155,7 @@ public sealed partial class RecipeJournalUISystem
         bool inside = book.Contains(cursor.ToPoint());
         if (inside) { Main.LocalPlayer.mouseInterface = true; PlayerInput.LockVanillaMouseScroll("InfiniCrafterLocal: Lineage"); }
         Fill(sb, new Rectangle(0, 0, Main.screenWidth, Main.screenHeight), new Color(0, 0, 0, 75));
-        DrawLineageBook(sb, book, canvas);
+        DrawBook(sb, book);
         if (LineageButton(sb, new Rectangle(book.X + 18, book.Y + 16, 66, 28), Text("Back"), click, cursor)) { GoBack(); Main.mouseLeftRelease = false; return true; }
         LineageLabel(sb, Text("Lineage"), new Vector2(book.X + 96, book.Y + 17), new Color(216, 185, 115), .9f, Math.Max(0, book.Width - 340));
         if (LineageButton(sb, new Rectangle(book.Right - 48, book.Y + 16, 30, 28), "×", click, cursor)) { Close(); Main.mouseLeftRelease = false; return true; }
@@ -198,7 +181,7 @@ public sealed partial class RecipeJournalUISystem
         _lineagePan = ClampLineagePan(_lineagePan, canvas.Size(), new Vector2(_lineage.Width, _lineage.Height), _lineageZoom);
         UpdateLineageHighlight(hoverIndex);
         DrawLineageGraph(sb, canvas, hoverIndex);
-        if (_foldSkin is not null) sb.Draw(_foldSkin.Value, new Rectangle(book.Right - 58, book.Bottom - 60, 40, 38), Color.White);
+        DrawBookFold(sb, book);
         if (hoverIndex >= 0 && !_lineageDragging)
         {
             var node = _lineage.Nodes[hoverIndex];
@@ -296,7 +279,7 @@ public sealed partial class RecipeJournalUISystem
                 int radius = Math.Max(7, (int)(28 * _lineageZoom));
                 var well = new Rectangle((int)center.X-radius,(int)center.Y-radius,radius*2,radius*2);
                 if (!canvas.Intersects(new Rectangle(well.X-70, well.Y, well.Width+140, well.Height+35))) continue;
-                DrawLineageWell(sb, well, i == _lineage.RootIndex, i == hoverIndex);
+                DrawBookWell(sb, well, i == _lineage.RootIndex, i == hoverIndex);
                 var icon = new Rectangle(well.X+radius/4,well.Y+radius/4,well.Width-radius/2,well.Height-radius/2);
                 if (node.Data is not null) Sprite(sb, node.Data, icon);
                 else if (_nativeNodes[i] is { } item) DrawNativeLineageSprite(sb, item, icon);
@@ -352,35 +335,5 @@ public sealed partial class RecipeJournalUISystem
         LineageCenterLabel(sb, text, new Rectangle(rect.X, rect.Y + 3, rect.Width, rect.Height - 3), brass, .72f);
         if (hover) { Fill(sb, new Rectangle(rect.X + 5, rect.Bottom - 2, Math.Max(0, rect.Width - 10), 1), brass); _hoverText = text; }
         return hover && click;
-    }
-    private static void DrawLineageBook(SpriteBatch sb, Rectangle book, Rectangle canvas)
-    {
-        if (_bookmarkSkin is not null)
-            sb.Draw(_bookmarkSkin.Value, new Rectangle(book.Center.X - 10, book.Bottom - 57, 20, 74), Color.White);
-        if (_bookSkin is null) return;
-        Texture2D texture = _bookSkin.Value;
-        const int left = 48, right = 48, top = 56, bottom = 48;
-        int dx = Math.Min(left, book.Width / 2), dy = Math.Min(top, book.Height / 2);
-        int dr = Math.Min(right, book.Width - dx), db = Math.Min(bottom, book.Height - dy);
-        // Nine draws, one authored continuous paper center: no stretched center fold.
-        for (int y = 0; y < 3; y++)
-        for (int x = 0; x < 3; x++)
-        {
-            int sx = x == 0 ? 0 : x == 1 ? left : texture.Width - right;
-            int sy = y == 0 ? 0 : y == 1 ? top : texture.Height - bottom;
-            int sw = x == 0 ? left : x == 1 ? texture.Width - left - right : right;
-            int sh = y == 0 ? top : y == 1 ? texture.Height - top - bottom : bottom;
-            var destination = new Rectangle(x == 0 ? book.X : x == 1 ? book.X + dx : book.Right - dr,
-                y == 0 ? book.Y : y == 1 ? book.Y + dy : book.Bottom - db,
-                x == 0 ? dx : x == 1 ? book.Width - dx - dr : dr,
-                y == 0 ? dy : y == 1 ? book.Height - dy - db : db);
-            if (destination.Width > 0 && destination.Height > 0)
-                sb.Draw(texture, destination, new Rectangle(sx, sy, sw, sh), Color.White);
-        }
-    }
-    private static void DrawLineageWell(SpriteBatch sb, Rectangle well, bool root, bool hover)
-    {
-        var texture = root ? _waxSkin : _wellSkin;
-        if (texture is not null) sb.Draw(texture.Value, well, hover ? new Color(255, 241, 198) : Color.White);
     }
 }

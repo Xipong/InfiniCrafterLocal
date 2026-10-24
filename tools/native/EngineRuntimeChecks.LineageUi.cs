@@ -16,7 +16,7 @@ internal static partial class EngineRuntimeChecks
         {
             foreach (string suffix in new[] { "Title", "Search", "All", "Favorites", "NoFavorites", "Empty",
                 "NoMatches", "Welcome", "Back", "Save", "Saved", "Ingredients", "Ingredient",
-                "OpenParent", "Result", "Notes", "Close", "Lineage", "LineageMissing", "LineageBrowserHint",
+                "OpenParent", "Result", "Notes", "Close", "SpaceHint", "ReadOnly", "Lineage", "LineageMissing", "LineageBrowserHint",
                 "LineageBrowserAbsent", "LineageCycle", "LineageTruncated", "FilterAll", "FilterHealing",
                 "FilterMining", "FilterSummon", "FilterMobility" })
             {
