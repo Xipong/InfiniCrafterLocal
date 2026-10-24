@@ -932,9 +932,24 @@ class CapabilitySpec:
         neutral_fields = tuple(spec.wire_name or name for name, spec in self.params.items()
             if self.category == "motion_primitive" and not spec.required and spec.default is not None
             and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
-        schemas = [{"type": "object", "additionalProperties": False, "properties": properties,
-                    "required": list(dict.fromkeys((*required, *neutral_fields)))} for properties, required in variants]
+        schemas = [self.timing_params_schema(properties, list(dict.fromkeys((*required, *neutral_fields))), wire=True)
+                   for properties, required in variants]
         return schemas[0] if len(schemas) == 1 else {"oneOf": schemas}
+
+    def timing_params_schema(self, properties: dict[str, Any], required: list[str], *, wire: bool = False) -> dict[str, Any]:
+        """Closed, disjoint timing shapes supported by both provider and local validation."""
+        schema = {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
+        rule = next((r for r in self.requirements if r.kind == "timing_pair_or_window"), None)
+        if rule is None:
+            return schema
+        def field(name: str) -> str:
+            return (self.params[name].wire_name or name) if wire else name
+        first, second, window = map(field, (rule.param, rule.other_param, rule.any_of[0]))
+        return {"oneOf": [
+            {**schema, "required": [*required, first, second]},
+            {**schema, "properties": {name: spec for name, spec in properties.items() if name not in (first, second)},
+             "required": [*required, window]},
+        ]}
 
     def provider_variant_schema(self, *, shared_refs: bool = False) -> dict[str, Any]:
         properties = {name: ({"$ref": "#/$defs/" + spec.shared_type} if shared_refs and spec.shared_type else spec.schema()) for name, spec in self.params.items()}
@@ -960,12 +975,7 @@ class CapabilitySpec:
                         "graphEdge": False,
                     },
                 },
-                "params": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": properties,
-                    "required": required,
-                },
+                "params": self.timing_params_schema(properties, required),
             },
             "required": ["id", "fn", "target", "params"],
         }
@@ -1668,11 +1678,11 @@ def _hit_target_spawn_geometry() -> ParamSpec:
 
 def _motion_window(*, required: bool = False) -> ParamSpec:
     phase = _p("string", "Native latch phase; released may overlap returning.", enum=("always", "charging", "released", "outbound", "returning"), wire_name="window.phase")
-    return _p("union", "Phase gate: phase alone covers its whole phase. charging/released and since_release require accumulate_projectile_charge on this entity; returning and since_return require set_projectile_return_trigger. Seek/arrival do not produce these latches. Optional timing is all-or-none; relative clocks are inactive before their latch and sample start-of-step active age.", required=required, shared_type="motionWindow", alternatives=(
-        _p("object", "Whole selected phase, without invented timing.", properties={"phase": phase}),
-        _p("object", "Selected phase intersected with a finite relative-clock interval.", properties={
+    return _p("union", "Phase alone covers the whole phase. charging/released/since_release require accumulate_projectile_charge; returning/since_return require set_projectile_return_trigger on this entity, never seek/arrival. Timing is all-or-none; relative clocks wait for their latch and sample step-start age.", required=required, shared_type="motionWindow", alternatives=(
+        _p("object", "Whole phase; no timer.", properties={"phase": phase}),
+        _p("object", "Phase intersected with clock interval.", properties={
             "phase": phase,
-            "clock": _p("string", "Native finite timestamp clock.", enum=("active", "since_release", "since_return"), wire_name="window.clock"),
+            "clock": _p("string", "Interval clock.", enum=("active", "since_release", "since_return"), wire_name="window.clock"),
             "startDelaySeconds": _seconds(_p("integer", "Delay after selected clock starts.", minimum=0, maximum=21600, wire_name="window.startDelayTicks"), "startDelayTicks"),
             "durationSeconds": _seconds(_p("integer", "Finite active duration.", minimum=1, maximum=21600, wire_name="window.durationTicks"), "durationTicks"),
         }),
@@ -1721,12 +1731,12 @@ _CAPS: list[CapabilitySpec] = [
         "autoReleaseAfterActiveSeconds": _seconds(_p("integer", "Optional automatic release age.", minimum=1, maximum=21600, required=False), "autoReleaseAfterActiveTicks"),
     }, cs="Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge", window=False, emitted_events=("on_release", "channel_complete"), requirements=(RequirementSpec("item_capability_param", target="item_body", capability="configure_item_use", param="channel", equals=True,
         when_spawned_by_inputs=("primary_use", "alternate_use"), message="Active charge input requires explicit channel=true."),)),
-    _motion_cap("apply_projectile_charge_release", "Apply independent interpolated multipliers once at charge release; lifetime pause is explicit and contact remains independently authored.", {
-        "damageMultiplier": _p("number", "Full-charge damage multiplier, interpolated from one.", minimum=1, maximum=4, consumer_storage="float64"),
-        "knockbackMultiplier": _p("number", "Full-charge knockback multiplier, interpolated from one.", minimum=0, maximum=4, consumer_storage="float64"),
-        "speedMultiplier": _p("number", "Full-charge speed multiplier, interpolated from one.", minimum=0.1, maximum=4, consumer_storage="float64"),
+    _motion_cap("apply_projectile_charge_release", "Apply interpolated multipliers once at release; lifetime pause is explicit; contact remains independently authored.", {
+        "damageMultiplier": _p("number", "Damage multiplier at full charge; interpolated from 1.", minimum=1, maximum=4, consumer_storage="float64", required=False, default=1, neutral=1),
+        "knockbackMultiplier": _p("number", "Knockback multiplier at full charge; interpolated from 1.", minimum=0, maximum=4, consumer_storage="float64", required=False, default=1, neutral=1),
+        "speedMultiplier": _p("number", "Full-charge speed multiplier, interpolated from 1; multiplies launch speed, not incoming velocity.", minimum=0.1, maximum=4, consumer_storage="float64", required=False, default=1, neutral=1),
         "launchSpeedBlocksPerSecond": _motion_number("launchSpeed", "Nonnegative explicit base launch speed.", 0, 80, multiplier=16, divisor=60, updates=1, units="blocks/second"),
-        "pauseLifetimeWhileCharging": _p("boolean", "Whether charging pauses the authored projectile lifetime."),
+        "pauseLifetimeWhileCharging": _p("boolean", "Pause authored lifetime while charging.", required=False, default=False, neutral=False),
     }, cs="Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge", window=False, requirements=(RequirementSpec("capability_present", capability="accumulate_projectile_charge", message="ChargeRelease requires explicit Charge."),)),
     _motion_cap("gate_projectile_contact", "Constrain actual damage eligibility during an explicit phase, including before the first AI; outside the gate retain base authored eligibility.", {
         "enabled": _p("boolean", "Whether contact damage is eligible within the selected window."),
@@ -1741,9 +1751,9 @@ _CAPS: list[CapabilitySpec] = [
         RequirementSpec("capability_absent", any_of=("set_projectile_hitbox_curve", "set_projectile_visual_scale_curve", "add_projectile_visual_scale"), message="Beam/lash line geometry excludes dynamic body hitbox and visual-scale owners; its shared line is the collision/draw authority."),)),
     _motion_cap("set_projectile_beam_ramp", "Independent warmup width/damage multipliers; damage is modified at hit dispatch, not by rewriting live damage.", {
         "warmupSeconds": _seconds(_p("integer", "Warmup; zero immediately reaches full progress.", minimum=0, maximum=600), "warmupTicks"),
-        "initialWidthMultiplier": _p("number", "Initial beam width multiplier.", minimum=0.01, maximum=1, consumer_storage="float64"),
-        "initialDamageMultiplier": _p("number", "Initial beam damage multiplier.", minimum=0.01, maximum=1, consumer_storage="float64"),
-        "damageStartProgress": _p("number", "Inclusive damage eligibility threshold.", minimum=0, maximum=1, consumer_storage="float64"),
+        "initialWidthMultiplier": _p("number", "Initial width multiplier.", minimum=0.01, maximum=1, consumer_storage="float64", required=False, default=1, neutral=1),
+        "initialDamageMultiplier": _p("number", "Initial damage multiplier.", minimum=0.01, maximum=1, consumer_storage="float64", required=False, default=1, neutral=1),
+        "damageStartProgress": _p("number", "Inclusive damage eligibility threshold.", minimum=0, maximum=1, consumer_storage="float64", required=False, default=0, neutral=0),
     }, cs="Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC", window=False, requirements=(RequirementSpec("capability_present", capability="set_projectile_beam_geometry", message="BeamRamp requires BeamGeometry."),)),
     _motion_cap("sustain_projectile_mana", "Pay recurring native held-item mana at the held item's use-time cadence, independently of geometry or damage class; initial payment belongs to item use.", {},
         cs="Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::PaySustainedMana", window=False, fixed_wire_literals={"cadence": "held_item_use_time"}, requirements=(RequirementSpec("capability_present", capability="set_projectile_owner_control", message="Recurring native held-item payment requires explicit owner control."),)),
@@ -2482,12 +2492,12 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "set_projectile_turn_modifier",
-        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+        "Rotate velocity after motion; modifier order: turn, speed, homing. Requires, never selects, a trajectory.",
         "motion_modifier", PROJECTILE_ENTITY_KIND_ORDER,
         {
-            "turnRadiansPerSecond": _world_units(_p("number", "Signed world-time velocity rotation rate during the active phase", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0), "turnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
-            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
-            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+            "turnRadiansPerSecond": _world_units(_p("number", "Signed world-time velocity rotation rate", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0), "turnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
+            "startDelaySeconds": _seconds(_p("integer", "Active-world delay, excluding activation wait", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active-world duration, sampled at AI-step start; inclusive start, exclusive end", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="turnModifier",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -2495,13 +2505,13 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "set_projectile_speed_modifier",
-        "After movement and turn, multiply velocity on each active projectile update and clamp its magnitude to the authored cap. Values below one slow; above one accelerate. Phase timing is in world ticks, while the multiplier is explicitly per projectile update.",
+        "After movement/turn, multiply velocity per update, then cap speed. Below 1 slows; above 1 accelerates. World-time timing.",
         "motion_modifier", PROJECTILE_ENTITY_KIND_ORDER,
         {
             "speedMultiplierPerUpdate": _p("number", "Velocity multiplier per active projectile update", minimum=0.8, maximum=1.2, units="dimensionless multiplier/update", consumer_storage="float32", neutral=1),
             "maxSpeedBlocksPerSecond": _world_units(_p("number", "Inclusive magnitude cap applied after the multiplication", minimum=0.1, maximum=80, units="pixels/projectile update", consumer_storage="float32"), "maxSpeed", multiplier=16, divisor=60, updates_power=1, units='blocks/s'),
-            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
-            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+            "startDelaySeconds": _seconds(_p("integer", "Active-world delay, excluding activation wait", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active-world duration, sampled at AI-step start; inclusive start, exclusive end", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="speedModifier",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -2509,14 +2519,14 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "set_projectile_homing_modifier",
-        "After movement, turn and speed, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+        "After movement/turn/speed, steer at unchanged speed to the nearest chaseable NPC inside hard range; ties use NPC index. Owner selects target, syncs velocity. Zero velocity or no target: no steering.",
         "motion_modifier", PROJECTILE_ENTITY_KIND_ORDER,
         {
             "rangeTiles": _p("number", "Hard target radius from this projectile center", minimum=1, maximum=120, units="tiles", consumer_storage="float32"),
-            "maxTurnRadiansPerSecond": _world_units(_p("number", "Maximum angular turn rate toward the target; each update integrates its elapsed world time and stops at full alignment", minimum=0.0001, maximum=3.2, units="radians/projectile update", consumer_storage="float32"), "maxTurnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
-            "requireLineOfSight": _p("boolean", "Require native CanHitLine from projectile box to candidate box before selecting it"),
-            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
-            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+            "maxTurnRadiansPerSecond": _world_units(_p("number", "Maximum target turn rate, integrated over elapsed world time; stops at alignment", minimum=0.0001, maximum=3.2, units="radians/projectile update", consumer_storage="float32"), "maxTurnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
+            "requireLineOfSight": _p("boolean", "Require native CanHitLine between projectile/NPC boxes before selection"),
+            "startDelaySeconds": _seconds(_p("integer", "Active-world delay, excluding activation wait", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active-world duration, sampled at AI-step start; inclusive start, exclusive end", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="homingModifier",
         authority="owner_execute_sync",
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyHomingModifier",
@@ -2525,15 +2535,15 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "attract_npcs_while_active",
-        "Independent server NPC attraction every active projectile update, after movement/modifiers, without changing projectile velocity or selecting a movement family. Scan NPC slots in index order, require chaseable positive-resistance targets within hard range, then apply at most maxTargets. Uses native resistance clamped 0.1..1. No periodic event clock or owner hit callback is substituted.",
+        "Server attraction after movement/modifiers each active projectile update, not periodic/on-hit. Projectile velocity/trajectory unchanged. Scan NPC index order: chaseable, positive-resistance, inside hard range; at most maxTargets. Native resistance clamps to 0.1..1.",
         "active_effect", PROJECTILE_ENTITY_KINDS,
         {
             "rangeTiles": _p("number", "Hard pull radius from projectile center", minimum=1, maximum=80, units="tiles", consumer_storage="float32"),
-            "accelerationBlocksPerSecondSquared": _world_units(_p("number", "World acceleration of NPC velocity before falloff and resistance, integrated over the active projectile clock", minimum=0.001, maximum=4, units="NPC velocity units/projectile update", consumer_storage="float32"), "strengthPerUpdate", multiplier=16, divisor=3600, updates_power=1, units='blocks/s² (NPC world-tick velocity)'),
+            "accelerationBlocksPerSecondSquared": _world_units(_p("number", "NPC world acceleration before falloff/resistance, integrated over active projectile time", minimum=0.001, maximum=4, units="NPC velocity units/projectile update", consumer_storage="float32"), "strengthPerUpdate", multiplier=16, divisor=3600, updates_power=1, units='blocks/s² (NPC world-tick velocity)'),
             "falloff": _p("string", "constant=1; linear=max(0,1-distance/radius), including zero at radius", enum=("constant", "linear")),
             "maxTargets": _p("integer", "Maximum accepted NPC slots per projectile update", minimum=1, maximum=16),
-            "startDelaySeconds": _seconds(_p("integer", "Begin phase after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
-            "durationSeconds": _seconds(_p("integer", "Phase duration in active world time; start inclusive and end exclusive at the beginning of each AI step", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+            "startDelaySeconds": _seconds(_p("integer", "Active-world delay, excluding activation wait", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active-world duration, sampled at AI-step start; inclusive start, exclusive end", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         }, component_slot="npcAttraction",
         authority="server_execute",
         meaningful_for_stationary=True,
@@ -3453,8 +3463,8 @@ def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
 
 
     if cap.category == "motion_modifier":
-        return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release"), message="Velocity modifiers require the explicit movement driver to own motion throughout their active phase."),
-                RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.author_visible and row.position_ownership != "none")), message="Velocity modifiers require an explicit trajectory component, including on a target_and_fire entity."))
+        return (RequirementSpec("capability_absent", any_of=("channel_beam", "charge_then_release"), message="Explicit trajectory owns motion throughout the interval."),
+                RequirementSpec("capability_group_present", target="same_target", any_of=tuple(sorted(row.name for row in _CAPS if row.author_visible and row.position_ownership != "none")), message="Trajectory required, even with target_and_fire."))
     if cap.name in {"channel_beam", "charge_then_release"}:
         rows = [RequirementSpec("item_capability_param", capability="configure_item_use", target="item_body", param="channel", equals=True, message="channel controller requires channel=true on item_body")]
         if cap.name == "charge_then_release":
@@ -3656,6 +3666,15 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
     """Finalize mechanical projections without replacing declared capability facts."""
     if cap.category == "motion_modifier" or cap.name in {"attract_npcs_while_active", "set_projectile_visual_scale_curve"}:
         cap = replace(cap, params=MappingProxyType({**cap.params, "window": replace(_motion_window(), wire_presence_requires_receipt=True)}))
+    if cap.category == "motion_modifier" or cap.name == "attract_npcs_while_active":
+        cap = replace(cap, params=MappingProxyType({
+            **cap.params,
+            **{name: replace(cap.params[name], required=False)
+               for name in ("startDelaySeconds", "durationSeconds")},
+        }), requirements=(*cap.requirements, RequirementSpec(
+            "timing_pair_or_window", param="startDelaySeconds", other_param="durationSeconds", any_of=("window",),
+            message="Window or scalar pair; both intersect.",
+        )))
     if cap.effect_groupable:
         cap = replace(cap, params=MappingProxyType({
             **cap.params,

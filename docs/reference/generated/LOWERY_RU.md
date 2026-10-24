@@ -239,6 +239,13 @@ Typed structured choices и конечные enum-отображения так�
 | set_projectile_owner_control.claimHeldProjectile | False | unconditional declared neutral |
 | set_projectile_owner_control.animation | 'none' | unconditional declared neutral |
 | set_projectile_owner_control.lifetime | 'authored' | unconditional declared neutral |
+| apply_projectile_charge_release.damageMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.knockbackMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.speedMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.pauseLifetimeWhileCharging | False | unconditional declared neutral |
+| set_projectile_beam_ramp.initialWidthMultiplier | 1 | unconditional declared neutral |
+| set_projectile_beam_ramp.initialDamageMultiplier | 1 | unconditional declared neutral |
+| set_projectile_beam_ramp.damageStartProgress | 0 | unconditional declared neutral |
 | set_projectile_aim.turnOwner | False | unconditional declared neutral |
 | attach_projectile.axisOffsetBlocks | 0 | unconditional declared neutral |
 | attach_projectile.normalOffsetBlocks | 0 | unconditional declared neutral |

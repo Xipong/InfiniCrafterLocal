@@ -9,8 +9,10 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
-    private bool ModifierPhaseActive(int delayTicks, int durationTicks)
-        => RuntimeModifierClock.Active(_age, Projectile.extraUpdates + 1, delayTicks, durationTicks);
+    private bool ModifierPhaseActive(int? delayTicks, int? durationTicks)
+        => delayTicks.HasValue && durationTicks.HasValue
+            ? RuntimeModifierClock.Active(_age, Projectile.extraUpdates + 1, delayTicks.Value, durationTicks.Value)
+            : !delayTicks.HasValue && !durationTicks.HasValue;
 
     private void ApplyActiveModifiers()
     {

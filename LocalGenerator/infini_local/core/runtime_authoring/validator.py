@@ -550,6 +550,14 @@ def _validate_requirement(
         if not any(_numeric_param(params, name, -1) >= 0 for name in names):
             return ValidationIssue(f"{path}.params", "empty_component", requirement.message, tuple(f"{name} >= 0" for name in names))
         return None
+    if requirement.kind == "timing_pair_or_window":
+        pair = (requirement.param, requirement.other_param)
+        missing = next((name for name in pair if name not in params), None)
+        if missing and any(name in params for name in pair):
+            return ValidationIssue(f"{path}.params.{missing}", "missing_dependency_param", requirement.message, (missing,))
+        if missing and requirement.any_of[0] not in params:
+            return ValidationIssue(f"{path}.params.{requirement.any_of[0]}", "missing_dependency_param", requirement.message, requirement.any_of)
+        return None
     if requirement.kind == "conditional_param":
         raw_mode = params.get(requirement.param)
         mode = raw_mode if isinstance(raw_mode, str) else ""

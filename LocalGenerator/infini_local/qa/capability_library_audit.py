@@ -59,6 +59,7 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "executed_tile_placement_reference",
     "unique_call_reference",
     "conditional_param",
+    "timing_pair_or_window",
     "param_only_when",
     "conditional_omission",
     "non_neutral_param",
@@ -405,6 +406,10 @@ def capability_library_audit() -> dict[str, Any]:
                 error("unknown_requirement_kind", f"{base}.requirements", requirement.kind)
             if requirement.capability and requirement.capability not in capability_names:
                 error("unknown_requirement_capability", f"{base}.requirements", requirement.capability)
+            if requirement.kind == "timing_pair_or_window":
+                names = (requirement.param, requirement.other_param, *requirement.any_of)
+                if len(names) != 3 or len(set(names)) != 3 or any(name not in cap.params for name in names):
+                    error("invalid_timing_requirement", f"{base}.requirements", str(names))
             if requirement.kind == "enabled_trigger":
                 if not requirement.any_of:
                     error("empty_enabled_trigger", f"{base}.requirements", requirement.kind)

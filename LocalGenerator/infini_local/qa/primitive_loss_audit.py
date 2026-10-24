@@ -272,9 +272,24 @@ def _dto_component_types(data: bytes) -> tuple[dict[str, dict[str, str]], dict[s
 
 def _schema_fields(schema: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
     fields: dict[str, list[dict[str, Any]]] = {}
-    for variant in schema.get("oneOf", [schema]):
-        for name, child in variant.get("properties", {}).items():
-            fields.setdefault(name, []).append(child)
+    for name, child in schema.get("properties", {}).items():
+        fields.setdefault(name, []).append(child)
+    for variant in schema.get("oneOf", []):
+        for name, children in _schema_fields(variant).items():
+            fields.setdefault(name, []).extend(children)
+    return fields
+
+
+def _inherited_dto_properties(own: dict[str, dict[str, str]], bases: dict[str, tuple[str, ...]],
+                              cls: str, visiting: tuple[str, ...] = ()) -> dict[str, str]:
+    if cls not in own or cls in visiting:
+        raise ValueError(f"Missing or cyclic executable C# DTO class {cls}")
+    fields = dict(own[cls])
+    for base in bases.get(cls, ()):
+        for field, storage in _inherited_dto_properties(own, bases, base, (*visiting, cls)).items():
+            if field in fields:
+                raise ValueError(f"Shadowed C# DTO property {cls}.{field}")
+            fields[field] = storage
     return fields
 
 
@@ -297,15 +312,7 @@ def _motion_component_surface_audit(dto: bytes) -> dict[str, Any]:
         drift.setdefault(cls, set()).update(actual ^ wire)
 
     def inherited(cls: str, visiting: tuple[str, ...] = ()) -> dict[str, str]:
-        if cls not in own or cls in visiting:
-            raise ValueError(f"Missing or cyclic executable C# DTO class {cls}")
-        fields = dict(own[cls])
-        for base in bases.get(cls, ()):
-            for field, storage in inherited(base, (*visiting, cls)).items():
-                if field in fields:
-                    raise ValueError(f"Shadowed C# DTO property {cls}.{field}")
-                fields[field] = storage
-        return fields
+        return _inherited_dto_properties(own, bases, cls, visiting)
 
     def visit(cls: str, paths: set[str], schemas: list[dict[str, Any]]) -> None:
         fields = inherited(cls)
@@ -391,13 +398,14 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         },
     }
     unclassified: dict[str, list[str]] = {}
+    own, bases = _dto_component_types(dto)
     for cls, prefixes in components.items():
         declared = {
             suffix[0].upper() + suffix[1:]
             for prefix in prefixes for path in paths
             if path.startswith(prefix) and (suffix := path[len(prefix):]) and "." not in suffix
         }
-        properties = _class_properties(dto, cls)
+        properties = set(_inherited_dto_properties(own, bases, cls))
         unclassified[cls] = sorted(properties - declared - hidden.get(cls, {}).keys())
         if declared - properties:
             raise ValueError(f"Registry projects absent {cls} DTO fields: {declared - properties}")
