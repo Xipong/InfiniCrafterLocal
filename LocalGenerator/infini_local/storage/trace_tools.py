@@ -498,7 +498,7 @@ def tail_ndjson(path: str | Path, limit: int = 80) -> list[dict[str, Any]]:
         if not p.exists():
             return []
         wanted = max(1, int(limit))
-        lines: list[bytes] = []
+        out: list[dict[str, Any]] = []
         needs_recovery = False
         with _ndjson_thread_lock(p), _ndjson_process_lock(p), p.open("rb") as handle:
             handle.seek(0, 2)
@@ -509,7 +509,7 @@ def tail_ndjson(path: str | Path, limit: int = 80) -> list[dict[str, Any]]:
             discard_final_fragment = handle.read(1) != b"\n"
             needs_recovery = discard_final_fragment
             buffered = b""
-            while position > 0 and len(lines) < wanted:
+            while position > 0 and len(out) < wanted:
                 start = max(0, position - _TAIL_READ_CHUNK_BYTES)
                 handle.seek(start)
                 buffered = handle.read(position - start) + buffered
@@ -526,25 +526,22 @@ def tail_ndjson(path: str | Path, limit: int = 80) -> list[dict[str, Any]]:
                         continue
                     if line.endswith(b"\r"):
                         line = line[:-1]
-                    if line:
-                        lines.append(line)
-                        if len(lines) >= wanted:
-                            break
+                    if not line.strip():
+                        continue
+                    if b"\x00" in line:
+                        needs_recovery = True
+                        continue
+                    try:
+                        obj = json.loads(line.decode("utf-8"))
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        needs_recovery = True
+                        continue
+                    out.append(obj if isinstance(obj, dict) else {"raw": obj})
+                    if len(out) >= wanted:
+                        break
                 position = start
-        out: list[dict[str, Any]] = []
-        for line in reversed(lines):
-            if not line.strip():
-                continue
-            if b"\x00" in line:
-                needs_recovery = True
-                continue
-            try:
-                obj = json.loads(line.decode("utf-8"))
-                out.append(obj if isinstance(obj, dict) else {"raw": obj})
-            except (UnicodeDecodeError, json.JSONDecodeError):
-                needs_recovery = True
         if needs_recovery:
             recover_ndjson(p)
-        return out
+        return list(reversed(out))
     except Exception as e:
         return [{"level": "error", "message": "trace read failed", "error": repr(e)}]
