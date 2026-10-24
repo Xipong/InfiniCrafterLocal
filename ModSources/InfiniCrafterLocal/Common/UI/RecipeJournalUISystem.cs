@@ -27,7 +27,7 @@ public sealed class RecipeJournalUISystem : ModSystem
     public override void Load()
         => ToggleJournalKey = KeybindLoader.RegisterKeybind(Mod, "ToggleRecipeJournal", Keys.K);
 
-    public override void Unload() => ToggleJournalKey = null!;
+    public override void Unload() { ResetSession(); ToggleJournalKey = null!; }
 
     internal static bool CanToggleFromKey(bool focused, bool menu, bool dead, bool writing,
         bool chat, bool blocked, bool rebinding)
@@ -35,13 +35,18 @@ public sealed class RecipeJournalUISystem : ModSystem
 
     public override void PostUpdateInput()
     {
+        // Hidden interface layers may not draw, but must still relinquish text focus.
+        if (IsOpen && (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead)) Close();
+        if (IsOpen) CanResumeInput(IsCovered(), Main.mouseLeft, Main.mouseRight);
         if (ToggleJournalKey?.JustPressed != true || Main.LocalPlayer is not { active: true } player
             || !CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
                 Main.drawingPlayerChat, Main.blockInput, PlayerInput.CurrentlyRebinding)) return;
         if (IsOpen) Close(); else Open();
     }
     private static string _query = "", _selected = "";
-    private static bool _searchFocus, _favoritesOnly;
+    private static bool _searchFocus, _favoritesOnly, _awaitingMouseRelease;
+    private static Player? _sessionOwner;
+    private static int _sessionWorld;
     private static RecipeJournalView.EffectFilter _effectFilter;
     private static string _ingredientFilter = "";
     private static int _page, _detailScroll;
@@ -58,24 +63,49 @@ public sealed class RecipeJournalUISystem : ModSystem
 
     public static void Open()
     {
+        if (!ReferenceEquals(_sessionOwner, Main.LocalPlayer) || _sessionWorld != Main.worldID) ResetSession();
+        _sessionOwner = Main.LocalPlayer; _sessionWorld = Main.worldID;
         IsOpen = true; SetSearchFocus(false); _snapshotTick = uint.MaxValue;
         Main.playerInventory = true;
         if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
             InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
     }
-    private static void SetSearchFocus(bool focused)
+    internal static void SetSearchFocus(bool focused)
     {
-        if (_searchFocus && !focused) PlayerInput.WritingText = false;
+        if (focused == _searchFocus) return;
+        // Do not acquire or clear another interface's text-input reservation.
+        if (focused && (Main.blockInput || PlayerInput.WritingText
+            || Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding)) return;
         _searchFocus = focused;
         Main.blockInput = focused;
+        PlayerInput.WritingText = focused;
     }
     private static void Close() { IsOpen = false; SetSearchFocus(false); }
-    public override void OnWorldUnload()
+    private static bool IsCovered()
+        => !Main.hasFocus || Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow
+            || Main.inFancyUI || Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding
+            || (!_searchFocus && (Main.blockInput || PlayerInput.WritingText));
+    internal static bool CanResumeInput(bool covered, bool leftDown, bool rightDown)
     {
-        Close(); _query = _selected = ""; _page = 0; _favoritesOnly = false;
+        if (covered)
+        {
+            SetSearchFocus(false);
+            _awaitingMouseRelease = true;
+            return false;
+        }
+        if (_awaitingMouseRelease && (leftDown || rightDown)) return false;
+        _awaitingMouseRelease = false;
+        return true;
+    }
+    private static void ResetSession()
+    {
+        Close(); _query = _selected = ""; _page = _detailScroll = 0; _favoritesOnly = false;
         _known = Array.Empty<GeneratedItemData>(); History.Clear();
         _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
+        _snapshotTick = uint.MaxValue; _hoverText = "";
+        _sessionOwner = null; _sessionWorld = 0; _awaitingMouseRelease = false;
     }
+    public override void OnWorldUnload() => ResetSession();
     public override void ModifyInterfaceLayers(List<GameInterfaceLayer> layers)
     {
         int index = layers.FindIndex(layer => layer.Name == "Vanilla: Inventory");
@@ -88,14 +118,15 @@ public sealed class RecipeJournalUISystem : ModSystem
             if (History.Count >= 32) History.Clear();
             History.Push(_selected);
         }
-        _selected = id; _detailScroll = 0; SetSearchFocus(false); Main.blockInput = false;
+        _selected = id; _detailScroll = 0; SetSearchFocus(false);
     }
     private static bool Draw()
     {
         if (!IsOpen) return true;
+        if (!ReferenceEquals(_sessionOwner, Main.LocalPlayer) || _sessionWorld != Main.worldID) { ResetSession(); return true; }
         if (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead) { Close(); return true; }
+        if (!CanResumeInput(IsCovered(), Main.mouseLeft, Main.mouseRight)) return true;
         if (Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape)) { Close(); return true; }
-        if (Main.hideUI) { SetSearchFocus(false); return true; }
         _hoverText = "";
         var player = Main.LocalPlayer.GetModPlayer<InfiniCraftPlayer>();
         Main.LocalPlayer.mouseInterface = true;
@@ -106,10 +137,9 @@ public sealed class RecipeJournalUISystem : ModSystem
             _known = InfiniCrafterLocalMod.GeneratedItems?.Snapshot() ?? Array.Empty<GeneratedItemData>();
             _snapshotTick = Main.GameUpdateCount;
         }
-        Main.blockInput = _searchFocus;
         if (_searchFocus)
         {
-            PlayerInput.WritingText = true; Main.instance.HandleIME();
+            Main.blockInput = true; PlayerInput.WritingText = true; Main.instance.HandleIME();
             string query = Main.GetInputText(_query);
             query = query[..Math.Min(query.Length, 80)];
             if (query != _query) { _query = query; _page = 0; }
