@@ -8,30 +8,23 @@ HTTP/LLM transport code in server.py can import them without pulling in gameplay
 state.
 """
 
-import json
 import re
 from typing import Any
+
+from infini_local.core import strict_json
 
 
 def _visible_model_output(text: str) -> str:
     """Remove model-private thought channels before scanning authored JSON."""
-    visible = text or ""
-    for tag in ("thought", "analysis"):
-        visible = re.sub(
-            rf"<{tag}\b[^>]*>.*?</{tag}\s*>",
-            "",
-            visible,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-        # A truncated private channel has no authored answer. Dropping its tail is
-        # safer than parsing a JSON example embedded in unfinished reasoning.
-        visible = re.sub(
-            rf"<{tag}\b[^>]*>.*\Z",
-            "",
-            visible,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-    return visible
+    # Match strings first so literal tags in authored prompts/tooltips survive.
+    # A channel opening outside a string owns its complete body, including JSON
+    # examples, or the remaining tail when the closing tag was truncated.
+    return re.sub(
+        r'"(?:\\.|[^"\\])*"|<(thought|analysis)\b[^>]*>.*?(?:</\1\s*>|\Z)',
+        lambda match: "" if match.group(1) else match.group(0),
+        text or "",
+        flags=re.IGNORECASE | re.DOTALL,
+    )
 
 
 def json_object_candidates(text: str) -> list[str]:
@@ -187,19 +180,8 @@ def recover_object_with_syntax_only_repairs(text: str) -> dict[str, Any] | None:
         if containers or in_string or edits > 64:
             continue
 
-        def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-            result: dict[str, Any] = {}
-            for key, value in pairs:
-                if key in result:
-                    raise ValueError("duplicate JSON key")
-                result[key] = value
-            return result
-
-        def reject_constant(value: str) -> None:
-            raise ValueError(f"non-JSON constant {value}")
-
         try:
-            recovered = json.loads("".join(output), object_pairs_hook=unique_object, parse_constant=reject_constant)
+            recovered = strict_json.loads("".join(output))
         except (TypeError, ValueError):
             continue
         if isinstance(recovered, dict):
@@ -211,7 +193,7 @@ def parse_first_valid_llm_json(text: str) -> dict[str, Any]:
     last_error: Exception | None = None
     for cand in json_object_candidates(text):
         try:
-            parsed = json.loads(cand)
+            parsed = strict_json.loads(cand)
             if isinstance(parsed, dict):
                 return parsed
         except Exception as e:
@@ -219,7 +201,7 @@ def parse_first_valid_llm_json(text: str) -> dict[str, Any]:
             continue
     if last_error:
         raise last_error
-    parsed = json.loads(extract_json(text))
+    parsed = strict_json.loads(extract_json(text))
     if not isinstance(parsed, dict):
         raise ValueError("LLM JSON root is not an object")
     return parsed

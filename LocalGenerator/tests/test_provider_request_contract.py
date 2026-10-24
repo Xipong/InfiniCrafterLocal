@@ -355,10 +355,24 @@ def test_successful_provider_reply_keeps_raw_usage_and_publishes_actual_counters
     pytest.param("parse", 'prefix {"text":"brace } inside string", "ok": true} suffix', {"text": "brace } inside string", "ok": True}, id="string-braces"),
     pytest.param("parse", '<thought>{"name":"Decoy"}</thought>{"name":"Authored"}', {"name": "Authored"}, id="private-thought"),
     pytest.param("candidates", '<thought>{"name":"unfinished-decoy"}', [], id="unfinished-private-thought"),
+    pytest.param("parse", '{"text":"<analysis>literal</analysis>"}', {"text": "<analysis>literal</analysis>"}, id="literal-private-tags"),
+    pytest.param("parse", '<analysis>{"decoy":1}</analysis>{"text":"<thought>literal"}', {"text": "<thought>literal"}, id="unfinished-literal-tag"),
+    pytest.param("parse", '{"text":"quote \\" <analysis>x</analysis>"}', {"text": 'quote " <analysis>x</analysis>'}, id="escaped-quote-before-tag"),
 ])
 def test_json_extraction_preserves_authored_text_not_private_thought(operation, text, expected):
     result = parse_first_valid_llm_json(text) if operation == "parse" else json_object_candidates(text)
     assert result == expected
+
+
+@pytest.mark.parametrize("text", [
+    '{"damage":1,"damage":2}', '{"damage":NaN}', '{"damage":Infinity}',
+    '{"damage":1e999}', '{"child":{"damage":1,"damage":2}}',
+])
+def test_llm_json_rejects_ambiguous_or_nonfinite_candidates(text):
+    with pytest.raises(ValueError):
+        parse_first_valid_llm_json(text)
+    assert recover_object_with_syntax_only_repairs(text) is None
+    assert parse_first_valid_llm_json(text + '{"damage":3}') == {"damage": 3}
 
 
 @pytest.mark.parametrize("text,expected", [

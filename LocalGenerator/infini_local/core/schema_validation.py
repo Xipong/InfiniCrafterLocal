@@ -54,6 +54,17 @@ def _type_matches(value: Any, expected: str) -> bool:
     return False
 
 
+def _json_equal(left: Any, right: Any) -> bool:
+    """JSON booleans are distinct from numbers, including inside containers."""
+    if type(left) is not type(right):
+        return type(left) in (int, float) and type(right) in (int, float) and left == right
+    if isinstance(left, dict):
+        return left.keys() == right.keys() and all(_json_equal(value, right[key]) for key, value in left.items())
+    if isinstance(left, list):
+        return len(left) == len(right) and all(_json_equal(a, b) for a, b in zip(left, right))
+    return left == right
+
+
 def _resolve_ref(root: Mapping[str, Any], ref: str) -> Mapping[str, Any] | None:
     if not ref.startswith("#/$defs/"):
         return None
@@ -110,10 +121,10 @@ def strict_schema_errors(value: Any, schema: Mapping[str, Any], *, path: str = "
             return errors
         return strict_schema_errors(value, resolved, path=path, root=root_schema, limit=limit)
 
-    if "const" in schema and value != schema.get("const"):
+    if "const" in schema and not _json_equal(value, schema["const"]):
         add("const", path, schema.get("const"), value)
     enum = schema.get("enum")
-    if isinstance(enum, list) and value not in enum:
+    if isinstance(enum, list) and not any(_json_equal(value, member) for member in enum):
         add("enum", path, enum, value)
 
     all_of = schema.get("allOf")
