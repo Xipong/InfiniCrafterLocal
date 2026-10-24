@@ -45,6 +45,8 @@ ENTITY_KINDS: Final[tuple[str, ...]] = (
 PROJECTILE_ENTITY_KIND_ORDER: Final[tuple[str, ...]] = ENTITY_KINDS[1:]
 PROJECTILE_ENTITY_KINDS: Final[frozenset[str]] = frozenset(PROJECTILE_ENTITY_KIND_ORDER)
 PROJECTILE_MODIFIER_COMPONENTS: Final[Mapping[str, str]] = MappingProxyType({
+    "set_projectile_vector_acceleration": "vectorAcceleration",
+    "set_projectile_speed_ramp": "speedRamp",
     "set_projectile_turn_modifier": "turnModifier",
     "set_projectile_speed_modifier": "speedModifier",
     "set_projectile_homing_modifier": "homingModifier",
@@ -357,7 +359,7 @@ class ParamSpec:
     default: Any = field(default=None, compare=False)
     wire_name: str = ""
     wire_divisor: int = 1
-    wire_multiplier: int = 1
+    wire_multiplier: int | float = 1
     multiple_of: float | int | None = None
     wire_boolean_true_value: int | None = None
     runtime_minimum: float | int | None = None
@@ -416,10 +418,9 @@ class ParamSpec:
         """Human bounds for one validated target clock; static schema covers their union."""
         if not self.wire_kind or not self.wire_updates_power:
             return {"minimum": self.minimum, "maximum": self.maximum}
-        factor = self._update_factor(updates_per_tick)
-        return {"minimum": self.wire_minimum * self.wire_divisor * factor / self.wire_multiplier
+        return {"minimum": self.from_wire(self.wire_minimum, updates_per_tick=updates_per_tick)
                     if self.wire_minimum is not None else None,
-                "maximum": self.wire_maximum * self.wire_divisor * factor / self.wire_multiplier
+                "maximum": self.from_wire(self.wire_maximum, updates_per_tick=updates_per_tick)
                     if self.wire_maximum is not None else None}
 
     @property
@@ -453,6 +454,16 @@ class ParamSpec:
             return value - self.wire_offset
         factor = self._update_factor(updates_per_tick)
         result = value * self.wire_divisor * factor / self.wire_multiplier
+        if self.wire_kind and not self.wire_rounding:
+            # The inverse's binary64 rounding can place an exact wire endpoint
+            # just outside its own domain on re-projection. Expose the adjacent
+            # representable Author endpoint inside that domain. Author admission
+            # and forward projection stay strict and never alter input values.
+            projected = self.to_wire(result, updates_per_tick=updates_per_tick)
+            if value == self.wire_minimum and projected < value:
+                result = math.nextafter(result, math.inf)
+            elif value == self.wire_maximum and projected > value:
+                result = math.nextafter(result, -math.inf)
         return int(result) if self.kind == "integer" and float(result).is_integer() else result
 
     def canonical_receipt_leaf_path(self, suffix: str) -> str | None:
@@ -1153,7 +1164,7 @@ def target_updates_per_tick(calls: Iterable[object], target: str) -> int:
     return value
 
 
-def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int, divisor: int = 1,
+def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int | float, divisor: int = 1,
                  updates_power: int = 0, units: str, seconds: bool = False) -> ParamSpec:
     """Declare changed Author units while freezing the pre-existing engine domain.
 
@@ -1179,7 +1190,7 @@ def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int, divisor:
     # make room for it. Keep each consumer's distinct execution meaning here.
     meaning = ("World duration (seconds); shared nearest-tick rounding applies. Native consumer: "
                if seconds else f"Author units: {units}. Native consumer: ")
-    return replace(spec, kind="number", description=meaning + spec.description,
+    converted = replace(spec, kind="number", description=meaning + spec.description,
                    minimum=author_low, maximum=author_high, units=units, semantic_type=units,
                    default=inverse(spec.default), neutral=inverse(spec.neutral),
                    # Converted floating scalars are stored by native float32
@@ -1195,6 +1206,17 @@ def _world_units(spec: ParamSpec, predecessor: str, *, multiplier: int, divisor:
                    wire_rounding="nearest_world_tick_half_up" if seconds else "",
                    multiple_of=1 / multiplier if geometry_lattice else None,
                    predecessor_names=(predecessor,))
+    if not seconds:
+        # Publish the same representable endpoints as the target-clock inverse;
+        # the static schema is the union of the admitted N=1..6 domains.
+        low_clock = 6 if updates_power and low is not None and low < 0 else 1
+        high_clock = 6 if updates_power and high is not None and high > 0 else 1
+        if low is not None and converted.to_wire(author_low, updates_per_tick=low_clock) < low:
+            author_low = converted.from_wire(low, updates_per_tick=low_clock)
+        if high is not None and converted.to_wire(author_high, updates_per_tick=high_clock) > high:
+            author_high = converted.from_wire(high, updates_per_tick=high_clock)
+        converted = replace(converted, minimum=author_low, maximum=author_high)
+    return converted
 
 
 def _seconds(spec: ParamSpec, predecessor: str) -> ParamSpec:
@@ -2137,9 +2159,25 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER, cs="Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::ModifyDamageHitbox|Content/Projectiles/GeneratedProjectile.Executors.cs::ApplyHitboxCurveVisual",
          wire_presence_path="runtimeProgram.entities[].hitboxCurve",
     ),
+    _cap("set_projectile_vector_acceleration", 'Timed signed two-axis world acceleration, independent of the selected trajectory. Adds the authored vector after movement, turn and multiplicative speed, before absolute speed ramp and homing; zero axes are explicit. The compiler divides acceleration by the square of updatesPerTick so the same world-time phase gives the same world velocity change. It can launch a stationary zero-velocity projectile without inventing a direction.', "motion_modifier", ("free_projectile", "child_projectile"), {
+            "accelerationXBlocksPerSecondSquared": _world_units(_p("number", "Signed horizontal acceleration; positive right", minimum=-2, maximum=2, units="pixels/update²", consumer_storage="float32", neutral=0), "accelerationX", multiplier=16, divisor=3600, updates_power=2, units="blocks/s²"),
+            "accelerationYBlocksPerSecondSquared": _world_units(_p("number", "Signed vertical acceleration; positive down", minimum=-2, maximum=2, units="pixels/update²", consumer_storage="float32", neutral=0), "accelerationY", multiplier=16, divisor=3600, updates_power=2, units="blocks/s²"),
+            "startDelaySeconds": _seconds(_p("integer", "Start after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active world-time duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+        }, component_slot="vectorAcceleration", authority="owner_execute_sync", py=_COMPILER_OWNER,
+        cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplyVectorAcceleration",
+        wire_presence_path="runtimeProgram.entities[].vectorAcceleration"),
+    _cap("set_projectile_speed_ramp", 'Absolute linear speed envelope over an authored active world-time interval. Unlike multiplicative speedModifier, speed at a given age is independent of prior magnitude and extraUpdates. After vector acceleration and before homing it preserves current heading and assigns a linearly interpolated start/end magnitude, reaching the endpoint on the last phase update. Outside the interval it releases velocity ownership. Zero velocity remains zero: this capability does not invent a launch direction. May compose with turn and targeting; a movement that replaces velocity each frame still receives the envelope in the fixed modifier pass.', "motion_modifier", ("free_projectile", "child_projectile"), {
+            "startSpeedBlocksPerSecond": _world_units(_p("number", "Absolute speed at the beginning of the interval", minimum=0.1, maximum=80, units="pixels/update", consumer_storage="float32"), "startSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+            "endSpeedBlocksPerSecond": _world_units(_p("number", "Absolute endpoint speed; zero stops on the last phase update", minimum=0, maximum=80, units="pixels/update", consumer_storage="float32", neutral=0), "endSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+            "startDelaySeconds": _seconds(_p("integer", "Start after this active world-time delay; activation waiting is excluded", minimum=0, maximum=21600, units="ticks"), "startDelayTicks"),
+            "durationSeconds": _seconds(_p("integer", "Active world-time duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
+        }, component_slot="speedRamp", authority="owner_execute_sync", py=_COMPILER_OWNER,
+        cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplySpeedRamp",
+        wire_presence_path="runtimeProgram.entities[].speedRamp"),
     _cap(
         "set_projectile_turn_modifier",
-        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+        "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, multiplicative speed, vector acceleration, absolute speed ramp, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "turnRadiansPerSecond": _world_units(_p("number", "Signed world-time velocity rotation rate during the active phase", minimum=-0.5, maximum=0.5, units="radians/projectile update", consumer_storage="float32", neutral=0), "turnRadiansPerUpdate", multiplier=1, divisor=60, updates_power=1, units='radians/s'),
@@ -2166,7 +2204,7 @@ _CAPS: list[CapabilitySpec] = [
     ),
     _cap(
         "set_projectile_homing_modifier",
-        "After movement, turn and speed, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+        "After movement, turn, multiplicative speed, vector acceleration and absolute speed ramp, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
         "motion_modifier", ("free_projectile", "child_projectile"),
         {
             "rangeTiles": _p("number", "Hard target radius from this projectile center", minimum=1, maximum=120, units="tiles", consumer_storage="float32"),
@@ -2277,6 +2315,24 @@ def _movement(
 
 
 _CAPS.extend([
+    _movement("move_spring_tether", 'A bounded tension-only spring between projectile and owner mounted center. Inside rest radius the tether is slack; outside it applies displacement-proportional inward acceleration. Exponential world-time damping applies to velocity everywhere; an explicit speed cap prevents runaway integration. Owner movement changes the anchor naturally. Invalid/dead owner ends the projectile. No channel requirement, target selection, teleport, forced collision change or return-to-owner kill. Composes with timed vector forces, speed envelopes and homing. Stiffness is s^-2 and damping is s^-1, lowered against the explicit projectile clock.', 21, {
+        "restRadiusTiles": _p("number", "Slack radius around owner mounted center", minimum=0, maximum=80, units="tiles", consumer_storage="float32", wire_presence_requires_receipt=True, wire_name="springRestRadius", neutral=0),
+        "stiffnessPerSecondSquared": _world_units(_p("number", "Inward acceleration per pixel of stretch", minimum=0.000001, maximum=1, units="update^-2", consumer_storage="float32", wire_presence_requires_receipt=True), "springStiffness", multiplier=1, divisor=3600, updates_power=2, units="s^-2"),
+        "dampingPerSecond": _world_units(_p("number", "Velocity decays by exp(-damping * elapsed seconds)", minimum=0, maximum=1, units="update^-1", consumer_storage="float32", wire_presence_requires_receipt=True, neutral=0), "springDamping", multiplier=1, divisor=60, updates_power=1, units="s^-1"),
+        "maxSpeedBlocksPerSecond": _world_units(_p("number", "Magnitude cap after spring and damping", minimum=0.1, maximum=80, units="pixels/update", consumer_storage="float32", wire_presence_requires_receipt=True), "springMaxSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+    }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveSpringTether"),
+    _movement("move_elliptic_orbit", 'Owner-relative ellipse with independently authored major/minor radii, explicit phase and signed angular speed. The ellipse X axis follows the synchronized initial launch direction, not world X or current cursor; orbit phase uses synchronized active age. Unlike circular move_orbit, non-equal radii and orientation shape a true ellipse and the author chooses initial phase rather than projectile identity. Sets velocity to the next owner-relative point for native integration, and disables tile collision. Normal lifetime applies; invalid/dead owner ends the projectile. Rotation remains tangent to actual velocity. World angular rate is invariant under extraUpdates.', 22, {
+        "radiusAlongTiles": _p("number", "Ellipse semi-axis along initial direction", minimum=0.25, maximum=80, units="tiles", consumer_storage="float32", wire_presence_requires_receipt=True, wire_name="ellipseRadiusAlong"),
+        "radiusAcrossTiles": _p("number", "Ellipse semi-axis perpendicular to initial direction", minimum=0.25, maximum=80, units="tiles", consumer_storage="float32", wire_presence_requires_receipt=True, wire_name="ellipseRadiusAcross"),
+        "angularSpeedRadiansPerSecond": _world_units(_p("number", "Signed phase increment; zero follows owner at fixed phase", minimum=-0.5, maximum=0.5, units="radians/update", consumer_storage="float32", wire_presence_requires_receipt=True, neutral=0), "ellipseAngularRate", multiplier=1, divisor=60, updates_power=1, units="radians/s"),
+        "phaseRadians": _p("number", "Explicit starting phase; no identity-derived offset", minimum=-3.1415927, maximum=3.1415927, units="radians", consumer_storage="float32", wire_presence_requires_receipt=True, wire_name="ellipsePhase", neutral=0),
+    }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveEllipticOrbit", requirements=(RequirementSpec("item_capability_param", capability="configure_spawn", param="aim", any_of=("cursor", "facing", "velocity"), message="This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one."),)),
+    _movement("move_traveling_wave", 'A traveling sine displacement around the synchronized initial launch axis: constant authored forward speed plus the exact change of lateral sinusoidal offset across each active update. Amplitude is a world distance, frequency is cycles per second, and phase is explicit. Unlike sine_homing this never selects targets, rotates velocity cumulatively or depends on prior heading; its integrated lateral displacement is bounded by twice amplitude even across extraUpdates. Native integration/collision remains enabled; each next AI recomputes the trajectory velocity from active age. Modifiers may add independent deviations after this driver. Late hydration resumes the same differential step without snapping to a saved origin.', 23, {
+        "forwardSpeedBlocksPerSecond": _world_units(_p("number", "Constant forward speed along initial direction", minimum=0.1, maximum=80, units="pixels/update", consumer_storage="float32", wire_presence_requires_receipt=True), "waveForwardSpeed", multiplier=16, divisor=60, updates_power=1, units="blocks/s"),
+        "amplitudeTiles": _p("number", "Lateral sine amplitude; zero is explicitly straight", minimum=0, maximum=16, units="tiles", consumer_storage="float32", wire_presence_requires_receipt=True, wire_name="waveDisplacementAmplitude", neutral=0),
+        "frequencyCyclesPerSecond": _world_units(_p("number", "Oscillation frequency in world time", minimum=0.0001, maximum=1, units="radians/update", consumer_storage="float32", wire_presence_requires_receipt=True), "wavePhaseRate", multiplier=6.283185307179586, divisor=60, updates_power=1, units="cycles/s"),
+        "phaseRadians": _p("number", "Starting oscillator phase; no initial lateral teleport", minimum=-3.1415927, maximum=3.1415927, units="radians", consumer_storage="float32", wire_presence_requires_receipt=True, wire_name="waveStartPhase", neutral=0),
+    }, targets=("free_projectile", "child_projectile"), cs="Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveTravelingWave", requirements=(RequirementSpec("item_capability_param", capability="configure_spawn", param="aim", any_of=("cursor", "facing", "velocity"), message="This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one."),)),
     _movement("move_straight", "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.", 0),
     _movement("move_slow_homing", "Steer gradually toward a valid NPC.", 1, {
         "rangeTiles": _p("number", "Target search radius", minimum=1, maximum=120, units="tiles"),
@@ -3391,6 +3447,9 @@ MOVEMENT_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "move_whip_lash": 18,
     "move_forward_then_retract": 19,
     "move_front_hand": 20,
+    "move_traveling_wave": 23,
+    "move_elliptic_orbit": 22,
+    "move_spring_tether": 21,
 })
 CONTROLLER_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "none": 0,

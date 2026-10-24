@@ -565,6 +565,34 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_vector_acceleration",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplyVectorAcceleration",
+      "outputs": [
+        "runtimeProgram.entities[].vectorAcceleration.accelerationX",
+        "runtimeProgram.entities[].vectorAcceleration.accelerationY",
+        "runtimeProgram.entities[].vectorAcceleration.startDelayTicks",
+        "runtimeProgram.entities[].vectorAcceleration.durationTicks"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].vectorAcceleration"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "set_projectile_speed_ramp",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplySpeedRamp",
+      "outputs": [
+        "runtimeProgram.entities[].speedRamp.startSpeed",
+        "runtimeProgram.entities[].speedRamp.endSpeed",
+        "runtimeProgram.entities[].speedRamp.startDelayTicks",
+        "runtimeProgram.entities[].speedRamp.durationTicks"
+      ],
+      "wirePresencePath": "runtimeProgram.entities[].speedRamp"
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "set_projectile_turn_modifier",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
@@ -664,6 +692,51 @@
         "runtimeProgram.entities[].collision.extraUpdates",
         "runtimeProgram.entities[].collision.npcImmunityMode",
         "runtimeProgram.entities[].collision.localNpcHitCooldownTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_spring_tether",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveSpringTether",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.springRestRadius",
+        "runtimeProgram.entities[].movement.params.springStiffness",
+        "runtimeProgram.entities[].movement.params.springDamping",
+        "runtimeProgram.entities[].movement.params.springMaxSpeed"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_elliptic_orbit",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveEllipticOrbit",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAlong",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAcross",
+        "runtimeProgram.entities[].movement.params.ellipseAngularRate",
+        "runtimeProgram.entities[].movement.params.ellipsePhase"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "move_traveling_wave",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveTravelingWave",
+      "outputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.waveForwardSpeed",
+        "runtimeProgram.entities[].movement.params.waveDisplacementAmplitude",
+        "runtimeProgram.entities[].movement.params.wavePhaseRate",
+        "runtimeProgram.entities[].movement.params.waveStartPhase"
       ]
     },
     {

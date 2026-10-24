@@ -3578,6 +3578,228 @@
     },
     {
       "authorityByEffect": {},
+      "capability": "set_projectile_vector_acceleration",
+      "componentSlot": "vectorAcceleration",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplyVectorAcceleration",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].vectorAcceleration.accelerationX",
+        "runtimeProgram.entities[].vectorAcceleration.accelerationY",
+        "runtimeProgram.entities[].vectorAcceleration.startDelayTicks",
+        "runtimeProgram.entities[].vectorAcceleration.durationTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "accelerationXBlocksPerSecondSquared": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 16200.0,
+          "minimum": -16200.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s²",
+          "units": "blocks/s²"
+        },
+        "accelerationYBlocksPerSecondSquared": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 16200.0,
+          "minimum": -16200.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s²",
+          "units": "blocks/s²"
+        },
+        "durationSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "startDelaySeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Timed signed two-axis world acceleration, independent of the selected trajectory. Adds the authored vector after movement, turn and multiplicative speed, before absolute speed ramp and homing; zero axes are explicit. The compiler divides acceleration by the square of updatesPerTick so the same world-time phase gives the same world velocity change. It can launch a stationary zero-velocity projectile without inventing a direction.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "channel_beam",
+            "charge_then_release"
+          ],
+          "kind": "capability_absent",
+          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "move_accelerate",
+            "move_blackhole_pull",
+            "move_boomerang",
+            "move_drift",
+            "move_elliptic_orbit",
+            "move_expanding_wave",
+            "move_flail_tether",
+            "move_forward_then_retract",
+            "move_front_hand",
+            "move_gravity_arc",
+            "move_orbit",
+            "move_phase",
+            "move_proximity_missile",
+            "move_returning_glaive",
+            "move_sine_homing",
+            "move_slow_homing",
+            "move_spiral",
+            "move_spring_tether",
+            "move_straight",
+            "move_traveling_wave",
+            "move_vortex_orb",
+            "move_whip_lash",
+            "move_yoyo_hover"
+          ],
+          "kind": "capability_group_present",
+          "message": "Velocity modifiers require explicit movement, including on a target_and_fire entity.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "set_projectile_speed_ramp",
+      "componentSlot": "speedRamp",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::ApplySpeedRamp",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].speedRamp.startSpeed",
+        "runtimeProgram.entities[].speedRamp.endSpeed",
+        "runtimeProgram.entities[].speedRamp.startDelayTicks",
+        "runtimeProgram.entities[].speedRamp.durationTicks"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "durationSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "endSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        },
+        "startDelaySeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "startSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.375,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Absolute linear speed envelope over an authored active world-time interval. Unlike multiplicative speedModifier, speed at a given age is independent of prior magnitude and extraUpdates. After vector acceleration and before homing it preserves current heading and assigns a linearly interpolated start/end magnitude, reaching the endpoint on the last phase update. Outside the interval it releases velocity ownership. Zero velocity remains zero: this capability does not invent a launch direction. May compose with turn and targeting; a movement that replaces velocity each frame still receives the envelope in the fixed modifier pass.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "channel_beam",
+            "charge_then_release"
+          ],
+          "kind": "capability_absent",
+          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "move_accelerate",
+            "move_blackhole_pull",
+            "move_boomerang",
+            "move_drift",
+            "move_elliptic_orbit",
+            "move_expanding_wave",
+            "move_flail_tether",
+            "move_forward_then_retract",
+            "move_front_hand",
+            "move_gravity_arc",
+            "move_orbit",
+            "move_phase",
+            "move_proximity_missile",
+            "move_returning_glaive",
+            "move_sine_homing",
+            "move_slow_homing",
+            "move_spiral",
+            "move_spring_tether",
+            "move_straight",
+            "move_traveling_wave",
+            "move_vortex_orb",
+            "move_whip_lash",
+            "move_yoyo_hover"
+          ],
+          "kind": "capability_group_present",
+          "message": "Velocity modifiers require explicit movement, including on a target_and_fire entity.",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
       "capability": "set_projectile_turn_modifier",
       "componentSlot": "turnModifier",
       "conflicts": [],
@@ -3626,7 +3848,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+      "purpose": "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, multiplicative speed, vector acceleration, absolute speed ramp, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3644,6 +3866,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -3656,7 +3879,9 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -3752,6 +3977,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -3764,7 +3990,9 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -3853,7 +4081,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "After movement, turn and speed, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+      "purpose": "After movement, turn, multiplicative speed, vector acceleration and absolute speed ramp, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3871,6 +4099,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -3883,7 +4112,9 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
@@ -4261,6 +4492,270 @@
         "child_projectile"
       ],
       "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_spring_tether",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveSpringTether",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.springRestRadius",
+        "runtimeProgram.entities[].movement.params.springStiffness",
+        "runtimeProgram.entities[].movement.params.springDamping",
+        "runtimeProgram.entities[].movement.params.springMaxSpeed"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "dampingPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 360.0,
+          "minimum": 0.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "s^-1",
+          "units": "s^-1"
+        },
+        "maxSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.375,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        },
+        "restRadiusTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        },
+        "stiffnessPerSecondSquared": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 129600.0,
+          "minimum": 0.0036,
+          "reference": null,
+          "required": true,
+          "semanticType": "s^-2",
+          "units": "s^-2"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "purpose": "A bounded tension-only spring between projectile and owner mounted center. Inside rest radius the tether is slack; outside it applies displacement-proportional inward acceleration. Exponential world-time damping applies to velocity everywhere; an explicit speed cap prevents runaway integration. Owner movement changes the anchor naturally. Invalid/dead owner ends the projectile. No channel requirement, target selection, teleport, forced collision change or return-to-owner kill. Composes with timed vector forces, speed envelopes and homing. Stiffness is s^-2 and damping is s^-1, lowered against the explicit projectile clock.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_elliptic_orbit",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveEllipticOrbit",
+      "dependencies": [
+        "configure_spawn"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAlong",
+        "runtimeProgram.entities[].movement.params.ellipseRadiusAcross",
+        "runtimeProgram.entities[].movement.params.ellipseAngularRate",
+        "runtimeProgram.entities[].movement.params.ellipsePhase"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "angularSpeedRadiansPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 180.0,
+          "minimum": -180.0,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians/s",
+          "units": "radians/s"
+        },
+        "phaseRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3.1415927,
+          "minimum": -3.1415927,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians"
+        },
+        "radiusAcrossTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        },
+        "radiusAlongTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 80,
+          "minimum": 0.25,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "purpose": "Owner-relative ellipse with independently authored major/minor radii, explicit phase and signed angular speed. The ellipse X axis follows the synchronized initial launch direction, not world X or current cursor; orbit phase uses synchronized active age. Unlike circular move_orbit, non-equal radii and orientation shape a true ellipse and the author chooses initial phase rather than projectile identity. Sets velocity to the next owner-relative point for native integration, and disables tile collision. Normal lifetime applies; invalid/dead owner ends the projectile. Rotation remains tangent to actual velocity. World angular rate is invariant under extraUpdates.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "cursor",
+            "facing",
+            "velocity"
+          ],
+          "capability": "configure_spawn",
+          "kind": "item_capability_param",
+          "message": "This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one.",
+          "param": "aim",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "move_traveling_wave",
+      "componentSlot": "movement",
+      "conflicts": [
+        "exclusive_group:movement"
+      ],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.MotionComposition.cs::MoveTravelingWave",
+      "dependencies": [
+        "configure_spawn"
+      ],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "movement",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code",
+        "runtimeProgram.entities[].movement.params.waveForwardSpeed",
+        "runtimeProgram.entities[].movement.params.waveDisplacementAmplitude",
+        "runtimeProgram.entities[].movement.params.wavePhaseRate",
+        "runtimeProgram.entities[].movement.params.waveStartPhase"
+      ],
+      "multiplicity": "single_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "amplitudeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 16,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        },
+        "forwardSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.375,
+          "reference": null,
+          "required": true,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        },
+        "frequencyCyclesPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 57.29577951308232,
+          "minimum": 0.0009549296585513722,
+          "reference": null,
+          "required": true,
+          "semanticType": "cycles/s",
+          "units": "cycles/s"
+        },
+        "phaseRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3.1415927,
+          "minimum": -3.1415927,
+          "reference": null,
+          "required": true,
+          "semanticType": "radians",
+          "units": "radians"
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "purpose": "A traveling sine displacement around the synchronized initial launch axis: constant authored forward speed plus the exact change of lateral sinusoidal offset across each active update. Amplitude is a world distance, frequency is cycles per second, and phase is explicit. Unlike sine_homing this never selects targets, rotates velocity cumulatively or depends on prior heading; its integrated lateral displacement is bounded by twice amplitude even across extraUpdates. Native integration/collision remains enabled; each next AI recomputes the trajectory velocity from active age. Modifiers may add independent deviations after this driver. Late hydration resumes the same differential step without snapping to a saved origin.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "cursor",
+            "facing",
+            "velocity"
+          ],
+          "capability": "configure_spawn",
+          "kind": "item_capability_param",
+          "message": "This trajectory requires an explicit synchronized launch axis; aim=none cannot invent one.",
+          "param": "aim",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "free_projectile",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": [
+        "runtimeProgram.entities[].movement.name",
+        "runtimeProgram.entities[].movement.code"
+      ]
     },
     {
       "authorityByEffect": {},
@@ -5809,6 +6304,7 @@
             "move_blackhole_pull",
             "move_boomerang",
             "move_drift",
+            "move_elliptic_orbit",
             "move_expanding_wave",
             "move_flail_tether",
             "move_forward_then_retract",
@@ -5821,7 +6317,9 @@
             "move_sine_homing",
             "move_slow_homing",
             "move_spiral",
+            "move_spring_tether",
             "move_straight",
+            "move_traveling_wave",
             "move_vortex_orb",
             "move_whip_lash",
             "move_yoyo_hover"
