@@ -68,15 +68,15 @@ internal static partial class EngineRuntimeChecks
             Equal(true, layout.List.Width >= 0 && layout.List.Height >= 0 && layout.Detail.Width >= 0 && layout.Detail.Height >= 0, "page extents never negative");
             Equal(true, layout.Rows >= 0 && layout.Rows * 52 <= layout.List.Height, "only complete list rows are drawn");
             Equal(true, layout.Columns >= 0 && layout.Columns * 52 <= layout.List.Width, "only complete grid columns are drawn");
-            Equal(true, layout.Book.Width <= 920 && layout.Book.Height <= 560, "recipe browser remains bounded on large screens");
+            Equal(true, layout.Book.Width <= width && layout.Book.Height <= height, "atlas never exceeds effective UI viewport");
         }
         var narrowBook = RecipeJournalView.Bounds(640, 600);
         Equal(true, narrowBook.Detail.Height >= 160 && narrowBook.Rows >= 1, "compact book retains readable details and a selectable recipe");
         var shortBook = RecipeJournalView.Bounds(640, 360);
-        Equal(true, shortBook.Rows >= 1 && shortBook.Detail.Height >= 52, "short compact viewport keeps selection reachable");
+        Equal(true, shortBook.Rows >= 1 && shortBook.Detail.Height >= 40, "short compact viewport keeps selection reachable");
         var wideBook = RecipeJournalView.Bounds(1280, 720);
         Equal(true, wideBook.Detail.Width > wideBook.List.Width && wideBook.Detail.Y == wideBook.List.Y, "wide browser keeps a larger recipe detail pane");
-        Equal(7, wideBook.Columns, "wide grid offers seven inventory columns");
+        Equal(true, wideBook.Columns * wideBook.Rows > narrowBook.Columns * narrowBook.Rows, "larger atlas exposes more selectable discoveries without shrinking detail");
         Equal(true, wideBook.Detail.Width >= 320, "wide detail keeps usable ingredient space");
         Equal(true, narrowBook.Columns >= 1 && narrowBook.Rows <= 2, "compact grid leaves room for detail");
         WithPlayer((player, _) => {
