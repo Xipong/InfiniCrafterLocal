@@ -300,6 +300,8 @@ public sealed class RuntimeProgramSpec
                 RuntimeEntitySpec? shot = TryGetEntity(entity.Targeting.ShotEntityId);
                 if (shot is null || !shot.IsProjectileEntity)
                     throw new InvalidDataException($"entity '{entity.Id}' targets invalid shot entity '{entity.Targeting.ShotEntityId}'");
+                if (entity.Targeting.AimMode == "velocity_lead" && shot.Spawn.Aim != "velocity")
+                    throw new InvalidDataException("velocity lead requires child aim=velocity");
                 graph[entity.Id].Add(shot.Id);
             }
             if (entity.Controller.Code == RuntimeControllerCode.TargetAndFire
@@ -1775,10 +1777,80 @@ public sealed class RuntimeTargetingSpec
         get => _hardRange;
         set => _hardRange = value ?? throw new InvalidDataException("present targeting hard range must be boolean");
     }
-    [JsonIgnore] public bool HasVolleyOptions => Count.HasValue || SpreadRadians.HasValue
+    private double? _minimumRangeTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MinimumRangeTiles { get => _minimumRangeTiles; set => _minimumRangeTiles = value ?? throw new InvalidDataException("present targeting minimumRangeTiles cannot be null"); }
+    private double? _coneRadians;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? ConeRadians { get => _coneRadians; set => _coneRadians = value ?? throw new InvalidDataException("present targeting coneRadians cannot be null"); }
+    private string? _coneDirection;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConeDirection { get => _coneDirection; set => _coneDirection = value ?? throw new InvalidDataException("present targeting coneDirection cannot be null"); }
+    private string? _bossFilter;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? BossFilter { get => _bossFilter; set => _bossFilter = value ?? throw new InvalidDataException("present targeting bossFilter cannot be null"); }
+    private double? _minimumHealthRatio;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MinimumHealthRatio { get => _minimumHealthRatio; set => _minimumHealthRatio = value ?? throw new InvalidDataException("present targeting minimumHealthRatio cannot be null"); }
+    private double? _maximumHealthRatio;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MaximumHealthRatio { get => _maximumHealthRatio; set => _maximumHealthRatio = value ?? throw new InvalidDataException("present targeting maximumHealthRatio cannot be null"); }
+    private string? _targetPriority;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? TargetPriority { get => _targetPriority; set => _targetPriority = value ?? throw new InvalidDataException("present targeting targetPriority cannot be null"); }
+    private string? _aimMode;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AimMode { get => _aimMode; set => _aimMode = value ?? throw new InvalidDataException("present targeting aimMode cannot be null"); }
+    private double? _leadSeconds;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? LeadSeconds { get => _leadSeconds; set => _leadSeconds = value ?? throw new InvalidDataException("present targeting leadSeconds cannot be null"); }
+    private double? _maximumLeadTiles;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? MaximumLeadTiles { get => _maximumLeadTiles; set => _maximumLeadTiles = value ?? throw new InvalidDataException("present targeting maximumLeadTiles cannot be null"); }
+    private int? _warmupTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? WarmupTicks { get => _warmupTicks; set => _warmupTicks = value ?? throw new InvalidDataException("present targeting warmupTicks cannot be null"); }
+    private int? _burstCount;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BurstCount { get => _burstCount; set => _burstCount = value ?? throw new InvalidDataException("present targeting burstCount cannot be null"); }
+    private int? _burstSpacingTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BurstSpacingTicks { get => _burstSpacingTicks; set => _burstSpacingTicks = value ?? throw new InvalidDataException("present targeting burstSpacingTicks cannot be null"); }
+    private int? _manaCost;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ManaCost { get => _manaCost; set => _manaCost = value ?? throw new InvalidDataException("present targeting manaCost cannot be null"); }
+    private string? _manaCostBasis;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ManaCostBasis { get => _manaCostBasis; set => _manaCostBasis = value ?? throw new InvalidDataException("present targeting manaCostBasis cannot be null"); }
+    private int? _manaReserve;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ManaReserve { get => _manaReserve; set => _manaReserve = value ?? throw new InvalidDataException("present targeting manaReserve cannot be null"); }
+    private string? _onManaShortage;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? OnManaShortage { get => _onManaShortage; set => _onManaShortage = value ?? throw new InvalidDataException("present targeting onManaShortage cannot be null"); }
+    [JsonIgnore] public bool HasVolleyOptions => OnManaShortage is not null || ManaReserve is not null || ManaCostBasis is not null || ManaCost is not null || BurstSpacingTicks is not null || BurstCount is not null || WarmupTicks is not null || MaximumLeadTiles is not null || LeadSeconds is not null || AimMode is not null || TargetPriority is not null || MaximumHealthRatio is not null || MinimumHealthRatio is not null || BossFilter is not null || ConeDirection is not null || ConeRadians is not null || MinimumRangeTiles is not null || Count.HasValue || SpreadRadians.HasValue
         || TargetPolicy is not null || RequireLineOfSight.HasValue || HardRange.HasValue;
     public void Normalize()
     {
+        if (MinimumRangeTiles is double minimumRangeTiles && (!double.IsFinite(minimumRangeTiles) || minimumRangeTiles < 0d || minimumRangeTiles > 120d || (minimumRangeTiles != 0d && (float)minimumRangeTiles == 0f))) throw new InvalidDataException("invalid targeting minimumRangeTiles");
+        if (ConeRadians is double coneRadians && (!double.IsFinite(coneRadians) || coneRadians < 0d || coneRadians > 6.283185307179586d || (coneRadians != 0d && (float)coneRadians == 0f))) throw new InvalidDataException("invalid targeting coneRadians");
+        if (ConeDirection is not null and not ("owner_facing" or "projectile_velocity")) throw new InvalidDataException("invalid targeting coneDirection");
+        if (BossFilter is not null and not ("any" or "boss_only" or "non_boss_only")) throw new InvalidDataException("invalid targeting bossFilter");
+        if (MinimumHealthRatio is double minimumHealthRatio && (!double.IsFinite(minimumHealthRatio) || minimumHealthRatio < 0d || minimumHealthRatio > 1d || (minimumHealthRatio != 0d && (float)minimumHealthRatio == 0f))) throw new InvalidDataException("invalid targeting minimumHealthRatio");
+        if (MaximumHealthRatio is double maximumHealthRatio && (!double.IsFinite(maximumHealthRatio) || maximumHealthRatio < 0d || maximumHealthRatio > 1d || (maximumHealthRatio != 0d && (float)maximumHealthRatio == 0f))) throw new InvalidDataException("invalid targeting maximumHealthRatio");
+        if (MinimumRangeTiles > RangeTiles || MinimumHealthRatio > MaximumHealthRatio)
+            throw new InvalidDataException("targeting filter endpoints are reversed");
+        if (TargetPriority is not null and not ("distance" or "lowest_health" or "highest_health" or "closest_to_owner" or "facing_alignment")) throw new InvalidDataException("invalid targeting targetPriority");
+        if (AimMode is not null and not ("direct" or "velocity_lead")) throw new InvalidDataException("invalid targeting aimMode");
+        if (LeadSeconds is double leadSeconds && (!double.IsFinite(leadSeconds) || leadSeconds < 0d || leadSeconds > 2d || (leadSeconds != 0d && (float)leadSeconds == 0f))) throw new InvalidDataException("invalid targeting leadSeconds");
+        if (MaximumLeadTiles is double maximumLeadTiles && (!double.IsFinite(maximumLeadTiles) || maximumLeadTiles < 0d || maximumLeadTiles > 120d || (maximumLeadTiles != 0d && (float)maximumLeadTiles == 0f))) throw new InvalidDataException("invalid targeting maximumLeadTiles");
+        if (WarmupTicks is < 0 or > 1800) throw new InvalidDataException("invalid targeting warmupTicks");
+        if (BurstCount is < 1 or > 8) throw new InvalidDataException("invalid targeting burstCount");
+        if (BurstSpacingTicks is < 1 or > 600) throw new InvalidDataException("invalid targeting burstSpacingTicks");
+        if (ManaCost is < 0 or > 200) throw new InvalidDataException("invalid targeting manaCost");
+        if (ManaCostBasis is not null and not ("volley" or "shot")) throw new InvalidDataException("invalid targeting manaCostBasis");
+        if (ManaReserve is < 0 or > 400) throw new InvalidDataException("invalid targeting manaReserve");
+        if (OnManaShortage is not null and not ("hold_fire" or "retire")) throw new InvalidDataException("invalid targeting onManaShortage");
         ShotEntityId = RuntimeText.IdOptional(ShotEntityId);
         IntervalTicks = Math.Clamp(IntervalTicks, 0, 3600);
         RangeTiles = Math.Clamp(RangeTiles, 0f, InfiniRuntimeLimits.MaxRuntimeRangeTiles);
@@ -1789,7 +1861,7 @@ public sealed class RuntimeTargetingSpec
             throw new InvalidDataException("targeting spread is outside explicit accepted bounds");
         if (SpreadRadians.HasValue && (!double.IsFinite(SpreadRadians.Value)
             || SpreadRadians != 0d && (float)SpreadRadians.Value == 0f)
-            || TargetPolicy is not null and not ("distance_score" or "player_assigned_first"))
+            || TargetPolicy is not null and not ("distance_score" or "player_assigned_first" or "player_assigned_only"))
             throw new InvalidDataException("targeting volley/policy is outside explicit accepted bounds");
     }
 }

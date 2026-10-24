@@ -136,6 +136,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int syncedActivationDelay = _activationDelayTicks;
         _data = data;
         _entity = entity;
+        CaptureTargetingOwner(preserveSyncedState);
         _runtimePayloadRejected = false;
         _generatedItemId = data.Id;
         _entityId = entity.Id;
@@ -296,7 +297,8 @@ public sealed partial class GeneratedProjectile : ModProjectile
         RuntimeInitialNpcExclusion? initialNpcExclusion = null,
         RuntimeSpawnTransform? initialTransform = null,
         int? initialVelocitySeed = null,
-        float? rootSpeedOverride = null)
+        float? rootSpeedOverride = null,
+        Action<int>? onSpawnProgress = null)
     {
         if (data is null || owner is null || !owner.active || !InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
             return 0;
@@ -423,6 +425,7 @@ public sealed partial class GeneratedProjectile : ModProjectile
                 }
                 projectile.netUpdate = true;
                 spawned++;
+                onSpawnProgress?.Invoke(spawned);
                 if (entity.NativeSentry == true) owner.UpdateMaxTurrets();
             }
         }

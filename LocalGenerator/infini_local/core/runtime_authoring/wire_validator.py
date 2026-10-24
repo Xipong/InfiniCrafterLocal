@@ -849,7 +849,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                                "message": "Present target bias must match its current declared domain without coercion or rewriting."})
             # Declared optional targeting neutrals may remain absent. Present
             # choices are checked without supplying or rewriting a value.
-            option_names = ("count", "spreadRadians", "targetPolicy", "requireLineOfSight", "hardRange")
+            option_specs = {spec.wire_name or name: spec for name, spec in CAPABILITY_REGISTRY["target_and_fire"].params.items() if not spec.required}
+            option_names = tuple(option_specs)
             present_options = set(option_names).intersection(targeting)
             if present_options and (
                 kind not in CAPABILITY_REGISTRY["target_and_fire"].target_kinds
@@ -873,14 +874,21 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                                        "message": "A present targeting option requires one exact capability receipt."})
             for name in option_names:
                 if name in targeting:
-                    spec = CAPABILITY_REGISTRY["target_and_fire"].params[name]
-                    for error in strict_schema_errors(targeting[name], spec.schema()):
+                    spec = option_specs[name]
+                    for error in strict_schema_errors(targeting[name], spec.wire_schema()):
                         errors.append({**error, "path": f"$.runtimeProgram.entities[{index}].targeting.{name}"})
                     consumer_error = spec.consumer_value_error(targeting[name])
                     if consumer_error:
                         errors.append({"code": "consumer_precision_loss", "message": consumer_error,
                                        "path": f"$.runtimeProgram.entities[{index}].targeting.{name}"})
+            for lower, upper in (("minimumRangeTiles", "rangeTiles"), ("minimumHealthRatio", "maximumHealthRatio")):
+                if type(targeting.get(lower)) in (int, float) and type(targeting.get(upper)) in (int, float) and targeting[lower] > targeting[upper]:
+                    errors.append({"path": f"{entity_path}.targeting.{lower}", "code": "reversed_target_filter", "message": "Target filter minimum exceeds its explicit maximum."})
             child = str(targeting.get("shotEntityId") or "")
+            if targeting.get("aimMode") == "velocity_lead":
+                child_row = entity_by_id.get(child) or next((e for e in entities if isinstance(e, Mapping) and e.get("id") == child), {})
+                if not isinstance(child_row.get("spawn"), Mapping) or child_row["spawn"].get("aim") != "velocity":
+                    errors.append({"path": f"{entity_path}.targeting.aimMode", "code": "predictive_aim_not_consumed", "message": "Velocity lead requires child aim=velocity."})
             if child and child not in entity_by_id and child not in {str(row.get("id") or "") for row in entities}:
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].targeting.shotEntityId", "code": "missing_entity_reference", "message": f"Unknown shot entity {child!r}."})
         events_raw = entity.get("events")

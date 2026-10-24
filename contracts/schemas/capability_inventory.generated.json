@@ -5867,11 +5867,98 @@
         "runtimeProgram.entities[].targeting.spreadRadians",
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
-        "runtimeProgram.entities[].targeting.hardRange"
+        "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.onManaShortage",
+        "runtimeProgram.entities[].targeting.manaReserve",
+        "runtimeProgram.entities[].targeting.manaCostBasis",
+        "runtimeProgram.entities[].targeting.manaCost",
+        "runtimeProgram.entities[].targeting.burstSpacingTicks",
+        "runtimeProgram.entities[].targeting.burstCount",
+        "runtimeProgram.entities[].targeting.warmupTicks",
+        "runtimeProgram.entities[].targeting.maximumLeadTiles",
+        "runtimeProgram.entities[].targeting.leadSeconds",
+        "runtimeProgram.entities[].targeting.aimMode",
+        "runtimeProgram.entities[].targeting.targetPriority",
+        "runtimeProgram.entities[].targeting.maximumHealthRatio",
+        "runtimeProgram.entities[].targeting.minimumHealthRatio",
+        "runtimeProgram.entities[].targeting.bossFilter",
+        "runtimeProgram.entities[].targeting.coneDirection",
+        "runtimeProgram.entities[].targeting.coneRadians",
+        "runtimeProgram.entities[].targeting.minimumRangeTiles"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_execute_sync",
       "parameters": {
+        "aimMode": {
+          "enum": [
+            "direct",
+            "velocity_lead"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "bossFilter": {
+          "enum": [
+            "any",
+            "boss_only",
+            "non_boss_only"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "burstCount": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 8,
+          "minimum": 1,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "burstSpacingSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "coneDirection": {
+          "enum": [
+            "owner_facing",
+            "projectile_velocity"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "coneRadians": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 6.283185307179586,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "radians",
+          "units": ""
+        },
         "count": {
           "enum": [],
           "kind": "integer",
@@ -5935,6 +6022,102 @@
           "minimum": null,
           "reference": null,
           "required": true,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "leadSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 2,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": ""
+        },
+        "manaCost": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 200,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "mana_points",
+          "units": ""
+        },
+        "manaCostBasis": {
+          "enum": [
+            "volley",
+            "shot"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "manaReserve": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 400,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "maximumHealthRatio": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "maximumLeadTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
+          "units": ""
+        },
+        "minimumHealthRatio": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "minimumRangeTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 120,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "tiles",
+          "units": ""
+        },
+        "onManaShortage": {
+          "enum": [
+            "hold_fire",
+            "retire"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
           "semanticType": "bounded_text",
           "units": ""
         },
@@ -6003,7 +6186,8 @@
         "targetPolicy": {
           "enum": [
             "distance_score",
-            "player_assigned_first"
+            "player_assigned_first",
+            "player_assigned_only"
           ],
           "kind": "string",
           "maximum": null,
@@ -6012,12 +6196,64 @@
           "required": false,
           "semanticType": "bounded_text",
           "units": ""
+        },
+        "targetPriority": {
+          "enum": [
+            "distance",
+            "lowest_health",
+            "highest_health",
+            "closest_to_owner",
+            "facing_alignment"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        },
+        "warmupSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 30.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
         }
       },
       "positionOwnership": "none",
       "purpose": "Acquire NPC targets and periodically spawn an authored shot entity from this entity's current position. Explicit same-entity movement executes before firing. Stationary/helper entities without movement remain stationary; free/child entities require explicit movement. Independent shot entities keep their own movement. Explicit combat bases select the child's authored stats or this projectile's current damage/knockback; the selected damage is multiplied once, without repeating player/class modifiers. Volley count/spread belong to this controller; child spawn count/spread remain independent for its other producers. Shared activation, depth and owner budgets still bound spawning. Child configure_spawn aim=velocity consumes the acquired target direction, and position={at:activation_origin} consumes the firing entity origin; other explicit child aim/position choices remain literal.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "capability": "configure_spawn",
+          "equals": "velocity_lead",
+          "kind": "predictive_aim_child",
+          "message": "Velocity lead requires the referenced child configure_spawn aim=velocity; no child aim is rewritten.",
+          "otherParam": "shotEntity",
+          "param": "aimMode",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "ordered_params",
+          "message": "Inner target radius cannot exceed the outer target range.",
+          "otherParam": "rangeTiles",
+          "param": "minimumRangeTiles",
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "ordered_params",
+          "message": "Minimum target health ratio cannot exceed maximum.",
+          "otherParam": "maximumHealthRatio",
+          "param": "minimumHealthRatio",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "targetKinds": [
         "free_projectile",

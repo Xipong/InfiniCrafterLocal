@@ -2448,9 +2448,26 @@ _CAPS.extend([
             "damageMultiplier": _p("number", "Multiply the selected damage basis exactly once; zero preserves a zero-damage child", minimum=0, maximum=4, wire_presence_requires_receipt=True),
             "count": _p("integer", "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot", minimum=1, maximum=4, units="projectiles/volley", required=False, default=1, neutral=1),
             "spreadRadians": _p("number", "Full symmetric fan angle for this firing volley; count=1 has zero angular offset", minimum=0, maximum=0.75, units="radians", required=False, default=0.0, neutral=0.0, consumer_storage="float32"),
-            "targetPolicy": _p("string", "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses distance score", enum=("distance_score", "player_assigned_first"), required=False, default="distance_score", neutral="distance_score"),
+            "targetPolicy": _p("string", "distance_score selects the lowest distance score; player_assigned_first gives the owner's exact assigned NPC priority if it passes the same range/LOS filters, then uses targetPriority; player_assigned_only refuses to fire without a valid exact assigned target", enum=("distance_score", "player_assigned_first", "player_assigned_only"), required=False, default="distance_score", neutral="distance_score"),
             "requireLineOfSight": _p("boolean", "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets", required=False, default=False, neutral=False),
             "hardRange": _p("boolean", "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit", required=False, default=False, neutral=False),
+            "onManaShortage": _p("string", "hold_fire skips this scheduled volley and retries at later due times; retire kills this projectile through its normal lifecycle when mana payment cannot be reserved", enum=('hold_fire', 'retire'), required=False, default='hold_fire', neutral='hold_fire'),
+            "manaReserve": _p("integer", "Keep at least this much actual owner mana after reserving the requested volley; active only when manaCost is positive", minimum=0, maximum=400, required=False, default=0, neutral=0),
+            "manaCostBasis": _p("string", "volley pays once if any child successfully spawns; shot pays for the actual successful child count. Reserve full requested cost before spawning and refund unused payment on failure or partial spawn", enum=('volley', 'shot'), required=False, default='volley', neutral='volley'),
+            "manaCost": _p("integer", "Base owner mana paid at each scheduled volley. Native manaCost multiplier is sampled once; no held-item hooks or automatic potions. Zero disables this payment and its reserve floor", minimum=0, maximum=200, required=False, default=0, neutral=0),
+            "burstSpacingSeconds": _seconds(_p("integer", "World ticks between volleys inside a burst. intervalSeconds is the pause from the last volley to the first volley of the next burst", minimum=1, maximum=600, required=False, default=6, neutral=6), "burstSpacingTicks"),
+            "burstCount": _p("integer", "Volleys per burst; every volley independently reacquires a target and consumes the shared activation budget. No target or failed spawn still advances the authored schedule", minimum=1, maximum=8, required=False, default=1, neutral=1),
+            "warmupSeconds": _seconds(_p("integer", "One initial world-time delay before the normal first firing interval", minimum=0, maximum=1800, required=False, default=0, neutral=0), "warmupTicks"),
+            "maximumLeadTiles": _p("number", "Clamp predicted displacement length to this many tiles, preserving its direction. This bounds aim beyond the target acquisition radius without changing target admission", minimum=0, maximum=120, required=False, default=120, neutral=120, consumer_storage="float32"),
+            "leadSeconds": _p("number", "World-time horizon for velocity_lead, independent of projectile extra updates. Zero predicts current centre; this does not assume future target acceleration or guarantee a hit", minimum=0, maximum=2, required=False, default=0, neutral=0, consumer_storage="float32"),
+            "aimMode": _p("string", "direct aims at current centre; velocity_lead predicts centre using the target actual velocity, leadSeconds and maximumLeadTiles. Only child configure_spawn aim=velocity may consume prediction; child movement remains independently authored", enum=('direct', 'velocity_lead'), required=False, default='direct', neutral='direct'),
+            "targetPriority": _p("string", "Rank admitted NPCs by discounted distance, lowest/highest life ratio, distance to the owner, or alignment with owner facing. Ties use distance score then NPC index. Assigned-first/assigned-only policies apply after identical admission filters", enum=('distance', 'lowest_health', 'highest_health', 'closest_to_owner', 'facing_alignment'), required=False, default='distance', neutral='distance'),
+            "maximumHealthRatio": _p("number", "Maximum inclusive current life/lifeMax ratio; combines with minimumHealthRatio as a health band", minimum=0, maximum=1, required=False, default=1, neutral=1, consumer_storage="float32"),
+            "minimumHealthRatio": _p("number", "Minimum inclusive current life/lifeMax ratio; candidates with invalid lifeMax cannot satisfy a health filter", minimum=0, maximum=1, required=False, default=0, neutral=0, consumer_storage="float32"),
+            "bossFilter": _p("string", "Filter chaseable NPCs by their native boss flag before assigned/priority selection", enum=('any', 'boss_only', 'non_boss_only'), required=False, default='any', neutral='any'),
+            "coneDirection": _p("string", "Cone axis: current owner horizontal facing or this projectile actual velocity; a zero velocity admits no targets when a restricted velocity cone is requested", enum=('owner_facing', 'projectile_velocity'), required=False, default='owner_facing', neutral='owner_facing'),
+            "coneRadians": _p("number", "Full targeting cone around the explicitly selected coneDirection. Full circle disables directional filtering", minimum=0, maximum=6.283185307179586, required=False, default=6.283185307179586, neutral=6.283185307179586, consumer_storage="float32"),
+            "minimumRangeTiles": _p("number", "Exclude targets closer than this geometric inner radius, before previous-target or assigned priority", minimum=0, maximum=120, required=False, default=0, neutral=0, consumer_storage="float32"),
         },
         component_slot="controller",
         authority="owner_execute_sync",
@@ -3080,6 +3097,12 @@ def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
 
 def _derived_requirements(cap: CapabilitySpec) -> tuple[RequirementSpec, ...]:
     """Project rules that depend on parameters, registry topology or shared categories."""
+    if cap.name == "target_and_fire":
+        return (
+            RequirementSpec("predictive_aim_child", param="aimMode", equals="velocity_lead", other_param="shotEntity", capability="configure_spawn", message="Velocity lead requires the referenced child configure_spawn aim=velocity; no child aim is rewritten."),
+            RequirementSpec("ordered_params", param="minimumRangeTiles", other_param="rangeTiles", message="Inner target radius cannot exceed the outer target range."),
+            RequirementSpec("ordered_params", param="minimumHealthRatio", other_param="maximumHealthRatio", message="Minimum target health ratio cannot exceed maximum."),
+        )
     if cap.name == "configure_spawn":
         moving = ("owner_attached_projectile", "free_projectile", "child_projectile")
         rows = [RequirementSpec("present_param_requires_target_kind", param=f"velocity.{variant}", any_of=moving,
@@ -3341,7 +3364,7 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
         dependencies=tuple(dict.fromkeys(
             requirement.capability
             for requirement in requirements
-            if requirement.capability and requirement.kind not in {"capability_param_absent", "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value"}
+            if requirement.capability and requirement.kind not in {"capability_param_absent", "present_param_forbids_capability", "referenced_entity_capability_params", "referenced_entity_without_capability", "referenced_param_presence_requires_value", "predictive_aim_child"}
         )),
         conflicts=(f"exclusive_group:{cap.exclusive_group}",) if cap.exclusive_group else (),
     )

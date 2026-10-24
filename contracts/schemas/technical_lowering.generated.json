@@ -979,7 +979,24 @@
         "runtimeProgram.entities[].targeting.spreadRadians",
         "runtimeProgram.entities[].targeting.targetPolicy",
         "runtimeProgram.entities[].targeting.requireLineOfSight",
-        "runtimeProgram.entities[].targeting.hardRange"
+        "runtimeProgram.entities[].targeting.hardRange",
+        "runtimeProgram.entities[].targeting.onManaShortage",
+        "runtimeProgram.entities[].targeting.manaReserve",
+        "runtimeProgram.entities[].targeting.manaCostBasis",
+        "runtimeProgram.entities[].targeting.manaCost",
+        "runtimeProgram.entities[].targeting.burstSpacingTicks",
+        "runtimeProgram.entities[].targeting.burstCount",
+        "runtimeProgram.entities[].targeting.warmupTicks",
+        "runtimeProgram.entities[].targeting.maximumLeadTiles",
+        "runtimeProgram.entities[].targeting.leadSeconds",
+        "runtimeProgram.entities[].targeting.aimMode",
+        "runtimeProgram.entities[].targeting.targetPriority",
+        "runtimeProgram.entities[].targeting.maximumHealthRatio",
+        "runtimeProgram.entities[].targeting.minimumHealthRatio",
+        "runtimeProgram.entities[].targeting.bossFilter",
+        "runtimeProgram.entities[].targeting.coneDirection",
+        "runtimeProgram.entities[].targeting.coneRadians",
+        "runtimeProgram.entities[].targeting.minimumRangeTiles"
       ]
     },
     {
