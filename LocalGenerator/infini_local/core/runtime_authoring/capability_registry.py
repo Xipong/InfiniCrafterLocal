@@ -1864,7 +1864,7 @@ _CAPS: list[CapabilitySpec] = [
                     "amplitudeRadiansPerSecond": _motion_number("amplitude", "Nonnegative angular velocity amplitude.", 0, 100, divisor=60, updates=1, units="radians/second"),
                 }),
             }, wire_literals={"law": "angular_sine"}),
-            _p("object", "Lateral sine: add perpendicular velocity before preserving original speed.", properties={
+            _p("object", "Lateral sine: nonlinear speed-preserving steering, scaled per world tick.", properties={
                 "lateral_velocity_sine": _p("object", "Lateral amplitude in blocks per world second.", properties={
                     "amplitudeBlocksPerSecond": _motion_number("amplitude", "Nonnegative lateral velocity amplitude.", 0, 100, multiplier=16, divisor=60, updates=1, units="blocks/second"),
                 }),

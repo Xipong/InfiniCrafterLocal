@@ -3404,7 +3404,7 @@
                       },
                       {
                         "additionalProperties": false,
-                        "description": "Lateral sine: add perpendicular velocity before preserving original speed.",
+                        "description": "Lateral sine: nonlinear speed-preserving steering, scaled per world tick.",
                         "properties": {
                           "lateral_velocity_sine": {
                             "additionalProperties": false,

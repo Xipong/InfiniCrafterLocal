@@ -3505,7 +3505,7 @@
                               "lateral_velocity_sine"
                             ],
                             "additionalProperties": false,
-                            "description": "Lateral sine: add perpendicular velocity before preserving original speed."
+                            "description": "Lateral sine: nonlinear speed-preserving steering, scaled per world tick."
                           }
                         ],
                         "description": "Select one explicit sine law and its world-unit amplitude. The selected object uniquely lowers the native law discriminator.",

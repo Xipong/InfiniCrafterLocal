@@ -100,10 +100,20 @@ public sealed partial class GeneratedProjectile
     private void SpinBody(float radians) => Projectile.rotation += radians;
     private void AngularSine(float frequency, float phase, float amplitude, float scale = 1f)
         => RotateVelocity(MathF.Sin(_age * frequency + phase) * amplitude * scale);
-    private void LateralSine(float frequency, float phase, float amplitude, float minimumSpeed, float scale = 1f)
+    private void LateralSine(float frequency, float phase, float amplitude, float minimumSpeed, float scale = 1f, int substeps = 1)
     {
         float speed = Math.Max(minimumSpeed, Projectile.velocity.Length());
         Vector2 forward = Projectile.velocity.SafeNormalize(_initialDirection);
+        if (substeps > 1) {
+            // Amplitude and velocity share the same world-to-update projection,
+            // so their ratio already cancels extraUpdates. Divide the resulting
+            // nonlinear turn, not amplitude, to integrate the u=1 law per tick.
+            float lateralSpeed = MathF.Sin(_age * frequency + phase) * amplitude * scale;
+            float turn = MathF.Atan2(lateralSpeed, speed) / substeps;
+            Projectile.velocity = forward.RotatedBy(turn) * speed;
+            return;
+        }
+        // Preserve the exact u=1 operation order and retained SineHome operands.
         Vector2 lateral = forward.RotatedBy(MathHelper.PiOver2) * MathF.Sin(_age * frequency + phase) * amplitude * scale;
         Projectile.velocity = (forward * speed + lateral).SafeNormalize(forward) * speed;
     }
@@ -219,7 +229,7 @@ public sealed partial class GeneratedProjectile
         if (_entity.VelocityRetention is { } retention && MotionWindowActive(retention.Window)) RetainVelocity(retention.MultiplierPerUpdate);
         if (_entity.Oscillation is { } sine && MotionWindowActive(sine.Window)) {
             if (sine.Law == "angular_sine") AngularSine(sine.FrequencyRadiansPerUpdate, sine.PhaseRadians, sine.Amplitude);
-            else LateralSine(sine.FrequencyRadiansPerUpdate, sine.PhaseRadians, sine.Amplitude, 0f);
+            else LateralSine(sine.FrequencyRadiansPerUpdate, sine.PhaseRadians, sine.Amplitude, 0f, substeps: Projectile.extraUpdates + 1);
         }
         if (_entity.Opacity is { } opacity && MotionWindowActive(opacity.Window)) Projectile.alpha = opacity.Alpha;
         if (_entity.VisualScaleRate is { } scale && MotionWindowActive(scale.Window)) AddVisualScale(scale.DeltaPerUpdate, scale.MaxScale, nonnegative: true);
