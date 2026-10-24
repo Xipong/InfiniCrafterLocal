@@ -548,6 +548,12 @@ public sealed partial class InfiniCraftPlayer
         var buffs = new List<ActiveGeneratedUtilityBuff>(count);
         for (int i = 0; i < count; i++) buffs.Add(ReadGeneratedUtilityBuffEntry(reader));
         var exhaustion = ReadGeneratedItemExhaustion(reader);
+        if (Player.dead)
+        {
+            ClearGeneratedUtilityState();
+            _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
+            return;
+        }
         _generatedBuffTicks = ticks; _generatedMiningSpeedMultiplier = mining;
         _generatedLightStrength = light; _generatedLightColorName = color;
         _generatedOreSenseRadiusTiles = ore; _generatedMovementSpeed = movement;
