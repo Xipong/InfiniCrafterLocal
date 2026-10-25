@@ -53,6 +53,15 @@ _EMISSION_UNUSED_EVENT_DEFAULTS = {
     "mode": "", "strength": 0, "radiusTiles": 0, "damageFraction": 0,
     "maxHeal": 0, "cooldownTicks": 0, "safeTileOnly": True,
 }
+def _retained_event_neutral_matches(key: str, value: Any, neutral: Any) -> bool:
+    """Native event DTO integers/bools are not interchangeable JSON numbers."""
+    if key in {"count", "periodTicks", "buffId", "durationTicks", "radiusPx", "maxHeal", "cooldownTicks"}:
+        return type(value) is int and value == neutral
+    if type(neutral) in (bool, str):
+        return type(value) is type(neutral) and value == neutral
+    return type(value) in (int, float) and value == neutral
+
+
 _FORBIDDEN_ROUTER_KEYS = {
     "attack",
     "runtimePlan",
@@ -982,7 +991,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 for key, neutral in {**_EMISSION_UNUSED_EVENT_DEFAULTS, "entityId": ""}.items():
                     if key in owned or key not in event:
                         continue
-                    if type(event[key]) not in (type(neutral), int, float) or event[key] != neutral:
+                    if not _retained_event_neutral_matches(key, event[key], neutral):
                         errors.append({"path": event_path + "." + key, "code": "wrong_event_parameter_owner", "message": "Nearby damage cannot consume another action's fields."})
                 for name in ("radiusTiles", "damageMultiplier", "maxTargets"):
                     spec = cap.params[name]
@@ -991,6 +1000,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                         errors.append({"path": event_path + "." + key, "code": "required_field", "message": "Nearby damage requires its complete bounded wire projection."})
                     else:
                         errors.extend(strict_schema_errors(event[key], spec.wire_schema(), path=event_path + "." + key))
+                if "delayTicks" in event:
+                    errors.extend(strict_schema_errors(event["delayTicks"], cap.params["delaySeconds"].wire_schema(), path=event_path + ".delayTicks"))
                 if event.get("action") != cap.name or event.get("event") not in cap.allowed_events:
                     errors.append({"path": event_path, "code": "invalid_event_action", "message": "Nearby damage requires its exact name and supported event."})
             if action_code != EVENT_ACTION_OPCODE["damage_nearby_on_event"] and "maxTargets" in event:
@@ -1004,6 +1015,15 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                         errors.extend(strict_schema_errors(event[field], CAPABILITY_REGISTRY["pull_on_event"].params[name].wire_schema(), path=event_path + "." + field))
                 elif field in event:
                     errors.append({"path": event_path + "." + field, "code": "wrong_event_parameter_owner", "message": "Two-body impulses require pull mode both."})
+            if both:
+                for key, neutral in {**_EMISSION_UNUSED_EVENT_DEFAULTS, "entityId": ""}.items():
+                    if key == "mode" or key not in event:
+                        continue
+                    if not _retained_event_neutral_matches(key, event[key], neutral):
+                        errors.append({"path": event_path + "." + key, "code": "wrong_event_parameter_owner",
+                                       "message": "Both pull cannot consume another action's fields; retained DTO neutrals remain readable."})
+                if "delayTicks" in event:
+                    errors.extend(strict_schema_errors(event["delayTicks"], CAPABILITY_REGISTRY["pull_on_event"].params["delaySeconds"].wire_schema(), path=event_path + ".delayTicks"))
             if both and (event.get("action") != "pull_on_event" or event.get("event") not in ("on_hit", "on_crit")
                          or event.get("strength", 0) != 0 or event.get("radiusTiles", 0) != 0):
                 errors.append({"path": event_path, "code": "invalid_pull_branch", "message": "Both never consumes a shared impulse or NPC-search radius."})

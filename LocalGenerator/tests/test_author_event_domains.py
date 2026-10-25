@@ -418,3 +418,73 @@ def test_pull_invalid_when_repair_freezes_mode_and_strengths(invalid_when):
     assert witness(repaired)["params"] == {"when": "on_hit", "mode": "both",
         "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
     compile_and_check(repaired)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("count", 2), ("damageMultiplier", 2), ("entityId", "foreign"), ("spreadRadians", 1),
+    ("periodTicks", 1), ("buffId", 1), ("durationTicks", 1), ("radiusPx", 16), ("rangeTiles", 1),
+    ("strength", 1), ("radiusTiles", 1), ("damageFraction", .5), ("maxHeal", 1),
+    ("cooldownTicks", 1), ("safeTileOnly", False), ("delayTicks", 601), ("delayTicks", -1), ("delayTicks", 1.5),
+])
+def test_both_delivery_rejects_foreign_native_fields_without_receipts(field, value):
+    source = build_capability_witness("pull_on_event")
+    witness(source)["params"] = {"when": "on_hit", "mode": "both",
+        "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
+    wire = compile_runtime_program(source)
+    wire.pop("runtimeContract")
+    assert validate_runtime_wire(wire)["ok"]
+    event = next(e["events"][0] for e in wire["runtimeProgram"]["entities"] if e["events"])
+    event[field] = value
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(error["path"].endswith("." + field) for error in report["errors"]), report
+
+
+@pytest.mark.parametrize("mode", ["target_to_owner", "target_to_entity", "owner_to_target"])
+@pytest.mark.parametrize("field,value", [("count", 2), ("damageMultiplier", 2), ("spreadRadians", 1),
+    ("durationTicks", 1), ("delayTicks", 601)])
+def test_legacy_pull_delivery_keeps_existing_unused_field_acceptance(mode, field, value):
+    wire = compile_runtime_program(build_capability_witness("pull_on_event"))
+    wire.pop("runtimeContract")
+    event = next(e["events"][0] for e in wire["runtimeProgram"]["entities"] if e["events"])
+    event.update(mode=mode)
+    event[field] = value
+    assert validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("delay", [-1, 601, 1.5, True])
+def test_nearby_delivery_rejects_invalid_delay_without_receipts(delay):
+    wire = compile_runtime_program(build_capability_witness(NEW))
+    wire.pop("runtimeContract")
+    event = next(e["events"][0] for e in wire["runtimeProgram"]["entities"] if e["events"])
+    event["delayTicks"] = delay
+    report = validate_runtime_wire(wire)
+    assert not report["ok"]
+    assert any(error["path"].endswith(".delayTicks") for error in report["errors"])
+
+
+def test_both_delivery_reads_native_dto_neutrals_without_receipts():
+    source = build_capability_witness("pull_on_event")
+    witness(source)["params"] = {"when": "on_hit", "mode": "both",
+        "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
+    wire = compile_runtime_program(source); wire.pop("runtimeContract")
+    event = next(e["events"][0] for e in wire["runtimeProgram"]["entities"] if e["events"])
+    event.update(count=1, damageMultiplier=1, entityId="", spreadRadians=0, periodTicks=0,
+                 buffId=-1, durationTicks=0, radiusPx=0, rangeTiles=0, strength=0, radiusTiles=0,
+                 damageFraction=0, maxHeal=0, cooldownTicks=0, safeTileOnly=True, delayTicks=600)
+    assert validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("fn", ["pull_on_event", NEW])
+@pytest.mark.parametrize("field,value", [("safeTileOnly", 1), ("safeTileOnly", 1.0), ("count", 1.0),
+    ("count", True), ("durationTicks", 0.0), ("buffId", -1.0), ("periodTicks", 0.0),
+    ("maxHeal", 0.0), ("cooldownTicks", 0.0), ("spreadRadians", False), ("strength", False)])
+def test_new_event_unused_native_neutrals_require_exact_json_types(fn, field, value):
+    source = build_capability_witness(fn)
+    if fn == "pull_on_event":
+        witness(source)["params"] = {"when": "on_hit", "mode": "both",
+            "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
+    wire = compile_runtime_program(source); wire.pop("runtimeContract")
+    event = next(e["events"][0] for e in wire["runtimeProgram"]["entities"] if e["events"])
+    event[field] = value
+    assert not validate_runtime_wire(wire)["ok"]
