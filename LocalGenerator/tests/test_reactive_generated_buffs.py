@@ -90,7 +90,6 @@ def test_actual_author_and_repair_packets_expose_complete_reaction_contract(monk
     cards = json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]
     card = next(c for c in cards if c["fn"] == "apply_generated_buff_on_event")
     assert set(card["params"]) == {"when", "effectGroupId", "delaySeconds"}
-    assert "same effectGroupId" in card["does"] and "exhaustion" in card["does"]
     doc = document(); doc["runtimeProgram"]["calls"][-1]["params"]["effectGroupId"] = "missing"
     dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
     broken = next(c for c in dossier["existingBrokenCapabilityCards"] if c["fn"] == "apply_generated_buff_on_event")

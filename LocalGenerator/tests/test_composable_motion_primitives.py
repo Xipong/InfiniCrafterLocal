@@ -255,17 +255,6 @@ def test_charge_latch_produces_release_event_without_compound_controller():
     assert {"entityId": entity["id"], "event": "on_release"} in runtime_event_inventory(wire)
 
 
-def test_seek_bound_and_fresh_field_guide_are_registry_owned():
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, runtime_authoring_prompt_field_guide
-    import json
-    cap = CAPABILITY_REGISTRY["seek_projectile"]
-    assert cap.max_per_target == 2
-    assert cap.author_prompt_card()["maxPerTarget"] == 2
-    guide = json.dumps(runtime_authoring_prompt_field_guide())
-    assert "move_front_hand" not in guide
-    assert "attach_projectile" in guide and "set_front_arm_pose" in guide
-
-
 def test_charging_attachment_released_seek_and_existing_modifiers_compose_without_old_driver():
     doc = base_document()
     doc["runtimeProgram"]["calls"] = [c for c in doc["runtimeProgram"]["calls"] if c["fn"] != "move_straight"]

@@ -58,23 +58,6 @@ def test_attachment_requires_exact_selected_png_owner_metadata(mode, field):
 
 
 @pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
-def test_outgoing_author_teaches_independent_motion_not_a_hand_macro(monkeypatch, format_name):
-    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-    monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
-    request, _, _ = build_initial_author_request({}, {}, "motion-guide", model_name="offline")
-    packet = request_dossier(request)
-    assert request["response_format"]["type"] == format_name
-    priority = " ".join(packet["priorityHeader"])
-    assert "use move_front_hand" not in priority
-    assert "attach_projectile" in priority and "set_front_arm_pose" in priority
-    assert "shared native hand" in priority
-    guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["projectileMotion"]
-    assert "accelerate_projectile_vertical" in guide
-    assert "move_gravity_arc" not in guide
-    assert "window" in guide and "since_release" in guide and "since_return" in guide
-
-
-@pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
 def test_visual_and_frozen_repair_expose_components_and_true_hand_semantics(wire_transport, monkeypatch, format_name):
     monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
     data, raw = _presentation_input(pose=True)

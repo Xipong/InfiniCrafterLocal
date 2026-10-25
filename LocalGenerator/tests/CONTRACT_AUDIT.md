@@ -1,4 +1,101 @@
-# Behavioral-test audit — 2026-10-22
+# Behavioral-test audits
+
+## 2026-10-25 — PR #231 follow-up: behavior instead of wording snapshots
+
+Baseline: `e9e3767608674df42c2a5d3ab373b200ac5c3328` (PR #231).
+The historical 2026-10-22 inventory below is intentionally preserved as a
+snapshot of its own baseline, including modules removed by this follow-up.
+
+| Measure, both configured pytest roots | Before | After |
+|---|---:|---:|
+| Collected pytest cases | 6,756 | 6,485 |
+| Python test functions in collected modules | 1,916 | 1,856 |
+| Collected test modules | 207 | 205 |
+
+Collection is not the number of assertions or generated examples. Bounded
+Hypothesis properties expand at execution time; their examples are not counted
+as separate pytest nodes. The cleanup removes 60 independently maintained test
+functions, two modules, duplicate concrete inputs and editorial obligations.
+It does not disguise the old suite in a single exhaustive loop. Whole-suite
+AST/collection screening identified candidates; focused owner reviews established
+which removals were redundant. This is not a claim of a line-by-line review of
+every remaining assertion or of complete native/gameplay execution coverage.
+
+### Behavior strengthened
+
+- Every Author-visible capability witness now authenticates its serialized
+  compiler receipts against both the authored document and delivered wire.
+  A valid DTO alone could conceal a silently dropped optional effect.
+- The complete Author catalog, vocabularies and provider roster are compared at
+  real HTTP JSON serialization. Identity and multiplicity are checked together;
+  references must resolve to the correct literal parameter owner. Reordering
+  independent inventories is accepted. Missing/duplicate cards and changed
+  numeric bounds fail.
+- Changed canonical summary/parameter wording must reach Author and scoped
+  Repair while provider grammar and compiled behavior remain unchanged. Exact
+  English phrasing is an editorial review concern, not a runtime contract.
+  Full editorial-catalog delivery remains in `test_director_example_neutrality.py`.
+- JSON `const`/`enum` admission is differentially checked against independent
+  `jsonschema` on bounded recursive JSON, with historical type-alias examples
+  and positive admission controls. Mana omission is tested across the current
+  damage-class vocabulary, varied values and explicit presence/absence.
+- Capability declaration ownership now uses changed metadata on known names,
+  rather than 98 comparisons of today's declaration with today's finalized copy.
+  Explicit new-declaration, event, effect-group and motion examples remain.
+- Cooldown negatives start from valid current `immunity.localCooldown` and forge
+  the actual authored value, wire and receipt. The old unknown legacy field could
+  make the test fail before reaching the claimed domain check.
+- Admission and worker cleanup use real dispatchers, gates and thread pools with
+  explicit event coordination. Worker exceptions are observed on the test thread;
+  teardown releases and joins blocked work even when the invariant fails.
+- File-count and byte limits are exercised through real delivery and cache
+  admission, on both sides of the exact boundary. Unsupported PNG extensions are
+  tested using healthy PNG bytes, independently of corruption checks.
+- Prompt character limits are tested at the declared boundary and an altered
+  boundary, including Unicode character/byte distinction. A native-arrow parent
+  is passed through real Author response acceptance to prove it cannot silently
+  choose gravity for the authored item.
+
+### Removal to retained coverage
+
+| Removed obligation | Retained behavioral owner |
+|---|---|
+| `test_author_prose_owners.py`, `test_model_facing_topology_prompt.py`, scattered English fragments | `test_registry_author_packet.py`: serialized complete cards, references, inventories, corruption and wording-change controls; actual runtime/Repair owners below |
+| Repeated full-fixture receipt sweep | `test_registry_composition_contract.py`: reversed independent rows, three audit modes, delivery and input/wire immutability |
+| Missing-all typed-output duplicate | `test_registry_structured_params.py::test_projection_coverage_is_unique_and_complete`, with and without source; partial loss cases remain |
+| Fixed default roster and obsolete audit-key snapshots | Registry-derived roster with independent optional/type-exact-neutral/admission rules; compiler omission receipts and frozen Repair cases remain |
+| 21 timing Cartesian duplicates and `assert schema` smoke | `test_modifier_timing_windows.py`: all 51 unique authored/stripped-wire input pairs, actual provider encoding/reconstruction and admission |
+| Separate private asset-roster limit test | `test_asset_transfer_cache_contracts.py`: exact count/byte delivery and cache boundaries |
+| Sleep-based gate counter and fake dispatcher probe | Real backend dispatch, occupied permit, original failure, successful sibling and final permit release |
+| Lower-level Visual/VFX success duplicate | Real combine integration: both Visual jobs in flight, unchanged DTO, new VFX job, exact multiplicity, no resubmission |
+| Generic no-hidden-ballistics prose | `test_deliberate_projectile_motion.py`: real Author acceptance preserves both authored choices despite native arrow parent facts |
+| Seek count and motion/charge/orbit/bounce descriptions | `test_composable_motion_constraints.py`: two-admit/third-refuse; independent compiler, frozen Repair and registered native checks remain |
+| Placement, equipment, exhaustion/reaction descriptions | Actual placement/equipment/buff DTO values, absence, references, frozen Repair and registered native consumer checks remain |
+| Repeated source-unit/optional-action/report prose | Shared source-unit and current-stage packets, real frozen Repair, exact artifact bytes and parent facts remain |
+
+The timing reduction was checked using the original mutation body and real
+compiler helpers: 72 old rows and 51 retained rows yield the same set of **51
+complete (authored document, stripped wire) pairs**. This is exact input
+deduplication, not an assumed equivalence of similarly named scenarios.
+
+### Defect-detection controls
+
+Temporary process-local mutations confirmed that retained tests reject silent
+`emit_light_while_active` loss, JSON boolean/number aliasing, stale name-selected
+metadata, omitted image-worker join, `shutdown(wait=False)`, admission-gate bypass,
+a leaked permit, and ignored file-count/aggregate-byte limits. The silent-effect
+loss is an observed improvement: the original per-capability witness passed,
+whereas the new receipt check rejects missing `strength`/`color` deliveries.
+Mutations and temporary plugins are not repository changes.
+
+Execution results, coverage measurements and exact CI head are recorded in the
+follow-up PR. Final Python acceptance uses the existing shard runner; native
+results must come from actual native execution, not from Python source scans.
+
+Method references: [pytest flaky tests](https://docs.pytest.org/en/stable/explanation/flaky.html),
+[Hypothesis introduction](https://hypothesis.readthedocs.io/en/latest/tutorial/introduction.html).
+
+## Historical audit — 2026-10-22
 
 Baseline: `57c58d50504a7c69712e5843fa392b9a39800537` (main). Independent
 of the unmerged parallel-image PR #137; no production changes from it are included.

@@ -1,4 +1,4 @@
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 """Independent explicit placed-light vertical slice; offline, no inference."""
 import copy
 import json
@@ -135,12 +135,7 @@ def test_real_serialized_author_repair_carries_independent_placed_light(wire_tra
     document = lit(); responses.append(document)
     accepted = gameplay.try_llm_plan({"name": "A"}, {"name": "B"}, "offline-placed-light")
     assert accepted is not None
-    payload = request_dossier(requests[-1])
-    card = next(c for c in payload["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
-    assert set(card["params"]) == {"placementCallId", *LIGHT}
-    assert "footprint" in card["does"]
-    assert "256 cells" in card["constructionMeaning"]
-    assert "independent" in card["constructionMeaning"].lower()
+    assert compile_runtime_program(accepted)["runtimeProgram"] == compile_runtime_program(document)["runtimeProgram"]
     document["runtimeProgram"]["calls"][-1]["params"]["placementCallId"] = "wrong"
     incoming = copy.deepcopy(document["runtimeProgram"]["calls"][-1])
     incoming["params"].update(placementCallId="install_tile", strength=1.5, color="red")

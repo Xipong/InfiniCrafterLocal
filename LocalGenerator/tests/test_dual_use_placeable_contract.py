@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import json
 from typing import Any
 
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
@@ -9,10 +8,7 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-
-
 
 
 def _codes(report: dict[str, Any]) -> set[str]:
@@ -320,19 +316,3 @@ def test_repair_placement_reference_changes_only_the_rejected_source_leaf() -> N
     repaired = apply_repair_patch(current, filtered)
     assert validate_runtime_program(repaired)["ok"]
     assert _changed_paths(current, repaired) == {"$.runtimeProgram.bindings[1].action.placementCallId"}
-
-
-def test_place_item_is_discoverable_but_not_recommended_by_high_salience_prompt() -> None:
-    payload = build_llm_author_payload({}, {}, "prompt-neutrality")
-    high_salience = json.dumps({
-        "priorityHeader": payload["priorityHeader"],
-        "runtimeProgramInvariants": payload["runtimeProgramInvariants"],
-    }, sort_keys=True).lower()
-    assert "place_item" not in high_salience
-    assert "placeable" not in high_salience
-    assert "hybrid placement" not in high_salience
-
-    action_cards = payload["runtimeCapabilityContract"]["catalog"]["bindingActions"]
-    place_card = next(row for row in action_cards if row["action"] == "place_item")
-    assert place_card["does"] == "Execute the one placement payload referenced by this binding action."
-    assert "alternate_use" not in place_card["does"]

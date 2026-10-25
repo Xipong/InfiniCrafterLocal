@@ -2,7 +2,6 @@
 
 from copy import deepcopy
 from itertools import product
-import json
 
 import pytest
 
@@ -89,22 +88,6 @@ def test_retained_wire_absence_is_accepted_without_inventing_choices():
 def test_real_author_packet_and_nullable_inverse_preserve_every_explicit_choice(monkeypatch, mode):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     request, user, _ = build_initial_author_request({}, {}, "targeting", model_name="test-model")
-    catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
-    card = next(c for c in catalog["capabilities"] if c["fn"] == "target_and_fire")
-    from test_author_request_compaction import _expand_constraint_references
-    card = _expand_constraint_references(card, catalog["fieldGuide"]["consumerConstraints"])
-    expected = CAPABILITY_REGISTRY["target_and_fire"].author_prompt_card()
-    expected["constructionMeaning"] = (
-        "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "
-        "interval and entity lifetime do not guarantee sustained output."
-    )
-    assert card == expected
-    for term in (
-        "native line-of-sight check from this projectile hitbox to the candidate NPC hitbox",
-        "both assigned and scanned targets", "hard geometric", "assigned NPC", "aim=velocity",
-        "position={at:activation_origin}",
-    ):
-        assert term in json.dumps(card)
     doc, call = _fixture(**OPTIONS)
     assert project_provider_author_item_to_local(doc, response_format=request["response_format"]) == doc
     # Only schema-owned optional nulls are removed; json_object null stays RED.

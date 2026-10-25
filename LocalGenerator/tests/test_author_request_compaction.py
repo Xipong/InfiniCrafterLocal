@@ -409,26 +409,3 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
                               root_meaning=target.get("meaning"))
     assert checked_descriptions and omitted_root_copies
     assert checked_shared_types == set(shared_types)
-
-
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_actual_author_and_scoped_repair_keep_shared_clock_semantics(monkeypatch, mode):
-    from infini_local.core import llm_config
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    _, serialized, _ = author.build_initial_author_request({}, {}, "clock-semantics", model_name="offline")
-    guide = json.loads(serialized)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["paramNotation"]
-    # These are the time semantics formerly repeated before every duration's
-    # distinct description. They must remain explicit in the actual model packet.
-    for rule in ("Times use Seconds", "nearest world tick at 60 ticks/s", "half-tick ties UP",
-                 "nonzero-to-zero collapse is rejected", "target projectile’s unique explicit updatesPerTick",
-                 "children use their own N", "algorithm counters, not seconds"):
-        assert rule in guide
-    doc = build_capability_witness("accumulate_projectile_charge")
-    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "accumulate_projectile_charge")
-    call["params"]["durationSeconds"] = -1
-    repair = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
-    assert repair["runtimeExecutionTruth"]["units"]["paramNotation"] == guide
-    broken = next(row for row in repair["existingBrokenCapabilityCards"] if row["fn"] == "accumulate_projectile_charge")
-    assert broken == CAPABILITY_REGISTRY["accumulate_projectile_charge"].prompt_card()
-    assert repair["repairScope"]["fieldPermissions"]["calls"] == [
-        {"id": call["id"], "paths": ["params.durationSeconds"]}]
