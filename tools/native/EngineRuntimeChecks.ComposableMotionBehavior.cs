@@ -202,6 +202,24 @@ internal static partial class EngineRuntimeChecks
     {
         WithPlayer((owner, _) => {
             using var actors = new NativeActorState(); owner.channel = true;
+            // The Author's absent optional releaseEffect is not a unit-valued
+            // effect: the latter still owns the launch rewrite.
+            var chargeOnly = MotionDefinition("""
+             {"aim":{"source":"initial","turnOwner":false},
+              "charge":{"durationTicks":1,"autoReleaseAfterActiveTicks":1}}
+             """);
+            var bare = MotionActor(chargeOnly, owner, new Vector2(3, 4));
+            bare.Host.AI();
+            AssertVfxNear(new Vector2(3, 4), bare.Body.velocity, "absent release effect keeps incoming velocity");
+            var unitEffect = MotionDefinition("""
+             {"aim":{"source":"initial","turnOwner":false},
+              "charge":{"durationTicks":1,"autoReleaseAfterActiveTicks":1},
+              "chargeRelease":{"damageMultiplier":1,"knockbackMultiplier":1,"speedMultiplier":1,
+                "launchSpeed":6,"pauseLifetimeWhileCharging":false}}
+             """);
+            var launched = MotionActor(unitEffect, owner, new Vector2(3, 4));
+            launched.Host.AI();
+            AssertVfxNear(new Vector2(6, 0), launched.Body.velocity, "unit release effect still sets explicit launch velocity");
             var data = MotionDefinition("""
              {"aim":{"source":"initial","turnOwner":false},"charge":{"durationTicks":4,"autoReleaseAfterActiveTicks":4},
               "chargeRelease":{"damageMultiplier":2,"knockbackMultiplier":3,"speedMultiplier":2,"launchSpeed":6,"pauseLifetimeWhileCharging":true},

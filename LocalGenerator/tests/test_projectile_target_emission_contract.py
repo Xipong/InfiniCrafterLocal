@@ -304,8 +304,9 @@ def test_old_wire_and_instant_radial_action_remain_distinct_and_unchanged():
     # saved bytes separate from a current final delivery / PNG-ready claim.
     assert [(e["path"], e["code"]) for e in validate_runtime_wire(wire)["errors"]] == [("$.tooltip", "unknown_final_wire_field")]
     assert wire == before and path.read_bytes() == raw
-    # The current exact fresh alias keeps the old radial runtime discriminator.
-    old = compile_runtime_program(build_capability_witness("damage_nearest_on_event"))
+    # The saved nearest projection retains its old radial runtime discriminator.
+    old = next(row["wire"] for row in json.loads((Path(__file__).with_name("fixtures") / "event_api_pre_simplification.json").read_text())["cases"]
+               if row["fn"] == "damage_nearest_on_event")
     events = [e for row in old["runtimeProgram"]["entities"] for e in row["events"]]
     assert events[0]["actionCode"] == EVENT_ACTION_OPCODE["chain_damage_on_event"] == 4
     assert "stepCount" not in events[0]

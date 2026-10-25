@@ -1,38 +1,88 @@
-# Точное имя nearest damage и разделение fresh/wire domain
+# Event Author API: ближайший урон и взаимное притяжение
 
-Категории аудита **B15.2–B15.3** уточняют низкоуровневый Author API. Они не добавляют новый combat algorithm и не меняют native DTO/consumer.
-
-## Damage nearest: один центр, несколько ближайших целей
+## Damage nearby: один центр, до N ближайших целей
 
 ```json
 {
   "id": "nearby_damage",
-  "fn": "damage_nearest_on_event",
+  "fn": "damage_nearby_on_event",
   "target": "bolt",
   "params": {
     "when": "on_hit",
     "maxTargets": 3,
-    "rangeTiles": 8,
+    "radiusTiles": 8,
     "damageMultiplier": 0.5,
-    "delayTicks": 0
+    "delaySeconds": 0
   }
 }
 ```
 
-| Fresh Author | Прежний wire / исполняемый смысл |
-|---|---|
-| `damage_nearest_on_event` | `action="chain_damage_on_event"`, `actionCode=4` |
-| `maxTargets: 1…12` | `count`: максимум дополнительных NPC |
-| `rangeTiles: 1…60` | Та же физическая область вокруг одного recorded event center; граница включена |
-| `when: "on_hit" / "on_crit"` | Прежний event; нужен действительный item-body или projectile producer |
-| `damageMultiplier: 0.05…2` | Один multiplier authored base damage для каждой выбранной цели |
-| `delayTicks: 0…600`, optional | Прежняя задержка действия; существующие scheduler и authority правила |
+Свежий Author выбирает `damage_nearby_on_event`: wire action с тем же именем,
+opcode `10`. Все NPC ранжируются от одной записанной точки события по расстоянию,
+затем по NPC slot при равенстве. Центр не переносится между целями; это не цепочка
+прыжков. Chaseability и native damage/defense по-прежнему ограничивают результат.
 
-`RuntimeProgramExecutor.ChainDamage` собирает chaseable NPC внутри одного радиуса, исключает directTarget, сортирует по расстоянию от того же центра и применяет урон первым `count`. Центр не переносится на следующую цель. Damage не уменьшается с расстоянием или порядком выбора. Результирующая потеря HP может различаться из-за native defense и других действующих правил Terraria. Порядок NPC на совершенно одинаковом расстоянии не получает нового обещания tie-break.
+- `maxTargets`: целое **1…16**. Пропуск явно означает технический предел **16**,
+  не «без ограничений» и не отсутствие урона. Это нейтральное ограничение отбора
+  в рамках общего cap, а не нейтральность всего эффекта. Compiler записывает
+  `maxTargets=16` с отдельным `declared_neutral_omission` receipt.
+- `radiusTiles`: **0.5…60**, точная сетка **1/16 блока**; граница включена.
+- `damageMultiplier`: **0.05…4**, умножает authored base damage владельца события,
+  не `damageDone` и не live damage уже усиленного снаряда.
+- События: `on_hit`, `on_crit`, `on_tile_collision`, `on_expire`, `on_kill`,
+  `on_hurt`, `on_enemy_kill`. Для двух реакций экипировки сохраняется явный cooldown
+  в trigger object. Реальный producer обязателен.
+- Direct target исключён **только** при `on_hit/on_crit`. При истечении срока или
+  proximity detonation выбранная NPC не считается уже поражённой и не исключается.
+- `delaySeconds` сохраняет существующие scheduler, snapshot и authority правила.
 
-Поэтому слово `chain` убрано из свежего имени и model-facing пояснения количества. Технический discriminator остаётся прежним. Это **Alias Lowering**: `fn` выбирает одну точную action/opcode пару, `maxTargets` дословно передаёт `count`; контекст, название предмета и family не участвуют. Fn-selected literal receipts продолжают использовать общий статус `technical_projection`, scalar count receipt — `delivered` с источником `params.maxTargets`.
+Это сознательно новый алгоритм для свежих предметов: прежний slot-first area cap16
+не эквивалентен nearest selection, а прежний nearest имел cap12. Сохранённые
+`damage_area_on_event`/opcode3 и `chain_damage_on_event`/opcode4 продолжают исполнять
+старые algorithms. Их readers не перенаправлены на opcode10. Fresh карточки
+`damage_area_on_event` и `damage_nearest_on_event` скрыты и fresh admission их отвергает;
+существующие registry records сохранены для исходных принятых receipts.
 
-Старый receipt owner `chain_damage_on_event` удалён из registry. Current `damage_nearest_on_event` продолжает писать `action=chain_damage_on_event`, opcode `4` и исполняться через `ChainDamage`. Удаление старых receipts не удаляет текущую механику, authority или strict wire action4.
+## Pull: направление и независимые импульсы
+
+```json
+{
+  "id": "grapple_both",
+  "fn": "pull_on_event",
+  "target": "bolt",
+  "params": {
+    "when": "on_hit",
+    "mode": "both",
+    "ownerImpulseBlocksPerSecond": 8,
+    "targetImpulseBlocksPerSecond": 14
+  }
+}
+```
+
+| Mode | Явные поля | Смысл |
+|---|---|---|
+| `target_to_owner` | `impulseBlocksPerSecond`, `radiusTiles` | NPC к игроку |
+| `target_to_entity` | `impulseBlocksPerSecond`, `radiusTiles` | NPC к записанному центру снаряда |
+| `owner_to_target` | `impulseBlocksPerSecond` | Игрок к прямой цели попадания |
+| `both` | `ownerImpulseBlocksPerSecond`, `targetImpulseBlocksPerSecond` | Обе стороны к одной и той же цели события |
+
+Все impulse-поля имеют диапазон **0.0375…15 блоков/с**: однократная прибавка к
+velocity, не перемещение. NPC impulse умножается на `knockBackResist`, player
+impulse — нет. Поэтому неподвижный к отбрасыванию босс остаётся на месте,
+а игрок может подтянуться к нему.
+
+`owner_to_target` и `both` в свежем API требуют `on_hit/on_crit`: периодическое
+событие без цели не заменяется поиском. В `both` оба коэффициента обязательны,
+shared impulse и radius запрещены. Исчезнувшая/неактивная цель означает отсутствие
+обоих импульсов; delayed reuse NPC slot отменяет действие. Нет автоматического
+выбора другого врага. Движение игрока исполняет owner; движение NPC — server
+через существующий hit bridge. Это не атомарная сетевая физика двух тел.
+
+NPC-only modes сохраняют свои `on_hit`, `periodic`, `on_expire` и теперь принимают
+также `on_crit`. Их старое radius-search поведение при отсутствии активной прямой
+цели не изменено: запрет fallback относится к `both` и owner-only. Сохранённый
+owner-only wire тоже не мигрируется. Старый fresh fn `pull_owner_to_event_target`
+больше не предлагается, но его уже принятые receipts читаются.
 
 ## Same-target bias: диапазон различимых Author choices
 
@@ -44,34 +94,50 @@
 
 Для current strict wire действует тот же registry domain **0…0.9**, включая delivery без receipts. Прежние значения 0.95/1 и widened receipt domain больше не принимаются; значения не clamp-ятся и не переписываются. Единственный owner `params.sameTargetBias` задаёт schema, cards, validation, Repair и source-free scalar audit.
 
-## Wire/source и Repair граница
+## Wire/source и frozen Repair
 
-Scalar receipt с исходным Author проверяется по текущему ParamSpec и точной проекции. Без Author проверяются только текущие declared paths, тип/domain, literals и согласованность с wire (`authoredSourceChecked=false`); прежние parameter paths/domains не принимаются.
+Каждый новый scalar сохраняет exact authored path и один owner call. `both` —
+одна event row с двумя impulse leaves, не два действия с выдуманными ID. Новые
+wire поля `ownerStrength/targetStrength` допустимы только вместе при mode `both`;
+`maxTargets` — только для opcode10. Bool/null/foreign fields и выход за новые
+bounds отвергаются, не лечатся clamp-ом. Сохранённый wire остальных opcodes
+сохраняет прежние DTO defaults и исполнение.
 
-Для wire без provenance present bias проверяется по current 0…0.9; bool, null, strings, nonfinite и значения вне domain отвергаются без записи нового значения. Current optional absence не получает новый default.
+Frozen Repair открывает только неверный или действительно отсутствующий leaf.
+Исправление второго импульса не позволяет заменить первый, режим или соседний
+валидный radius. Принятые отсутствия остаются frozen. Новая вложенность или
+retirement fresh карточки не разрешает переписывать сохранённый предмет.
 
-Owner-only pull по-прежнему выбирается current `pull_owner_to_event_target`. Старый `pull_on_event.mode=owner_to_target` receipt больше не принимается; current NPC modes `target_to_owner / target_to_entity` сохранены. Frozen prior fixture не переписан.
+`fixtures/event_api_pre_simplification.json` хранит реальные исходные Author и
+wire/receipts с head `723f0e1`: оба прежних damage и оба pull проверяются без
+изменения байтовых значений, с исходным Author и без него. Более ранний
+`event_domain_retained_wire.json` остаётся прежней отрицательной fixture для
+уже отвергавшихся исторических contracts; эта работа не восстанавливает их.
 
-Repair открывает только ошибочный leaf: invalid `maxTargets` или `sameTargetBias`. Попытки переписать валидный range одновременно с полезной поправкой игнорируются и попадают в audit. Неверное значение на разрешённом leaf остаётся RED. Никакого fallback выбора числа или преобразования вероятности в discount нет.
+## Проверки
 
-## Доказательства и пределы проверки
+`test_author_event_domains.py` проверяет registry/provider → validation → compiler
+→ exact receipts → strict wire, omission cap16, режимы pull, неправильные branch
+поля, ограничения событий, frozen leaf Repair и сохранённые определения.
 
-`test_author_event_domains.py` проходит registry→provider/cards→validator→compiler receipts→strict wire. Матрицы включают оба event и item/projectile producers, 1/3/12 targets, явные delay/radius/damage значения, forged/missing/duplicate literals, неверный count source/path/domain, malformed fresh inputs, wire с/без receipts и frozen leaf Repair.
-
-`fixtures/event_domain_retained_wire.json` хранит неизменённые original compiler records и hashes как отрицательную provenance evidence. Current aliases сохраняют gameplay/runtime projections. Source-backed и source-free current receipts проверяются отдельно, включая missing/duplicate/source-owner attacks и targeting-neutral omissions.
-
-`EngineRuntimeChecks.EventDomains.cs` подготовлен для native проверки двух фактов. Radial check вызывает настоящий `ExecuteAction`/`ApplyDamageToNPC`, сравнивает с native damage control, проверяет исключённый directTarget, сортировку, count, inclusive boundary и NPC вне исходного радиуса, находящуюся рядом с выбранной целью. Bias check читает реальный строгий JSON DTO, вызывает actual `FindNearestNpc` при четырёх ролях, проверяет сохранение 0.95/1, одинаковую saturation и previous target вне физического range. Source gate связывает эти methods с реальными callers, включая текущий `ApplyTargetAndFire → FindFiringTarget`; восемь isolated native-source mutations обязаны его нарушить.
-
-Это method-level checks, не полный world/network loop. Текущая Python retirement проверка не запускает C# build, EngineRuntimeChecks или SP/MP smoke; native acceptance принадлежит отдельному parent-owned integration.
+Зарегистрированные native checks в `EngineRuntimeChecks.EventApi.cs` используют
+реальные DTO/executor/scheduler: раздельная owner/server authority, observer,
+knockback-immune NPC, отсутствующая и recycled цель; deterministic closest ties,
+inclusive radius, ограничение 16 и реальный damage consumer для 3/16 целей.
+Существующий `EngineRuntimeChecks.EventDomains.cs` продолжает проверять прежний
+ChainDamage. Source-policy PASS не является native execution PASS; native build/run
+проверяется интеграционным CI точного итогового дерева, не игровым UI smoke.
 
 ## Канонические владельцы
 
-- [`capability_registry.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/capability_registry.py): current параметры и exact wire action4 alias; retired receipt metadata удалена.
-- [`technical_lowering.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/technical_lowering.py): scalar projection и source/wire receipt checks.
-- [`wire_validator.py`](../../../LocalGenerator/infini_local/core/runtime_authoring/wire_validator.py): present saved targeting domain без provenance.
-- [`RuntimeProgramExecutor.cs`](../../../ModSources/InfiniCrafterLocal/Common/Runtime/RuntimeProgramExecutor.cs): прежний `ChainDamage` и authority.
-- [`GeneratedProjectile.Executors.cs`](../../../ModSources/InfiniCrafterLocal/Content/Projectiles/GeneratedProjectile.Executors.cs): current `ApplyTargetAndFire`/`FindFiringTarget` и retained `FindNearestNpc`.
-- [`RuntimeProgramSpec.cs`](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/RuntimeProgramSpec.cs): прежние action 4 и обе DTO границы bias 0…1.
+- `core/runtime_authoring/capability_registry.py`: fresh branch shapes, bounds,
+  declared omission, скрытые сохранённые records.
+- `technical_lowering.py`: общий scalar projector и audit receipts.
+- `wire_validator.py`, `RuntimeProgramSpec.cs`: strict wire/DTO admission.
+- `RuntimeProgramExecutor.cs`: новый nearby selector, оба старых damage executors,
+  независимые authority checks `both`.
+- `RuntimeHitPullBridge.cs`, `RuntimeDelayedActionScheduler.cs`: существующая
+  проверка owner hit receipt и NPC incarnation, без нового router.
 
 ## Выбор кнопки для on_use и маны
 

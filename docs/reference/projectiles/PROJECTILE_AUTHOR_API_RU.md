@@ -98,7 +98,7 @@ Owner immunity разделяет Terraria cooldown между снарядам�
 
 Activation delay относится к уже созданному projectile: он занимает live slot, до активации не движется и не запускает `on_spawn`. Начальный `timeLeft` включает authored lifetime и updates ожидания. Это отдельный clock от delay event action. Retired `spawn_over_target` capability удалена; current `configure_spawn.position` по-прежнему проецирует `spawn.overTarget` и сохраняет current front-hand/hit-target запреты.
 
-## Typed when и отдельная тяга владельца
+## Typed when и единая тяга
 
 В event capabilities ключ `when` задаёт обычное событие либо период:
 
@@ -107,33 +107,39 @@ Activation delay относится к уже созданному projectile: �
 ```
 
 ```json
-{"when": {"everyTicks": 12}}
+{"when": {"everySeconds": 0.2}}
 ```
 
-Каждая capability сохраняет прежний конечный набор допустимых events. Периодическая форма доступна только там, где раньше поддерживался `periodic`; `everyTicks` — integer `6..3600`. Она записывает `event: "periodic"` и `periodTicks: n`. Обычная строка записывает только прежний event. Ни старый ключ `event`, ни отдельный `periodTicks`, ни строка `when: "periodic"` не принимаются как новая Author форма.
+Каждая capability сохраняет прежний конечный набор допустимых events. Периодическая форма доступна только там, где раньше поддерживался `periodic`; `everySeconds` задаёт интервал в секундах с проекцией в bounded world ticks (`6..3600`). Она записывает `event: "periodic"` и `periodTicks` после объявленного округления. Обычная строка записывает только прежний event. Ни старый ключ `event`, ни отдельный `periodTicks`, ни строка `when: "periodic"` не принимаются как новая Author форма.
 
-Call IDs, порядок actions, producer dependencies, фаза item/projectile periodic, scheduler и бюджеты сохраняются. Optional `delayTicks` остаётся отдельным leaf event action. При Repair ошибочного `when.everyTicks` валидные siblings и остальные параметры frozen.
+Call IDs, порядок actions, producer dependencies, фаза item/projectile periodic, scheduler и бюджеты сохраняются. Optional `delaySeconds` проецируется в отдельный wire leaf `delayTicks`. При Repair ошибочного `when.everySeconds` валидные siblings и остальные параметры frozen.
 
 ```json
 {
   "id": "grapple_hit",
-  "fn": "pull_owner_to_event_target",
+  "fn": "pull_on_event",
   "target": "projectile",
-  "params": {"when": "on_hit", "strength": 2}
+  "params": {"when": "on_hit", "mode": "both", "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
 }
 ```
 
-Эта операция записывает старые `action: "pull_on_event"`, `actionCode: 5`, `mode: "owner_to_target"`, `radiusTiles: 1`. Константы связаны receipt с выбранным `fn`, а не с вымышленным authored числом. Strength сохраняет диапазон `0.01..4` и прежнюю точность.
+Свежий `pull_on_event` явно выбирает `target_to_owner`, `target_to_entity`,
+`owner_to_target` или `both`. Последние два режима требуют `on_hit/on_crit`
+и действительную цель события, без поиска замены. У `both` две независимые
+силы; NPC учитывает `knockBackResist`, игрок — нет. Authority игрока и NPC
+раздельная. NPC-режимы сохраняют свой radius и прежний fallback при отсутствии
+active directTarget; `target_to_entity` использует центр source projectile,
+зафиксированный до delay. [Полный новый договор](../authoring/AUTHOR_API_SIMPLIFICATION_RU.md).
 
-Тяга направлена к active directTarget события. При отсутствии directTarget она ничего не делает; nearby NPC не выбирается. Поэтому periodic owner pull остаётся выразимым прежним no-op, а `on_expire` может иметь цель у proximity missile. Сетевая authority и executor не меняются.
-
-`pull_on_event` теперь предлагает только NPC modes `target_to_owner` и `target_to_entity`; radius остаётся обязательным, поскольку используется fallback-поиском при отсутствии active directTarget. `target_to_entity` сохраняет прежнее назначение event position, которое на прямом hit может совпасть с центром NPC. Эта категория не добавляет новое назначение source projectile center.
+Исторический `pull_owner_to_event_target` остаётся внутренним receipt owner:
+его сохранённые литералы `actionCode=5`, `mode=owner_to_target`, `radiusTiles=1`
+и прежние события исполняются без миграции. Это не свежая Author-форма.
 
 ## Радиусы в tiles на точной решётке
 
 | Capability / Author leaf | Domain | Прежний integer wire |
 |---|---|---|
-| `damage_area_on_event.radiusTiles` | `0.5..48`, шаг `1/16` | `radiusPx = n × 16`, integer `8..768` |
+| `damage_nearby_on_event.radiusTiles` | `0.5..60`, шаг `1/16` | `radiusPx = n × 16`, integer `8..960` |
 | Сохранённый `move_proximity_missile.triggerRadiusTiles` | `0.25..32`, шаг `1/16` | `proximityRadiusPx = n × 16`, integer `4..512` |
 
 Все 761 AoE и 509 proximity значений старого integer domain сохраняются точно. Дробь со знаменателем 16 и умножение на 16 не округляют эти значения. Произвольные дроби, например `0.1 tile`, отвергаются в этих lattice projections; compiler не округляет их. Новый независимый `set_projectile_proximity_action.triggerRadiusBlocks` имеет собственный float-domain из registry и не наследует integer-lattice ограничение старого controller. Event radius проходит тот же registry projection и receipt proof. Damage basis, search, excluded direct target и authority не меняются.
@@ -178,7 +184,7 @@ Repair сохраняет принятое отсутствие frozen. Разр
 | Решение | Независимые операции |
 |---|---|
 | Направление, привязка, рука и вылет | `set_projectile_aim`, `attach_projectile`, `set_front_arm_pose`, `set_projectile_reach_curve` |
-| Траектория и steering | `move_straight`, `orbit_projectile`, `seek_projectile`; существующие turn/speed/homing modifiers |
+| Траектория и steering | `move_straight`, `orbit_projectile`, `seek_projectile`; turn/homing modifiers и `scale_projectile_velocity` |
 | Ускорение, затухание и колебание | `accelerate_projectile_vertical`, `multiply_projectile_velocity`, `oscillate_projectile_velocity` |
 | Начало возврата, достижение владельца, proximity | `set_projectile_return_trigger`, `set_projectile_arrival`, `set_projectile_proximity_action` |
 | Вращение и видимость | `set_projectile_rotation`, `set_projectile_opacity`, `add_projectile_visual_scale`; существующие visual/hitbox curves остаются раздельными |
@@ -193,7 +199,7 @@ Repair сохраняет принятое отсутствие frozen. Разр
 
 Optional `window` задаёт конечные native phases `always`, `charging`, `released`, `outbound`, `returning`, а не произвольную state graph. Форма `{phase}` означает всю фазу без выдуманного максимального duration. Timing задаётся целиком: `clock`, `startDelaySeconds`, `durationSeconds`; частичная группа и present null отвергаются. `released` — latch, который может пересекаться с `returning`, а не отдельная взаимоисключающая стадия. Relative clock не активен до соответствующего release/return. Отсутствие window не добавляет фазу или таймер.
 
-Для `set_projectile_turn_modifier`, `set_projectile_speed_modifier`, `set_projectile_homing_modifier` и `attract_npcs_while_active` предпочтительно задавать время одним явным `window`. Отдельные `startDelaySeconds` и `durationSeconds` тогда не нужны: окно полностью определяет, когда исполняется модификатор, без скрытого абсолютного cutoff. `{phase: "always"}` явно выбирает всё время жизни; окно с `since_release` или `since_return` начинается от соответствующего latch.
+Для `set_projectile_turn_modifier`, `set_projectile_homing_modifier` и `attract_npcs_while_active` предпочтительно задавать время одним явным `window`. Отдельные `startDelaySeconds` и `durationSeconds` тогда не нужны: окно полностью определяет, когда исполняется модификатор, без скрытого абсолютного cutoff. `{phase: "always"}` явно выбирает всё время жизни; окно с `since_release` или `since_return` начинается от соответствующего latch.
 
 Прежняя полная пара `startDelaySeconds` + `durationSeconds` остаётся допустимой и сохраняет active-age интервал. Если явно переданы и эта пара, и `window`, исполняется их **пересечение**, как прежде. Одинокое поле пары, `null` и отсутствие одновременно пары и окна отвергаются; compiler не подставляет фиктивную максимальную длительность. Сохранённые определения с парой не мигрируются, а Repair не удаляет их валидный интервал ради новой формы. Времена reach/arm/visual/hitbox curves по-прежнему задают саму интерполяцию, а не только gate, поэтому не заменяются этим правилом.
 
@@ -217,3 +223,37 @@ Tile collision остаётся явным решением: always-active attac
 Runtime API v5 / wire v3 сохраняются. Старые movement opcodes и `channel_beam`/`charge_then_release` доступны для чтения принятого wire, но не предлагаются как свежие Author/Repair capabilities. Их исполнение сохраняет прежние formulas, порядок, return/collision/terminal behavior, включая старые неудачные gameplay choices. Stored definitions, receipts, worlds и player data не мигрируются. Ранее retired opcode `6` остаётся запрещённым; остальные коды не перенумерованы.
 
 Новые комбинации проверяются через реальные validator/compiler/strict-wire и зарегистрированные native CPU observers; DTO admission сама по себе не доказывает движение, render, игру или multiplayer. Основные regressions — `test_composable_motion_*`, `test_motion_lowering_*`, `test_motion_repair_visibility.py`, `test_motion_presentation_handoffs.py` и `EngineRuntimeChecks.ComposableMotion*.cs`. Исторические fixtures не превращаются в свежий model output и не переписываются ради GREEN.
+
+## Вложенные свойства Author
+
+Свежий Author задаёт зависимые настройки непосредственно у их владельца:
+
+- `set_projectile_beam_geometry.params.ramp` — необязательные прежние поля прогрева луча: `warmupSeconds`, `initialWidthMultiplier`, `initialDamageMultiplier`, `damageStartProgress`.
+- `attach_projectile.params.reachCurve` — необязательная кривая вылета с прежними полями и собственным `window`. Окно attachment и окно reach независимы; вылет применяется только при активной привязке. Кривая остаётся age-based и не запускается заново при открытии окна.
+- `accumulate_projectile_charge.params.releaseEffect` — необязательные прежние усиления и явный `launchSpeedBlocksPerSecond`. Отсутствие свойства не создаёт эффект освобождения. Даже единичные множители в присутствующем эффекте переписывают launch velocity, поэтому это не замена отсутствию.
+
+Это alias lowering явно выбранных полей, а не новый controller: `beamGeometry`/`beamRamp`, `attachment`/`reach`, `charge`/`chargeRelease` остаются отдельными native-компонентами. Опущенные объявленные нейтральные листья материализуются только внутри присутствующего свойства и имеют точные nested-path receipts. Принятые отсутствия и соседние значения остаются frozen при Repair.
+
+Отдельные свежие вызовы `set_projectile_beam_ramp`, `set_projectile_reach_curve`, `apply_projectile_charge_release` больше не принимаются. Их сохранённый wire и исторические receipts продолжают проверяться и исполняться без миграции; это не скрытые свежие aliases.
+### Единое масштабирование скорости свежего Author
+
+`scale_projectile_velocity` умножает текущую скорость **после turn, перед homing**.
+`multiplierPerUpdate` явно задаётся в диапазоне 0..1.2; ноль останавливает,
+малый положительный коэффициент сильно тормозит. Необязательный
+`maxSpeedBlocksPerSecond` ограничивает модуль после умножения; отсутствие означает
+настоящее отсутствие cap, а не большой подставленный предел. Множитель применяется
+каждый projectile update, включая дополнительные updates.
+
+Допустимы один вызов на всё время жизни либо до двух вызовов с доказуемо
+непересекающимися `window`: например, разгон в первую секунду и торможение во
+вторую, либо разные `outbound`/`returning` фазы. Конечные интервалы одного clock
+полуоткрытые; разные clocks не считаются непересекающимися без взаимоисключающих
+фаз. Порядок calls не разрешает пересечение. Это не произвольный pipeline.
+
+Старые `multiply_projectile_velocity` и `set_projectile_speed_modifier` больше не
+предлагаются свежему Author. Их сохранённые wire-компоненты и исторические receipts
+не меняются: ранний retention и поздний speed продолжают исполняться по прежним
+правилам. Для новых предметов единственная поздняя стадия — сознательная
+нормализация, **не** эквивалентность прежнему одновременному early/late исполнению.
+Две независимые временные фазы остаются; комбинация новых и старых scalers
+запрещена. Отсутствующий cap и валидное соседнее окно остаются frozen при Repair.

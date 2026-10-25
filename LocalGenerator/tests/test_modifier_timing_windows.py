@@ -17,7 +17,6 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 CASES = [
     ("set_projectile_turn_modifier", "turnModifier", "turnRadiansPerSecond", "turnRadiansPerUpdate", 1),
-    ("set_projectile_speed_modifier", "speedModifier", "speedMultiplierPerUpdate", "speedMultiplierPerUpdate", 1.01),
     ("set_projectile_homing_modifier", "homingModifier", "maxTurnRadiansPerSecond", "maxTurnRadiansPerUpdate", 1),
     ("attract_npcs_while_active", "npcAttraction", "accelerationBlocksPerSecondSquared", "strengthPerUpdate", 1),
 ]

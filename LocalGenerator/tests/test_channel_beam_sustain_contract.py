@@ -36,17 +36,17 @@ def _fixture(**options):
     values = {**NEUTRALS, **options}
     doc = build_capability_witness("move_straight")
     _add(doc, "set_projectile_aim", {"source": "velocity", "turnOwner": False})
-    _add(doc, "set_projectile_beam_geometry", {"lengthBlocks": 20, "widthBlocks": 0.5,
+    beam = _add(doc, "set_projectile_beam_geometry", {"lengthBlocks": 20, "widthBlocks": 0.5,
                                               "raycastTiles": values["raycastTiles"]})
-    ramp = _add(doc, "set_projectile_beam_ramp", {"warmupSeconds": 0.5,
-        **{k: values[k] for k in ("initialDamageMultiplier", "initialWidthMultiplier", "damageStartProgress")}})
+    beam["params"]["ramp"] = {"warmupSeconds": 0.5,
+        **{k: values[k] for k in ("initialDamageMultiplier", "initialWidthMultiplier", "damageStartProgress")}}
     if values["manaPayment"] == "each_use_time":
         # Explicit test composition, never a gameplay default inferred from beam.
         _call(doc, "configure_item_use")["params"]["channel"] = True
         _add(doc, "set_projectile_owner_control", {"requireHeldItem": True, "requireChannel": True,
             "requireItemAnimation": False, "claimHeldProjectile": False, "animation": "none", "lifetime": "authored"})
         _add(doc, "sustain_projectile_mana", {})
-    return doc, ramp
+    return doc, beam
 
 
 def _beam(wire):
@@ -91,14 +91,17 @@ def test_representative_joint_beam_choices_project_exactly_with_independent_coll
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     for source in (doc, None):
         assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
-    for fn, member in (("set_projectile_beam_geometry", "beamGeometry"), ("set_projectile_beam_ramp", "beamRamp")):
-        call = _call(doc, fn)
-        for key, value in call["params"].items():
-            rows = [r for r in receipts if r.get("callId") == call["id"] and r["authoredPath"].endswith(".params." + key)]
+    call = _call(doc, "set_projectile_beam_geometry")
+    for parameter, spec in CAPABILITY_REGISTRY[call["fn"]].params.items():
+        if parameter not in call["params"]:
+            continue
+        member = "beamRamp" if parameter == "ramp" else "beamGeometry"
+        for projection in spec.projected_fields(call["params"][parameter], parameter):
+            rows = [r for r in receipts if r.get("callId") == call["id"]
+                    and r["authoredPath"].endswith(".params." + projection.authored_path)]
             assert len(rows) == 1 and rows[0]["status"] == "delivered"
-            spec = CAPABILITY_REGISTRY[fn].params[key]
-            assert rows[0]["value"] == spec.to_wire(value)
-            assert rows[0]["finalPath"].endswith("." + member + "." + (spec.wire_name or key))
+            assert rows[0]["value"] == projection.value
+            assert rows[0]["finalPath"].endswith("." + member + "." + projection.wire_path)
     if choices[0]:
         cadence = [r for r in receipts if r.get("callId") == "sustain_projectile_mana"]
         assert len(cadence) == 1
@@ -146,7 +149,8 @@ def test_bad_present_independent_values_stay_red_in_author_and_stripped_wire(key
     wire = compile_runtime_program(doc)
     wire.pop("runtimeContract")
     call = _call(doc, "set_projectile_beam_geometry") if key == "raycastTiles" else ramp
-    call["params"][key] = value
+    params = call["params"] if key == "raycastTiles" else call["params"]["ramp"]
+    params[key] = value
     member = "beamGeometry" if key == "raycastTiles" else "beamRamp"
     _beam(wire)[member][key] = value
     for obj, validator in ((doc, validate_runtime_program), (wire, validate_runtime_wire)):
@@ -181,20 +185,20 @@ def test_real_production_packet_and_nullable_inverse_expose_independent_choices(
     assert not validate_runtime_program(local)["ok"]
     import json
     offered = {row["fn"] for row in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    assert {"set_projectile_beam_geometry", "set_projectile_beam_ramp", "sustain_projectile_mana", "set_projectile_owner_control"} <= offered
+    assert {"set_projectile_beam_geometry", "sustain_projectile_mana", "set_projectile_owner_control"} <= offered
     assert "channel_beam" not in offered
 
 
 def test_frozen_repair_fixes_only_invalid_width_and_keeps_absent_independent_components():
     good, good_call = _fixture(initialWidthMultiplier=0.22)
     broken = deepcopy(good)
-    bad_call = _call(broken, "set_projectile_beam_ramp")
-    bad_call["params"]["initialWidthMultiplier"] = 0
+    bad_call = _call(broken, "set_projectile_beam_geometry")
+    bad_call["params"]["ramp"]["initialWidthMultiplier"] = 0
     before = deepcopy(broken)
     scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": bad_call["id"], "paths": ["params.initialWidthMultiplier"]}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": bad_call["id"], "paths": ["params.ramp.initialWidthMultiplier"]}]
     hostile = deepcopy(good_call)
-    hostile["params"]["warmupSeconds"] += 10 / 60
+    hostile["params"]["ramp"]["warmupSeconds"] += 10 / 60
     filtered, audit = filter_repair_patch_scope(broken, {"callsUpsert": [hostile], "note": "width only"}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
     repaired = apply_repair_patch(broken, filtered)

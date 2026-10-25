@@ -121,7 +121,7 @@ def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(
 
 
 @pytest.mark.parametrize("fn,name,wire_name,lo,hi", [
-    ("damage_area_on_event", "radiusTiles", "radiusPx", 8, 768),
+    ("damage_nearby_on_event", "radiusTiles", "radiusPx", 8, 960),
 ])
 # Each owner retains both bounds, a non-boundary exact pixel, and every
 # rejection class. Extra interior pixels repeat the same exact projection.
@@ -143,26 +143,25 @@ def test_tile_radius_boundaries_keep_exact_pixel_projection(fn, name, wire_name,
     else:
         assert type(spec.to_wire(pixels / 16)) is int and spec.to_wire(pixels / 16) == pixels
         _, entity = compiled_entity(document, call)
-        output = entity["events"][0] if fn == "damage_area_on_event" else entity["movement"]["params"]
+        output = entity["events"][0] if fn == "damage_nearby_on_event" else entity["movement"]["params"]
         assert output[wire_name] == pixels and type(output[wire_name]) is int
     assert document == before
 
 
-@pytest.mark.parametrize("when", ["on_hit", {"everySeconds": 0.1}, {"everySeconds": 60}])
+@pytest.mark.parametrize("when", ["on_hit", "on_crit"])
 def test_owner_pull_uses_exact_old_action_and_ignores_no_authored_radius(when):
-    document = build_capability_witness("pull_owner_to_event_target")
+    document = build_capability_witness("pull_on_event")
+    selected(document)["params"] = {"when": "on_hit", "mode": "owner_to_target", "impulseBlocksPerSecond": 7.5}
     call = selected(document)
     call["params"].update(when=when, impulseBlocksPerSecond=11.71875, delaySeconds=(37) / 60)
     wire, entity = compiled_entity(document, call)
     event = entity["events"][0]
     assert event == {
         "id": "witness_call", "action": "pull_on_event", "actionCode": 5,
-        "event": "on_hit" if isinstance(when, str) else "periodic", "mode": "owner_to_target",
-        "radiusTiles": 1, "strength": 3.125, "delayTicks": 37,
-        **({"periodTicks": int(when["everySeconds"] * 60)} if isinstance(when, dict) else {}),
+        "event": when, "mode": "owner_to_target", "strength": 3.125, "delayTicks": 37,
     }
     relevant = [r for r in wire["runtimeContract"]["finalWireReceipts"] if r.get("callId") == call["id"]]
-    for literal in ("action", "actionCode", "mode", "radiusTiles"):
+    for literal in ("action", "actionCode"):
         receipt = next(r for r in relevant if r["finalPath"].endswith("." + literal))
         assert receipt["authoredPath"].endswith(".fn") and receipt["status"] == "technical_projection"
     hostile = deepcopy(document)
@@ -175,7 +174,8 @@ def test_owner_pull_uses_exact_old_action_and_ignores_no_authored_radius(when):
 
 @pytest.mark.parametrize("mutation", ["discriminator", "missing", "duplicate", "source"])
 def test_owner_pull_discriminator_receipts_bind_the_exact_existing_executor(mutation):
-    document = build_capability_witness("pull_owner_to_event_target")
+    document = build_capability_witness("pull_on_event")
+    selected(document)["params"] = {"when": "on_hit", "mode": "owner_to_target", "impulseBlocksPerSecond": 7.5}
     wire, entity = compiled_entity(document, selected(document))
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     action = next(row for row in receipts if row.get("callId") == "witness_call"
@@ -209,7 +209,7 @@ def test_owner_pull_discriminator_receipts_bind_the_exact_existing_executor(muta
         ("extra-field", {"everySeconds": 0.1, "event": "on_hit"}),
     )),
     pytest.param("pull_on_event", {"everySeconds": 5 / 60}, id="pull-interval-bound"),
-    pytest.param("pull_owner_to_event_target", {"everySeconds": 0.1, "event": "on_hit"}, id="owner-pull-extra-field"),
+    pytest.param("pull_on_event", {"everySeconds": 0.1, "event": "on_hit"}, id="owner-pull-extra-field"),
 ])
 def test_periodic_trigger_requires_one_explicit_integer_interval(fn, when):
     document = build_capability_witness(fn)
@@ -507,7 +507,7 @@ def test_reserved_movement_six_is_refused_without_renumbering_current_codes():
 
 
 @pytest.mark.parametrize("current,retired", [("configure_tile_placement", "configure_placeable"),
-                                           ("damage_nearest_on_event", "chain_damage_on_event")])
+                                           ("damage_nearby_on_event", "chain_damage_on_event")])
 def test_retired_receipt_owner_cannot_authenticate_current_mechanics(current, retired):
     document = build_capability_witness(current)
     wire = compile_runtime_program(document)

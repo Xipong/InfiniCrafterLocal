@@ -16,7 +16,7 @@ from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 @pytest.mark.parametrize("capability", [
     "apply_generated_buff_on_use", "apply_vanilla_buff_on_use", "move_player_on_use",
     "add_hold_light", "configure_tool", "configure_item_contact_hitbox",
-    "configure_accessory", "configure_armor", "damage_area_on_event", "spawn_entity_on_event",
+    "configure_accessory", "configure_armor", "damage_nearby_on_event", "spawn_entity_on_event",
 ])
 def test_card_preserves_complete_accepted_mechanics(capability):
     data = sanitize_recipe_for_delivery(compile_runtime_program(build_capability_witness(capability)))

@@ -32,7 +32,7 @@ def compile_ok(doc):
 
 @pytest.mark.parametrize("fn,params,member,expected", [
     ("accelerate_projectile_vertical", {"accelerationYBlocksPerSecondSquared": -2}, "verticalAcceleration", {"accelerationYPerUpdate": -2 * 16 / 3600}),
-    ("multiply_projectile_velocity", {"multiplierPerUpdate": 0}, "velocityRetention", {"multiplierPerUpdate": 0}),
+    ("scale_projectile_velocity", {"multiplierPerUpdate": 0}, "velocityScale", [{"multiplierPerUpdate": 0}]),
     ("set_projectile_rotation", {"mode": "spin", "offsetRadians": 0, "radiansPerSecond": -6}, "rotation", {"mode": "spin", "offsetRadians": 0, "radiansPerUpdate": -0.1}),
     ("oscillate_projectile_velocity", {"law": {"angular_sine": {"amplitudeRadiansPerSecond": 6}}, "frequencyRadiansPerSecond": 3, "phaseRadians": 0}, "oscillation", {"law": "angular_sine", "frequencyRadiansPerUpdate": 0.05, "phaseRadians": 0, "amplitude": 0.1}),
     ("add_projectile_visual_scale", {"deltaPerSecond": -0.6, "maxScale": 5}, "visualScaleRate", {"deltaPerUpdate": -0.01, "maxScale": 5}),
@@ -91,8 +91,8 @@ def test_hand_attachment_pose_and_asymmetric_reach_are_separate(peak, end):
     add(doc, "attach_projectile", {"anchor": "front_hand", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0})
     add(doc, "set_front_arm_pose", {"durationSeconds": 0.5, "startStretch": "full", "peakStretch": peak,
         "endStretch": end, "peakProgress": 0.3})
-    add(doc, "set_projectile_reach_curve", {"durationSeconds": 1, "startOffsetBlocks": -1,
-        "peakOffsetBlocks": 4, "endOffsetBlocks": 2, "peakProgress": 0.2})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "attach_projectile")["params"]["reachCurve"] = {"durationSeconds": 1, "startOffsetBlocks": -1,
+        "peakOffsetBlocks": 4, "endOffsetBlocks": 2, "peakProgress": 0.2}
     _, entity = compile_ok(doc)
     assert entity["attachment"]["anchor"] == "front_hand"
     assert entity["armPose"]["endStretch"] == end
@@ -116,8 +116,8 @@ def test_charge_contact_and_owner_liveness_are_independent_of_position():
     doc = base_document()
     next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["channel"] = True
     add(doc, "accumulate_projectile_charge", {"durationSeconds": 1, "autoReleaseAfterActiveSeconds": 2})
-    add(doc, "apply_projectile_charge_release", {"damageMultiplier": 2, "knockbackMultiplier": 0,
-        "speedMultiplier": 0.5, "launchSpeedBlocksPerSecond": 30, "pauseLifetimeWhileCharging": False})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "accumulate_projectile_charge")["params"]["releaseEffect"] = {"damageMultiplier": 2, "knockbackMultiplier": 0,
+        "speedMultiplier": 0.5, "launchSpeedBlocksPerSecond": 30, "pauseLifetimeWhileCharging": False}
     add(doc, "gate_projectile_contact", {"window": window("charging"), "enabled": False})
     add(doc, "set_projectile_owner_control", {"requireHeldItem": True, "requireChannel": False,
         "requireItemAnimation": False, "claimHeldProjectile": False, "animation": "none", "lifetime": "authored"})
@@ -134,8 +134,8 @@ def test_free_beam_geometry_and_ramp_do_not_imply_channel_or_attachment():
     doc = base_document()
     add(doc, "set_projectile_aim", {"source": "velocity", "turnOwner": False})
     add(doc, "set_projectile_beam_geometry", {"lengthBlocks": 20, "widthBlocks": 0.5, "raycastTiles": True})
-    add(doc, "set_projectile_beam_ramp", {"warmupSeconds": 0, "initialWidthMultiplier": 1,
-        "initialDamageMultiplier": 1, "damageStartProgress": 0})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_beam_geometry")["params"]["ramp"] = {"warmupSeconds": 0, "initialWidthMultiplier": 1,
+        "initialDamageMultiplier": 1, "damageStartProgress": 0}
     wire, entity = compile_ok(doc)
     assert entity["beamGeometry"] == {"lengthPx": 320, "widthPx": 8, "raycastTiles": True}
     assert entity["beamRamp"]["warmupTicks"] == 0
@@ -221,7 +221,7 @@ def test_phase_window_on_existing_turn_modifier_keeps_original_delay_duration():
 def test_all_new_registry_witnesses_reach_real_compiler_and_stripped_wire():
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     for cap in CAPABILITY_REGISTRY.values():
-        if cap.category != "motion_primitive":
+        if cap.category != "motion_primitive" or not cap.author_visible:
             continue
         doc = build_capability_witness(cap.name)
         wire, _ = compile_ok(doc)
@@ -276,13 +276,14 @@ def test_charging_attachment_released_seek_and_existing_modifiers_compose_withou
         "window": window("charging")})
     add(doc, "seek_projectile", {"target": "cursor", "maxSpeedBlocksPerSecond": 30, "velocityLerpPerUpdate": 1,
         "limitSpeedToDistance": False, "window": window("released", "since_release")})
-    for fn in ("set_projectile_turn_modifier", "set_projectile_speed_modifier", "set_projectile_homing_modifier"):
+    for fn in ("set_projectile_turn_modifier", "scale_projectile_velocity", "set_projectile_homing_modifier"):
         witness = build_capability_witness(fn)
         params = next(c["params"] for c in witness["runtimeProgram"]["calls"] if c["fn"] == fn)
         add(doc, fn, dict(params, window=window("released", "since_release")))
     _, entity = compile_ok(doc)
     assert "movement" not in entity and "controller" not in entity
-    assert all(entity[member]["window"]["phase"] == "released" for member in ("turnModifier", "speedModifier", "homingModifier"))
+    assert all(entity[member]["window"]["phase"] == "released" for member in ("turnModifier", "homingModifier"))
+    assert entity["velocityScale"][0]["window"]["phase"] == "released"
 
 
 def test_phase_only_window_has_no_invented_duration_and_partial_timing_is_red():
@@ -337,3 +338,85 @@ def test_opacity_alone_has_no_wobble_or_movement_obligation():
     assert "oscillation" not in entity
     assert any(r.get("fn") == "set_projectile_opacity" and r["finalPath"].endswith(".opacity.alpha")
                and r["value"] == 0 for r in wire["runtimeContract"]["finalWireReceipts"])
+
+
+_PACKAGED = [
+    ("set_projectile_beam_geometry", "ramp", "set_projectile_beam_ramp", "beamRamp", {"warmupSeconds": 0}),
+    ("attach_projectile", "reachCurve", "set_projectile_reach_curve", "reach", {
+        "durationSeconds": 1, "startOffsetBlocks": -1, "peakOffsetBlocks": 4,
+        "endOffsetBlocks": 2, "peakProgress": 0.2,
+        "window": {"phase": "always", "clock": "active", "startDelaySeconds": 0.5, "durationSeconds": 1}}),
+    ("accumulate_projectile_charge", "releaseEffect", "apply_projectile_charge_release", "chargeRelease", {
+        "launchSpeedBlocksPerSecond": 30}),
+]
+
+
+@pytest.mark.parametrize("parent,property,retired,member,params", _PACKAGED)
+def test_optional_motion_property_is_exact_separate_native_component(parent, property, retired, member, params):
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
+    doc = build_capability_witness(parent)
+    selected = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == parent)
+    absent, entity = compile_ok(doc)
+    assert member not in entity
+    selected["params"][property] = deepcopy(params)
+    wire, entity = compile_ok(doc)
+    assert member in entity
+    if member == "chargeRelease":
+        assert entity[member]["launchSpeed"] == 8
+        assert entity[member]["damageMultiplier"] == 1
+    if member == "reach":
+        assert entity[member]["window"]["startDelayTicks"] == 30
+        assert "window" not in entity["attachment"]
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    nested = [r for r in receipts if "." + member + "." in r["finalPath"]]
+    assert nested and {r["fn"] for r in nested} == {parent}
+    assert all(".params." + property + "." in r["authoredPath"] for r in nested)
+    assert not CAPABILITY_REGISTRY[retired].author_visible
+    for source in (None, doc):
+        assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
+        for corruption in ("missing", "wrong_component", "wrong_call", "duplicate"):
+            tampered = deepcopy(receipts)
+            index = next(i for i, r in enumerate(tampered) if r == nested[0])
+            if corruption == "missing":
+                tampered.pop(index)
+            elif corruption == "wrong_component":
+                tampered[index]["finalPath"] = tampered[index]["finalPath"].replace("." + member + ".", ".damage.")
+            elif corruption == "wrong_call":
+                tampered[index]["callId"] = "foreign"
+            else:
+                tampered.append(deepcopy(tampered[index]))
+            assert not audit_compiler_receipts(tampered, authored_document=source, final_document=wire)["ok"]
+    delivery = deepcopy(wire)
+    delivery.pop("runtimeContract")
+    assert validate_runtime_wire(delivery)["ok"]
+    # Historical standalone component receipts remain valid, while the fresh
+    # Author spelling is rejected. Native data itself is byte-for-byte identical.
+    legacy = deepcopy(receipts)
+    for row in legacy:
+        if "." + member + "." in row["finalPath"]:
+            row["fn"], row["callId"] = retired, "historical_child"
+            row["authoredPath"] = row["authoredPath"].replace(".params." + property + ".", ".params.")
+            row["authoredPath"] = __import__("re").sub(r"calls\[\d+\]", "calls[999]", row["authoredPath"])
+    assert audit_compiler_receipts(legacy, final_document=wire)["ok"]
+    selected["params"].pop(property)
+    add(doc, retired, deepcopy(params))
+    assert not validate_runtime_program(doc)["ok"]
+
+
+@pytest.mark.parametrize("parent,property,retired,member,params", _PACKAGED)
+@pytest.mark.parametrize("bad", [None, {}, {"unknown": 1}])
+def test_nested_property_rejects_null_empty_and_unknown(parent, property, retired, member, params, bad):
+    doc = build_capability_witness(parent)
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == parent)["params"][property] = bad
+    assert not validate_runtime_program(doc)["ok"]
+
+
+def test_nested_reach_window_requires_real_release_producer():
+    doc = build_capability_witness("attach_projectile")
+    attach = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "attach_projectile")
+    attach["params"]["reachCurve"] = deepcopy(_PACKAGED[1][4])
+    attach["params"]["reachCurve"]["window"] = {"phase": "released"}
+    errors = validate_runtime_program(doc)["errors"]
+    assert any(e["code"] == "missing_capability_dependency" and ".reachCurve.window.phase" in e["path"] for e in errors)

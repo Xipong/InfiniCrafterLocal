@@ -23,6 +23,13 @@ public sealed partial class GeneratedProjectile
         {
             MultiplyVelocityCapped(speed.SpeedMultiplierPerUpdate, speed.MaxSpeed, onlyBelowCap: false, legacyNormalize: false);
         }
+        foreach (var scale in _entity.VelocityScale ?? Array.Empty<RuntimeVelocityScaleSpec>())
+        {
+            if (!MotionWindowActive(scale.Window)) continue;
+            if (scale.MaxSpeed is float maximum)
+                MultiplyVelocityCapped(scale.MultiplierPerUpdate, maximum, onlyBelowCap: false, legacyNormalize: false);
+            else RetainVelocity(scale.MultiplierPerUpdate);
+        }
         ApplyHomingModifier();
     }
 

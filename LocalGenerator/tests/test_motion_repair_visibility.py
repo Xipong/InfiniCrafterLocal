@@ -115,3 +115,30 @@ def test_undecided_motion_selector_does_not_thaw_its_valid_optional_leaf(fn, sel
     scope = build_runtime_repair_scope(doc, report["errors"])
     assert scope["deletable"]["callParamKeys"] == []
     assert not any("params." + field in row["paths"] for row in scope["fieldPermissions"]["calls"])
+
+
+@pytest.mark.parametrize("fn,property,core,value,extra", [
+    ("set_projectile_beam_geometry", "ramp", "lengthBlocks", 20, {"warmupSeconds": 1}),
+    ("attach_projectile", "reachCurve", "anchor", "owner_center", {
+        "durationSeconds": 1, "startOffsetBlocks": 0, "peakOffsetBlocks": 2,
+        "endOffsetBlocks": 0, "peakProgress": 0.5}),
+    ("accumulate_projectile_charge", "releaseEffect", "durationSeconds", 1, {"launchSpeedBlocksPerSecond": 30}),
+])
+def test_repair_of_parent_does_not_invent_absent_nested_effect(fn, property, core, value, extra):
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+
+    doc = build_capability_witness(fn)
+    call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
+    call["params"][core] = None
+    before = deepcopy(doc)
+    scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    proposed = deepcopy(call)
+    proposed["params"].update({core: value, property: extra})
+    patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [proposed], "note": "fix parent only"}, scope)
+    fixed = apply_repair_patch(doc, patch)
+    expected = deepcopy(before)
+    next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"][core] = value
+    assert fixed == expected and doc == before
+    assert audit["ok"] and audit["ignoredChanges"]
+    assert validate_runtime_wire(compile_runtime_program(fixed))["ok"]

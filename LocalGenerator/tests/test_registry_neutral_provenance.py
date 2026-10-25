@@ -30,11 +30,8 @@ DECLARED = {
     "set_projectile_owner_control": {"requireHeldItem": False, "requireChannel": False,
                                      "requireItemAnimation": False, "claimHeldProjectile": False,
                                      "animation": "none", "lifetime": "authored"},
-    "apply_projectile_charge_release": {"damageMultiplier": 1, "knockbackMultiplier": 1,
-                                        "speedMultiplier": 1, "pauseLifetimeWhileCharging": False},
-    "set_projectile_beam_ramp": {"initialWidthMultiplier": 1, "initialDamageMultiplier": 1,
-                                 "damageStartProgress": 0},
     "spawn_entity_on_event": {"spreadRadians": 0},
+    "damage_nearby_on_event": {"maxTargets": 16},
     "configure_item_stats": {"manaCost": 0, "manaCostInput": "both"},
     "configure_item_use": {"holdoutOffsetX": 0, "holdoutOffsetY": 0},
     "target_and_fire": {"count": 1, "spreadRadians": 0.0, "targetPolicy": "distance_score",
@@ -49,6 +46,11 @@ DECLARED = {
     },
 }
 RETAINED_WIRE_DEFAULTS = {
+    "apply_projectile_charge_release": {"damageMultiplier": 1, "knockbackMultiplier": 1,
+                                        "speedMultiplier": 1, "pauseLifetimeWhileCharging": False},
+    "set_projectile_beam_ramp": {"initialWidthMultiplier": 1, "initialDamageMultiplier": 1,
+                                 "damageStartProgress": 0},
+
     "channel_beam": {"manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,
                      "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False},
 }

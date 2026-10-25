@@ -59,6 +59,8 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "executed_tile_placement_reference",
     "unique_call_reference",
     "conditional_param",
+    "param_branch_fields",
+    "conditional_param_values",
     "timing_pair_or_window",
     "param_only_when",
     "conditional_omission",
@@ -253,7 +255,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             csharp_name = "DescendantMaxActive" if cap.name == "set_descendant_concurrency" else field[:1].upper() + field[1:]
             bounds = class_bounds[class_name]
             csharp = bounds.get(csharp_name)
-            if (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
+            if (cap.name == "pull_on_event" and field in {"ownerStrength", "targetStrength"}) or (cap.name == "damage_nearby_on_event" and field == "maxTargets") or (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
                 from infini_local.qa.primitive_loss_audit import nullable_number_rejection_bounds
                 reject_bounds = nullable_number_rejection_bounds(text.encode(), class_name, csharp_name)
             elif cap.name == "target_and_fire" and param_name in {"count", "spreadRadians"}:
@@ -264,7 +266,9 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                     r"throw new InvalidDataException\(", _class_block(text, class_name),
                 )
                 reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
-            if ((cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"})
+            if ((cap.name == "pull_on_event" and field in {"ownerStrength", "targetStrength"})
+                    or (cap.name == "damage_nearby_on_event" and field == "maxTargets")
+                    or (cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"})
                     or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}):
                 authored_bounds = [spec.minimum, spec.maximum]
                 rows.append({"capability": cap.name, "param": param_name,

@@ -70,7 +70,7 @@ public partial class GeneratedItem
                         add("ReactionDelay" + suffix, "ReactionDelay", new object[] { occurrence, delay });
                     AddRuntimeUseEffects(group, "Reaction" + suffix, occurrence, add);
                 }
-                else if (action.ActionCode == RuntimeEventActionCode.DamageArea && action.RadiusPx is > 0 and <= 1024
+                else if (action.ActionCode is (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.DamageNearby) && action.RadiusPx is > 0 and <= 1024
                     && RuntimeTooltipFinite(action.DamageMultiplier, 0f, 10f))
                 {
                     // RuntimeProgramExecutor.AuthoredEventDamage/DamageArea:
@@ -80,8 +80,12 @@ public partial class GeneratedItem
                     int damage = Math.Max(1, (int)MathF.Round(Math.Max(1, authored) * Math.Max(.05f, action.DamageMultiplier)));
                     string exclusion = action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
                         ? RuntimeTooltipText("SecondaryDirectExcluded") : "";
-                    add("SecondaryArea" + suffix, "SecondaryArea", new object[] { occurrence, delay,
-                        RuntimeTooltipNumber(PlayerDisplayUnits.Blocks(action.RadiusPx)), RuntimeTooltipNumber(damage), exclusion });
+                    if (action.ActionCode == RuntimeEventActionCode.DamageNearby)
+                        add("SecondaryNearby" + suffix, "SecondaryNearby", new object[] { occurrence, delay,
+                            RuntimeTooltipNumber(PlayerDisplayUnits.Blocks(action.RadiusPx)), RuntimeTooltipNumber(damage), exclusion, action.MaxTargets });
+                    else
+                        add("SecondaryArea" + suffix, "SecondaryArea", new object[] { occurrence, delay,
+                            RuntimeTooltipNumber(PlayerDisplayUnits.Blocks(action.RadiusPx)), RuntimeTooltipNumber(damage), exclusion });
                 }
                 else if (action.ActionCode == RuntimeEventActionCode.SpawnEntity)
                 {
@@ -128,7 +132,7 @@ public partial class GeneratedItem
 
     private static bool SecondaryEventIsReachable(RuntimeEntitySpec source, RuntimeEventActionSpec action, bool itemContact, bool activeUse, bool equipped)
     {
-        if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.ApplyGeneratedBuff)
+        if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.DamageNearby or RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.ApplyGeneratedBuff)
             || action.Action != RuntimeOpcodeNames.EventActionName(action.ActionCode)
             || (action.Event == RuntimeEventKind.Periodic
                 && (action.PeriodTicks < 6 || !SecondaryPeriodCanOccur(source, action.PeriodTicks)))) return false;

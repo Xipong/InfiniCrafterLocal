@@ -21,7 +21,6 @@ from test_low_level_three_stage_pipeline import wire_transport
 
 PARAMS = {
     "set_projectile_turn_modifier": dict(turnRadiansPerSecond=(.04) * 60, startDelaySeconds=(0) / 60, durationSeconds=(90) / 60),
-    "set_projectile_speed_modifier": dict(speedMultiplierPerUpdate=1.01, maxSpeedBlocksPerSecond=75, startDelaySeconds=(0) / 60, durationSeconds=(40) / 60),
     "set_projectile_homing_modifier": dict(rangeTiles=40, maxTurnRadiansPerSecond=(.1) * 60, requireLineOfSight=True, startDelaySeconds=(40) / 60, durationSeconds=(50) / 60),
     "attract_npcs_while_active": dict(rangeTiles=10, accelerationBlocksPerSecondSquared=(2) * 3600 / 16, falloff="linear", maxTargets=8, startDelaySeconds=(5) / 60, durationSeconds=(60) / 60),
     "set_projectile_visual_scale_curve": dict(startScale=.5, endScale=4, startDelaySeconds=(5) / 60, durationSeconds=(60) / 60, curve="exponential"),
@@ -87,8 +86,6 @@ def test_complete_vertical_witness_exact_identity_and_source_receipts(fn):
 @pytest.mark.parametrize("fn,leaf,kind,value", [
     ("set_projectile_turn_modifier", "turnRadiansPerSecond", "missing", None),
     ("set_projectile_turn_modifier", "turnRadiansPerSecond", "null", None),
-    ("set_projectile_speed_modifier", "maxSpeedBlocksPerSecond", "boolean", True),
-    ("set_projectile_speed_modifier", "speedMultiplierPerUpdate", "numeric-text", "1"),
     ("set_projectile_homing_modifier", "rangeTiles", "negative", -22000),
     ("set_projectile_homing_modifier", "requireLineOfSight", "wrong-type", 0),
     ("attract_npcs_while_active", "accelerationBlocksPerSecondSquared", "infinity", float("inf")),
@@ -115,7 +112,6 @@ def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, ki
 
 @pytest.mark.parametrize("fn,mutation", [
     ("set_projectile_turn_modifier", "null"),
-    ("set_projectile_speed_modifier", "unknown"),
     ("set_projectile_homing_modifier", "duplicate"),
     ("attract_npcs_while_active", "receipt_deleted"),
     ("set_projectile_visual_scale_curve", "other_entity"),
@@ -214,7 +210,6 @@ def test_visual_curve_cannot_be_ignored_by_line_geometry_or_overwritten_by_anoth
 
 @pytest.mark.parametrize("fn,leaf,collapsed,neutral,positive", [
     ("set_projectile_turn_modifier", "turnRadiansPerSecond", 1e-46, 0, 2.4),
-    ("set_projectile_speed_modifier", "speedMultiplierPerUpdate", 1.0000000000000002, 1, 1.01),
 ])
 def test_non_neutral_modifier_cannot_collapse_in_the_real_consumer_and_repair_is_leaf_local(fn, leaf, collapsed, neutral, positive):
     doc = source(fn); call(doc, fn)["params"][leaf] = collapsed

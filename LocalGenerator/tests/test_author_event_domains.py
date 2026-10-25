@@ -21,7 +21,7 @@ from infini_local.core.runtime_authoring.capability_registry import EVENT_ACTION
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 
-NEW = "damage_nearest_on_event"
+NEW = "damage_nearby_on_event"
 OLD = "chain_damage_on_event"
 FIXTURE = Path(__file__).with_name("fixtures") / "event_domain_retained_wire.json"
 
@@ -57,27 +57,28 @@ def test_nearest_alias_preserves_exact_event_opcode_parameters_and_authority(whe
         next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_item_use")["params"]["disableMeleeHitbox"] = False
         call["target"] = "item"
         document["runtimeProgram"]["calls"].append(call)
-    call["params"].update(when=when, maxTargets=count, rangeTiles=7.125, damageMultiplier=0.625, delaySeconds=(37) / 60)
+    call["params"].update(when=when, maxTargets=count, radiusTiles=7.125, damageMultiplier=0.625, delaySeconds=(37) / 60)
     wire, entity = compile_and_check(document)
     assert entity["events"][0] == {
-        "id": "witness_call", "action": OLD, "actionCode": 4, "event": when,
-        "count": count, "rangeTiles": 7.125, "damageMultiplier": 0.625, "delayTicks": 37,
+        "id": "witness_call", "action": NEW, "actionCode": 10, "event": when,
+        "maxTargets": count, "radiusPx": 114, "damageMultiplier": 0.625, "delayTicks": 37,
     }
     cap = CAPABILITY_REGISTRY[NEW]
-    assert cap.network_authority == "owner_execute_sync"
+    assert cap.network_authority == "server_execute"
+    assert cap.authority_by_effect[when] == "owner_execute_sync"
     receipts = [row for row in wire["runtimeContract"]["finalWireReceipts"] if row.get("callId") == "witness_call"]
     for field in ("action", "actionCode"):
         row = next(row for row in receipts if row["finalPath"].endswith("." + field))
         assert row["authoredPath"].endswith(".fn") and row["status"] == "technical_projection"
-    count_row = next(row for row in receipts if row["finalPath"].endswith(".count"))
+    count_row = next(row for row in receipts if row["finalPath"].endswith(".maxTargets"))
     assert count_row["authoredPath"].endswith(".params.maxTargets")
     assert count_row["value"] == count and count_row["status"] == "delivered"
 
 
 @pytest.mark.parametrize("name,value", [
-    ("maxTargets", 0), ("maxTargets", 13), ("maxTargets", 1.5), ("maxTargets", True),
-    ("maxTargets", None), ("count", 2), ("rangeTiles", 0.9), ("rangeTiles", 61),
-    ("damageMultiplier", 0.049), ("damageMultiplier", 2.01),
+    ("maxTargets", 0), ("maxTargets", 17), ("maxTargets", 1.5), ("maxTargets", True),
+    ("maxTargets", None), ("count", 2), ("radiusTiles", 0.49), ("radiusTiles", 61),
+    ("damageMultiplier", 0.049), ("damageMultiplier", 4.01),
     ("when", "periodic"), ("when", {"everySeconds": 1}), ("event", "on_hit"),
 ])
 def test_nearest_alias_rejects_old_or_ambiguous_fresh_fields(name, value):
@@ -105,11 +106,11 @@ def test_nearest_receipts_bind_exact_fixed_action_and_max_target_source(mutation
     elif mutation == "source":
         action["authoredPath"] = action["authoredPath"].removesuffix(".fn") + ".params.maxTargets"
     elif mutation == "count_path":
-        row = next(row for row in receipts if row.get("callId") == "witness_call" and row["finalPath"].endswith(".count"))
+        row = next(row for row in receipts if row.get("callId") == "witness_call" and row["finalPath"].endswith(".maxTargets"))
         row["authoredPath"] = row["authoredPath"].removesuffix(".maxTargets") + ".count"
     else:
-        row = next(row for row in receipts if row.get("callId") == "witness_call" and row["finalPath"].endswith(".count"))
-        row["value"] = entity["events"][0]["count"] = 13
+        row = next(row for row in receipts if row.get("callId") == "witness_call" and row["finalPath"].endswith(".maxTargets"))
+        row["value"] = entity["events"][0]["maxTargets"] = 17
     for source in (None, document):
         assert not audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
     assert not validate_runtime_wire(wire)["ok"]
@@ -120,8 +121,6 @@ def test_old_receipt_owner_is_retired_but_current_action_four_remains():
     variants = {row["properties"]["fn"]["const"]: row for row in capability_provider_union()}
     assert NEW in public and NEW in variants and OLD not in public and OLD not in variants
     assert "maxTargets" in public[NEW]["params"] and "count" not in public[NEW]["params"]
-    assert "same center" in public[NEW]["does"] and "excluding" in public[NEW]["does"]
-    assert "sequential hopping" in public[NEW]["does"]
     assert OLD not in CAPABILITY_REGISTRY and EVENT_ACTION_OPCODE[OLD] == 4
     assert NEW in EVENT_CAPABILITIES and OLD not in EVENT_CAPABILITIES
     document = deepcopy(json.loads(FIXTURE.read_text())["cases"][0]["source"])
@@ -200,7 +199,7 @@ def test_saved_bias_domain_is_strict_even_without_receipts(bias, provenance):
     assert target["targeting"]["sameTargetBias"] is bias  # no in-place normalization
 
 
-@pytest.mark.parametrize("fn,leaf,bad,good", [(NEW, "maxTargets", 13, 3), ("target_and_fire", "sameTargetBias", 0.95, 0.4)])
+@pytest.mark.parametrize("fn,leaf,bad,good", [(NEW, "maxTargets", 17, 3), ("target_and_fire", "sameTargetBias", 0.95, 0.4)])
 def test_leaf_repair_keeps_valid_neighbors_and_accepts_only_current_domain(fn, leaf, bad, good):
     document = build_capability_witness(fn)
     call = witness(document)
@@ -208,11 +207,12 @@ def test_leaf_repair_keeps_valid_neighbors_and_accepts_only_current_domain(fn, l
     scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
     assert next(row["paths"] for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"]) == ["params." + leaf]
     candidate = deepcopy(call)
-    candidate["params"].update({leaf: good, "rangeTiles": 999})
+    neighbor = "radiusTiles" if fn == NEW else "rangeTiles"
+    candidate["params"].update({leaf: good, neighbor: 999})
     patch, audit = filter_repair_patch_scope(document, {"note": "correct one domain leaf", "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(document, patch)
-    assert witness(repaired)["params"]["rangeTiles"] == call["params"]["rangeTiles"]
+    assert witness(repaired)["params"][neighbor] == call["params"][neighbor]
     assert witness(repaired)["params"][leaf] == good
     assert audit["ignoredChanges"]
     compile_and_check(repaired)
@@ -254,3 +254,167 @@ def test_nearest_alias_receipts_bind_final_event_identity_even_for_equal_values(
     entity["events"] = [{**b, "id": a_id}, {**a, "id": b_id}]
     for doc in (None, source):
         assert not audit_compiler_receipts(rows, authored_document=doc, final_document=wire)["ok"]
+
+
+@pytest.mark.parametrize("mode,impulses", [
+    ("target_to_owner", {"impulseBlocksPerSecond": 8, "radiusTiles": 10}),
+    ("target_to_entity", {"impulseBlocksPerSecond": 14, "radiusTiles": 10}),
+    ("owner_to_target", {"impulseBlocksPerSecond": 8}),
+    ("both", {"ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}),
+])
+def test_unified_pull_compiles_only_explicit_selected_branch(mode, impulses):
+    document = build_capability_witness("pull_on_event")
+    witness(document)["params"] = {"when": "on_crit", "mode": mode, **impulses}
+    wire, entity = compile_and_check(document)
+    action = entity["events"][0]
+    assert action["action"] == "pull_on_event" and action["actionCode"] == 5
+    assert action["mode"] == mode
+    if mode == "both":
+        assert action["ownerStrength"] == 8 * 16 / 60
+        assert action["targetStrength"] == 14 * 16 / 60
+        assert "strength" not in action and "radiusTiles" not in action
+    else:
+        assert action["strength"] == impulses["impulseBlocksPerSecond"] * 16 / 60
+        assert "ownerStrength" not in action and "targetStrength" not in action
+    delivery = deepcopy(wire); delivery.pop("runtimeContract")
+    assert validate_runtime_wire(delivery)["ok"]
+
+
+@pytest.mark.parametrize("change", [
+    {"targetImpulseBlocksPerSecond": None}, {"targetImpulseBlocksPerSecond": True},
+    {"targetImpulseBlocksPerSecond": 0}, {"targetImpulseBlocksPerSecond": 15.01},
+    {"radiusTiles": 5}, {"impulseBlocksPerSecond": 2},
+    {"when": {"everySeconds": 1}}, {"when": "on_expire"},
+])
+def test_both_pull_rejects_missing_wrong_branch_or_targetless_events(change):
+    document = build_capability_witness("pull_on_event")
+    witness(document)["params"] = {"when": "on_hit", "mode": "both",
+        "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14, **change}
+    assert not validate_runtime_program(document)["ok"]
+    with pytest.raises(ValueError): compile_runtime_program(document)
+
+
+def test_both_pull_missing_impulse_repair_preserves_other_strength_and_mode():
+    document = build_capability_witness("pull_on_event")
+    call = witness(document)
+    call["params"] = {"when": "on_hit", "mode": "both", "ownerImpulseBlocksPerSecond": 8}
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(document, report["errors"])
+    candidate = deepcopy(call)
+    candidate["params"].update(ownerImpulseBlocksPerSecond=12, targetImpulseBlocksPerSecond=14)
+    patch, audit = filter_repair_patch_scope(document, {"note": "supply missing target impulse", "callsUpsert": [candidate]}, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(document, patch)
+    assert witness(repaired)["params"]["ownerImpulseBlocksPerSecond"] == 8
+    assert witness(repaired)["params"]["mode"] == "both"
+    assert witness(repaired)["params"]["targetImpulseBlocksPerSecond"] == 14
+    compile_and_check(repaired)
+
+
+def test_nearby_omission_is_explicit_cap_receipt_not_unlimited_damage():
+    source = build_capability_witness(NEW)
+    witness(source)["params"].pop("maxTargets")
+    wire, entity = compile_and_check(source)
+    assert entity["events"][0]["maxTargets"] == 16
+    receipt = next(r for r in wire["runtimeContract"]["finalWireReceipts"]
+                   if r.get("callId") == "witness_call" and r["finalPath"].endswith(".maxTargets"))
+    assert receipt["status"] == "declared_neutral_omission" and receipt["value"] == 16
+
+
+@pytest.mark.parametrize("field,value", [("maxTargets", 17), ("maxTargets", True), ("radiusPx", 961),
+    ("radiusPx", 7), ("damageMultiplier", 4.01), ("damageMultiplier", None), ("mode", "both")])
+def test_nearby_delivery_strict_native_domain_without_diagnostics(field, value):
+    wire = compile_runtime_program(build_capability_witness(NEW)); wire.pop("runtimeContract")
+    event = next(e["events"][0] for e in wire["runtimeProgram"]["entities"] if e["events"])
+    event[field] = value
+    assert not validate_runtime_wire(wire)["ok"]
+
+
+def test_saved_pre_simplification_events_and_receipts_keep_their_original_contract():
+    corpus = json.loads(FIXTURE.with_name("event_api_pre_simplification.json").read_text())
+    assert corpus["sourceHead"] == "723f0e1b07a79b3621f40e61c4d9ee30690ced8a"
+    for case in corpus["cases"]:
+        wire = case["wire"]
+        before = deepcopy(wire)
+        assert validate_runtime_wire(wire)["ok"], case["fn"]
+        for source in (None, case["source"]):
+            assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                authored_document=source, final_document=wire)["ok"], case["fn"]
+        assert wire == before
+        delivery = deepcopy(wire); delivery.pop("runtimeContract")
+        assert validate_runtime_wire(delivery)["ok"]
+        if case["fn"] != "pull_on_event":
+            assert not validate_runtime_program(case["source"])["ok"]
+            assert not CAPABILITY_REGISTRY[case["fn"]].author_visible
+
+
+def test_both_pull_foreign_radius_repair_deletes_only_invalid_leaf():
+    source = build_capability_witness("pull_on_event")
+    call = witness(source)
+    call["params"] = {"when": "on_hit", "mode": "both", "ownerImpulseBlocksPerSecond": 8,
+                      "targetImpulseBlocksPerSecond": 14, "radiusTiles": 8}
+    scope = build_runtime_repair_scope(source, validate_runtime_program(source)["errors"])
+    assert next(row["paths"] for row in scope["fieldPermissions"]["calls"]
+                if row["id"] == call["id"]) == ["params.radiusTiles"]
+    candidate = deepcopy(call)
+    candidate["params"].pop("radiusTiles")
+    candidate["params"]["ownerImpulseBlocksPerSecond"] = 12
+    patch, audit = filter_repair_patch_scope(source, {"note": "delete foreign radius", "callsUpsert": [candidate],
+        "callParamKeysDelete": [{"callId": call["id"], "key": name}
+                               for name in ("radiusTiles", "ownerImpulseBlocksPerSecond")]}, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(source, patch)
+    assert witness(repaired)["params"] == {"when": "on_hit", "mode": "both",
+        "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
+    compile_and_check(repaired)
+    assert audit["ignoredChanges"]
+    # A valid different branch is not an alternate permission to change mode.
+    hostile = deepcopy(call)
+    hostile["params"] = {"when": "on_hit", "mode": "owner_to_target", "impulseBlocksPerSecond": 2}
+    patch, audit = filter_repair_patch_scope(source, {"note": "try replacing branch", "callsUpsert": [hostile]}, scope)
+    if audit["ok"]:
+        actual = witness(apply_repair_patch(source, patch))["params"]
+        assert actual == {key: value for key, value in call["params"].items() if key != "radiusTiles"}
+
+
+@pytest.mark.parametrize("invalid_selector", ["oops", None, 7, {}])
+def test_pull_undecided_mode_repair_freezes_present_strengths(invalid_selector):
+    source = build_capability_witness("pull_on_event")
+    call = witness(source)
+    call["params"] = {"when": "on_hit", "ownerImpulseBlocksPerSecond": 8,
+                      "targetImpulseBlocksPerSecond": 14}
+    if invalid_selector is not None:
+        call["params"]["mode"] = invalid_selector
+    report = validate_runtime_program(source)
+    assert not report["ok"]
+    scope = build_runtime_repair_scope(source, report["errors"])
+    candidate = deepcopy(call)
+    candidate["params"].update(mode="both", when="on_crit", ownerImpulseBlocksPerSecond=1,
+                               targetImpulseBlocksPerSecond=2)
+    patch, audit = filter_repair_patch_scope(source, {"note": "choose mode", "callsUpsert": [candidate]}, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(source, patch)
+    assert witness(repaired)["params"] == {"when": "on_hit", "mode": "both",
+        "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
+    compile_and_check(repaired)
+
+
+@pytest.mark.parametrize("invalid_when", ["oops", None, 7, {}])
+def test_pull_invalid_when_repair_freezes_mode_and_strengths(invalid_when):
+    source = build_capability_witness("pull_on_event")
+    call = witness(source)
+    call["params"] = {"mode": "both", "ownerImpulseBlocksPerSecond": 8,
+                      "targetImpulseBlocksPerSecond": 14}
+    if invalid_when is not None:
+        call["params"]["when"] = invalid_when
+    scope = build_runtime_repair_scope(source, validate_runtime_program(source)["errors"])
+    candidate = deepcopy(call)
+    candidate["params"].update(when="on_hit", ownerImpulseBlocksPerSecond=1,
+                               targetImpulseBlocksPerSecond=2)
+    patch, audit = filter_repair_patch_scope(source, {"note": "choose event", "callsUpsert": [candidate]}, scope)
+    assert audit["ok"], audit
+    repaired = apply_repair_patch(source, patch)
+    assert witness(repaired)["params"] == {"when": "on_hit", "mode": "both",
+        "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
+    compile_and_check(repaired)

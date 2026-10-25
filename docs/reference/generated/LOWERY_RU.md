@@ -161,6 +161,8 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | apply_generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
 | apply_status_on_event | runtimeProgram.entities[].events[].action | 'apply_status_on_event' |
 | apply_status_on_event | runtimeProgram.entities[].events[].actionCode | 2 |
+| damage_nearby_on_event | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
+| damage_nearby_on_event | runtimeProgram.entities[].events[].actionCode | 10 |
 | damage_area_on_event | runtimeProgram.entities[].events[].action | 'damage_area_on_event' |
 | damage_area_on_event | runtimeProgram.entities[].events[].actionCode | 3 |
 | damage_nearest_on_event | runtimeProgram.entities[].events[].action | 'chain_damage_on_event' |
@@ -193,8 +195,11 @@ Typed structured choices и конечные enum-отображения так�
 
 | capability.param | declared projection |
 |---|---|
+| accumulate_projectile_charge.releaseEffect | (('releaseEffect.damageMultiplier', 'damageMultiplier', False), ('releaseEffect.knockbackMultiplier', 'knockbackMultiplier', False), ('releaseEffect.speedMultiplier', 'speedMultiplier', False), ('releaseEffect.launchSpeedBlocksPerSecond', 'launchSpeed', False), ('releaseEffect.pauseLifetimeWhileCharging', 'pauseLifetimeWhileCharging', False)) |
 | gate_projectile_contact.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_beam_geometry.ramp | (('ramp.warmupSeconds', 'warmupTicks', False), ('ramp.initialWidthMultiplier', 'initialWidthMultiplier', False), ('ramp.initialDamageMultiplier', 'initialDamageMultiplier', False), ('ramp.damageStartProgress', 'damageStartProgress', False)) |
 | attach_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| attach_projectile.reachCurve | (('reachCurve.durationSeconds', 'durationTicks', False), ('reachCurve.startOffsetBlocks', 'startOffsetPx', False), ('reachCurve.peakOffsetBlocks', 'peakOffsetPx', False), ('reachCurve.endOffsetBlocks', 'endOffsetPx', False), ('reachCurve.peakProgress', 'peakProgress', False), ('reachCurve.window.phase', 'window.phase', False), ('reachCurve.window.clock', 'window.clock', False), ('reachCurve.window.startDelaySeconds', 'window.startDelayTicks', False), ('reachCurve.window.durationSeconds', 'window.durationTicks', False)) |
 | set_front_arm_pose.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | set_projectile_reach_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | orbit_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
@@ -203,6 +208,7 @@ Typed structured choices и конечные enum-отображения так�
 | set_projectile_proximity_action.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | accelerate_projectile_vertical.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | multiply_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| scale_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | set_projectile_rotation.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | oscillate_projectile_velocity.law | (('law', 'law', True), ('law.angular_sine.amplitudeRadiansPerSecond', 'amplitude', False), ('law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'amplitude', False)) |
 | oscillate_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
@@ -223,6 +229,7 @@ Typed structured choices и конечные enum-отображения так�
 | spawn_entity_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
 | spawn_entity_from_hit_target.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforePositionJitterRadiusBlocks', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeDirectionJitterRadians', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpreadRadians', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.initialIgnoreCountdownUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
 | apply_generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
+| damage_nearby_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
 | damage_area_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
 | pull_on_event.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
 | pull_owner_to_event_target.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
@@ -280,6 +287,7 @@ Typed structured choices и конечные enum-отображения так�
 | target_and_fire.requireLineOfSight | False | unconditional declared neutral |
 | target_and_fire.hardRange | False | unconditional declared neutral |
 | spawn_entity_on_event.spreadRadians | 0 | {'targetKinds': (), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| damage_nearby_on_event.maxTargets | 16 | unconditional declared neutral |
 
 ## Каноническая vocabulary
 
@@ -427,6 +435,7 @@ Event actions:
 | move_owner_on_event | 7 |
 | select_targets_and_emit_on_event | 8 |
 | apply_generated_buff_on_event | 9 |
+| damage_nearby_on_event | 10 |
 
 ### Entity kind → visual role
 

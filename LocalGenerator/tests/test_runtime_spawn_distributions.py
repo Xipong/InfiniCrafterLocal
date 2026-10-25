@@ -277,10 +277,12 @@ def test_sampled_velocity_cannot_be_authored_for_a_stationary_kind(kind):
     assert any(row["code"] == "unsupported_param_variant_target_kind" for row in report["errors"])
 
 
-@pytest.mark.parametrize("capability", ["apply_projectile_charge_release", "set_projectile_beam_geometry"])
+@pytest.mark.parametrize("capability", ["accumulate_projectile_charge", "set_projectile_beam_geometry"])
 def test_independent_charge_release_and_beam_geometry_keep_initial_sampled_flight(capability):
     document = build_capability_witness(capability)
     controller = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == capability)
+    if capability == "accumulate_projectile_charge":
+        controller["params"]["releaseEffect"] = {"launchSpeedBlocksPerSecond": 30}
     spawn = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn" and row["target"] == controller["target"])
     spawn["params"].update(velocity=deepcopy(VELOCITIES[2]), spreadRadians=0)
     before = deepcopy(document)

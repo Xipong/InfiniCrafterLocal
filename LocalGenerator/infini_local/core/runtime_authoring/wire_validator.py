@@ -96,7 +96,7 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
-    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput",
+    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
 }) | _TARGET_EMISSION_FIELDS
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
@@ -629,7 +629,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
             if not isinstance(event, Mapping): continue
             reactive = event.get("event") in ("on_hurt", "on_enemy_kill")
             timer = event.get("reactionCooldownTicks", 0)
-            if (reactive and (type(timer) is not int or not 6 <= timer <= 3600 or event.get("actionCode") not in (1, 3, EVENT_ACTION_OPCODE["apply_generated_buff_on_event"]))
+            if (reactive and (type(timer) is not int or not 6 <= timer <= 3600 or event.get("actionCode") not in (1, 3, EVENT_ACTION_OPCODE["apply_generated_buff_on_event"], EVENT_ACTION_OPCODE["damage_nearby_on_event"]))
                     or not reactive and "reactionCooldownTicks" in event):
                 errors.append({"path": f"{entity_path}.events[{event_index}].reactionCooldownTicks", "code": "invalid_reaction_cooldown", "message": "Equipment reactions require an explicit supported action and bounded cooldown."})
         movement = entity.get("movement") if isinstance(entity.get("movement"), Mapping) else {}
@@ -651,6 +651,8 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                 if not isinstance(record, Mapping):
                     continue
                 for param_name, spec in modifier_cap.params.items():
+                    if param_name in modifier_cap.nested_components:
+                        continue
                     if modifier_cap.category != "motion_primitive" and param_name != "window":
                         continue  # Retained components keep their scalar admission.
                     if any(name.split(".", 1)[0] in record for name in spec.wire_field_names(param_name)) and not _wire_projection_witness(spec, param_name, "component", {"component": record}):
@@ -973,6 +975,39 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                     errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}].event",
                                    "code": "event_not_produced", "message": "Target emission requires the actual item-contact or projectile-damage hit producer."})
             action_code = event.get("actionCode")
+            event_path = f"$.runtimeProgram.entities[{index}].events[{event_index}]"
+            if action_code == EVENT_ACTION_OPCODE["damage_nearby_on_event"]:
+                cap = CAPABILITY_REGISTRY["damage_nearby_on_event"]
+                owned = {field for name, spec in cap.params.items() for field in spec.wire_field_names(name)}
+                for key, neutral in {**_EMISSION_UNUSED_EVENT_DEFAULTS, "entityId": ""}.items():
+                    if key in owned or key not in event:
+                        continue
+                    if type(event[key]) not in (type(neutral), int, float) or event[key] != neutral:
+                        errors.append({"path": event_path + "." + key, "code": "wrong_event_parameter_owner", "message": "Nearby damage cannot consume another action's fields."})
+                for name in ("radiusTiles", "damageMultiplier", "maxTargets"):
+                    spec = cap.params[name]
+                    key = spec.wire_name or name
+                    if key not in event:
+                        errors.append({"path": event_path + "." + key, "code": "required_field", "message": "Nearby damage requires its complete bounded wire projection."})
+                    else:
+                        errors.extend(strict_schema_errors(event[key], spec.wire_schema(), path=event_path + "." + key))
+                if event.get("action") != cap.name or event.get("event") not in cap.allowed_events:
+                    errors.append({"path": event_path, "code": "invalid_event_action", "message": "Nearby damage requires its exact name and supported event."})
+            if action_code != EVENT_ACTION_OPCODE["damage_nearby_on_event"] and "maxTargets" in event:
+                errors.append({"path": event_path + ".maxTargets", "code": "wrong_event_parameter_owner", "message": "maxTargets requires nearby damage."})
+            both = action_code == EVENT_ACTION_OPCODE["pull_on_event"] and event.get("mode") == "both"
+            for field, name in (("ownerStrength", "ownerImpulseBlocksPerSecond"), ("targetStrength", "targetImpulseBlocksPerSecond")):
+                if both:
+                    if field not in event:
+                        errors.append({"path": event_path + "." + field, "code": "required_field", "message": "Both requires two explicit independent impulses."})
+                    else:
+                        errors.extend(strict_schema_errors(event[field], CAPABILITY_REGISTRY["pull_on_event"].params[name].wire_schema(), path=event_path + "." + field))
+                elif field in event:
+                    errors.append({"path": event_path + "." + field, "code": "wrong_event_parameter_owner", "message": "Two-body impulses require pull mode both."})
+            if both and (event.get("action") != "pull_on_event" or event.get("event") not in ("on_hit", "on_crit")
+                         or event.get("strength", 0) != 0 or event.get("radiusTiles", 0) != 0):
+                errors.append({"path": event_path, "code": "invalid_pull_branch", "message": "Both never consumes a shared impulse or NPC-search radius."})
+
             _validate_hit_target_spawn(event, kind, entities, f"$.runtimeProgram.entities[{index}].events[{event_index}]", errors)
             _validate_child_combat(event, "spawn_entity_on_event", kind,
                                    type(action_code) is int and action_code == EVENT_ACTION_OPCODE["spawn_entity_on_event"]

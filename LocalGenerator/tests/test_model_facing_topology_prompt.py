@@ -91,13 +91,13 @@ def test_use_hold_charge_equipment_and_topology_are_at_owners(monkeypatch) -> No
     assert all(term in use for term in ("useTimeSeconds", "useAnimationSeconds", "autoReuse", "channel"))
     charge = cards["accumulate_projectile_charge"]
     assert "durationSeconds" in charge["params"]
-    assert "no position, aim, damage, contact gate or lifetime pause" in charge["does"]
+    assert charge["params"]["releaseEffect"]["optional"] is True
     assert any(rule["capability"] == "configure_item_use" and rule["param"] == "channel"
                and rule["equals"] is True for rule in charge["requires"])
-    release = cards["apply_projectile_charge_release"]
-    assert "pauseLifetimeWhileCharging" in release["params"]
-    assert any(rule["capability"] == charge["fn"] for rule in release["requires"])
-    assert "contact remains independently authored" in release["does"]
+    release = charge["params"]["releaseEffect"]["shape"]["properties"]
+    assert "pauseLifetimeWhileCharging" in release
+    assert "launchSpeedBlocksPerSecond" in release
+    assert "apply_projectile_charge_release" not in cards
     assert "gate_projectile_contact" in cards
     assert "customHeldSprite" in cards["configure_item_use"]["params"]
     assert "charge_then_release" not in cards

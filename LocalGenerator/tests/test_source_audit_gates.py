@@ -27,6 +27,24 @@ def python_sources(source):
             "LocalGenerator/infini_local/renamed_probe.py": source}
 
 
+def test_validator_inventory_follows_explicit_diagnostic_code_arguments(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("audit_targeted_repair", ROOT / "tools/checks/audit_targeted_repair.py")
+    assert spec is not None and spec.loader is not None
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    path = tmp_path / "LocalGenerator/infini_local/core/runtime_authoring/validator.py"
+    path.parent.mkdir(parents=True)
+    path.write_text('''
+def reject(row, field, code, message):
+    return ValidationIssue(field, code, message)
+reject({}, "window", "overlapping_motion_windows", "not_an_error_code")
+ValidationIssue("path", "first" if name == "not_a_code" else "second", "message")
+unrelated("not_a_code")
+''')
+    monkeypatch.setattr(audit, "ROOT", tmp_path)
+    assert audit._emitted_validator_codes() == {"overlapping_motion_windows", "first", "second"}
+
+
 @pytest.mark.parametrize("source,code", [
     ('values = {"name": 1, "name": 2}', "duplicate_dict_key"),
     ('def f():\n    x = 1\n    x = 1', "duplicate_assignment"),
