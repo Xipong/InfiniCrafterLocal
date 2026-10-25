@@ -37,9 +37,11 @@ internal static class RuntimeProgramExecutor
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyGeneratedBuff => InfiniRuntimeAuthority.ShouldRunPlayerGameplay(owner),
             RuntimeEventActionCode.SelectTargetsAndEmit => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
-            RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage
+            RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage or RuntimeEventActionCode.DamageNearby
                 => ShouldRunNpcEvent(action, owner),
-            RuntimeEventActionCode.Pull => action.Mode == "owner_to_target"
+            RuntimeEventActionCode.Pull => action.Mode == "both"
+                ? InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner) || InfiniRuntimeAuthority.ShouldRunNpcGameplay()
+                : action.Mode == "owner_to_target"
                 ? InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner)
                 : InfiniRuntimeAuthority.ShouldRunNpcGameplay(),
             _ => false,
@@ -116,6 +118,10 @@ internal static class RuntimeProgramExecutor
                 // expiration merely selects a nearby target; its blast must
                 // include that target rather than treating it as a prior hit.
                 DamageArea(data, sourceEntity, action, owner, eventPosition,
+                    action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit ? directTarget : null);
+                break;
+            case RuntimeEventActionCode.DamageNearby:
+                DamageNearby(data, sourceEntity, action, owner, eventPosition,
                     action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit ? directTarget : null);
                 break;
             case RuntimeEventActionCode.ChainDamage:
@@ -416,8 +422,49 @@ internal static class RuntimeProgramExecutor
         }
     }
 
+    internal static List<NPC> SelectNearbyDamageTargets(Vector2 center, float radius, int maximum, NPC? excluded)
+    {
+        var candidates = new List<NPC>();
+        foreach (NPC npc in Main.ActiveNPCs)
+            if (npc.CanBeChasedBy() && npc != excluded && Vector2.DistanceSquared(npc.Center, center) <= radius * radius)
+                candidates.Add(npc);
+        candidates.Sort((left, right) =>
+        {
+            int distance = Vector2.DistanceSquared(left.Center, center).CompareTo(Vector2.DistanceSquared(right.Center, center));
+            return distance != 0 ? distance : left.whoAmI.CompareTo(right.whoAmI);
+        });
+        int count = Math.Min(candidates.Count, Math.Clamp(maximum, 1, 16));
+        if (candidates.Count > count) candidates.RemoveRange(count, candidates.Count - count);
+        return candidates;
+    }
+
+    private static void DamageNearby(GeneratedItemData data, RuntimeEntitySpec sourceEntity, RuntimeEventActionSpec action, Player owner, Vector2 center, NPC? excluded)
+    {
+        var (baseDamage, damageClass) = AuthoredEventDamage(data, sourceEntity);
+        int damage = Math.Max(1, (int)MathF.Round(Math.Max(1, baseDamage) * action.DamageMultiplier));
+        foreach (NPC npc in SelectNearbyDamageTargets(center, action.RadiusPx, action.MaxTargets!.Value, excluded))
+            owner.ApplyDamageToNPC(npc, damage, 0f, npc.Center.X >= owner.Center.X ? 1 : -1,
+                false, TerrariaRuntimeVocabulary.ResolveDamageClass(damageClass), false);
+    }
+
     private static void Pull(RuntimeEventActionSpec action, Player owner, Vector2 eventPosition, NPC? directTarget)
     {
+        if (action.Mode == "both")
+        {
+            // Each side rechecks its own authority. Hit bridge server replay must
+            // never apply the owner impulse again; target loss never becomes AoE.
+            if (directTarget is not { active: true } || action.OwnerStrength is not float ownerStrength
+                || action.TargetStrength is not float targetStrength) return;
+            Vector2 towardTarget = (directTarget.Center - owner.Center).SafeNormalize(Vector2.Zero);
+            if (InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner))
+                owner.velocity += towardTarget * ownerStrength;
+            if (InfiniRuntimeAuthority.ShouldRunNpcGameplay() && directTarget.knockBackResist > 0f)
+            {
+                directTarget.velocity -= towardTarget * targetStrength * directTarget.knockBackResist;
+                if (InfiniRuntimeAuthority.IsServer) directTarget.netUpdate = true;
+            }
+            return;
+        }
         float strength = Math.Clamp(action.Strength, 0f, 4f);
         float radius = Math.Max(16f, action.RadiusTiles * 16f);
         if (action.Mode == "owner_to_target")

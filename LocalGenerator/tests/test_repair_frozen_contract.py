@@ -175,10 +175,9 @@ def test_captured_gameplay_repair_replay(section, case, fresh_motion):
             {"id": "explicit_axis", "fn": "set_projectile_aim", "target": old["target"],
              "params": {"source": "cursor", "turnOwner": False}},
             {"id": "explicit_anchor", "fn": "attach_projectile", "target": old["target"],
-             "params": {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0}},
-            {"id": "explicit_reach", "fn": "set_projectile_reach_curve", "target": old["target"],
-             "params": {"durationSeconds": 31 / 60, "startOffsetBlocks": 1.125,
-                        "peakOffsetBlocks": 6.125, "endOffsetBlocks": 1.125, "peakProgress": 0.5}},
+             "params": {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0,
+                        "reachCurve": {"durationSeconds": 31 / 60, "startOffsetBlocks": 1.125,
+                        "peakOffsetBlocks": 6.125, "endOffsetBlocks": 1.125, "peakProgress": 0.5}}},
         ])
     historical_patch = _historical_names(replay["repairPatch"]) if section == "gameplayApplyCases" else None
     if historical_patch is not None:

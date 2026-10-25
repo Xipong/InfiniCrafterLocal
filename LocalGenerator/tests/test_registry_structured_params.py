@@ -151,7 +151,7 @@ def test_call_projection_authenticates_exact_entity_owner(attack):
 
 @pytest.mark.parametrize("attack", ["id-only", "coordinated-events"])
 def test_event_projection_authenticates_exact_call_identity(attack):
-    document = build_capability_witness("damage_nearest_on_event")
+    document = build_capability_witness("damage_nearby_on_event")
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
     another = deepcopy(call)
     another.update(id="another_nearest")

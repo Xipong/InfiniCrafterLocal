@@ -81,6 +81,42 @@ internal static partial class EngineRuntimeChecks
         }));
     }
 
+    private static void NearbyDamageTooltipUsesExplicitCapWithoutFallback()
+    {
+        var row = JsonNode.Parse(File.ReadAllText(Path.Combine("tools", "fixtures", "played-secondaries-delivered.json")))!.AsArray()[0]!;
+        WithForgePresentationLanguages(locale =>
+        {
+            var data = GeneratedItemData.FromJson(row.ToJsonString())
+                ?? throw new InvalidOperationException("secondary tooltip fixture refused: " + ContractJsonDiagnostics.LastError);
+            var host = TooltipSecondaryHost(data);
+            data = host.Data;
+            var source = data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.PrimaryEntityId)!;
+            RuntimeEventActionSpec Nearby() => new() { Id = "nearby_tooltip", Event = RuntimeEventKind.OnHit,
+                Action = "damage_nearby_on_event", ActionCode = RuntimeEventActionCode.DamageNearby,
+                RadiusPx = 24, DamageMultiplier = .5f, DelayTicks = 10 };
+            foreach (int cap in new[] { 1, 16 })
+            {
+                var action = Nearby(); action.MaxTargets = cap;
+                action.NormalizeAndValidate();
+                source.Events = new[] { action };
+                string before = JsonSerializer.Serialize(data);
+                var lines = TooltipSecondaryLines(host);
+                string text = lines.Single(x => x.Name.StartsWith("InfiniSecondaryNearby", StringComparison.Ordinal)).Text;
+                string fact = locale == "en-US" ? $"up to {cap} nearest" : $"до {cap} ближайших";
+                Equal(true, text.Contains(fact, StringComparison.Ordinal), "nearby tooltip renders the actual explicit target cap");
+                Equal(false, text.Contains("Mods.InfiniCrafterLocal.", StringComparison.Ordinal), "nearby tooltip resolves localized text");
+                Equal(false, lines.Any(x => x.Name.StartsWith("InfiniSecondaryArea", StringComparison.Ordinal)), "nearby tooltip never describes legacy area targeting");
+                Equal(before, JsonSerializer.Serialize(data), "nearby tooltip does not change accepted gameplay values");
+            }
+            source.Events = new[] { Nearby() }; // malformed DTO bypasses admission deliberately
+            string malformedBefore = JsonSerializer.Serialize(data);
+            var malformedLines = TooltipSecondaryLines(host);
+            Equal(false, malformedLines.Any(x => x.Name.StartsWith("InfiniSecondaryNearby", StringComparison.Ordinal)
+                || x.Name.StartsWith("InfiniSecondaryArea", StringComparison.Ordinal)), "absent cap has no advertised damage or area fallback");
+            Equal(malformedBefore, JsonSerializer.Serialize(data), "tooltip does not fill an absent cap with sixteen");
+        });
+    }
+
     public static void PlayedSecondaryTooltipsDescribeExactDeliveredCombat()
     {
         var rows = JsonNode.Parse(File.ReadAllText(Path.Combine("tools", "fixtures", "played-secondaries-delivered.json")))!.AsArray();

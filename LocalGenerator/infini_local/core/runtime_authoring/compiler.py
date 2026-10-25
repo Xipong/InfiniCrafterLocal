@@ -367,8 +367,13 @@ def _compile_entity_call(
             project(rows[index], f"{base}.{name}[{index}]", p)
         else:
             target, prefix = component(name), f"{base}.{name}"
-            project(target, prefix, p)
-            for key, value in CAPABILITY_REGISTRY[fn].fixed_wire_literals.items():
+            cap = CAPABILITY_REGISTRY[fn]
+            project(target, prefix, {key: value for key, value in p.items() if key not in cap.nested_components})
+            for key, member in cap.nested_components.items():
+                if key in p:
+                    ctx.project_parameter(call=call, param=key, value=p[key],
+                                          target=component(member), prefix=f"{base}.{member}")
+            for key, value in cap.fixed_wire_literals.items():
                 ctx.write_derived(call=call, path=f"{prefix}.{key}", value=value,
                     target=target, key=key, source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
@@ -431,7 +436,13 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         if omitted:
             # Only the private compiler copy is completed; the Author source and
             # Repair's sparse fragments retain their original omission.
-            call["params"] = {**authored_params, **copy.deepcopy(omitted)}
+            call["params"] = copy.deepcopy(authored_params)
+            for path, value in omitted.items():
+                destination = call["params"]
+                parts = path.split(".")
+                for part in parts[:-1]:
+                    destination = destination[part]
+                destination[parts[-1]] = copy.deepcopy(value)
             call["_neutralOmissions"] = frozenset(omitted)
 
     item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")

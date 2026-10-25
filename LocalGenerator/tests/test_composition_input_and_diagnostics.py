@@ -43,8 +43,8 @@ def test_target_and_fire_composes_with_explicit_motion_and_speed_modifier():
     doc = build_capability_witness('target_and_fire')
     doc['runtimeProgram']['entities'][1]['kind'] = 'free_projectile'
     doc['runtimeProgram']['calls'].append({'id': 'firing_motion', 'fn': 'move_straight', 'target': 'witness_entity'})
-    modifier = deepcopy(next(c for c in build_capability_witness('set_projectile_speed_modifier')['runtimeProgram']['calls']
-                             if c['fn'] == 'set_projectile_speed_modifier'))
+    modifier = deepcopy(next(c for c in build_capability_witness('scale_projectile_velocity')['runtimeProgram']['calls']
+                             if c['fn'] == 'scale_projectile_velocity'))
     modifier['id'] = 'firing_speed'
     doc['runtimeProgram']['calls'].append(modifier)
     assert validate_runtime_program(doc)['ok'], validate_runtime_program(doc)
@@ -55,7 +55,7 @@ def test_target_and_fire_composes_with_explicit_motion_and_speed_modifier():
     entity = next(e for e in wire['runtimeProgram']['entities'] if e['id'] == 'witness_entity')
     assert entity['movement']['name'] == 'move_straight'
     assert entity['controller']['name'] == 'target_and_fire'
-    assert entity['speedModifier']['speedMultiplierPerUpdate'] == .8
+    assert entity['velocityScale'][0]['multiplierPerUpdate'] == modifier['params']['multiplierPerUpdate']
 
 
 def test_mobile_firing_requires_explicit_motion_without_inventing_stationary_behavior():

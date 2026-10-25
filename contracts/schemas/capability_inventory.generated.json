@@ -115,7 +115,7 @@
       "capability": "accumulate_projectile_charge",
       "componentSlot": "charge",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
       "dependencies": [
         "configure_item_use"
       ],
@@ -127,7 +127,12 @@
       "exclusiveGroup": "",
       "finalWirePaths": [
         "runtimeProgram.entities[].charge.durationTicks",
-        "runtimeProgram.entities[].charge.autoReleaseAfterActiveTicks"
+        "runtimeProgram.entities[].charge.autoReleaseAfterActiveTicks",
+        "runtimeProgram.entities[].chargeRelease.damageMultiplier",
+        "runtimeProgram.entities[].chargeRelease.knockbackMultiplier",
+        "runtimeProgram.entities[].chargeRelease.speedMultiplier",
+        "runtimeProgram.entities[].chargeRelease.launchSpeed",
+        "runtimeProgram.entities[].chargeRelease.pauseLifetimeWhileCharging"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -151,10 +156,20 @@
           "required": true,
           "semanticType": "seconds",
           "units": "seconds"
+        },
+        "releaseEffect": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         }
       },
       "positionOwnership": "none",
-      "purpose": "Accumulate and latch release only; no position, aim, damage, contact gate or lifetime pause.",
+      "purpose": "Accumulate and latch release. Without releaseEffect, no velocity, combat or lifetime rewrite; aim and contact stay independent.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -209,7 +224,7 @@
           "maximum": 4,
           "minimum": 1,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": ""
         },
@@ -219,7 +234,7 @@
           "maximum": 4,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": ""
         },
@@ -239,7 +254,7 @@
           "maximum": null,
           "minimum": null,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "bounded_text",
           "units": ""
         },
@@ -249,13 +264,13 @@
           "maximum": 4,
           "minimum": 0.1,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": ""
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply independent interpolated multipliers once at charge release; lifetime pause is explicit and contact remains independently authored.",
+      "purpose": "Apply interpolated multipliers once at release; lifetime pause is explicit; contact remains independently authored.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -339,7 +354,7 @@
       "capability": "set_projectile_beam_geometry",
       "componentSlot": "beamGeometry",
       "conflicts": [],
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "dependencies": [
         "set_projectile_aim"
       ],
@@ -349,7 +364,11 @@
       "finalWirePaths": [
         "runtimeProgram.entities[].beamGeometry.lengthPx",
         "runtimeProgram.entities[].beamGeometry.widthPx",
-        "runtimeProgram.entities[].beamGeometry.raycastTiles"
+        "runtimeProgram.entities[].beamGeometry.raycastTiles",
+        "runtimeProgram.entities[].beamRamp.warmupTicks",
+        "runtimeProgram.entities[].beamRamp.initialWidthMultiplier",
+        "runtimeProgram.entities[].beamRamp.initialDamageMultiplier",
+        "runtimeProgram.entities[].beamRamp.damageStartProgress"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -363,6 +382,16 @@
           "required": true,
           "semanticType": "blocks",
           "units": "blocks"
+        },
+        "ramp": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "raycastTiles": {
           "enum": [],
@@ -452,7 +481,7 @@
           "maximum": 1,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": ""
         },
@@ -462,7 +491,7 @@
           "maximum": 1,
           "minimum": 0.01,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": ""
         },
@@ -472,7 +501,7 @@
           "maximum": 1,
           "minimum": 0.01,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "unitless_scalar",
           "units": ""
         },
@@ -813,7 +842,16 @@
         "runtimeProgram.entities[].attachment.window.phase",
         "runtimeProgram.entities[].attachment.window.clock",
         "runtimeProgram.entities[].attachment.window.startDelayTicks",
-        "runtimeProgram.entities[].attachment.window.durationTicks"
+        "runtimeProgram.entities[].attachment.window.durationTicks",
+        "runtimeProgram.entities[].reach.durationTicks",
+        "runtimeProgram.entities[].reach.startOffsetPx",
+        "runtimeProgram.entities[].reach.peakOffsetPx",
+        "runtimeProgram.entities[].reach.endOffsetPx",
+        "runtimeProgram.entities[].reach.peakProgress",
+        "runtimeProgram.entities[].reach.window.phase",
+        "runtimeProgram.entities[].reach.window.clock",
+        "runtimeProgram.entities[].reach.window.startDelayTicks",
+        "runtimeProgram.entities[].reach.window.durationTicks"
       ],
       "multiplicity": "single_per_target",
       "networkAuthority": "owner_request_server_execute",
@@ -851,6 +889,16 @@
           "required": false,
           "semanticType": "blocks",
           "units": "blocks"
+        },
+        "reachCurve": {
+          "enum": [],
+          "kind": "object",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
         },
         "window": {
           "enum": [],
@@ -1792,6 +1840,83 @@
       "purpose": "Multiply velocity independently; explicit zero stops velocity, never normalizes to one.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "scale_projectile_velocity",
+      "componentSlot": "velocityScale",
+      "conflicts": [],
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].velocityScale[].multiplierPerUpdate",
+        "runtimeProgram.entities[].velocityScale[].maxSpeed",
+        "runtimeProgram.entities[].velocityScale[].window.phase",
+        "runtimeProgram.entities[].velocityScale[].window.clock",
+        "runtimeProgram.entities[].velocityScale[].window.startDelayTicks",
+        "runtimeProgram.entities[].velocityScale[].window.durationTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_request_server_execute",
+      "parameters": {
+        "maxSpeedBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1800.0,
+          "minimum": 0.00375,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks/second",
+          "units": "blocks/second"
+        },
+        "multiplierPerUpdate": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1.2,
+          "minimum": 0,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": "unitless"
+        },
+        "window": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": false,
+          "semanticType": "bounded_text",
+          "units": ""
+        }
+      },
+      "positionOwnership": "velocity_or_position_controller",
+      "purpose": "After turn and before homing, multiply velocity per update, optionally cap its magnitude. Zero stops; below one brakes. At most two independently timed, provably disjoint instances; no early-stage scaling.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "anyOf": [
+            "multiply_projectile_velocity",
+            "set_projectile_speed_modifier"
+          ],
+          "kind": "capability_absent",
+          "message": "New late scaling cannot coexist with historical velocity scalers.",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "bounded by runtime program limits",
       "targetKinds": [
         "owner_attached_projectile",
@@ -5719,7 +5844,7 @@
           "maximum": 360.0,
           "minimum": 0.008333333333333333,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -5729,7 +5854,7 @@
           "maximum": 360.0,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -5755,16 +5880,27 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "After the explicit movement driver, rotate velocity during an authored active-age phase. Fixed modifier order is turn, speed, then homing. This is independent of the single movement slot; it does not create a trajectory or choose another driver.",
+      "purpose": "Rotate velocity after motion; modifier order: turn, speed, homing. Requires, never selects, a trajectory.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
+        {
+          "anyOf": [
+            "window"
+          ],
+          "equals": null,
+          "kind": "timing_pair_or_window",
+          "message": "Window or scalar pair; both intersect.",
+          "otherParam": "durationSeconds",
+          "param": "startDelaySeconds",
+          "target": "same_target"
+        },
         {
           "anyOf": [
             "channel_beam",
             "charge_then_release"
           ],
           "kind": "capability_absent",
-          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "message": "Explicit trajectory owns motion throughout the interval.",
           "target": "same_target"
         },
         {
@@ -5772,14 +5908,14 @@
             "accelerate_projectile_vertical",
             "attach_projectile",
             "move_straight",
-            "multiply_projectile_velocity",
             "orbit_projectile",
             "oscillate_projectile_velocity",
+            "scale_projectile_velocity",
             "seek_projectile",
             "set_projectile_lash_geometry"
           ],
           "kind": "capability_group_present",
-          "message": "Velocity modifiers require an explicit trajectory component, including on a target_and_fire entity.",
+          "message": "Trajectory required, even with target_and_fire.",
           "target": "same_target"
         }
       ],
@@ -5823,7 +5959,7 @@
           "maximum": 360.0,
           "minimum": 0.008333333333333333,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -5853,7 +5989,7 @@
           "maximum": 360.0,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -5869,16 +6005,27 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "After movement and turn, multiply velocity on each active projectile update and clamp its magnitude to the authored cap. Values below one slow; above one accelerate. Phase timing is in world ticks, while the multiplier is explicitly per projectile update.",
+      "purpose": "After movement/turn, multiply velocity per update, then cap speed. Below 1 slows; above 1 accelerates. World-time timing.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
+        {
+          "anyOf": [
+            "window"
+          ],
+          "equals": null,
+          "kind": "timing_pair_or_window",
+          "message": "Window or scalar pair; both intersect.",
+          "otherParam": "durationSeconds",
+          "param": "startDelaySeconds",
+          "target": "same_target"
+        },
         {
           "anyOf": [
             "channel_beam",
             "charge_then_release"
           ],
           "kind": "capability_absent",
-          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "message": "Explicit trajectory owns motion throughout the interval.",
           "target": "same_target"
         },
         {
@@ -5886,14 +6033,14 @@
             "accelerate_projectile_vertical",
             "attach_projectile",
             "move_straight",
-            "multiply_projectile_velocity",
             "orbit_projectile",
             "oscillate_projectile_velocity",
+            "scale_projectile_velocity",
             "seek_projectile",
             "set_projectile_lash_geometry"
           ],
           "kind": "capability_group_present",
-          "message": "Velocity modifiers require an explicit trajectory component, including on a target_and_fire entity.",
+          "message": "Trajectory required, even with target_and_fire.",
           "target": "same_target"
         }
       ],
@@ -5938,7 +6085,7 @@
           "maximum": 360.0,
           "minimum": 0.008333333333333333,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -5978,7 +6125,7 @@
           "maximum": 360.0,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -5994,16 +6141,27 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "After movement, turn and speed, steer toward the nearest chaseable NPC within the hard radius, preserving current speed. Owner selects the target and synchronizes velocity. Equal distances use NPC index. Zero velocity stays zero; no target means no steering.",
+      "purpose": "After movement/turn/speed, steer at unchanged speed to the nearest chaseable NPC inside hard range; ties use NPC index. Owner selects target, syncs velocity. Zero velocity or no target: no steering.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
+        {
+          "anyOf": [
+            "window"
+          ],
+          "equals": null,
+          "kind": "timing_pair_or_window",
+          "message": "Window or scalar pair; both intersect.",
+          "otherParam": "durationSeconds",
+          "param": "startDelaySeconds",
+          "target": "same_target"
+        },
         {
           "anyOf": [
             "channel_beam",
             "charge_then_release"
           ],
           "kind": "capability_absent",
-          "message": "Velocity modifiers require the explicit movement driver to own motion throughout their active phase.",
+          "message": "Explicit trajectory owns motion throughout the interval.",
           "target": "same_target"
         },
         {
@@ -6011,14 +6169,14 @@
             "accelerate_projectile_vertical",
             "attach_projectile",
             "move_straight",
-            "multiply_projectile_velocity",
             "orbit_projectile",
             "oscillate_projectile_velocity",
+            "scale_projectile_velocity",
             "seek_projectile",
             "set_projectile_lash_geometry"
           ],
           "kind": "capability_group_present",
-          "message": "Velocity modifiers require an explicit trajectory component, including on a target_and_fire entity.",
+          "message": "Trajectory required, even with target_and_fire.",
           "target": "same_target"
         }
       ],
@@ -6074,7 +6232,7 @@
           "maximum": 360.0,
           "minimum": 0.008333333333333333,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -6117,7 +6275,7 @@
           "maximum": 360.0,
           "minimum": 0,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "seconds",
           "units": "seconds"
         },
@@ -6133,9 +6291,21 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Independent server NPC attraction every active projectile update, after movement/modifiers, without changing projectile velocity or selecting a movement family. Scan NPC slots in index order, require chaseable positive-resistance targets within hard range, then apply at most maxTargets. Uses native resistance clamped 0.1..1. No periodic event clock or owner hit callback is substituted.",
+      "purpose": "Server attraction after movement/modifiers each active projectile update, not periodic/on-hit. Projectile velocity/trajectory unchanged. Scan NPC index order: chaseable, positive-resistance, inside hard range; at most maxTargets. Native resistance clamps to 0.1..1.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "requirements": [],
+      "requirements": [
+        {
+          "anyOf": [
+            "window"
+          ],
+          "equals": null,
+          "kind": "timing_pair_or_window",
+          "message": "Window or scalar pair; both intersect.",
+          "otherParam": "durationSeconds",
+          "param": "startDelaySeconds",
+          "target": "same_target"
+        }
+      ],
       "safetyLimits": "one bounded native NPC-array scan, at most authored 1..16 targets/update",
       "targetKinds": [
         "owner_attached_projectile",
@@ -8922,6 +9092,117 @@
         "on_hit": "owner_execute_sync",
         "on_hurt": "owner_execute_sync"
       },
+      "capability": "damage_nearby_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit",
+        "on_tile_collision",
+        "on_expire",
+        "on_kill",
+        "on_hurt",
+        "on_enemy_kill"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
+        "runtimeProgram.entities[].events[].radiusPx",
+        "runtimeProgram.entities[].events[].maxTargets",
+        "runtimeProgram.entities[].events[].damageMultiplier",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "server_execute",
+      "parameters": {
+        "damageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 4,
+          "minimum": 0.05,
+          "reference": null,
+          "required": true,
+          "semanticType": "unitless_scalar",
+          "units": ""
+        },
+        "delaySeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "maxTargets": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 16,
+          "minimum": 1,
+          "reference": null,
+          "required": false,
+          "semanticType": "spawn_or_target_count",
+          "units": ""
+        },
+        "radiusTiles": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60,
+          "minimum": 0.5,
+          "reference": null,
+          "required": true,
+          "semanticType": "tiles",
+          "units": "blocks (tiles)"
+        },
+        "when": {
+          "enum": [],
+          "kind": "union",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Damage up to maxTargets nearest eligible NPCs around the event position, ranked by distance then NPC slot; omission selects the technical maximum of 16, not unlimited targets. Exclude the event's direct target only for on_hit/on_crit. For other events, including on_expire/on_kill, ignore direct-target exclusion; a previously hit NPC is not excluded by hit history. An additional hit is not guaranteed: native NPC eligibility/damage rules still apply.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded by runtime program limits",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {
+        "on_crit": "owner_execute_sync",
+        "on_enemy_kill": "owner_execute_sync",
+        "on_hit": "owner_execute_sync",
+        "on_hurt": "owner_execute_sync"
+      },
       "capability": "damage_area_on_event",
       "componentSlot": "event_action",
       "conflicts": [],
@@ -9120,8 +9401,12 @@
     },
     {
       "authorityByEffect": {
+        "both": "owner_request_server_execute",
+        "on_crit:target_to_entity": "owner_request_server_execute",
+        "on_crit:target_to_owner": "owner_request_server_execute",
         "on_hit:target_to_entity": "owner_request_server_execute",
         "on_hit:target_to_owner": "owner_request_server_execute",
+        "owner_to_target": "owner_execute_sync",
         "target_to_entity": "server_execute",
         "target_to_owner": "server_execute"
       },
@@ -9133,6 +9418,7 @@
       "emittedEvents": [],
       "events": [
         "on_hit",
+        "on_crit",
         "periodic",
         "on_expire"
       ],
@@ -9145,6 +9431,8 @@
         "runtimeProgram.entities[].events[].mode",
         "runtimeProgram.entities[].events[].strength",
         "runtimeProgram.entities[].events[].radiusTiles",
+        "runtimeProgram.entities[].events[].ownerStrength",
+        "runtimeProgram.entities[].events[].targetStrength",
         "runtimeProgram.entities[].events[].delayTicks"
       ],
       "multiplicity": "many_per_target",
@@ -9166,14 +9454,16 @@
           "maximum": 15.0,
           "minimum": 0.0375,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "blocks/s (one-off velocity impulse)",
           "units": "blocks/s (one-off velocity impulse)"
         },
         "mode": {
           "enum": [
             "target_to_owner",
-            "target_to_entity"
+            "target_to_entity",
+            "owner_to_target",
+            "both"
           ],
           "kind": "string",
           "maximum": null,
@@ -9183,15 +9473,35 @@
           "semanticType": "bounded_text",
           "units": ""
         },
+        "ownerImpulseBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 15.0,
+          "minimum": 0.0375,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
+        },
         "radiusTiles": {
           "enum": [],
           "kind": "number",
           "maximum": 60,
           "minimum": 1,
           "reference": null,
-          "required": true,
+          "required": false,
           "semanticType": "tiles",
           "units": "blocks (tiles)"
+        },
+        "targetImpulseBlocksPerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 15.0,
+          "minimum": 0.0375,
+          "reference": null,
+          "required": false,
+          "semanticType": "blocks/s",
+          "units": "blocks/s"
         },
         "when": {
           "enum": [],
@@ -9205,9 +9515,76 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply bounded pull between owner, target and event entity.",
+      "purpose": "Apply a velocity impulse between owner, target and event entity. Both requires the same active event target for both bodies; no target means neither moves and no replacement search. NPC impulse scales by knockBackResist; player impulse does not. Owner and NPC movement keep separate network authority, not an atomic two-body transaction.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
+        {
+          "anyOf": [
+            "impulseBlocksPerSecond",
+            "radiusTiles"
+          ],
+          "equals": "target_to_owner",
+          "kind": "param_branch_fields",
+          "message": "Use only the selected pull mode's explicit impulse and radius fields.",
+          "param": "mode",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "impulseBlocksPerSecond",
+            "radiusTiles"
+          ],
+          "equals": "target_to_entity",
+          "kind": "param_branch_fields",
+          "message": "Use only the selected pull mode's explicit impulse and radius fields.",
+          "param": "mode",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "impulseBlocksPerSecond"
+          ],
+          "equals": "owner_to_target",
+          "kind": "param_branch_fields",
+          "message": "Use only the selected pull mode's explicit impulse and radius fields.",
+          "param": "mode",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "ownerImpulseBlocksPerSecond",
+            "targetImpulseBlocksPerSecond"
+          ],
+          "equals": "both",
+          "kind": "param_branch_fields",
+          "message": "Use only the selected pull mode's explicit impulse and radius fields.",
+          "param": "mode",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "on_hit",
+            "on_crit"
+          ],
+          "equals": "owner_to_target",
+          "kind": "conditional_param_values",
+          "message": "Owner and both pull require an actual direct-hit event target.",
+          "otherParam": "when",
+          "param": "mode",
+          "target": "same_target"
+        },
+        {
+          "anyOf": [
+            "on_hit",
+            "on_crit"
+          ],
+          "equals": "both",
+          "kind": "conditional_param_values",
+          "message": "Owner and both pull require an actual direct-hit event target.",
+          "otherParam": "when",
+          "param": "mode",
+          "target": "same_target"
+        },
         {
           "equals": null,
           "kind": "event_available",

@@ -4,6 +4,10 @@
 
 Это human projection, не owner schema/registry. Exact shape — [program_schema.py](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py); model-facing prose — [author_item_contract.py](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py). Inventory/units/wire facts генерируются в [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) и [primitive parity](../generated/PRIMITIVE_PARITY_RU.md); технический manifest не надо копировать в LLM-каталог.
 
+Новые канонические формы pull, nearby damage, зависимых свойств и скорости,
+а также точная граница совместимости со старыми предметами описаны в
+[решениях по упрощению Author API](AUTHOR_API_SIMPLIFICATION_RU.md).
+
 <a id="response"></a>
 ## Author response
 

@@ -86,7 +86,7 @@ def planner_priority_header_for_llm() -> list[str]:
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
         "Source provenance constrains factual claims about the parents, not the mechanics you may invent. Create new purposeful mechanics from catalog primitives inspired by both parent identities; neither parent needs to have performed them. Do not present invented effects as observed parent abilities. No forced twist or unrelated gimmick is required.",
         "Use source tempo when available and useful to the composition; make deviations intentional.",
-        "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. set_projectile_reach_curve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
+        "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. attach_projectile.reachCurve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
     ]
 
@@ -299,7 +299,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     )
     field_guide["projectileMotion"] = (
         "move_straight has no falling arc; accelerate_projectile_vertical adds signed world acceleration. "
-        "Retention, sine law, seek, orbit, attachment, rotation, return and arrival are independent choices; "
+        "Velocity scaling, sine law, seek, orbit, attachment, rotation, return and arrival are independent choices; "
         "none implies channel, collision policy or lifetime. Optional window admits a phase-only gate or "
         "all timing fields together; since_release/since_return clocks are inactive before their latch. "
         "Use each card's units and dependencies. Source projectile identity, arrow flags and aiStyle do not "

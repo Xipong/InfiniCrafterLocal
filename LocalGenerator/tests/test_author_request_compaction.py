@@ -298,6 +298,11 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
     shared_types = guide["types"]
     checked_shared_types = set()
 
+    def consumer_text(text, metadata):
+        text = text.removeprefix(seconds_primer)
+        units = metadata.get("units", metadata.get("x-infini-units"))
+        return text.removeprefix(f"Author units: {units}. Native consumer: ") if units else text
+
     def comparison_metadata(card):
         result = copy.deepcopy({key: value for key, value in card.items() if key != "params"})
         rules = []
@@ -324,14 +329,19 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
             removed = set(source) - set(sent)
             assert not set(sent) - set(source), path
             if removed:
-                # A missing schema-root description is legal only when the same
-                # full consumer text is still the parameter's visible meaning.
-                assert removed == {"description"} and root_meaning is not None, path
-                assert source["description"].removeprefix(seconds_primer) == root_meaning, path
+                # The exact text must still occur at its parameter or sole
+                # branch property; no description may simply vanish.
+                assert removed == {"description"}, path
+                retained = root_meaning
+                properties = sent.get("properties", {})
+                if retained is None and len(properties) == 1:
+                    retained = next(iter(properties.values())).get("description")
+                assert retained is not None, path
+                assert consumer_text(source["description"], source) == retained, path
                 omitted_root_copies.append(path)
             for key in set(source) & set(sent):
                 if key == "description" and isinstance(source[key], str):
-                    assert sent[key] == source[key].removeprefix(seconds_primer), path
+                    assert sent[key] == consumer_text(source[key], source), path
                     checked_descriptions.append(path)
                 else:
                     compare_shape(source[key], sent[key], path + "." + key)
@@ -372,7 +382,7 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
             # columns; all actual domain/reference/storage/projection rules remain.
             for key in source.keys() - {"meaning", "required", "semanticType", "neutral", "units", "shape"}:
                 assert target[key] == source[key], (name, param, key)
-            meaning = source["meaning"].removeprefix(seconds_primer)
+            meaning = consumer_text(source["meaning"], source)
             if name == "configure_armor" and "meaning" not in target:
                 # Armor borrows only an identical accessory effect description.
                 assert CAPABILITY_REGISTRY["configure_accessory"].params[param].description == spec.description

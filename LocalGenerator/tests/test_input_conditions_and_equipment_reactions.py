@@ -34,7 +34,7 @@ def test_two_input_gates_keep_independent_conditions_and_provenance():
 
 def reaction(when):
     doc = build_capability_witness('configure_accessory')
-    event = deepcopy(next(c for c in build_capability_witness('damage_area_on_event')['runtimeProgram']['calls'] if c['id'] == 'witness_call'))
+    event = deepcopy(next(c for c in build_capability_witness('damage_nearby_on_event')['runtimeProgram']['calls'] if c['id'] == 'witness_call'))
     event.update(id='reaction', target='item')
     event['params']['when'] = when
     doc['runtimeProgram']['calls'].append(event)

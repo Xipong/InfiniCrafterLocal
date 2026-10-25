@@ -291,7 +291,9 @@ def test_item_effects_require_their_executable_binding(fn):
     [
         fn
         for fn, cap in CAPABILITY_REGISTRY.items()
-        if cap.category == "event"
+        # Fresh compilation uses canonical cards; retired event owners are
+        # exercised as frozen source/wire records in test_author_event_domains.
+        if cap.author_visible and cap.category == "event"
         and "delaySeconds" in cap.params and fn != "spawn_entity_on_event"
     ],
 )

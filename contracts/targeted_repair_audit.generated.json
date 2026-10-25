@@ -1,5 +1,5 @@
 {
-  "authorVisibleCapabilityCount": 74,
+  "authorVisibleCapabilityCount": 68,
   "cases": [
     {
       "brokenCounts": {
@@ -10,7 +10,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 35169,
+      "dossierChars": 34965,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -42,7 +42,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 34601,
+      "dossierChars": 34397,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -66,34 +66,30 @@
         "entities": 0
       },
       "capabilityCardsMatchSubset": true,
-      "capabilitySubsetCount": 10,
+      "capabilitySubsetCount": 9,
       "directCapabilities": [
         "accelerate_projectile_vertical",
         "attach_projectile",
         "move_straight",
-        "multiply_projectile_velocity",
         "orbit_projectile",
         "oscillate_projectile_velocity",
+        "scale_projectile_velocity",
         "seek_projectile",
         "set_projectile_lash_geometry"
       ],
-      "dossierChars": 75405,
+      "dossierChars": 73323,
       "errorCodes": [
-        "missing_capability_dependency",
         "missing_movement_component"
       ],
       "errorPaths": [
-        "$.runtimeProgram.calls[14]",
         "$.runtimeProgram.calls"
       ],
-      "existingBrokenCapabilities": [
-        "set_projectile_reach_curve"
-      ],
+      "existingBrokenCapabilities": [],
       "name": "missing_position_driver",
       "nonRepairableCount": 0,
       "readOnlyDependencyCounts": {
         "bindings": 1,
-        "calls": 2,
+        "calls": 1,
         "entities": 1
       },
       "supportingCapabilities": [
@@ -111,12 +107,12 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 38397,
+      "dossierChars": 40920,
       "errorCodes": [
         "missing_item_capability_param"
       ],
       "errorPaths": [
-        "$.runtimeProgram.calls[19]"
+        "$.runtimeProgram.calls[18]"
       ],
       "existingBrokenCapabilities": [
         "accumulate_projectile_charge",
@@ -151,16 +147,16 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 192850,
-  "fullCapabilityCatalogCount": 96,
+  "fullAuthorPayloadChars": 191193,
+  "fullCapabilityCatalogCount": 98,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 54,
+    "declaredCodes": 56,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 53,
+    "emittedCodes": 55,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 54,
-    "runtimeDeclaredCodes": 53,
+    "policyCodes": 56,
+    "runtimeDeclaredCodes": 55,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

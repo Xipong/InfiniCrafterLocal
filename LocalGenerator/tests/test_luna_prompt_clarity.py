@@ -86,7 +86,7 @@ def test_event_cards_do_not_borrow_other_operations_safety_or_payload(monkeypatc
     safety = cards['move_owner_on_event']['params']['safeTileOnly']['meaning']
     assert 'solid-tile overlap only' in safety
     assert 'No world-bounds or lava check' in safety
-    aoe = cards['damage_area_on_event']['does']
+    aoe = cards['damage_nearby_on_event']['does']
     assert 'on_tile_collision/on_expire/on_kill carry no direct target' not in aoe
     assert 'only for on_hit/on_crit' in aoe
     placement = cards['configure_tile_placement']['does']

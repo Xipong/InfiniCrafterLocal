@@ -599,7 +599,6 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
         motion = next(row for row in calls if row["id"] == "workbench_blade_motion")
         motion.update(fn="move_straight")
         motion.pop("params")
-        calls.remove(next(row for row in calls if row["fn"] == "set_projectile_reach_curve"))
         assert validate_runtime_program(current)["ok"]
         owner = next(row for row in calls if row["id"] == "workbench_blade_collision")
         owner["params"]["tileCollide"] = False
@@ -676,8 +675,8 @@ def test_scoped_dependency_closure_freezes_entire_document(scenario, fixture, co
     pytest.param("binding", "duplicate", "at most one new binding", id="selected-any-of-single-input-root-budget"),
 ])
 def test_selected_event_transaction_closes_exact_support(scenario, invalid_choice, message):
-    fixture = {"producer": "door_on_chain", "alternative": "damage_area_on_event",
-               "lifetime": "damage_area_on_event", "binding": "spawn_entity_on_event"}[scenario]
+    fixture = {"producer": "door_on_chain", "alternative": "damage_nearby_on_event",
+               "lifetime": "damage_nearby_on_event", "binding": "spawn_entity_on_event"}[scenario]
     current = build_runtime_fixture(fixture) if fixture == "door_on_chain" else build_capability_witness(fixture)
     program = current["runtimeProgram"]
     event_call = next(row for row in program["calls"] if row["id"] == ("door_stun" if scenario == "producer" else "witness_call"))

@@ -337,10 +337,38 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
     cap = CAPABILITY_REGISTRY.get(fn)
     if cap is None:
         return {}
-    return {
-        name: spec.default for name, spec in cap.params.items()
-        if name not in params and _declares_neutral_omission(spec)
-    }
+    def walk(specs: Mapping[str, ParamSpec], values: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
+        omitted = {}
+        for name, spec in specs.items():
+            path = prefix + name
+            if name not in values and _declares_neutral_omission(spec):
+                omitted[path] = spec.default
+            elif (prefix or name in cap.nested_components) and name in values and spec.properties and isinstance(values[name], Mapping):
+                omitted.update(walk(spec.properties, values[name], path + "."))
+        return omitted
+    return walk(cap.params, params)
+
+
+def _completed_params(fn: str, params: Mapping[str, Any]) -> dict[str, Any]:
+    """Private exact-neutral projection view; never completes an absent object."""
+    import copy
+    completed = copy.deepcopy(dict(params))
+    for path, value in declared_neutral_omissions(fn, params).items():
+        parts = path.split(".")
+        target = completed
+        for part in parts[:-1]:
+            target = target[part]
+        target[parts[-1]] = value
+    return completed
+
+
+def _param_leaf(cap: Any, path: str) -> ParamSpec | None:
+    parts = path.split(".")
+    spec = cap.params.get(parts[0])
+    for part in parts[1:]:
+        spec = spec.properties.get(part) if spec is not None else None
+    return spec
+
 
 
 def _omission_context_allows(
@@ -398,11 +426,16 @@ def _omission_context_allows(
 
 def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None) -> tuple[str, ...]:
     cap = CAPABILITY_REGISTRY[fn]
-    spec = cap.params[name]
+    root = name.split(".", 1)[0]
+    spec = _param_leaf(cap, name)
+    if spec is None:
+        return ()
     names = (name, *spec.wire_field_names(name))
     return tuple(dict.fromkeys(
         candidate for candidate in cap.final_wire_paths
         if any(candidate.endswith("." + name) for name in names)
+        and (fn not in PROJECTILE_MODIFIER_COMPONENTS or candidate.startswith(
+            "runtimeProgram.entities[]." + cap.nested_components.get(root, PROJECTILE_MODIFIER_COMPONENTS[fn]) + ("[]" if cap.multiplicity == "many_per_target" else "") + "."))
         and (params is None or not cap.effect_groupable
              or candidate.startswith("runtimeProgram.effectGroups[]." if "effectGroupId" in params else "gameplay."))
     ))
@@ -717,8 +750,8 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
                     if receipt.get("fn") == cap.name and receipt.get("finalPath") == path
                     and (receipt.get("status") == ("alias_lowering" if projection.literal else "delivered")
                          or (not projection.literal and receipt.get("status") == "declared_neutral_omission"
-                             and projection.authored_path in cap.params
-                             and _declares_neutral_omission(cap.params[projection.authored_path])))
+                             and (omitted_spec := _param_leaf(cap, projection.authored_path)) is not None
+                             and _declares_neutral_omission(omitted_spec)))
                     and not receipt.get("authoredPaths") and _same_receipt_value(receipt.get("value"), projection.value)
                     and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(projection.authored_path),
                                      str(receipt.get("authoredPath") or ""))]
@@ -767,7 +800,8 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
             # selectors. An indexed component is one instance of one call; neither
             # splitting its leaves across calls nor reusing a call for two instances
             # is valid saved provenance. Author target authentication stays above.
-            member = PROJECTILE_MODIFIER_COMPONENTS[fn]
+            source_param = str(receipt.get("authoredPath", "")).split(".params.", 1)[-1].split(".", 1)[0]
+            member = cap.nested_components.get(source_param, PROJECTILE_MODIFIER_COMPONENTS[fn])
             suffix = r"\[\d+\]" if cap.multiplicity == "many_per_target" else ""
             owner_pattern = re.escape(entity_base + "." + member) + suffix
             owner_match = re.match(r"(" + owner_pattern + r")\.", path)
@@ -782,10 +816,15 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
             source_claims = {(row.get("fn"), row.get("callId")) for row in receipts
                              if row.get("fn") and not row.get("lowererId")
                              and row["authoredPath"].startswith(source_base + ".")}
+            allowed_owners = (tuple(entity_base + "." + member for member in
+                                    (PROJECTILE_MODIFIER_COMPONENTS[fn], *cap.nested_components.values()))
+                              if cap.nested_components else (owner,))
             associated = (bool(owner) and isinstance(_final_value(final, owner), Mapping)
                           and origins == {(fn, receipt.get("callId"), source_base)}
                           and source_claims == {(fn, receipt.get("callId"))}
-                          and all(row["finalPath"].startswith(owner + ".") for row in call_rows))
+                          and all(any(row["finalPath"].startswith(allowed + ".") for allowed in allowed_owners)
+                                  for row in call_rows))
+
         elif cap.category == "movement":
             code = _final_value(final, entity_base + ".movement.code")
             associated = (_final_value(final, entity_base + ".movement.name") == fn
@@ -1116,6 +1155,12 @@ def audit_compiler_receipts(
             pairs = [(source, destination, literal) for source, destination, literal in spec.projection_paths(root_name)
                      if source == source_name and path.endswith("." + destination)]
             expected_statuses = {"alias_lowering" if literal else "delivered" for _, _, literal in pairs}
+            leaf_spec = _param_leaf(cap, source_name)
+            if leaf_spec is not None and _declares_neutral_omission(leaf_spec):
+                expected_statuses.add("declared_neutral_omission")
+                if receipt.get("status") == "declared_neutral_omission" and not _same_receipt_value(
+                        receipt.get("value"), leaf_spec.to_wire(leaf_spec.default)):
+                    violations.append({"fn": fn, "finalPath": path, "reason": "nested omission differs from declared neutral"})
             if not pairs or receipt.get("status") not in expected_statuses or authored_paths:
                 violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
                                    "finalPath": path, "reason": "structured parameter receipt is not a declared source/output pair"})
@@ -1127,12 +1172,14 @@ def audit_compiler_receipts(
                     and source_call.get("id") == receipt.get("callId")
                     and isinstance(source_params, Mapping) and root_name in source_params):
                     try:
-                        expected_rows = spec.projected_fields(source_params[root_name], root_name, updates_per_tick=_source_updates(spec, source_call, source_calls))
+                        expected_rows = spec.projected_fields(_completed_params(fn, source_params)[root_name], root_name, updates_per_tick=_source_updates(spec, source_call, source_calls))
                     except (ValueError, TypeError, KeyError):
                         pass
+                omissions = declared_neutral_omissions(fn, source_params) if isinstance(source_params, Mapping) else {}
                 matching = [row for row in expected_rows if row.authored_path == source_name
                             and path.endswith("." + row.wire_path)
-                            and receipt.get("status") == ("alias_lowering" if row.literal else "delivered")
+                            and receipt.get("status") == ("alias_lowering" if row.literal else
+                                "declared_neutral_omission" if row.authored_path in omissions else "delivered")
                             and _same_receipt_value(row.value, receipt.get("value"))]
                 if len(matching) != 1:
                     violations.append({"fn": fn, "callId": receipt.get("callId"), "authoredPath": authored_path,
@@ -1339,7 +1386,10 @@ def audit_compiler_receipts(
             source_name = root_name + row["authoredPath"][len(source_root):]
             pairs = [(destination, literal) for source, destination, literal in spec.projection_paths(root_name)
                      if source == source_name and row["finalPath"].endswith("." + destination)
-                     and row["status"] == ("alias_lowering" if literal else "delivered")]
+                     and (row["status"] == ("alias_lowering" if literal else "delivered")
+                          or not literal and row["status"] == "declared_neutral_omission"
+                          and (leaf_spec := _param_leaf(CAPABILITY_REGISTRY[fn], source_name)) is not None
+                          and _declares_neutral_omission(leaf_spec))]
             if len(pairs) != 1:
                 break
             destination, literal = pairs[0]
@@ -1401,8 +1451,7 @@ def audit_compiler_receipts(
                                    "reason": "effect call lacks one exact default or named group output owner"})
         for name, spec in cap.params.items():
             if spec.structured:
-                destinations = spec.wire_field_names(name)
-                patterns = [p for p in cap.final_wire_paths if any(p.endswith("." + d) for d in destinations)]
+                patterns = list(_parameter_outputs(fn, name, projection_params))
                 # Current declared paths share finite output slots; every
                 # present slot still needs one exact originating row.
             else:
@@ -1597,7 +1646,7 @@ def audit_compiler_receipts(
                 cap = CAPABILITY_REGISTRY.get(str(source_call.get("fn") or ""))
                 if cap is not None and name in cap.params and cap.params[name].structured:
                     try:
-                        projections = cap.params[name].projected_fields(source_params[name], name, updates_per_tick=_source_updates(cap.params[name], source_call, source_calls))
+                        projections = cap.params[name].projected_fields(_completed_params(cap.name, source_params)[name], name, updates_per_tick=_source_updates(cap.params[name], source_call, source_calls))
                     except (ValueError, TypeError, KeyError):
                         projections = ()
                     if not projections:
@@ -1749,6 +1798,14 @@ def audit_compiler_receipts(
                                   if row["finalPath"].startswith(event_base + ".") and row.get("fn")}
                         if claims and fn not in claims:
                             continue
+                    # A packaged property owns the same old DTO leaf. Its exact
+                    # nested source, value and component ownership were audited above.
+                    member = PROJECTILE_MODIFIER_COMPONENTS.get(fn)
+                    nested_claims = [row for row in receipt_rows if row.get("finalPath") == expected
+                        and (owner_cap := CAPABILITY_REGISTRY.get(row.get("fn"))) is not None
+                        and member in owner_cap.nested_components.values()]
+                    if len(nested_claims) == 1:
+                        continue
                     source_pattern = r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(name)
                     matching = [row for row in receipt_rows
                                 if row.get("fn") == fn and row.get("finalPath") == expected

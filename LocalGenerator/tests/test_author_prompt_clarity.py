@@ -47,12 +47,12 @@ def test_area_damage_card_scopes_direct_target_exclusion_in_author_and_repair(mo
     monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', 'json_object')
     _, user, _ = author.build_initial_author_request({}, {}, 'area-clarity', model_name='test-model')
     catalog = json.loads(user)['runtimeCapabilityContract']['catalog']
-    card = next(row for row in catalog['capabilities'] if row['fn'] == 'damage_area_on_event')
+    card = next(row for row in catalog['capabilities'] if row['fn'] == 'damage_nearby_on_event')
     # The event carries the exclusion target, not the projectile's hit history.
     for phrase in ('only for on_hit/on_crit', 'on_kill', 'ignore direct-target exclusion', 'previously hit NPC'):
         assert phrase in card['does']
-    doc = build_capability_witness('damage_area_on_event')
-    call = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'damage_area_on_event')
+    doc = build_capability_witness('damage_nearby_on_event')
+    call = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'damage_nearby_on_event')
     del call['params']['radiusTiles']
     report = validate_runtime_program(doc)
     assert not report['ok']

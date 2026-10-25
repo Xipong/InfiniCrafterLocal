@@ -95,6 +95,8 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "entity_not_binding_spawnable": {"strategy": "patch_exact_binding_action", "llmRepairable": True, "allowNodeDelete": False},
     "event_not_emitted": {"strategy": "patch_or_synthesize_exact_event_producer", "llmRepairable": True, "allowNodeDelete": False},
     "event_spawn_budget": {"strategy": "patch_spawn_count_or_delete_edge", "llmRepairable": True, "allowNodeDelete": True},
+    "overlapping_motion_windows": {"strategy": "patch_window_or_delete_conflicting_call", "llmRepairable": True, "allowNodeDelete": True},
+    "retained_motion_stage_conflict": {"strategy": "reject_conflicting_saved_wire", "llmRepairable": False, "allowNodeDelete": False},
     "exclusive_component_conflict": {"strategy": "patch_or_delete_conflicting_call", "llmRepairable": True, "allowNodeDelete": True},
     "hidden_item_primary_requires_spawn_target": {"strategy": "select_exact_spawn_target_as_primary", "llmRepairable": True, "allowNodeDelete": False},
     "illegal_event_cycle": {"strategy": "patch_or_delete_cycle_edge", "llmRepairable": True, "allowNodeDelete": True},
@@ -153,6 +155,8 @@ def _conditional_param_dependencies(cap: CapabilitySpec) -> tuple[tuple[str, Any
     """Exact selector -> required leaf facts, projected from their registry owners."""
     dependencies: list[tuple[str, Any, str]] = []
     for requirement in cap.requirements:
+        if requirement.kind == "param_branch_fields":
+            dependencies.extend((requirement.param, requirement.equals, name) for name in requirement.any_of)
         if requirement.kind == "conditional_param":
             for encoded in requirement.any_of:
                 expected, required = encoded.split(":", 1)
@@ -1810,6 +1814,13 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 mark("calls", node_id, can_delete=True)
                 for relative_path in _component_repair_paths(code, node_row, path=path, allowed=allowed):
                     grant("calls", node_id, relative_path)
+            for row_id in related:
+                if row_id != node_id:
+                    context_id(row_id)
+        elif code == "overlapping_motion_windows":
+            if node_namespace == "calls" and node_id:
+                mark("calls", node_id, can_delete=True)
+                grant("calls", node_id, "params.window")
             for row_id in related:
                 if row_id != node_id:
                     context_id(row_id)

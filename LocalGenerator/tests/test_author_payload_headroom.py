@@ -50,9 +50,10 @@ def test_fresh_cards_share_only_exact_parameter_metadata_and_dead_negative_claus
     )
 
     before = {name: cap.audit_card() for name, cap in CAPABILITY_REGISTRY.items()}
-    cards = {card["fn"]: card for card in compact_capability_catalog()}
+    catalog = compact_capability_catalog()
+    cards = {card["fn"]: card for card in catalog}
     guide = runtime_authoring_prompt_field_guide()
-    assert len(cards) == 74
+    assert len(cards) == len(catalog), "each visible capability is delivered exactly once"
     assert set(cards) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
     assert "paramRef" in guide["paramNotation"]
     references = []
@@ -139,9 +140,20 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
 
     def normalize_meanings(value: Any) -> Any:
         if isinstance(value, dict):
-            return {key: child.removeprefix(seconds_primer)
+            result = {key: child.removeprefix(seconds_primer)
                     if key in {"meaning", "description"} and isinstance(child, str)
                     else normalize_meanings(child) for key, child in value.items()}
+            units = value.get("units", value.get("x-infini-units"))
+            if isinstance(units, str):
+                for key in ("meaning", "description"):
+                    if isinstance(result.get(key), str):
+                        result[key] = result[key].removeprefix(f"Author units: {units}. Native consumer: ")
+            properties = result.get("properties")
+            if isinstance(properties, dict) and len(properties) == 1:
+                child = next(iter(properties.values()))
+                if isinstance(child, dict) and result.get("description") == child.get("description"):
+                    result.pop("description", None)
+            return result
         if isinstance(value, list):
             return [normalize_meanings(child) for child in value]
         return value

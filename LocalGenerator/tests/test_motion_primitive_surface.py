@@ -51,13 +51,33 @@ def test_every_component_rejects_an_unexposed_future_field(dto, component_classe
     assert "UnexposedFutureField" in report["wireDtoDriftByClass"][cls]
 
 
-@pytest.mark.parametrize("cls", ("RuntimeMotionWindowSpec", "RuntimeWindowedMotionSpec"))
+@pytest.mark.parametrize("cls", ("RuntimeMotionWindowSpec", "RuntimeWindowedMotionSpec", "RuntimeTimedModifierSpec"))
 def test_shared_and_inherited_window_reject_unexposed_future_field(dto, cls):
     report = audit.runtime_component_surface_audit(add_property(dto, cls))
     assert not report["ok"], report
     assert report["unclassifiedByClass"][cls] == ["UnexposedFutureField"]
     if cls == "RuntimeWindowedMotionSpec":
         assert "UnexposedFutureField" in report["unclassifiedByClass"]["RuntimeSeekSpec"]
+    if cls == "RuntimeTimedModifierSpec":
+        for concrete in ("RuntimeTurnModifierSpec", "RuntimeSpeedModifierSpec", "RuntimeHomingModifierSpec", "RuntimeNpcAttractionSpec"):
+            assert "UnexposedFutureField" in report["unclassifiedByClass"][concrete]
+
+
+def test_timing_base_inventory_uses_inheritance_not_a_base_name_whitelist(dto):
+    report = audit.runtime_component_surface_audit(dto.replace(b"RuntimeTimedModifierSpec", b"RelocatedTimingBase"))
+    assert report["ok"], report
+    assert "RelocatedTimingBase" in report["unclassifiedByClass"]
+
+
+def test_missing_inherited_timing_leaf_is_not_hidden_by_other_classes(dto):
+    declaration = next(row for row in audit._nodes(audit._PARSER.parse(dto).root_node, "class_declaration")
+                       if row.child_by_field_name("name").text == b"RuntimeTimedModifierSpec")
+    prop = next(row for row in declaration.child_by_field_name("body").named_children
+                if row.type == "property_declaration" and row.child_by_field_name("name").text == b"StartDelayTicks")
+    name = prop.child_by_field_name("name")
+    source = dto[:name.start_byte] + b"RemovedDelayTicks" + dto[name.end_byte:]
+    with pytest.raises(ValueError, match="RuntimeTurnModifierSpec.*StartDelayTicks"):
+        audit.runtime_component_surface_audit(source)
 
 
 @pytest.mark.parametrize("mutation", ("missing", "unknown"))

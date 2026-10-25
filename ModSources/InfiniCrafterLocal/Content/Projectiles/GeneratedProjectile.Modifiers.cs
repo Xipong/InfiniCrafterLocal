@@ -9,8 +9,10 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
-    private bool ModifierPhaseActive(int delayTicks, int durationTicks)
-        => RuntimeModifierClock.Active(_age, Projectile.extraUpdates + 1, delayTicks, durationTicks);
+    private bool ModifierPhaseActive(int? delayTicks, int? durationTicks)
+        => delayTicks.HasValue && durationTicks.HasValue
+            ? RuntimeModifierClock.Active(_age, Projectile.extraUpdates + 1, delayTicks.Value, durationTicks.Value)
+            : !delayTicks.HasValue && !durationTicks.HasValue;
 
     private void ApplyActiveModifiers()
     {
@@ -20,6 +22,13 @@ public sealed partial class GeneratedProjectile
         if (_entity.SpeedModifier is { } speed && ModifierPhaseActive(speed.StartDelayTicks, speed.DurationTicks) && MotionWindowActive(speed.Window))
         {
             MultiplyVelocityCapped(speed.SpeedMultiplierPerUpdate, speed.MaxSpeed, onlyBelowCap: false, legacyNormalize: false);
+        }
+        foreach (var scale in _entity.VelocityScale ?? Array.Empty<RuntimeVelocityScaleSpec>())
+        {
+            if (!MotionWindowActive(scale.Window)) continue;
+            if (scale.MaxSpeed is float maximum)
+                MultiplyVelocityCapped(scale.MultiplierPerUpdate, maximum, onlyBelowCap: false, legacyNormalize: false);
+            else RetainVelocity(scale.MultiplierPerUpdate);
         }
         ApplyHomingModifier();
     }
