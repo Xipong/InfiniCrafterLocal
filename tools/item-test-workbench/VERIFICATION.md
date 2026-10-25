@@ -23,7 +23,7 @@ inspectable but unverified, and hashes establish consistency rather than authent
 
 For agent iterations use the [fast workflow](README.md#fast-agent-workflow).
 `suite suites/smoke.json` runs native synthetic/vanilla controls and checks an exact
-negative assertion plus an identical-input repeat. An expected `failed` result
+negative assertion. An expected `failed` result
 stays failed in each native trace and suite row. Matrix success means the detector
 matched the declared expectations; it does not certify those failed items.
 
@@ -36,7 +36,7 @@ python -m toolbox workbench test
 ```
 
 The agent-workflow tests exercise archived evidence portability/tampering, the
-first changed native field, true-PNG contact-sheet receipts, strict negative
+true-PNG contact-sheet receipts, strict negative
 expectations, malformed/missing terminal output, timeout receipts, optional export
 failures, and matrix continuation. Synthetic boundary tests are labelled as such;
 they do not stand in for running the native smoke matrix.
@@ -74,15 +74,14 @@ unconditional installation checks or proof of all-item parity.
 
 ## Evidence reviewed during development
 
-Agent-workflow verification (2026-10-25): the six-case public smoke completed with
-five native passes and one exact `dummy_damaged` negative failure; the straight
-repeat had identical inputs and observations. Two `client-vfx-captured` runs each
-passed and produced 80 native PNGs with identical gameplay, particle state and PNG
-hashes. A 12-frame contact sheet was exported and visually inspected; this run is
+Agent-workflow verification before removal of run comparison (2026-10-25): the
+native smoke exercised passing controls and an exact `dummy_damaged` negative
+failure. Two `client-vfx-captured` runs each passed and produced 80 native PNGs.
+A 12-frame contact sheet was exported and visually inspected; this run is
 VFX-only, not player/item/world artwork coverage. Copied archives audited as
-verified, and changing a recorded mana sample was located at its exact JSON field
-and native tick. The 69 portable workbench tests, 94 toolbox tests and affected
-owner checks (Python + native build) passed.
+verified. The then-current portable workbench tests, 94 toolbox tests and affected
+owner checks (Python + native build) passed. The current smoke has five cases;
+run comparison and its duplicate smoke case have been removed.
 
 These native runs used the documented tML v2026.08.3.0 references and .NET SDK
 8.0.408. This development container has mismatched process/procfs PID namespaces;

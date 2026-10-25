@@ -53,8 +53,8 @@ python tools/item-test-workbench/workbench.py build
 
 ## Fast agent workflow
 
-All commands also work through `python -m toolbox workbench`. `catalog`, `report`,
-`compare` and `suite --plan` are offline/read-only unless an explicit report output
+All commands also work through `python -m toolbox workbench`. `catalog`, `report`
+and `suite --plan` are offline/read-only unless an explicit report output
 is requested. They need no game install, SDK or API credentials.
 
 ```sh
@@ -63,12 +63,11 @@ python -m toolbox workbench catalog
 # Validate/list the portable native smoke matrix without building or writing.
 python -m toolbox workbench suite tools/item-test-workbench/suites/smoke.json \
   --out artifacts/smoke --plan
-# Build once, write synthetic fixtures through C#, run controls + deterministic repeat.
+# Build once, write synthetic fixtures through C#, run the controls.
 python -m toolbox workbench suite tools/item-test-workbench/suites/smoke.json \
   --out artifacts/smoke
 # Read compact results without dumping thousands of snapshots.
 python -m toolbox workbench report artifacts/smoke/straight
-python -m toolbox workbench compare artifacts/smoke/straight artifacts/smoke/repeat
 ```
 
 Each `run` now writes `agent-report.json` and `agent-report.md` alongside the raw
@@ -101,7 +100,7 @@ no schematic substitution or intermediate animation is generated. Use the comple
 `native-review` viewer/raw PNGs for omitted ticks. Visual approval remains a task
 for the reviewing agent, never a conclusion of a hash check.
 
-### Saved-run audit and comparison
+### Saved-run audit
 
 Reports validate native trace structure, archived input/trace hashes, process status
 and any recorded PNGs. The original checkout, original source paths and installed
@@ -112,17 +111,10 @@ inconsistent evidence is `invalid`. Missing current source/dependency installati
 do not invalidate a portable archive. `--no-build` still checks the current build
 before executing.
 
-`compare` checks exact snapshots, assertions, coverage, resource observers and
-render-state/frame hashes, excluding host paths/build hashes and error stack text.
-It reports the first differing JSON field and snapshot tick; it does not add a
-tolerance, infer motion or silently ignore changed seeds/scenarios/items.
-`sameInputs` must be true for a repeatability claim. Equal failed runs remain failed.
-
 | Command | Exit 0 | Exit 1 | Exit 2 |
 |---|---|---|---|
 | `run` | Native assertions passed, requested evidence exported | Native assertions failed | Refusal, timeout, bad evidence or export error; inspect separate native status |
 | `report` | Read/export succeeded; inspect `nativeStatus` and `integrity` | — | Invalid evidence or command/export error |
-| `compare` | Same inputs and equivalent recorded evidence; inspect archive integrity | Different inputs or observations | Invalid evidence/command error |
 | `suite` | Every explicit expectation matched | At least one mismatch | Setup/manifest error |
 
 ### Your own scenario matrix
@@ -131,9 +123,8 @@ Use the checked-in [smoke suite](suites/smoke.json) as the manifest format. Path
 resolve relative to that **manifest**, independently of the caller's working
 directory. A case has a unique safe `name`, exactly one `item` path, `vanillaItem`
 name/ID string or `fixture` filename, a `scenario` path, and explicit `expect`.
-Optional `itemBoundary`, `review`, `timeout`, and `compareTo` select existing owner
-behavior. `compareTo` names an earlier case and requires identical inputs and
-observations. All cases are planned before execution, built once and run in
+Optional `itemBoundary`, `review`, and `timeout` select existing owner behavior.
+All cases are planned before execution, built once and run in
 separate processes; failed cases do not stop later controls. Summary checkpoints
 retain `passed: false` until the entire matrix finishes.
 
@@ -152,7 +143,7 @@ names; an additional nonfinite failure or a process crash cannot satisfy a miss
 control. Expected refusals use `{"status":"error","errorContains":"specific native reason"}`.
 Their process status, valid trace, archive and error substring must all agree.
 Suite success certifies the detector expectations, not health of negative items.
-The six-case smoke is bounded infrastructure coverage, not all-item certification;
+The five-case smoke is bounded infrastructure coverage, not all-item certification;
 the specialized `verify_*.py` matrices remain available for their wider scenarios.
 
 ## First run: no generated artwork required

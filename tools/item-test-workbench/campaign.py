@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 import workbench as w
-from agent_evidence import NATIVE_EXIT, compare, report
+from agent_evidence import NATIVE_EXIT, report
 
 
 def keys(obj, allowed, context):
@@ -48,12 +48,10 @@ def plan_suite(manifest):
         raise ValueError("Suite requires 1..128 explicit cases")
     names, planned = set(), []
     for case in cases:
-        keys(case, ("name", "item", "vanillaItem", "fixture", "scenario", "expect", "compareTo", "itemBoundary", "review", "timeout"), "suite case")
+        keys(case, ("name", "item", "vanillaItem", "fixture", "scenario", "expect", "itemBoundary", "review", "timeout"), "suite case")
         name = case.get("name")
         if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", name) or name in names:
             raise ValueError("Case names must be unique safe directory names (1..64 characters)")
-        if case.get("compareTo") is not None and case["compareTo"] not in names:
-            raise ValueError("compareTo must name an earlier case")
         names.add(name)
         sources = [k for k in ("item", "vanillaItem", "fixture") if k in case]
         if len(sources) != 1:
@@ -150,12 +148,6 @@ def run_suite(manifest, output, no_build=False):
             row.update(nativeStatus=data["nativeStatus"], integrity=data["integrity"],
                        failedAssertions=data["summary"]["failedAssertions"], error=data["summary"]["error"])
             row["expectationMatched"] = matches_expectation(data, case["expect"], proc.returncode)
-            if "compareTo" in case:
-                comparison = compare(output / case["compareTo"], output / name)
-                (output / (name + ".comparison.json")).write_text(json.dumps(comparison, indent=2), encoding="utf-8")
-                row["comparison"] = name + ".comparison.json"
-                row["expectationMatched"] &= (comparison["sameInputs"] and comparison["equivalent"]
-                    and all(v["status"] == "verified" for v in comparison["integrity"].values()))
         except (OSError, ValueError, RuntimeError, KeyError, TypeError, subprocess.SubprocessError) as exc:
             row["runnerError"] = str(exc)
         rows.append(row)

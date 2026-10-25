@@ -580,7 +580,6 @@ def main():
     sub.add_parser("catalog",help="Read-only inventory of supplied scenarios, actions and assertions")
     r=sub.add_parser("fixtures",help="Write synthetic fixtures through the native owner");r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true")
     r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
-    r=sub.add_parser("compare",help="Locate first exact recorded-state divergence; no execution");r.add_argument("baseline",type=Path);r.add_argument("candidate",type=Path)
     r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")
     r=sub.add_parser("inspect");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int);r.add_argument("--events",action="store_true");r.add_argument("--kind");r.add_argument("--summary",action="store_true",help="Compact read-only resource/hit/event aggregates")
     r=sub.add_parser("native-review");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--gif",action="store_true");r.add_argument("--gif-stride",type=int,default=1,help="Sample every N original PNGs only in optional GIF; HTML retains every native tick")
@@ -614,11 +613,6 @@ def main():
             if args.contact_sheet and args.out is None:raise ValueError("--contact-sheet requires --out")
             data=export_report(args.run,args.out,args.contact_sheet) if args.out else report(args.run)
             print(json.dumps(data,indent=2,allow_nan=False));return 2 if data["integrity"]["status"]=="invalid" else 0
-        if args.command=="compare":
-            from agent_evidence import compare
-            data=compare(args.baseline,args.candidate);print(json.dumps(data,indent=2,allow_nan=False))
-            if any(a["status"]=="invalid" for a in data["integrity"].values()):return 2
-            return 0 if data["equivalent"] and data["sameInputs"] else 1
         if args.command=="suite":
             from campaign import plan_suite,run_suite
             data=plan_suite(args.manifest) if args.plan else run_suite(args.manifest,args.out,args.no_build)

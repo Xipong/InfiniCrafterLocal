@@ -1,4 +1,4 @@
-"""Portable agent evidence: audit saved runs, locate divergence, select real pixels.
+"""Portable agent evidence: audit saved runs and select real pixels.
 
 No inference, game execution, physics, or interpretation of item names/prose.
 """
@@ -239,77 +239,3 @@ def export_contact_sheet(value, output):
                 "note": "Thumbnail contact sheet with labels; original PNGs remain authoritative"}
     (output / "vision.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     return metadata
-
-
-def first_difference(left, right, path="$"):
-    """Return one exact JSON path, keeping output bounded even for large traces."""
-    if type(left) is not type(right):
-        preview = lambda v: {"type": type(v).__name__, "length": len(v)} if isinstance(v, (dict, list)) else v
-        return {"path": path, "baseline": preview(left), "candidate": preview(right)}
-    if isinstance(left, dict):
-        for key in sorted(left.keys() | right.keys()):
-            child = path + "[" + json.dumps(key) + "]"
-            if key not in left or key not in right:
-                return {"path": child, "baselinePresent": key in left, "candidatePresent": key in right}
-            diff = first_difference(left[key], right[key], child)
-            if diff:
-                return diff
-    elif isinstance(left, list):
-        for index, (a, b) in enumerate(zip(left, right)):
-            diff = first_difference(a, b, f"{path}[{index}]")
-            if diff:
-                return diff
-        if len(left) != len(right):
-            return {"path": path + ".length", "baseline": len(left), "candidate": len(right)}
-    elif left != right:
-        return {"path": path, "baseline": left, "candidate": right}
-    return None
-
-
-def compare(baseline, candidate):
-    a_path, b_path = trace_path(baseline), trace_path(candidate)
-    a, b = (w.validate_trace(w.read_json(p)) for p in (a_path, b_path))
-    # Equality of frame-hash strings is not proof that either PNG still exists.
-    recorded_frames(a, a_path)
-    recorded_frames(b, b_path)
-    # Paths, source/build hashes and diagnostic stack traces are metadata. Gameplay
-    # snapshots, coverage, assertions and resource observers are compared exactly.
-    input_keys = ("boundary", "source", "sha256", "nativeItemId", "scenarioSha256", "seed")
-    identity_a = {k: a.get("input", {}).get(k) for k in input_keys}
-    identity_b = {k: b.get("input", {}).get(k) for k in input_keys}
-    def complete_identity(t):
-        source = t.get("input", {})
-        return (isinstance(source, dict) and type(source.get("seed")) is int
-                and isinstance(source.get("scenarioSha256"), str) and len(source["scenarioSha256"]) == 64
-                and (source.get("source") == "generated" and isinstance(source.get("sha256"), str) and len(source["sha256"]) == 64
-                     or source.get("source") == "vanilla" and type(source.get("nativeItemId")) is int))
-    same_inputs = identity_a == identity_b and complete_identity(a) and complete_identity(b)
-    first = None
-    for index, (left, right) in enumerate(zip(a["snapshots"], b["snapshots"])):
-        diff = first_difference(left, right, f'$["snapshots"][{index}]')
-        if diff:
-            first = {**diff, "snapshotIndex": index, "baselineTick": left["tick"], "candidateTick": right["tick"]}
-            break
-    if first is None and len(a["snapshots"]) != len(b["snapshots"]):
-        first = {"path": '$["snapshots"].length', "baseline": len(a["snapshots"]), "candidate": len(b["snapshots"])}
-    keys = ("status", "assertions", "resources", "combat", "coverage", "timeline", "failure")
-    outcome_diff = first_difference({k: a.get(k) for k in keys}, {k: b.get(k) for k in keys})
-    execution_keys = ("backend", "fullGameParity", "nativeMethods")
-    execution_diff = first_difference({k: a["execution"].get(k) for k in execution_keys},
-                                      {k: b["execution"].get(k) for k in execution_keys})
-    # Drawing can affect RNG and dust retirement. Exact render-state/frame hashes
-    # are separate evidence; never equate telemetry-only repeat with pixel parity.
-    def pixels(t):
-        r = t.get("nativeRender", {})
-        return {"snapshots": r.get("snapshots"), "frames": [
-            {k: f.get(k) for k in ("tick", "sha256", "width", "height")} for f in r.get("frames", [])]}
-    pixel_diff = first_difference(pixels(a), pixels(b))
-    audits = [audit_run(a_path, a), audit_run(b_path, b)]
-    return {"schemaVersion": 1, "kind": "native-evidence-comparison", "sameInputs": same_inputs,
-            "inputDifference": first_difference(identity_a, identity_b),
-            "equivalent": first is None and outcome_diff is None and pixel_diff is None and execution_diff is None,
-            "firstSnapshotDifference": first, "outcomeDifference": outcome_diff, "pixelDifference": pixel_diff,
-            "executionDifference": execution_diff,
-            "integrity": {"baseline": audits[0], "candidate": audits[1]},
-            "baselineStatus": a["status"], "candidateStatus": b["status"],
-            "note": "Exact recorded evidence comparison, no tolerance or physics reconstruction. Equal failed runs remain failed; sameInputs must be true for a repeatability claim."}

@@ -78,38 +78,6 @@ class AgentEvidenceTests(unittest.TestCase):
                                    ({"status": "passed", "failedAssertions": []}, 0)]:
                 self.assertFalse(c.matches_expectation(data, expected, code))
 
-    def test_compare_reports_first_changed_tick_without_confusing_host_paths(self):
-        with tempfile.TemporaryDirectory() as d:
-            a, b = Path(d) / "a", Path(d) / "b"
-            saved_run(a)
-            trace, receipt = saved_run(b)
-            trace["input"]["path"] = "/different-host/item.json"
-            save_trace(b, trace, receipt)
-            result = e.compare(a, b)
-            self.assertTrue(result["sameInputs"] and result["equivalent"])
-            trace["snapshots"][1]["player"]["mana"] = 19
-            save_trace(b, trace, receipt)
-            result = e.compare(a, b)
-            self.assertFalse(result["equivalent"])
-            self.assertEqual(result["firstSnapshotDifference"]["candidateTick"], 1)
-            self.assertTrue(result["firstSnapshotDifference"]["path"].endswith('["player"]["mana"]'))
-            trace["input"]["seed"] = 2
-            save_trace(b, trace, receipt)
-            self.assertFalse(e.compare(a, b)["sameInputs"])
-
-    def test_no_receipt_and_incomplete_identity_do_not_become_repeatability_proof(self):
-        with tempfile.TemporaryDirectory() as d:
-            a, b = Path(d) / "a", Path(d) / "b"
-            for p in (a, b):
-                trace, receipt = saved_run(p)
-                trace["input"] = {"path": "only metadata"}
-                save_trace(p, trace, receipt)
-                (p / "run.json").unlink()
-            result = e.compare(a, b)
-            self.assertTrue(result["equivalent"])
-            self.assertFalse(result["sameInputs"])
-            self.assertEqual(result["integrity"]["baseline"]["status"], "unverified")
-
     def test_unexpected_error_and_extra_failed_assertions_do_not_satisfy_negative_control(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -165,8 +133,6 @@ class AgentEvidenceTests(unittest.TestCase):
             (root / frames[0]["path"]).write_bytes(b"not PNG")
             with self.assertRaises(ValueError):
                 e.report(root)
-            with self.assertRaises(ValueError):
-                e.compare(root, root)
 
 
 class RunnerBoundaryTests(unittest.TestCase):
@@ -231,7 +197,17 @@ class SuiteTests(unittest.TestCase):
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             plan = json.loads(proc.stdout)
-            self.assertEqual(len(plan["cases"]), 6)
+            self.assertEqual(len(plan["cases"]), 5)
+            self.assertEqual(list(root.iterdir()), [])
+
+    def test_removed_compare_command_is_rejected_without_outputs(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            proc = subprocess.run([sys.executable, str(w.HERE / "workbench.py"),
+                                   "compare", "baseline", "candidate"], cwd=root,
+                                  capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 2)
+            self.assertIn("invalid choice", proc.stderr)
             self.assertEqual(list(root.iterdir()), [])
 
     def test_ambiguous_and_blanket_expected_failures_are_refused(self):
@@ -239,10 +215,13 @@ class SuiteTests(unittest.TestCase):
         variants = []
         for change in ({"name": "../escape"}, {"fixture": "../../elsewhere.json"}, {"unexpected": True},
                        {"expect": {"status": "failed"}}, {"expect": {"status": "error"}},
-                       {"compareTo": "missing"}, {"vanillaItem": "WoodenBoomerang"}, {"timeout": True}):
+                       {"compareTo": "straight"}, {"vanillaItem": "WoodenBoomerang"}, {"timeout": True}):
             item = copy.deepcopy(valid)
             item["cases"][0].update(change)
             variants.append(item)
+        prior_case = copy.deepcopy(valid)
+        prior_case["cases"][1]["compareTo"] = "straight"
+        variants.append(prior_case)
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "suite.json"
             # Resolve scenarios once so failures exercise suite semantics, not missing files.
