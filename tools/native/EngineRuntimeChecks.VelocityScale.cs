@@ -32,7 +32,8 @@ internal static partial class EngineRuntimeChecks
         WithPlayer((owner, _) => {
             using var actors = new NativeActorState();
             foreach (int updates in new[] {1, 2, 4}) {
-                var data=MotionDefinition("{\"velocityScale\":[{\"multiplierPerUpdate\":0.5}]}", b => b["collision"]!["updatesPerTick"]=updates);
+                // This helper consumes strict native wire, not Author collision parameters.
+                var data=MotionDefinition("{\"velocityScale\":[{\"multiplierPerUpdate\":0.5}]}", b => b["collision"]!["extraUpdates"]=updates - 1);
                 var actor=MotionActor(data,owner,new Vector2(16,0));
                 for (int i=0;i<updates;i++) actor.Host.AI();
                 AssertVfxNear(new Vector2(16f * MathF.Pow(.5f,updates),0),actor.Body.velocity,"per-update multiplier respects explicit subupdates");
