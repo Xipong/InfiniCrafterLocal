@@ -2427,8 +2427,10 @@ _CAPS: list[CapabilitySpec] = [
          "copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding "
          "to the same entity share the cap. This does not override existing producer semantics: the owner-attached "
          "active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use "
-         "singleton or make hold refill to this cap. First-batch count retains its existing meaning. Late spawn refusal "
-         "does not roll back other activation events or native item/mana costs. Capability absence adds no admission cap; no neutral/default "
+         "singleton or make hold refill to this cap. First-batch count retains its existing meaning. Root bindings preflight "
+         "the full batch in CanUseItem before Shoot/spawn. Event, controller, and later spawn refusals can occur after activation "
+         "is accepted; they do not roll back costs or effects already accepted for that activation. This cap alone does not establish "
+         "whether a refused root use paid or was refunded, and implies no extra charges. Capability absence adds no admission cap; no neutral/default "
          "is materialized, no name/category/movement routing and no other mechanic is selected."),
         "entity_spawn",
         PROJECTILE_ENTITY_KINDS,
