@@ -247,6 +247,24 @@
       "context": [
         "docs/development/BUILD_RU.md"
       ]
+    },
+    {
+      "id": "item-test-workbench",
+      "area": "tooling",
+      "patterns": [
+        "tools/item-test-workbench/**"
+      ],
+      "checks": [
+        "item_workbench_python",
+        "item_workbench_build"
+      ],
+      "entrypoints": [
+        "tools/item-test-workbench/README.md",
+        "tools/item-test-workbench/workbench.py"
+      ],
+      "context": [
+        "tools/item-test-workbench/SUPPORT_MATRIX.md"
+      ]
     }
   ]
 }

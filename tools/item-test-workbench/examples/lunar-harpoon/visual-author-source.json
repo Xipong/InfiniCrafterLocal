@@ -1,0 +1,38 @@
+{
+  "schema": "infini.visual-kit.runtime-entities.v2",
+  "item": {
+    "prompt": "Vertical upward-pointing silver crescent harpoon with cyan lunar core and brown shaft grip, transparent background.",
+    "negativePrompt": "text, background, hands",
+    "silhouette": "Slender long shaft with crescent spearhead",
+    "visualIdentity": "Silver cyan lunar harpoon with brown wrapped handle",
+    "palette": [
+      "silver",
+      "cyan",
+      "brown"
+    ],
+    "preferredCanvasSize": 96,
+    "renderSizePx": 96,
+    "forwardAngleDegrees": -90,
+    "inventoryScale": 1,
+    "worldScale": 1,
+    "grip": {
+      "normalizedX": 0.5,
+      "normalizedY": 0.7291666666666666
+    }
+  },
+  "entities": [
+    {
+      "entityId": "item",
+      "assetMode": "baked_sprite",
+      "visualProjectRef": "item",
+      "scale": 1
+    },
+    {
+      "entityId": "harpoon",
+      "assetMode": "reuse_item_icon",
+      "visualProjectRef": "item",
+      "scale": 1
+    }
+  ],
+  "animationPlan": "One physical sprite held by its measured brown grip, then thrown and returned; no duplicate item sprite."
+}

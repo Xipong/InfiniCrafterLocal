@@ -1,4 +1,4 @@
-"""Small public router; runtime imports belong only to deliberate live execution."""
+"""Small public router; execution stays with the existing command owners."""
 from __future__ import annotations
 
 import argparse
@@ -16,12 +16,18 @@ def main(argv: list[str] | None = None) -> int:
     values = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description='Утилиты QA: безопасный offline-вход; live только с --run.',
-        epilog='live10/live20: исторические входы, preflight или явная text-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks.',
+        epilog='live10/live20: исторические входы, preflight или явная text-кампания; panels: каталог запросов; summary: saved ledgers; doctor: read-only prerequisites; replay: saved wire; verify: canonical affected checks; workbench: native item tests and recorded frames.',
     )
-    parser.add_argument('command', choices=('live10', 'live20', 'panels', 'summary', 'doctor', 'verify', 'replay'))
+    parser.add_argument('command', choices=('live10', 'live20', 'panels', 'summary', 'doctor', 'verify', 'replay', 'workbench'))
     if not values or values[0] in ('-h', '--help'):
         parser.print_help()
         return 0
+    if values[0] == 'workbench':
+        # Keep caller-relative item/scenario/output paths and stream semantics.
+        # The existing owner alone parses arguments and decides whether to execute.
+        return subprocess.run(
+            [sys.executable, str(BASE_ROOT / 'tools/item-test-workbench/workbench.py'), *values[1:]],
+        ).returncode
     if values[0] == 'panels':
         from toolbox.live.catalog import panel_catalog
         catalog_parser = argparse.ArgumentParser(description='Исходные пакеты запросов и родители; без inference.')

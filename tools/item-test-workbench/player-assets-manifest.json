@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "package": "Terraria starter-player community source PNGs",
+  "versionClaim": "1.4.4.9",
+  "repository": "https://github.com/sullerandras/terraria-hd-textures",
+  "commit": "c835594415e31ed88734dc778661014b48ffb648",
+  "sourceDirectory": "source-pngs",
+  "provenanceScope": "Community extraction labelled Terraria 1.4.4.9; original source PNGs, NOT HD outputs. No independent official checksum certification.",
+  "redistribution": "Not bundled. Explicit downloader execution retrieves public data locally; game assets remain owned by their respective copyright holders.",
+  "files": [
+    {
+      "path": "Images/Player_0_0.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_0.png",
+      "sha256": "95e272aefac3ab5eda8f2bad352f404442820b952872365d444d8c2973c8a5df",
+      "bytes": 1474,
+      "width": 40,
+      "height": 1118
+    },
+    {
+      "path": "Images/Player_0_1.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_1.png",
+      "sha256": "ac7f437365b5fdd5bc3025cda82904364ebe68f8d766baba95e12bc5e8999a84",
+      "bytes": 1230,
+      "width": 40,
+      "height": 1118
+    },
+    {
+      "path": "Images/Player_0_2.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_2.png",
+      "sha256": "e9ed6edbd5efdb701ea09c1d90e533eb6bddea2f0a9b94c44557f57f1bb6990e",
+      "bytes": 1228,
+      "width": 40,
+      "height": 1118
+    },
+    {
+      "path": "Images/Player_0_3.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_3.png",
+      "sha256": "fb597b26dd4f1fe446a59065a9b05db97cc3c1189ad148cff9b1897144f13ffe",
+      "bytes": 1157,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_4.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_4.png",
+      "sha256": "2286d978fbeab0f3c95a2e307951f4a29827301beabc089fad40ea3a61e1a4ac",
+      "bytes": 1839,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_5.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_5.png",
+      "sha256": "44906bcf01cd976f0d3edd97e58c425b96533f06f375c644ceaae409697bd6b5",
+      "bytes": 1777,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_6.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_6.png",
+      "sha256": "040261d619c52e590c0624d4edaf52356b4b0d5dbc6d45922cc9444872b5b873",
+      "bytes": 1498,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_7.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_7.png",
+      "sha256": "111430f1920424de74e04241a6ec1db7d0acb3bd9e7d69b24a471c9bbcdbbed3",
+      "bytes": 2295,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_8.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_8.png",
+      "sha256": "9a0f52867d6fdd7b6ae3e40bc32d71eb2db995366f02f3425b69b42c3ca0daa8",
+      "bytes": 1820,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_9.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_9.png",
+      "sha256": "4f64746d5f795b6af0ce17d3ae485ec3eb02224821cd07d53f1c39d99125de0f",
+      "bytes": 1584,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_10.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_10.png",
+      "sha256": "d03a75a6517fc0c6b44fbf8d6ae87aa1d7aa4904e5618e2558b1f961177ca8b0",
+      "bytes": 2014,
+      "width": 40,
+      "height": 1120
+    },
+    {
+      "path": "Images/Player_0_11.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_11.png",
+      "sha256": "a5761d1b0d2c4bafef7b1f022e77069b301ae541b1a45af4fbb24fff8061ce51",
+      "bytes": 2321,
+      "width": 40,
+      "height": 1120
+    },
+    {
+      "path": "Images/Player_0_12.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_12.png",
+      "sha256": "cbdf494b40ccdb212d6c0ae5e0045db9fe25d75818dec5d48e93b2a42eecf0dc",
+      "bytes": 1534,
+      "width": 40,
+      "height": 1120
+    },
+    {
+      "path": "Images/Player_0_13.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_13.png",
+      "sha256": "f9857f1590703def9cede2cf7092ff7d430a098f1ab9f184f2434bf9b237ff93",
+      "bytes": 869,
+      "width": 360,
+      "height": 224
+    },
+    {
+      "path": "Images/Player_0_15.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_0_15.png",
+      "sha256": "6fa7df52dbaeca38b2dd43d6d99bee667c12ffd1cad041c3929d90427e24f917",
+      "bytes": 296,
+      "width": 40,
+      "height": 168
+    },
+    {
+      "path": "Images/Player_Hair_1.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_Hair_1.png",
+      "sha256": "8e134925cc78408705b50d99e0d0d752c5454a6acedf08ad9174a3bd270b7104",
+      "bytes": 1335,
+      "width": 40,
+      "height": 784
+    },
+    {
+      "path": "Images/Player_HairAlt_1.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Player_HairAlt_1.png",
+      "sha256": "4306b8eeb6bfd2b1be7db83d087bbfcb1f96f5add9e4e2979de160880d172d01",
+      "bytes": 1133,
+      "width": 40,
+      "height": 784
+    },
+    {
+      "path": "Images/MagicPixel.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/MagicPixel.png",
+      "sha256": "43e32609f2d123fc51cafbafab11955153ea545760952a578c3f909bbe88651c",
+      "bytes": 93,
+      "width": 1,
+      "height": 1000
+    },
+    {
+      "path": "Images/Dust.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Dust.png",
+      "sha256": "ffb3b9d3a11421600429adf5de97a6369f1c9e5b3533d6b99820aba143147dde",
+      "bytes": 36526,
+      "width": 1000,
+      "height": 120
+    }
+  ],
+  "matchingRelease": {
+    "tag": "v0.16.2-1.4.4.9",
+    "commit": "0cdfe4c092d98c5853972b0c87979d7f9a81ce13",
+    "relationship": "One version-bump commit after the pinned source commit; all 19 requested Git blobs match both trees."
+  },
+  "trainingDummyFiles": [
+    {
+      "path": "Images/NPC_488.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/NPC_488.png",
+      "sha256": "d20c5c9375ef6015c2dbccd140e13198b951489648e755b469bd94988f98c797",
+      "bytes": 2570,
+      "width": 32,
+      "height": 550
+    },
+    {
+      "path": "Images/Tiles_378.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Tiles_378.png",
+      "sha256": "525fe8e863cbca7e587d42c03a52c8280cbbf1aacc817779bb480492c0ca4583",
+      "bytes": 6209,
+      "width": 72,
+      "height": 594
+    }
+  ],
+  "trainingDummyScope": "Optional original tile378 artwork plus NPC488 animation-frame texture. NPC488 is deliberately invisible; the native tile renderer draws the linked tile entity."
+}

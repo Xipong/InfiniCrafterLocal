@@ -149,12 +149,23 @@
       "python",
       "tools/testing/test_tml_ci.py",
       "-v"
+    ],
+    "item_workbench_python": [
+      "python",
+      "tools/item-test-workbench/workbench.py",
+      "test"
+    ],
+    "item_workbench_build": [
+      "python",
+      "tools/item-test-workbench/workbench.py",
+      "build"
     ]
   },
   "fullChecks": [
     "pytest",
     "compileall",
     "tml_ci_regression",
+    "item_workbench_python",
     "schema_check",
     "generated_docs",
     "delivery_contract",
@@ -174,13 +185,15 @@
     "primitive_loss",
     "tml_build",
     "native_checks",
+    "item_workbench_build",
     "tml_runtime_selftest"
   ],
   "validationGroups": {
     "python": [
       "pytest",
       "compileall",
-      "tml_ci_regression"
+      "tml_ci_regression",
+      "item_workbench_python"
     ],
     "static": [
       "schema_check",
@@ -204,6 +217,7 @@
     "build": [
       "tml_build",
       "native_checks",
+      "item_workbench_build",
       "tml_runtime_selftest"
     ]
   },
