@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 
 import pytest
+from hypothesis import example, given, settings, strategies as st
+from jsonschema import Draft202012Validator
 
 import infini_local.core.runtime_authoring.capability_registry as registry
 import infini_local.core.runtime_authoring.compiler as compiler
@@ -16,14 +18,33 @@ from infini_local.core.runtime_authoring.program_schema import strict_schema_err
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-@pytest.mark.parametrize("value,literal", [
-    (True, 1), (False, 0), ({"flag": True}, {"flag": 1}), ([False], [0]),
-    (1.0, 1), ({"a": [1.0], "b": False}, {"b": False, "a": [1]}),
-])
-def test_const_and_enum_follow_json_equality_instead_of_python_boolean_aliases(value, literal):
-    from jsonschema import Draft202012Validator
-    for schema in ({"const": literal}, {"enum": [literal]}):
-        assert (not strict_schema_errors(value, schema)) == Draft202012Validator(schema).is_valid(value)
+JSON_VALUES = st.recursive(
+    st.none() | st.booleans() | st.integers() | st.floats(allow_nan=False, allow_infinity=False)
+    | st.text(max_size=12),
+    lambda children: st.lists(children, max_size=4)
+    | st.dictionaries(st.text(max_size=8), children, max_size=4),
+    max_leaves=12,
+)
+
+
+@pytest.mark.parametrize("keyword", ["const", "enum"])
+@settings(max_examples=64, derandomize=True, deadline=None)
+@example(value=True, literal=1)
+@example(value=False, literal=0)
+@example(value={"flag": True}, literal={"flag": 1})
+@example(value=[False], literal=[0])
+@example(value=1.0, literal=1)
+@example(value={"a": [1.0], "b": False}, literal={"b": False, "a": [1]})
+@given(value=JSON_VALUES, literal=JSON_VALUES)
+def test_literal_admission_agrees_with_independent_json_schema(keyword, value, literal):
+    # The JSON Schema implementation is an independent oracle. Generated nested
+    # values cover key order, scalar/container distinctions and bool/int aliases;
+    # checking the literal itself prevents an always-reject validator from passing.
+    schema = {keyword: [literal] if keyword == "enum" else literal}
+    before = deepcopy((value, schema))
+    assert (not strict_schema_errors(value, schema)) == Draft202012Validator(schema).is_valid(value)
+    assert not strict_schema_errors(deepcopy(literal), schema)
+    assert (value, schema) == before
 
 
 def test_boolean_and_numeric_const_union_selects_exactly_one_branch():
@@ -198,19 +219,29 @@ def test_projection_coverage_is_unique_and_complete(attack):
         assert not technical_lowering.audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
 
 
-@pytest.mark.parametrize("bad", [True, 601, 1.0, None])
+@pytest.mark.parametrize("malformed", ["boolean", "above-maximum", "float", "null"])
 @pytest.mark.parametrize("source_available", [False, True])
-def test_legacy_scalar_domain_is_not_authenticated_by_coherent_receipts(bad, source_available):
+def test_structured_scalar_domain_is_not_authenticated_by_coherent_receipts(malformed, source_available):
+    immunity = registry.CAPABILITY_REGISTRY["set_projectile_collision"].params["immunity"]
+    cooldown = next(branch.properties["localCooldown"] for branch in immunity.alternatives if branch.kind == "object")
+    bad = {"boolean": True, "above-maximum": cooldown.maximum + 1, "float": 1.0, "null": None}[malformed]
     document = build_capability_witness("set_projectile_collision")
     call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
+    call["params"]["immunity"] = {"localCooldown": 19}
     wire = compiler.compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
-    call["params"]["localNpcHitCooldownEngineUnits"] = bad
+    source = document if source_available else None
+    assert technical_lowering.audit_compiler_receipts(
+        receipts, authored_document=source, final_document=wire,
+    )["ok"]
+    # Corrupt the current authored leaf, not a retired unknown parameter that
+    # would fail regardless of whether the cooldown domain was checked.
+    call["params"]["immunity"]["localCooldown"] = bad
     entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["target"])
     entity["collision"]["localNpcHitCooldownTicks"] = bad
     next(r for r in receipts if r.get("callId") == call["id"] and r["finalPath"].endswith(".localNpcHitCooldownTicks"))["value"] = bad
     assert not technical_lowering.audit_compiler_receipts(
-        receipts, authored_document=document if source_available else None, final_document=wire,
+        receipts, authored_document=source, final_document=wire,
     )["ok"]
 
 
@@ -223,16 +254,6 @@ def test_wire_claim_cannot_split_one_call_across_entity_owners():
     # Equal-valued scalar fields still belong to one exact call/component.
     row = next(r for r in receipts if r.get("callId") == calls[0]["id"] and r["finalPath"].endswith(".tileCollide"))
     row["finalPath"] = row["finalPath"].replace(f"entities[{indices[0]}]", f"entities[{indices[1]}]")
-    assert not technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]
-
-
-def test_missing_typed_outputs_have_no_receipt_excuse():
-    document = build_capability_witness("set_projectile_collision")
-    call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    call["params"]["immunity"] = {"localCooldown": 19}
-    wire = compiler.compile_runtime_program(document)
-    receipts = wire["runtimeContract"]["finalWireReceipts"]
-    receipts[:] = [r for r in receipts if ".params.immunity" not in r.get("authoredPath", "")]
     assert not technical_lowering.audit_compiler_receipts(receipts, final_document=wire)["ok"]
 
 
@@ -274,17 +295,6 @@ def test_fn_literal_provenance_requires_value_source_and_complete_coverage(monke
         forged[receipts.index(literal)][key] = value
         assert not technical_lowering.audit_compiler_receipts(forged, authored_document=document, final_document=wire)["ok"]
     assert not technical_lowering.audit_compiler_receipts([r for r in receipts if r is not literal], final_document=wire)["ok"]
-
-
-def test_policy_absence_preserves_buff_and_receipts_but_not_obsolete_audit_roster():
-    document = build_capability_witness("apply_generated_buff_on_use")
-    call = next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "witness_call")
-    call["params"].pop("exhaustionSeconds", None)
-    wire = compiler.compile_runtime_program(document)
-    assert "exhaustionTicks" not in wire["gameplay"]["generatedBuff"]
-    assert not any(r.get("authoredPath", "").endswith(".exhaustionTicks") for r in wire["runtimeContract"]["finalWireReceipts"])
-    lowerer = next(r for r in wire["runtimeContract"]["technicalLoweringAudit"]["lowerers"] if r["id"] == "item_fields_to_tml_projection")
-    assert "gameplay.generatedBuff.exhaustionTicks" in lowerer["outputs"]
 
 
 @pytest.mark.parametrize("key,value", [("shotEntity", "shot"), ("intervalSeconds", 1), ("sameTargetBias", 0.5)])

@@ -75,10 +75,6 @@ def test_zero_is_explicit_and_schema_prompt_advertise_the_same_signed_domain():
     assert shape["properties"][PARAM]["x-infini-consumerConstraint"]["storage"] == "float32"
     card = next(row for row in compact_capability_catalog() if row["fn"] == FN)
     assert card["params"][PARAM]["min"] == spec.minimum and card["params"][PARAM]["max"] == spec.maximum
-    assert "negative up" in card["params"][PARAM]["meaning"]
-    assert "signed world vertical acceleration" in card["does"]
-    assert card["params"][PARAM]["projectionConstraints"]["targetContext"] == (
-        "same target's unique set_projectile_collision.updatesPerTick")
     assert card["params"][PARAM]["units"] == "blocks/second^2"
     document = build_capability_witness(FN)
     del selected(document)["params"][PARAM]

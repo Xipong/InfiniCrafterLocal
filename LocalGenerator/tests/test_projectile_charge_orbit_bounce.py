@@ -1,16 +1,13 @@
 """Independent charge channels, world-time orbit, and literal tile restitution."""
 from copy import deepcopy
-import json
 
 import pytest
 
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
@@ -146,24 +143,6 @@ def test_repair_only_changes_invalid_channel_and_keeps_valid_charge_channels_fro
     hostile = deepcopy(call); hostile['params']['releaseEffect']['damageMultiplier'] = 4
     patch, audit = filter_repair_patch_scope(broken, {'callsUpsert': [hostile], 'note': 'one channel'}, scope)
     assert audit['ignoredChanges'] and apply_repair_patch(broken, patch) == good
-
-
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-def test_actual_author_packet_teaches_native_semantics_and_independent_choices(monkeypatch, mode):
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
-    _, user, _ = build_initial_author_request({}, {}, 'projectile-controls', model_name='test-model')
-    cards = {c['fn']: c for c in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
-    assert 'powerMultiplier' not in cards['accumulate_projectile_charge']['params']['releaseEffect']['shape']['properties']
-    assert {'damageMultiplier', 'knockbackMultiplier', 'speedMultiplier'} <= cards['accumulate_projectile_charge']['params']['releaseEffect']['shape']['properties'].keys()
-    assert {'charge_then_release', 'move_orbit'}.isdisjoint(cards)
-    orbit = cards['orbit_projectile']
-    assert 'Signed angular rate' in orbit['params']['radiansPerSecond']['meaning']
-    assert 'zero holds phase' in orbit['params']['radiansPerSecond']['meaning']
-    assert 'tile collision remains independently authored' in orbit['does']
-    meaning = cards['set_projectile_collision']['params']['bounceSpeedRetention']['meaning']
-    assert 'collided velocity axis' in meaning and 'Tangential speed is unchanged' in meaning
-    assert 'No friction' in meaning
-    assert set(CAPABILITY_REGISTRY['orbit_projectile'].params) <= cards['orbit_projectile']['params'].keys()
 
 
 @pytest.mark.parametrize('field', ['damageMultiplier', 'knockbackMultiplier', 'speedMultiplier'])

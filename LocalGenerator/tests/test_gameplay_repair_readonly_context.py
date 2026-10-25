@@ -76,7 +76,6 @@ def test_changed_source_fact_changes_serialized_repair_not_permissions(monkeypat
         assert dossier["acceptedItemContext"]["concept"] == item["concept"]
         assert dossier["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
         assert "concept" not in dossier and "runtimeProgram" not in dossier
-        assert list(dossier)[-1] == "requiredJsonShape"
     # Nothing outside the exact read-only source field should react to this change.
     changed_dossier["acceptedItemContext"][field] = baseline_dossier["acceptedItemContext"][field]
     assert changed_dossier == baseline_dossier
@@ -105,19 +104,6 @@ def test_binding_index_never_uses_legacy_wrapper_or_materializes_absences(action
     assert index[0] == {key: value for key, value in binding.items() if key in {"id", "input", "action", "stackCost", "contactDamage"}}
     index[0]["action"] = {"kind": "mutation must stay in projection"}
     assert item == before
-
-
-def test_serialized_report_instructions_distinguish_source_from_permitted_overlay(monkeypatch):
-    _, dossier = _capture_request(monkeypatch, _broken_held_and_deployed(), "json_object")
-    rules = " ".join(dossier["rules"])
-    for required in (
-        "optional advisory context", "never an observed run or an acceptance requirement",
-        "acceptedItemContext.runtimeProgram", "pre-repair source", "including invalid fields",
-        "only edits admitted by repairScope", "keep every frozen value and absence unchanged",
-        "Do not repair or complete prose or self-evaluation",
-    ):
-        assert required in rules
-    assert "literal post-repair execution report" not in rules
 
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])

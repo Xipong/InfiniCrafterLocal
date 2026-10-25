@@ -5,6 +5,7 @@ from dataclasses import replace
 from itertools import product
 import json
 import pytest
+from hypothesis import example, given, settings, strategies as st
 from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY, capability_provider_union
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -14,46 +15,21 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 import infini_local.core.runtime_authoring.technical_lowering as technical_lowering
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.program_schema import strict_schema_errors
+from infini_local.core.runtime_authoring.terraria_vocabulary import DAMAGE_CLASS_TOKENS
 from infini_local.qa.capability_witnesses import build_capability_witness
 from test_registry_receipt_identity import _call, _receipt
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request, build_gameplay_repair_dossier
+from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 
-DECLARED = {
-    "present_placed_item_sprite": {"pivotSpace": "frame"},
-    "configure_spawn": {"count": 1, "spreadRadians": 0},
-    "set_projectile_collision": {"bounceCount": 0, "bounceSpeedRetention": 1},
-    "set_projectile_aim": {"turnOwner": False},
-    "attach_projectile": {"axisOffsetBlocks": 0, "normalOffsetBlocks": 0},
-    "set_projectile_return_trigger": {"onOwnerRelease": False, "onTileCollision": False,
-                                      "disableTileCollisionOnReturn": False},
-    "set_projectile_rotation": {"offsetRadians": 0, "radiansPerSecond": 0},
-    "set_projectile_owner_control": {"requireHeldItem": False, "requireChannel": False,
-                                     "requireItemAnimation": False, "claimHeldProjectile": False,
-                                     "animation": "none", "lifetime": "authored"},
-    "spawn_entity_on_event": {"spreadRadians": 0},
-    "damage_nearby_on_event": {"maxTargets": 16},
-    "configure_item_stats": {"manaCost": 0, "manaCostInput": "both"},
-    "configure_item_use": {"holdoutOffsetX": 0, "holdoutOffsetY": 0},
-    "target_and_fire": {"count": 1, "spreadRadians": 0.0, "targetPolicy": "distance_score",
-                        "requireLineOfSight": False, "hardRange": False},
-    "apply_generated_buff_on_use": {
-        "miningSpeedMultiplier": 1,
-        "oreSenseEnabled": False,
-        "moveSpeedBonusPercent": 0,
-        "jumpSpeedBonusBlocksPerSecond": 0.0,
-        "manaRegenBonusPoints": 0,
-        "lifeRegenHpPerSecond": 0,
-    },
+# The registry owns the permitted omission surface. Tests constrain its meaning
+# (optional, type-exact neutral, admitted) instead of maintaining a second roster
+# that fails whenever another safe omission is registered.
+DEFAULTS = {
+    fn: {name: spec.default for name, spec in cap.params.items() if spec.default is not None}
+    for fn, cap in CAPABILITY_REGISTRY.items()
+    if any(spec.default is not None for spec in cap.params.values())
 }
-RETAINED_WIRE_DEFAULTS = {
-    "apply_projectile_charge_release": {"damageMultiplier": 1, "knockbackMultiplier": 1,
-                                        "speedMultiplier": 1, "pauseLifetimeWhileCharging": False},
-    "set_projectile_beam_ramp": {"initialWidthMultiplier": 1, "initialDamageMultiplier": 1,
-                                 "damageStartProgress": 0},
-
-    "channel_beam": {"manaPayment": "initial_use_only", "initialDamageMultiplier": 1.0,
-                     "initialWidthMultiplier": 1.0, "damageStartProgress": 1.0, "raycastTiles": False},
-}
+DECLARED = {fn: values for fn, values in DEFAULTS.items() if CAPABILITY_REGISTRY[fn].author_visible}
+RETAINED_WIRE_DEFAULTS = {fn: values for fn, values in DEFAULTS.items() if not CAPABILITY_REGISTRY[fn].author_visible}
 BUFF_NEUTRALS = DECLARED["apply_generated_buff_on_use"]
 
 
@@ -76,15 +52,14 @@ def _audit(source, compiled, rows):
     return audit_compiler_receipts(rows, authored_document=source, final_document=compiled)
 
 
-def test_declared_omission_roster_matches_registry_and_serialized_contract():
-    actual = {
-        fn: {n: s.default for n, s in c.params.items() if s.default is not None}
-        for fn, c in CAPABILITY_REGISTRY.items()
-        if any(s.default is not None for s in c.params.values())
-    }
-    assert actual == {**DECLARED, **RETAINED_WIRE_DEFAULTS}
-    assert {fn for fn in actual if CAPABILITY_REGISTRY[fn].author_visible} == set(DECLARED)
-    assert all(not CAPABILITY_REGISTRY[fn].author_visible for fn in RETAINED_WIRE_DEFAULTS)
+def test_declared_defaults_are_neutral_optional_and_reach_serialized_contract():
+    assert DEFAULTS and DECLARED
+    for fn, values in DEFAULTS.items():
+        for name, value in values.items():
+            spec = CAPABILITY_REGISTRY[fn].params[name]
+            assert not spec.required, (fn, name)
+            assert type(value) is type(spec.neutral) and value == spec.neutral, (fn, name)
+            assert not strict_schema_errors(value, spec.schema()), (fn, name)
     _, user, _ = build_initial_author_request({}, {}, "omission-proof", model_name="test-model")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     cards = {c["fn"]: c for c in catalog["capabilities"]}
@@ -94,9 +69,6 @@ def test_declared_omission_roster_matches_registry_and_serialized_contract():
     assert set(RETAINED_WIRE_DEFAULTS).isdisjoint(schemas)
     for fn, values in DECLARED.items():
         for name, value in values.items():
-            spec = CAPABILITY_REGISTRY[fn].params[name]
-            assert not spec.required and spec.neutral == value and type(spec.neutral) is type(value)
-            assert not strict_schema_errors(value, spec.schema())
             assert cards[fn]["params"][name]["optional"] is True
             assert cards[fn]["params"][name]["default"] == value
             assert name not in schemas[fn]["required"]
@@ -104,22 +76,12 @@ def test_declared_omission_roster_matches_registry_and_serialized_contract():
             assert projected["default"] == value and type(projected["default"]) is type(value)
             assert projected["x-infini-neutral"] == value
             assert not strict_schema_errors(value, projected)
-    guide = catalog["fieldGuide"]["paramNotation"]
-    assert "default" in guide and "full Author" in guide and "not universal" in guide
-    doc = build_capability_witness("configure_item_stats")
-    _call(doc, "configure_item_stats")["params"]["damage"] = -1
-    dossier = build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
-    assert "omission means no change" in " ".join(json.loads(json.dumps(dossier))["rules"])
 
 
 @pytest.mark.parametrize(
     "fn,omitted,values",
     [pytest.param(fn, (n,), {}, id=fn + "-" + n) for fn, vs in DECLARED.items() for n in vs
      if CAPABILITY_REGISTRY[fn].params[n].omission_condition is None]
-    + [
-        pytest.param("configure_item_stats", ("manaCost",), {"damageClass": dc}, id="mana-" + dc)
-        for dc in ("melee", "ranged", "magic", "summon", "default")
-    ]
     + [
         pytest.param(
             "configure_item_use",
@@ -199,9 +161,44 @@ def test_optional_shape_owner_reports_every_broken_indexed_leaf(fn, label):
     assert doc == before
 
 
-# Numeric units/projections belong to test_registry_author_units. Here the
-# optional leaf must distinguish absence from a present invalid or boundary value.
-@pytest.mark.parametrize("value,accepted", [(0, True), (500, True), ("0", False), (-1, False), (501, False)])
+MANA_SPEC = CAPABILITY_REGISTRY["configure_item_stats"].params["manaCost"]
+
+
+@settings(max_examples=40, derandomize=True, deadline=None)
+@example(damage_class="magic", value=17, omitted=False)
+@example(damage_class="default", value=17, omitted=True)
+@given(
+    damage_class=st.sampled_from(DAMAGE_CLASS_TOKENS),
+    value=st.integers(min_value=MANA_SPEC.minimum, max_value=MANA_SPEC.maximum),
+    omitted=st.booleans(),
+)
+def test_mana_presence_and_value_are_independent_of_damage_class(damage_class, value, omitted):
+    doc = _stats(omit=omitted)
+    params = _call(doc, "configure_item_stats")["params"]
+    params["damageClass"] = damage_class
+    if not omitted:
+        params["manaCost"] = value
+    before = deepcopy(doc)
+    wire = compile_runtime_program(doc)
+    expected = 0 if omitted else value
+    assert type(wire["gameplay"]["manaCost"]) is int
+    assert wire["gameplay"]["manaCost"] == expected
+    row = _receipt(wire["runtimeContract"]["finalWireReceipts"], "gameplay.manaCost")
+    assert row["value"] == expected
+    assert row["status"] == ("declared_neutral_omission" if omitted else "delivered")
+    assert validate_runtime_wire(wire)["ok"]
+    assert doc == before
+
+
+# Absence and explicit zero are covered above; these are independent refusal
+# classes and the two endpoints declared by the current public parameter.
+@pytest.mark.parametrize("value,accepted", [
+    pytest.param(MANA_SPEC.minimum, True, id="minimum"),
+    pytest.param(MANA_SPEC.maximum, True, id="maximum"),
+    pytest.param(str(MANA_SPEC.minimum), False, id="text"),
+    pytest.param(MANA_SPEC.minimum - 1, False, id="below-minimum"),
+    pytest.param(MANA_SPEC.maximum + 1, False, id="above-maximum"),
+])
 def test_present_optional_mana_keeps_bounds_and_literal_projection(value, accepted):
     doc = _stats(omit=False)
     _call(doc, "configure_item_stats")["params"]["manaCost"] = value
@@ -384,6 +381,7 @@ def test_omission_provenance_rejects_every_forged_source_type_or_output(mutation
     [
         pytest.param({"default": None}, id="absent-default"),
         pytest.param({"default": 1}, id="nonneutral-default"),
+        pytest.param({"default": False}, id="equal-value-wrong-json-type"),
         pytest.param({"required": True}, id="required"),
     ],
 )

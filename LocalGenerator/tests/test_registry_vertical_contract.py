@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from types import MappingProxyType
 from copy import deepcopy
+import json
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
@@ -12,9 +13,9 @@ from infini_local.core.runtime_authoring.capability_registry import (
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     runtime_authoring_registry_manifest,
-    compact_capability_catalog,
 )
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 import infini_local.core.runtime_authoring.validator as validator
 import infini_local.core.runtime_authoring.repair_scope as repair_scope
@@ -24,7 +25,6 @@ import infini_local.core.runtime_authoring.validator as validator_module
 from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.qa.capability_library_audit import capability_library_audit
 
 
 @pytest.mark.parametrize(
@@ -59,18 +59,16 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     item = build_capability_witness(fn)
     before = deepcopy(item)
     assert Draft202012Validator(author_item_response_schema()).is_valid(item)
-    wire = compile_runtime_program(item)
-    assert validate_runtime_wire(wire)["ok"]
+    wire = json.loads(json.dumps(compile_runtime_program(item)))
+    report = validate_runtime_wire(wire)
+    assert report["ok"], report["errors"]
+    # A shape-valid DTO alone does not prove that an optional authored effect
+    # reached the wire. Authenticate every receipt against both real endpoints.
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    report = audit_compiler_receipts(receipts, authored_document=item, final_document=wire)
+    assert report["ok"], report["violations"]
+    assert any(row.get("callId") == "witness_call" for row in receipts)
     assert item == before
-
-
-def test_registry_public_catalog_and_schema_remain_reachable():
-    expected = {cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
-    schema = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
-    assert {row["properties"]["fn"]["const"] for row in schema} == expected
-    assert {row["fn"] for row in compact_capability_catalog()} == expected
-    report = capability_library_audit()
-    assert report["ok"], report["issues"]
 
 
 def test_registry_mutation_updates_schema_but_missing_executor_stays_red(monkeypatch: pytest.MonkeyPatch) -> None:

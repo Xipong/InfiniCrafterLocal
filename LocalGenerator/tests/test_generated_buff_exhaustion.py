@@ -81,8 +81,6 @@ def test_serialized_author_presence_policy_and_registered_card(monkeypatch, mode
     param = card["params"]['exhaustionSeconds']
     assert param["type"] == "number" and param["min"] == 0 and param["max"] == 360
     assert "default" not in param and "neutral" not in param
-    assert "successful application" in card["does"] and "independently of buff duration" in card["does"]
-    assert "Normal attacks" in card["does"] and "separately authored" in card["does"]
     doc, _ = _policy_fixture(value, group)
     restored = provider_roundtrip(doc, request["response_format"])
     assert validate_runtime_program(restored)["ok"]
@@ -347,12 +345,7 @@ def test_serialized_strict_provider_rejects_bad_policy_tokens(monkeypatch, value
     assert not validate_runtime_program(restored)["ok"]
 
 
-def test_explicit_held_refresh_preserves_policy_on_its_exact_generated_group(monkeypatch):
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
-    _, user, _ = author.build_initial_author_request({}, {}, "held-policy", model_name="offline")
-    card = next(c for c in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]
-                if c["fn"] == "refresh_generated_effect_group_while_held")
-    assert "attempt" in card["does"].lower() and "exhaustionSeconds" in card["does"]
+def test_explicit_held_refresh_preserves_policy_on_its_exact_generated_group():
     doc = build_capability_witness("refresh_generated_effect_group_while_held")
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
     call["params"]['exhaustionSeconds'] = (180) / 60

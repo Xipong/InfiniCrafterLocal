@@ -11,7 +11,6 @@ from infini_local.core.runtime_authoring.repair_scope import build_runtime_repai
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.author_item_contract import author_item_provider_response_schema
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
@@ -65,8 +64,24 @@ def test_exact_forms_roundtrip_receipts_and_preserve_source(fn, member, author_l
 
 
 @pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
-@pytest.mark.parametrize("form", ["pair", "window", "intersection"])
-@pytest.mark.parametrize("mutation", ["half_delay", "half_duration", "null_delay", "null_duration", "zero_duration", "bad_numeric", "unknown", "missing_all"])
+@pytest.mark.parametrize("mutation,form", [
+    pytest.param(mutation, form, id=f"{mutation}-{form}")
+    for mutation, forms in (
+        # These mutations replace the scalar pair. Starting with window-only
+        # or intersection therefore produces identical authored AND wire input.
+        ("half_delay", ("pair", "window")),
+        ("half_duration", ("pair", "window")),
+        ("null_delay", ("pair", "window")),
+        ("null_duration", ("pair", "window")),
+        ("zero_duration", ("pair", "window")),
+        # Other fields leave all three distinct timing representations intact.
+        ("bad_numeric", ("pair", "window", "intersection")),
+        ("unknown", ("pair", "window", "intersection")),
+        # Erasing every timing field erases the original representation too.
+        ("missing_all", ("pair",)),
+    )
+    for form in forms
+])
 def test_author_provider_and_stripped_wire_refuse_invalid_fields(fn, member, author_leaf, wire_leaf, value, form, mutation):
     source, call = document(fn, form)
     wire, component = delivered(source, call, member)
@@ -167,13 +182,6 @@ def test_incomplete_pair_repair_opens_only_missing_half(fn, member, author_leaf,
     filtered, audit = filter_repair_patch_scope(source, {"callsUpsert": [patch], "note": "complete exact timing pair"}, scope)
     assert audit["ok"]
     assert apply_repair_patch(source, filtered) == expected
-
-
-def test_provider_projection_supports_the_exact_disjoint_timing_shapes():
-    # The actual strict-provider owner must prove the union; unsupported
-    # conditionals/compositions cannot be hidden behind local-only tests.
-    schema = author_item_provider_response_schema()
-    assert schema
 
 
 @pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)

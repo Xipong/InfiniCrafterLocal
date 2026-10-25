@@ -1,7 +1,7 @@
 """Explicit placed-body Author -> compiler -> wire tracer bullets (offline)."""
 from __future__ import annotations
 
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 import copy
 import hashlib
 import json
@@ -17,7 +17,7 @@ from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_R
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_dual_use_placeable_contract import _dual_use_placeable
-from test_low_level_three_stage_pipeline import wire_transport
+from test_low_level_three_stage_pipeline import wire_transport as wire_transport
 
 FN = "present_placed_item_sprite"
 TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
@@ -93,13 +93,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     assert set(card["params"]) == {"placementCallId", "pivotSpace", *TRANSFORM}
     reference = card["params"]["placementCallId"]
     assert reference["reference"]["namespace"] == "call"
-    assert "Exact same-item configure_tile_placement call" in reference["meaning"]
-    assert "native" in card["does"]
-    # Static whole-body replacement also removes native flame/state pictures;
-    # mechanical wiring/light retention must not imply visual animation survives.
-    for fact in ("native animation", "on/off", "baked flames", "omit this call"):
-        assert fact in card["does"].lower()
-    assert all(term in card["constructionMeaning"].lower() for term in ("certified", "16x16", "256 cells", "callbacks", "refused"))
+    assert reference == CAPABILITY_REGISTRY[FN].author_prompt_card()["params"]["placementCallId"]
     wire = compile_runtime_program(document)
     before = json.dumps(wire, sort_keys=True)
     kit = _visual_kit(wire)
@@ -111,9 +105,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
         guidance = packet["spritePresentationReadOnly"]["placedBody"]
         assert guidance["operation"] == FN
         assert set(guidance["params"]) == {"placementCallId", "pivotSpace", *TRANSFORM}
-        assert "existing" in guidance["meaning"] and "light" in guidance["meaning"]
-        for fact in ("native animation", "on/off", "baked flames", "omit this call"):
-            assert fact in guidance["meaning"].lower()
+        assert guidance["meaning"] == CAPABILITY_REGISTRY[FN].summary
         packet["acceptedPresentationMechanicsReadOnly"]["bindings"].clear()
     assert json.dumps(wire, sort_keys=True) == before
     with_body = visual._apply_kit(wire, kit)
