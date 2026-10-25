@@ -51,14 +51,108 @@ python tools/item-test-workbench/workbench.py doctor
 python tools/item-test-workbench/workbench.py build
 ```
 
+## Fast agent workflow
+
+All commands also work through `python -m toolbox workbench`. `catalog`, `report`
+and `suite --plan` are offline/read-only unless an explicit report output
+is requested. They need no game install, SDK or API credentials.
+
+```sh
+# Discover actual supplied scenarios and their complete assertion requests.
+python -m toolbox workbench catalog
+# Validate/list the portable native smoke matrix without building or writing.
+python -m toolbox workbench suite tools/item-test-workbench/suites/smoke.json \
+  --out artifacts/smoke --plan
+# Build once, write synthetic fixtures through C#, run the controls.
+python -m toolbox workbench suite tools/item-test-workbench/suites/smoke.json \
+  --out artifacts/smoke
+# Read compact results without dumping thousands of snapshots.
+python -m toolbox workbench report artifacts/smoke/straight
+```
+
+Each `run` now writes `agent-report.json` and `agent-report.md` alongside the raw
+inputs, `native.json`, `run.json` and process logs. Inspect `nativeStatus`, failed
+assertion **requests**, `integrity`, coverage, first event ticks and failure context.
+Final assertions do not identify a causal tick: only explicit native invariant
+evidence sets `observedFailureTick`; otherwise context points to the last tick or
+an assertion's requested tick. No event or cause is invented from the artwork.
+
+`run.json` separately records `nativeExitCode`, `nativeStatus`, wrapper `exitCode`
+and review export status. Exit 0 without a valid terminal trace is refused. Missing
+frames or failed optional exports preserve the native outcome and logs but return
+wrapper error 2. `--timeout 180` bounds native execution (allowed 1..3600 seconds).
+`--review none` omits replay export for batch work; it **does not** disable native
+rendering/capture requested by the scenario. `--review native` exports the exact PNG
+viewer directly; `--gif-stride` applies to that viewer's GIF. Default review remains
+`schematic`; `--png` selects schematic rasterization, not original game pixels.
+
+For an authored graphics run, export a bounded, labelled vision contact sheet:
+
+```sh
+python -m toolbox workbench report artifacts/my-run \
+  --out artifacts/my-run/agent-review --contact-sheet
+```
+
+`vision.png` contains at most 12 recorded native frames, prioritizing start/end,
+first events, observed transitions and available neighboring ticks. `vision.json`
+records original frame hashes/ticks. Only thumbnail scaling and labels are added;
+no schematic substitution or intermediate animation is generated. Use the complete
+`native-review` viewer/raw PNGs for omitted ticks. Visual approval remains a task
+for the reviewing agent, never a conclusion of a hash check.
+
+### Saved-run audit
+
+Reports validate native trace structure, archived input/trace hashes, process status
+and any recorded PNGs. The original checkout, original source paths and installed
+game are not required to inspect a copied run directory. `verified` means internal
+archive consistency, **not authentication, current source freshness or visual/game
+approval**. Old/direct traces without all receipts remain `unverified`; changed or
+inconsistent evidence is `invalid`. Missing current source/dependency installations
+do not invalidate a portable archive. `--no-build` still checks the current build
+before executing.
+
+| Command | Exit 0 | Exit 1 | Exit 2 |
+|---|---|---|---|
+| `run` | Native assertions passed, requested evidence exported | Native assertions failed | Refusal, timeout, bad evidence or export error; inspect separate native status |
+| `report` | Read/export succeeded; inspect `nativeStatus` and `integrity` | — | Invalid evidence or command/export error |
+| `suite` | Every explicit expectation matched | At least one mismatch | Setup/manifest error |
+
+### Your own scenario matrix
+
+Use the checked-in [smoke suite](suites/smoke.json) as the manifest format. Paths
+resolve relative to that **manifest**, independently of the caller's working
+directory. A case has a unique safe `name`, exactly one `item` path, `vanillaItem`
+name/ID string or `fixture` filename, a `scenario` path, and explicit `expect`.
+Optional `itemBoundary`, `review`, and `timeout` select existing owner behavior.
+All cases are planned before execution, built once and run in
+separate processes; failed cases do not stop later controls. Summary checkpoints
+retain `passed: false` until the entire matrix finishes.
+
+```json
+{
+  "schemaVersion": 1,
+  "cases": [
+    {"name": "primary", "item": "item.json", "scenario": "primary.json", "expect": {"status": "passed"}},
+    {"name": "miss-detector", "item": "item.json", "scenario": "miss.json", "expect": {"status": "failed", "failedAssertions": ["dummy_damaged"]}}
+  ]
+}
+```
+
+An expected failure must match the **exact multiset** of failed native assertion
+names; an additional nonfinite failure or a process crash cannot satisfy a miss
+control. Expected refusals use `{"status":"error","errorContains":"specific native reason"}`.
+Their process status, valid trace, archive and error substring must all agree.
+Suite success certifies the detector expectations, not health of negative items.
+The five-case smoke is bounded infrastructure coverage, not all-item certification;
+the specialized `verify_*.py` matrices remain available for their wider scenarios.
+
 ## First run: no generated artwork required
 
 This exports explicitly synthetic fixtures using the native executable, then runs
 one through actual item use, projectile update, collision and lifetime code:
 
 ```sh
-dotnet tools/item-test-workbench/bin/Release/net8.0/ItemTestWorkbench.dll \
-  --write-fixtures artifacts/workbench-fixtures
+python -m toolbox workbench fixtures --out artifacts/workbench-fixtures --no-build
 python tools/item-test-workbench/workbench.py run \
   --item artifacts/workbench-fixtures/synthetic-straight.json \
   --scenario tools/item-test-workbench/scenarios/primary.json \

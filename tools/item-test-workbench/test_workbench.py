@@ -160,6 +160,12 @@ class WorkbenchTests(unittest.TestCase):
             with self.assertRaises(ValueError):w.validate_trace(t)
         t=trace();t['snapshots'][0]['player']=dict(t['snapshots'][0]['player'],width=-1)
         with self.assertRaises(ValueError):w.validate_trace(t)
+        for field,value in [('vx',float('inf')),('vy',None),('rotation',True),('nonFinite','false')]:
+            t=trace();t['snapshots'][0]['player']=dict(t['snapshots'][0]['player'],**{field:value})
+            with self.assertRaises(ValueError):w.validate_trace(t)
+        t=trace();t['status']='passed';t['assertions'][0]['status']='passed'
+        t['snapshots'][0]['player']=dict(t['snapshots'][0]['player'],nonFinite=True)
+        with self.assertRaises(ValueError):w.validate_trace(t)
     def test_rejects_unordered_and_provenance_free(self):
         t=trace();t['snapshots'].reverse()
         with self.assertRaises(ValueError):w.validate_trace(t)

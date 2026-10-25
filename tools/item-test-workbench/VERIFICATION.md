@@ -14,6 +14,19 @@ dependencies invalidate `--no-build`. Native frames carry PNG hashes and associa
 Keep these together: a screenshot alone cannot establish collision, damage,
 resource payment or lifecycle correctness.
 
+The wrapper additionally rejects a zero process exit without a valid terminal
+native trace, status/exit disagreements, conflicting input hashes and incomplete
+passing timelines. Native result and optional review export failures are recorded
+separately. New receipts hash `native.json` itself; `report` audits the archived
+bytes without depending on original absolute paths. Legacy/unreceipted traces are
+inspectable but unverified, and hashes establish consistency rather than authenticity.
+
+For agent iterations use the [fast workflow](README.md#fast-agent-workflow).
+`suite suites/smoke.json` runs native synthetic/vanilla controls and checks an exact
+negative assertion. An expected `failed` result
+stays failed in each native trace and suite row. Matrix success means the detector
+matched the declared expectations; it does not certify those failed items.
+
 ## Portable utility checks
 
 These Python tests use local fixtures/mocks and do not require game assets:
@@ -21,6 +34,12 @@ These Python tests use local fixtures/mocks and do not require game assets:
 ```sh
 python -m toolbox workbench test
 ```
+
+The agent-workflow tests exercise archived evidence portability/tampering, the
+true-PNG contact-sheet receipts, strict negative
+expectations, malformed/missing terminal output, timeout receipts, optional export
+failures, and matrix continuation. Synthetic boundary tests are labelled as such;
+they do not stand in for running the native smoke matrix.
 
 The shared manifest includes `item_workbench_python` in the Python CI group and
 `item_workbench_build` in the build group. The latter compiles this linked-source
@@ -54,6 +73,23 @@ corpora or explicit local inputs beyond the minimal public example. They are not
 unconditional installation checks or proof of all-item parity.
 
 ## Evidence reviewed during development
+
+Agent-workflow verification before removal of run comparison (2026-10-25): the
+native smoke exercised passing controls and an exact `dummy_damaged` negative
+failure. Two `client-vfx-captured` runs each passed and produced 80 native PNGs.
+A 12-frame contact sheet was exported and visually inspected; this run is
+VFX-only, not player/item/world artwork coverage. Copied archives audited as
+verified. The then-current portable workbench tests, 94 toolbox tests and affected
+owner checks (Python + native build) passed. The current smoke has five cases;
+run comparison and its duplicate smoke case have been removed.
+
+These native runs used the documented tML v2026.08.3.0 references and .NET SDK
+8.0.408. This development container has mismatched process/procfs PID namespaces;
+a local-only `open64` shim mapped current-process `/proc/<pid>/...` reads to
+`/proc/self/...` so .NET/MonoMod could inspect their own process. No CLR, game DLL,
+gameplay or workbench source was patched for that workaround, and it is not bundled
+or required on ordinary hosts. Native assets, binaries and run outputs remain
+external to repository source.
 
 Local runs exercised native use/projectile collision and expiry; charge/release;
 return; full player regeneration and buff clocks; bounded equipment and ammo;
