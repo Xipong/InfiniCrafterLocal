@@ -2,6 +2,7 @@
 using System;
 using System.Globalization;
 using InfiniCrafterLocal.Content.Items;
+using InfiniCrafterLocal.Common.Models;
 using Terraria;
 using Terraria.ID;
 using Terraria.ModLoader;
@@ -12,6 +13,13 @@ namespace InfiniCrafterLocal.Common.UI;
 // Call when rebuilding the lineage view, and cache the returned hover item there.
 internal static class RecipeNativeItemResolver
 {
+    internal static Item? ResolveParent(GeneratedItemData data, int index)
+    {
+        string[]? identities = data.RecipeMeta.ParentIdentities;
+        return identities is not null && index >= 0 && index < identities.Length
+            ? Resolve(identities[index]) : null;
+    }
+
     internal static Item? Resolve(string identity)
     {
         if (!TryGetStableName(identity, out string stable)) return null;

@@ -7,6 +7,30 @@ using Microsoft.Xna.Framework;
 
 internal static partial class EngineRuntimeChecks
 {
+    private static void AtlasDrawingUsesBoundedPixelsAndCenteredText()
+    {
+        // Terraria's MagicPixel asset is 1x1000. A full-texture source would
+        // produce a 1000-pixel strip even with a Y scale of one.
+        var textureBounds = new Rectangle(0, 0, 1, 1000);
+        var source = RecipeJournalUISystem.SolidPixelSource;
+        Equal(true, textureBounds.Contains(source), "line samples inside the native texture");
+        Equal(1, source.Width * source.Height, "UI lines sample one texel independent of asset height");
+        foreach (byte alpha in new byte[] { 0, 40, 85, 115, 255 })
+        {
+            var converted = RecipeJournalUISystem.PremultipliedUiColor(new Color(255, 245, 214, alpha));
+            Equal(alpha, converted.A, "paper opacity is preserved");
+            Equal(true, converted.R <= alpha && converted.G <= alpha && converted.B <= alpha,
+                "AlphaBlend never receives additive straight-alpha paper colors");
+        }
+        foreach (var bounds in new[] { new Rectangle(10, 20, 118, 26), new Rectangle(30, 40, 80, 28), new Rectangle(0, 0, 44, 44) })
+        foreach (var size in new[] { new Vector2(20, 12), new Vector2(60, 18), new Vector2(38, 24) })
+        {
+            var at = RecipeJournalUISystem.CenteredTextPosition(bounds, size);
+            Equal((float)bounds.Center.X, at.X + size.X / 2, "caption horizontal center");
+            Equal((float)bounds.Center.Y, at.Y + size.Y / 2, "caption vertical center");
+        }
+    }
+
     private static void AtlasBookControlsStayReachableAcrossUiScales()
     {
         foreach (int screenWidth in new[] { 320, 640, 800, 1280, 1920 })

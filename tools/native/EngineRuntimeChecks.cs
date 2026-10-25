@@ -44,6 +44,8 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("coincident seek finite motion and exact retirement", CoincidentSeekPreservesFiniteMotionAndExplicitRetirement),
+            ("single-active weapon admission without chat warning", SingleActiveWeaponBusyKeepsAdmissionWithoutChatWarning),
             ("composable motion review manual release VFX roundtrip", ComposableMotionManualReleaseVfxRoundtrip),
             ("composable motion review automatic completion VFX roundtrip", ComposableMotionAutomaticCompletionVfxRoundtrip),
             ("composable motion review authenticated release source fences", ComposableMotionReleaseVfxKeepsAuthenticatedSourceFences),
@@ -96,6 +98,7 @@ internal static partial class EngineRuntimeChecks
             ("projectile controls collided-axis bounce retention", BounceRetentionChangesOnlyCollidedAxes),
             ("projectile controls strict DTO and retained absence", ProjectileControlDtoRejectsInvalidPresentAndKeepsOldAbsence),
             ("journal world history favorites and responsive bounds", RecipeJournalKeepsWorldIdentityAndFavorites),
+            ("atlas drawing native pixel alpha and text alignment", AtlasDrawingUsesBoundedPixelsAndCenteredText),
             ("atlas book controls responsive bounds and scaled hit areas", AtlasBookControlsStayReachableAcrossUiScales),
             ("atlas discovery search favorites filters and exact ancestry", AtlasDiscoverySelectionKeepsSearchFavoritesAndAncestry),
             ("atlas detail lineage navigation restores discovery context", AtlasDetailLineageNavigationPreservesReturnLocation),

@@ -92,7 +92,12 @@ public sealed partial class GeneratedProjectile
         float distance = Projectile.Distance(target);
         speed = Math.Max(minimumSpeed, speed);
         if (limitDistance) speed = Math.Min(speed, distance);
-        Projectile.velocity = Vector2.Lerp(Projectile.velocity, Projectile.DirectionTo(target) * speed, lerp);
+        // DirectionTo normalizes a zero vector at exact arrival. NaN velocity
+        // makes an otherwise live projectile disappear and hold its concurrency
+        // slot until expiry. Zero displacement has no steering direction; keep
+        // the authored interpolation and leave retirement to its arrival policy.
+        Vector2 direction = Projectile.Center == target ? Vector2.Zero : Projectile.DirectionTo(target);
+        Projectile.velocity = Vector2.Lerp(Projectile.velocity, direction * speed, lerp);
     }
     private void RetainVelocity(float multiplier) => Projectile.velocity *= multiplier;
     private void AccelerateVertical(float amount) => Projectile.velocity.Y += amount;

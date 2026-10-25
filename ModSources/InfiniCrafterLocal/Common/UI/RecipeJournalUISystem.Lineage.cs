@@ -283,7 +283,7 @@ public sealed partial class RecipeJournalUISystem
                 var icon = new Rectangle(well.X+radius/4,well.Y+radius/4,well.Width-radius/2,well.Height-radius/2);
                 if (node.Data is not null) Sprite(sb, node.Data, icon);
                 else if (_nativeNodes[i] is { } item) DrawNativeLineageSprite(sb, item, icon);
-                else LineageCenterLabel(sb, "?", new Rectangle(well.X,well.Y+radius/2,well.Width,well.Height), MapInk, .8f * _lineageZoom);
+                else LineageCenterLabel(sb, "?", well, MapInk, .8f * _lineageZoom);
                 float scale = .6f * _lineageZoom;
                 if (_lineageZoom >= .45f) sb.DrawString(FontAssets.MouseText.Value, _lineageCaptions[i],
                     new Vector2(center.X - _lineageCaptionWidths[i] * scale / 2, well.Bottom + 4), MapInk, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
@@ -308,31 +308,21 @@ public sealed partial class RecipeJournalUISystem
         text = text.Replace('\r', ' ').Replace('\n', ' ');
         var font = FontAssets.MouseText.Value;
         if (font.MeasureString(text).X <= width) return text;
+        if (font.MeasureString("…").X > width) return "";
         while (text.Length > 0 && font.MeasureString(text + "…").X > width) text = text[..^1];
         return text + "…";
     }
     private static void LineageLabel(SpriteBatch sb, string text, Vector2 at, Color color, float scale, int width)
     {
-        if (width <= 0) return;
-        var font = FontAssets.MouseText.Value;
-        text = text.Replace('\r', ' ').Replace('\n', ' ');
-        if (font.MeasureString(text).X * scale > width)
-        {
-            while (text.Length > 0 && font.MeasureString(text + "…").X * scale > width) text = text[..^1];
-            text += "…";
-        }
-        sb.DrawString(font, text, at, color, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
+        Label(sb, text, at, color, scale, width);
     }
     private static void LineageCenterLabel(SpriteBatch sb, string text, Rectangle rect, Color color, float scale)
-    {
-        float width = Math.Min(rect.Width, FontAssets.MouseText.Value.MeasureString(text).X * scale);
-        LineageLabel(sb, text, new Vector2(rect.X + (rect.Width - width) / 2, rect.Y), color, scale, rect.Width);
-    }
+        => CenterLabel(sb, text, rect, color, scale);
     private static bool LineageButton(SpriteBatch sb, Rectangle rect, string text, bool click, Vector2 cursor)
     {
         bool hover = rect.Contains(cursor.ToPoint());
         Color brass = hover ? new Color(255, 224, 153) : new Color(199, 164, 91);
-        LineageCenterLabel(sb, text, new Rectangle(rect.X, rect.Y + 3, rect.Width, rect.Height - 3), brass, .72f);
+        LineageCenterLabel(sb, text, rect, brass, .72f);
         if (hover) { Fill(sb, new Rectangle(rect.X + 5, rect.Bottom - 2, Math.Max(0, rect.Width - 10), 1), brass); _hoverText = text; }
         return hover && click;
     }

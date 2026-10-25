@@ -63,6 +63,8 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static readonly Color Ink = new(79, 57, 34), Muted = new(113, 88, 55), Gold = new(216, 185, 115);
     private static readonly Color Rule = new(135, 107, 65, 115), Link = new(133, 67, 35);
     private static string _hoverText = "";
+    private static readonly string?[] DetailParentIdentities = new string?[2];
+    private static readonly Item?[] DetailNativeParents = new Item?[2];
     internal static string Text(string key, params object[] args)
         => Language.GetTextValue("Mods.InfiniCrafterLocal.RecipeJournal." + key, args);
 
@@ -106,6 +108,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     {
         Close(); _query = _selected = ""; _page = _detailScroll = 0; _favoritesOnly = false;
         _known = Array.Empty<GeneratedItemData>(); History.Clear();
+        Array.Clear(DetailParentIdentities); Array.Clear(DetailNativeParents);
         _effectFilter = RecipeJournalView.EffectFilter.All; _ingredientFilter = "";
         _snapshotTick = uint.MaxValue; _hoverText = ""; ResetLineage();
         _sessionOwner = null; _sessionWorld = 0; _awaitingMouseRelease = false;
@@ -251,6 +254,13 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     private static void DrawDetail(SpriteBatch sb, GeneratedItemData data, Rectangle area, InfiniCraftPlayer player, bool click, Vector2 cursor)
     {
         if (area.Width < 60 || area.Height < 40) return;
+        for (int i = 0; i < DetailNativeParents.Length; i++)
+        {
+            string identity = data.RecipeMeta.ParentIdentities is { } identities && i < identities.Length ? identities[i] : "";
+            if (string.Equals(DetailParentIdentities[i], identity, StringComparison.Ordinal)) continue;
+            DetailParentIdentities[i] = identity;
+            DetailNativeParents[i] = RecipeNativeItemResolver.ResolveParent(data, i);
+        }
         DrawPaperSlip(sb, area);
         int x = area.X + 12, y = area.Y + 10, w = area.Width - 24;
         // Keep navigation and save reachable even in the short stacked layout.
@@ -317,7 +327,9 @@ public sealed partial class RecipeJournalUISystem : ModSystem
             bool hover = slot.Contains(cursor.ToPoint());
             ItemSlotBackground(sb, slot, false, hover && parent is not null);
             if (parent is not null) Sprite(sb, parent, new Rectangle(slot.X + 5, slot.Y + 5, slot.Width - 10, slot.Height - 10));
-            else CenterLabel(sb, (p + 1).ToString(), new Rectangle(slot.X + 4, slot.Y + 8, slot.Width - 8, 20), Muted, 0.7f);
+            else if (DetailNativeParents[p] is { } native)
+                DrawNativeLineageSprite(sb, native, new Rectangle(slot.X + 5, slot.Y + 5, slot.Width - 10, slot.Height - 10));
+            else CenterLabel(sb, "?", slot, Muted, 0.7f);
             if (!compact)
             {
                 string name = p == 0 ? data.ParentA : data.ParentB;
@@ -361,17 +373,12 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         sb.Draw(texture, bounds.Center.ToVector2(), null, Color.White, 0f, texture.Size() * 0.5f, scale, SpriteEffects.None, 0f);
     }
     private static void Fill(SpriteBatch sb, Rectangle rect, Color color)
-    { if (rect.Width > 0 && rect.Height > 0) sb.Draw(TextureAssets.MagicPixel.Value, rect, color); }
+    { if (rect.Width > 0 && rect.Height > 0) sb.Draw(TextureAssets.MagicPixel.Value, rect, SolidPixelSource, PremultipliedUiColor(color)); }
     private static void Label(SpriteBatch sb, string text, Vector2 at, Color color, float scale, int width)
     {
-        text = (text ?? "").Replace('\n', ' ').Replace('\r', ' ');
-        var font = FontAssets.MouseText.Value;
         if (width <= 0) return;
-        if (font.MeasureString(text).X * scale > width)
-        {
-            while (text.Length > 0 && font.MeasureString(text + "…").X * scale > width) text = text[..^1];
-            text = text.Length == 0 ? "" : text + "…";
-        }
+        var font = FontAssets.MouseText.Value;
+        text = ClipLineageLabel(text ?? "", width / scale);
         sb.DrawString(font, text, at, color, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
     }
     private static void Paragraph(SpriteBatch sb, string text, Rectangle rect, Color color, float scale, bool scroll = false)
@@ -399,15 +406,26 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     }
     private static void ItemSlotBackground(SpriteBatch sb, Rectangle rect, bool selected, bool hover)
         => DrawBookWell(sb, rect, selected, hover);
+    internal static readonly Rectangle SolidPixelSource = new(0, 0, 1, 1);
+    internal static Color PremultipliedUiColor(Color color)
+        => Color.FromNonPremultiplied(color.R, color.G, color.B, color.A);
+    internal static Vector2 CenteredTextPosition(Rectangle bounds, Vector2 size)
+        => bounds.Center.ToVector2() - size * .5f;
     private static void Trace(SpriteBatch sb, Vector2 from, Vector2 to, Color color)
     {
         Vector2 delta = to - from;
-        sb.Draw(TextureAssets.MagicPixel.Value, from, null, color, MathF.Atan2(delta.Y, delta.X), Vector2.Zero, new Vector2(delta.Length(), 1), SpriteEffects.None, 0f);
+        if (delta.LengthSquared() <= 0f) return;
+        // MagicPixel is 1x1000 in Terraria, not a 1x1 texture. Sampling the
+        // whole asset makes each connector a thousand-pixel-wide strip.
+        sb.Draw(TextureAssets.MagicPixel.Value, from, SolidPixelSource, PremultipliedUiColor(color), MathF.Atan2(delta.Y, delta.X), new Vector2(0, .5f), new Vector2(delta.Length(), 1), SpriteEffects.None, 0f);
     }
     private static void CenterLabel(SpriteBatch sb, string text, Rectangle rect, Color color, float scale)
     {
-        float textWidth = FontAssets.MouseText.Value.MeasureString(text).X * scale;
-        Label(sb, text, new Vector2(rect.X + Math.Max(0, (rect.Width - textWidth) / 2), rect.Y), color, scale, rect.Width);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+        text = ClipLineageLabel(text, rect.Width / scale);
+        var font = FontAssets.MouseText.Value;
+        Vector2 size = font.MeasureString(text) * scale;
+        sb.DrawString(font, text, CenteredTextPosition(rect, size), color, 0, Vector2.Zero, scale, SpriteEffects.None, 0);
     }
     private static bool Button(SpriteBatch sb, Rectangle rect, string text, bool click, Vector2 cursor, bool enabled = true, bool selected = false)
     {
