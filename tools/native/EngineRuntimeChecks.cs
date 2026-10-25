@@ -155,6 +155,7 @@ internal static partial class EngineRuntimeChecks
             ("descriptive art captions Unicode roundtrip", DescriptiveArtCaptionsUnicodeRoundtrip),
             ("two-body pull independent authority target loss and boss resistance", BothPullKeepsIndependentAuthorityAndDirectTarget),
             ("nearby damage deterministic nearest ranking and cap", NearbyDamageRanksNearestWithDeterministicCap),
+            ("nearby damage tooltip requires explicit cap without fallback", NearbyDamageTooltipUsesExplicitCapWithoutFallback),
             ("NPC hit pull preserves projectile origin", NpcHitPullPreservesProjectileOrigin),
             ("nearest event damage retains radial native selection and direct-target exclusion", NearestDamageRetainsTheSingleCenterNativeAction),
             ("target bias saved DTO range and native distance-score discount", TargetBiasKeepsSavedDtoDomainAndActualDistanceDiscount),

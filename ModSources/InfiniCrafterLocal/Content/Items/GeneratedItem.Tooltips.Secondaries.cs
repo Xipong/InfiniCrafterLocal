@@ -81,8 +81,11 @@ public partial class GeneratedItem
                     string exclusion = action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
                         ? RuntimeTooltipText("SecondaryDirectExcluded") : "";
                     if (action.ActionCode == RuntimeEventActionCode.DamageNearby)
+                    {
+                        if (action.MaxTargets is not int maxTargets || maxTargets is < 1 or > 16) continue;
                         add("SecondaryNearby" + suffix, "SecondaryNearby", new object[] { occurrence, delay,
-                            RuntimeTooltipNumber(PlayerDisplayUnits.Blocks(action.RadiusPx)), RuntimeTooltipNumber(damage), exclusion, action.MaxTargets });
+                            RuntimeTooltipNumber(PlayerDisplayUnits.Blocks(action.RadiusPx)), RuntimeTooltipNumber(damage), exclusion, maxTargets });
+                    }
                     else
                         add("SecondaryArea" + suffix, "SecondaryArea", new object[] { occurrence, delay,
                             RuntimeTooltipNumber(PlayerDisplayUnits.Blocks(action.RadiusPx)), RuntimeTooltipNumber(damage), exclusion });
