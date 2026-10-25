@@ -99,7 +99,7 @@ def test_real_author_and_visual_requests_carry_capability_readonly(wire_transpor
     # mechanical wiring/light retention must not imply visual animation survives.
     for fact in ("native animation", "on/off", "baked flames", "omit this call"):
         assert fact in card["does"].lower()
-    assert all(term in card["constructionMeaning"].lower() for term in ("certified", "16x16", "256 cells", "callbacks", "before mutation"))
+    assert all(term in card["constructionMeaning"].lower() for term in ("certified", "16x16", "256 cells", "callbacks", "refused"))
     wire = compile_runtime_program(document)
     before = json.dumps(wire, sort_keys=True)
     kit = _visual_kit(wire)

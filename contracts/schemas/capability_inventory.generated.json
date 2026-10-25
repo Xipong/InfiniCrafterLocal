@@ -2607,7 +2607,7 @@
       "networkAuthority": "native_worldgen",
       "parameters": {},
       "positionOwnership": "none",
-      "purpose": "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG, nearest-player selection and drop/MP lifecycle remain unchanged. Does not consume the item, choose ammo, change attack costs, or inherit automatically from a parent flag. No parameters.",
+      "purpose": "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG and nearest-player selection remain unchanged. Does not consume the item. No parameters.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "one bounded native inventory witness; no added spawns or RNG",
@@ -2728,7 +2728,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. Native inventory-only item flags are not inherited by this call. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -2828,7 +2828,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Mark this generated item as one exact vanilla ammo category and projectile. Sets Item.ammo and Item.shoot; it does not configure a weapon to consume ammo.",
+      "purpose": "Mark this generated item as one exact vanilla ammo category and projectile. It does not configure a weapon to consume ammo.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3185,7 +3185,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionSeconds starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration. No recurring cost is implied.",
+      "purpose": "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionSeconds starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3614,7 +3614,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. No new image project or source choice. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation and adds no wire member. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this presentation call.",
+      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this presentation call.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4041,7 +4041,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Run a bounded blink-to-cursor action on successful use; home recall has its own operation with no inactive blink fields.",
+      "purpose": "Run a bounded blink-to-cursor action on successful use; home recall has its own operation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -5391,7 +5391,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit opt-in concurrency cap: count live projectiles for the same owner + generated item ID + exact entity ID, across all producers regardless of root/child, binding or input; pending scheduler entries are not live. The requested effective batch is admitted all-or-nothing when enough slots remain, otherwise refused; no clipping by this cap of the effective batch after existing global/depth/event-budget limits. count is per activation; concurrency is separate. Select maxActive=1 for one returned physical copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding to the same entity share the cap. This does not override existing producer semantics: the owner-attached active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use singleton or make hold refill to this cap. First-batch count retains its existing meaning. Root bindings preflight the full batch in CanUseItem before Shoot/spawn. Event, controller, and later spawn refusals can occur after activation is accepted; they do not roll back costs or effects already accepted for that activation. This cap alone does not establish whether a refused root use paid or was refunded, and implies no extra charges. Capability absence adds no admission cap; no neutral/default is materialized, no name/category/movement routing and no other mechanic is selected.",
+      "purpose": "Explicit opt-in concurrency cap: count live projectiles for the same owner + generated item ID + exact entity ID, across all producers regardless of root/child, binding or input; pending scheduler entries are not live. The requested effective batch is admitted all-or-nothing when enough slots remain, otherwise refused; no clipping by this cap of the effective batch after existing global/depth/event-budget limits. count is per activation; concurrency is separate. Select maxActive=1 for one returned physical copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding to the same entity share the cap. This does not override existing producer semantics: the owner-attached active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use singleton or make hold refill to this cap. First-batch count retains its existing meaning. Capability absence adds no admission cap.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5433,7 +5433,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicitly choose Projectile.sentry registration for this entity. enabled=true participates in the owner's native maxTurrets cap; Player.UpdateMaxTurrets runs immediately after each successful native sentry spawn and may retire the oldest sentry. Active item bindings project Item.sentry from their exact target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement or choose a weapon family. Omission preserves prior non-sentry behaviour.",
+      "purpose": "Explicitly choose native sentry registration for this entity. enabled=true participates in the owner's native sentry cap; each successful native sentry spawn immediately checks that cap and may retire the oldest sentry. Each active input uses the sentry status of its own target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement. Omission leaves the entity without native sentry registration.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5475,7 +5475,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget, with no fresh capacity created by network hydration.",
+      "purpose": "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -6141,7 +6141,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "After movement/turn/speed, steer at unchanged speed to the nearest chaseable NPC inside hard range; ties use NPC index. Owner selects target, syncs velocity. Zero velocity or no target: no steering.",
+      "purpose": "After movement/turn/speed, steer at unchanged speed to the nearest chaseable NPC inside hard range; ties use NPC index. Zero velocity or no target: no steering.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -6291,7 +6291,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Server attraction after movement/modifiers each active projectile update, not periodic/on-hit. Projectile velocity/trajectory unchanged. Scan NPC index order: chaseable, positive-resistance, inside hard range; at most maxTargets. Native resistance clamps to 0.1..1.",
+      "purpose": "Attraction after movement/modifiers each active projectile update, not periodic/on-hit. Projectile velocity/trajectory unchanged. Scan NPC index order: chaseable, positive-resistance, inside hard range; at most maxTargets. Native resistance clamps to 0.1..1.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -8976,7 +8976,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply one exact named generated-utility-buff group to the owner after a functional equipment reaction. Populate it with apply_generated_buff_on_use using the same effectGroupId; no active-use binding is needed for that group. The group must contain only this generated buff, never healing, native buffs or teleport. Identical effects refresh remaining duration without stacking strength; existing item exhaustion and shared per-action reaction cooldowns still apply. In multiplayer the owner predicts the effect, while native server hurt/death occurrences build the authoritative utility snapshot; client stat claims cannot commit it.",
+      "purpose": "Apply one exact named generated-utility-buff group to the owner after a functional equipment reaction. Populate it with apply_generated_buff_on_use using the same effectGroupId; no active-use binding is needed for that group. The group must contain only this generated buff, never healing, native buffs or teleport. Identical effects refresh remaining duration without stacking strength; existing item exhaustion and shared per-action reaction cooldowns still apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -9515,7 +9515,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply a velocity impulse between owner, target and event entity. Both requires the same active event target for both bodies; no target means neither moves and no replacement search. NPC impulse scales by knockBackResist; player impulse does not. Owner and NPC movement keep separate network authority, not an atomic two-body transaction.",
+      "purpose": "Apply a velocity impulse between owner, target and event entity. Both requires the same active event target for both bodies; no target means neither moves and no replacement search. NPC impulse scales by knockBackResist; player impulse does not.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
