@@ -35,7 +35,9 @@ internal static partial class EngineRuntimeChecks
             Equal(true, Line(lines, "InfiniMovementPrimary").Contains("+15%"), "float32 percentage is human 15%, not binary expansion");
             Equal(true, Line(lines, "InfiniMovementPrimary").Contains(fraction), "fractional seconds follow UI culture");
             Equal(false, lines.Any(l => l.Text.Contains("ticks") || l.Text.Contains("тиков")), "ordinary player duration text excludes raw ticks");
-            Equal(true, Line(lines, "InfiniManaRegenPrimary").Contains("manaRegenBonus"), "mana bonus is not a mana/sec rate");
+            Equal(true, Line(lines, "InfiniManaRegenPrimary").Contains("+10")
+                && !Line(lines, "InfiniManaRegenPrimary").Contains("/s")
+                && !Line(lines, "InfiniManaRegenPrimary").Contains("/с"), "mana regeneration magnitude is a bonus, not a fabricated per-second rate");
             Equal(true, Line(lines, "InfiniLifeRegenPrimary").Contains(locale == "en-US" ? "0.5" : "0,5"), "lifeRegen 1 contributes half HP/s");
             string before = data.ToNetworkJson();
             _ = Lines();
@@ -45,12 +47,15 @@ internal static partial class EngineRuntimeChecks
             data.Gameplay.GeneratedBuff = new GeneratedBuffSpec();
             data.Accessory.Enabled = true; data.Accessory.LifeRegen = 1;
             data.Accessory.ManaRegen = 10; data.Accessory.LightStrength = .35f;
+            data.Accessory.MovementSpeed = .15f; data.Accessory.ManaCostReduction = .10f;
             data.RuntimeProgram.Bindings = new[] { new RuntimeBindingSpec { Id = "wear", Input = RuntimeInputKind.Equipped,
                 UsePolicy = new() { Action = new() { Kind = RuntimeBindingAction.EquipPassive, TargetId = data.RuntimeProgram.ItemEntityId } } } };
             lines = Lines();
             Equal(true, Line(lines, "InfiniEquipmentLifeRegen").Contains(locale == "en-US" ? "+0.5" : "+0,5"), "Hearth actual life contribution shown");
-            Equal(true, Line(lines, "InfiniEquipmentManaRegen").Contains("+10") && Line(lines, "InfiniEquipmentManaRegen").Contains("manaRegenBonus"), "Hearth actual native mana bonus shown");
+            Equal(true, Line(lines, "InfiniEquipmentManaRegen").Contains("+10") && !Line(lines, "InfiniEquipmentManaRegen").Contains("/s") && !Line(lines, "InfiniEquipmentManaRegen").Contains("/с"), "Hearth actual native mana bonus shown");
             Equal(true, Line(lines, "InfiniEquipmentLight").Contains(locale == "en-US" ? "0.35" : "0,35"), "Hearth actual light coefficient shown without float32 artifact");
+            Equal(true, Line(lines, "InfiniEquipmentMovement").Contains("+15%"), "movement remains a signed bonus, not an absolute speed");
+            Equal(true, Line(lines, "InfiniEquipmentManaCost").Contains("-10%"), "mana reduction remains negative, not an absolute 10 percent cost");
             data.Accessory.Enabled = false;
             Equal(false, Lines().Any(l => l.Name.StartsWith("InfiniEquipment")), "disabled equipment cannot advertise a contribution");
             data.Accessory.Enabled = true; data.RuntimeProgram.Bindings = Array.Empty<RuntimeBindingSpec>();
@@ -77,7 +82,7 @@ internal static partial class EngineRuntimeChecks
             Equal(1800, Field<int>("RemainingTicks"), "exact ticks retained for HUD countdown");
             Equal(BuffID.ChaosState, Field<int>("IconBuffType"), "borrowed mobility icon distinct from immutable Exhaustion PNG");
             Equal(true, Field<string>("Tooltip").Contains("30") && !Field<string>("Tooltip").Contains("1800"), "player sees 30 seconds, not ticks");
-            Equal(true, Field<string>("Tooltip").Contains(locale == "en-US" ? "mining" : "добыч"), "tooltip explains ordinary actions unaffected");
+            Equal(true, Field<string>("Tooltip").Length < 100, "mobility feedback is a concise countdown");
             Equal(0, ((IEnumerable)PresentationExhaustionCapture(owner)).Cast<object>().Count(), "mobility cooldown never creates generated-buff exhaustion");
             Equal(false, owner.TryReserveGeneratedMobilityCooldown(3600), "failed reservation refused by existing owner");
             Equal(1800, owner.GeneratedMobilityCooldownTicks, "failed attempt cannot extend cooldown");

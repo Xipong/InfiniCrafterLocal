@@ -142,7 +142,10 @@ public partial class GeneratedItem
                 // input. Item.mana may still reflect a previous projection; the
                 // displayed base cost intentionally excludes player reductions.
                 Add("Input" + suffix, "ActiveBinding", label, description,
-                    RuntimeTooltipNumber(binding.UsePolicy.StackCost), RuntimeTooltipNumber(data.Gameplay.ManaCostForInput(binding.Input)));
+                    binding.UsePolicy.StackCost > 0
+                        ? RuntimeTooltipText("ItemCost", RuntimeTooltipNumber(binding.UsePolicy.StackCost)) : "",
+                    data.Gameplay.ManaCostForInput(binding.Input) > 0
+                        ? RuntimeTooltipText("ManaCost", RuntimeTooltipNumber(data.Gameplay.ManaCostForInput(binding.Input))) : "");
                 AddRuntimeUseCondition(data.Gameplay, suffix, label, Add);
             }
             else

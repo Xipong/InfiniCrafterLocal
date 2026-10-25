@@ -165,10 +165,11 @@ public partial class GeneratedItem
         {
             RuntimeEntitySpec? entity = Data.RuntimeProgram.TryGetEntity(binding.UsePolicy.Action.TargetId);
             if (entity is null) return false;
-            string spawnRefusal = RootSpawnBlockedReason(player, entity);
+            string spawnRefusal = RootSpawnBlockedReason(player, entity, out bool routineBusy);
             if (spawnRefusal.Length != 0)
             {
-                player.GetModPlayer<InfiniCraftPlayer>().NotifyGeneratedUseRefusal(spawnRefusal);
+                if (!routineBusy)
+                    player.GetModPlayer<InfiniCraftPlayer>().NotifyGeneratedUseRefusal(spawnRefusal);
                 return false;
             }
         }
@@ -184,14 +185,24 @@ public partial class GeneratedItem
 
     // Read the exact native admission facts; this does not reserve or alter a budget.
     internal string RootSpawnBlockedReason(Player player, RuntimeEntitySpec entity)
+        => RootSpawnBlockedReason(player, entity, out _);
+
+    internal string RootSpawnBlockedReason(Player player, RuntimeEntitySpec entity, out bool routineBusy)
     {
+        routineBusy = false;
         int count = RootBindingSpawnCapacity(entity);
         if (GeneratedProjectile.CountActiveGeneratedProjectiles(player.whoAmI)
             > InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner - count)
             return InfiniCraftPlayer.GeneratedUseFeedbackText("OwnerProjectileLimit",
                 InfiniRuntimeLimits.MaxRuntimeActiveProjectilesPerOwner);
         if (!GeneratedProjectile.CanAdmitEntityBatch(Data, entity, player.whoAmI, count))
+        {
+            // An already-active single-shot weapon is ordinary native-style
+            // admission, not a recurring chat warning. Keep the exact reason
+            // available to diagnostics, and keep exceptional batch limits loud.
+            routineBusy = count == 1 && entity.Spawn.MaxActive == 1;
             return InfiniCraftPlayer.GeneratedUseFeedbackText("EntityBatchLimit", count, entity.Spawn.MaxActive!);
+        }
         if (entity.IsOwnerAttached)
             foreach (Projectile projectile in Main.ActiveProjectiles)
                 if (projectile.owner == player.whoAmI && projectile.ModProjectile is GeneratedProjectile generated

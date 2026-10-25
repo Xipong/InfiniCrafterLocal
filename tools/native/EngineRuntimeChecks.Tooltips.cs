@@ -158,14 +158,14 @@ internal static partial class EngineRuntimeChecks
                         (data.Gameplay.ExtraBuffs.Length == 1000 && float.IsNaN(data.Gameplay.GeneratedBuff.MovementSpeed))), "tooltip normalized/mutated DTO");
                     Check(lines.All(x => !x.Text.Contains("NaN") && !x.Text.Contains("UNTRUSTED") && !x.Text.Contains("Mods.InfiniCrafterLocal.")), "unsafe or unresolved localization output");
                     Check(lines.Count <= 65 && lines.Select(x => x.Name).Distinct().Count() == lines.Count, "unbounded or duplicate facts");
-                    string mana17 = locale == "en-US" ? "base mana: 17" : "базовая мана: 17";
-                    string cost0 = locale == "en-US" ? "item cost: 0" : "расход предметов: 0";
-                    string cost1 = locale == "en-US" ? "item cost: 1" : "расход предметов: 1";
+                    string mana17 = Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ManaCost", "17");
+                    string cost0 = Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ItemCost", "0");
+                    string cost1 = Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ItemCost", "1");
                     switch (scenario)
                     {
                         case "split-costs":
                         case "placement":
-                            Check(Line("InfiniInputPrimary").Contains(cost0) && Line("InfiniInputPrimary").Contains(mana17), "primary zero-stack/global mana");
+                            Check(!Line("InfiniInputPrimary").Contains(cost0) && Line("InfiniInputPrimary").Contains(mana17), "primary omits neutral stack cost but retains nonzero mana");
                             Check(Line("InfiniInputAlternate").Contains(cost1) && Line("InfiniInputAlternate").Contains(mana17), "alternate one-stack/global mana");
                             Check(scenario == "placement" ? Line("InfiniPlacementAlternate").Length > 0 : Line("InfiniMobilityAlternate").Contains("2"), "exact placement/recall feedback absent");
                             break;
