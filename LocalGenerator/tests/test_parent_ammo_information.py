@@ -52,7 +52,7 @@ def test_real_author_packet_explains_ammo_identity_without_forcing_projectile_de
     text = json.dumps(card, ensure_ascii=False)
     assert "Seeds share the dart category" in text
     assert "does not select projectile appearance" in text
-    assert "inventory-only" in text
+    assert "selected ammo projectile AI is not copied" in text
     # This is comprehension guidance, not a new seed ammo category or forced design.
     assert author_item_response_schema()["required"] == ["name", "category", "runtimeProgram"]
 
@@ -91,9 +91,9 @@ def test_actual_author_cards_explain_spawn_axes_event_origin_and_independent_rot
     assert "move_yoyo_hover" not in cards
     assert "on_hit/on_crit: struck NPC center" in spawn
     assert "periodic/on_spawn/on_kill: source projectile center" in spawn
-    assert "facing uses current owner.direction" in spawn
+    assert "facing uses the owner's current horizontal facing" in spawn
     assert "velocity uses the producer-supplied gameplay axis" in spawn
-    assert "cursor uses MouseWorld minus the shifted spawn position" in spawn
+    assert "cursor points from the shifted spawn position toward the cursor" in spawn
     assert "not the visible sprite's rotation" in spawn
     assert "without changing velocity" in rotation["does"]
     assert set(rotation["params"]["mode"]["enum"]) == {"axis", "velocity", "spin"}

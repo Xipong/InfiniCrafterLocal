@@ -99,7 +99,11 @@ def test_real_author_packet_and_nullable_inverse_preserve_every_explicit_choice(
         "interval and entity lifetime do not guarantee sustained output."
     )
     assert card == expected
-    for term in ("Collision.CanHit", "hard geometric", "assigned NPC", "aim=velocity", "position={at:activation_origin}"):
+    for term in (
+        "native line-of-sight check from this projectile hitbox to the candidate NPC hitbox",
+        "both assigned and scanned targets", "hard geometric", "assigned NPC", "aim=velocity",
+        "position={at:activation_origin}",
+    ):
         assert term in json.dumps(card)
     doc, call = _fixture(**OPTIONS)
     assert project_provider_author_item_to_local(doc, response_format=request["response_format"]) == doc
