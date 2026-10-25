@@ -1410,7 +1410,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
                           "knockbackMultiplier": {
@@ -1423,7 +1423,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
                           "speedMultiplier": {
@@ -1436,7 +1436,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
                           "launchSpeedBlocksPerSecond": {
@@ -1664,7 +1664,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
                           "initialDamageMultiplier": {
@@ -1677,7 +1677,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
                           "damageStartProgress": {
@@ -1690,7 +1690,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           }
                         },
@@ -2154,7 +2154,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
                           "window": {
@@ -2353,7 +2353,7 @@
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
                           "rule": "finite_double_no_normalization",
-                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                          "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                         }
                       },
                       "window": {
@@ -3847,7 +3847,7 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 500,
-                        "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeSeconds can permit additional Shoot/UseItem activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.",
+                        "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeSeconds can permit additional activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.",
                         "x-infini-semanticType": "mana_points",
                         "default": 0,
                         "x-infini-neutral": 0
@@ -3913,7 +3913,7 @@
                         "type": "number",
                         "minimum": 0.25,
                         "maximum": 4,
-                        "description": "Dimensionless held Item scale via ModifyItemScale (1 unchanged/neutral); multiplies the presentation base size, not bake resolution. Independent of dropped worldScale and projectile hitbox.drawScale/visual.scale",
+                        "description": "Dimensionless held Item scale (1 unchanged/neutral); multiplies the presentation base size, not bake resolution. Independent of dropped worldScale and projectile hitbox.drawScale/visual.scale",
                         "x-infini-semanticType": "draw_scale"
                       }
                     },
@@ -4301,7 +4301,7 @@
                         "type": "number",
                         "minimum": -75.0,
                         "maximum": 300.0,
-                        "description": "Author units: blocks/s (base native launch contribution, not final projectile speed). Native consumer: Base/native launch contribution to Item.shootSpeed via vanilla PickAmmo, in blocks/s. No eventual projectile updatesPerTick is known here; this contribution is not a guaranteed final projectile speed",
+                        "description": "Author units: blocks/s (base native launch contribution, not final projectile speed). Native consumer: Base/native launch contribution in blocks/s; this contribution is not a guaranteed final projectile speed",
                         "x-infini-units": "blocks/s (base native launch contribution, not final projectile speed)",
                         "x-infini-semanticType": "blocks/s (base native launch contribution, not final projectile speed)",
                         "x-infini-consumerConstraint": {
@@ -4836,7 +4836,7 @@
                         "type": "number",
                         "minimum": 0.1,
                         "maximum": 4,
-                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect; no tool power is inferred.",
+                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect.",
                         "x-infini-units": "engine units: pickSpeed divisor",
                         "x-infini-semanticType": "unitless_scalar"
                       }
@@ -5027,7 +5027,7 @@
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
                           "rule": "finite_double_no_normalization",
-                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                          "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                         }
                       },
                       "footprintAnchorY": {
@@ -5039,7 +5039,7 @@
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
                           "rule": "finite_double_no_normalization",
-                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                          "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                         }
                       },
                       "pivotSpace": {
@@ -5062,7 +5062,7 @@
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
                           "rule": "finite_double_no_normalization",
-                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                          "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                         }
                       },
                       "imagePivotY": {
@@ -5074,7 +5074,7 @@
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
                           "rule": "finite_double_no_normalization",
-                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                          "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                         }
                       },
                       "offsetXPx": {
@@ -5103,7 +5103,7 @@
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
                           "rule": "finite_double_no_normalization",
-                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                          "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                         }
                       },
                       "flipX": {
@@ -5191,7 +5191,7 @@
                         "x-infini-consumerConstraint": {
                           "storage": "float64",
                           "rule": "finite_double_no_normalization",
-                          "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                          "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                         }
                       },
                       "color": {
@@ -5529,7 +5529,7 @@
                       },
                       "safeTileOnly": {
                         "type": "boolean",
-                        "description": "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; ignored for recall_home; not a general hazard check",
+                        "description": "Blink bounds, solid-tile overlap and nearby lava checks; false skips them; not a general hazard check",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "effectGroupId": {
@@ -5645,7 +5645,7 @@
                         "type": "integer",
                         "minimum": -50,
                         "maximum": 200,
-                        "description": "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment",
+                        "description": "Add native item defense",
                         "x-infini-units": "defense_points",
                         "x-infini-semanticType": "defense_points",
                         "x-infini-neutral": 0
@@ -5830,7 +5830,7 @@
                         "type": "number",
                         "minimum": 0,
                         "maximum": 99,
-                        "description": "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
+                        "description": "Equipped owner's ammo saving chance for any weapon; equipped item chances combine as 1−product(1−p)",
                         "x-infini-units": "probability_percent",
                         "x-infini-semanticType": "probability_percent",
                         "x-infini-neutral": 0,
@@ -6006,7 +6006,7 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 5,
-                        "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight",
+                        "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing, sliding or movement-ability refresh refill, wings may convert charges to wingTime; mounts suppress flight",
                         "x-infini-units": "native rocket flight mode",
                         "x-infini-semanticType": "unitless_scalar",
                         "x-infini-neutral": 0
@@ -6077,7 +6077,7 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 200,
-                        "description": "Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment",
+                        "description": "Add native item defense",
                         "x-infini-units": "defense_points",
                         "x-infini-semanticType": "defense_points",
                         "x-infini-neutral": 0
@@ -6262,7 +6262,7 @@
                         "type": "number",
                         "minimum": 0,
                         "maximum": 99,
-                        "description": "Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
+                        "description": "Equipped owner's ammo saving chance for any weapon; equipped item chances combine as 1−product(1−p)",
                         "x-infini-units": "probability_percent",
                         "x-infini-semanticType": "probability_percent",
                         "x-infini-neutral": 0,
@@ -6489,7 +6489,7 @@
                             "type": "number",
                             "minimum": 0,
                             "maximum": 99,
-                            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p)",
+                            "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Equipped owner's ammo saving chance for any weapon; equipped item chances combine as 1−product(1−p)",
                             "x-infini-units": "probability_percent",
                             "x-infini-semanticType": "probability_percent",
                             "x-infini-neutral": 0,
@@ -6733,7 +6733,7 @@
                               "constantSpeedBlocksPerSecond"
                             ],
                             "additionalProperties": false,
-                            "description": "Exact constant-speed deterministic fan; preserves the established wire."
+                            "description": "Exact constant-speed deterministic fan."
                           },
                           {
                             "type": "object",
@@ -7150,7 +7150,7 @@
                             "description": "Independently jitter each authored fan direction uniformly within the selected half-angle, and sample speed uniformly between min and max."
                           }
                         ],
-                        "description": "Select exactly one initial velocity rule. Owner samples a seeded batch once; native projectile state synchronizes the result. No peer reroll or inferred distribution.",
+                        "description": "Select exactly one initial velocity rule. Launch velocities are sampled once per batch.",
                         "x-infini-semanticType": "initial_velocity_distribution"
                       },
                       "count": {
@@ -7166,7 +7166,7 @@
                         "type": "number",
                         "minimum": 0,
                         "maximum": 6.283185307179586,
-                        "description": "Total angular spread. May be omitted for explicit count=1 (inactive fan), or child_projectile whose producers override it; present valid values are preserved",
+                        "description": "Total angular spread. May be omitted for explicit count=1 (inactive fan), or child_projectile whose producers override it",
                         "x-infini-units": "radians",
                         "x-infini-semanticType": "radians",
                         "default": 0,
@@ -7192,7 +7192,7 @@
                           "velocity",
                           "none"
                         ],
-                        "description": "Initial aim axis and forward offset: facing uses current owner.direction on the horizontal axis; velocity uses the producer-supplied gameplay axis; cursor uses MouseWorld minus the shifted spawn position. These are not the visible sprite's rotation. radial/disk sample their own directions. none is zero velocity for constant speed.",
+                        "description": "Initial aim axis and forward offset: facing uses the owner's current horizontal facing; velocity uses the producer-supplied gameplay axis; cursor points from the shifted spawn position toward the cursor. These are not the visible sprite's rotation. radial/disk sample their own directions. none is zero velocity for constant speed.",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "position": {
@@ -7209,7 +7209,7 @@
                                   "ground_at_cursor",
                                   "native_resting_spot"
                                 ],
-                                "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle"
+                                "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot uses native reachable-area clamping and centers above the selected ground by half the entity hitbox height; it does not enable native sentry lifecycle"
                               }
                             },
                             "required": [
@@ -7230,7 +7230,7 @@
                                   "ground_at_cursor",
                                   "native_resting_spot"
                                 ],
-                                "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot explicitly calls Player.FindSentryRestingSpot with native reachable-area clamp and centers above returned ground by half the entity hitbox height; it does not enable native sentry lifecycle"
+                                "description": "Exact spawn anchor; activation_origin is the invoking producer's origin. For generic projectile event spawns, on_hit/on_crit: struck NPC center; periodic/on_spawn/on_kill: source projectile center. Do not generalize these origins to other producers. native_resting_spot uses native reachable-area clamping and centers above the selected ground by half the entity hitbox height; it does not enable native sentry lifecycle"
                               },
                               "heightTiles": {
                                 "type": "number",
@@ -7371,7 +7371,7 @@
                     "properties": {
                       "enabled": {
                         "type": "boolean",
-                        "description": "Native Projectile.sentry flag; false explicitly disables registration",
+                        "description": "Native sentry registration; false explicitly disables registration",
                         "x-infini-semanticType": "bounded_text"
                       }
                     },
@@ -8054,7 +8054,7 @@
                           },
                           "requireLineOfSight": {
                             "type": "boolean",
-                            "description": "Require native CanHitLine between projectile/NPC boxes before selection",
+                            "description": "Require native line-of-sight check between projectile/NPC boxes before selection",
                             "x-infini-semanticType": "bounded_text"
                           },
                           "startDelaySeconds": {
@@ -8157,7 +8157,7 @@
                           },
                           "requireLineOfSight": {
                             "type": "boolean",
-                            "description": "Require native CanHitLine between projectile/NPC boxes before selection",
+                            "description": "Require native line-of-sight check between projectile/NPC boxes before selection",
                             "x-infini-semanticType": "bounded_text"
                           },
                           "window": {
@@ -8615,7 +8615,7 @@
                         "type": "integer",
                         "minimum": -1,
                         "maximum": 100,
-                        "description": "Terraria Projectile.penetrate count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name",
+                        "description": "NPC penetration count: pierce=1 causes native kill after the first damaging NPC contact; pierce=-1 does not kill from NPC contact. on_hit has no implicit explosion; an on_kill effect is a separate authored event action, not implied by penetration or an explosive name",
                         "x-infini-semanticType": "penetration_count"
                       },
                       "updatesPerTick": {
@@ -8865,7 +8865,7 @@
                       },
                       "requireLineOfSight": {
                         "type": "boolean",
-                        "description": "Require native Collision.CanHit from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets",
+                        "description": "Require native line-of-sight check from this projectile hitbox to the candidate NPC hitbox for both assigned and scanned targets",
                         "x-infini-semanticType": "bounded_text",
                         "default": false,
                         "x-infini-neutral": false
@@ -9203,7 +9203,7 @@
                             "x-infini-consumerConstraint": {
                               "storage": "float64",
                               "rule": "finite_double_no_normalization",
-                              "meaning": "C# double preserves the admitted JSON number; only GPU API coordinates convert to float. No float32 guard, rounding or replacement."
+                              "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
                           "hitboxMaxSideFactor": {
@@ -9306,7 +9306,7 @@
                           "initialIgnoreCountdownUpdates"
                         ],
                         "additionalProperties": false,
-                        "description": "Explicit hit-target-relative origin and direction sampling. Capture target geometry/event direction and owner seed at action admission, including delayed actions. Positive exclusion retains the exact NPC incarnation and refuses reused slots; zero disables exclusion and its incarnation cancellation guard.",
+                        "description": "Explicit hit-target-relative origin and direction sampling. Capture target geometry and event direction at action admission, including delayed actions. Positive exclusion retains the exact NPC incarnation and refuses reused slots; zero disables exclusion and its incarnation cancellation guard.",
                         "x-infini-semanticType": "hit_target_spawn_geometry"
                       },
                       "damageBasis": {
@@ -9461,7 +9461,7 @@
                       },
                       "requireLineOfSight": {
                         "type": "boolean",
-                        "description": "Require native Collision.CanHit from the current anchor hitbox to each candidate; independent of child tileCollide/ownerHitCheck",
+                        "description": "Require native line-of-sight check from the current anchor hitbox to each candidate; independent of child tileCollide/ownerHitCheck",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "initialIgnoreCountdownUpdates": {

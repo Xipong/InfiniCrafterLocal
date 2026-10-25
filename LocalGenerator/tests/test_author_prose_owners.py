@@ -60,8 +60,9 @@ def test_serialized_overlays_keep_only_facts_missing_from_canonical_cards(monkey
     _, user, _ = author.build_initial_author_request({}, {}, "overlays", model_name="offline")
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     placed = next(row for row in catalog["capabilities"] if row["fn"] == "present_placed_item_sprite")
-    assert placed["constructionMeaning"] == (
-        "Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused before mutation.")
+    assert all(fact in placed["constructionMeaning"] for fact in (
+        "16x16/256 cells max", "post-place actors or visual callbacks are refused",
+    ))
     canonical = CAPABILITY_REGISTRY["present_placed_item_sprite"].author_prompt_card()
     assert placed["does"] == canonical["does"]
     assert placed["requires"] == canonical["requires"]

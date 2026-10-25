@@ -123,10 +123,13 @@ def test_production_author_request_carries_independent_native_choices(monkeypatc
     for fn in ("set_projectile_sentry", "set_descendant_concurrency"):
         assert cards[fn] == CAPABILITY_REGISTRY[fn].author_prompt_card()
         assert all(s.default is None for s in CAPABILITY_REGISTRY[fn].params.values())
-    assert "FindSentryRestingSpot" in json.dumps(cards["configure_spawn"])
-    assert "UpdateMaxTurrets" in cards["set_projectile_sentry"]["does"]
+    spawn = json.dumps(cards["configure_spawn"])
+    assert "native_resting_spot" in spawn and "reachable-area clamping" in spawn
+    assert "half the entity hitbox height" in spawn
+    assert "native sentry cap" in cards["set_projectile_sentry"]["does"]
+    assert "may retire the oldest sentry" in cards["set_projectile_sentry"]["does"]
     assert "ancestor lifetime ledger" in cards["set_descendant_concurrency"]["does"]
-    assert "network hydration" in cards["set_descendant_concurrency"]["does"]
+    assert "Absence retains the existing lifetime budget" in cards["set_descendant_concurrency"]["does"]
 
 
 def test_frozen_repair_can_fix_pool_limit_without_enabling_native_or_changing_placement():

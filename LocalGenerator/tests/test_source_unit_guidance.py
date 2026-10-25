@@ -295,7 +295,7 @@ def test_author_explains_native_mana_payment_boundary(monkeypatch, mode):
     mana = stats["params"]["manaCost"]
     for rule in (
         "For primary_use/alternate_use, native mana payment is attempted when a new use animation starts",
-        "useTimeSeconds can permit additional Shoot/UseItem activations inside that animation without another native mana payment",
+        "useTimeSeconds can permit additional activations inside that animation without another native mana payment",
         "not a per-projectile or per-successful-spawn debit",
         "explicit controller manaPayment may add recurring payment; do not infer it",
         "before player mana-cost modifiers, not guaranteed final mana spent",

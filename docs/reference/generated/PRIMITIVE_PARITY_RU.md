@@ -35,7 +35,7 @@ Author schema ограничивает значения всех примити�
 
 | Author | Действие / engine semantics | Единица | Neutral | Author range | Wire DTO | Фаза |
 |---|---|---|---|---|---|---|
-| defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | -50…200<br>runtime clamp: -100…500 | accessory.defense | ModItem.UpdateAccessory |
+| defensePoints | Add native item defense | defense_points | 0 | -50…200<br>runtime clamp: -100…500 | accessory.defense | ModItem.UpdateAccessory |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxLife | ModItem.UpdateAccessory |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxMana | ModItem.UpdateAccessory |
 | lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100<br>runtime clamp: -120…200 | accessory.lifeRegen = Author ×2 | ModItem.UpdateAccessory |
@@ -49,7 +49,7 @@ Author schema ограничивает значения всех примити�
 | minionSlotsBonus | Add minion slots | slots | 0 | 0…20<br>runtime clamp: 0…20 | accessory.minionSlots | ModItem.UpdateAccessory |
 | sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20<br>runtime clamp: 0…20 | accessory.sentrySlots | ModItem.UpdateAccessory |
 | manaCostReductionPercentagePoints | Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | accessory.manaCostReduction = Author /100 | ModItem.UpdateAccessory |
-| ammoSaveChancePercent | Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | accessory.ammoSaveChance = Author /100 | ModItem.UpdateAccessory |
+| ammoSaveChancePercent | Equipped owner's ammo saving chance for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | accessory.ammoSaveChance = Author /100 | ModItem.UpdateAccessory |
 | aggroPoints | Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | engine units: aggro points | 0 | -1000…1000 | accessory.aggro | ModItem.UpdateAccessory |
 | damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75<br>runtime clamp: 0…0.75 | accessory.endurance = Author /100 | ModItem.UpdateAccessory |
 | genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | accessory.armorPenetration | ModItem.UpdateAccessory |
@@ -64,7 +64,7 @@ Author schema ограничивает значения всех примити�
 | noKnockback | Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate | bounded_text | False | boolean | accessory.noKnockback | ModItem.UpdateAccessory |
 | fireWalk | Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles | bounded_text | False | boolean | accessory.fireWalk | ModItem.UpdateAccessory |
 | accRunSpeedBlocksPerSecond | Author units: blocks/s. Native consumer: Native sprint-speed floor: max(Player.accRunSpeed, lowered value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus | blocks/s | 0.0 | 0.0…75.0 | accessory.accRunSpeed = Author ×16 /60 | ModItem.UpdateAccessory |
-| rocketBoots | Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing/sliding/RefreshMovementAbilities refill, wings may convert charges to wingTime; mounts suppress flight | native rocket flight mode | 0 | 0…5 | accessory.rocketBoots | ModItem.UpdateAccessory |
+| rocketBoots | Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing, sliding or movement-ability refresh refill, wings may convert charges to wingTime; mounts suppress flight | native rocket flight mode | 0 | 0…5 | accessory.rocketBoots | ModItem.UpdateAccessory |
 | wireVision | Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation | bounded_text | False | boolean | accessory.wireVision | ModItem.UpdateAccessory |
 
 Authority: `owner_execute_sync`; техническая фаза/сетевая роль выбираются runtime, не LLM.
@@ -75,7 +75,7 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 |---|---|---|---|---|---|---|
 | slot | Armor equip slot | bounded_text | None | head/body/legs | armor.slot | C# normalized item projection |
 | setKey | Exact authored set key (empty when no matching set is intended) | bounded_text |  | ^[a-z0-9_]{0,48}$ | armor.setKey | C# normalized item projection |
-| defensePoints | Add to Item.defense; Terraria applies it, not an extra equip-hook adjustment | defense_points | 0 | 0…200<br>runtime clamp: 0…500 | armor.defense | ModItem.UpdateEquip |
+| defensePoints | Add native item defense | defense_points | 0 | 0…200<br>runtime clamp: 0…500 | armor.defense | ModItem.UpdateEquip |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxLife | ModItem.UpdateEquip |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxMana | ModItem.UpdateEquip |
 | lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100 | armor.lifeRegen = Author ×2 | ModItem.UpdateEquip |
@@ -89,7 +89,7 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | minionSlotsBonus | Add minion slots | slots | 0 | 0…20 | armor.minionSlots | ModItem.UpdateEquip |
 | sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20 | armor.sentrySlots | ModItem.UpdateEquip |
 | manaCostReductionPercentagePoints | Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | armor.manaCostReduction = Author /100 | ModItem.UpdateEquip |
-| ammoSaveChancePercent | Equipped owner's ammo saving chance via Player.CanConsumeAmmo for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | armor.ammoSaveChance = Author /100 | ModItem.UpdateEquip |
+| ammoSaveChancePercent | Equipped owner's ammo saving chance for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | armor.ammoSaveChance = Author /100 | ModItem.UpdateEquip |
 | aggroPoints | Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | engine units: aggro points | 0 | -1000…1000 | armor.aggro | ModItem.UpdateEquip |
 | damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75 | armor.endurance = Author /100 | ModItem.UpdateEquip |
 | genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | armor.armorPenetration | ModItem.UpdateEquip |
