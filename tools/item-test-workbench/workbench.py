@@ -37,10 +37,13 @@ def drawable(actor):
 
 def validate_trace(trace):
     if not isinstance(trace,dict):raise ValueError("Telemetry must be an object")
-    if trace.get("schemaVersion") != 1:
+    if type(trace.get("schemaVersion")) is not int or trace["schemaVersion"] != 1:
         raise ValueError("Expected telemetry schemaVersion 1")
     if not isinstance(trace.get("execution"), dict):
         raise ValueError("Missing execution provenance")
+    for field in ("scene", "input", "coverage", "nativeRender", "resources", "failure"):
+        if field in trace and not isinstance(trace[field], dict):
+            raise ValueError("Malformed native object: " + field)
     status=trace.get("status")
     if status not in ("passed","failed","error"):
         raise ValueError("Trace is not a terminal native result")
@@ -49,21 +52,26 @@ def validate_trace(trace):
         raise ValueError("Malformed assertion results")
     if status=="passed" and (not assertions or any(a["status"]!="passed" for a in assertions)):
         raise ValueError("Passed trace requires nonempty passing assertions")
+    if status=="passed" and (trace.get("error") or trace.get("failure")):
+        raise ValueError("Passed trace cannot contain native error/failure evidence")
+    if status=="failed" and not (trace.get("failure") or any(a["status"]=="failed" for a in assertions)):
+        raise ValueError("Failed trace needs a failed assertion or native invariant evidence")
     snapshots = trace.get("snapshots")
     if not isinstance(snapshots, list) or len(snapshots) > 20000:
         raise ValueError("Missing or oversized snapshots")
     for tile in trace.get("scene",{}).get("tiles",[]):
         if any(not isinstance(tile.get(k),(int,float)) or not math.isfinite(tile[k]) for k in ("x","y","width","height")):
             raise ValueError("Invalid native tile rectangle")
-    previous = (-1, -1)
+    previous = (-2, -2, -1)
     for snap in snapshots:
         if not isinstance(snap,dict) or type(snap.get("tick")) is not int or type(snap.get("substep",0)) is not int:
             raise ValueError("Invalid snapshot/tick")
         if not isinstance(snap.get("player"),dict) or not isinstance(snap.get("dummy"),dict):
             raise ValueError("Snapshot needs recorded player and dummy bounds")
-        current = (snap["tick"], snap.get("substep", 0))
-        if current < previous:
-            raise ValueError("Snapshots must be ordered by tick/substep")
+        current = (snap["tick"], snap.get("substep", 0),
+                   0 if snap.get("phase")=="after_input_before_update" else 1)
+        if current <= previous:
+            raise ValueError("Snapshots must be ordered by tick/substep/phase without duplicates")
         previous = current
         if not isinstance(snap.get("events",[]),list) or any(not isinstance(e,dict) or not isinstance(e.get("kind"),str) for e in snap.get("events",[])):
             raise ValueError("Malformed recorded native events")
@@ -72,6 +80,10 @@ def validate_trace(trace):
         for actor in [snap.get("player"), snap.get("dummy"), *snap.get("projectiles", [])]:
             if actor is None:
                 continue
+            if "nonFinite" in actor and type(actor["nonFinite"]) is not bool:
+                raise ValueError("Invalid native nonFinite flag")
+            if actor.get("nonFinite") is True and status == "passed":
+                raise ValueError("Passed trace contains invalid native state")
             if actor.get("nonFinite") is True and trace.get("status") in ("failed","error"):
                 # Native invalid state stays in JSON and is visibly not drawable.
                 continue
@@ -81,6 +93,9 @@ def validate_trace(trace):
                     raise ValueError(f"Invalid actor coordinate {key}: {value!r}")
             if actor["width"] < 0 or actor["height"] < 0:
                 raise ValueError("Negative actor dimensions")
+            for key in ("vx", "vy", "rotation"):
+                if key in actor and (type(actor[key]) not in (int,float) or not math.isfinite(actor[key])):
+                    raise ValueError("Invalid native motion field: " + key)
         exhaustion=snap["player"].get("generatedItemExhaustion",[])
         if not isinstance(exhaustion,list) or any(not isinstance(e,dict) or type(e.get("remainingTicks")) is not int or e["remainingTicks"]<0 for e in exhaustion):
             raise ValueError("Malformed native generated-item exhaustion clocks")
@@ -360,8 +375,8 @@ document.getElementById('play').onclick=()=>{if(timer){stop();return}if(+seek.va
 
 def doctor():
     dotnet = os.environ.get("DOTNET", "dotnet")
-    tml = Path(os.environ.get("INFINI_TML_REFERENCE_DIR", "/nonexistent"))
-    deps = Path(os.environ.get("INFINI_TML_DEPS_SRC", "/nonexistent"))
+    tml = Path(os.environ.get("INFINI_TML_REFERENCE_DIR", "/nonexistent")).expanduser()
+    deps = Path(os.environ.get("INFINI_TML_DEPS_SRC", "/nonexistent")).expanduser()
     checks = {"dotnet":shutil.which(dotnet),"tModLoader":(tml/"tModLoader.dll").is_file(),
               "ParticleLibrary":(deps/"ParticleLibrary/ParticleLibrary.dll").is_file(),
               "Luminance":(deps/"Luminance/bin/Debug/net8.0/Luminance.dll").is_file()}
@@ -415,16 +430,166 @@ def build():
     (dll.parent/"build-provenance.json").write_text(json.dumps(build_state(dll)))
 
 
+def native_executable(no_build=False):
+    state = doctor()
+    if not state["ready"]:
+        raise RuntimeError("Native prerequisites unavailable: " + json.dumps(state))
+    if not no_build:
+        build()
+    dll = HERE / "bin/Release/net8.0/ItemTestWorkbench.dll"
+    if not dll.is_file():
+        raise RuntimeError("Native executable absent; run build first")
+    provenance_path = dll.parent / "build-provenance.json"
+    if not provenance_path.is_file():
+        raise RuntimeError("Build provenance missing; run workbench build (not raw dotnet build)")
+    provenance = read_json(provenance_path)
+    if provenance != build_state(dll):
+        raise RuntimeError("Native build is stale or modified; rebuild before executing")
+    return dll, provenance
+
+
+def fixtures(output, no_build=False):
+    """Expose the native fixture owner without requiring agents to find its DLL."""
+    output = output.resolve()
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        raise ValueError("Use a fresh fixture directory")
+    dll, provenance = native_executable(no_build)
+    subprocess.run([os.environ.get("DOTNET", "dotnet"), str(dll), "--write-fixtures", str(output)],
+                   cwd=ROOT, check=True, stdout=sys.stderr, timeout=180)
+    if build_state(dll) != provenance:
+        raise RuntimeError("Native build changed while writing fixtures")
+    paths = sorted(output.glob("*.json"))
+    if not paths:
+        raise RuntimeError("Native fixture writer produced no JSON files")
+    return {"kind": "synthetic-native-fixtures", "directory": str(output),
+            "files": {p.name: digest(p) for p in paths}}
+
+
+def execute_run(args):
+    from agent_evidence import NATIVE_EXIT, report, markdown
+    if not 1 <= args.timeout <= 3600:
+        raise ValueError("Timeout must be 1..3600 seconds")
+    if args.review == "none" and (args.png or args.gif):
+        raise ValueError("PNG/GIF export requires --review schematic or native")
+    if args.vanilla_item is not None and args.vanilla_item.lstrip("-").isdigit() and int(args.vanilla_item) <= 0:
+        raise ValueError("Vanilla ItemID must be positive")
+    if args.item_boundary != "fresh" and args.item is None:
+        raise ValueError("Saved-cache boundary requires --item")
+    item = args.item.resolve() if args.item is not None else None
+    scenario, output = args.scenario.resolve(), args.out.resolve()
+    if item is not None:
+        read_json(item)
+    read_json(scenario)
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        raise ValueError("Output directory is not empty; use a new run directory to preserve evidence")
+    dll, provenance = native_executable(args.no_build)
+    output.mkdir(parents=True, exist_ok=True)
+    if item is not None:
+        shutil.copyfile(item, output / "item.json")
+    shutil.copyfile(scenario, output / "scenario.json")
+    item_sha = digest(output / "item.json") if item is not None else None
+    scenario_sha = digest(output / "scenario.json")
+    trace_path = output / "native.json"
+    cmd = [os.environ.get("DOTNET", "dotnet"), str(dll)]
+    cmd += ["--item", str(output / "item.json")] if item is not None else ["--vanilla-item", str(args.vanilla_item)]
+    cmd += ["--scenario", str(output / "scenario.json"), "--output", str(trace_path)]
+    if args.item_boundary != "fresh":
+        cmd.extend(["--item-boundary", args.item_boundary])
+    try:
+        proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, timeout=args.timeout)
+    except subprocess.TimeoutExpired as exc:
+        decode = lambda v: v.decode(errors="replace") if isinstance(v, bytes) else v or ""
+        proc = subprocess.CompletedProcess(cmd, 124, decode(exc.stdout),
+            decode(exc.stderr) + f"\nNative execution timed out after {args.timeout} seconds")
+    except OSError as exc:
+        proc = subprocess.CompletedProcess(cmd, 2, "", str(exc))
+    (output / "stdout.log").write_text(proc.stdout, encoding="utf-8")
+    (output / "stderr.log").write_text(proc.stderr, encoding="utf-8")
+    receipt = {"schemaVersion": 2, "command": cmd, "exitCode": proc.returncode,
+        "nativeExitCode": proc.returncode, "scenarioSha256": scenario_sha,
+        "sourceScenarioPath": str(scenario), "nativeDllSha256": provenance["dllSha256"],
+        "inputBoundary": args.item_boundary, "timeoutSeconds": args.timeout,
+        **{k: provenance[k] for k in ("sourceSha256", "nativeAssetSha256", "runtimeFilesSha256", "configuredReferences")},
+        "dependencyReceiptScope": "Copied runtime DLL/load manifest hashes; build references are not loaded-byte proof",
+        "review": {"requested": args.review, "status": "notRun"}}
+    if item is None:
+        receipt["source"] = {"kind": "vanilla", "requestedItem": args.vanilla_item}
+    else:
+        receipt.update(itemSha256=item_sha, sourceItemPath=str(item), source={"kind": "generated-json"})
+    errors = []
+    try:
+        if (item is not None and digest(output / "item.json") != item_sha) or digest(output / "scenario.json") != scenario_sha:
+            errors.append("Archived input changed during execution; result is not trustworthy")
+        if build_state(dll) != provenance:
+            errors.append("Native source/build/assets changed during execution; result is not trustworthy")
+    except (OSError,ValueError) as exc:
+        errors.append("Native inputs/build evidence unavailable after execution: " + str(exc))
+    native = None
+    try:
+        native = validate_trace(read_json(trace_path))
+        receipt["traceSha256"] = digest(trace_path)
+        receipt["nativeStatus"] = native["status"]
+        if proc.returncode != NATIVE_EXIT[native["status"]]:
+            errors.append("Native exit code disagrees with terminal trace status")
+        observed = native.get("input")
+        if observed is not None and (observed.get("scenarioSha256") != scenario_sha or
+                                    item is not None and observed.get("sha256") != item_sha):
+            errors.append("Native input hashes disagree with archived input")
+        if native["status"] != "error" and not isinstance(observed, dict):
+            errors.append("Native behavioral result is missing input provenance")
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        errors.append("Missing or invalid terminal native trace: " + str(exc))
+    if errors:
+        receipt["error"] = "; ".join(errors)
+        receipt["exitCode"] = 2
+    # Save a receipt even if PNG/GIF export or native trace validation fails.
+    receipt_path = output / "run.json"
+    receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+    if native is not None and not errors and args.review != "none" and native["snapshots"]:
+        try:
+            if args.review == "native":
+                from native_review import export_native_review
+                if args.png:
+                    raise ValueError("Native PNGs are recorded by scenario.nativeRender; --png selects schematic export")
+                receipt.update(export_native_review(native, trace_path, output / "review", args.gif, args.gif_stride))
+            else:
+                receipt.update(render(trace_path, output / "review", args.png, args.gif, args.camera))
+            receipt["review"]["status"] = "exported"
+        except (ValueError, OSError, RuntimeError, ImportError, KeyError, TypeError) as exc:
+            receipt["review"]["status"] = "error"
+            receipt["reviewErrors"] = [str(exc)]
+            receipt["exitCode"] = 2
+    receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+    if native is not None:
+        try:
+            data = report(trace_path)
+            (output / "agent-report.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+            (output / "agent-report.md").write_text(markdown(data), encoding="utf-8")
+            receipt["agentReport"] = str(output / "agent-report.json")
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            receipt["error"] = "; ".join(filter(None, [receipt.get("error"), "Agent evidence validation failed: " + str(exc)]))
+            receipt["exitCode"] = 2
+    receipt_path.write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+    return receipt
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     sub=parser.add_subparsers(dest="command",required=True)
     sub.add_parser("doctor");sub.add_parser("build");sub.add_parser("test",help="Run offline utility tests; not native gameplay verification")
+    sub.add_parser("catalog",help="Read-only inventory of supplied scenarios, actions and assertions")
+    r=sub.add_parser("fixtures",help="Write synthetic fixtures through the native owner");r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true")
+    r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
+    r=sub.add_parser("compare",help="Locate first exact recorded-state divergence; no execution");r.add_argument("baseline",type=Path);r.add_argument("candidate",type=Path)
+    r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")
     r=sub.add_parser("inspect");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int);r.add_argument("--events",action="store_true");r.add_argument("--kind");r.add_argument("--summary",action="store_true",help="Compact read-only resource/hit/event aggregates")
     r=sub.add_parser("native-review");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--gif",action="store_true");r.add_argument("--gif-stride",type=int,default=1,help="Sample every N original PNGs only in optional GIF; HTML retains every native tick")
     r=sub.add_parser("timeline");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True)
     r=sub.add_parser("frame");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int,required=True);r.add_argument("--out",type=Path,required=True);r.add_argument("--camera",choices=("action","scene"),default="action")
     r=sub.add_parser("render");r.add_argument("trace",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--png",action="store_true");r.add_argument("--gif",action="store_true");r.add_argument("--camera",choices=("action","scene"),default="action")
     r=sub.add_parser("run");sources=r.add_mutually_exclusive_group(required=True);sources.add_argument("--item",type=Path);sources.add_argument("--vanilla-item",help="Exact native ItemID name or positive integer; backend admits verified controls only");r.add_argument("--scenario",type=Path,required=True);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--item-boundary",choices=("fresh","local_cache"),default="fresh",help="Use the actual fresh-input or saved-cache production reader; never rewrite source JSON");r.add_argument("--png",action="store_true");r.add_argument("--gif",action="store_true");r.add_argument("--camera",choices=("action","scene"),default="action")
+    r.add_argument("--review",choices=("schematic","native","none"),default="schematic",help="Review export only; none still records native frames if requested by scenario")
+    r.add_argument("--gif-stride",type=int,default=1);r.add_argument("--timeout",type=int,default=180)
     args=parser.parse_args()
     try:
         if args.command=="test":
@@ -434,6 +599,30 @@ def main():
         if args.command=="doctor":
             state=doctor();print(json.dumps(state,indent=2));return 0 if state["ready"] else 2
         if args.command=="build":build();return 0
+        if args.command=="fixtures":print(json.dumps(fixtures(args.out,args.no_build),indent=2));return 0
+        if args.command=="catalog":
+            rows=[]
+            for path in sorted((HERE/"scenarios").glob("*.json")):
+                scene=read_json(path)
+                rows.append({"path":str(path),"playerUpdate":scene.get("playerUpdate","item_check"),"ticks":scene["ticks"],
+                    "actions":sorted({a["kind"] for a in scene.get("actions",[])}),
+                    "assertions":scene["assertions"],"nativeRender":scene.get("nativeRender"),
+                    "note":"Choose expectations for your item explicitly; this template is not universally applicable"})
+            print(json.dumps({"scenarios":rows,"supportMatrix":str(HERE/"SUPPORT_MATRIX.md")},indent=2));return 0
+        if args.command=="report":
+            from agent_evidence import report,export_report
+            if args.contact_sheet and args.out is None:raise ValueError("--contact-sheet requires --out")
+            data=export_report(args.run,args.out,args.contact_sheet) if args.out else report(args.run)
+            print(json.dumps(data,indent=2,allow_nan=False));return 2 if data["integrity"]["status"]=="invalid" else 0
+        if args.command=="compare":
+            from agent_evidence import compare
+            data=compare(args.baseline,args.candidate);print(json.dumps(data,indent=2,allow_nan=False))
+            if any(a["status"]=="invalid" for a in data["integrity"].values()):return 2
+            return 0 if data["equivalent"] and data["sameInputs"] else 1
+        if args.command=="suite":
+            from campaign import plan_suite,run_suite
+            data=plan_suite(args.manifest) if args.plan else run_suite(args.manifest,args.out,args.no_build)
+            print(json.dumps(data,indent=2,allow_nan=False));return 0 if args.plan or data["passed"] else 1
         if args.command=="inspect":
             native=validate_trace(read_json(args.trace))
             selected=[s for s in native["snapshots"] if args.tick is None or s["tick"]==args.tick]
@@ -476,59 +665,10 @@ def main():
             else:args.out.write_text(svg,encoding="utf-8")
             print(json.dumps({"tick":args.tick,"frameIndex":index,"camera":args.camera,"output":str(args.out),"sourceSha256":digest(args.trace)}));return 0
         if args.command=="render":print(json.dumps(render(args.trace,args.out,args.png,args.gif,args.camera),indent=2));return 0
-        state=doctor()
-        if not state["ready"]:raise RuntimeError("Native prerequisites unavailable: "+json.dumps(state))
-        if args.vanilla_item is not None and args.vanilla_item.lstrip("-").isdigit() and int(args.vanilla_item)<=0:raise ValueError("Vanilla ItemID must be positive")
-        if args.item_boundary!="fresh" and args.item is None:raise ValueError("Saved-cache boundary requires --item")
-        if args.item is not None:args.item=args.item.resolve();read_json(args.item)
-        args.scenario=args.scenario.resolve();args.out=args.out.resolve()
-        read_json(args.scenario)
-        if args.out.exists() and any(args.out.iterdir()):
-            raise ValueError("Output directory is not empty; use a new run directory to preserve evidence")
-        args.out.mkdir(parents=True,exist_ok=True)
-        if not args.no_build:build()
-        dll=HERE/"bin/Release/net8.0/ItemTestWorkbench.dll"
-        if not dll.is_file():raise RuntimeError("Native executable absent; run build first")
-        provenance_path=dll.parent/"build-provenance.json"
-        if not provenance_path.is_file():raise RuntimeError("Build provenance missing; run workbench build (not raw dotnet build)")
-        provenance=read_json(provenance_path)
-        if provenance!=build_state(dll):
-            raise RuntimeError("Native build is stale or modified; rebuild before executing")
-        source_item,source_scenario=args.item,args.scenario
-        if args.item is not None:
-            shutil.copyfile(args.item,args.out/"item.json");args.item=args.out/"item.json";read_json(args.item)
-        shutil.copyfile(args.scenario,args.out/"scenario.json");args.scenario=args.out/"scenario.json"
-        read_json(args.scenario)
-        item_sha=digest(args.item) if args.item is not None else None
-        scenario_sha=digest(args.scenario)
-        trace=args.out/"native.json"
-        cmd=[os.environ.get("DOTNET","dotnet"),str(dll)]+(["--item",str(args.item)] if args.item is not None else ["--vanilla-item",str(args.vanilla_item)])+["--scenario",str(args.scenario),"--output",str(trace)]
-        if args.item_boundary!="fresh":cmd.extend(["--item-boundary",args.item_boundary])
-        try:
-            proc=subprocess.run(cmd,cwd=ROOT,capture_output=True,text=True,timeout=180)
-        except subprocess.TimeoutExpired as exc:
-            decode=lambda value: value.decode(errors="replace") if isinstance(value,bytes) else value or ""
-            proc=subprocess.CompletedProcess(cmd,124,decode(exc.stdout),decode(exc.stderr)+"\nNative execution timed out after 180 seconds")
-        (args.out/"stdout.log").write_text(proc.stdout);(args.out/"stderr.log").write_text(proc.stderr)
-        receipt={"command":cmd,"exitCode":proc.returncode,"itemSha256":item_sha,"scenarioSha256":scenario_sha,"sourceItemPath":str(source_item),"sourceScenarioPath":str(source_scenario),"nativeDllSha256":digest(dll),"sourceSha256":provenance["sourceSha256"],"nativeAssetSha256":provenance["nativeAssetSha256"],"runtimeFilesSha256":provenance["runtimeFilesSha256"],"configuredReferences":provenance["configuredReferences"],"dependencyReceiptScope":"runtimeFilesSha256 hashes actual copied runtime DLLs and load manifests; configuredReferences are build inputs, not proof of loaded bytes"}
-        receipt["inputBoundary"]=args.item_boundary
-        if args.item is None:
-            del receipt["itemSha256"];del receipt["sourceItemPath"]
-            receipt["source"]={"kind":"vanilla","requestedItem":args.vanilla_item}
-        else:receipt["source"]={"kind":"generated-json"}
-        if (args.item is not None and digest(args.item)!=item_sha) or digest(args.scenario)!=scenario_sha:
-            receipt["error"]="Archived input changed during execution; result is not trustworthy"
-            receipt["exitCode"]=2
-        if build_state(dll)!=provenance:
-            receipt["error"]="Native source/build/assets changed during execution; result is not trustworthy"
-            receipt["exitCode"]=2
-        (args.out/"run.json").write_text(json.dumps(receipt,indent=2))
-        if trace.is_file():
-            native=read_json(trace)
-            if native.get("snapshots"):receipt.update(render(trace,args.out/"review",args.png,args.gif,args.camera))
-        print(json.dumps(receipt,indent=2))
+        receipt=execute_run(args)
+        print(json.dumps(receipt,indent=2,allow_nan=False))
         return receipt["exitCode"]
-    except (ValueError,OSError,RuntimeError,subprocess.SubprocessError,KeyError,TypeError) as error:
+    except (ValueError,OSError,RuntimeError,ImportError,subprocess.SubprocessError,KeyError,TypeError) as error:
         print(json.dumps({"status":"error","error":str(error)}),file=sys.stderr);return 2
 
 if __name__=="__main__":sys.exit(main())
