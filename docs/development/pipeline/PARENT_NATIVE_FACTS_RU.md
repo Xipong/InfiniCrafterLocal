@@ -5,7 +5,7 @@
 `generatedParent` по-прежнему передаёт исходные механические графы и значения;
 этот путь не классифицирует их и не перебалансирует.
 
-## Три разных источника
+## Источники фактов и отдельный словарь выбора
 
 - **Snapshot:** `GeneratorClient.ParentFacts.cs` читает выбранные поля native Item
   и нового Projectile после `SetDefaults`. `lifeRegen` — сырой вклад Item;
@@ -33,6 +33,85 @@
   При отсутствии собственного `shoot` weapon
   effective projectile теперь остаётся неизвестным, а не выбирается из инвентаря.
   Это исправление информации о родителе, не изменение игрового выстрела.
+
+## Source-derived ammo configurations
+
+`native_ammo_sources.md` в `contracts/reports/` описывает полный source contract;
+производитель — `GeneratorClient.AmmoFacts.cs`, offline owner —
+`tools/generate/generate_native_ammo_facts.py`. Правила извлекаются из native
+`PickAmmo` / `ItemCheck_Shoot`, а не из item-name/family таблицы. Exact SHA256
+метода и MVID обязательны; неизвестные method/dispatcher certificates не
+разрешают заявлять прежний call order.
+
+`projectileSemanticsReference` сохраняет source stages, точные input-projectile
+условия, source spawn sites и неразобранные gates. `candidateProjectileBindings`
+связывает наблюдаемый/representative ammo input с этими правилами. Произвольный
+hook, неизвестная ветка или неполный roster остаются unknown, не «обычной стрелой».
+Поддержанные ModItem/GlobalItem override shapes читаются из metadata без
+исполнения; ammo-owned `PickAmmo` отдельно от weapon `ModifyShootStats`/`Shoot`.
+
+Регрессии закреплённого binary: Pulse Bow заменяет projectile любого arrow
+input на 357; Hellwing меняет только current projectile 1 на 485, сохраняя
+специальные inputs отдельно; Daedalus сохраняет projectile identity, но имеет
+собственный aerial delivery с constructor Y `MountedCenter−600` и консервативным
+условным spawn-count range 2–4. Это не полный aim/spread, итоговая скорость,
+вероятности, cadence, guaranteed hits или обещание неизменённых mod hooks.
+
+При доказанной замене входной projectile profile исключается, отдельно
+передаётся source-output reference. **Ammo-item damage, speed и knockback
+сохраняются независимо от замены projectile.** Это вклады, а не универсальная
+формула сложения или итоговый DPS. Неизвестный transfer поведения не удаляет
+известный вклад ammo damage. Specials не получают механики базовой стрелы
+по умолчанию.
+
+Для будущего Author конфигурации сравниваются раздельно, без автоматического
+среднего или выбора «сильнейшей» стрелы. Inventory observation показывает
+фактические inputs, не весь доступный progression; fallback examples не
+доказывают владение или доступность. Source-подтверждённая условная способность
+оружия остаётся отдельным ориентиром даже без её ammo в текущем inventory.
+Нет нового progression solver, recommended damage corridor или скрытого
+перебаланса сохранённого ребёнка при смене патронов.
+
+## Неопределённость не запрещает новый дизайн
+
+Заявление «родитель накладывает X» требует подходящего source-наблюдения с
+его условиями. Явно выбранная **новая** способность ребёнка не требует, чтобы
+родитель ею обладал. Отсутствие source certificate не означает отсутствие
+механики и не запрещает Author составить её из доступных primitives. Код
+не дописывает эффект за Author и не превращает необязательный self-check в gate.
+
+Для `buffId` больше нет требования «только скопировать из parent facts».
+`GeneratorClient.ReferenceCatalog.cs` отдельно читает текущий `BuffID.Search`:
+vanilla ID связывается с `Terraria/<registered name>`, mod ID — с уже
+зарегистрированным `ModBuff.FullName`. `ModBuff.SetupContent` заполняет этот
+же native registry; при Prepare не вызываются `Update`, `SetupContent`,
+metadata overrides или другие модовые hooks. Это **идентичности**, не
+доказательство поведения, пригодности статуса для NPC или отсутствия иммунитета.
+
+Опциональный `loadedBuffIdentitiesRaw` находится только в root parent wire,
+не в `runtimeFacts`/fingerprint. Python передаёт один общий
+`runtimeCapabilityContract.statusIdentityChoices` в реальные Author и frozen
+Repair requests, не повторяя весь словарь в механических карточках A/B.
+Лимит capture — 2048 записей в пределах уже разрешённого `buffId` 1…65535;
+ограниченный/неполный registry явно имеет `complete=false`. Отсутствующее
+наблюдение не заменяется выдуманным каталогом. Конфликтующие пары ID/fullName
+не разрешаются выбором одного родителя; конфликтующие записи исключаются,
+остальные подтверждённые identities остаются доступны как неполный словарь.
+Имена сохраняются буквально, числовые строки/bool не становятся buff-ID.
+
+Author может выбрать точный supplied ID, событие, получателя и длительность
+для нового замысла без утверждения о наследовании. В частности, подтверждённый
+Poisoned ID и шанс source-клинка остаются source facts; отдельный выбор другого
+шанса/длительности у ребёнка — authored решение, а не «исправленный» факт о
+родителе. Каталог identities сам по себе не задаёт эти значения и не обещает,
+что неизвестный mod buff имеет угаданный по имени эффект.
+
+Практическая ценность уточняется в существующем Author contract: основной
+режим должен иметь понятную пользу в обычной ситуации, вторичный — достижимую
+пользу либо осознанную нишу; повторяющиеся затраты и реальный риск оцениваются
+вместе с наградой. Это guidance, не числовой balance corridor, обязательная
+синергия/гиммик или повод Repair менять уже валидные механики. Простые предметы,
+осмысленные sidegrades и сильные заслуженные выгоды остаются допустимыми.
 
 ## Что именно сертифицируется
 

@@ -50,6 +50,37 @@ Author выдаёт один JSON: optional sketch `concept`, executable `runtim
 
 Construction facts живут у своих owners, а не в повторных глобальных checklist. Порядок ответа задают system и `requiredJsonShape`; отдельные повторные `gameplayAuthoringStages`, `principle`/`reportEvidenceRule`/`literalSynthesisRule` и `forbidden` не передаются. Полные catalog cards, shape examples и optional advisory guidance доступны во всех response modes, включая `json_object`/off: provider schema их не заменяет.
 
+### Полезная композиция и самостоятельный выбор статусов
+
+`priorityHeader` получает `AUTHOR_DESIGN_QUALITY_RULE` из prose owner: ценность основного
+действия в обычной ситуации (в бою — в том числе против одиночной цели), достижимая
+и полезная secondary/event-награда, взаимодополняющие действия и реально действующий
+обмен риска/ресурса на пользу. Число capabilities само по себе не делает результат
+интересным. Узкие применения, простые результаты, сильные оправданные преимущества
+и намеренные sidegrades допустимы: нет требования всегда усиливать предмет,
+добавлять twist, наследовать по эффекту каждого родителя или писать новый отчёт.
+Это ориентиры Author в том же единственном ответе, не кодовые правила баланса,
+admission gates или дополнительная critic-стадия.
+
+`runtimeCapabilityContract.statusIdentityChoices` — один общий read-only словарь
+загруженных buff identities (`source/complete/entries`, где entry содержит
+`id/fullName`), а **не** перечень эффектов, доказанно нанесённых родителями.
+Author вправе явно выбрать оттуда статус для нового предмета даже при неизвестной
+механике родителей; выбор не удостоверяет наследование. Карточки обоих `buffId`
+разрешают supplied identity либо exact parent ID, без старого copy-only ограничения.
+Подсказки различают NPC damage-over-time, давление на defense и воздействие на AI,
+не обещая обхода native immunity или применимости player-only debuff к NPC.
+Recipient, event producer, trigger и duration всё равно выбираются явно.
+
+Числовой `buffId`, bounds, schema и compiled wire не меняются. Старый запрос без
+словаря не получает вымышленные ID; неполный словарь явно отмечен `complete=false`.
+Repair видит тот же shared словарь без второго полного capability catalog, но
+новая видимость не даёт права менять уже валидный `buffId`, event или соседний call.
+Synthetic offline Author → parse → compile и hostile leaf-local Repair проверены
+в обоих `json_schema`/`json_object`, включая poison без parent mechanic proof.
+Это проверка исполнимости и model-facing контекста, не измерение качества live-model
+генерации и не изменение сохранённых предметов.
+
 Call/binding spelling и точные fixed-literal omissions объясняются один раз в `fieldGuide.rowShapes` (`RUNTIME_ROW_SHAPE_RULE`); в Repair та же инструкция передаётся в `rules`. `bindingTarget` сохраняет targeting/contact semantics, `stackCost` — расход/escrow и optional chance, без повторного описания формы. Source-motion guidance живёт в `fieldGuide.projectileMotion`, отдельный header сохраняет предпочтение source tempo. У `present_placed_item_sprite` summary/params/requires владеют PNG, transforms и exact tile reference; overlay добавляет только certified footprint/refusal. Актуальный полный набор cards и executable grammar берётся из canonical registry; число capabilities — в generated inventory.
 
 | Место в packet | Правило построения |

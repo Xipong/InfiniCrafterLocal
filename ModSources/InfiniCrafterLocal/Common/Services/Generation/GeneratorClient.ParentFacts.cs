@@ -108,6 +108,11 @@ public sealed partial class GeneratorClient
         // fact adds spriteReferenceRaw. No global null omission.
         if (spriteReference is not null)
             snapshot["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(spriteReference, WireJsonOptions);
+        // Shared design vocabulary, deliberately outside native mechanics and
+        // fingerprint. Python factors the two request observations once for Author.
+        JsonObject? buffIdentities = CaptureLoadedBuffIdentities();
+        if (buffIdentities is not null)
+            snapshot["loadedBuffIdentitiesRaw"] = buffIdentities;
         return snapshot;
     }
 
@@ -472,10 +477,19 @@ public sealed partial class GeneratorClient
 
         var inventory = FindPlayerAmmoCandidates(item.useAmmo, player, 3, out string inventoryStatus);
         var fallback = FindRepresentativeAmmoCandidates(item.useAmmo, 3);
+        var semantics = CaptureAmmoProjectileSemantics(item);
+        var bindings = (inventory ?? new List<AmmoCandidate>()).Concat(fallback)
+            .ToDictionary(candidate => candidate, candidate => BindAmmoCandidateProjectile(item, candidate, semantics));
+        bool KeepInputProfile(AmmoCandidate candidate) => bindings[candidate]["includeInputProjectileProfile"]!.GetValue<bool>();
+        var replacementTypes = bindings.Values.Where(binding => binding["includeReplacementProjectileProfile"]!.GetValue<bool>())
+            .Select(binding => binding["sourceRuleOutputProjectileId"]!.GetValue<int>()).Distinct().Take(3).ToArray();
         return new
         {
             mode = "weapon_uses_ammo",
             ammoId = item.useAmmo,
+            projectileSemanticsReference = semantics,
+            candidateProjectileBindings = bindings.Values.ToArray(),
+            nativeReplacementProjectileRaw = replacementTypes.Select(type => SourceReplacementProjectileRaw(type, item)).ToArray(),
             playerInventoryObservation = new
             {
                 source = "Player.inventory",
@@ -490,9 +504,9 @@ public sealed partial class GeneratorClient
             // Null means the inventory was not observed. Only a completed scan
             // can publish [] as an observed lack of matching candidates.
             playerInventoryAmmoRaw = inventory?.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
-            playerInventoryProjectileRaw = inventory?.Where(c => c.Item.shoot > ProjectileID.None).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray(),
+            playerInventoryProjectileRaw = inventory?.Where(c => c.Item.shoot > ProjectileID.None && KeepInputProfile(c)).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray(),
             fallbackAmmoRaw = fallback.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
-            fallbackProjectileRaw = fallback.Where(c => c.Item.shoot > ProjectileID.None).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray()
+            fallbackProjectileRaw = fallback.Where(c => c.Item.shoot > ProjectileID.None && KeepInputProfile(c)).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray()
         };
     }
 
@@ -587,6 +601,7 @@ public sealed partial class GeneratorClient
             internalName = InternalName(ammo),
             sourceMod = SourceModName(ammo),
             fullName = SourceModName(ammo) + "/" + InternalName(ammo),
+            pickAmmoHookReference = CaptureAmmoInputHookReference(ammo),
             damage = ammo.damage,
             damageClass = DamageClassName(ammo),
             ammo = ammo.ammo,

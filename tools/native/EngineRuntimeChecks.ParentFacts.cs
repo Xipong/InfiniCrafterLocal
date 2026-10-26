@@ -83,7 +83,7 @@ internal static partial class EngineRuntimeChecks
             Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,channel,"
                 + "consumable,craftInput,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
                 + "effectiveProjectileRaw,fingerprint,fishingPole,fullName,generatedData,hammerPower,headSlot,healLife,healMana,"
-                + "id,internalName,knockback,legSlot,lifeRegen,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"
+                + "id,internalName,knockback,legSlot,lifeRegen,loadedBuffIdentitiesRaw,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"
                 + "noUseGraphic,notAmmo,originalPrefix,pickPower,placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,"
                 + "reuseDelay,runtimeFacts,shoot,shootProjectileFullName,shootSpeed,sourceMod,stack,tags,tooltipLines,"
                 + "tooltipSource,useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value",

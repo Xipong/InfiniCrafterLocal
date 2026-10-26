@@ -20,20 +20,22 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
     DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS, ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TOKENS,
 )
 from infini_local.pipelines.author_item_contract import (
+    AUTHOR_DESIGN_QUALITY_RULE,
     RUNTIME_ROW_SHAPE_RULE,
     author_item_prompt_shape_card,
     primary_entity_llm_invariant,
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
+from infini_local.pipelines.native_reference_context import loaded_status_identity_choices
 from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.core.item_identity_tools import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
 
-# Engineering character guard, not a model token limit: exactly 225000 Unicode
-# characters in the complete compact JSON dossier. Preserve both source tooltips
-# and accepted generated graphs; never clip them to fit.
-PLANNER_PROMPT_LIMIT_CHARS = 225_000
+# Engineering character guard, not a model token limit: complete compact JSON
+# dossiers include loaded status identities and source-derived ammo variants.
+# Preserve literal tooltips, accepted graphs and capabilities; never clip to fit.
+PLANNER_PROMPT_LIMIT_CHARS = 400_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
@@ -84,6 +86,7 @@ def planner_priority_header_for_llm() -> list[str]:
     return [
         "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; author every mechanic explicitly in runtimeProgram.",
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
+        AUTHOR_DESIGN_QUALITY_RULE,
         "Source provenance constrains factual claims about the parents, not the mechanics you may invent. Create new purposeful mechanics from catalog primitives inspired by both parent identities; neither parent needs to have performed them. Do not present invented effects as observed parent abilities. No forced twist or unrelated gimmick is required.",
         "Use source tempo when available and useful to the composition; make deviations intentional.",
         "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. attach_projectile.reachCurve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
@@ -392,10 +395,12 @@ def engine_runtime_capability_contract_for_llm(
     b: dict[str, Any],
     envelope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    del a, b, envelope
+    del envelope
+    choices = loaded_status_identity_choices(a, b)
     return {
         "catalog": sharp_engine_fn_catalog_for_llm(include_source_units=False),
         "technicalNotes": concise_terraria_tick_guide_for_llm(),
+        **({"statusIdentityChoices": choices} if choices else {}),
     }
 
 

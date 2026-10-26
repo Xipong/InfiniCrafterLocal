@@ -4269,7 +4269,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "buffId": {
-                    "description": "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess",
+                    "description": "Exact supplied BuffID/ModContent.BuffType: select from runtimeCapabilityContract.statusIdentityChoices or an explicit parent buffId; never guess modded IDs. Identity choices are not evidence of parent behavior and need no inherited ability. For NPC targets, Poisoned/OnFire cause damage over time, Ichor lowers defense, and Confused affects susceptible AI; immunity and native target behavior still apply. Player-only debuffs need not affect NPCs. Choose the recipient, supported event and duration explicitly; identity alone supplies none.",
                     "maximum": 65535,
                     "minimum": 1,
                     "type": "integer",
@@ -9463,7 +9463,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "buffId": {
-                    "description": "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess",
+                    "description": "Exact supplied BuffID/ModContent.BuffType: select from runtimeCapabilityContract.statusIdentityChoices or an explicit parent buffId; never guess modded IDs. Identity choices are not evidence of parent behavior and need no inherited ability. For NPC targets, Poisoned/OnFire cause damage over time, Ichor lowers defense, and Confused affects susceptible AI; immunity and native target behavior still apply. Player-only debuffs need not affect NPCs. Choose the recipient, supported event and duration explicitly; identity alone supplies none.",
                     "maximum": 65535,
                     "minimum": 1,
                     "type": "integer",

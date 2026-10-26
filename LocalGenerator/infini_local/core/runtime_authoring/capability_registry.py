@@ -29,6 +29,15 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 )
 
 
+_BUFF_ID_SELECTION_RULE = (
+    "Exact supplied BuffID/ModContent.BuffType: select from runtimeCapabilityContract.statusIdentityChoices "
+    "or an explicit parent buffId; never guess modded IDs. Identity choices are not evidence of parent "
+    "behavior and need no inherited ability. For NPC targets, Poisoned/OnFire cause damage over time, "
+    "Ichor lowers defense, and Confused affects susceptible AI; immunity and native target behavior "
+    "still apply. Player-only debuffs need not affect NPCs. Choose the recipient, supported event "
+    "and duration explicitly; identity alone supplies none."
+)
+
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
 RUNTIME_PROGRAM_SCHEMA: Final[str] = "infini.runtime-program.authoring.v6"
 RUNTIME_WIRE_SCHEMA: Final[str] = "infini.runtime-program.wire.v3"
@@ -2075,7 +2084,7 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "buffId": _p("integer", "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess", minimum=1, maximum=65535, semantic_type="loaded_buff_id", wire_name="buffCode"),
+            "buffId": _p("integer", _BUFF_ID_SELECTION_RULE, minimum=1, maximum=65535, semantic_type="loaded_buff_id", wire_name="buffCode"),
             "durationSeconds": _seconds(_p("integer", "Buff duration", minimum=1, maximum=21600, units="ticks", wire_name="buffTime"), "durationTicks"),
         },
         component_slot="use_buff",
@@ -2958,7 +2967,7 @@ _CAPS.extend([
         ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
         {
             "when": _event_when_param(("on_hit", "on_crit")),
-            "buffId": _p("integer", "Exact loaded BuffID/ModContent.BuffType; copy from parent facts, do not guess", minimum=1, maximum=65535, semantic_type="loaded_buff_id"),
+            "buffId": _p("integer", _BUFF_ID_SELECTION_RULE, minimum=1, maximum=65535, semantic_type="loaded_buff_id"),
             "durationSeconds": _seconds(_p("integer", "Status duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
         },
         component_slot="event_action",

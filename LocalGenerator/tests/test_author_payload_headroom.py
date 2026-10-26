@@ -212,6 +212,29 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
     assert request_dossier(request) == json.loads(user) == packet
 
 
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_bounded_loaded_status_vocabulary_and_literal_sources_fit_without_clipping(monkeypatch, mode):
+    """Source-only stress fixture: the native capture's 2048-entry bound, not a live registry."""
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    entries = [{"id": n, "fullName": f"ContextFixture/RegisteredStatus{n}"} for n in range(1, 2049)]
+    source = {
+        "name": "Bounded native reference context",
+        "tooltipLines": ["literal source " + "Ж" * 1000] * 12,
+        "loadedBuffIdentitiesRaw": {"source": "native_loaded_buff_registry", "complete": False, "entries": entries},
+    }
+    before = copy.deepcopy(source)
+    request, text, _ = build_initial_author_request(source, source, "bounded-identities", model_name="offline")
+    packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
+    choices = packet["runtimeCapabilityContract"]["statusIdentityChoices"]
+    assert choices["entries"] == entries and choices["complete"] is False
+    for side in ("A", "B"):
+        assert packet["parents"][side]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
+    assert text.count("ContextFixture/RegisteredStatus2048") == 1
+    assert len(packet["runtimeCapabilityContract"]["catalog"]["capabilities"]) == len(compact_capability_catalog())
+    assert len(text) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    assert source == before
+
+
 @pytest.mark.parametrize("extra_room", [None, 31], ids=["declared-limit", "changed-limit"])
 def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode_character(monkeypatch, extra_room):
     from infini_local.pipelines import llm_authoring_prompt as prompt
