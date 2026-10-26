@@ -125,11 +125,17 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     out = _select_raw_keys(raw, LLM_ITEM_RAW_KEYS)
     # Literal source text/provenance is one observation: preserve line order,
     # whitespace, empty lines and source-bound refusal without compacting it.
-    for key in ("tooltipLines", "tooltipSource"):
+    for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference",
+                "nativeEquipmentReference", "nativeEnvironmentReference"):
         value = item_field(item, key, None)
+        if value is None and key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
+            runtime = dict_get_ci(item, "runtimeFacts", {})
+            value = dict_get_ci(runtime, key, None) if isinstance(runtime, dict) else None
         if value is not None:
             out[key] = copy.deepcopy(value)
     if generated_data_of(item):
+        for key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
+            out.pop(key, None)
         for key in ("createTile", "createWall", "placeStyle"):
             out.pop(key, None)
         out.update(_generated_placement_fields(item))
@@ -174,6 +180,8 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
     # Item.buffType is a self-use buff, not this projectile's NPC-hit status.
     if isinstance(proj.get("onHitStatusReference"), dict):
         out["onHitStatusReference"] = copy.deepcopy(proj["onHitStatusReference"])
+    if isinstance(proj.get("collisionReference"), dict):
+        out["collisionReference"] = copy.deepcopy(proj["collisionReference"])
     if LLM_INCLUDE_AISTYLE_RAW and _compact_keep(proj.get("aiStyle")):
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
     return out
@@ -192,7 +200,19 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
     for key in ("projectileRaw", "weaponShootFieldProjectileRaw"):
         if isinstance(ap.get(key), dict):
             out[key] = compact_projectile_profile(ap[key])
-    return {k: v for k, v in out.items() if _compact_keep(v)}
+    # These are already bounded observations from the native producer, not a
+    # selected/best ammo or a replacement for the weapon's own shoot identity.
+    # Keep order and multiplicity, and keep an observed empty inventory distinct
+    # from an unavailable observation. Each entry retains source and slot.
+    for key in ("playerInventoryAmmoRaw", "fallbackAmmoRaw"):
+        if isinstance(ap.get(key), list):
+            out[key] = [_select_raw_keys(value, LLM_AMMO_ITEM_KEYS)
+                        for value in ap[key] if isinstance(value, dict)]
+    for key in ("playerInventoryProjectileRaw", "fallbackProjectileRaw"):
+        if isinstance(ap.get(key), list):
+            out[key] = [compact_projectile_profile(value)
+                        for value in ap[key] if isinstance(value, dict)]
+    return out
 
 def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     """Compact raw Terraria item role flags for planner context.
@@ -230,6 +250,8 @@ def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
         if n > 0 or k in {"createTile", "createWall", "placeStyle"}:
             out[k] = n
     if generated_data_of(item):
+        for key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
+            out.pop(key, None)
         for key in ("createTile", "createWall", "placeStyle"):
             out.pop(key, None)
         out.update(_generated_placement_fields(item))

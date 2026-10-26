@@ -93,9 +93,92 @@ def test_generated_catalog_preserves_all_reported_effects_and_both_certificates(
     assert generator.OUTPUT.read_text() == generator.render(report["sources"])
     for source in report["sources"]:
         records = source["records"]
-        assert source["coveredProjectileEffects"] == sum(len(r["effects"]) for r in records)
-        assert source["coveredProjectileTypes"] == len(records)
-        assert source["coveredProjectileTypes"] < source["analyzedProjectileTypes"]
+        kind = "Item" if source.get("sourceKind") == "contact" else "Projectile"
+        assert source["covered" + kind + "Effects"] == sum(len(r["effects"]) for r in records)
+        assert source["covered" + kind + "Types"] == len(records)
+        assert source["covered" + kind + "Types"] < source["analyzed" + kind + "Types"]
         assert source["uncoveredMethodAddBuffOffsets"]  # honest partial coverage
-        pygmy = next(r for r in records if r["projectileName"] == "PygmySpear")
-        assert pygmy["effects"][0]["durationTicksStep"] == 60
+        if kind == "Projectile":
+            pygmy = next(r for r in records if r["projectileName"] == "PygmySpear")
+            assert pygmy["effects"][0]["durationTicksStep"] == 60
+        else:
+            grass = next(r for r in records if r["itemId"] == 190)
+            assert grass["randomOutcomes"][0]["alternatives"][0]["probabilityDenominator"] == 4
+
+
+def random_choice(high):
+    return [("call", ("Terraria.Main.get_rand", 0, False, True)), ("const", high),
+            ("call", ("Terraria.Utilities.UnifiedRandom.Next", 1, True, True))]
+
+
+def test_bounded_random_proc_preserves_empty_alternative_and_exact_probability():
+    result = analysis.analyze(program(random_choice(4) + [("brtrue", 11)] + effect([("const", 420)]) + [("ret",)]), 1)
+    assert result["effects"] == []
+    choice = result["randomOutcomes"][0]
+    assert choice["sourceRandomCallIlOffset"] == 2
+    assert [(a["randomValues"], a["probabilityNumerator"], a["probabilityDenominator"], len(a["effects"]))
+            for a in choice["alternatives"]] == [([0], 1, 4, 1), ([1, 2, 3], 3, 4, 0)]
+    assert choice["alternatives"][0]["effects"][0]["durationTicksMin"] == 420
+
+
+def test_discrete_random_durations_are_mutually_exclusive_not_two_simultaneous_buffs():
+    # One random call chooses either 600 or 300 ticks, never both requests.
+    ops = random_choice(3) + [("brtrue", 12)] + effect() + [("br", 19)] + effect([("const", 300)]) + [("ret",)]
+    result = analysis.analyze(program(ops), 1)
+    assert result["effects"] == []
+    alternatives = result["randomOutcomes"][0]["alternatives"]
+    assert [(a["probabilityNumerator"], a["probabilityDenominator"], a["effects"][0]["durationTicksMin"])
+            for a in alternatives] == [(1, 3, 600), (2, 3, 300)]
+
+
+def test_random_choice_does_not_erase_unknown_world_condition_or_expand_large_ranges():
+    ops = random_choice(4) + [("brtrue", 13), ("ldsfld", "Terraria.Main.hardMode"), ("brfalse", 13)] + effect() + [("ret",)]
+    assert analysis.analyze(program(ops), 1)["randomOutcomes"] == []
+    assert analysis.analyze(program(random_choice(100) + [("brtrue", 11)] + effect() + [("ret",)]), 1)["randomOutcomes"] == []
+
+
+def labeled(ops):
+    labels, clean = {}, []
+    for op in ops:
+        if op[0] == "label":
+            labels[op[1]] = len(clean)
+        else:
+            clean.append(op)
+    return program([(op[0], labels.get(op[1], op[1])) if len(op) == 2 and isinstance(op[1], str) and op[1] in labels else op for op in clean])
+
+
+def test_request_depending_on_two_random_draws_is_not_claimed_as_single_draw():
+    ops = random_choice(4) + [("brtrue", "done")] + random_choice(3) + [("brtrue", "done")] + effect() + [("label", "done"), ("ret",)]
+    result = analysis.analyze(labeled(ops), 1)
+    assert result["effects"] == [] and result["randomOutcomes"] == []
+
+
+def test_irrelevant_second_random_draw_does_not_hide_proved_first_draw():
+    ops = random_choice(4) + [("brtrue", "other")] + effect() + [("label", "other")] + random_choice(3) + [("brtrue", "done"), ("ret",), ("label", "done"), ("ret",)]
+    result = analysis.analyze(labeled(ops), 1)
+    assert len(result["randomOutcomes"]) == 1
+    assert [a["probabilityNumerator"] for a in result["randomOutcomes"][0]["alternatives"]] == [1, 3]
+
+
+def test_reused_random_local_keeps_correlated_requests_in_one_alternative():
+    ops = random_choice(3) + [("stloc", 0), ("ldloc", 0), ("brtrue", "second")] + effect() + [
+        ("label", "second"), ("ldloc", 0), ("brtrue", "done")] + effect([("const", 120)]) + [("label", "done"), ("ret",)]
+    result = analysis.analyze(labeled(ops), 1)
+    assert len(result["randomOutcomes"]) == 1
+    alternatives = result["randomOutcomes"][0]["alternatives"]
+    assert [(a["randomValues"], len(a["effects"])) for a in alternatives] == [([0], 2), ([1, 2], 0)]
+
+
+def test_contact_signature_binds_item_type_and_npc_index_without_player_equipment_inference():
+    # Unlike projectile StatusNPC, contact signature passes native item type as
+    # arg1 and target NPC index as arg2. Player fields remain unknown.
+    contact_effect = [("ldsfld", "Terraria.Main.npc"), ("ldarg", 2), ("ldelem",),
+                      ("const", 20), ("const", 420), ("const", 0),
+                      ("call", ("Terraria.NPC.AddBuff", 3, True, False))]
+    ops = [("ldarg", 1), ("const", 190), ("bne", "done")] + random_choice(4) + [("brtrue", "done")] + contact_effect + [("label", "done"), ("ret",)]
+    assert len(analysis.analyze(labeled(ops), 190, "contact")["randomOutcomes"]) == 1
+    assert analysis.analyze(labeled(ops), 191, "contact")["randomOutcomes"] == []
+    conditional = [("ldarg", 0), ("ldfld", "Terraria.Player.magmaStone"), ("brfalse", "done")] + ops
+    assert analysis.analyze(labeled(conditional), 190, "contact")["randomOutcomes"] == []
+    with pytest.raises(ValueError):
+        analysis.analyze(labeled(ops), 190, "unknown_signature")

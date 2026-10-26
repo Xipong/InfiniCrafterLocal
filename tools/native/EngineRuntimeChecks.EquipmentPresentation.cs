@@ -146,11 +146,11 @@ internal static partial class EngineRuntimeChecks
             }
             Equal(true, ReferenceEquals(PlayerDrawLayers.Wings, ((PlayerDrawLayer.AfterParent)children[0].GetDefaultPosition()).Parent), "back mounts remain behind native skin/torso");
             Equal(true, ReferenceEquals(PlayerDrawLayers.OffhandAcc, ((PlayerDrawLayer.BeforeParent)children[1].GetDefaultPosition()).Parent), "front mounts follow torso subtree before hands");
-            PlayerDrawSet Render(float shadow = 0f, bool hideEntire = false)
+            PlayerDrawSet Render(float shadow = 0f, bool hideEntire = false, float torsoOffset = 0f)
             {
                 var info = new PlayerDrawSet { drawPlayer = player, Position = player.position, DrawDataCache = new List<DrawData>(),
                     DustCache = new List<int>(), GoreCache = new List<int>(), bodyVect = new Vector2(20, 28), colorArmorBody = Color.White, bodyGlowMask = -1, armGlowMask = -1, armorHidesHands = true,
-                    playerEffect = (player.direction < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None) | (player.gravDir < 0 ? SpriteEffects.FlipVertically : SpriteEffects.None), shadow = shadow, hideEntirePlayer = hideEntire };
+                    playerEffect = (player.direction < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None) | (player.gravDir < 0 ? SpriteEffects.FlipVertically : SpriteEffects.None), shadow = shadow, hideEntirePlayer = hideEntire, torsoOffset = torsoOffset };
                 foreach (var parent in parents)
                 {
                     reset.Invoke(parent, new object[] { info }); object[] args = { info }; drawTree.Invoke(parent, args); info = (PlayerDrawSet)args[0];
@@ -163,7 +163,7 @@ internal static partial class EngineRuntimeChecks
                 player.direction = direction; player.gravDir = gravity; player.bodyRotation = .25f;
                 var info = Render();
                 Equal(6, info.DrawDataCache.Count, "five badges and native torso exactly once");
-                Texture2D[] expected = { textures[0], textures[2], torsoTexture, textures[1], textures[3], textures[4] };
+                Texture2D[] expected = { textures[0], torsoTexture, textures[1], textures[2], textures[3], textures[4] };
                 for (int i = 0; i < expected.Length; i++) Equal(true, ReferenceEquals(expected[i], info.DrawDataCache[i].texture), "native layer submission order " + i);
                 foreach (DrawData badge in info.DrawDataCache.Where(d => !ReferenceEquals(d.texture, torsoTexture)))
                 {
@@ -172,7 +172,7 @@ internal static partial class EngineRuntimeChecks
                     Near(.25f, badge.rotation, "local torso rotation retained"); Near(18f / 64f, badge.scale.X, "whole-texture pixel fit retained");
                 }
                 // Orbit occupies index 2 of the whole set, not index 1 of the rear subset.
-                DrawData orbit = info.DrawDataCache[1];
+                DrawData orbit = info.DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2]));
                 float angle = MathHelper.PiOver2 + 2 * MathHelper.TwoPi / 5;
                 Vector2 expectedOffset = new Vector2(16, 0).RotatedBy(angle); expectedOffset.Y *= gravity;
                 Vector2 frameTop = new((int)(player.position.X - Terraria.Main.screenPosition.X - 20 + player.width / 2), (int)(player.position.Y - Terraria.Main.screenPosition.Y + player.height - 56 + 4));
@@ -184,26 +184,35 @@ internal static partial class EngineRuntimeChecks
                 for (int i = 0; i < info.DrawDataCache.Count; i++)
                     Near(untransformed[i].rotation + .4f, info.DrawDataCache[i].rotation, "native final full rotation exactly once");
             }
-            // A seated/mounted torso applies this native transform before its
-            // child layers. Rear badges must follow the same body displacement.
+            // Explicit orbit is the only changed depth policy. Old definitions
+            // with absent mount retain their rear route and identical ring offset.
+            var orbitData = ((GeneratedItem)player.armor[5].ModItem!).Data;
+            var orbitVisual = orbitData.Visual;
+            Vector2 explicitOrbit = Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position;
+            {
+                // Omission is not an explicit null/empty token (both are invalid wire).
+                orbitData.Visual = new VisualSpec { EquipOverlayPath = orbitVisual.EquipOverlayPath };
+                var legacy = Render();
+                Equal(true, ReferenceEquals(textures[0], legacy.DrawDataCache[0].texture), "explicit back remains rear");
+                Equal(true, ReferenceEquals(textures[2], legacy.DrawDataCache[1].texture), "absent orbit stays before torso");
+                Equal(true, ReferenceEquals(torsoTexture, legacy.DrawDataCache[2].texture), "legacy depth not silently migrated");
+                Equal(explicitOrbit, legacy.DrawDataCache[1].position, "depth does not change ring geometry");
+            }
+            orbitData.Visual = orbitVisual;
+            // Native torso displacement applies exactly once to both depths.
             player.bodyRotation = 0f;
             var neutral = Render();
-            // Render() sets zero offset; exercise the actual native subtree with
-            // a nonzero offset instead of only comparing local geometry.
-            var shifted = new PlayerDrawSet { drawPlayer = player, Position = player.position, DrawDataCache = new List<DrawData>(),
-                bodyVect = new Vector2(20, 28), colorArmorBody = Color.White, torsoOffset = 7f };
-            reset.Invoke(parents[0], new object[] { shifted });
-            object[] shiftedArgs = { shifted }; drawTree.Invoke(parents[0], shiftedArgs); shifted = (PlayerDrawSet)shiftedArgs[0];
-            foreach (var texture in new[] { textures[0], textures[2] })
+            var shifted = Render(torsoOffset: 7f);
+            foreach (var texture in textures)
             {
                 Vector2 oldPosition = neutral.DrawDataCache.Single(d => ReferenceEquals(d.texture, texture)).position;
                 Vector2 newPosition = shifted.DrawDataCache.Single(d => ReferenceEquals(d.texture, texture)).position;
-                Near(oldPosition.Y + 7f, newPosition.Y, "rear accessory follows native torso offset");
+                Near(oldPosition.Y + 7f, newPosition.Y, "front/rear accessory follows native torso offset once");
             }
             Vector2 readyOrbit = Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position;
             string chestPath = ((GeneratedItem)player.armor[4].ModItem!).Data.Visual.EquipOverlayPath;
             object chestTexture = cache.Textures[chestPath]!; cache.Textures.Remove(chestPath);
-            Equal(readyOrbit, Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position, "missing front asset does not reflow rear orbit");
+            Equal(readyOrbit, Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position, "missing front asset does not reflow orbit");
             cache.Textures[chestPath] = chestTexture;
             player.armor[14] = new Item { type = ItemID.AvengerEmblem, stack = 1, accessory = true };
             Equal(true, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[1])), "nonvisual social item cannot erase functional badge");

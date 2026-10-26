@@ -23,6 +23,7 @@
 |---|---|
 | Новая механика | [Vertical slice](ADDING_RUNTIME_CAPABILITY_FOR_AGENTS_RU.md) → [Author contract](../reference/authoring/LOW_LEVEL_RUNTIME_AUTHORING_RU.md) → [generated inventory](../reference/generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) |
 | LLM стадии и локальное исправление | [Pipeline](pipeline/THREE_STAGE_LLM_PIPELINE_RU.md), [frozen-first Repair](pipeline/TARGETED_REPAIR_PROTOCOL_RU.md); компактные запросы [Author](pipeline/AUTHOR_REQUEST_COMPACTION_RU.md) и [Repair](pipeline/REPAIR_REQUEST_COMPACTION_RU.md) |
+| Проверяемые факты native-родителей и боеприпасов | [Источники, сертификаты и границы](pipeline/PARENT_NATIVE_FACTS_RU.md) |
 | Lowering/fix/normalization | [Policy](architecture/TECHNICAL_LOWERING_POLICY_RU.md), [generated boundary](../reference/generated/LOWERY_RU.md) |
 | Provider envelope/quota/cache | [Request shape](providers/LLM_TRANSPORT_REQUEST_SHAPE_RU.md), [admission](providers/LLM_PROVIDER_ADMISSION_RU.md), [cache/latency](providers/LLM_PROMPT_CACHE_AND_LATENCY_RU.md) |
 | Image attempts/publication/delivery | [Image lifecycle](pipeline/IMAGE_ASSET_LIFECYCLE_RU.md) |

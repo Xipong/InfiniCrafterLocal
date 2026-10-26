@@ -26,14 +26,14 @@ internal enum GeneratedHeldRenderRole
 ///
 /// tModLoader's vanilla held-item renderer can only draw a ModItem's static Texture.
 /// Generated items use per-instance PNG paths, so Tools/potions/weapons with noUseGraphic=true
-/// need this custom layer.  The layer intentionally follows Terraria's player.itemLocation
-/// and player.itemRotation state: those fields are what vanilla/tML use to place the
-/// currently used item in the player's hands, including remote players.
+/// need this custom layer. Native use-style anchors are projected into grip contact
+/// space; native itemRotation and the later player draw transforms remain in charge
+/// of the pose. The presentation-only packet carries the same resolved contact.
 /// </summary>
 public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 {
     public const byte PacketSyncGeneratedHeldItemPresentation = InfiniNetPacketIds.SyncGeneratedHeldItemPresentation;
-    private const int HeldItemPresentationSyncVersion = 4;
+    private const int HeldItemPresentationSyncVersion = 5;
     private const int HeldSyncExpireTicks = 54;
     private const int HeldAssetRetryTicks = 90;
 
@@ -171,9 +171,12 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         float drawScale = baseScale * payloadScale * SpritePresentation.FrameScale(data!.Visual.RenderSizePx, source.Width, source.Height);
         Vector2 origin = HeldSpriteOrigin(texture, role, flip, drawGravDir, data?.Visual?.Grip);
         Vector2 holdOffset = HeldOffset(data, drawGravDir);
-        // ItemLocation is already the draw-set pose (not necessarily player.itemLocation).
+        // Project the native use pose into contact space, retaining draw-set transforms.
+        // v5 remote packets carry that resolved contact, not raw ItemLocation.
         // World zero and screen zero are valid coordinates, never missing-pose sentinels.
-        Vector2 itemLocation = PayloadItemLocation(payload) ?? drawInfo.ItemLocation;
+        Vector2 contact = PayloadItemLocation(payload)
+            ?? NativeGripLocation(player, held, player.itemLocation);
+        Vector2 itemLocation = contact + drawInfo.ItemLocation - player.itemLocation;
         Vector2 position = itemLocation - Main.screenPosition + holdOffset;
         // An explicit final-canvas pivot is the hand contact point. Legacy artistic
         // translations would move that point away from the hand; authored screen-space
@@ -268,13 +271,14 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 
     private static HeldItemPresentationPayload BuildLocalPayload(Player player, Item held, GeneratedItemData data, bool activeUse)
     {
+        Vector2 contact = NativeGripLocation(player, held, player.itemLocation);
         return new HeldItemPresentationPayload
         {
             PlayerId = player.whoAmI,
             SelectedItem = player.selectedItem,
             GeneratedItemId = ShortNet(data.Id, 96),
-            ItemLocationX = player.itemLocation.X,
-            ItemLocationY = player.itemLocation.Y,
+            ItemLocationX = contact.X,
+            ItemLocationY = contact.Y,
             ItemRotation = player.itemRotation,
             Direction = player.direction < 0 ? -1 : 1,
             GravDir = player.gravDir == -1f ? -1f : 1f,
@@ -379,6 +383,23 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         if (style is "thrust" or "rapier") return GeneratedHeldRenderRole.Thrust;
         if (style == "swing") return GeneratedHeldRenderRole.Swing;
         return GeneratedHeldRenderRole.Generic;
+    }
+
+    // Technical pose projection: ItemLocation is a native use-style anchor, not
+    // universally a hand. Preserve swing/thrust anchors; composite poses use the
+    // engine hand and ordinary shoot uses its native frame-center translation.
+    // No weapon IDs, authored reach changes, or generated texture-size offsets.
+    internal static Vector2 NativeGripLocation(Player player, Item? held, Vector2 itemLocation)
+    {
+        if (player.compositeFrontArm.enabled)
+            return player.GetFrontHandPosition(player.compositeFrontArm.stretch,
+                player.compositeFrontArm.rotation) + itemLocation - player.itemLocation;
+        if (held is not null && !held.IsAir && held.useStyle == ItemUseStyleID.Shoot)
+        {
+            Rectangle frame = player.GetItemDrawFrame(held.type);
+            return itemLocation + new Vector2(0, frame.Height * .5f);
+        }
+        return itemLocation;
     }
 
     private static Vector2? PayloadItemLocation(HeldItemPresentationPayload? payload)

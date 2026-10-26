@@ -2,16 +2,18 @@
   "schema": "infini.native-hit-status-sources.v1",
   "sources": [
     {
+      "sourceKind": "projectile",
       "assemblyVersion": "1.4.4.9",
       "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
       "moduleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
       "sourceMethodSha256": "0409d6e8aeb6c41acc5454f7f818368639b041341d9eafff9dd1336cd42e2cf7",
-      "scope": "Unconditional vanilla Projectile.StatusNPC NPC.AddBuff requests only; not final applied buffs, item hooks, player/PvP hits, child AI or mod hooks.",
+      "scope": "Proved unconditional and per-request single-random-choice vanilla Projectile.StatusNPC projectile NPC.AddBuff requests only; not final applied buffs, equipment-dependent requests, player/PvP hits, child AI or mod hooks.",
       "analyzedProjectileTypes": 1021,
-      "coveredProjectileTypes": 64,
+      "coveredProjectileTypes": 87,
       "coveredProjectileEffects": 65,
+      "coveredRandomChoices": 24,
       "totalMethodAddBuffSites": 100,
-      "coveredMethodAddBuffSites": 51,
+      "coveredMethodAddBuffSites": 74,
       "uncoveredMethodAddBuffOffsets": [
         120,
         148,
@@ -21,10 +23,6 @@
         263,
         277,
         615,
-        714,
-        802,
-        856,
-        910,
         1003,
         1045,
         1087,
@@ -37,37 +35,214 @@
         1743,
         1767,
         1853,
-        1905,
-        2005,
         2674,
         2739,
         2768,
         2784,
-        2848,
-        2861,
-        2897,
-        2940,
         3003,
-        3083,
-        3128,
-        3173,
-        3221,
-        3281,
-        3339,
-        3384,
-        3429,
-        3474,
-        3493,
-        3548,
-        3606,
-        3892,
-        3908
+        3606
       ],
       "excludedTypeSiteCounts": {
-        "conditional_player_world_ai_or_random_path": 11273,
+        "conditional_player_world_ai_or_random_path": 11242,
         "dynamic_buff_or_duration_or_flags": 6
       },
       "records": [
+        {
+          "projectileId": 2,
+          "projectileName": "FireArrow",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 2881,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 2897,
+                      "buffId": 24,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 19,
+          "projectileName": "Flamarang",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3064,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3083,
+                      "buffId": 24,
+                      "durationTicksMin": 360,
+                      "durationTicksMax": 360,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 33,
+          "projectileName": "ThornChakram",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3154,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3173,
+                      "buffId": 20,
+                      "durationTicksMin": 420,
+                      "durationTicksMax": 420,
+                      "durationTicksStep": 1,
+                      "buffName": "Poisoned"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 34,
+          "projectileName": "Flamelash",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3247,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3281,
+                      "buffId": 24,
+                      "durationTicksMin": 240,
+                      "durationTicksMax": 479,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 35,
+          "projectileName": "Sunfury",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3365,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3384,
+                      "buffId": 24,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
+            }
+          ]
+        },
         {
           "projectileId": 46,
           "projectileName": "DarkLance",
@@ -79,6 +254,88 @@
               "durationTicksMax": 299,
               "durationTicksStep": 1,
               "buffName": "ShadowFlame"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 54,
+          "projectileName": "PoisonedKnife",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3410,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3429,
+                      "buffId": 20,
+                      "durationTicksMin": 600,
+                      "durationTicksMax": 600,
+                      "durationTicksStep": 1,
+                      "buffName": "Poisoned"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 63,
+          "projectileName": "TheDaoofPow",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3519,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 5,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 5
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3,
+                    4
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3548,
+                      "buffId": 31,
+                      "durationTicksMin": 120,
+                      "durationTicksMax": 240,
+                      "durationTicksStep": 60,
+                      "buffName": "Confused"
+                    }
+                  ],
+                  "probabilityNumerator": 4,
+                  "probabilityDenominator": 5
+                }
+              ]
             }
           ]
         },
@@ -94,7 +351,8 @@
               "durationTicksStep": 1,
               "buffName": "CursedInferno"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 98,
@@ -108,7 +366,8 @@
               "durationTicksStep": 1,
               "buffName": "Poisoned"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 103,
@@ -122,7 +381,8 @@
               "durationTicksStep": 1,
               "buffName": "CursedInferno"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 104,
@@ -135,6 +395,46 @@
               "durationTicksMax": 420,
               "durationTicksStep": 1,
               "buffName": "CursedInferno"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 113,
+          "projectileName": "IceBoomerang",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3109,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3128,
+                      "buffId": 44,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "Frostburn"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
             }
           ]
         },
@@ -150,6 +450,96 @@
               "durationTicksStep": 1,
               "buffName": "Frostburn2"
             }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 163,
+          "projectileName": "Flare",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3876,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3892,
+                      "buffId": 24,
+                      "durationTicksMin": 600,
+                      "durationTicksMax": 600,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3908,
+                      "buffId": 24,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 172,
+          "projectileName": "FrostburnArrow",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 2921,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 2940,
+                      "buffId": 44,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "Frostburn"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
+            }
           ]
         },
         {
@@ -164,7 +554,8 @@
               "durationTicksStep": 1,
               "buffName": "Poisoned"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 188,
@@ -178,7 +569,8 @@
               "durationTicksStep": 1,
               "buffName": "OnFire3"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 195,
@@ -192,7 +584,8 @@
               "durationTicksStep": 60,
               "buffName": "Venom"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 253,
@@ -206,7 +599,8 @@
               "durationTicksStep": 1,
               "buffName": "Frostburn2"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 265,
@@ -219,6 +613,56 @@
               "durationTicksMax": 1800,
               "durationTicksStep": 1,
               "buffName": "Poisoned"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 267,
+          "projectileName": "PoisonDartBlowgun",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3458,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3474,
+                      "buffId": 20,
+                      "durationTicksMin": 3600,
+                      "durationTicksMax": 3600,
+                      "durationTicksStep": 1,
+                      "buffName": "Poisoned"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3493,
+                      "buffId": 20,
+                      "durationTicksMin": 1800,
+                      "durationTicksMax": 1800,
+                      "durationTicksStep": 1,
+                      "buffName": "Poisoned"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
           ]
         },
@@ -234,7 +678,8 @@
               "durationTicksStep": 1,
               "buffName": "Ichor"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 279,
@@ -248,7 +693,8 @@
               "durationTicksStep": 1,
               "buffName": "Ichor"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 280,
@@ -262,7 +708,8 @@
               "durationTicksStep": 1,
               "buffName": "Ichor"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 282,
@@ -276,7 +723,8 @@
               "durationTicksStep": 1,
               "buffName": "Venom"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 283,
@@ -289,6 +737,56 @@
               "durationTicksMax": 600,
               "durationTicksStep": 1,
               "buffName": "Venom"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 285,
+          "projectileName": "NanoBullet",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 2832,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 2848,
+                      "buffId": 31,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "Confused"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 2861,
+                      "buffId": 31,
+                      "durationTicksMin": 60,
+                      "durationTicksMax": 60,
+                      "durationTicksStep": 1,
+                      "buffName": "Confused"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
           ]
         },
@@ -304,7 +802,8 @@
               "durationTicksStep": 1,
               "buffName": "Midas"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 295,
@@ -318,7 +817,8 @@
               "durationTicksStep": 60,
               "buffName": "OnFire3"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 296,
@@ -332,7 +832,8 @@
               "durationTicksStep": 60,
               "buffName": "OnFire3"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 309,
@@ -345,6 +846,56 @@
               "durationTicksMax": 300,
               "durationTicksStep": 1,
               "buffName": "Frostburn2"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 310,
+          "projectileName": "BlueFlare",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3876,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3892,
+                      "buffId": 24,
+                      "durationTicksMin": 600,
+                      "durationTicksMax": 600,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3908,
+                      "buffId": 24,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
           ]
         },
@@ -360,7 +911,8 @@
               "durationTicksStep": 1,
               "buffName": "Venom"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 359,
@@ -374,7 +926,8 @@
               "durationTicksStep": 1,
               "buffName": "Frostburn2"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 374,
@@ -388,7 +941,8 @@
               "durationTicksStep": 60,
               "buffName": "Poisoned"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 376,
@@ -402,7 +956,8 @@
               "durationTicksStep": 60,
               "buffName": "OnFire"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 379,
@@ -416,7 +971,8 @@
               "durationTicksStep": 60,
               "buffName": "Venom"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 390,
@@ -430,7 +986,8 @@
               "durationTicksStep": 60,
               "buffName": "Venom"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 391,
@@ -444,7 +1001,8 @@
               "durationTicksStep": 60,
               "buffName": "Venom"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 392,
@@ -458,7 +1016,8 @@
               "durationTicksStep": 60,
               "buffName": "Venom"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 399,
@@ -472,7 +1031,8 @@
               "durationTicksStep": 60,
               "buffName": "OnFire"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 400,
@@ -486,7 +1046,8 @@
               "durationTicksStep": 60,
               "buffName": "OnFire"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 401,
@@ -500,7 +1061,8 @@
               "durationTicksStep": 60,
               "buffName": "OnFire"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 402,
@@ -514,7 +1076,8 @@
               "durationTicksStep": 60,
               "buffName": "OnFire"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 476,
@@ -528,7 +1091,8 @@
               "durationTicksStep": 1,
               "buffName": "SoulDrain"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 478,
@@ -542,7 +1106,8 @@
               "durationTicksStep": 60,
               "buffName": "CursedInferno"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 479,
@@ -556,7 +1121,8 @@
               "durationTicksStep": 60,
               "buffName": "Ichor"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 480,
@@ -570,7 +1136,8 @@
               "durationTicksStep": 60,
               "buffName": "CursedInferno"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 482,
@@ -584,7 +1151,8 @@
               "durationTicksStep": 1,
               "buffName": "CursedInferno"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 495,
@@ -598,7 +1166,8 @@
               "durationTicksStep": 1,
               "buffName": "ShadowFlame"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 496,
@@ -612,7 +1181,8 @@
               "durationTicksStep": 1,
               "buffName": "ShadowFlame"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 497,
@@ -626,7 +1196,8 @@
               "durationTicksStep": 1,
               "buffName": "ShadowFlame"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 523,
@@ -640,7 +1211,8 @@
               "durationTicksStep": 60,
               "buffName": "Poisoned"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 524,
@@ -653,6 +1225,87 @@
               "durationTicksMax": 420,
               "durationTicksStep": 60,
               "buffName": "Ichor"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 545,
+          "projectileName": "Cascade",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 1877,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 1905,
+                      "buffId": 24,
+                      "durationTicksMin": 60,
+                      "durationTicksMax": 239,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 552,
+          "projectileName": "Amarok",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 1974,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 2005,
+                      "buffId": 324,
+                      "durationTicksMin": 120,
+                      "durationTicksMax": 319,
+                      "durationTicksStep": 1,
+                      "buffName": "Frostburn2"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
           ]
         },
@@ -668,7 +1321,8 @@
               "durationTicksStep": 1,
               "buffName": "OnFire3"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 567,
@@ -682,7 +1336,8 @@
               "durationTicksStep": 60,
               "buffName": "Poisoned"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 568,
@@ -696,7 +1351,8 @@
               "durationTicksStep": 60,
               "buffName": "Poisoned"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 583,
@@ -710,7 +1366,8 @@
               "durationTicksStep": 60,
               "buffName": "Poisoned"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 585,
@@ -724,7 +1381,8 @@
               "durationTicksStep": 60,
               "buffName": "ShadowFlame"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 611,
@@ -738,7 +1396,8 @@
               "durationTicksStep": 1,
               "buffName": "Daybreak"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 612,
@@ -751,6 +1410,126 @@
               "durationTicksMax": 300,
               "durationTicksStep": 1,
               "buffName": "Daybreak"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 664,
+          "projectileName": "DD2FlameBurstTowerT1Shot",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 776,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 802,
+                      "buffId": 24,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 60,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 666,
+          "projectileName": "DD2FlameBurstTowerT2Shot",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 826,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 856,
+                      "buffId": 323,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 480,
+                      "durationTicksStep": 60,
+                      "buffName": "OnFire3"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 668,
+          "projectileName": "DD2FlameBurstTowerT3Shot",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 880,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 910,
+                      "buffId": 323,
+                      "durationTicksMin": 360,
+                      "durationTicksMax": 480,
+                      "durationTicksStep": 60,
+                      "buffName": "OnFire3"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
           ]
         },
@@ -766,7 +1545,8 @@
               "durationTicksStep": 1,
               "buffName": "OnFire3"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 711,
@@ -780,7 +1560,8 @@
               "durationTicksStep": 1,
               "buffName": "BetsysCurse"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 841,
@@ -794,7 +1575,8 @@
               "durationTicksStep": 1,
               "buffName": "BlandWhipEnemyDebuff"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 847,
@@ -808,7 +1590,8 @@
               "durationTicksStep": 1,
               "buffName": "SwordWhipNPCDebuff"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 848,
@@ -822,7 +1605,8 @@
               "durationTicksStep": 1,
               "buffName": "MaceWhipNPCDebuff"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 849,
@@ -836,7 +1620,8 @@
               "durationTicksStep": 1,
               "buffName": "ScytheWhipEnemyDebuff"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 912,
@@ -858,7 +1643,8 @@
               "durationTicksStep": 1,
               "buffName": "Frostburn2"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 913,
@@ -872,7 +1658,8 @@
               "durationTicksStep": 1,
               "buffName": "OnFire3"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 914,
@@ -885,6 +1672,43 @@
               "durationTicksMax": 240,
               "durationTicksStep": 1,
               "buffName": "ThornWhipNPCDebuff"
+            }
+          ],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 698,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 5,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 714,
+                      "buffId": 20,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "Poisoned"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 5
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3,
+                    4
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 4,
+                  "probabilityDenominator": 5
+                }
+              ]
             }
           ]
         },
@@ -900,6 +1724,50 @@
               "durationTicksStep": 1,
               "buffName": "RainbowWhipNPCDebuff"
             }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 948,
+          "projectileName": "FlamingMace",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3310,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 6,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3339,
+                      "buffId": 24,
+                      "durationTicksMin": 120,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 60,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 6
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 5,
+                  "probabilityDenominator": 6
+                }
+              ]
+            }
           ]
         },
         {
@@ -914,7 +1782,8 @@
               "durationTicksStep": 1,
               "buffName": "BoneWhipNPCDebuff"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 953,
@@ -927,6 +1796,48 @@
               "durationTicksMax": 300,
               "durationTicksStep": 1,
               "buffName": "Daybreak"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 976,
+          "projectileName": "BladeOfGrass",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3202,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 4,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3221,
+                      "buffId": 20,
+                      "durationTicksMin": 420,
+                      "durationTicksMax": 420,
+                      "durationTicksStep": 1,
+                      "buffName": "Poisoned"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 4
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 3,
+                  "probabilityDenominator": 4
+                }
+              ]
             }
           ]
         },
@@ -942,7 +1853,8 @@
               "durationTicksStep": 1,
               "buffName": "OnFire"
             }
-          ]
+          ],
+          "randomOutcomes": []
         },
         {
           "projectileId": 980,
@@ -955,6 +1867,56 @@
               "durationTicksMax": 300,
               "durationTicksStep": 1,
               "buffName": "Venom"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 1008,
+          "projectileName": "SpelunkerFlare",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3876,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3892,
+                      "buffId": 24,
+                      "durationTicksMin": 600,
+                      "durationTicksMax": 600,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3908,
+                      "buffId": 24,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
           ]
         },
@@ -969,983 +1931,468 @@
               "durationTicksMax": 600,
               "durationTicksStep": 1,
               "buffName": "CursedInferno"
+            }
+          ],
+          "randomOutcomes": []
+        },
+        {
+          "projectileId": 1010,
+          "projectileName": "RainbowFlare",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3876,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3892,
+                      "buffId": 24,
+                      "durationTicksMin": 600,
+                      "durationTicksMax": 600,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3908,
+                      "buffId": 24,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "projectileId": 1011,
+          "projectileName": "ShimmerFlare",
+          "effects": [],
+          "randomOutcomes": [
+            {
+              "sourceRandomCallIlOffset": 3876,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3892,
+                      "buffId": 24,
+                      "durationTicksMin": 600,
+                      "durationTicksMax": 600,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 3908,
+                      "buffId": 24,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
           ]
         }
       ]
     },
     {
+      "sourceKind": "contact",
       "assemblyVersion": "1.4.4.9",
-      "assemblySha256": "0585f4ebb022708a5d2a52ba92c6b4a4f812154d0333b384ef64d2dbd4f5b124",
-      "moduleVersionId": "2dc689ad-ceed-4fd9-848d-e10218d2e473",
-      "sourceMethodSha256": "ea30212888353eea100edc863b651f8ee1555b4f39891eb2de442ba3339dcb79",
-      "scope": "Unconditional vanilla Projectile.StatusNPC NPC.AddBuff requests only; not final applied buffs, item hooks, player/PvP hits, child AI or mod hooks.",
-      "analyzedProjectileTypes": 1021,
-      "coveredProjectileTypes": 64,
-      "coveredProjectileEffects": 65,
-      "totalMethodAddBuffSites": 100,
-      "coveredMethodAddBuffSites": 51,
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+      "moduleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "sourceMethodSha256": "ba0c7a049ff31dba62ae1a8d21c2a3d653dc37a2c0c84b2dfbedf437bde44fc6",
+      "scope": "Proved unconditional and per-request single-random-choice vanilla Player.StatusToNPC contact NPC.AddBuff requests only; not final applied buffs, equipment-dependent requests, player/PvP hits, child AI or mod hooks.",
+      "coveredRandomChoices": 7,
+      "totalMethodAddBuffSites": 20,
+      "coveredMethodAddBuffSites": 9,
       "uncoveredMethodAddBuffOffsets": [
-        120,
-        148,
-        176,
-        206,
-        234,
-        263,
-        277,
-        615,
-        714,
-        802,
-        856,
-        910,
-        1003,
-        1045,
-        1087,
-        1129,
-        1348,
-        1543,
-        1567,
-        1635,
-        1663,
-        1743,
-        1767,
-        1853,
-        1905,
-        2005,
-        2674,
-        2739,
-        2768,
-        2784,
-        2848,
-        2861,
-        2897,
-        2940,
-        3003,
-        3083,
-        3128,
-        3173,
-        3221,
-        3281,
-        3339,
-        3384,
-        3429,
-        3474,
-        3493,
-        3548,
-        3606,
-        3892,
-        3908
+        59,
+        98,
+        137,
+        178,
+        217,
+        257,
+        283,
+        325,
+        369,
+        407,
+        429
       ],
       "excludedTypeSiteCounts": {
-        "conditional_player_world_ai_or_random_path": 11273,
-        "dynamic_buff_or_duration_or_flags": 6
+        "conditional_player_world_ai_or_random_path": 60005
       },
       "records": [
         {
-          "projectileId": 46,
-          "projectileName": "DarkLance",
-          "effects": [
+          "effects": [],
+          "randomOutcomes": [
             {
-              "ilOffset": 2176,
-              "buffId": 153,
-              "durationTicksMin": 240,
-              "durationTicksMax": 299,
-              "durationTicksStep": 1,
-              "buffName": "ShadowFlame"
+              "sourceRandomCallIlOffset": 588,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 2,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 613,
+                      "buffId": 24,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                },
+                {
+                  "randomValues": [
+                    1
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 2
+                }
+              ]
             }
-          ]
+          ],
+          "itemId": 121,
+          "itemName": "FieryGreatsword"
         },
         {
-          "projectileId": 95,
-          "projectileName": "CursedFlameFriendly",
-          "effects": [
+          "effects": [],
+          "randomOutcomes": [
             {
-              "ilOffset": 3703,
-              "buffId": 39,
-              "durationTicksMin": 420,
-              "durationTicksMax": 420,
-              "durationTicksStep": 1,
-              "buffName": "CursedInferno"
+              "sourceRandomCallIlOffset": 706,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 10,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 728,
+                      "buffId": 24,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 10
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    8,
+                    9
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 9,
+                  "probabilityDenominator": 10
+                }
+              ]
             }
-          ]
+          ],
+          "itemId": 122,
+          "itemName": "MoltenPickaxe"
         },
         {
-          "projectileId": 98,
-          "projectileName": "PoisonDart",
-          "effects": [
+          "effects": [],
+          "randomOutcomes": [
             {
-              "ilOffset": 3960,
-              "buffId": 20,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "Poisoned"
+              "sourceRandomCallIlOffset": 740,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 4,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 762,
+                      "buffId": 20,
+                      "durationTicksMin": 420,
+                      "durationTicksMax": 420,
+                      "durationTicksStep": 1,
+                      "buffName": "Poisoned"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 4
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 3,
+                  "probabilityDenominator": 4
+                }
+              ]
             }
-          ]
+          ],
+          "itemId": 190,
+          "itemName": "BladeofGrass"
         },
         {
-          "projectileId": 103,
-          "projectileName": "CursedArrow",
-          "effects": [
+          "effects": [],
+          "randomOutcomes": [
             {
-              "ilOffset": 3703,
-              "buffId": 39,
-              "durationTicksMin": 420,
-              "durationTicksMax": 420,
-              "durationTicksStep": 1,
-              "buffName": "CursedInferno"
+              "sourceRandomCallIlOffset": 774,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 5,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 796,
+                      "buffId": 24,
+                      "durationTicksMin": 180,
+                      "durationTicksMax": 180,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 5
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3,
+                    4
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 4,
+                  "probabilityDenominator": 5
+                }
+              ]
             }
-          ]
+          ],
+          "itemId": 217,
+          "itemName": "MoltenHamaxe"
         },
         {
-          "projectileId": 104,
-          "projectileName": "CursedBullet",
-          "effects": [
+          "effects": [],
+          "randomOutcomes": [
             {
-              "ilOffset": 3703,
-              "buffId": 39,
-              "durationTicksMin": 420,
-              "durationTicksMax": 420,
-              "durationTicksStep": 1,
-              "buffName": "CursedInferno"
+              "sourceRandomCallIlOffset": 809,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 10,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 10
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                    6,
+                    7,
+                    8,
+                    9
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 828,
+                      "buffId": 31,
+                      "durationTicksMin": 120,
+                      "durationTicksMax": 120,
+                      "durationTicksStep": 1,
+                      "buffName": "Confused"
+                    }
+                  ],
+                  "probabilityNumerator": 9,
+                  "probabilityDenominator": 10
+                }
+              ]
             }
-          ]
+          ],
+          "itemId": 1123,
+          "itemName": "BeeKeeper"
         },
         {
-          "projectileId": 119,
-          "projectileName": "FrostBoltSword",
           "effects": [
             {
-              "ilOffset": 342,
-              "buffId": 324,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "Frostburn2"
-            }
-          ]
-        },
-        {
-          "projectileId": 184,
-          "projectileName": "PoisonDartTrap",
-          "effects": [
-            {
-              "ilOffset": 3988,
-              "buffId": 20,
-              "durationTicksMin": 900,
-              "durationTicksMax": 900,
-              "durationTicksStep": 1,
-              "buffName": "Poisoned"
-            }
-          ]
-        },
-        {
-          "projectileId": 188,
-          "projectileName": "FlamesTrap",
-          "effects": [
-            {
-              "ilOffset": 3641,
-              "buffId": 323,
-              "durationTicksMin": 1200,
-              "durationTicksMax": 1200,
-              "durationTicksStep": 1,
-              "buffName": "OnFire3"
-            }
-          ]
-        },
-        {
-          "projectileId": 195,
-          "projectileName": "PygmySpear",
-          "effects": [
-            {
-              "ilOffset": 315,
-              "buffId": 70,
+              "ilOffset": 468,
+              "buffId": 69,
               "durationTicksMin": 300,
-              "durationTicksMax": 600,
-              "durationTicksStep": 60,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 253,
-          "projectileName": "BallofFrost",
-          "effects": [
-            {
-              "ilOffset": 3038,
-              "buffId": 324,
-              "durationTicksMin": 480,
-              "durationTicksMax": 480,
-              "durationTicksStep": 1,
-              "buffName": "Frostburn2"
-            }
-          ]
-        },
-        {
-          "projectileId": 265,
-          "projectileName": "PoisonFang",
-          "effects": [
-            {
-              "ilOffset": 4044,
-              "buffId": 20,
-              "durationTicksMin": 1800,
-              "durationTicksMax": 1800,
-              "durationTicksStep": 1,
-              "buffName": "Poisoned"
-            }
-          ]
-        },
-        {
-          "projectileId": 278,
-          "projectileName": "IchorArrow",
-          "effects": [
-            {
-              "ilOffset": 3758,
-              "buffId": 69,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "Ichor"
-            }
-          ]
-        },
-        {
-          "projectileId": 279,
-          "projectileName": "IchorBullet",
-          "effects": [
-            {
-              "ilOffset": 3758,
-              "buffId": 69,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "Ichor"
-            }
-          ]
-        },
-        {
-          "projectileId": 280,
-          "projectileName": "GoldenShowerFriendly",
-          "effects": [
-            {
-              "ilOffset": 3758,
-              "buffId": 69,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "Ichor"
-            }
-          ]
-        },
-        {
-          "projectileId": 282,
-          "projectileName": "VenomArrow",
-          "effects": [
-            {
-              "ilOffset": 3800,
-              "buffId": 70,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 283,
-          "projectileName": "VenomBullet",
-          "effects": [
-            {
-              "ilOffset": 3800,
-              "buffId": 70,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 287,
-          "projectileName": "GoldenBullet",
-          "effects": [
-            {
-              "ilOffset": 2808,
-              "buffId": 72,
-              "durationTicksMin": 120,
-              "durationTicksMax": 120,
-              "durationTicksStep": 1,
-              "buffName": "Midas"
-            }
-          ]
-        },
-        {
-          "projectileId": 295,
-          "projectileName": "InfernoFriendlyBolt",
-          "effects": [
-            {
-              "ilOffset": 2595,
-              "buffId": 323,
-              "durationTicksMin": 480,
-              "durationTicksMax": 900,
-              "durationTicksStep": 60,
-              "buffName": "OnFire3"
-            }
-          ]
-        },
-        {
-          "projectileId": 296,
-          "projectileName": "InfernoFriendlyBlast",
-          "effects": [
-            {
-              "ilOffset": 2595,
-              "buffId": 323,
-              "durationTicksMin": 480,
-              "durationTicksMax": 900,
-              "durationTicksStep": 60,
-              "buffName": "OnFire3"
-            }
-          ]
-        },
-        {
-          "projectileId": 309,
-          "projectileName": "FrostBlastFriendly",
-          "effects": [
-            {
-              "ilOffset": 372,
-              "buffId": 324,
-              "durationTicksMin": 300,
-              "durationTicksMax": 300,
-              "durationTicksStep": 1,
-              "buffName": "Frostburn2"
-            }
-          ]
-        },
-        {
-          "projectileId": 355,
-          "projectileName": "VenomFang",
-          "effects": [
-            {
-              "ilOffset": 4072,
-              "buffId": 70,
-              "durationTicksMin": 1800,
-              "durationTicksMax": 1800,
-              "durationTicksStep": 1,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 359,
-          "projectileName": "FrostBoltStaff",
-          "effects": [
-            {
-              "ilOffset": 402,
-              "buffId": 324,
-              "durationTicksMin": 420,
-              "durationTicksMax": 420,
-              "durationTicksStep": 1,
-              "buffName": "Frostburn2"
-            }
-          ]
-        },
-        {
-          "projectileId": 374,
-          "projectileName": "HornetStinger",
-          "effects": [
-            {
-              "ilOffset": 2454,
-              "buffId": 20,
-              "durationTicksMin": 240,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "Poisoned"
-            }
-          ]
-        },
-        {
-          "projectileId": 376,
-          "projectileName": "ImpFireball",
-          "effects": [
-            {
-              "ilOffset": 2491,
-              "buffId": 24,
-              "durationTicksMin": 180,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "OnFire"
-            }
-          ]
-        },
-        {
-          "projectileId": 379,
-          "projectileName": "BabySpider",
-          "effects": [
-            {
-              "ilOffset": 2367,
-              "buffId": 70,
-              "durationTicksMin": 120,
-              "durationTicksMax": 240,
-              "durationTicksStep": 60,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 390,
-          "projectileName": "VenomSpider",
-          "effects": [
-            {
-              "ilOffset": 2417,
-              "buffId": 70,
-              "durationTicksMin": 120,
-              "durationTicksMax": 240,
-              "durationTicksStep": 60,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 391,
-          "projectileName": "JumperSpider",
-          "effects": [
-            {
-              "ilOffset": 2417,
-              "buffId": 70,
-              "durationTicksMin": 120,
-              "durationTicksMax": 240,
-              "durationTicksStep": 60,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 392,
-          "projectileName": "DangerousSpider",
-          "effects": [
-            {
-              "ilOffset": 2417,
-              "buffId": 70,
-              "durationTicksMin": 120,
-              "durationTicksMax": 240,
-              "durationTicksStep": 60,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 399,
-          "projectileName": "MolotovCocktail",
-          "effects": [
-            {
-              "ilOffset": 2541,
-              "buffId": 24,
-              "durationTicksMin": 180,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "OnFire"
-            }
-          ]
-        },
-        {
-          "projectileId": 400,
-          "projectileName": "MolotovFire",
-          "effects": [
-            {
-              "ilOffset": 2541,
-              "buffId": 24,
-              "durationTicksMin": 180,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "OnFire"
-            }
-          ]
-        },
-        {
-          "projectileId": 401,
-          "projectileName": "MolotovFire2",
-          "effects": [
-            {
-              "ilOffset": 2541,
-              "buffId": 24,
-              "durationTicksMin": 180,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "OnFire"
-            }
-          ]
-        },
-        {
-          "projectileId": 402,
-          "projectileName": "MolotovFire3",
-          "effects": [
-            {
-              "ilOffset": 2541,
-              "buffId": 24,
-              "durationTicksMin": 180,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "OnFire"
-            }
-          ]
-        },
-        {
-          "projectileId": 476,
-          "projectileName": "SoulDrain",
-          "effects": [
-            {
-              "ilOffset": 2203,
-              "buffId": 151,
-              "durationTicksMin": 30,
-              "durationTicksMax": 30,
-              "durationTicksStep": 1,
-              "buffName": "SoulDrain"
-            }
-          ]
-        },
-        {
-          "projectileId": 478,
-          "projectileName": "CursedDart",
-          "effects": [
-            {
-              "ilOffset": 2292,
-              "buffId": 39,
-              "durationTicksMin": 180,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "CursedInferno"
-            }
-          ]
-        },
-        {
-          "projectileId": 479,
-          "projectileName": "IchorDart",
-          "effects": [
-            {
-              "ilOffset": 2330,
-              "buffId": 69,
-              "durationTicksMin": 420,
-              "durationTicksMax": 840,
+              "durationTicksMax": 540,
               "durationTicksStep": 60,
               "buffName": "Ichor"
             }
-          ]
+          ],
+          "randomOutcomes": [],
+          "itemId": 3211,
+          "itemName": "Bladetongue"
         },
         {
-          "projectileId": 480,
-          "projectileName": "CursedDartFlame",
-          "effects": [
+          "effects": [],
+          "randomOutcomes": [
             {
-              "ilOffset": 2292,
-              "buffId": 39,
-              "durationTicksMin": 180,
-              "durationTicksMax": 360,
-              "durationTicksStep": 60,
-              "buffName": "CursedInferno"
+              "sourceRandomCallIlOffset": 625,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 4,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 653,
+                      "buffId": 323,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire3"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 4
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2,
+                    3
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 3,
+                  "probabilityDenominator": 4
+                }
+              ]
             }
-          ]
+          ],
+          "itemId": 3823,
+          "itemName": "DD2SquireDemonSword"
         },
         {
-          "projectileId": 482,
-          "projectileName": "ClingerStaff",
           "effects": [
             {
-              "ilOffset": 3703,
-              "buffId": 39,
-              "durationTicksMin": 420,
-              "durationTicksMax": 420,
-              "durationTicksStep": 1,
-              "buffName": "CursedInferno"
-            }
-          ]
-        },
-        {
-          "projectileId": 495,
-          "projectileName": "ShadowFlameArrow",
-          "effects": [
-            {
-              "ilOffset": 2047,
-              "buffId": 153,
-              "durationTicksMin": 120,
-              "durationTicksMax": 299,
-              "durationTicksStep": 1,
-              "buffName": "ShadowFlame"
-            }
-          ]
-        },
-        {
-          "projectileId": 496,
-          "projectileName": "ShadowFlame",
-          "effects": [
-            {
-              "ilOffset": 2134,
-              "buffId": 153,
-              "durationTicksMin": 240,
-              "durationTicksMax": 479,
-              "durationTicksStep": 1,
-              "buffName": "ShadowFlame"
-            }
-          ]
-        },
-        {
-          "projectileId": 497,
-          "projectileName": "ShadowFlameKnife",
-          "effects": [
-            {
-              "ilOffset": 2089,
-              "buffId": 153,
-              "durationTicksMin": 60,
-              "durationTicksMax": 179,
-              "durationTicksStep": 1,
-              "buffName": "ShadowFlame"
-            }
-          ]
-        },
-        {
-          "projectileId": 523,
-          "projectileName": "ToxicBubble",
-          "effects": [
-            {
-              "ilOffset": 2242,
-              "buffId": 20,
-              "durationTicksMin": 600,
-              "durationTicksMax": 1740,
-              "durationTicksStep": 60,
-              "buffName": "Poisoned"
-            }
-          ]
-        },
-        {
-          "projectileId": 524,
-          "projectileName": "IchorSplash",
-          "effects": [
-            {
-              "ilOffset": 1463,
-              "buffId": 69,
-              "durationTicksMin": 180,
-              "durationTicksMax": 420,
-              "durationTicksStep": 60,
-              "buffName": "Ichor"
-            }
-          ]
-        },
-        {
-          "projectileId": 553,
-          "projectileName": "HelFire",
-          "effects": [
-            {
-              "ilOffset": 1950,
-              "buffId": 323,
-              "durationTicksMin": 180,
-              "durationTicksMax": 479,
-              "durationTicksStep": 1,
-              "buffName": "OnFire3"
-            }
-          ]
-        },
-        {
-          "projectileId": 567,
-          "projectileName": "SporeTrap",
-          "effects": [
-            {
-              "ilOffset": 961,
-              "buffId": 20,
-              "durationTicksMin": 300,
-              "durationTicksMax": 600,
-              "durationTicksStep": 60,
-              "buffName": "Poisoned"
-            }
-          ]
-        },
-        {
-          "projectileId": 568,
-          "projectileName": "SporeTrap2",
-          "effects": [
-            {
-              "ilOffset": 961,
-              "buffId": 20,
-              "durationTicksMin": 300,
-              "durationTicksMax": 600,
-              "durationTicksStep": 60,
-              "buffName": "Poisoned"
-            }
-          ]
-        },
-        {
-          "projectileId": 583,
-          "projectileName": "NurseSyringeHurt",
-          "effects": [
-            {
-              "ilOffset": 1426,
-              "buffId": 20,
-              "durationTicksMin": 180,
-              "durationTicksMax": 300,
-              "durationTicksStep": 60,
-              "buffName": "Poisoned"
-            }
-          ]
-        },
-        {
-          "projectileId": 585,
-          "projectileName": "ClothiersCurse",
-          "effects": [
-            {
-              "ilOffset": 1389,
-              "buffId": 153,
-              "durationTicksMin": 300,
-              "durationTicksMax": 600,
-              "durationTicksStep": 60,
-              "buffName": "ShadowFlame"
-            }
-          ]
-        },
-        {
-          "projectileId": 611,
-          "projectileName": "SolarWhipSword",
-          "effects": [
-            {
-              "ilOffset": 1159,
-              "buffId": 189,
+              "ilOffset": 496,
+              "buffId": 120,
               "durationTicksMin": 300,
               "durationTicksMax": 300,
               "durationTicksStep": 1,
-              "buffName": "Daybreak"
+              "buffName": "Stinky"
             }
-          ]
+          ],
+          "randomOutcomes": [],
+          "itemId": 5129,
+          "itemName": "Flymeal"
         },
         {
-          "projectileId": 612,
-          "projectileName": "SolarWhipSwordExplosion",
-          "effects": [
+          "effects": [],
+          "randomOutcomes": [
             {
-              "ilOffset": 1189,
-              "buffId": 189,
-              "durationTicksMin": 300,
-              "durationTicksMax": 300,
-              "durationTicksStep": 1,
-              "buffName": "Daybreak"
+              "sourceRandomCallIlOffset": 665,
+              "randomMinimumInclusive": 0,
+              "randomMaximumExclusive": 3,
+              "alternatives": [
+                {
+                  "randomValues": [
+                    0
+                  ],
+                  "effects": [
+                    {
+                      "ilOffset": 693,
+                      "buffId": 323,
+                      "durationTicksMin": 300,
+                      "durationTicksMax": 300,
+                      "durationTicksStep": 1,
+                      "buffName": "OnFire3"
+                    }
+                  ],
+                  "probabilityNumerator": 1,
+                  "probabilityDenominator": 3
+                },
+                {
+                  "randomValues": [
+                    1,
+                    2
+                  ],
+                  "effects": [],
+                  "probabilityNumerator": 2,
+                  "probabilityDenominator": 3
+                }
+              ]
             }
-          ]
-        },
-        {
-          "projectileId": 706,
-          "projectileName": "DD2PhoenixBowShot",
-          "effects": [
-            {
-              "ilOffset": 1306,
-              "buffId": 323,
-              "durationTicksMin": 480,
-              "durationTicksMax": 480,
-              "durationTicksStep": 1,
-              "buffName": "OnFire3"
-            }
-          ]
-        },
-        {
-          "projectileId": 711,
-          "projectileName": "ApprenticeStaffT3Shot",
-          "effects": [
-            {
-              "ilOffset": 1276,
-              "buffId": 203,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "BetsysCurse"
-            }
-          ]
-        },
-        {
-          "projectileId": 841,
-          "projectileName": "BlandWhip",
-          "effects": [
-            {
-              "ilOffset": 512,
-              "buffId": 307,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "BlandWhipEnemyDebuff"
-            }
-          ]
-        },
-        {
-          "projectileId": 847,
-          "projectileName": "SwordWhip",
-          "effects": [
-            {
-              "ilOffset": 556,
-              "buffId": 309,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "SwordWhipNPCDebuff"
-            }
-          ]
-        },
-        {
-          "projectileId": 848,
-          "projectileName": "MaceWhip",
-          "effects": [
-            {
-              "ilOffset": 733,
-              "buffId": 319,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "MaceWhipNPCDebuff"
-            }
-          ]
-        },
-        {
-          "projectileId": 849,
-          "projectileName": "ScytheWhip",
-          "effects": [
-            {
-              "ilOffset": 578,
-              "buffId": 310,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "ScytheWhipEnemyDebuff"
-            }
-          ]
-        },
-        {
-          "projectileId": 912,
-          "projectileName": "CoolWhip",
-          "effects": [
-            {
-              "ilOffset": 651,
-              "buffId": 340,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "CoolWhipNPCDebuff"
-            },
-            {
-              "ilOffset": 668,
-              "buffId": 324,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "Frostburn2"
-            }
-          ]
-        },
-        {
-          "projectileId": 913,
-          "projectileName": "FireWhip",
-          "effects": [
-            {
-              "ilOffset": 632,
-              "buffId": 323,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "OnFire3"
-            }
-          ]
-        },
-        {
-          "projectileId": 914,
-          "projectileName": "ThornWhip",
-          "effects": [
-            {
-              "ilOffset": 687,
-              "buffId": 315,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "ThornWhipNPCDebuff"
-            }
-          ]
-        },
-        {
-          "projectileId": 915,
-          "projectileName": "RainbowWhip",
-          "effects": [
-            {
-              "ilOffset": 752,
-              "buffId": 316,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "RainbowWhipNPCDebuff"
-            }
-          ]
-        },
-        {
-          "projectileId": 952,
-          "projectileName": "BoneWhip",
-          "effects": [
-            {
-              "ilOffset": 534,
-              "buffId": 326,
-              "durationTicksMin": 240,
-              "durationTicksMax": 240,
-              "durationTicksStep": 1,
-              "buffName": "BoneWhipNPCDebuff"
-            }
-          ]
-        },
-        {
-          "projectileId": 953,
-          "projectileName": "DaybreakExplosion",
-          "effects": [
-            {
-              "ilOffset": 1246,
-              "buffId": 189,
-              "durationTicksMin": 300,
-              "durationTicksMax": 300,
-              "durationTicksStep": 1,
-              "buffName": "Daybreak"
-            }
-          ]
-        },
-        {
-          "projectileId": 978,
-          "projectileName": "Volcano",
-          "effects": [
-            {
-              "ilOffset": 1216,
-              "buffId": 24,
-              "durationTicksMin": 180,
-              "durationTicksMax": 180,
-              "durationTicksStep": 1,
-              "buffName": "OnFire"
-            }
-          ]
-        },
-        {
-          "projectileId": 980,
-          "projectileName": "VenomDartTrap",
-          "effects": [
-            {
-              "ilOffset": 4016,
-              "buffId": 70,
-              "durationTicksMin": 300,
-              "durationTicksMax": 300,
-              "durationTicksStep": 1,
-              "buffName": "Venom"
-            }
-          ]
-        },
-        {
-          "projectileId": 1009,
-          "projectileName": "CursedFlare",
-          "effects": [
-            {
-              "ilOffset": 3935,
-              "buffId": 39,
-              "durationTicksMin": 600,
-              "durationTicksMax": 600,
-              "durationTicksStep": 1,
-              "buffName": "CursedInferno"
-            }
-          ]
+          ],
+          "itemId": 5382,
+          "itemName": "WaffleIron"
         }
-      ]
+      ],
+      "analyzedItemTypes": 5503,
+      "coveredItemTypes": 9,
+      "coveredItemEffects": 2
     }
   ]
 }

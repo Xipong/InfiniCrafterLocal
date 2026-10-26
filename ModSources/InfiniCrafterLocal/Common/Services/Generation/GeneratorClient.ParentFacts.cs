@@ -336,6 +336,7 @@ public sealed partial class GeneratorClient
             ["bait"] = item.bait,
             ["fishingPole"] = item.fishingPole,
             ["healLife"] = item.healLife,
+            ["lifeRegen"] = item.lifeRegen,
             ["healMana"] = item.healMana,
             ["manaCost"] = item.mana,
             ["ammo"] = item.ammo,
@@ -353,6 +354,14 @@ public sealed partial class GeneratorClient
             ["buffTime"] = item.buffTime,
             ["material"] = item.material,
         };
+        if (existing is null && CaptureNativeContactHitStatusReference(item) is object contactReference)
+            facts["nativeContactHitStatusReference"] = JsonSerializer.SerializeToNode(contactReference, WireJsonOptions);
+        if (existing is null && CaptureNativeEnvironmentReference(item) is JsonObject environmentReference)
+            facts["nativeEnvironmentReference"] = environmentReference;
+        if (existing is null && CaptureNativeEquipmentReference(item) is JsonObject equipmentReference)
+            facts["nativeEquipmentReference"] = equipmentReference;
+        if (existing is null && CaptureNativeShootReference(item) is JsonObject shootReference)
+            facts["nativeShootReference"] = shootReference;
         if (NativeTileStateFacts.Capture(facts["createTile"]?.GetValue<int>(), facts["placeStyle"]?.GetValue<int>()) is JsonObject tileState)
             facts["nativeTileState"] = tileState;
         return new(facts, JsonSerializer.SerializeToNode(DirectProjectileRawFromItem(item), WireJsonOptions));
@@ -439,13 +448,8 @@ public sealed partial class GeneratorClient
         if (item.shoot > ProjectileID.None)
             return ProjectileRawSnapshot(item.shoot, item.shootSpeed, item.useAmmo > AmmoID.None ? "weapon_item.shoot_field" : "item.shoot", item, -1);
 
-        if (item.useAmmo > AmmoID.None)
-        {
-            var fallback = FindPlayerAmmoCandidates(item.useAmmo, player, 1).FirstOrDefault()
-                ?? FindRepresentativeAmmoCandidates(item.useAmmo, 1).FirstOrDefault();
-            if (fallback is not null && fallback.Item.shoot > ProjectileID.None)
-                return ProjectileRawSnapshot(fallback.Item.shoot, fallback.Item.shootSpeed, fallback.Source + ".shoot_fallback_no_weapon_shoot", fallback.Item, fallback.InventorySlot);
-        }
+        // No own shoot field means unknown here. Inventory/representative ammo
+        // remain observations in ammoRaw, never a replacement weapon identity.
 
         return null;
     }
@@ -659,6 +663,8 @@ public sealed partial class GeneratorClient
                 ai2 = p.ai.Length > 2 ? p.ai[2] : 0f,
                 localAI0 = p.localAI.Length > 0 ? p.localAI[0] : 0f,
                 localAI1 = p.localAI.Length > 1 ? p.localAI[1] : 0f,
+                collisionReference = CaptureNativeCollisionReference(p),
+                armorPenetration = p.ArmorPenetration,
                 width = p.width,
                 height = p.height,
                 scale = p.scale,

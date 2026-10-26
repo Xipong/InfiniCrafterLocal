@@ -82,7 +82,7 @@ Accessory mounts all use the existing single overlay PNG, body position/pivot/ro
 - shoulder `(8,-12)`
 - orbit: the existing 16px accessory ring, including its existing ordinal/count policy
 
-Fixed X offsets mirror with facing; Y mirrors with gravity. Vanilla owns the outer full-player rotation/scale. `back` uses the rear accessory layer after Wings and before Skin/Leggings/Torso; `chest`, `waist` and `shoulder` use a front layer after Torso and the generated body badge, before OffhandAcc. `orbit` and an absent mount retain the historical rear layer. These are the same single PNG and existing mount choices; see [equipment rendering](EQUIPMENT_OVERLAY_RENDERING.md) for the native layer/carrier contract. Multiple fixed badges may overlap; there is no layout optimizer.
+Fixed X offsets mirror with facing; Y mirrors with gravity. Vanilla owns the outer full-player rotation/scale. `back` uses the rear accessory layer after Wings and before Skin/Leggings/Torso; `chest`, `waist`, `shoulder` and explicit `orbit` use a front layer after Torso and the generated body badge, before OffhandAcc. An absent mount retains the historical rear layer. Explicit `orbit` deliberately changes depth to avoid its first ring badge being fully hidden by the native legs; its ring geometry, fit, dye and transforms are unchanged. This is a presentation-depth change for existing explicit-orbit records, not a migration of absent metadata. These are the same single PNG and existing mount choices; see [equipment rendering](EQUIPMENT_OVERLAY_RENDERING.md) for the native layer/carrier contract. Multiple fixed badges may overlap; there is no layout optimizer.
 
 The Director is asked to choose grip/mount for new applicable designs. Runtime VFX colors belong to the VFX Director’s local RGB fields, not Visual metadata. `normalize_asset_prompt` forwards the exact `visual.grip` object into the actual item image request as final-canvas placement guidance, without truncating its coordinates or applying it to separate entity sprites. A pre-image authored coordinate is not evidence that a generated bitmap's physical handle actually lands there; no physical-grip accuracy or GPU/game acceptance is claimed by DTO/DrawData tests.
 
@@ -111,3 +111,27 @@ Visual Repair root использует partial `itemPatch|null`, условно
 `test_visual_presentation_metadata.py`: strict values, refusal of foreign color metadata, schema transport/downgrade behavior, Director dispatch/conditional Repair, frozen absences/siblings, delivery. Existing held/equipment fixture extensions in `EngineRuntimeChecks`: real DTO full/cache/network/save/registry routes, facing/gravity grip DrawData and FNA CPU submission, all fixed mounts/orbit through real player transforms. Texture shells and intercepted GPU flushes are headless seams, not in-game rendering.
 
 Условные проекты/actual packets/pixels защищают `test_vfx_packet_contracts.py`, `test_vfx_frozen_boundary_contracts.py`, `test_sprite_render_contracts.py`, `test_visual_vfx_prompt_prefix.py`. C# consumers — [VisualSpec](../../../ModSources/InfiniCrafterLocal/Common/Models/Contracts/GeneratedItemData.Model.cs), [held layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedHeldItemDrawLayer.cs), [equip layer](../../../ModSources/InfiniCrafterLocal/Common/Players/GeneratedEquipOverlayDrawLayer.cs). Результаты старых проходов — [history](../../archive/VISUAL_AUDIT_HISTORY_RU.md#presentation); актуальные команды/границы — [test owners](../../development/TESTING_RU.md).
+
+### Native held contact and dropped support
+
+The held root renderer projects the native use-style pose into the authored grip's
+contact space. An enabled composite front arm uses the engine's front-hand getter;
+ordinary shoot uses the native proxy frame's center translation; swing/thrust retain
+their native item anchor. Draw-set translation, native layer/full-player transforms,
+explicit holdout offsets, facing and gravity remain independent. This is a technical
+pose correction, not a new arm pose or a reinterpretation of projectile `reach`.
+The held-presentation packet is version **5**: its location pair now carries resolved
+contact coordinates. Both producer and local draw use the same projection. Version 4
+(raw item-anchor coordinates) is rejected, not guessed or migrated; peers must run
+the same mod version. This presentation packet never controls gameplay.
+
+Dropped sprites retain their complete PNG, declared frame size, caller rotation and
+scale, native collider and authored draw offsets. The selected texture cache measures
+an alpha-positive pixel-edge convex hull once alongside its existing alpha bounds.
+After rotation/scale, that visible hull is horizontally centered on `Item.Bottom`
+and its lowest edge touches the native bottom (before explicit draw offsets). This
+presentation normalization removes transparent padding without identifying feet,
+decorations or materials. Alpha=1 participates just as in existing bounds; sparse or
+rotated silhouettes do not acquire fictitious bounding-box corners. No item art,
+placed-body pivot or physics is rewritten. Alpha-empty images remain empty; unknown
+geometry exists only for borrowed/headless fixtures and retains old frame placement.
