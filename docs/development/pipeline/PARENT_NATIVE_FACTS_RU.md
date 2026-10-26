@@ -49,6 +49,11 @@
 hook, неизвестная ветка или неполный roster остаются unknown, не «обычной стрелой».
 Поддержанные ModItem/GlobalItem override shapes читаются из metadata без
 исполнения; ammo-owned `PickAmmo` отдельно от weapon `ModifyShootStats`/`Shoot`.
+При подтверждённых сертификатах `PickAmmo` и его lookup читается текущая
+`AmmoID.Sets.SpecificLauncherAmmoProjectileMatches`: моды могут изменять эту
+таблицу. Если пара не найдена и категория допускает offset, идентичность
+остаётся unknown: перед offset возможны другие native-ветки. Позднейшее
+безусловное подтверждённое правило может снова определить идентичность.
 
 Регрессии закреплённого binary: Pulse Bow заменяет projectile любого arrow
 input на 357; Hellwing меняет только current projectile 1 на 485, сохраняя

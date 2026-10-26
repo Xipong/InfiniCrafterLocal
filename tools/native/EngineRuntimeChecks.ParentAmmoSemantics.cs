@@ -76,6 +76,7 @@ internal static partial class EngineRuntimeChecks
             }
         }
         AssertAmmoSourceAgainstNativeShotRequests();
+        AssertRocketTableSelection();
         Equal(23, owner.inventory[54].stack, "capture never selects/consumes ammo");
         string? export = Environment.GetEnvironmentVariable("INFINI_PARENT_AMMO_PACKET");
         if (!string.IsNullOrWhiteSpace(export))
@@ -83,6 +84,47 @@ internal static partial class EngineRuntimeChecks
             System.IO.File.WriteAllText(export, new GeneratorClient().Prepare(new Item(2223), new Item(ItemID.DaedalusStormbow), owner).PayloadJson);
             System.IO.File.WriteAllText(export + ".hellwing.json", new GeneratorClient().Prepare(new Item(3019), new Item(4381), owner).PayloadJson);
         }
+    }
+
+    private static void AssertRocketTableSelection()
+    {
+        var owner = new Player();
+        foreach (int weaponType in new[] { 1946, 3930 })
+            foreach (int ammoType in new[] { 772, 773, 774 })
+            {
+                var weapon = new Item(weaponType);
+                owner.inventory[54] = new Item(ammoType, 20);
+                Equal(true, owner.PickAmmo(weapon, out int actual, out _, out _, out _, out _, dontConsume: true), "native rocket selection oracle");
+                using var packet = JsonDocument.Parse(new GeneratorClient().Prepare(weapon, new Item(ItemID.DirtBlock), owner).PayloadJson);
+                var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
+                var binding = raw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
+                Equal(actual, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "specific rocket table precedes generic offset");
+                Equal(actual, raw.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(), "exported rocket projectile profile agrees with native selection");
+            }
+        // A live table may be changed by mods. Capture the current entry; never
+        // fall through to the category offset if there is no matching entry.
+        var table = AmmoID.Sets.SpecificLauncherAmmoProjectileMatches[1946];
+        int original = table[772];
+        try
+        {
+            var weapon = new Item(1946); owner.inventory[54] = new Item(772, 20);
+            table[772] = ProjectileID.Bee;
+            using (var packet = JsonDocument.Parse(new GeneratorClient().Prepare(weapon, new Item(ItemID.DirtBlock), owner).PayloadJson))
+            {
+                var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
+                var binding = raw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
+                Equal(ProjectileID.Bee, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "capture observes current table entry");
+            }
+            table.Remove(772);
+            using (var packet = JsonDocument.Parse(new GeneratorClient().Prepare(weapon, new Item(ItemID.DirtBlock), owner).PayloadJson))
+            {
+                var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
+                var binding = raw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
+                Equal(JsonValueKind.Null, binding.GetProperty("sourceRuleOutputProjectileId").ValueKind, "unmatched rocket selection remains unknown");
+                Equal(false, binding.GetProperty("includeReplacementProjectileProfile").GetBoolean(), "unknown selection exports no replacement profile");
+            }
+        }
+        finally { table[772] = original; }
     }
 
     private static void AssertAmmoSourceAgainstNativeShotRequests()
