@@ -77,8 +77,8 @@ public sealed class RuntimeItemEffectGroupSpec : IItemEffectsSpec
             static bool Between(float value, float low, float high) => float.IsFinite(value) && value >= low && value <= high;
             if (buff.DurationTicks is < 1 or > 21600 || !Between(buff.MiningSpeedMultiplier, .25f, 4f)
                 || !Between(buff.EmitLightStrength, 0f, 1.5f) || buff.OreSenseRadiusTiles is not (0 or 1)
-                || !Between(buff.MovementSpeed, -.5f, 2f) || !Between(buff.JumpBoost, 0f, 8f)
-                || buff.ManaRegen is < 0 or > 120 || buff.LifeRegen is < 0 or > 120
+                || !Between(buff.MovementSpeed, -.8f, 2f) || !Between(buff.JumpBoost, -8f, 8f)
+                || buff.ManaRegen is < -100 or > 120 || buff.LifeRegen is < -100 or > 120
                 || buff.LightColorName != RuntimeColorPolicy.NormalizeRequired(buff.LightColorName, allowEmpty: buff.EmitLightStrength <= 0f))
                 throw new InvalidDataException("effect group generated buff must match the exact registered wire domain");
         }

@@ -7,6 +7,7 @@ import pytest
 
 from infini_local.pipelines import llm_authoring_pipeline as author
 from infini_local.pipelines.parent_context_pipeline import compact_projectile_profile
+from prompt_packet_helpers import expand_native_source_references
 
 
 @pytest.mark.parametrize("surface,key", [
@@ -69,7 +70,9 @@ def test_parent_ammo_observations_reach_author_with_scope_multiplicity_and_empty
                   "fallbackProjectileRaw": [candidate, candidate]}}
     before = copy.deepcopy(parent)
     _, user, _ = author.build_initial_author_request(parent, {}, "ammo-source", model_name="offline-test-model")
-    raw = json.loads(user)["parents"]["A"]["packet"]["raw"]
+    packet = json.loads(user)
+    assert "sourceSameAs" in user
+    raw = expand_native_source_references(packet)["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["lifeRegen"] == 2
     assert raw["directProjectile"] == {"type": 10, "armorPenetration": 5}
     assert raw["ammo"] == parent["ammoRaw"]

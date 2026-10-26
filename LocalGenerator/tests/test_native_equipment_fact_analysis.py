@@ -150,3 +150,48 @@ def test_unreachable_or_repeated_whole_equipment_branch_is_refused():
     assert equipment_facts(program([("ret",)] + item(crit()))) == []
     repeated = [("label", "loop")] + item(crit())[:-1] + [("br", "loop"), ("ret",)]
     assert equipment_facts(program(repeated)) == []
+
+
+def test_boolean_context_keeps_base_addition_and_conditional_contribution_separate():
+    body = crit() + [("ldsfld", "Terraria.Main.tenthAnniversaryWorld:bool"), ("brfalse", "outside")] + [
+        ("ldarg", 0), ("ldarg", 0), ("ldfld", "Terraria.Player.maxMinions"), ("const", 1), ("add",), ("stfld", "Terraria.Player.maxMinions")]
+    rows = equipment_facts(program(item(body, (238,))))
+    assert len(rows) == 1
+    branch = rows[0]["branches"][0]
+    assert branch["effects"][0]["value"] == 5
+    conditional = branch["conditionalEffects"][0]
+    assert conditional["condition"] == {"nativeMember": "Terraria.Main.tenthAnniversaryWorld", "equals": True, "observed": False}
+    assert conditional["effects"][0]["stat"] == "maximumMinions"
+    assert conditional["effects"][0]["value"] == 1
+    false_body = list(body); false_body[8] = ("brtrue", "outside")
+    assert equipment_facts(program(item(false_body, (238,))))[0]["branches"][0]["conditionalEffects"][0]["condition"]["equals"] is False
+    for gate in ["unknown", "Terraria.Main.tenthAnniversaryWorld"]:
+        unknown = list(body); unknown[7] = ("ldsfld", gate)
+        assert equipment_facts(program(item(unknown, (238,)))) == []
+    nested = body[:9] + [("ldsfld", "Terraria.Main.other:bool"), ("brfalse", "outside")] + body[9:]
+    assert equipment_facts(program(item(nested, (238,)))) == []
+
+
+def test_bounded_literal_item_id_range_preserves_each_item_and_declines_bypass():
+    guarded = [("ldarg", 1), ("ldfld", "Terraria.Item.type"), ("const", 1158), ("blt", "outside"),
+        ("ldarg", 1), ("ldfld", "Terraria.Item.type"), ("const", 1161), ("bgt", "outside")] + crit() + [("label", "outside"), ("ret",)]
+    rows = equipment_facts(program(guarded))
+    assert [r["itemId"] for r in rows] == [1158, 1159, 1160, 1161]
+    assert all(len(r["branches"]) == 1 and r["branches"][0]["effects"][0]["value"] == 5 for r in rows)
+    for at, replacement in [(3, ("blt", "outside_wrong")), (7, ("bge", "outside")), (6, ("const", 2000))]:
+        changed = guarded.copy(); changed[at] = replacement
+        assert equipment_facts(program(changed + [("label", "outside_wrong"), ("ret",)])) == []
+    assert equipment_facts(program([("ldsfld", "unknown"), ("brfalse", "outside")] + guarded)) == []
+    bypass = program(guarded)
+    assert equipment_facts([I(-1, "br", 8), *bypass]) == []
+
+
+def test_native_mining_whip_and_fishing_additions_keep_component_units():
+    for field, value, expected, units in [("pickSpeed", -0.1, "pickUseTimeMultiplier", "additive_fraction"),
+            ("whipRangeMultiplier", 0.15, "whipRangeMultiplier", "additive_fraction"),
+            ("fishingSkill", 5, "fishingPower", "points")]:
+        body = [("ldarg", 0), ("ldarg", 0), ("ldfld", "Terraria.Player." + field), ("const", value), ("add",), ("stfld", "Terraria.Player." + field)]
+        rows = equipment_facts(program(item(body, (10,))))
+        assert len(rows) == 1
+        effect = rows[0]["branches"][0]["effects"][0]
+        assert (effect["stat"], effect["value"], effect["units"]) == (expected, value, units)

@@ -18,11 +18,13 @@ def extended_decode(path, method):
 
     result = list(decode(path, "Player", method, "Terraria.ID.ItemID"))
     pe = dnfile.dnPE(str(path))
-    fields = {}
+    fields, booleans = {}, set()
     for t in pe.net.mdtables.TypeDef:
         owner = str(t.TypeNamespace) + "." + str(t.TypeName)
         for f in t.FieldList:
             fields[id(f.row)] = owner + "." + str(f.row.Name)
+            if f.row.Signature.value == b"\x06\x02":
+                booleans.add(fields[id(f.row)])
     code = []
     for i in result[0]:
         arg = i.arg
@@ -31,6 +33,8 @@ def extended_decode(path, method):
             arg = fields[id(row)]
             if row.Signature.value == b"\x06\x02":
                 arg += ":bool"
+        elif i.op in ("ldfld", "ldsfld") and arg in booleans:
+            arg += ":bool"
         elif i.op == "ldstr":
             arg = str(pe.net.user_strings.get(arg.value & 0xFFFFFF).value)
         code.append(Instruction(i.offset, i.op, arg))

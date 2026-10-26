@@ -233,6 +233,62 @@
           "fullName": "Terraria/BatScepter"
         },
         {
+          "itemId": 679,
+          "sourceGuardIlOffset": 15369,
+          "sourceSpawnIlOffset": 15477,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 6,
+            "maximum": 6,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/TacticalShotgun"
+        },
+        {
+          "itemId": 1156,
+          "sourceGuardIlOffset": 15506,
+          "sourceSpawnIlOffset": 15614,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 3,
+            "maximum": 3,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/PiranhaGun"
+        },
+        {
+          "itemId": 4682,
+          "sourceGuardIlOffset": 15643,
+          "sourceSpawnIlOffset": 15751,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 3,
+            "maximum": 3,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/ReleaseDoves"
+        },
+        {
+          "itemId": 2623,
+          "sourceGuardIlOffset": 15780,
+          "sourceSpawnIlOffset": 15888,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 3,
+            "maximum": 3,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/BubbleGun"
+        },
+        {
           "itemId": 3210,
           "sourceGuardIlOffset": 15917,
           "sourceSpawnIlOffset": 16157,

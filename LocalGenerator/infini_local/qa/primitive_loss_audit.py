@@ -114,6 +114,57 @@ def nullable_number_rejection_bounds(data: bytes, class_name: str, property_name
     return None
 
 
+def number_rejection_bounds(data: bytes, class_name: str, property_name: str) -> list[float] | None:
+    """Prove bounded scalar setters, including a class-local finite guard helper.
+
+    This recognizes exact native guard shapes, not names or declared bounds.
+    A changed assignment, missing finite guard or unrecognized helper fails closed.
+    """
+    nullable = nullable_number_rejection_bounds(data, class_name, property_name)
+    if nullable is not None:
+        return nullable
+
+    def tokens(node: Node) -> bytes:
+        if node.type == "comment":
+            return b""
+        return b"".join(tokens(child) for child in node.children) if node.children else node.text or b""
+
+    for declaration in _nodes(_PARSER.parse(data).root_node, "class_declaration"):
+        name = declaration.child_by_field_name("name")
+        if name is None or name.text != class_name.encode():
+            continue
+        for prop in declaration.child_by_field_name("body").named_children:
+            if prop.type != "property_declaration" or prop.child_by_field_name("name").text != property_name.encode():
+                continue
+            storage = prop.child_by_field_name("type").text
+            if storage not in {b"int", b"float", b"double"}:
+                return None
+            accessors = list(_nodes(prop, "accessor_declaration"))
+            getter = next((row for row in accessors if row.children[0].type == "get"), None)
+            setter = next((row for row in accessors if row.children[0].type == "set"), None)
+            backing = re.fullmatch(rb"get=>([A-Za-z_][A-Za-z_0-9]*);", tokens(getter)) if getter else None
+            if not backing or setter is None:
+                return None
+            literal = rb"-?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?[fd]?"
+            direct = re.fullmatch(rb"set=>" + re.escape(backing[1]) + rb"=valueis>=(" + literal + rb")and<=(" + literal + rb")\?value:thrownewInvalidDataException\(.*\);", tokens(setter))
+            if direct and storage == b"int":
+                return [float(raw) for raw in direct.groups()]
+            call = re.fullmatch(rb"set=>" + re.escape(backing[1]) + rb"=([A-Za-z_][A-Za-z_0-9]*)\(value,(" + literal + rb"),(" + literal + rb")\);", tokens(setter))
+            if call is None or storage == b"int":
+                return None
+            helpers = [node for node in declaration.child_by_field_name("body").named_children
+                       if node.type == "method_declaration" and node.child_by_field_name("name").text == call[1]]
+            if len(helpers) != 1:
+                return None
+            guard = (b"privatestatic" + storage + call[1] + b"(" + storage + b"value," + storage + b"low," + storage + b"high)=>"
+                     + storage + b".IsFinite(value)&&value>=low&&value<=high?value:thrownewInvalidDataException(")
+            helper = tokens(helpers[0])
+            if not helper.startswith(guard) or not re.fullmatch(rb'"(?:[^"\\]|\\.)*"\);', helper[len(guard):]):
+                return None
+            return [float(raw.rstrip(b"fd")) for raw in call.groups()[1:]]
+    return None
+
+
 def _method_bounds(data: bytes, signature: bytes, next_signature: bytes | None = None) -> tuple[int, int]:
     start = data.find(signature)
     # The last method in a dedicated owner partial needs no unrelated next hook.
@@ -240,8 +291,11 @@ def event_surface_audit(
 def _runtime_dto_source() -> bytes:
     # Both partial declarations are authoritative; inspecting only the original
     # file misses the additive entity fields even though strict wire admits them.
-    return b"\n".join((_MODEL_ROOT / "Common/Models/Contracts" / name).read_bytes()
-                      for name in ("RuntimeProgramSpec.cs", "RuntimeMotionComponents.cs"))
+    directory = _MODEL_ROOT / "Common/Models/Contracts"
+    files = {"RuntimeProgramSpec.cs", "RuntimeMotionComponents.cs"}
+    files.update(cls + ".cs" for cap in CAPABILITY_REGISTRY.values()
+                 for cls in cap.wire_components.values() if (directory / (cls + ".cs")).is_file())
+    return b"\n".join((directory / name).read_bytes() for name in sorted(files))
 
 
 def _dto_component_types(data: bytes) -> tuple[dict[str, dict[str, str]], dict[str, tuple[str, ...]]]:
@@ -356,6 +410,21 @@ def _motion_component_surface_audit(dto: bytes) -> dict[str, Any]:
         if not paths:
             raise ValueError(f"Missing registry component projection: {fn}")
         visit(cls, paths, [cap.flat_wire_params_schema()])
+    # Every declared nested event destination is checked independently, including
+    # its native field type, instead of unioning shared DTO inputs across calls.
+    event_fields = inherited("RuntimeEventActionSpec")
+    for cap in CAPABILITY_REGISTRY.values():
+        for member, declared_class in cap.wire_components.items():
+            if cap.category != "event":
+                raise ValueError(f"Unsupported nested component owner: {cap.name}")
+            field = member[0].upper() + member[1:]
+            storage = event_fields.get(field, "").removesuffix("?")
+            if storage != declared_class:
+                raise ValueError(f"Registry/native nested component binding differs: {cap.name}.{member}")
+            prefix = f"runtimeProgram.entities[].events[].{member}."
+            paths = {path[len(prefix):] for path in cap.final_wire_paths if path.startswith(prefix)}
+            schemas = _schema_fields(cap.flat_wire_params_schema()).get(member, [])
+            visit(storage, paths, schemas)
     return {"ok": not any(unclassified.values()) and not any(missing.values()) and not any(drift.values()),
             "unclassifiedByClass": {cls: sorted(fields) for cls, fields in unclassified.items()},
             "missingDtoFieldsByClass": {cls: sorted(fields) for cls, fields in missing.items()},

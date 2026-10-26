@@ -132,7 +132,8 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     packet = request_dossier(request)
     catalog = packet["runtimeCapabilityContract"]["catalog"]
     assert catalog == sharp_engine_fn_catalog_for_llm(include_source_units=False)
-    cards = {card["fn"]: card for card in catalog["capabilities"]}
+    from prompt_packet_helpers import expand_catalog_targets
+    cards = {card["fn"]: card for card in expand_catalog_targets(catalog["capabilities"], catalog["fieldGuide"]["targetKindSets"])}
     visible = {cap.name: cap for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
     assert set(cards) == set(visible)
     assert not set(cards).intersection(cap.name for cap in CAPABILITY_REGISTRY.values() if not cap.author_visible)

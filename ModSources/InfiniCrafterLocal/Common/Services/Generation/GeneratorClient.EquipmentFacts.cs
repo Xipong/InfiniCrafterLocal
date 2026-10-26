@@ -65,7 +65,7 @@ public sealed partial class GeneratorClient
         if (equipped is null && sets.Count == 0) return null;
         var result = new JsonObject {
             ["source"] = "verified_native_equipment_source_branches",
-            ["scope"] = "Partial source references for the unprefixed item in functional equipment. Per-item contributions are separate from conditional FULL armor sets; set slots are native equip-slot IDs, not item IDs. No current player state or arbitrary mod hooks are executed. Other branches, runtime gates, final player stats and mod changes are not inferred. Additions are native stat contributions, not final animation/run speed or final damage multipliers. Boolean native flags are not quantified mechanics. Literal localized set text is not numeric proof. Author chooses generated behavior explicitly.",
+            ["scope"] = "Partial source references for the unprefixed item in functional equipment. Per-item contributions are separate from conditional FULL armor sets; set slots are native equip-slot IDs, not item IDs. No current player state or arbitrary mod hooks are executed. Explicit conditionalEffects retain literal native Boolean gates with observed=false; they are not active bonuses and no world/player condition is evaluated. Other branches, runtime gates, final player stats and mod changes are not inferred. Additions are native stat contributions, not final animation/run speed or final damage multipliers. Boolean native flags are not quantified mechanics. Literal localized set text is not numeric proof. Author chooses generated behavior explicitly.",
         };
         if (equipped is not null)
         {

@@ -85,6 +85,12 @@ def ammo_profile_of(item: dict[str, Any]) -> dict[str, Any]:
     Ammo examples are not the canonical weapon identity: a modded gun/bow may have
     important item.shoot mechanics independent of the player's current bullets.
     """
+    # A present request-local observation, even empty or unavailable, owns this
+    # envelope. Never replace it with the fingerprint's player-free examples.
+    missing = object()
+    direct = dict_get_ci(item, "ammoRaw", missing)
+    if direct is not missing:
+        return direct if isinstance(direct, dict) else {}
     return _raw_section_dict(item, "ammoRaw")
 
 
@@ -126,7 +132,7 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     # Literal source text/provenance is one observation: preserve line order,
     # whitespace, empty lines and source-bound refusal without compacting it.
     for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference",
-                "nativeEquipmentReference", "nativeEnvironmentReference"):
+                "nativeEquipmentReference", "nativeEnvironmentReference", "nativeBuffEffectReference"):
         value = item_field(item, key, None)
         if value is None and key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
             runtime = dict_get_ci(item, "runtimeFacts", {})
@@ -186,6 +192,13 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
         out["aiStyle"] = _compact_raw_value(proj.get("aiStyle"))
     return out
 
+def _compact_ammo_item_source(value: dict[str, Any]) -> dict[str, Any]:
+    out = _select_raw_keys(value, LLM_AMMO_ITEM_KEYS)
+    if isinstance(value.get("pickAmmoHookReference"), dict):
+        out["pickAmmoHookReference"] = copy.deepcopy(value["pickAmmoHookReference"])
+    return out
+
+
 def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
     ap = ammo_profile_of(item)
     if not isinstance(ap, dict) or not ap:
@@ -195,8 +208,16 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
         out["mode"] = ap["mode"]
     if _compact_keep(ap.get("ammoId")):
         out["ammoId"] = ap["ammoId"]
+    if isinstance(ap.get("projectileSemanticsReference"), dict):
+        # Native source proof and its unresolved hook scope are inseparable.
+        # Ammo candidates remain inputs, not observed outgoing shots.
+        out["projectileSemanticsReference"] = copy.deepcopy(ap["projectileSemanticsReference"])
+    if isinstance(ap.get("candidateProjectileBindings"), list):
+        out["candidateProjectileBindings"] = copy.deepcopy(ap["candidateProjectileBindings"])
+    if isinstance(ap.get("playerInventoryObservation"), dict):
+        out["playerInventoryObservation"] = copy.deepcopy(ap["playerInventoryObservation"])
     if isinstance(ap.get("ammoItemRaw"), dict):
-        out["ammoItemRaw"] = _select_raw_keys(ap["ammoItemRaw"], LLM_AMMO_ITEM_KEYS)
+        out["ammoItemRaw"] = _compact_ammo_item_source(ap["ammoItemRaw"])
     for key in ("projectileRaw", "weaponShootFieldProjectileRaw"):
         if isinstance(ap.get(key), dict):
             out[key] = compact_projectile_profile(ap[key])
@@ -206,9 +227,9 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
     # from an unavailable observation. Each entry retains source and slot.
     for key in ("playerInventoryAmmoRaw", "fallbackAmmoRaw"):
         if isinstance(ap.get(key), list):
-            out[key] = [_select_raw_keys(value, LLM_AMMO_ITEM_KEYS)
+            out[key] = [_compact_ammo_item_source(value)
                         for value in ap[key] if isinstance(value, dict)]
-    for key in ("playerInventoryProjectileRaw", "fallbackProjectileRaw"):
+    for key in ("playerInventoryProjectileRaw", "fallbackProjectileRaw", "nativeReplacementProjectileRaw"):
         if isinstance(ap.get(key), list):
             out[key] = [compact_projectile_profile(value)
                         for value in ap[key] if isinstance(value, dict)]

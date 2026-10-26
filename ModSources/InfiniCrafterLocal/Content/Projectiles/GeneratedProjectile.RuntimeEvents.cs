@@ -25,6 +25,7 @@ public sealed partial class GeneratedProjectile
         Vector2 direction = GameplayEventDirection();
         foreach (RuntimeEventActionSpec action in _entity.ActionsFor(eventName))
         {
+            if (action.ActionCode == RuntimeEventActionCode.ApplyNpcEffect) continue; // hit bridge owns admission/RNG
             Vector2 eventPosition = RuntimeProgramExecutor.ProjectileEventPosition(action, Projectile.Center, target);
             if (action.DelayTicks > 0)
             {

@@ -354,6 +354,16 @@ public sealed partial class GeneratorClient
             ["buffTime"] = item.buffTime,
             ["material"] = item.material,
         };
+        if (existing is null && item.buffType > InfiniTerrariaSentinels.NoBuffType && item.buffTime > 0)
+        {
+            // Item buff fields are on-use PLAYER requests, never NPC-hit facts.
+            // Keep observed duration distinct from source-certified update effects.
+            JsonObject buffReference = CaptureNativeBuffEffectReference(item.buffType, "player", item.ModItem is null);
+            buffReference["applicationSource"] = "Item.buffType_and_buffTime_on_use_request";
+            buffReference["requestedDurationTicks"] = item.buffTime;
+            buffReference["applicationScope"] = "Native item field request only; item-use admission, refresh rules and loaded hooks were not executed.";
+            facts["nativeBuffEffectReference"] = buffReference;
+        }
         if (existing is null && CaptureNativeContactHitStatusReference(item) is object contactReference)
             facts["nativeContactHitStatusReference"] = JsonSerializer.SerializeToNode(contactReference, WireJsonOptions);
         if (existing is null && CaptureNativeEnvironmentReference(item) is JsonObject environmentReference)
@@ -470,27 +480,47 @@ public sealed partial class GeneratorClient
         if (item.useAmmo <= AmmoID.None)
             return null;
 
-        var inventory = FindPlayerAmmoCandidates(item.useAmmo, player, 3);
+        var inventory = FindPlayerAmmoCandidates(item.useAmmo, player, 3, out string inventoryStatus);
         var fallback = FindRepresentativeAmmoCandidates(item.useAmmo, 3);
+        var semantics = CaptureAmmoProjectileSemantics(item);
+        var bindings = (inventory ?? new List<AmmoCandidate>()).Concat(fallback)
+            .ToDictionary(candidate => candidate, candidate => BindAmmoCandidateProjectile(item, candidate, semantics));
+        bool KeepInputProfile(AmmoCandidate candidate) => bindings[candidate]["includeInputProjectileProfile"]!.GetValue<bool>();
+        var replacementTypes = bindings.Values.Where(binding => binding["includeReplacementProjectileProfile"]!.GetValue<bool>())
+            .Select(binding => binding["sourceRuleOutputProjectileId"]!.GetValue<int>()).Distinct().Take(3).ToArray();
         return new
         {
             mode = "weapon_uses_ammo",
             ammoId = item.useAmmo,
+            projectileSemanticsReference = semantics,
+            candidateProjectileBindings = bindings.Values.ToArray(),
+            nativeReplacementProjectileRaw = replacementTypes.Select(type => SourceReplacementProjectileRaw(type, item)).ToArray(),
+            playerInventoryObservation = new
+            {
+                source = "Player.inventory",
+                status = inventoryStatus == "observed" ? "observed" : "unavailable",
+                reason = inventoryStatus == "observed" ? null : inventoryStatus,
+                candidateLimit = 3,
+                selection = "inventory_order_category_match_not_native_PickAmmo"
+            },
             // This is the weapon's own shoot field.  It may be a default ammo placeholder,
             // or it may be a custom mechanic.  The LLM gets it separately from ammo candidates.
             weaponShootFieldProjectileRaw = item.shoot > ProjectileID.None ? ProjectileRawSnapshot(item.shoot, item.shootSpeed, "weapon_item.shoot_field", item, -1) : null,
-            playerInventoryAmmoRaw = inventory.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
-            playerInventoryProjectileRaw = inventory.Where(c => c.Item.shoot > ProjectileID.None).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray(),
+            // Null means the inventory was not observed. Only a completed scan
+            // can publish [] as an observed lack of matching candidates.
+            playerInventoryAmmoRaw = inventory?.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
+            playerInventoryProjectileRaw = inventory?.Where(c => c.Item.shoot > ProjectileID.None && KeepInputProfile(c)).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray(),
             fallbackAmmoRaw = fallback.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
-            fallbackProjectileRaw = fallback.Where(c => c.Item.shoot > ProjectileID.None).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray()
+            fallbackProjectileRaw = fallback.Where(c => c.Item.shoot > ProjectileID.None && KeepInputProfile(c)).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray()
         };
     }
 
-    private static List<AmmoCandidate> FindPlayerAmmoCandidates(int ammoId, Player? player, int maxCount)
+    private static List<AmmoCandidate>? FindPlayerAmmoCandidates(int ammoId, Player? player, int maxCount, out string status)
     {
+        status = player is null ? "no_player" : "inventory_scan_failed";
         var outList = new List<AmmoCandidate>();
-        if (player is null || ammoId <= ItemID.None)
-            return outList;
+        if (player is null || ammoId <= AmmoID.None)
+            return null;
         try
         {
             for (int i = 0; i < player.inventory.Length; i++)
@@ -498,7 +528,7 @@ public sealed partial class GeneratorClient
                 Item ammo = player.inventory[i];
                 if (ammo is null || ammo.IsAir || ammo.stack <= 0)
                     continue;
-                if (ammo.ammo == ammoId && ammo.shoot > ProjectileID.None)
+                if (ammo.ammo == ammoId)
                 {
                     outList.Add(new AmmoCandidate
                     {
@@ -513,8 +543,9 @@ public sealed partial class GeneratorClient
                         break;
                 }
             }
+            status = "observed";
         }
-        catch { }
+        catch { return null; }
         return outList;
     }
 
@@ -531,7 +562,7 @@ public sealed partial class GeneratorClient
                 {
                     Item ammo = new();
                     ammo.SetDefaults(type);
-                    if (ammo.IsAir || ammo.ammo != ammoId || ammo.shoot <= ProjectileID.None)
+                    if (ammo.IsAir || ammo.ammo != ammoId)
                         continue;
                     outList.Add(new AmmoCandidate
                     {
@@ -575,6 +606,7 @@ public sealed partial class GeneratorClient
             internalName = InternalName(ammo),
             sourceMod = SourceModName(ammo),
             fullName = SourceModName(ammo) + "/" + InternalName(ammo),
+            pickAmmoHookReference = CaptureAmmoInputHookReference(ammo),
             damage = ammo.damage,
             damageClass = DamageClassName(ammo),
             ammo = ammo.ammo,

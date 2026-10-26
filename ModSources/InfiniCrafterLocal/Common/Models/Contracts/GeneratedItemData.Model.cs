@@ -173,10 +173,10 @@ public sealed class GeneratedBuffSpec
         EmitLightStrength = MathF.Min(1.5f, MathF.Max(0f, EmitLightStrength));
         LightColorName = RuntimeColorPolicy.NormalizeRequired(LightColorName, allowEmpty: EmitLightStrength <= 0f);
         OreSenseRadiusTiles = Math.Min(60, Math.Max(0, OreSenseRadiusTiles));
-        MovementSpeed = MathF.Min(2f, MathF.Max(-0.5f, MovementSpeed));
-        JumpBoost = MathF.Min(8f, MathF.Max(0f, JumpBoost));
-        ManaRegen = Math.Min(120, Math.Max(0, ManaRegen));
-        LifeRegen = Math.Min(120, Math.Max(0, LifeRegen));
+        MovementSpeed = MathF.Min(2f, MathF.Max(-0.8f, MovementSpeed));
+        JumpBoost = MathF.Min(8f, MathF.Max(-8f, JumpBoost));
+        ManaRegen = Math.Min(120, Math.Max(-100, ManaRegen));
+        LifeRegen = Math.Min(120, Math.Max(-100, LifeRegen));
     }
 }
 

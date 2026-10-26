@@ -70,6 +70,15 @@ public partial class GeneratedItem
                         add("ReactionDelay" + suffix, "ReactionDelay", new object[] { occurrence, delay });
                     AddRuntimeUseEffects(group, "Reaction" + suffix, occurrence, add);
                 }
+                else if (action.ActionCode == RuntimeEventActionCode.ApplyNpcEffect
+                    && action.NpcEffect is { HasEffect: true } effect && action.DurationTicks is >= 1 and <= 3600)
+                {
+                    add("SecondaryNpcEffect" + suffix, "SecondaryNpcEffect", new object[] { occurrence, delay,
+                        RuntimeTooltipTime(action.DurationTicks), RuntimeTooltipNumber(effect.Chance * 100f),
+                        RuntimeTooltipNumber(effect.LifeRegenPenalty / 2f),
+                        (effect.DefenseDelta >= 0 ? "+" : "") + effect.DefenseDelta.ToString(CultureInfo.InvariantCulture),
+                        RuntimeTooltipNumber(effect.ContactDamageMultiplier), RuntimeTooltipNumber(effect.VelocityRetentionPerTick) });
+                }
                 else if (action.ActionCode is (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.DamageNearby) && action.RadiusPx is > 0 and <= 1024
                     && RuntimeTooltipFinite(action.DamageMultiplier, 0f, 10f))
                 {
@@ -135,7 +144,7 @@ public partial class GeneratedItem
 
     private static bool SecondaryEventIsReachable(RuntimeEntitySpec source, RuntimeEventActionSpec action, bool itemContact, bool activeUse, bool equipped)
     {
-        if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.DamageNearby or RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.ApplyGeneratedBuff)
+        if (action.DelayTicks is < 0 or > 600 || action.ActionCode is not (RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.DamageNearby or RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.ApplyGeneratedBuff or RuntimeEventActionCode.ApplyNpcEffect)
             || action.Action != RuntimeOpcodeNames.EventActionName(action.ActionCode)
             || (action.Event == RuntimeEventKind.Periodic
                 && (action.PeriodTicks < 6 || !SecondaryPeriodCanOccur(source, action.PeriodTicks)))) return false;

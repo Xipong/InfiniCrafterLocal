@@ -1,6 +1,6 @@
 """Lossless prompt metadata sharing and the real strict-provider inverse seam."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
 
 import copy
 import json
@@ -178,6 +178,7 @@ def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutati
     assert nested_references and set(nested_references) <= set(profiles)
     assert set(references + nested_references) == set(profiles)
     expanded = _expand_constraint_references(catalog["capabilities"], profiles)
+    expanded = expand_catalog_targets(expanded, catalog["fieldGuide"]["targetKindSets"])
     assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
             for card in expanded] == [cap.author_prompt_card() for cap in CAPABILITY_REGISTRY.values()
                                       if cap.author_visible]

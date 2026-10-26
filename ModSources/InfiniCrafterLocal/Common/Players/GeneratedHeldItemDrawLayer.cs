@@ -33,7 +33,8 @@ internal enum GeneratedHeldRenderRole
 public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 {
     public const byte PacketSyncGeneratedHeldItemPresentation = InfiniNetPacketIds.SyncGeneratedHeldItemPresentation;
-    private const int HeldItemPresentationSyncVersion = 5;
+    // v6 transports contact relative to the owner, not a stale world position.
+    private const int HeldItemPresentationSyncVersion = 6;
     private const int HeldSyncExpireTicks = 54;
     private const int HeldAssetRetryTicks = 90;
 
@@ -172,10 +173,12 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
         Vector2 origin = HeldSpriteOrigin(texture, role, flip, drawGravDir, data?.Visual?.Grip);
         Vector2 holdOffset = HeldOffset(data, drawGravDir);
         // Project the native use pose into contact space, retaining draw-set transforms.
-        // v5 remote packets carry that resolved contact, not raw ItemLocation.
+        // v6 remote packets carry that resolved contact relative to player.position;
+        // interpolation/movement between packets must not leave the PNG behind.
         // World zero and screen zero are valid coordinates, never missing-pose sentinels.
-        Vector2 contact = PayloadItemLocation(payload)
-            ?? NativeGripLocation(player, held, player.itemLocation);
+        Vector2 contact = PayloadItemLocation(payload) is { } relativeContact
+            ? player.position + relativeContact
+            : NativeGripLocation(player, held, player.itemLocation);
         Vector2 itemLocation = contact + drawInfo.ItemLocation - player.itemLocation;
         Vector2 position = itemLocation - Main.screenPosition + holdOffset;
         // An explicit final-canvas pivot is the hand contact point. Legacy artistic
@@ -271,7 +274,7 @@ public sealed class GeneratedHeldItemDrawLayer : PlayerDrawLayer
 
     private static HeldItemPresentationPayload BuildLocalPayload(Player player, Item held, GeneratedItemData data, bool activeUse)
     {
-        Vector2 contact = NativeGripLocation(player, held, player.itemLocation);
+        Vector2 contact = NativeGripLocation(player, held, player.itemLocation) - player.position;
         return new HeldItemPresentationPayload
         {
             PlayerId = player.whoAmI,

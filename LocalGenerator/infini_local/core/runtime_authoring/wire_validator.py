@@ -106,7 +106,8 @@ _EVENT_KEYS = frozenset({
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
     "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
-}) | _TARGET_EMISSION_FIELDS
+}) | _TARGET_EMISSION_FIELDS | frozenset(member for cap in CAPABILITY_REGISTRY.values()
+                                        if cap.category == "event" for member in cap.wire_components)
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
 _USE_POLICY_KEYS = frozenset({"action", "stackCost", "contactDamage", "stackConsumeChancePercent"})
 _BINDING_ACTION_KEYS = frozenset({"kind", "targetId", "placement", "effectGroupId"})
@@ -240,6 +241,55 @@ def _validate_hit_target_spawn(event: Mapping[str, Any], source_kind: str, entit
             or child_spawn["offsetPx"] != 0 or over.get("heightTiles", 0) != 0 or over.get("delayTicks", 0) != 0):
         errors.append({"path": path + ".entityId", "code": "reference_requirements_unsatisfied",
                        "message": "Target-relative child must be moving with exact event-origin/velocity/zero-offset spawn and no over-target transform."})
+
+
+def _validate_npc_effect(event: Mapping[str, Any], entity: Mapping[str, Any], runtime: Mapping[str, Any],
+                         path: str, errors: list[dict[str, Any]]) -> None:
+    cap = CAPABILITY_REGISTRY["apply_npc_effect_on_event"]
+    active = event.get("actionCode") == EVENT_ACTION_OPCODE[cap.name]
+    if not active:
+        if "npcEffect" in event:
+            errors.append({"path": path + ".npcEffect", "code": "wrong_event_parameter_owner",
+                           "message": "npcEffect belongs only to apply_npc_effect_on_event."})
+        return
+    if event.get("action") != cap.name or event.get("event") not in cap.allowed_events or entity.get("kind") not in cap.target_kinds:
+        errors.append({"path": path, "code": "invalid_event_action", "message": "NPC effects require the exact action and hit/crit event on a supported source."})
+    for name in ("durationSeconds", "delaySeconds"):
+        spec = cap.params[name]
+        key = spec.wire_name or name
+        if key in event:
+            errors.extend(strict_schema_errors(event[key], spec.wire_schema(), path=path + "." + key))
+        elif spec.required:
+            errors.append({"path": path + "." + key, "code": "required_field", "message": "NPC effect duration is required."})
+    effect_specs = {name: spec for name, spec in cap.params.items() if spec.wire_name.startswith("npcEffect.")}
+    effect = _validate_component_shape(event.get("npcEffect"), frozenset(spec.wire_name.split(".", 1)[1] for spec in effect_specs.values()), path + ".npcEffect", errors)
+    if effect is not None:
+        nonneutral = next(r.nonzero_params for r in cap.requirements if r.kind == "non_neutral_param")
+        has_effect = False
+        for name, spec in effect_specs.items():
+            key = spec.wire_name.split(".", 1)[1]
+            if key not in effect:
+                continue  # Native omitted fields retain exactly the declared neutral.
+            value = effect[key]
+            if not spec.matches_scalar_projection(value):
+                errors.append({"path": path + ".npcEffect." + key, "code": "invalid_npc_effect_field",
+                               "message": "NPC modifier must match its exact declared native type and bounds."})
+            elif name in nonneutral and value != spec.to_wire(spec.neutral):
+                has_effect = True
+        if not has_effect:
+            errors.append({"path": path + ".npcEffect", "code": "inert_component", "message": "NPC effect requires a non-neutral modifier; probability alone is not an effect."})
+    owned = {field.split(".", 1)[0] for name, spec in cap.params.items() for field in spec.wire_field_names(name)}
+    for key, neutral in {**_EMISSION_UNUSED_EVENT_DEFAULTS, "entityId": ""}.items():
+        if key not in owned and key in event and not _retained_event_neutral_matches(key, event[key], neutral):
+            errors.append({"path": path + "." + key, "code": "wrong_event_parameter_owner", "message": "NPC effects cannot consume other actions' parameters."})
+    if entity.get("kind") == "item_body":
+        bindings = runtime.get("bindings")
+        produced = isinstance(bindings, list) and any(contact_damage(b) for b in bindings if isinstance(b, Mapping))
+    else:
+        damage = entity.get("damage")
+        produced = isinstance(damage, Mapping) and damage.get("enabled") is True
+    if not produced:
+        errors.append({"path": path + ".event", "code": "event_not_produced", "message": "NPC effect needs the actual item-contact or projectile-damage hit producer."})
 
 
 def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]], path: str = "$.gameplay.generatedBuff") -> None:
@@ -985,6 +1035,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                                    "code": "event_not_produced", "message": "Target emission requires the actual item-contact or projectile-damage hit producer."})
             action_code = event.get("actionCode")
             event_path = f"$.runtimeProgram.entities[{index}].events[{event_index}]"
+            _validate_npc_effect(event, entity, runtime, event_path, errors)
             if action_code == EVENT_ACTION_OPCODE["damage_nearby_on_event"]:
                 cap = CAPABILITY_REGISTRY["damage_nearby_on_event"]
                 owned = {field for name, spec in cap.params.items() for field in spec.wire_field_names(name)}

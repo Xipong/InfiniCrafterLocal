@@ -54,3 +54,24 @@ def test_generated_environment_catalog_exact_projection():
     assert by_tile[215]["regenerationComponent"]["add"] == 1
     assert len(data["auras"]) == 5
     assert all(len(s["assemblySha256"]) == 64 and len(s["sourceMethodSha256"]) == 64 for s in data["sources"])
+
+
+def test_placement_certificate_is_exact_native_source_not_tile_family_inference():
+    data = json.loads(generator.REPORT.read_text())
+    assert "placementMapping" in data, "source-certified placement arithmetic must accompany tile predicates"
+    mapping = data["placementMapping"]
+    assert mapping["algorithm"] == "TileObject.Place_metadata_frames_v1"
+    assert all(len(sha) == 64 for sha in mapping["sourceMethodCertificates"].values())
+    assert mapping["placementStyle"] == "style * StyleMultiplier + Style + max(random, 0)"
+    assert mapping["tileCellFrameX"] == "baseFrameX + column * (CoordinateWidth + CoordinatePadding)"
+    assert mapping["tileCellFrameY"] == "baseFrameY + sum(CoordinateHeights[row] + CoordinatePadding for preceding rows)"
+    certificates = {s["method"]: s["sourceMethodSha256"] for s in data["sources"]}
+    assert generator.certified_placement_mapping(certificates) == mapping
+    for method in mapping["sourceMethods"]:
+        changed = dict(certificates); changed[method] = "0" * 64
+        try:
+            generator.certified_placement_mapping(changed)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("changed source cannot borrow placement semantics: " + method)

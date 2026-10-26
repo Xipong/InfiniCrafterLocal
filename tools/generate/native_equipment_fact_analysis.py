@@ -7,6 +7,7 @@ control-flow entries, nested context or numeric transformations refuse a record.
 from __future__ import annotations
 
 from collections import defaultdict
+from itertools import chain
 
 PLAYER = ("ldarg", 0)
 # Names identify native state, not generated capabilities or inheritance rules.
@@ -24,6 +25,9 @@ GETTERS = {
     "minionDamage": ("damage", "summon", "additive_fraction"),
 }
 FIELDS = {
+    "pickSpeed": ("pickUseTimeMultiplier", "additive_fraction"),
+    "whipRangeMultiplier": ("whipRangeMultiplier", "additive_fraction"),
+    "fishingSkill": ("fishingPower", "points"),
     "moveSpeed": ("movementSpeed", "additive_fraction"),
     "statManaMax2": ("maximumMana", "points"),
     "maxMinions": ("maximumMinions", "slots"),
@@ -88,6 +92,38 @@ def guarded_blocks(code):
             if not unsafe:
                 yield tuple(ids), d.offset, body
             break
+
+
+def guarded_range_blocks(code):
+    """Two signed inclusive Item.type comparisons, not a name-derived family."""
+    code = [i for i in code if i.op != "nop"]
+    for start in range(len(code) - 8):
+        if any(i.op == "ret" for i in code[:start]):
+            continue
+        a, b, lo, lower, e, f, hi, upper = code[start:start + 8]
+        if ((a.op, a.arg), (b.op, b.arg), (e.op, e.arg), (f.op, f.arg)) != (
+                ("ldarg", 1), ("ldfld", "Terraria.Item.type"), ("ldarg", 1), ("ldfld", "Terraria.Item.type")):
+            continue
+        if (lo.op != "const" or hi.op != "const" or not isinstance(lo.arg, int) or not isinstance(hi.arg, int)
+                or not 0 < lo.arg <= hi.arg < 10000 or hi.arg - lo.arg >= 32
+                or lower.op != "blt" or upper.op != "bgt" or lower.arg != upper.arg
+                or not isinstance(upper.arg, int) or upper.arg <= upper.offset):
+            continue
+        first, end = a.offset, upper.arg
+        body = [i for i in code[start + 8:] if i.offset < end]
+        if not body:
+            continue
+        unsafe = False
+        for n, ins in enumerate(code):
+            if start <= n < start + 8:
+                continue
+            for target in _targets(ins):
+                if (ins.offset < first and target > first and target >= end
+                        or target <= first and ins.offset >= end
+                        or not first <= ins.offset < end and first < target < end):
+                    unsafe = True
+        if not unsafe:
+            yield tuple(range(lo.arg, hi.arg + 1)), upper.offset, body
 
 
 def _constant(ins):
@@ -209,13 +245,49 @@ def additions(block):
     return result
 
 
+def conditioned_additions(block, end):
+    """One literal Boolean gate, retaining independent straight-line additions.
+
+    Entire branch consumption is still mandatory. This does not evaluate world
+    or player state, split opaque calls, or flatten nested conditions.
+    """
+    gates = []
+    for n, ins in enumerate(block):
+        if ins.op == "ldsfld" and isinstance(ins.arg, str) and ins.arg.startswith("Terraria.Main.") and ins.arg.endswith(":bool"):
+            gates.append((n, n + 1, ins.arg))
+        elif (ins.op, ins.arg) == PLAYER and n + 1 < len(block):
+            field = block[n + 1]
+            if field.op == "ldfld" and isinstance(field.arg, str) and field.arg.startswith("Terraria.Player.") and field.arg.endswith(":bool"):
+                gates.append((n, n + 2, field.arg))
+    if not gates:
+        effects = additions(block)
+        return {"effects": effects} if effects else None
+    if len(gates) != 1:
+        return None
+    start, at, member = gates[0]
+    if at >= len(block) or block[at].op not in ("brfalse", "brtrue"):
+        return None
+    branch = block[at]
+    # The gate must enclose a complete nonempty suffix of the item branch.
+    # Decline short-circuit chains, inner joins, loops and unknown control flow.
+    if branch.arg != end:
+        return None
+    before, conditional = additions(block[:start]), additions(block[at + 1:])
+    if (start and not before) or not conditional:
+        return None
+    return {"effects": before, "conditionalEffects": [{
+        "condition": {"nativeMember": member[:-5], "equals": branch.op == "brfalse", "observed": False},
+        "guardIlOffset": branch.offset, "effects": conditional}]}
+
+
 def equipment_facts(code):
     records = defaultdict(list)
-    for ids, guard, block in guarded_blocks(code):
-        effects = additions(block)
-        if effects:
+    for ids, guard, block in chain(guarded_blocks(code), guarded_range_blocks(code)):
+        end = next((i.offset for i in code if i.offset > block[-1].offset), None)
+        contributions = conditioned_additions(block, end)
+        if contributions is not None:
             for identity in ids:
-                records[identity].append({"guardIlOffset": guard, "effects": effects})
+                records[identity].append({"guardIlOffset": guard, **contributions})
     return [
         {"itemId": identity, "condition": "equipped_functional_item_during_GrantArmorBenefits", "branches": branches}
         for identity, branches in sorted(records.items())

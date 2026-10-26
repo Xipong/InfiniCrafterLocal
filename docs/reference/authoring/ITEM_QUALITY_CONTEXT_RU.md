@@ -2,7 +2,7 @@
 
 ## Сохранность родителей
 
-`parent_context_cards.py` передаёт точные accepted gameplay/runtime facts generated-родителя, включая независимые buffs, mobility, light и scale. Это read-only context, не приказ наследовать все функции. Для Visual/Repair отдельно передаётся принятая внешность с entity identity; Gameplay не выбирается из palette/silhouette/prose. Проекции копируют источник, не изменяют recipes. Generated parent передаёт полный exact accepted graph, не один guessed projectile или power/digest summary. Native ammo card содержит только фактические `mode`, `ammoId`, `ammoItemRaw`, `projectileRaw`, `weaponShootFieldProjectileRaw`, когда они присутствуют в текущем источнике. Имя/теги не выбирают пример ammo или behavior; native runtime dump lookup остаётся буквальным factual tool context.
+`parent_context_cards.py` передаёт точные accepted gameplay/runtime facts generated-родителя, включая независимые buffs, mobility, light и scale. Это read-only context, не приказ наследовать все функции. Для Visual/Repair отдельно передаётся принятая внешность с entity identity; Gameplay не выбирается из palette/silhouette/prose. Проекции копируют источник, не изменяют recipes. Generated parent передаёт полный exact accepted graph, не один guessed projectile или power/digest summary. Native ammo card сохраняет literal item/ammo observations и отдельно source-сертифицированные правила преобразования снаряда, условия и неизвестные hooks. При замене projectile сохраняются ammo-item damage/speed/knockback; профиль исходного снаряда не выдаётся за профиль выстрела. Наблюдаемое наличие не смешивается с player-free reference examples; текущий stack не передаётся. Подробные поля и границы — [native parent facts](../../development/pipeline/PARENT_NATIVE_FACTS_RU.md). Имя/теги не выбирают пример ammo или behavior; native runtime dump lookup остаётся буквальным factual tool context.
 
 Настоящий `GeneratorClient.Prepare` получает literal native tooltip через `Lang.GetTooltip`: строки, язык текущей UI culture, exact fullName и owner source. Prefix нормализуется только в request clone, оригинал и refund остаются прежними. Generated proxy tooltip не принимается за описание accepted generated definition. Если native text недоступен, он остаётся неизвестным. При более 64 строках или 16 384 символах отказывается вся optional source observation с provenance/status — предложение не обрезается и не подаётся как буквальная цитата. Tooltip не является числовым сертификатом native AI и не парсится хостом в механику.
 
@@ -24,12 +24,25 @@ Image builder передаёт selected canvas, final-frame render extent и п�
 
 ## Engineering limits и баланс
 
-Author character guard — ровно **225000 Unicode-символов** полного compact JSON dossier (`ensure_ascii=False`, separators без пробелов), вне SYSTEM/HTTP wrappers и response schema. Лимит повышен на 5000 с прежних 220000; более ранние 196608 блокировали generated+generated до provider. Это локальный engineering bound, не token context/output. Вложенные numeric consumer constraints используют точные packet-local ссылки на полные определения; capabilities, domains, dependencies и source-rich parents не вырезаются. Общие правила секунд и округления задаются в `fieldGuide.paramNotation`; дословный повтор этого введения в отдельных параметрах удаляется, но собственное описание каждого потребителя сохраняется. Описание structured shape опускается только при полном совпадении с сохранённым `meaning` того же параметра; вложенные описания и ограничения остаются. Превышение остаётся явным отказом без clipping. Размер actual serialized native snapshots проверяется отдельно от source-defined и synthetic controls.
+Author character guard — **225000 Unicode-символов** полного compact JSON dossier (`ensure_ascii=False`, separators без пробелов), вне SYSTEM/HTTP wrappers и response schema. Необоснованное расширение до 400000 отменено вместе с глобальным словарём buff-ID. Parent-local effect references, source-derived ammo variants и literal source context проверяются в этом же бюджете; это локальный engineering bound, не token context/output. Вложенные numeric consumer constraints используют точные packet-local ссылки на полные определения; capabilities, domains, dependencies и source-rich parents не вырезаются. Общие правила секунд и округления задаются в `fieldGuide.paramNotation`; дословный повтор этого введения в отдельных параметрах удаляется, но собственное описание каждого потребителя сохраняется. Описание structured shape опускается только при полном совпадении с сохранённым `meaning` того же параметра; вложенные описания и ограничения остаются. Превышение остаётся явным отказом без clipping. Размер actual serialized native snapshots проверяется отдельно от source-defined и synthetic controls.
 
 Author оценивает actual ingredient power/acquisition/rarity/economy совместно, reusable benefit и полный throughput (children/chains/bounces/cadence/yield/payment frequency). Ammo damage — вклад в совместимый launcher, не самостоятельная атака; снятие launcher requirement — новая выгода. Бесплатное повторное использование допустимо, обязательного cooldown всем вещам нет. Это model-facing guidance, не новый автоматический nerf или доказанное качество свежей генерации.
 
 Host recommended damage и parent-dependent damage envelope удалены. Literal parent damage и hard registry bounds сохранены; code не переводит healing/value/rarity в рекомендуемый урон. Codex catalog protocol использует актуальный version-gated discovery; catalog listing не является live inference acceptance.
 
 ## Проверка и обновление
+
+Точные повторения native read-only значений разделяются через `sourceSameAs: N` —
+индекс полного значения в `nativeSourceFacts[N]` того же dossier. Consumer instruction
+общая для Author/Repair. Раскрытие ссылок восстанавливает каждый исходный факт,
+scope/неизвестность, scalar type, порядок и кратность; это не clipping, отбор
+ammo или новый словарь готовых эффектов. Literal tooltips и accepted
+`generatedParent` не заменяются ссылками. Source-unit guide строится по полным
+фактам до sharing; guard проверяет фактически отправляемое представление.
+Повторяющиеся разрешённые target-kind списки карточек также разделяются через
+`targetsRef` → `fieldGuide.targetKindSets`: каждый kind и порядок сохраняются,
+ни одна capability/граница/зависимость не удаляется. Это ссылки контекста,
+не новые значения в authored runtimeProgram. Пулы фактов остаются в динамическом
+USER-сегменте, не превращаясь в общие DEVELOPER-инструкции.
 
 Обновляй мод и LocalGenerator вместе. Новые context/physics/image/audio choices относятся к будущему authoring, runtime расхода и buff identity — к выполняемым accepted bindings. Исторические definitions/PNG, баланс принятых меча/лука и chain hold не переписываются. Offline builders, native headless consumer checks и обычный SDK/analyzer build проверяют указанные границы; игра/world/GPU/MP match и новые live generations не запускаются автоматически.

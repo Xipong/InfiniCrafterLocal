@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 from typing import Any
 
 from infini_local.core.item_identity_tools import (
@@ -24,6 +25,79 @@ from infini_local.pipelines.parent_context_pipeline import (
 
 # LLM parent packet owner. Extraction lives in parent_context_pipeline; identity
 # primitives come directly from their defining module. No derived-card alternative.
+
+NATIVE_SOURCE_REFERENCE_RULE = (
+    "Read-only native source values may be shared as {sourceSameAs:N}: read the complete value "
+    "at nativeSourceFacts[N] in this same dossier, expanding recursively. These are exact repetitions, "
+    "not inferred mechanics or Author values. Literal tooltips and accepted generatedParent packets stay inline."
+)
+
+
+def share_exact_native_parent_facts(parents: dict[str, Any]) -> dict[str, Any]:
+    """Intern exact repeated native JSON; keep every value in this same dossier.
+
+    Scalar kinds/presence, source/scope and list order/multiplicity are unchanged.
+    Literal tooltips and complete accepted generated packets are never interned.
+    """
+    counts: dict[str, int] = {}
+    indices: dict[str, int] = {}
+    shared: list[Any] = []
+    literal_keys = {"tooltipLines", "tooltipSource", "generatedParent"}
+
+    def contains_literal(value: Any) -> bool:
+        if isinstance(value, dict):
+            return bool(literal_keys.intersection(value)) or any(contains_literal(child) for child in value.values())
+        return isinstance(value, list) and any(contains_literal(child) for child in value)
+
+    def candidate(value: Any) -> str | None:
+        if not isinstance(value, (dict, list, str)) or contains_literal(value):
+            return None
+        if isinstance(value, dict) and ("sameAs" in value or "sourceSameAs" in value):
+            return None
+        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        return encoded if len(encoded) >= 128 else None
+
+    def count(value: Any) -> None:
+        key = candidate(value)
+        if key is not None:
+            counts[key] = counts.get(key, 0) + 1
+        if isinstance(value, dict):
+            for name, child in value.items():
+                if name not in literal_keys:
+                    count(child)
+        elif isinstance(value, list):
+            for child in value:
+                count(child)
+
+    def children(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {name: copy.deepcopy(child) if name in literal_keys else visit(child)
+                    for name, child in value.items()}
+        if isinstance(value, list):
+            return [visit(child) for child in value]
+        return copy.deepcopy(value)
+
+    def visit(value: Any) -> Any:
+        key = candidate(value)
+        if key is not None and counts[key] > 1:
+            if key not in indices:
+                index = indices[key] = len(shared)
+                shared.append(None)
+                shared[index] = children(value)
+            return {"sourceSameAs": indices[key]}
+        return children(value)
+
+    for row in parents.values():
+        raw = row.get("packet", {}).get("raw", {})
+        if "generatedParent" not in raw:
+            count(raw)
+    result = copy.deepcopy(parents)
+    for row in result.values():
+        raw = row.get("packet", {}).get("raw", {})
+        if "generatedParent" not in raw:
+            # Keep the native raw section map itself; intern only its values.
+            row["packet"]["raw"] = {name: visit(value) for name, value in raw.items()}
+    return {"parents": result, **({"nativeSourceFacts": shared} if shared else {})}
 
 _FORBIDDEN_DERIVED_PACKET_KEYS = frozenset({
     "behaviorDigest", "mechanicalHint", "semantics",
@@ -180,4 +254,4 @@ def raw_parent_card_for_llm(item: dict[str, Any], *, include_visual_reference: b
     # Do not send section bookkeeping or token-byte metadata to the LLM; the raw object keys are enough.
     return _strip_derived_packet_fields({k: v for k, v in card.items() if _compact_keep(v)})
 
-__all__ = ["raw_parent_card_for_llm"]
+__all__ = ["raw_parent_card_for_llm", "share_exact_native_parent_facts", "NATIVE_SOURCE_REFERENCE_RULE"]

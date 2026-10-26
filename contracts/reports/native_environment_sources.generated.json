@@ -40,6 +40,38 @@
       "sourceMethodSha256": "8ba71410fbac0756ba5ab862683857425ca7ad6753c226ec45c6f68819695098",
       "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
       "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "TileObject.Place",
+      "overloadIndex": 0,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "905f016285cf638e62a56185c18d786e7879e186933326dbd61c64303712988e",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "TileObjectData.CalculatePlacementStyle",
+      "overloadIndex": 0,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "9992280a8aba8d0a97caf0cb1ac83c8ec59215bc86d7690c03cc494db0ddef69",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "TileObjectData.Initialize",
+      "overloadIndex": 0,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "8f30db7f3197e38bb489bbc6eff27100c19a3ae39d3b869effc4cabe7499edec",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "TileObjectData.GetTileData",
+      "overloadIndex": 0,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "47222b188e6c6fa05447e61acaa1f30fb22680e1a0eb1574f32ee0d6f9ea191b",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
     }
   ],
   "auras": [
@@ -134,5 +166,41 @@
       ],
       "sourceBranchOffset": 575
     }
-  ]
+  ],
+  "placementMapping": {
+    "algorithm": "TileObject.Place_metadata_frames_v1",
+    "sourceMethods": [
+      "TileObject.Place",
+      "TileObjectData.CalculatePlacementStyle",
+      "TileObjectData.Initialize",
+      "TileObjectData.GetTileData"
+    ],
+    "sourceMethodCertificates": {
+      "TileObject.Place": "905f016285cf638e62a56185c18d786e7879e186933326dbd61c64303712988e",
+      "TileObjectData.CalculatePlacementStyle": "9992280a8aba8d0a97caf0cb1ac83c8ec59215bc86d7690c03cc494db0ddef69",
+      "TileObjectData.Initialize": "8f30db7f3197e38bb489bbc6eff27100c19a3ae39d3b869effc4cabe7499edec",
+      "TileObjectData.GetTileData": "47222b188e6c6fa05447e61acaa1f30fb22680e1a0eb1574f32ee0d6f9ea191b"
+    },
+    "placementStyle": "style * StyleMultiplier + Style + max(random, 0)",
+    "styleWrap": "if StyleWrapLimit > 0: line = placementStyle / StyleWrapLimit * StyleLineSkip; placementStyle %= StyleWrapLimit; else line = 0",
+    "baseFrameX": "CoordinateFullWidth * (placementStyle if StyleHorizontal else line)",
+    "baseFrameY": "CoordinateFullHeight * (line if StyleHorizontal else placementStyle)",
+    "tileCellFrameX": "baseFrameX + column * (CoordinateWidth + CoordinatePadding)",
+    "tileCellFrameY": "baseFrameY + sum(CoordinateHeights[row] + CoordinatePadding for preceding rows)",
+    "sourceIlOffsets": {
+      "calculatePlacementStyle": [
+        12,
+        39
+      ],
+      "placementBaseFrames": [
+        190,
+        311
+      ],
+      "placementCellFrames": [
+        552,
+        698
+      ]
+    },
+    "scope": "Conditional newly placed empty-cell frames under current native TileObjectData. No placement success, world state, wiring changes, random styles, custom placement hooks or generated gameplay is inferred. Each admitted variant retains its alternate index and matching cell frames. Only current vanilla default item tile/style pairs are admitted."
+  }
 }

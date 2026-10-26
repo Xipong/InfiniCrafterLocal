@@ -3095,7 +3095,7 @@
           "enum": [],
           "kind": "number",
           "maximum": 30.0,
-          "minimum": 0.0,
+          "minimum": -30.0,
           "reference": null,
           "required": false,
           "semanticType": "blocks/s",
@@ -3105,7 +3105,7 @@
           "enum": [],
           "kind": "number",
           "maximum": 60,
-          "minimum": 0,
+          "minimum": -50,
           "reference": null,
           "required": false,
           "semanticType": "unitless_scalar",
@@ -3147,7 +3147,7 @@
           "enum": [],
           "kind": "integer",
           "maximum": 120,
-          "minimum": 0,
+          "minimum": -100,
           "reference": null,
           "required": false,
           "semanticType": "unitless_scalar",
@@ -3167,7 +3167,7 @@
           "enum": [],
           "kind": "number",
           "maximum": 200,
-          "minimum": -50,
+          "minimum": -80,
           "reference": null,
           "required": false,
           "semanticType": "additive_percent",
@@ -8990,6 +8990,153 @@
       "safetyLimits": "bounded by runtime program limits",
       "targetKinds": [
         "item_body"
+      ],
+      "technicalLoweringOutputs": []
+    },
+    {
+      "authorityByEffect": {},
+      "capability": "apply_npc_effect_on_event",
+      "componentSlot": "event_action",
+      "conflicts": [],
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "dependencies": [],
+      "emittedEvents": [],
+      "events": [
+        "on_hit",
+        "on_crit"
+      ],
+      "exclusiveGroup": "",
+      "finalWirePaths": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].durationTicks",
+        "runtimeProgram.entities[].events[].npcEffect.lifeRegenPenalty",
+        "runtimeProgram.entities[].events[].npcEffect.defenseDelta",
+        "runtimeProgram.entities[].events[].npcEffect.contactDamageMultiplier",
+        "runtimeProgram.entities[].events[].npcEffect.velocityRetentionPerTick",
+        "runtimeProgram.entities[].events[].npcEffect.chance",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ],
+      "multiplicity": "many_per_target",
+      "networkAuthority": "owner_execute_sync",
+      "parameters": {
+        "chancePercent": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 100,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "percent probability"
+        },
+        "contactDamageMultiplier": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 3,
+          "minimum": 0.1,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "multiplier"
+        },
+        "damagePerSecond": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 200,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "HP/s"
+        },
+        "defenseDelta": {
+          "enum": [],
+          "kind": "integer",
+          "maximum": 100,
+          "minimum": -100,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "defense points"
+        },
+        "delaySeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 10.0,
+          "minimum": 0,
+          "reference": null,
+          "required": false,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "durationSeconds": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 60.0,
+          "minimum": 0.008333333333333333,
+          "reference": null,
+          "required": true,
+          "semanticType": "seconds",
+          "units": "seconds"
+        },
+        "velocityRetentionPerTick": {
+          "enum": [],
+          "kind": "number",
+          "maximum": 1,
+          "minimum": 0.1,
+          "reference": null,
+          "required": false,
+          "semanticType": "unitless_scalar",
+          "units": "velocity fraction/world tick"
+        },
+        "when": {
+          "enum": [
+            "on_hit",
+            "on_crit"
+          ],
+          "kind": "string",
+          "maximum": null,
+          "minimum": null,
+          "reference": null,
+          "required": true,
+          "semanticType": "runtime_event_trigger",
+          "units": ""
+        }
+      },
+      "positionOwnership": "none",
+      "purpose": "Apply independently composed timed modifiers to the actually hit NPC, without a BuffID or name-to-effect mapping. The same item/entity/action/owner refreshes remaining duration, not strength per hit; independent records may combine under bounded native caps. Chance rolls once per hit/crit admission before delay; the server receiver never rerolls, and independent calls draw independently. This is a bounded set of modifiers, not the full native buff repertoire.",
+      "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "requirements": [
+        {
+          "kind": "non_neutral_param",
+          "message": "Select at least one non-neutral NPC modifier; chance and delay alone are not effects.",
+          "nonzeroParams": [
+            "damagePerSecond",
+            "defenseDelta",
+            "contactDamageMultiplier",
+            "velocityRetentionPerTick"
+          ],
+          "target": "same_target"
+        },
+        {
+          "equals": null,
+          "kind": "event_available",
+          "message": "target entity must actually emit the selected event",
+          "param": "when",
+          "target": "same_target"
+        }
+      ],
+      "safetyLimits": "bounded native timed-NPC record store; same source refreshes duration without per-hit strength stacking",
+      "targetKinds": [
+        "item_body",
+        "owner_attached_projectile",
+        "free_projectile",
+        "stationary_projectile",
+        "temporary_helper",
+        "field",
+        "child_projectile"
       ],
       "technicalLoweringOutputs": []
     },

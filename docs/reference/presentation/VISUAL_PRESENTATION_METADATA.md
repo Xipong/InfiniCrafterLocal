@@ -120,10 +120,14 @@ ordinary shoot uses the native proxy frame's center translation; swing/thrust re
 their native item anchor. Draw-set translation, native layer/full-player transforms,
 explicit holdout offsets, facing and gravity remain independent. This is a technical
 pose correction, not a new arm pose or a reinterpretation of projectile `reach`.
-The held-presentation packet is version **5**: its location pair now carries resolved
-contact coordinates. Both producer and local draw use the same projection. Version 4
-(raw item-anchor coordinates) is rejected, not guessed or migrated; peers must run
-the same mod version. This presentation packet never controls gameplay.
+The held-presentation packet is version **6**: its location pair carries resolved
+contact relative to `player.position`. The remote renderer reconstructs it from the
+owner's current position, so movement/interpolation between packets does not leave
+the PNG at an old world coordinate. Producer and local draw use the same native
+contact projection; subsequent draw-set/player transforms remain unchanged.
+Versions 4 (raw item anchor) and 5 (absolute resolved contact) are rejected rather
+than reinterpreted; server and clients must run the same mod version. This
+presentation packet never controls gameplay.
 
 Dropped sprites retain their complete PNG, declared frame size, caller rotation and
 scale, native collider and authored draw offsets. The selected texture cache measures

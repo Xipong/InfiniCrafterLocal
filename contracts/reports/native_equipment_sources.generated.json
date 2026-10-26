@@ -348,6 +348,47 @@
           "fullName": "Terraria/MoltenGreaves"
         },
         {
+          "itemId": 238,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 1809,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 1833
+                }
+              ],
+              "conditionalEffects": [
+                {
+                  "condition": {
+                    "nativeMember": "Terraria.Main.tenthAnniversaryWorld",
+                    "equals": true,
+                    "observed": false
+                  },
+                  "guardIlOffset": 1843,
+                  "effects": [
+                    {
+                      "stat": "maximumMinions",
+                      "nativeMember": "Terraria.Player.maxMinions",
+                      "operation": "add",
+                      "value": 1,
+                      "units": "slots",
+                      "ilOffset": 1854
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/WizardHat"
+        },
+        {
           "itemId": 256,
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
@@ -854,6 +895,46 @@
             }
           ],
           "fullName": "Terraria/AdamantiteLeggings"
+        },
+        {
+          "itemId": 410,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7313,
+              "effects": [
+                {
+                  "stat": "pickUseTimeMultiplier",
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7328
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MiningShirt"
+        },
+        {
+          "itemId": 411,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7344,
+              "effects": [
+                {
+                  "stat": "pickUseTimeMultiplier",
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7359
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MiningPants"
         },
         {
           "itemId": 551,
@@ -1488,6 +1569,141 @@
             }
           ],
           "fullName": "Terraria/ChlorophyteGreaves"
+        },
+        {
+          "itemId": 1158,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/PygmyNecklace"
+        },
+        {
+          "itemId": 1159,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7415,
+              "effects": [
+                {
+                  "stat": "whipRangeMultiplier",
+                  "nativeMember": "Terraria.Player.whipRangeMultiplier",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7430
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7459,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7483
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TikiMask"
+        },
+        {
+          "itemId": 1160,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7459,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7483
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TikiShirt"
+        },
+        {
+          "itemId": 1161,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7459,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7483
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TikiPants"
         },
         {
           "itemId": 1205,
@@ -2874,6 +3090,124 @@
           "fullName": "Terraria/BeeGreaves"
         },
         {
+          "itemId": 2367,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3634,
+              "effects": [
+                {
+                  "stat": "fishingPower",
+                  "nativeMember": "Terraria.Player.fishingSkill",
+                  "operation": "add",
+                  "value": 5,
+                  "units": "points",
+                  "ilOffset": 3645
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AnglerHat"
+        },
+        {
+          "itemId": 2368,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3634,
+              "effects": [
+                {
+                  "stat": "fishingPower",
+                  "nativeMember": "Terraria.Player.fishingSkill",
+                  "operation": "add",
+                  "value": 5,
+                  "units": "points",
+                  "ilOffset": 3645
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AnglerVest"
+        },
+        {
+          "itemId": 2369,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3634,
+              "effects": [
+                {
+                  "stat": "fishingPower",
+                  "nativeMember": "Terraria.Player.fishingSkill",
+                  "operation": "add",
+                  "value": 5,
+                  "units": "points",
+                  "ilOffset": 3645
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AnglerPants"
+        },
+        {
+          "itemId": 2370,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7512,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 7536
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpiderMask"
+        },
+        {
+          "itemId": 2371,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7512,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 7536
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpiderBreastplate"
+        },
+        {
           "itemId": 2372,
           "condition": "equipped_functional_item_during_GrantArmorBenefits",
           "branches": [
@@ -3432,6 +3766,80 @@
             }
           ],
           "fullName": "Terraria/StardustHelmet"
+        },
+        {
+          "itemId": 3382,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7701,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "slots",
+                  "ilOffset": 7712
+                },
+                {
+                  "stat": "whipRangeMultiplier",
+                  "nativeMember": "Terraria.Player.whipRangeMultiplier",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 7730
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.22,
+                  "units": "additive_fraction",
+                  "ilOffset": 7757
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/StardustBreastplate"
+        },
+        {
+          "itemId": 3383,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7701,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "slots",
+                  "ilOffset": 7712
+                },
+                {
+                  "stat": "whipRangeMultiplier",
+                  "nativeMember": "Terraria.Player.whipRangeMultiplier",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 7730
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.22,
+                  "units": "additive_fraction",
+                  "ilOffset": 7757
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/StardustLeggings"
         },
         {
           "itemId": 3770,
@@ -4359,6 +4767,64 @@
           "condition": {
             "functionalEquipSlots": {
               "head": [
+                11
+              ],
+              "body": [
+                20
+              ],
+              "legs": [
+                19
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Mining",
+          "effects": [
+            {
+              "stat": "pickUseTimeMultiplier",
+              "nativeMember": "Terraria.Player.pickSpeed",
+              "operation": "add",
+              "value": -0.1,
+              "units": "additive_fraction",
+              "ilOffset": 3485
+            }
+          ],
+          "guardIlOffset": 3426
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                216
+              ],
+              "body": [
+                20
+              ],
+              "legs": [
+                19
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Mining",
+          "effects": [
+            {
+              "stat": "pickUseTimeMultiplier",
+              "nativeMember": "Terraria.Player.pickSpeed",
+              "operation": "add",
+              "value": -0.1,
+              "units": "additive_fraction",
+              "ilOffset": 3552
+            }
+          ],
+          "guardIlOffset": 3490
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
                 161
               ],
               "body": [
@@ -4470,6 +4936,43 @@
             }
           ],
           "guardIlOffset": 4483
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                82
+              ],
+              "body": [
+                53
+              ],
+              "legs": [
+                48
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Tiki",
+          "effects": [
+            {
+              "stat": "maximumMinions",
+              "nativeMember": "Terraria.Player.maxMinions",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 5068
+            },
+            {
+              "stat": "whipRangeMultiplier",
+              "nativeMember": "Terraria.Player.whipRangeMultiplier",
+              "operation": "add",
+              "value": 0.2,
+              "units": "additive_fraction",
+              "ilOffset": 5086
+            }
+          ],
+          "guardIlOffset": 5013
         },
         {
           "condition": {

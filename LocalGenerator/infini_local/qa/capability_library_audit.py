@@ -199,8 +199,8 @@ def _numeric_parameter_leaves(spec: ParamSpec, name: str) -> list[tuple[str, Par
 
 def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     root = _repo_root()
-    dto_path = root / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "Contracts" / "RuntimeProgramSpec.cs"
-    text = dto_path.read_text("utf-8", errors="ignore")
+    from infini_local.qa.primitive_loss_audit import _runtime_dto_source
+    text = _runtime_dto_source().decode("utf-8")
     constants = _csharp_constants(root)
     class_bounds = {
         name: _clamp_bounds(text, name, constants)
@@ -211,6 +211,9 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             "RuntimeEventActionSpec", "RuntimeItemContactSpec", "RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec",
         )
     }
+    for cap in CAPABILITY_REGISTRY.values():
+        for cls in cap.wire_components.values():
+            class_bounds.setdefault(cls, _clamp_bounds(text, cls, constants))
     property_map: dict[str, tuple[str, str]] = {
         "configure_spawn": ("RuntimeSpawnSpec", ""),
         "set_projectile_lifetime": ("RuntimeEntitySpec", ""),
@@ -250,11 +253,19 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             wire_name = spec.wire_name or param_name.rsplit(".", 1)[-1]
             field = wire_name
             class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
-                           "overTarget": "RuntimeOverTargetSpec"}.get(field.split(".", 1)[0], default_class))
+                           "overTarget": "RuntimeOverTargetSpec", **cap.wire_components}.get(field.split(".", 1)[0], default_class))
             field = field.rsplit(".", 1)[-1]
             csharp_name = "DescendantMaxActive" if cap.name == "set_descendant_concurrency" else field[:1].upper() + field[1:]
             bounds = class_bounds[class_name]
             csharp = bounds.get(csharp_name)
+            if class_name in cap.wire_components.values():
+                from infini_local.qa.primitive_loss_audit import number_rejection_bounds
+                reject_bounds = number_rejection_bounds(text.encode(), class_name, csharp_name)
+                rows.append({"capability": cap.name, "param": param_name,
+                             "csharpClass": class_name, "authorBounds": [spec.minimum, spec.maximum],
+                             "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
+                             "wireBounds": wire_bounds, "preserved": reject_bounds == wire_bounds})
+                continue
             if (cap.name == "pull_on_event" and field in {"ownerStrength", "targetStrength"}) or (cap.name == "damage_nearby_on_event" and field == "maxTargets") or (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
                 from infini_local.qa.primitive_loss_audit import nullable_number_rejection_bounds
                 reject_bounds = nullable_number_rejection_bounds(text.encode(), class_name, csharp_name)

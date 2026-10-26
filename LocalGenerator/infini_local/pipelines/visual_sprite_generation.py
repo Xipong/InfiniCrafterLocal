@@ -474,7 +474,10 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             phase = "selection"
             best, score = pick_best_sprite(variants, request.processing_role, request.canvas)
             phase = "processing"
-            master_path = output_dir / "refit-master.png" if request.processing_role != "vfx_strip" else None
+            # Keep retained sampling inputs outside the logical filename
+            # namespace: an asset named "refit-master" must not overwrite its
+            # own high-resolution source when postprocess saves the final bake.
+            master_path = output_dir / "refit-source" / "master.png" if request.processing_role != "vfx_strip" else None
             final = postprocess_sprite(best, attempt_id, request.canvas, request.processing_role,
                 output_dir=output_dir, master_output=master_path, **process_kwargs)
             phase = "validation"

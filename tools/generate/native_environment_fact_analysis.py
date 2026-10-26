@@ -76,3 +76,40 @@ def scene_regen_additions(code):
             "condition": "local_player_and_scene_flag", "units": "native_life_regen_counter_units",
             "scope": "one native addition before other regeneration, debuff and mod processing; not final HP per second"}
     return out
+
+
+# These are audited SOURCE PROGRAM certificates, not per-item or family tables.
+# Their complete IL was checked against the installed binary (not API reference
+# assemblies). Unknown methods never acquire the declared arithmetic merely by
+# containing a getter/call name. Whole-module SHA/MVID additionally cover every
+# dependent getter, metadata initializer, and GetTileData overload.
+PLACEMENT_SOURCE_CERTIFICATES = {
+    "TileObject.Place": "905f016285cf638e62a56185c18d786e7879e186933326dbd61c64303712988e",
+    "TileObjectData.CalculatePlacementStyle": "9992280a8aba8d0a97caf0cb1ac83c8ec59215bc86d7690c03cc494db0ddef69",
+    "TileObjectData.Initialize": "8f30db7f3197e38bb489bbc6eff27100c19a3ae39d3b869effc4cabe7499edec",
+    "TileObjectData.GetTileData": "47222b188e6c6fa05447e61acaa1f30fb22680e1a0eb1574f32ee0d6f9ea191b",
+}
+
+
+def certified_placement_mapping(certificates: dict[str, str]) -> dict[str, object]:
+    """Exact audited IL program; no broad claim of arbitrary C# interpretation.
+
+    Offsets use dncil body coordinates, including the 12-byte method header.
+    Runtime reads current native metadata only; it does not execute Place,
+    CanPlace, item defaults or equipment hooks to create these observations.
+    """
+    if any(certificates.get(name) != sha for name, sha in PLACEMENT_SOURCE_CERTIFICATES.items()):
+        raise ValueError("Unsupported native placement source program")
+    return {
+        "algorithm": "TileObject.Place_metadata_frames_v1",
+        "sourceMethods": list(PLACEMENT_SOURCE_CERTIFICATES),
+        "sourceMethodCertificates": dict(PLACEMENT_SOURCE_CERTIFICATES),
+        "placementStyle": "style * StyleMultiplier + Style + max(random, 0)",
+        "styleWrap": "if StyleWrapLimit > 0: line = placementStyle / StyleWrapLimit * StyleLineSkip; placementStyle %= StyleWrapLimit; else line = 0",
+        "baseFrameX": "CoordinateFullWidth * (placementStyle if StyleHorizontal else line)",
+        "baseFrameY": "CoordinateFullHeight * (line if StyleHorizontal else placementStyle)",
+        "tileCellFrameX": "baseFrameX + column * (CoordinateWidth + CoordinatePadding)",
+        "tileCellFrameY": "baseFrameY + sum(CoordinateHeights[row] + CoordinatePadding for preceding rows)",
+        "sourceIlOffsets": {"calculatePlacementStyle": [12, 39], "placementBaseFrames": [190, 311], "placementCellFrames": [552, 698]},
+        "scope": "Conditional newly placed empty-cell frames under current native TileObjectData. No placement success, world state, wiring changes, random styles, custom placement hooks or generated gameplay is inferred. Each admitted variant retains its alternate index and matching cell frames. Only current vanilla default item tile/style pairs are admitted.",
+    }

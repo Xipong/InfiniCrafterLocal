@@ -16,6 +16,27 @@ from infini_local.core.runtime_authoring.program_schema import (
 from infini_local.core.schema_validation import strict_schema_errors
 
 
+AUTHOR_DESIGN_QUALITY_RULE = (
+    "Compose for useful player decisions, not call count. Give the main action a clear practical payoff "
+    "in ordinary use (for combat, consider an isolated target); make a secondary action or event bonus "
+    "reachable and worth its control/cost, or deliberately keep it niche. Let complementary effects "
+    "reinforce a purpose or offer a meaningful alternative, rather than hide a weak main action behind "
+    "an unlikely chain. Weigh actual recurring economy and risk against actual reward: a restriction "
+    "is a tradeoff only when it affects the use gaining that reward. Simple results, deliberate "
+    "sidegrades and strong earned benefits are valid; no always-upgrade rule, mandatory twist or "
+    "per-parent effect quota. These are design aims, not admission gates or required reports."
+)
+
+AUTHOR_STATUS_COMPOSITION_RULE = (
+    "Compose buffs and debuffs from generated effect primitives: explicitly choose the recipient, "
+    "modifiers, activation, duration and any supported chance. Signed modifiers can impose penalties "
+    "or tradeoffs. A native buff ID identifies existing native behavior; it is not an effect description "
+    "or a prerequisite for an invented effect. Parent effect references certify only their listed "
+    "receiver, operations and source conditions; partial/unknown behavior remains unknown. Custom "
+    "effects do not inherit a named native buff's immunity, AI or other unselected mechanics. "
+    "Describe the actual composed effects, not unimplemented equivalence to a familiar buff."
+)
+
 PRIMARY_REPAIR_SYSTEM_RULE = (
     f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
 )
@@ -143,6 +164,12 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 "do not confuse that native field with the projectile chosen by an actual ammo shot. "
                 "Read damage in its source role: ammunition damage is a contribution to a compatible launcher's attack, "
                 "not proof of a standalone weapon; ammunition useTime alone does not establish attack cadence. "
+                "Projectile replacement does not remove ammunition damage: distinguish this input contribution "
+                "from transferred flight, penetration and statuses; do not assume a simple additive damage formula. "
+                "Evaluate supplied weapon-ammo configurations separately rather than taking an average or automatically "
+                "the strongest: inventory observations show current inputs, not all available progression choices, "
+                "and fallback examples do not prove possession or progression. Keep source-proved conditional weapon "
+                "abilities distinct from current ammo availability; no automatic child rebalancing is implied. "
                 "Turning that contribution into an autonomous attack is a new benefit: account for the removed launcher "
                 "requirement and the new throughput/resource cost rather than treating source damage as free power. "
                 "Do not treat cheap abundant inputs as evidence for exceptional output merely because the new theme sounds powerful. "
@@ -652,6 +679,7 @@ def project_provider_author_item_to_local(
 
 
 __all__ = [
+    "AUTHOR_DESIGN_QUALITY_RULE",
     "PRIMARY_REPAIR_SYSTEM_RULE",
     "author_item_prompt_shape_card",
     "author_item_provider_repair_response_schema",

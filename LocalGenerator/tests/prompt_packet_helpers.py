@@ -1,5 +1,7 @@
 """Read the derived dossier view in semantic tests; authority tests inspect rows."""
+import copy
 import json
+from typing import Any
 
 
 def dossier_text(request, *, declaration=None):
@@ -44,3 +46,29 @@ def request_dossier(request, *, declaration=None):
         assert "bakeFillByProcessingRole" not in dossier["spritePresentationReadOnly"]
         dossier["spritePresentationReadOnly"]["bakeFillByProcessingRole"] = dossier.pop("bakeFillByProcessingRole")
     return dossier
+
+
+def expand_catalog_targets(cards: list[dict[str, Any]], target_sets: dict[str, list[str]]) -> list[dict[str, Any]]:
+    """Resolve model-only shared kind lists before comparing to the registry."""
+    result = copy.deepcopy(cards)
+    for card in result:
+        if "targetsRef" in card:
+            assert "targets" not in card
+            card["targets"] = copy.deepcopy(target_sets[card.pop("targetsRef")])
+    return result
+
+
+def expand_native_source_references(dossier: dict[str, Any]) -> dict[str, Any]:
+    """Independent lossless check; request_dossier deliberately stays literal."""
+    def expand(value: Any, active: tuple[int, ...] = ()) -> Any:
+        if isinstance(value, dict):
+            if set(value) == {"sourceSameAs"}:
+                index = value["sourceSameAs"]
+                assert type(index) is int and 0 <= index < len(dossier["nativeSourceFacts"])
+                assert index not in active, "cyclic native source reference"
+                return expand(dossier["nativeSourceFacts"][index], (*active, index))
+            return {key: expand(child, active) for key, child in value.items()}
+        if isinstance(value, list):
+            return [expand(child, active) for child in value]
+        return copy.deepcopy(value)
+    return expand(dossier)

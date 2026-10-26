@@ -14,6 +14,28 @@ internal static partial class EngineRuntimeChecks
     {
         using var state = new NativeActorState();
         var grant = typeof(Player).GetMethod("GrantArmorBenefits", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!;
+        var wizardFacts = GeneratorClient.CaptureNativeEquipmentReference(new Item(ItemID.WizardHat));
+        Equal(true, wizardFacts is not null, "boolean world gate does not erase independently proved base contribution");
+        var wizardBranch = wizardFacts!["equippedContributions"]!["branches"]![0]!;
+        var conditional = wizardBranch["conditionalEffects"]![0]!;
+        Equal("Terraria.Main.tenthAnniversaryWorld", conditional["condition"]!["nativeMember"]!.GetValue<string>(), "world condition remains literal native state");
+        Equal(false, conditional["condition"]!["observed"]!.GetValue<bool>(), "source condition is not a current player/world observation");
+        bool previousWorld = Terraria.Main.tenthAnniversaryWorld;
+        try
+        {
+            foreach (bool world in new[] { false, true })
+            {
+                Terraria.Main.tenthAnniversaryWorld = world;
+                var wizardPlayer = new Player();
+                int beforeMinions = wizardPlayer.maxMinions;
+                float beforeDamage = wizardPlayer.GetDamage(DamageClass.Magic).Additive;
+                grant.Invoke(wizardPlayer, new object[] { new Item(ItemID.WizardHat) });
+                Equal(world ? 1 : 0, wizardPlayer.maxMinions - beforeMinions, "actual native conditional minion slot agrees with retained world predicate");
+                Equal(true, Math.Abs(wizardPlayer.GetDamage(DamageClass.Magic).Additive - beforeDamage - 0.05f) < 0.000001f, "base native magic contribution remains independent from world predicate");
+            }
+        }
+        finally { Terraria.Main.tenthAnniversaryWorld = previousWorld; }
+
         foreach (int type in new[] { ItemID.AncientShadowHelmet, ItemID.AncientShadowScalemail, ItemID.AncientShadowGreaves })
         {
             var item = new Item(type);
@@ -39,6 +61,10 @@ internal static partial class EngineRuntimeChecks
             (ItemID.AmethystRobe, "manaCostMultiplier", p => p.manaCost),
             (ItemID.SpookyBreastplate, "maximumMinions", p => p.maxMinions),
             (ItemID.JungleHat, "maximumMana", p => p.statManaMax2),
+            (1158, "maximumMinions", p => p.maxMinions),
+            (2367, "fishingPower", p => p.fishingSkill),
+            (410, "pickUseTimeMultiplier", p => p.pickSpeed),
+            (1159, "whipRangeMultiplier", p => p.whipRangeMultiplier),
         })
         {
             var item = new Item(type);
@@ -90,6 +116,32 @@ internal static partial class EngineRuntimeChecks
                 && slots["legs"]!.AsArray().Any(x => x!.GetValue<int>() == legs);
             Equal(expected, observed, "literal slot condition must distinguish complete/mixed/incomplete");
             Equal(expected, player.shadowArmor, "actual native set consumer agrees with source condition");
+        }
+        foreach (var (type, key, stat, read) in new (int Type, string Key, string Stat, Func<Player, float> Read)[]
+        {
+            (410, "ArmorSetBonus.Mining", "pickUseTimeMultiplier", p => p.pickSpeed),
+            (1159, "ArmorSetBonus.Tiki", "whipRangeMultiplier", p => p.whipRangeMultiplier)
+        })
+        {
+            var reference = GeneratorClient.CaptureNativeEquipmentReference(new Item(type))!;
+            var numericSets = reference["conditionalArmorSets"]!.AsArray().OfType<JsonObject>()
+                .Where(row => row["setBonusLocalizationKey"]!.GetValue<string>() == key).ToArray();
+            Equal(true, numericSets.Length > 0, "native numeric set control must execute a matching source row: " + key);
+            foreach (JsonObject row in numericSets)
+            {
+                var required = row["condition"]!["functionalEquipSlots"]!;
+                float contribution = row["effects"]!.AsArray().OfType<JsonObject>()
+                    .Single(effect => effect["stat"]?.GetValue<string>() == stat)["value"]!.GetValue<float>();
+                foreach (bool complete in new[] { false, true })
+                {
+                    var player = new Player { head = required["head"]![0]!.GetValue<int>(),
+                        body = required["body"]![0]!.GetValue<int>(), legs = complete ? required["legs"]![0]!.GetValue<int>() : -1 };
+                    float before = read(player);
+                    update.Invoke(player, args);
+                    Equal(true, Math.Abs(read(player) - before - (complete ? contribution : 0)) < 0.000001f,
+                        "new native set numeric contribution requires every functional slot: " + key);
+                }
+            }
         }
     }
 }

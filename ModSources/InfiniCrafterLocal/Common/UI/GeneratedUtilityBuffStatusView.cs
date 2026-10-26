@@ -82,13 +82,13 @@ internal static class GeneratedUtilityBuffStatusView
         GeneratedUtilityBuffField.EmitLightStrength => float.IsFinite(value.EmitLightStrength) && value.EmitLightStrength > 0f,
         GeneratedUtilityBuffField.OreSenseRadiusTiles => value.OreSenseRadiusTiles > 0,
         GeneratedUtilityBuffField.MovementSpeed => float.IsFinite(value.MovementSpeed) && value.MovementSpeed != 0f,
-        GeneratedUtilityBuffField.JumpBoost => float.IsFinite(value.JumpBoost) && value.JumpBoost > 0f,
-        GeneratedUtilityBuffField.ManaRegen => value.ManaRegen > 0,
-        GeneratedUtilityBuffField.LifeRegen => value.LifeRegen > 0,
-        GeneratedUtilityBuffField.Defense => value.Defense > 0,
-        GeneratedUtilityBuffField.AttackSpeed => value.AttackSpeed > 0,
-        GeneratedUtilityBuffField.CritChance => value.CritChance > 0,
-        GeneratedUtilityBuffField.Damage => value.DamageBonuses?.Any(pair => pair.Value > 0) == true,
+        GeneratedUtilityBuffField.JumpBoost => float.IsFinite(value.JumpBoost) && value.JumpBoost != 0f,
+        GeneratedUtilityBuffField.ManaRegen => value.ManaRegen != 0,
+        GeneratedUtilityBuffField.LifeRegen => value.LifeRegen != 0,
+        GeneratedUtilityBuffField.Defense => value.Defense != 0,
+        GeneratedUtilityBuffField.AttackSpeed => value.AttackSpeed != 0,
+        GeneratedUtilityBuffField.CritChance => value.CritChance != 0,
+        GeneratedUtilityBuffField.Damage => value.DamageBonuses?.Any(pair => pair.Value != 0) == true,
         _ => false,
     };
 
@@ -105,13 +105,13 @@ internal static class GeneratedUtilityBuffStatusView
             GeneratedUtilityBuffField.OreSenseRadiusTiles => russian ? (value.OreSenseRadiusTiles > 0 ? "обнаружение сокровищ включено" : "обнаружение сокровищ выключено") : "findTreasure = " + (value.OreSenseRadiusTiles > 0 ? "true" : "false"),
             GeneratedUtilityBuffField.MovementSpeed => Signed(value.MovementSpeed) + (russian ? " к коэффициенту скорости передвижения" : " moveSpeed factor"),
             GeneratedUtilityBuffField.JumpBoost => Signed(PlayerDisplayUnits.BlocksPerSecond(value.JumpBoost)) + (russian ? " блоков/с к скорости прыжка" : " blocks/s jump-speed bonus"),
-            GeneratedUtilityBuffField.ManaRegen => "+" + value.ManaRegen.ToString(culture) + (russian ? " единиц manaRegenBonus" : " manaRegenBonus points"),
-            GeneratedUtilityBuffField.LifeRegen => "+" + Number(value.LifeRegen / 2f) + (russian ? " ОЗ/с — вклад в регенерацию" : " HP/s contribution"),
+            GeneratedUtilityBuffField.ManaRegen => Signed(value.ManaRegen) + (russian ? " единиц manaRegenBonus" : " manaRegenBonus points"),
+            GeneratedUtilityBuffField.LifeRegen => Signed(value.LifeRegen / 2f) + (russian ? " ОЗ/с — вклад в регенерацию" : " HP/s contribution"),
             GeneratedUtilityBuffField.Defense => Signed(value.Defense) + (russian ? " защиты" : " defense"),
             GeneratedUtilityBuffField.AttackSpeed => Signed(value.AttackSpeed) + (russian ? "% скорости атаки" : "% attack speed"),
             GeneratedUtilityBuffField.CritChance => Signed(value.CritChance) + (russian ? " п.п. шанса критического удара" : " percentage points critical chance"),
             GeneratedUtilityBuffField.Damage => string.Join(", ", (value.DamageBonuses ?? new Dictionary<string, float>())
-                .Where(pair => pair.Value > 0).OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Where(pair => pair.Value != 0).OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => pair.Key + " " + Signed(pair.Value) + "%")),
             _ => "",
         };

@@ -159,6 +159,8 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | select_targets_and_emit_on_event | runtimeProgram.entities[].events[].actionCode | 8 |
 | apply_generated_buff_on_event | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
 | apply_generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
+| apply_npc_effect_on_event | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
+| apply_npc_effect_on_event | runtimeProgram.entities[].events[].actionCode | 11 |
 | apply_status_on_event | runtimeProgram.entities[].events[].action | 'apply_status_on_event' |
 | apply_status_on_event | runtimeProgram.entities[].events[].actionCode | 2 |
 | damage_nearby_on_event | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
@@ -287,6 +289,11 @@ Typed structured choices и конечные enum-отображения так�
 | target_and_fire.requireLineOfSight | False | unconditional declared neutral |
 | target_and_fire.hardRange | False | unconditional declared neutral |
 | spawn_entity_on_event.spreadRadians | 0 | {'targetKinds': (), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| apply_npc_effect_on_event.damagePerSecond | 0 | unconditional declared neutral |
+| apply_npc_effect_on_event.defenseDelta | 0 | unconditional declared neutral |
+| apply_npc_effect_on_event.contactDamageMultiplier | 1 | unconditional declared neutral |
+| apply_npc_effect_on_event.velocityRetentionPerTick | 1 | unconditional declared neutral |
+| apply_npc_effect_on_event.chancePercent | 100 | unconditional declared neutral |
 | damage_nearby_on_event.maxTargets | 16 | unconditional declared neutral |
 
 ## Каноническая vocabulary
@@ -379,6 +386,7 @@ Lowery — технический lowering, не lore и не автор доп�
 
 | единицы / scope | shared model-facing guide |
 |---|---|
+| nativeSourceReferences | Read-only native source values may be shared as {sourceSameAs:N}: read the complete value at nativeSourceFacts[N] in this same dossier, expanding recursively. These are exact repetitions, not inferred mechanics or Author values. Literal tooltips and accepted generatedParent packets stay inline. |
 | time | Write world durations/intervals in decimal seconds. The engine has 60 world ticks = 1 second; lowering resolves seconds to the nearest world tick, half-tick ties upward. Explicit zero stays zero; a positive effect may not round to disabled zero. Raw immunity.localCooldown and explicitly named projectile-update counters are counts, not seconds. |
 | distance | Write gameplay world distances in blocks. 1 Terraria block (tile) = 16 world pixels. rangeTiles/radiusTiles already mean blocks, including blink rangeTiles: do not divide again. Read whether each card means radius, diameter, origin offset or distance to a target center. |
 | speed | Write gameplay speeds in blocks/s, physical accelerations in blocks/s^2 and declared angular rates in radians/s. The canonical lowering accounts for the affected target's updatesPerTick; do not manually rescale Author values. Initial speed, flat bonuses, sprint floors and event impulses are distinct, not guaranteed final movement or jump height. Ammo speed is a base native launch contribution; the eventual projectile can have its own update rate. Dimensionless retention/lerp/multiplier controls retain their declared per-update meaning. |
@@ -436,6 +444,7 @@ Event actions:
 | select_targets_and_emit_on_event | 8 |
 | apply_generated_buff_on_event | 9 |
 | damage_nearby_on_event | 10 |
+| apply_npc_effect_on_event | 11 |
 
 ### Entity kind → visual role
 
