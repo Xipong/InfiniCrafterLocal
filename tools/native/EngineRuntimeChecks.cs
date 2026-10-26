@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("journal hotkey trigger lifecycle", JournalHotkeyToleratesTriggerLifecycle),
             ("coincident seek finite motion and exact retirement", CoincidentSeekPreservesFiniteMotionAndExplicitRetirement),
             ("single-active weapon admission without chat warning", SingleActiveWeaponBusyKeepsAdmissionWithoutChatWarning),
             ("composable motion review manual release VFX roundtrip", ComposableMotionManualReleaseVfxRoundtrip),

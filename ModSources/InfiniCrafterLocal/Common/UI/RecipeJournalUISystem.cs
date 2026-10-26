@@ -24,14 +24,18 @@ public sealed partial class RecipeJournalUISystem : ModSystem
     public static bool IsOpen { get; private set; }
     public static ModKeybind ToggleJournalKey { get; private set; } = null!;
 
+    private const string ToggleJournalKeyName = "ToggleRecipeJournal";
+    private static string _toggleJournalTrigger = "";
+
     public override void Load()
     {
-        ToggleJournalKey = KeybindLoader.RegisterKeybind(Mod, "ToggleRecipeJournal", Keys.K);
+        ToggleJournalKey = KeybindLoader.RegisterKeybind(Mod, ToggleJournalKeyName, Keys.K);
+        _toggleJournalTrigger = $"{Mod.Name}/{ToggleJournalKeyName}";
         LoadBookSkin();
         LineageClip = new RasterizerState { ScissorTestEnable = true, CullMode = CullMode.None };
     }
 
-    public override void Unload() { ResetSession(); UnloadBookSkin(); LineageClip?.Dispose(); LineageClip = null; ToggleJournalKey = null!; }
+    public override void Unload() { ResetSession(); UnloadBookSkin(); LineageClip?.Dispose(); LineageClip = null; ToggleJournalKey = null!; _toggleJournalTrigger = ""; }
 
     internal static bool CanToggleFromKey(bool focused, bool menu, bool dead, bool writing,
         bool chat, bool blocked, bool rebinding)
@@ -43,9 +47,15 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (IsOpen && (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead)) Close();
         if (IsOpen) CanResumeInput(IsCovered(), Main.mouseLeft, Main.mouseRight);
         UpdateLineageInput();
-        if (ToggleJournalKey?.JustPressed != true || Main.LocalPlayer is not { active: true } player
+        if (Main.LocalPlayer is not { active: true } player
             || !CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
                 Main.drawingPlayerChat, Main.blockInput, PlayerInput.CurrentlyRebinding)) return;
+        // PostUpdateInput also runs during reload, before tML populates the new
+        // binding in Triggers. ModKeybind.JustPressed indexes that dictionary.
+        // A missing binding means no input, not a startup exception or a toggle.
+        if (_toggleJournalTrigger.Length == 0
+            || !PlayerInput.Triggers.JustPressed.KeyStatus.TryGetValue(_toggleJournalTrigger, out bool pressed)
+            || !pressed) return;
         if (IsOpen) Close(); else Open();
     }
     private static string _query = "", _selected = "";

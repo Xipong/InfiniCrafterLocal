@@ -445,3 +445,45 @@ def test_main_canvas_and_presentation_do_not_leak_to_dedicated_impact(canvas):
     assert plan["impact:opaque_body"]["canvas"] == 24
     assert all(field not in plan["impact:opaque_body"] for field in ("renderSizePx", "forwardAngleDegrees", "presentationOwnerEntityId"))
     assert data == before
+
+
+def test_fit_refit_samples_retained_master_not_degraded_final(tmp_path):
+    # Synthetic narrow physical mark with different adjacent colors. A tiny bake
+    # averages those colors; scaling that bake cannot recover the authored detail.
+    master = Image.new('RGBA', (96, 96))
+    draw = ImageDraw.Draw(master)
+    for y in range(36, 64):
+        draw.line((40, y, 55, y), fill=((220, 25, 15, 255) if y % 4 < 2 else (230, 190, 30, 255)))
+    master_path = tmp_path / 'master.png'
+    master.save(master_path)
+    final = post.bake_sprite_from_master(master, 24, 'field')
+    path = tmp_path / 'final.png'
+    final.save(path)
+    validation = generation.validate_processed_sprite(str(path), 'field')
+    assert not validation['ok']
+    assert any('silhouette_too_small' in reason for reason in validation['reasons'])
+    old_path = generation.refit_processed_sprite_to_contract(str(path), 'low', 24, 'field', validation, output_dir=tmp_path)
+    new_path = generation.refit_processed_sprite_to_contract(str(path), 'master', 24, 'field', validation,
+        output_dir=tmp_path, master_path=master_path)
+    old, new = Image.open(old_path), Image.open(new_path)
+    assert new.size == old.size == (24, 24)
+    assert new.getbbox() == old.getbbox()  # same existing fit; no new layout policy
+    assert generation.validate_processed_sprite(new_path, 'field')['ok']
+    assert len(new.getcolors(24 * 24)) > len(old.getcolors(24 * 24))
+    assert new.tobytes() != old.tobytes()
+    # Full-frame VFX UV assets must never take this crop/refit path.
+    assert not generation.refit_processed_sprite_to_contract(str(path), 'strip', 24, 'vfx_strip', validation,
+        output_dir=tmp_path, master_path=master_path)
+
+
+def test_postprocess_retains_exact_prebake_master_privately(tmp_path, monkeypatch):
+    raw = Image.new('RGBA', (96, 96))
+    ImageDraw.Draw(raw).rectangle((30, 20, 65, 75), fill=(160, 50, 20, 255))
+    source, master_path = tmp_path / 'raw.png', tmp_path / 'master.png'
+    raw.save(source)
+    monkeypatch.setattr(post, 'SAVE_SPRITE_STAGES', False)
+    final_path = post.postprocess_sprite(str(source), 'synthetic', 24, 'field',
+        output_dir=tmp_path, master_output=master_path)
+    master = Image.open(master_path)
+    assert master.width > 24
+    assert Image.open(final_path).tobytes() == post.bake_sprite_from_master(master, 24, 'field').tobytes()

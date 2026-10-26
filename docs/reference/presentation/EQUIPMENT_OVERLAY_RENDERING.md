@@ -37,10 +37,12 @@ and the existing asset catch-up path runs; no invented armor artwork is drawn.
 
 ## Accessory depth
 
-- `back`, `orbit` and absent mount: existing rear layer after `Wings`, before
+- `back` and absent mount: existing rear layer after `Wings`, before
   native skin/leggings/torso
-- `chest`, `waist`, `shoulder`: front layer immediately before `OffhandAcc`,
+- `chest`, `waist`, `shoulder`, explicit `orbit`: front layer immediately before `OffhandAcc`,
   after the torso and its generated armor badge, before hands/held items
+
+Explicit `orbit` intentionally moves forward: its unchanged first 16px-ring position can be completely occluded by the native legs when submitted behind the body. Existing records with an explicit orbit token receive this visibility correction; absent mount and explicit back retain their old depth. Ring offsets, sizing and artwork are not rewritten. Hands/held items can still occlude front badges; this is not an always-visible HUD.
 
 The explicit mount token determines this finite rendering route. No name,
 category or image analysis selects placement. The full visible accessory set
