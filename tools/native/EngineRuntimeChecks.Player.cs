@@ -45,7 +45,7 @@ internal static partial class EngineRuntimeChecks
                 using var packet = new System.IO.MemoryStream();
                 using (var writer = new System.IO.BinaryWriter(packet, System.Text.Encoding.UTF8, leaveOpen: true))
                 {
-                    writer.Write(5); writer.Write((byte)1); writer.Write((byte)1);
+                    writer.Write(6); writer.Write((byte)1); writer.Write((byte)1);
                     writer.Write("held-pose-test");
                     writer.Write(160f); writer.Write(320f); writer.Write(0.5f);
                     writer.Write(1); writer.Write(1f); writer.Write(true); writer.Write((byte)200);
