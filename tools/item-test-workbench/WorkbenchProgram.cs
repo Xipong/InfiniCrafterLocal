@@ -13,6 +13,7 @@ internal static class WorkbenchProgram
         {
             Terraria.Program.SavePath = sandbox;
             Terraria.Main.dedServ = true;
+            if (args.Length == 1 && args[0] == "--check-assertions") { EngineRuntimeChecks.CheckWorkbenchAssertions(); return 0; }
             if (args.Length == 2 && args[0] == "--write-fixtures") { EngineRuntimeChecks.WriteWorkbenchFixtures(args[1]); return 0; }
             string itemBoundary="fresh"; string? item = null, scenario = null; int? vanillaItem = null;
             for (int i = 0; i < args.Length; i += 2)

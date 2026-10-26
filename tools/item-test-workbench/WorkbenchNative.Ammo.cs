@@ -24,7 +24,7 @@ internal static partial class EngineRuntimeChecks
     {
         foreach(var row in scenario["inventory"]?.AsArray() ?? new JsonArray()) {
             var ammo=new Item(WInt(row,"itemId",0));
-            if(ammo.ammo!=AmmoID.Arrow && ammo.ammo!=AmmoID.Bullet) throw new NotSupportedException("Only vanilla arrow/bullet inventory entries are admitted");
+            if(ammo.ammo!=AmmoID.Arrow && ammo.ammo!=AmmoID.Bullet && ammo.ammo!=AmmoID.Flare) throw new NotSupportedException("Only vanilla arrow/bullet/flare inventory entries are admitted");
             int count=WInt(row,"stack",0);
             if(count>ammo.maxStack) throw new ArgumentException("Inventory stack exceeds native item maxStack");
             ammo.stack=count; owner.inventory[WInt(row,"slot",-1)]=ammo;

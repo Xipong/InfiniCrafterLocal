@@ -122,3 +122,53 @@ workbench and every scenario ran.
 - Real pixels can establish visible pose/grip/direction only for loaded assets and
   executed passes. Read [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) before extending that
   conclusion to other appearances, worlds, shaders or multiplayer.
+
+### Synthetic material / scene controls
+
+```sh
+python tools/item-test-workbench/verify_materials.py --out artifacts/material-controls
+```
+
+This generates explicitly synthetic native fixture JSON and two colored control
+PNGs locally, then executes the original material-path renderer. It checks path
+history/retirement, native light bounds for a distant camera, and missing/tampered
+publication and invalid lighting-mode refusals. A synthetic VFX-off control must
+produce identical native gameplay snapshots; both original PNG sets are hash-checked
+and the VFX-on frames must contain actual RGB differences. This verifies visible
+material output in that controlled scene, not authored visual quality. No captured user
+item or game PNG is bundled. `--native-dll PATH --no-build` accepts an independently built
+native executable and records its hash; it does not claim a wrapper build receipt.
+
+Native client consumable-depletion cases additionally require the pinned original
+community `Images/Item_0.png`, provisioned by `fetch_player_assets.py` (20 core
+PNGs, plus two optional dummy PNGs). This initializes native PlayerFrame after the
+last item is consumed. The genuine repository GeneratedProjectile.png is loaded
+for Main.LoadProjectile; authored item art is never replaced with that proxy.
+
+### Lifecycle, world, equipment and input controls
+
+Run each verifier into a fresh directory:
+
+```sh
+python tools/item-test-workbench/verify_lifecycle.py --out artifacts/lifecycle
+python tools/item-test-workbench/verify_world.py --out artifacts/world
+python tools/item-test-workbench/verify_placed_render.py --out artifacts/placed-render
+python tools/item-test-workbench/verify_equipment_reactions.py --out artifacts/equipment-reactions
+python tools/item-test-workbench/verify_equipment_render.py --item /path/to/equipment.json --artwork /path/to/item.png /path/to/overlay.png --player-assets /path/to/player-assets --out artifacts/equipment-render
+python tools/item-test-workbench/verify_controls.py --out artifacts/controls
+```
+
+These execute original native gameplay/draw paths and explicit negative controls.
+World removal via `break_tile` is native `WorldGen.KillTile`, not a claim that the
+player mined the object; the separate mining scenario executes native player item
+use. Returned generated items are compared with the complete source network
+serialization, not merely name/ID/count. Placed rendering invokes the production
+ledger renderer against a neutral background; it is not the complete terrain pass.
+Equipment reactions use native hurt/death, and movement controls set only native
+input flags before `Player.Update`. Draw calls alone do not establish visibility:
+inspect output pixels and paired functional/vanity/unequipped scenes separately.
+
+For an independently built executable, pass `--no-build --native-dll PATH` where
+supported. Its exact binary hash is evidence, but not proof that the normal
+MSBuild/wrapper path passed. Preserve failed controls and environment errors as
+such; do not relabel unsupported or unexecuted paths as generic success.

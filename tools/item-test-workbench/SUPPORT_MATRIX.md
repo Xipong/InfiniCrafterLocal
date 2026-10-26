@@ -10,8 +10,10 @@ false: the utility initializes a controlled scene instead of running all of Main
 | Generated JSON | Production fresh or explicit local-cache reader; real registered item/projectile types | Not every valid item is admitted by a scene; source input is not rewritten |
 | Use, charge, release, return, expiry | Actual ItemCheck, generated hooks, Projectile.Update/Kill and delayed scheduler | Scenario-specific assertions; no all-controller certification |
 | Full player | Player.Update, gravity/floor, mana/health regeneration, supported held/buff/mobility clocks | Commanded input replaces keyboard polling; world systems are not complete |
-| Equipment | Supported single-instance accessory equip/unequip/vanity paths | Not arbitrary armor sets, multi-accessory interactions or reactive equipment |
-| Ammo | Native arrow/bullet selection, source identity, consumption, slot priority and depletion | Generated ammo and other categories are not certified; fixtures are synthetic |
+| Equipment | Single-instance accessory and head/body/legs native equip/unequip/vanity; registered on-hurt/on-enemy-kill generated-buff reactions; original five equip-overlay draw layers and exact authored overlay PNGs | Not armor sets, multi-accessory interactions, enemy AI/loot tables, full armor atlases or multiplayer; draw dispatch alone does not prove visible pixels |
+| Ammo | Native arrow/bullet/flare selection, source identity, consumption, slot priority and depletion | Generated ammo and other categories are not certified; fixtures are synthetic |
+| Stack/long lifecycles | Native stack consumption, configured entity counts/caps, exact exhaustion checkpoints and up to 14,400 headless ticks | Assertions are scenario-specific; rendered captures remain capped at 600 ticks |
+| Placement/mining | Native ItemCheck placement/mining, ledger commit/retirement and canonical-definition-preserving material return | Explicit tile scenarios only; break_tile is external native stimulus; no world save/ecology parity |
 | Item-body contact | Original client use-style/contact and supported use/hit/crit events | Requires explicit client modes; unsupported effect combinations refuse |
 | Authored VFX | Original supported ParticleLibrary resources, updates and draw wrapper | Not all visual-slot kinds, shaders, sound output or mod content |
 | Authored PNGs | Original sprite resolver and item/projectile drawing paths; publication identity checks | Baked/reused PNG subset; no silent geometry/asset fallback |
@@ -52,8 +54,29 @@ onto the collision box. Use native hit events rather than requiring its HP to dr
 
 ## Regression findings are not production fixes
 
-A synthetic zero-distance return case has exposed non-finite native motion. Its
-expected-failure regression can pass while the tested item remains broken. Likewise,
+The synthetic zero-distance return case now requires finite native motion after
+the production coincident-seek fix. Negative controls must still fail only their
+explicit intended assertions. Likewise,
 an author composition that starts homing too late is an authoring defect, not a
 reason for the utility to rewrite engine timing. Fixes belong to their actual owner
 and require a separate positive test plus the original negative control.
+
+Camera diagnostics use the actual native view matrix and report collision-bound
+intersection and sampled center light per captured frame, not sprite visibility.
+Lighting bounds follow that viewport; optional `lightingMode: viewport_fill`
+uses a controlled native white-light grid. Neither illumination mode certifies a
+loaded-world appearance. Fixed camera framing remains an explicit scenario input.
+
+Authored material paths/elements and impact sprites use the original detached
+renderer with exact selected publication assets. Their native state is recorded
+separately from particle state. `impactRing` requires the original full projectile
+and dust paths. Source-only admission or a successful scenario with no matching
+emission does not certify that visual lane. Full-player held-projectile rendering
+must be checked separately from the partial authored-art lane.
+
+Native world scenarios now admit explicitly selected `place_item` bindings through
+full Player.Update/ItemCheck, production ledger maintenance and native material
+return. Primary pickaxe mining is separately exercised through the client branch.
+Tracked tiles and timed assertions are evidence, not world/render parity. The
+`break_tile` command is an external native-world stimulus; it must not be described
+as a player mining action. Reusable synthetic matrix: `verify_world.py`.

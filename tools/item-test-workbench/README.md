@@ -239,8 +239,8 @@ export INFINI_PLAYER_ASSET_DIR="$PWD/artifacts/dependencies/player-assets"
 ```
 
 The VFX fetcher checks the installed DLL and downloads pinned upstream resources;
-it does not replace the DLL. The player fetcher downloads 19 pinned **community
-source PNGs**, or 21 with `--include-dummy`, not HD upscales. These are labelled
+it does not replace the DLL. The player fetcher downloads 20 pinned **community
+source PNGs**, or 22 with `--include-dummy`, not HD upscales. These are labelled
 1.4.4.9 upstream but are not certified against official game XNB bytes. Both fetchers
 verify hashes/sizes and refuse mismatches/symlinks instead of silently overwriting.
 Game assets and external dependency binaries are **not bundled** with this utility.
@@ -277,3 +277,173 @@ its build instructions; replay requires no LLM API key.
 6. Re-run both cases after a change. Do not relax assertions merely to obtain green output.
 
 See [VERIFICATION.md](VERIFICATION.md) for portable checks and interpretation.
+
+### Camera and controlled lighting diagnostics
+
+`nativeRender.lightingMode` accepts `legacy_point` (default native white point at
+ tile 50,45) or `viewport_fill` (explicit diagnostic white native lights on a
+ four-tile grid). Both use **original** `Lighting.AddLight/LightTiles`. The processed
+ region now follows the actual camera/zoom matrix, with a 16-tile margin clipped
+ to the initialized world, rather than a fixed Y=32..56 band. This is controlled
+ test illumination, not Terraria world-light parity; the fill mode is opt-in.
+
+Every captured PNG's frame record includes `scene`: the camera, native-transformed
+ player/projectile collision bounds, `hitboxIntersectsViewport`, and sampled
+ `centerLightRgb`. This separates an off-camera or dark object from a missing
+ spawn. Hitbox overlap and a draw call do **not** prove visible sprite pixels,
+ complete VFX coverage, grip correctness or visual quality. Review original PNGs.
+ The camera does not auto-follow or change gameplay; enlarge/reposition it in the
+ explicit scenario when an intended lifecycle leaves the viewport.
+
+### Authored material and impact textures
+
+The original detached renderer also admits `spriteElement`, `texturedPath`, and
+`impactSprite` when `drawArtwork=true`. Supply the exact referenced VFX and impact
+PNG files alongside item/entity files in `artworkFiles`; unrelated files still
+refuse. VFX files are checked against the canonical `[recipeId, assetId]` + NUL +
+PNG identity (`infini_vfx_png_`); impact files use the canonical default impact
+logical asset identity (`infini_asset_png_`). Missing, substituted or incorrectly
+named bytes do not pass admission. Custom logical impact IDs remain unsupported.
+
+`impactRing` additionally requires `drawPlayer=true` and `drawNativeDust=true`:
+the original MagicPixel/Dust resources and complete native projectile hooks are
+required, not reconstructed rings. Native snapshots now expose original material
+path histories/geometries and detached impact records as well as particles. A
+record proves state exists, not that it was drawn or visually approved; inspect
+the corresponding original PNG frames and renderer coverage separately.
+
+### Equipment reactions and secondary targets
+
+CPU `playerUpdate: "full"` admits a single authored head/body/legs armor item or
+accessory via `equip`, `vanity`, and `unequip`. The instance moves, rather than
+being copied. Armor uses its actual generated armor proxy and native equip-slot
+registration; `Player.Update` owns effects and reset. `player_stat_at` also accepts
+`genericCrit` (including the native baseline).
+
+Reaction scenarios can schedule `{"tick":5,"kind":"hurt_player","damage":10}`
+or `{"tick":5,"kind":"strike_hostile","damage":10}`. They run **after** that
+tick's native player update, so functional equipment registration, defense,
+immunity, death credit and cooldowns are real. `strike_hostile` allocates a declared
+one-HP, stationary Zombie fixture in slot 1 and calls `Player.StrikeNPCDirect`;
+`GeneratedEquipmentKillGlobalNPC` is registered in the actual native loader.
+Native death callbacks and player damage are recorded. The controlled hostile uses
+an explicitly empty native loot table: this tests kill/reaction hooks, not vanilla
+loot, enemy AI, graphical enemy death or multiplayer. A live previous hostile is
+never silently overwritten. These stimuli are not admitted in rendered modes.
+
+Optional `hostiles: [{"x":960,"y":700,"life":10000}]` provisions up to eight
+additional stationary controlled Zombies in slots 2–9. They retain native geometry,
+NPC updates, collision and damage hooks, but have disabled AI/gravity/contact damage
+and zero defense/knockback. Their snapshots let a scenario distinguish secondary
+projectile targeting from a hit on the first dummy. This is not NPC-AI certification.
+
+```sh
+python tools/item-test-workbench/verify_equipment_reactions.py --out artifacts/equipment
+# For an independently source-built native executable, preserve its build receipt:
+python tools/item-test-workbench/verify_equipment_reactions.py --out artifacts/equipment \
+  --no-build --native-dll /path/to/ItemTestWorkbench.dll
+```
+
+### Native placement and mining world scenes
+
+`world.trackTiles` selects explicit `{tileX,tileY}` cells for native telemetry.
+Optional `world.walls` initializes bounded vanilla wall rectangles with `tileX`,
+`tileY`, `width`, `height`, `wallId`; `tiles` still supplies Dirt terrain.
+The scene loads Terraria's actual second tile/NPC metadata initializer, the
+production placement ledger and its native `GlobalTile.CanDrop` callback, plus
+native NBT bool serialization. It does not implement a parallel material ledger.
+
+- `tile_target` sets the native tile target and mouse coordinates. Subsequent
+  `primary`/`alt` runs real `Player.Update`/`ItemCheck`, `PlaceThing` or mining hooks.
+- `break_tile` calls original `WorldGen.KillTile` as an **external break stimulus**.
+  It is not evidence that a player mined the object. Primary pickaxe tests use
+  ordinary input instead and observe the actual native tile removal.
+- `tile_at`, `placement_groups_at`, `placement_pending_at` and
+  `generated_world_items_at` assert native state at an explicit post-update `tick`.
+  `tile_at` requires `tileX`, `tileY`, `hasTile` and, for a present tile, `tileId`.
+  Count assertions require `value`. Assert stack debit separately with
+  `generated_stack_at`; an observed world item count alone is not conservation.
+- Snapshots include exact tile frames, pending/quarantined return counts and
+  returned generated-item definition hashes. `GeneratedPlacementLedgerSystem`
+  performs real post-world maintenance and `Item.NewItem` allocation.
+
+```sh
+python tools/item-test-workbench/verify_world.py --out artifacts/world-controls
+```
+
+The synthetic controls cover native campfire placement/last-unit debit, full
+footprint removal, repeated break without duplicate return, a deliberately wrong
+return count, native pickaxe mining versus no use, and an out-of-world refusal.
+Placement lifecycle tests use `full` (dedicated visual branch); mining/contact uses
+`client`. These controls do not certify placed-body artwork, wall breaking,
+chests, arbitrary vanilla tiles, wiring, multiplayer, or the client renderer after
+consuming the final held unit. World maps are disabled in this controlled scene;
+map UI and full world ecology are not simulated.
+
+### Resource, entity and long-lifecycle checks
+
+`itemStack` provisions the actual generated item instance (default 1, bounded by
+its native `maxStack`). Native `ItemCheck` owns consumption; the bench does not
+subtract stacks. Arrow, bullet and flare inventory go through native ammo selection.
+Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded to
+600. This permits full multi-minute field expiry without increasing image budgets.
+
+- `entity_spawn_count` counts distinct observed configured native lifetimes.
+- `entity_hit_count_at_least` counts actual projectile hit callbacks.
+- `entity_peak_active_at_most` checks native snapshots and configuration-time
+  counts, including allocations between snapshots. All take `entityId` and `value`.
+- `entity_inactive` and `entity_natural_expiry` take `entityId`; they inspect final
+  native activity or observed lifetime-depleted Kill, respectively.
+- `generated_stack_at` and `exhaustion_at` take post-update `tick` and exact `value`.
+  Stack assertions sum the single generated identity across inventory/equipment.
+- Direct `Player.ApplyDamageToNPC` calls are observed separately from native
+  item/projectile hit callbacks, so nearby-event damage is not mistaken for zero
+  damage simply because it bypasses projectile contact callbacks.
+
+```sh
+python tools/item-test-workbench/verify_lifecycle.py --out artifacts/lifecycle
+```
+
+For separately source-built executables, the new lifecycle/world/equipment
+verifiers accept `--no-build --native-dll PATH`. They record binary identity and
+refuse a changed binary mid-matrix. This is direct native execution, **not** proof
+of the standard wrapper's build provenance, archive or optional exports. Preserve
+the external compiler/source/reference receipt with that evidence.
+
+### Native placed-body drawing
+
+`nativeRender.drawPlacedBodies: true` requires `drawArtwork: true` and an explicit
+`world` scene. It calls the original `GeneratedPlacedBodyDrawSystem.PostDrawTiles`
+over the real placement ledger and records successful original `DrawBody` calls.
+`placed_body_draw_count_at_least` requires a positive `minimum`; no emitted body
+cannot count as visual-path coverage. No native terrain texture or background is
+invented. This verifies the authored placed-body renderer, not the complete world.
+
+Returned material telemetry includes both the retained canonical source and returned
+`ToNetworkJson` hashes. `generated_world_items_at` also rejects any returned item
+whose canonical definition differs from the source; item ID/count alone is not
+sufficient evidence that a placement round-trip preserved the definition.
+
+Native movement inputs are explicit and persistent until changed:
+`{"tick":20,"kind":"controls","left":false,"right":true,"jump":true}`.
+All three booleans are required. Release them with all three `false`; ordinary
+weapon `release` does not release movement. This requires full `Player.Update`,
+which remains responsible for acceleration, jump, gravity, collisions and friction.
+No workbench motion/physics model is used. Native input flags are in every player
+snapshot. `verify_controls.py` checks run, jump, release and preflight refusals.
+
+For equipped PNG checks, `verify_equipment_render.py` accepts `--item`, exact
+`--artwork` PNG paths and `--player-assets`, plus the common output/build options.
+It runs actual equipment layers and checks the idle player-region pixels against
+unequip, retaining raw PNGs. A dispatched draw is **not** sufficient: fully occluded
+overlays fail its visibility check. Facing/animation coverage remains explicit.
+All equipment artwork runs require both exact item and `equipOverlayPath` PNGs,
+even when the supplied scenario only uses the item in hand or places it.
+
+Rendered movement can complete native achievements in the controlled scene. The
+workbench preserves native achievement completion and its original notification/
+sound dispatch, but captures achievement chat text before font layout, like the
+existing generated-use-refusal text sink. It records `native_achievement_completed`
+and `native_ui_message`; chat glyph rendering and audible audio are not certified.
+This adapter does not alter world position, movement, achievement conditions or
+item behavior. Unrelated chat paths are not silently swallowed.

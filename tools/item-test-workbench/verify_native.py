@@ -40,7 +40,7 @@ def main():
            ('tile-wall','synthetic-wall.json',modified(tiles=[{'tileX':48,'tileY':36,'width':1,'height':12}],assertions=[spawned,{'kind':'tile_collision'},{'kind':'dummy_undamaged'},inactive,finite]),0),
            ('vanilla-wooden-boomerang',284,modified(ticks=180,assertions=[spawned,{'kind':'dummy_damaged'},inactive,finite]),0),
            ('straight-repeat','synthetic-straight.json',base,0),
-           ('return-nonfinite-regression','synthetic-return.json',modified(dummy={**base['dummy'],'y':1000},assertions=[spawned,{'kind':'returned'},finite]),1),
+           ('return-coincident-finite-regression','synthetic-return.json',modified(dummy={**base['dummy'],'y':1000},assertions=[spawned,{'kind':'returned'},finite]),0),
            ('imported-front-hand',str(w.ROOT/'tools/fixtures/front-hand-compiled.json'),modified(assertions=[{'kind':'spawned'},inactive,finite]),0),
            ('captured-pumpkin-wand',str(w.ROOT/'tools/fixtures/video-ui-buffs/g_4efc7c05f7b078e0.json'),modified(player={**base['player'],'life':80,'maxLife':100},dummy={**base['dummy'],'x':750},assertions=[spawned,{'kind':'dummy_damaged'},{'kind':'life_equals','value':81},{'kind':'mana_equals','value':195},inactive,finite]),0),
            ('captured-frog-chest-wand',str(w.ROOT/'tools/fixtures/video-ui-buffs/g_17d5099f992a900b.json'),modified(player={**base['player'],'life':80,'maxLife':100},dummy={**base['dummy'],'x':750},assertions=[spawned,{'kind':'dummy_damaged'},{'kind':'life_equals','value':81},{'kind':'mana_equals','value':190},inactive,finite]),0)]
@@ -112,8 +112,8 @@ def main():
         passed=proc.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
         if name=='negative-held-buff':
             passed=passed and 'NotSupportedException' in trace.get('error','') and 'held' in trace.get('error','').lower()
-        if name=='return-nonfinite-regression':
-            passed = passed and any(p.get('nonFinite') for frame in trace.get('snapshots',[]) for p in frame.get('projectiles',[]))
+        if name=='return-coincident-finite-regression':
+            passed = passed and bool(trace.get('snapshots')) and not any(p.get('nonFinite') for frame in trace['snapshots'] for p in frame.get('projectiles',[]))
         rows.append({'name':name,'passed':passed,'expectedExitCode':expected,'actualExitCode':proc.returncode,'nativeStatus':trace.get('status'),'trace':str(trace_path),'runnerStdout':proc.stdout,'runnerStderr':proc.stderr})
         print(name+': '+('PASS' if passed else 'FAIL'),flush=True)
     def recorded(name):
@@ -143,7 +143,7 @@ def main():
                 passed=passed and abs(speed-expected_speed)<.0001 and root['initialDamage']==damage and root['initialKnockback']==knockback
             passed=passed and bool(trace.get('snapshots')) and all(any(i['slot']==0 and i['stack']==1 for i in frame['player']['inventory']) for frame in trace.get('snapshots',[]))
         rows.append({'name':'ammo-'+category+'-native-launch-policy-and-weapon-preservation','passed':passed,'observed':observed})
-    summary={'fullGameParity':False,'scope':'Actual native scenarios and explicit negative controls; not universal item coverage','passed':all(r['passed'] for r in rows),'itemReadiness':'not certified','knownProductFailure':'return seek at owner center produces non-finite velocity; expected failed native result is a successful detector test, NOT a healthy item','checks':rows}
+    summary={'fullGameParity':False,'scope':'Actual native scenarios and explicit negative controls; not universal item coverage','passed':all(r['passed'] for r in rows),'itemReadiness':'not certified','regressionScope':'Coincident return seek must remain finite after the production fix; negative controls still require their exact intended failures','checks':rows}
     (out/'summary.json').write_text(json.dumps(summary,indent=2))
     return 0 if summary['passed'] else 1
 

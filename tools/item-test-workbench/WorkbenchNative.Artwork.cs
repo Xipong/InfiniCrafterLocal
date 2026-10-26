@@ -23,17 +23,25 @@ internal sealed class WNativeArtwork:IDisposable {
  readonly RuntimeSpriteCache cache=new();readonly GeneratedAssetSyncService sync=new();readonly Player owner;
  readonly object? oldCache,oldSync;readonly GeneratedHeldItemDrawLayer layer=new();readonly Func<Projectile,int> projectileId;
  readonly HashSet<Texture2D> heldTextures=new();
- bool nativePlayer;Hook? heldObserver,playerObserver,proxyObserver;
+ WNativeEquipmentLayers? equipmentLayers;
+ bool nativePlayer;Hook? heldObserver,playerObserver,proxyObserver,projectileObserver;
  public bool NativePlayerEnabled=>nativePlayer;
  delegate bool ProxyOriginal(InfiniCrafterLocal.Content.Items.GeneratedItem self,ref PlayerDrawSet draw,ref DrawData item,ref DrawData? colored,ref DrawData? glow);
  delegate bool ProxyObserver(ProxyOriginal orig,InfiniCrafterLocal.Content.Items.GeneratedItem self,ref PlayerDrawSet draw,ref DrawData item,ref DrawData? colored,ref DrawData? glow);
+ delegate bool ProjectileDrawOriginal(GeneratedProjectile self,ref Color color);
+ delegate bool ProjectileDrawObserver(ProjectileDrawOriginal orig,GeneratedProjectile self,ref Color color);
  delegate void HeldOriginal(GeneratedHeldItemDrawLayer self,ref PlayerDrawSet draw);
  delegate void HeldObserver(HeldOriginal orig,GeneratedHeldItemDrawLayer self,ref PlayerDrawSet draw);
  delegate void PlayerOriginal(ref PlayerDrawSet draw);
  delegate void PlayerObserver(PlayerOriginal orig,ref PlayerDrawSet draw);
  public void EnableNativePlayer(){
+  projectileObserver=new Hook(typeof(GeneratedProjectile).GetMethod(nameof(GeneratedProjectile.PreDraw))!,
+   (ProjectileDrawObserver)((ProjectileDrawOriginal orig,GeneratedProjectile self,ref Color color)=>{
+    bool result=orig(self,ref color);RecordProjectile(self.Projectile,self.Projectile.whoAmI==owner.heldProj?"Native PlayerDrawLayers -> Main.DrawProj -> GeneratedProjectile.PreDraw":"ProjectileLoader.PreDraw -> GeneratedProjectile.PreDraw");return result;
+   }));
   if(owner.skinVariant!=0||owner.hair!=0)throw new NotSupportedException("Native player artwork currently requires actual default skinVariant0/hair0");
   typeof(PlayerDrawLayerLoader).GetMethod("Add",All)!.Invoke(null,new object[]{layer});
+  equipmentLayers=new WNativeEquipmentLayers(()=>Frame);
   typeof(PlayerDrawLayerLoader).GetMethod("ResizeArrays",All)!.Invoke(null,null);
   heldObserver=new Hook(typeof(GeneratedHeldItemDrawLayer).GetMethod("Draw",All)!, (HeldObserver)((HeldOriginal orig,GeneratedHeldItemDrawLayer self,ref PlayerDrawSet draw)=>{
    int count=draw.DrawDataCache.Count;orig(self,ref draw);for(int i=count;i<draw.DrawDataCache.Count;i++) RecordHeld(draw.DrawDataCache[i]);
@@ -46,6 +54,7 @@ internal sealed class WNativeArtwork:IDisposable {
     if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.PlayerHair[owner.hair].Value))textureIdentity="Player_Hair_"+(owner.hair+1);
     if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.PlayerHairAlt[owner.hair].Value))textureIdentity="Player_HairAlt_"+(owner.hair+1);
     if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.Item[owner.HeldItem.type].Value))textureIdentity="native_item_proxy";
+    if(equipmentLayers?.Owns(entry.texture)==true)textureIdentity="generated_equip_overlay";
     nativeData.Add(new JsonObject{["textureIdentity"]=textureIdentity,["textureWidth"]=entry.texture?.Width,["textureHeight"]=entry.texture?.Height,["positionX"]=entry.position.X,["positionY"]=entry.position.Y,["originX"]=entry.origin.X,["originY"]=entry.origin.Y,["scaleX"]=entry.scale.X,["scaleY"]=entry.scale.Y,["rotation"]=entry.rotation,["sourceX"]=entry.sourceRect?.X,["sourceY"]=entry.sourceRect?.Y,["sourceWidth"]=entry.sourceRect?.Width,["sourceHeight"]=entry.sourceRect?.Height,["effects"]=entry.effect.ToString(),["shader"]=entry.shader});
    }Frame["nativePlayerDrawData"]=nativeData;
    Frame["nativeProxyDrawDataCount"]=draw.DrawDataCache.Count(d=>ReferenceEquals(d.texture,Terraria.GameContent.TextureAssets.Item[owner.HeldItem.type].Value));
@@ -57,7 +66,7 @@ internal sealed class WNativeArtwork:IDisposable {
    if(!result)Frame["nativeProxyVetoCount"]=(Frame["nativeProxyVetoCount"]?.GetValue<int>()??0)+1;
    return result;
   }));
-  nativePlayer=true;Report["scope"]="Original native PlayerRenderer body/layer ordering, generated held layer once and full generated projectile PreDraw/PostDraw; separate inventory preview; no Terraria tile/NPC/world renderer";Report["entrypoints"]=Entrypoints();Report["nativePlayerRenderer"]="Main.PlayerRenderer.DrawPlayers / LegacyPlayerRenderer";Report["fullProjectilePreDrawEnabled"]=true;Report["fullProjectilePreDrawExecuted"]=false;Report["missingFullPreDrawAsset"]=null;
+  nativePlayer=true;Report["scope"]="Original native PlayerRenderer body/layer ordering, generated held layer once and full generated projectile PreDraw/PostDraw; separate inventory preview; no Terraria tile/NPC/world renderer";Report["entrypoints"]=Entrypoints();Report["nativePlayerRenderer"]="Main.PlayerRenderer.DrawPlayers / LegacyPlayerRenderer";Report["equipmentOverlayScope"]="Original five GeneratedEquipOverlay draw layers; actual equip/vanity selection and exact authored overlay PNG; no full armor atlas substitution";Report["fullProjectilePreDrawEnabled"]=true;Report["fullProjectilePreDrawExecuted"]=false;Report["missingFullPreDrawAsset"]=null;
  }
  public JsonObject Report {get;}=new();
  public JsonObject Frame {get;private set;}=new();
@@ -70,6 +79,17 @@ internal sealed class WNativeArtwork:IDisposable {
    if(entity.Visual.AssetMode is not ("baked_sprite" or "reuse_item_icon"))throw new NotSupportedException("Authored PNG artwork requires baked_sprite/reuse_item_icon, not "+entity.Visual.AssetMode+" for "+entity.Id);
    selected.Add((entity.Id,SpritePresentation.Entity(data,entity),entity.Kind==RuntimeEntityKind.ItemBody||entity.Visual.AssetMode=="reuse_item_icon"?rootIdentity:new[]{data.Id,"runtime:"+RuntimeEntityKind.VisualRoleFor(entity.Kind),entity.Id,data.Id+"_"+entity.Id}));
   }
+  // Only explicitly authored texture references are admitted; never invent a missing visual.
+  foreach(var entity in data.RuntimeProgram.Entities)
+   if(data.VfxManifest.Slots.Any(slot=>slot.EntityId==entity.Id && (slot.RendererKind=="impactSprite" || slot.Element?.Texture.Source=="impact" || slot.Path?.Texture.Source=="impact")))
+    selected.Add(("impact:"+entity.Id,new SpritePresentationSelection(entity.Visual.ImpactSpritePath,null,null,ImpactTexture:true),new[]{data.Id,"impact",entity.Id,data.Id+"_"+entity.Id+"_impact"}));
+  var assetIds=data.VfxManifest.Slots.Select(slot=>slot.Element?.Texture??slot.Path?.Texture).Where(texture=>texture?.Source=="asset").Select(texture=>texture!.AssetId).ToHashSet(StringComparer.Ordinal);
+  foreach(string assetId in assetIds) {
+   var asset=data.VfxManifest.Assets?.SingleOrDefault(a=>a.Id==assetId)??throw new InvalidDataException("Missing authored VFX asset: "+assetId);
+   selected.Add(("vfx:"+assetId,new SpritePresentationSelection(asset.SpritePath,null,null,ImpactTexture:true),new[]{data.VfxManifest.RecipeId,assetId}));
+  }
+  if(data.Accessory.Enabled || data.Armor.Enabled)
+   selected.Add(("equip_overlay",new SpritePresentationSelection(data.Visual.EquipOverlayPath,null,null,ImpactTexture:true),new[]{data.Id,"equip_overlay","",data.Id+"_equip_overlay"}));
   var supplied=new Dictionary<string,string>(StringComparer.OrdinalIgnoreCase);
   foreach(string file in files) {
    string full=Path.GetFullPath(file);RejectSymlink(full);
@@ -79,7 +99,7 @@ internal sealed class WNativeArtwork:IDisposable {
   var required=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
   foreach(var (_,selection,identity) in selected) {
    if(identity.Any(part=>part.Any(c=>!((c>='a'&&c<='z')||(c>='A'&&c<='Z')||(c>='0'&&c<='9')||c is '_' or '-' or '.' or ':'))))throw new NotSupportedException("Publication proof currently admits only ASCII letters/digits/underscore/hyphen/period/colon identities; other identity serialization is not certified");
-   SpritePresentation.RequireRenderSize(selection.RenderSizePx);SpritePresentation.RequireForwardAngle(selection.ForwardAngleDegrees);
+   if(!selection.ImpactTexture){SpritePresentation.RequireRenderSize(selection.RenderSizePx);SpritePresentation.RequireForwardAngle(selection.ForwardAngleDegrees);}
    string alias=selection.Path.Trim();if(string.IsNullOrEmpty(alias)||alias!=Environment.ExpandEnvironmentVariables(alias)||alias.Replace('\\','/').Split('/').Any(p=>p is "." or ".."))throw new InvalidDataException("Unsafe/empty authored asset alias");
    string name=GeneratedAssetSyncService.FileNameFromPath(alias);if(name.Length==0||!supplied.ContainsKey(name))throw new FileNotFoundException("Missing explicit artwork file for selected publication: "+name);
    if(!string.Equals(Path.GetFileName(supplied[name]),name,StringComparison.Ordinal))throw new InvalidDataException("Selected/supplied publication basename must match exact case");
@@ -95,14 +115,14 @@ internal sealed class WNativeArtwork:IDisposable {
    foreach(var publication in selected.Where(x=>GeneratedAssetSyncService.FileNameFromPath(x.Selection.Path)==pair.Key)) {
     byte[] identity=Encoding.ASCII.GetBytes(JsonSerializer.Serialize(publication.Identity));
     using var digest=IncrementalHash.CreateHash(HashAlgorithmName.SHA256);digest.AppendData(identity);digest.AppendData(new byte[]{0});digest.AppendData(bytes);
-    string expected="infini_asset_png_"+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png";
+    string expected=(publication.Role.StartsWith("vfx:",StringComparison.Ordinal)?"infini_vfx_png_":"infini_asset_png_")+Convert.ToHexString(digest.GetHashAndReset()).ToLowerInvariant()+".png";
     if(!string.Equals(pair.Key,expected,StringComparison.Ordinal))throw new InvalidDataException("Artwork publication identity/content mismatch; custom logical asset IDs and non-publication filenames are not certified by this bounded mode: "+pair.Key);
    }
    if(System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(8,4))!=13 || !bytes.AsSpan(12,4).SequenceEqual(new byte[]{73,72,68,82})) throw new InvalidDataException("Artwork PNG must start with canonical IHDR");
    uint width=System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(16,4)),height=System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20,4));
    if(width==0||height==0||width>4096||height>4096||(ulong)width*height>16UL*1024*1024) throw new InvalidDataException("Artwork PNG dimensions exceed admission limit: positive dimensions <=4096 and <=16M pixels");
    string destination=Path.Combine(sync.CacheRoot,pair.Key);RejectSymlink(destination);File.WriteAllBytes(destination,bytes);string sha=Hash(File.ReadAllBytes(destination));hashes[pair.Key]=sha;
-   receipts.Add(new JsonObject{["publicationFileName"]=pair.Key,["suppliedPath"]=pair.Value,["stagedPath"]=destination,["bytes"]=bytes.Length,["copiedBytesSha256"]=sha,["publicationVerified"]=true,["publicationAlgorithm"]="LocalGenerator visual_sprite_generation._runtime_publication_identity + _publish_image_png: compact ASCII identity JSON + NUL + exact PNG bytes",["publicationScope"]="Root item and default runtime logical assetId=data.Id+underscore+entity.Id; safe ASCII identities only"});
+   receipts.Add(new JsonObject{["publicationFileName"]=pair.Key,["suppliedPath"]=pair.Value,["stagedPath"]=destination,["bytes"]=bytes.Length,["copiedBytesSha256"]=sha,["publicationVerified"]=true,["publicationAlgorithm"]="LocalGenerator visual_sprite_generation._runtime_publication_identity or _publish_vfx_png: compact ASCII identity JSON + NUL + exact PNG bytes",["publicationScope"]="Root/runtime/impact default logical asset IDs; VFX exact recipeId/assetId identity; safe ASCII identities only"});
   }
   typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,cache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,sync);
   bool old=Main.dedServ;Main.dedServ=false;
@@ -122,14 +142,24 @@ internal sealed class WNativeArtwork:IDisposable {
  static void RejectSymlink(string path) {for(FileSystemInfo? p=new FileInfo(path);p is not null;p=p is FileInfo file?file.Directory:((DirectoryInfo)p).Parent)if(p.LinkTarget is not null||(p.Exists&&(p.Attributes&FileAttributes.ReparsePoint)!=0))throw new InvalidDataException("Artwork symlink/reparse path is not admitted: "+p.FullName);}
  JsonArray Entrypoints()=>nativePlayer?new("Main.PlayerRenderer.DrawPlayers","GeneratedItem.ModifyItemDraw","GeneratedHeldItemDrawLayer.Draw (native layer loader)","PlayerDrawLayers.DrawPlayer_RenderAllLayers","ProjectileLoader.PreDraw / GeneratedProjectile.PreDraw","ProjectileLoader.PostDraw","GeneratedItem.PreDrawInInventory"):new("GeneratedItem.PreDrawInInventory","GeneratedHeldItemDrawLayer.GetDefaultVisibility/Draw","DrawData.Draw","GeneratedProjectile.DrawAuthoredEntityVisual");
  static JsonObject PreviewAnchor()=>new(){["positionX"]=36,["positionY"]=36,["originX"]=24,["originY"]=24,["requestedFrameWidth"]=48,["requestedFrameHeight"]=48,["scope"]="Separate UI preview anchor; original hook determines actual authored PNG size"};
- public void BeginFrame(){heldTextures.Clear();Frame=new JsonObject{["playerDrawCount"]=0,["playerRenderAllLayersCalls"]=0,["nativeProxyVetoCount"]=0,["nativeProxyDrawDataCount"]=0,["heldItemDrawCount"]=0,["projectileDrawCount"]=0,["inventoryPreviewDrawCount"]=0,["heldDrawData"]=new JsonArray(),["projectileIds"]=new JsonArray(),["projectileDraws"]=new JsonArray(),["entrypoints"]=Entrypoints(),["inventoryPreviewAnchor"]=PreviewAnchor()};}
+ public void BeginFrame(){heldTextures.Clear();equipmentLayers?.BeginFrame();Frame=new JsonObject{["equipmentOverlayDrawCount"]=0,["equipmentOverlayDrawData"]=new JsonArray(),["playerDrawCount"]=0,["playerRenderAllLayersCalls"]=0,["nativeProxyVetoCount"]=0,["nativeProxyDrawDataCount"]=0,["heldItemDrawCount"]=0,["projectileDrawCount"]=0,["inventoryPreviewDrawCount"]=0,["heldDrawData"]=new JsonArray(),["projectileIds"]=new JsonArray(),["projectileDraws"]=new JsonArray(),["entrypoints"]=Entrypoints(),["inventoryPreviewAnchor"]=PreviewAnchor()};}
  void Increment(string key,int amount=1)=>Frame[key]=Frame[key]!.GetValue<int>()+amount;
  public void DrawInventory() {
+  if(owner.HeldItem.IsAir)return; // No selected item: no preview, never substitute artwork.
   Main.spriteBatch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer);
   try{owner.HeldItem.ModItem!.PreDrawInInventory(Main.spriteBatch,new Vector2(36,36),new Rectangle(0,0,48,48),Color.White,Color.White,new Vector2(24),1);Increment("inventoryPreviewDrawCount");}finally{Main.spriteBatch.End();}
  }
  public void DrawHeld() {
-  if(nativePlayer){if(owner.isLockedToATile)throw new NotSupportedException("Locked-to-tile player draw ordering is outside the ordinary player render pass");Main.PlayerRenderer.DrawPlayers(Main.Camera,new[]{owner});Frame["playerDrawCount"]=1;return;}
+  if(nativePlayer){
+   if(owner.isLockedToATile)throw new NotSupportedException("Locked-to-tile player draw ordering is outside the ordinary player render pass");
+   var active=Main.projectile.Where(p=>p.active).ToArray();Exception? drawError=null;
+   EventHandler<System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs> observe=(_,args)=>{drawError=args.Exception;};
+   AppDomain.CurrentDomain.FirstChanceException+=observe;
+   try{Main.PlayerRenderer.DrawPlayers(Main.Camera,new[]{owner});}
+   finally{AppDomain.CurrentDomain.FirstChanceException-=observe;}
+   if(active.Any(p=>!p.active))throw new InvalidOperationException("Native player rendering deactivated a projectile; swallowed draw errors cannot certify a successful gameplay run",drawError);
+   Frame["playerDrawCount"]=1;return;
+  }
   var draw=new PlayerDrawSet{drawPlayer=owner,ItemLocation=owner.itemLocation,DrawDataCache=new List<DrawData>()};if(!layer.GetDefaultVisibility(draw))return;
   object[] args={draw};typeof(GeneratedHeldItemDrawLayer).GetMethod("Draw",All)!.Invoke(layer,args);draw=(PlayerDrawSet)args[0];
   Main.spriteBatch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
@@ -139,10 +169,14 @@ internal sealed class WNativeArtwork:IDisposable {
  public void DrawProjectiles() {
   Main.spriteBatch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
   try{foreach(var p in Main.projectile.Where(p=>p.active)) {
+   if(nativePlayer && p.whoAmI==owner.heldProj)continue; // Native player layer owns this pass exactly once.
    if(p.hide)throw new NotSupportedException("Hidden or specially ordered projectile draw passes are not admitted");
    if(p.ModProjectile is not GeneratedProjectile)throw new NotSupportedException("Only generated projectile authored core is supported");
-   Color color=Lighting.GetColor((int)p.Center.X/16,(int)p.Center.Y/16);if(nativePlayer){Report["fullProjectilePreDrawExecuted"]=true;if(ProjectileLoader.PreDraw(p,ref color))throw new InvalidOperationException("Generated full PreDraw unexpectedly requested vanilla fallback");ProjectileLoader.PostDraw(p,color);}else typeof(GeneratedProjectile).GetMethod("DrawAuthoredEntityVisual",All)!.Invoke(p.ModProjectile,new object[]{color});Increment("projectileDrawCount");int id=projectileId(p);Frame["projectileIds"]!.AsArray().Add(JsonValue.Create(id));Frame["projectileDraws"]!.AsArray().Add(new JsonObject{["projectileId"]=id,["nativeSlot"]=p.whoAmI,["nativeIdentity"]=p.identity,["entrypoint"]=nativePlayer?"ProjectileLoader.PreDraw / GeneratedProjectile.PreDraw / ProjectileLoader.PostDraw":"GeneratedProjectile.DrawAuthoredEntityVisual"});
+   Color color=Lighting.GetColor((int)p.Center.X/16,(int)p.Center.Y/16);if(nativePlayer){Report["fullProjectilePreDrawExecuted"]=true;if(ProjectileLoader.PreDraw(p,ref color))throw new InvalidOperationException("Generated full PreDraw unexpectedly requested vanilla fallback");ProjectileLoader.PostDraw(p,color);}else typeof(GeneratedProjectile).GetMethod("DrawAuthoredEntityVisual",All)!.Invoke(p.ModProjectile,new object[]{color});if(!nativePlayer)RecordProjectile(p,"GeneratedProjectile.DrawAuthoredEntityVisual");
   }}finally{Main.spriteBatch.End();}
  }
- public void Dispose(){heldObserver?.Dispose();playerObserver?.Dispose();proxyObserver?.Dispose();if(nativePlayer)typeof(PlayerDrawLayerLoader).GetMethod("Unload",All)!.Invoke(null,null);cache.Dispose();sync.Dispose();typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,oldCache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,oldSync);}
+ void RecordProjectile(Projectile p,string entrypoint){
+  Increment("projectileDrawCount");int id=projectileId(p);Frame["projectileIds"]!.AsArray().Add(JsonValue.Create(id));Frame["projectileDraws"]!.AsArray().Add(new JsonObject{["projectileId"]=id,["nativeSlot"]=p.whoAmI,["nativeIdentity"]=p.identity,["entrypoint"]=entrypoint});
+ }
+ public void Dispose(){equipmentLayers?.Dispose();projectileObserver?.Dispose();heldObserver?.Dispose();playerObserver?.Dispose();proxyObserver?.Dispose();if(nativePlayer)typeof(PlayerDrawLayerLoader).GetMethod("Unload",All)!.Invoke(null,null);cache.Dispose();sync.Dispose();typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,oldCache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,oldSync);}
 }

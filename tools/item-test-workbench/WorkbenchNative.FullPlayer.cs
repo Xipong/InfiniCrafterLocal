@@ -30,6 +30,9 @@ internal static partial class EngineRuntimeChecks
         Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1).Select(_ => new Item()).ToArray();
         Terraria.Main.dust = Enumerable.Range(0, Terraria.Main.maxDust + 1).Select(_ => new Dust()).ToArray();
         Terraria.GameInput.PlayerInput.Triggers.Initialize();
+        // This scene has no registered crafting recipes; still execute native FindRecipes after stack debits.
+        Terraria.Main.guideItem = new Item();
+        Terraria.Recipe.maxRecipes = 0;
         Terraria.Main.autoSave = false; // This isolated temporary world is never persisted.
         Terraria.Main.instance = (Terraria.Main)RuntimeHelpers.GetUninitializedObject(typeof(Terraria.Main));
         typeof(Terraria.Main).GetField("_achievements", TestInstance)!

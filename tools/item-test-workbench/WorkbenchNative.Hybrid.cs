@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Collections.Generic;
 using Terraria.DataStructures;
@@ -18,12 +19,14 @@ internal static partial class EngineRuntimeChecks
             foreach(var action in entity.Events)
             {
                 bool body=entity.Kind==RuntimeEntityKind.ItemBody;
+                if(body && renderedVfx && WEquipmentBodyEventsSupported(data) && action.Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill)continue;
                 bool supported=body
                     ? action.Event is RuntimeEventKind.OnUse or RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit
                         && (action.ActionCode==RuntimeEventActionCode.SpawnEntity
                             || (action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit && action.ActionCode==RuntimeEventActionCode.HealOwner))
-                    : action.ActionCode==RuntimeEventActionCode.SpawnEntity || renderedVfx && action.ActionCode==RuntimeEventActionCode.HealOwner;
-                if(!supported) throw new NotSupportedException("Client hybrid admits item-body on_use/on_hit/on_crit spawn and on_hit/on_crit healing only; projectile callbacks remain spawn-only");
+                    : action.ActionCode is RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.SelectTargetsAndEmit or RuntimeEventActionCode.DamageNearby
+                        || renderedVfx && action.ActionCode==RuntimeEventActionCode.HealOwner;
+                if(!supported) throw new NotSupportedException("Client hybrid admits item-body on_use/on_hit/on_crit spawn and on_hit/on_crit healing only; projectile callbacks admit spawn/select-target emission/native nearby damage and rendered healing");
             }
     }
     private delegate void WItemEventOriginal(GeneratedItem self,Player player,RuntimeEntitySpec entity,string eventName,NPC? target,int damageDone,string? useInput);
@@ -51,7 +54,7 @@ internal static partial class EngineRuntimeChecks
             (WConfigureObserver)((orig,self,data,entity,depth,remaining,direction,preserve,budget,reservation,nativeVelocity,originalDamage)=> {
                 orig(self,data,entity,depth,remaining,direction,preserve,budget,reservation,nativeVelocity,originalDamage);
                 Projectile p=self.Projectile;
-                observe(new JsonObject { ["kind"]="entity_configured",["projectileId"]=WProjectileId(p),["nativeIdentity"]=p.identity,["entityId"]=WProjectileEntity(p),["itemId"]=data.Id,["childDepth"]=WProjectileDepth(p),["damage"]=p.damage,["originalDamage"]=p.originalDamage,["knockback"]=p.knockBack,["vx"]=WFinite(p.velocity.X),["vy"]=WFinite(p.velocity.Y),["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode,["observationStage"]="after_canonical_configure" });
+                observe(new JsonObject { ["kind"]="entity_configured",["activeEntityCount"]=Terraria.Main.projectile.Count(other=>other.active && other.owner==p.owner && WProjectileEntity(other)==entity.Id),["projectileId"]=WProjectileId(p),["nativeIdentity"]=p.identity,["entityId"]=WProjectileEntity(p),["itemId"]=data.Id,["childDepth"]=WProjectileDepth(p),["damage"]=p.damage,["originalDamage"]=p.originalDamage,["knockback"]=p.knockBack,["vx"]=WFinite(p.velocity.X),["vy"]=WFinite(p.velocity.Y),["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode,["observationStage"]="after_canonical_configure" });
             }));
     private static string WProjectileEntity(Projectile p) => p.ModProjectile is GeneratedProjectile gp?WState<string>(gp,"_entityId"):"vanilla:"+p.type;
     private static int? WProjectileDepth(Projectile p) => p.ModProjectile is GeneratedProjectile gp?WState<int>(gp,"_childDepth"):null;

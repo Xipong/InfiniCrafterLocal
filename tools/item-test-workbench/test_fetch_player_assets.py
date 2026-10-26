@@ -30,9 +30,9 @@ class PlayerAssetsTests(unittest.TestCase):
     def provision(self):
         return fetcher.provision(self.root, self.manifest, self.download)
     def test_download_and_reuse(self):
-        self.assertEqual(self.provision()['downloaded'], 19)
-        self.assertEqual(self.provision()['reused'], 19)
-        self.assertEqual(len(self.calls), 19)
+        self.assertEqual(self.provision()['downloaded'], 20)
+        self.assertEqual(self.provision()['reused'], 20)
+        self.assertEqual(len(self.calls), 20)
         self.assertFalse(self.provision()['officialByteIdentityVerified'])
         self.assertEqual(list(self.root.rglob('.player-asset-*')), [])
     def test_wrong_bytes(self):
@@ -90,11 +90,11 @@ class PlayerAssetsTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.provision()
     def test_optional_dummy_download_and_default_unchanged(self):
         self.manifest['trainingDummyFiles'] = [dict(path='Images/' + name, sourceURL=fetcher.PREFIX + name, sha256=hashlib.sha256(self.data).hexdigest(), bytes=len(self.data), width=1, height=1) for name in sorted(fetcher.DUMMY_REQUIRED)]
-        self.assertEqual(self.provision()['verifiedFiles'], 19)
+        self.assertEqual(self.provision()['verifiedFiles'], 20)
         result = fetcher.provision(self.root, self.manifest, self.download, include_dummy=True)
-        self.assertEqual((result['downloaded'], result['reused'], result['verifiedFiles']), (2, 19, 21))
+        self.assertEqual((result['downloaded'], result['reused'], result['verifiedFiles']), (2, 20, 22))
         self.assertTrue(result['includesTrainingDummy'])
-        self.assertEqual(self.provision()['verifiedFiles'], 19)
+        self.assertEqual(self.provision()['verifiedFiles'], 20)
     def test_optional_dummy_missing_or_wrong_manifest(self):
         with self.assertRaises(ValueError): fetcher.provision(self.root, self.manifest, self.download, include_dummy=True)
         self.manifest['trainingDummyFiles'] = self.manifest['files'][:2]
@@ -104,7 +104,7 @@ class PlayerAssetsTests(unittest.TestCase):
         manifest = json.loads(fetcher.MANIFEST.read_text())
         self.assertEqual(manifest['commit'], fetcher.COMMIT)
         self.assertEqual({Path(e['path']).name for e in manifest['files']}, fetcher.REQUIRED)
-        self.assertEqual(len(manifest['files']), 19)
+        self.assertEqual(len(manifest['files']), 20)
         for entry in manifest['files']:
             self.assertEqual(entry['sourceURL'], fetcher.PREFIX + Path(entry['path']).name)
             self.assertEqual(len(entry['sha256']), 64)
