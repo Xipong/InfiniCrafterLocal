@@ -85,6 +85,12 @@ def ammo_profile_of(item: dict[str, Any]) -> dict[str, Any]:
     Ammo examples are not the canonical weapon identity: a modded gun/bow may have
     important item.shoot mechanics independent of the player's current bullets.
     """
+    # A present request-local observation, even empty or unavailable, owns this
+    # envelope. Never replace it with the fingerprint's player-free examples.
+    missing = object()
+    direct = dict_get_ci(item, "ammoRaw", missing)
+    if direct is not missing:
+        return direct if isinstance(direct, dict) else {}
     return _raw_section_dict(item, "ammoRaw")
 
 
@@ -195,6 +201,8 @@ def compact_ammo_profile(item: dict[str, Any]) -> dict[str, Any]:
         out["mode"] = ap["mode"]
     if _compact_keep(ap.get("ammoId")):
         out["ammoId"] = ap["ammoId"]
+    if isinstance(ap.get("playerInventoryObservation"), dict):
+        out["playerInventoryObservation"] = copy.deepcopy(ap["playerInventoryObservation"])
     if isinstance(ap.get("ammoItemRaw"), dict):
         out["ammoItemRaw"] = _select_raw_keys(ap["ammoItemRaw"], LLM_AMMO_ITEM_KEYS)
     for key in ("projectileRaw", "weaponShootFieldProjectileRaw"):

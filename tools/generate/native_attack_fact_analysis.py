@@ -54,6 +54,10 @@ def straight_line_arguments(block, call_index, count):
 
 def type_blocks(instructions, field, argument):
     code = [i for i in instructions if i.op != "nop"]
+    # No fallthrough proof is valid in the presence of an unmodeled transfer,
+    # including transfers outside the candidate that could enter its interior.
+    if any(i.op in ("throw", "rethrow", "jmp", "leave", "endfinally", "endfilter") for i in code):
+        return
     for index in range(len(code) - 4):
         a, b, c, guard = code[index:index + 4]
         if (a.op, a.arg, b.op, b.arg, c.op, guard.op) != ("ldarg", argument, "ldfld", field, "const", "bne"):
@@ -115,7 +119,7 @@ def direct_call_count(block, call_offset):
 
 
 def counted_spawn(block, call_offset):
-    """Recognize i=0; i<rand.Next(lo,hi); i++ with one straight-line spawn."""
+    """Recognize bounded i=0; i<literal/local; i++ with one direct spawn."""
     jumps = [(n, i) for n, i in enumerate(block) if i.op.startswith("b") and isinstance(i.arg, int) and i.arg < i.offset]
     if len(jumps) != 1:
         raise Unrecognized("not one counted loop")
@@ -123,9 +127,11 @@ def counted_spawn(block, call_offset):
     if branch.op != "blt":
         raise Unrecognized("not strict upper bound")
     left, right = block[end - 2:end]
-    if left.op != "ldloc" or right.op != "ldloc":
+    if left.op != "ldloc" or right.op not in ("ldloc", "const"):
         raise Unrecognized("nonlocal loop bounds")
-    counter, limit = left.arg, right.arg
+    counter, limit = left.arg, right.arg if right.op == "ldloc" else None
+    if counter == limit:
+        raise Unrecognized("aliased loop locals")
     if any(i.op == "ldloca" and i.arg in (counter, limit) for i in block):
         raise Unrecognized("address mutation of loop locals")
     start = next(n for n, i in enumerate(block) if i.offset == branch.arg)
@@ -139,17 +145,22 @@ def counted_spawn(block, call_offset):
     if [(i.op, i.arg) for i in body[-4:]] != [("ldloc", counter), ("const", 1), ("add", None), ("stloc", counter)]:
         raise Unrecognized("nonunit increment")
     stores = [(n, i) for n, i in enumerate(block) if i.op == "stloc" and i.arg in (counter, limit)]
-    if len(stores) != 3:
+    if len(stores) != (3 if limit is not None else 2):
         raise Unrecognized("loop local reassignment")
     initial = [n for n, i in stores if i.arg == counter and n < start]
     bounds = [n for n, i in stores if i.arg == limit and n < start]
-    if len(initial) != 1 or len(bounds) != 1 or (block[initial[0] - 1].op, block[initial[0] - 1].arg) != ("const", 0):
+    if len(initial) != 1 or len(bounds) != int(limit is not None) or (block[initial[0] - 1].op, block[initial[0] - 1].arg) != ("const", 0):
         raise Unrecognized("nonzero loop start")
-    value, _ = expression(block, bounds[0] - 1)
-    if len(value) != 5 or value[:2] != ("call", "Terraria.Utilities.UnifiedRandom.Next") or value[2] != ("call", "Terraria.Main.get_rand"):
+    value, _ = expression(block, bounds[0] - 1) if bounds else (("const", right.arg), None)
+    if value[0] == "const":
+        low = high = value[1]
+        distribution = "fixed"
+    elif len(value) == 5 and value[:2] == ("call", "Terraria.Utilities.UnifiedRandom.Next") and value[2] == ("call", "Terraria.Main.get_rand") and all(v[0] == "const" for v in value[3:]):
+        low, high = value[3][1], value[4][1] - 1
+        distribution = "uniform_integer_inclusive"
+    else:
         raise Unrecognized("nonuniform loop bound")
-    low, high = value[3:]
-    if low[0] != "const" or high[0] != "const" or not 0 < low[1] < high[1] <= 64:
+    if not all(isinstance(v, int) for v in (low, high)) or not 0 < low <= high <= 64:
         raise Unrecognized("unbounded loop")
     # The only forward jump skips the loop body for the first condition test.
     forwards = [i for i in block if i.op.startswith("b") and isinstance(i.arg, int) and i.arg > i.offset]
@@ -157,7 +168,7 @@ def counted_spawn(block, call_offset):
         raise Unrecognized("additional loop entry/exit condition")
     if forwards[0].offset != block[start - 1].offset or any(block[n].offset >= forwards[0].offset for n in initial + bounds):
         raise Unrecognized("loop setup does not dominate first condition")
-    return {"minimum": low[1], "maximum": high[1] - 1, "distribution": "uniform_integer_inclusive"}
+    return {"minimum": low, "maximum": high, "distribution": distribution}
 
 
 def shoot_facts(instructions):
@@ -231,10 +242,20 @@ def line_collision_facts(instructions):
         }
         if any(i.op == "call" and i.arg[0] not in allowed_calls for i in block):
             continue
+        # The proof relates all reads to one live scale/rotation. Writes (also
+        # indirect writes via aliases) invalidate that relation, even if the
+        # final expression still has the familiar spelling.
+        if any(i.op in ("ldarga", "starg") or i.op.startswith(("stfld", "stsfld", "stind", "stobj", "cpobj", "initobj")) for i in block):
+            continue
+        if call.arg != ("Terraria.Collision.CheckAABBvLineCollision", 6, False, True):
+            continue
         try:
             if any(i.op == "ret" for i in block[:n]):
                 continue
             args = straight_line_arguments(block, n, 6)
+            if args[:2] != (("call", "Terraria.Utils.TopLeft", ("ldarg", 2)),
+                            ("call", "Terraria.Utils.Size", ("ldarg", 2))):
+                continue
             start, end, thickness = args[2:5]
             if start[:3] != ("call", "Microsoft.Xna.Framework.Vector2.op_Subtraction", center):
                 continue

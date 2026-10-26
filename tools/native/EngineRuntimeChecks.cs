@@ -44,6 +44,9 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("journal lifecycle without draw", JournalSessionRetiresWithoutDrawing),
+            ("parent fixed spawn source native oracle", ParentFixedSpawnFactsMatchNativeBranchAndRequest),
+            ("parent ammo inventory observation unknown versus empty", ParentAmmoInventoryObservationDistinguishesUnavailableAndEmpty),
             ("parent environment references conditional fail closed", ParentEnvironmentReferencesAreConditionalAndFailClosed),
             ("parent banner registry matches native conditional components", ParentBannerRegistryMatchesConditionalNativeComponents),
             ("parent equipment source pieces and conditional sets", ParentEquipmentFactsSeparatePiecesAndConditionalSets),

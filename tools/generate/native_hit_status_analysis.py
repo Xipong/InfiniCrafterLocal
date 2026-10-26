@@ -52,6 +52,8 @@ def _analyze(instructions, projectile_type, choices=None, source_kind="projectil
     exits = []
     calls = {}
     random_branches = {}
+    random_calls = {}
+    duration_sources = {}
     reasons = {}
     all_sites = {i.offset for i in instructions if i.op == "call" and i.arg[0] == "Terraria.NPC.AddBuff"}
     for index, ins in enumerate(instructions):
@@ -114,6 +116,7 @@ def _analyze(instructions, projectile_type, choices=None, source_kind="projectil
                 if all(v is not None for v in values):
                     low, high = (0, values[0]) if count == 1 else values
                     if 0 <= low < high:
+                        random_calls[ins.offset] = (low, high - 1, 1)
                         result = (("int", choices[ins.offset]) if choices and ins.offset in choices
                                   else ("range", low, high - 1, 1, ins.offset))
             elif name == "Terraria.NPC.AddBuff" and receiver == TARGET and count == 3:
@@ -123,6 +126,8 @@ def _analyze(instructions, projectile_type, choices=None, source_kind="projectil
                 if duration_value is not None:
                     duration = ("range", duration_value, duration_value, 1)
                 if buff_id is not None and buff_id > 0 and duration[0] == "range" and duration[1] > 0 and integer(quiet) == 0:
+                    if len(duration) == 5:
+                        duration_sources[ins.offset] = duration[4]
                     calls[ins.offset] = (buff_id, duration[1], duration[2], duration[3])
                     must = must | {ins.offset}
                 else:
@@ -155,7 +160,10 @@ def _analyze(instructions, projectile_type, choices=None, source_kind="projectil
             }[op]
             successors = [arg, next_offset] if condition is None else [arg if condition else next_offset]
         elif op == "switch":
-            value = integer(pop())
+            operand = pop()
+            if operand[0] == "range" and len(operand) == 5:
+                random_branches[operand[4]] = (operand[1], operand[2], operand[3])
+            value = integer(operand)
             successors = [*arg, next_offset] if value is None else [arg[value] if 0 <= value < len(arg) else next_offset]
         elif op == "ret":
             if stack:
@@ -181,6 +189,8 @@ def _analyze(instructions, projectile_type, choices=None, source_kind="projectil
         "excludedSites": [{"ilOffset": offset, "reason": reason} for offset, reason in sorted(reasons.items())],
         "totalMethodAddBuffSites": len(all_sites),
         "randomBranches": random_branches,
+        "randomCalls": random_calls,
+        "durationSources": duration_sources,
     }
 
 
@@ -197,21 +207,37 @@ def analyze(instructions, projectile_type, source_kind="projectile"):
         raise ValueError("unsupported native status signature")
     baseline = _analyze(instructions, projectile_type, source_kind=source_kind)
     branches = baseline.pop("randomBranches")
+    random_calls = baseline.pop("randomCalls")
+    duration_sources = baseline.pop("durationSources")
+    # A single roll can drive a proc and a duration, or several durations. Do
+    # not publish independent-looking ranges that erase that correlation.
+    for source in duration_sources.values():
+        if list(duration_sources.values()).count(source) > 1:
+            branches[source] = random_calls[source]
     baseline["randomOutcomes"] = []
+    correlated_sites = {site for site, source in duration_sources.items() if source in branches}
+    # If joint alternatives exceed the proof budget, decline those ranges,
+    # rather than silently converting correlated requests into marginal facts.
+    baseline["effects"] = [e for e in baseline["effects"] if e["ilOffset"] not in correlated_sites]
+    baseline["excludedSites"] += [{"ilOffset": site, "reason": "correlated_duration_requires_bounded_joint_choice"}
+                                  for site in sorted(correlated_sites)
+                                  if not any(s["ilOffset"] == site for s in baseline["excludedSites"])]
     # Bound offline work even for an unexpected new native method.
     if len(branches) > 32:
         return baseline
-    for offset, (low, high, step) in branches.items():
-        _capture_single_choice(instructions, projectile_type, baseline, offset, low, high, step, source_kind)
+    for offset in branches:
+        low, high, step = random_calls[offset]
+        correlated = {site for site, source in duration_sources.items() if source == offset}
+        _capture_single_choice(instructions, projectile_type, baseline, offset, low, high, step, source_kind, correlated)
     return baseline
 
 
-def _capture_single_choice(instructions, projectile_type, baseline, offset, low, high, step, source_kind):
+def _capture_single_choice(instructions, projectile_type, baseline, offset, low, high, step, source_kind, correlated=frozenset()):
     if step != 1 or not 0 < high - low + 1 <= 16:
         return baseline
     trials = [_analyze(instructions, projectile_type, {offset: value}, source_kind)
               for value in range(low, high + 1)]
-    unconditional = {effect["ilOffset"] for effect in baseline["effects"]}
+    unconditional = {effect["ilOffset"] for effect in baseline["effects"]} - correlated
     candidate_sites = {effect["ilOffset"] for trial in trials for effect in trial["effects"]} - unconditional
     # A missing site may be unreachable under an RNG outcome, but must never be
     # a possible unproved request hidden behind player/world/AI state.
@@ -233,5 +259,6 @@ def _capture_single_choice(instructions, projectile_type, baseline, offset, low,
         "randomMinimumInclusive": low, "randomMaximumExclusive": high + 1,
         "alternatives": [{**a, "probabilityNumerator": len(a["randomValues"]),
                            "probabilityDenominator": high - low + 1} for a in alternatives]})
+    baseline["effects"] = [e for e in baseline["effects"] if e["ilOffset"] not in candidate_sites]
     baseline["excludedSites"] = [s for s in baseline["excludedSites"] if s["ilOffset"] not in candidate_sites]
     return baseline

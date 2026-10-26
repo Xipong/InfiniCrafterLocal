@@ -57,7 +57,7 @@ internal static partial class EngineRuntimeChecks
         player.inventory[0] = item;
         var reset = typeof(PlayerDrawLayer).GetMethod("ResetVisibility", instance)!;
         var tree = typeof(PlayerDrawLayer).GetMethod("DrawWithTransformationAndChildren", instance)!;
-        PlayerDrawSet Info(Item host) => new() { drawPlayer = player, heldItem = host, ItemLocation = new Vector2(180, 180), Position = player.position, DrawDataCache = new List<DrawData>() };
+        PlayerDrawSet Info(Item host) => new() { drawPlayer = player, heldItem = host, ItemLocation = new Vector2(180, 180) + player.position - new Vector2(160, 160), Position = player.position, DrawDataCache = new List<DrawData>() };
         DrawData Entry(Texture2D texture) => new(texture, Vector2.Zero, texture.Bounds, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
         PlayerDrawSet Render(Item host, bool seed = false, bool shadow = false, bool hideParent = false)
         {
@@ -136,6 +136,18 @@ internal static partial class EngineRuntimeChecks
                 PlayerDrawSet remoteContact=Render(item);
                 AssertVfxNear(localContact.DrawDataCache[0].position,remoteContact.DrawDataCache[0].position,
                     "remote resolved contact receives identical draw-set translation");
+                // No new packet: native interpolation/movement must carry the held
+                // contact with its owner instead of pinning it in world space.
+                Vector2 originalPosition = player.position, originalItemLocation = player.itemLocation;
+                foreach (Vector2 movement in new[] { new Vector2(31, -17), new Vector2(-23, 41) })
+                {
+                    player.position = originalPosition + movement;
+                    player.itemLocation = originalItemLocation + movement;
+                    PlayerDrawSet moved = Render(item);
+                    AssertVfxNear(remoteContact.DrawDataCache[0].position + movement,
+                        moved.DrawDataCache[0].position, "remote held contact follows owner between pose packets");
+                }
+                player.position = originalPosition; player.itemLocation = originalItemLocation;
             }
             GeneratedHeldItemDrawLayer.ClearNetCaches(); player.whoAmI=0;
             Terraria.Main.myPlayer=0; Terraria.Main.netMode=NetmodeID.SinglePlayer;

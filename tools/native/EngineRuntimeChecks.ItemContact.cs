@@ -115,13 +115,13 @@ internal static partial class EngineRuntimeChecks
                 using var reader = new BinaryReader(stream);
                 object decoded = read.Invoke(null,new object[] {reader})!;
                 float Field(string name) => (float)decoded.GetType().GetField(name)!.GetValue(decoded)!;
-                AssertVfxNear(hand,new Vector2(Field("ItemLocationX"),Field("ItemLocationY")),
-                    "remote v5 transports the identical resolved native contact, not raw item location");
-                stream.Position=0; writer.Write(4); stream.Position=0;
+                AssertVfxNear(hand,player.position+new Vector2(Field("ItemLocationX"),Field("ItemLocationY")),
+                    "remote contact is owner-relative, preserving native facing/gravity without world pinning");
+                stream.Position=0; writer.Write(5); stream.Position=0;
                 bool rejected=false;
                 try { read.Invoke(null,new object[] {reader}); }
                 catch(TargetInvocationException e) when(e.InnerException is InvalidDataException) { rejected=true; }
-                Equal(true,rejected,"old raw-location packet cannot be interpreted as contact-space data");
+                Equal(true,rejected,"old world-contact packet cannot be interpreted as owner-relative data");
             }
             player.compositeFrontArm.enabled=false;
             AssertVfxNear(player.itemLocation,GeneratedHeldItemDrawLayer.NativeGripLocation(player,item,player.itemLocation),

@@ -470,27 +470,38 @@ public sealed partial class GeneratorClient
         if (item.useAmmo <= AmmoID.None)
             return null;
 
-        var inventory = FindPlayerAmmoCandidates(item.useAmmo, player, 3);
+        var inventory = FindPlayerAmmoCandidates(item.useAmmo, player, 3, out string inventoryStatus);
         var fallback = FindRepresentativeAmmoCandidates(item.useAmmo, 3);
         return new
         {
             mode = "weapon_uses_ammo",
             ammoId = item.useAmmo,
+            playerInventoryObservation = new
+            {
+                source = "Player.inventory",
+                status = inventoryStatus == "observed" ? "observed" : "unavailable",
+                reason = inventoryStatus == "observed" ? null : inventoryStatus,
+                candidateLimit = 3,
+                selection = "inventory_order_category_match_not_native_PickAmmo"
+            },
             // This is the weapon's own shoot field.  It may be a default ammo placeholder,
             // or it may be a custom mechanic.  The LLM gets it separately from ammo candidates.
             weaponShootFieldProjectileRaw = item.shoot > ProjectileID.None ? ProjectileRawSnapshot(item.shoot, item.shootSpeed, "weapon_item.shoot_field", item, -1) : null,
-            playerInventoryAmmoRaw = inventory.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
-            playerInventoryProjectileRaw = inventory.Where(c => c.Item.shoot > ProjectileID.None).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray(),
+            // Null means the inventory was not observed. Only a completed scan
+            // can publish [] as an observed lack of matching candidates.
+            playerInventoryAmmoRaw = inventory?.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
+            playerInventoryProjectileRaw = inventory?.Where(c => c.Item.shoot > ProjectileID.None).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray(),
             fallbackAmmoRaw = fallback.Select(c => AmmoItemRawSnapshot(c.Item, c.Source, c.InventorySlot)).ToArray(),
             fallbackProjectileRaw = fallback.Where(c => c.Item.shoot > ProjectileID.None).Select(c => ProjectileRawSnapshot(c.Item.shoot, c.Item.shootSpeed, c.Source + ".shoot", c.Item, c.InventorySlot)).ToArray()
         };
     }
 
-    private static List<AmmoCandidate> FindPlayerAmmoCandidates(int ammoId, Player? player, int maxCount)
+    private static List<AmmoCandidate>? FindPlayerAmmoCandidates(int ammoId, Player? player, int maxCount, out string status)
     {
+        status = player is null ? "no_player" : "inventory_scan_failed";
         var outList = new List<AmmoCandidate>();
-        if (player is null || ammoId <= ItemID.None)
-            return outList;
+        if (player is null || ammoId <= AmmoID.None)
+            return null;
         try
         {
             for (int i = 0; i < player.inventory.Length; i++)
@@ -513,8 +524,9 @@ public sealed partial class GeneratorClient
                         break;
                 }
             }
+            status = "observed";
         }
-        catch { }
+        catch { return null; }
         return outList;
     }
 

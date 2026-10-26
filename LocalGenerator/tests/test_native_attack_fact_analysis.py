@@ -51,6 +51,22 @@ def test_branch_multiplier_is_current_shot_local_not_item_base_damage():
     assert analysis.shoot_facts(program(wrap(conditional + spawn(damage) + [("ret",)])))[0]["shotDamageLocalMayBeModifiedInBranch"] is True
 
 
+@pytest.mark.parametrize("local_bound", [False, True])
+def test_fixed_counted_loop_is_proved_from_literal_or_single_assignment(local_bound):
+    ops = loop()
+    # Replace just the RNG setup with a fixed limit, preserving canonical CFG.
+    ops[:5] = [("const", 6), ("stloc", 10)] if local_bound else []
+    if not local_bound:
+        ops[-3] = ("const", 6)
+    result = analysis.shoot_facts(program(wrap(ops)))
+    assert result[0]["explicitSpawnCount"] == {"minimum": 6, "maximum": 6, "distribution": "fixed"}
+    assert result[0]["damageMultiplierAtSpawn"] == 1
+    for invalid in [0, -1, 65]:
+        changed = list(ops)
+        changed[0 if local_bound else -3] = ("const", invalid)
+        assert analysis.shoot_facts(program(wrap(changed))) == []
+
+
 def test_canonical_counted_loop_preserves_uniform_exclusive_upper_bound():
     result = analysis.shoot_facts(program(wrap(loop())))
     assert result[0]["explicitSpawnCount"] == {"minimum": 3, "maximum": 4, "distribution": "uniform_integer_inclusive"}
@@ -128,6 +144,29 @@ def test_collision_setup_cannot_be_bypassed_by_control_flow():
     body = line_body()
     body.insert(13, ("label", "arguments"))
     assert analysis.line_collision_facts(collision_program([("br", "arguments")] + body)) == []
+
+
+@pytest.mark.parametrize("change", ["target", "signature", "scale_write", "target_write", "target_address"])
+def test_line_collision_refuses_wrong_target_signature_or_live_scale_mutation(change):
+    body = line_body()
+    if change == "target":
+        body[13] = ("ldarg", 1)  # projectile hitbox is not the target rectangle
+    elif change == "signature":
+        body[-2] = ("call", ("Terraria.Collision.CheckAABBvLineCollision", 5, False, True))
+    elif change == "target_write":
+        body[13:13] = [("ldarg", 1), ("starg", 2)]
+    elif change == "target_address":
+        body[13:13] = [("ldarga", 2), ("const", 10), ("const", 10),
+                       ("call", ("Microsoft.Xna.Framework.Rectangle.Inflate", 2, True, False))]
+    else:
+        body[13:13] = [("ldarg", 0), ("const", 2.0), ("stfld", "Terraria.Projectile.scale")]
+    assert analysis.line_collision_facts(collision_program(body)) == []
+
+
+@pytest.mark.parametrize("exit_op", ["throw", "rethrow", "jmp", "leave"])
+def test_unmodeled_control_transfer_cannot_be_counted_as_fallthrough(exit_op):
+    body = [(exit_op, "outside")] + spawn() + [("ret",)]
+    assert analysis.shoot_facts(program(wrap(body))) == []
 
 
 def test_external_control_flow_cannot_bypass_type_guard():

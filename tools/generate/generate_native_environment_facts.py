@@ -3,14 +3,40 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
+import uuid
 from pathlib import Path
 
 from generate_native_hit_status import decode
-from native_environment_fact_analysis import aura_branches, scene_regen_additions
+from native_environment_fact_analysis import aura_branches, scene_regen_additions, certified_placement_mapping
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "ModSources/InfiniCrafterLocal/Common/Services/Generation/NativeEnvironmentFactsCatalog.g.cs"
 REPORT = ROOT / "contracts/reports/native_environment_sources.generated.json"
+
+
+def placement_sources(path: Path):
+    """Read method bodies/identity from metadata; do not load the assembly."""
+    import dnfile
+    from dncil.cil.body import CilMethodBody
+    from dncil.cil.body.reader import CilMethodBodyReaderBytes
+
+    pe = dnfile.dnPE(str(path))
+    methods = [("Terraria", "TileObject", "Place"),
+        ("Terraria.ObjectData", "TileObjectData", "CalculatePlacementStyle"),
+        ("Terraria.ObjectData", "TileObjectData", "Initialize"),
+        ("Terraria.ObjectData", "TileObjectData", "GetTileData")]
+    version = pe.net.mdtables.Assembly.rows[0]
+    for namespace, owner, method in methods:
+        native = next(m.row for t in pe.net.mdtables.TypeDef
+            if str(t.TypeNamespace) == namespace and str(t.TypeName) == owner
+            for m in t.MethodList if str(m.row.Name) == method)
+        body = CilMethodBody(CilMethodBodyReaderBytes(pe.get_data(native.Rva, 100_000)))
+        yield {"method": owner + "." + method, "overloadIndex": 0,
+            "assemblyVersion": ".".join(str(getattr(version, k)) for k in ("MajorVersion", "MinorVersion", "BuildNumber", "RevisionNumber")),
+            "sourceMethodSha256": hashlib.sha256(pe.get_data(native.Rva + body.header_size, body.code_size)).hexdigest(),
+            "sourceModuleVersionId": str(uuid.UUID(bytes_le=pe.net.mdtables.Module.rows[0].Mvid.value)),
+            "assemblySha256": hashlib.sha256(path.read_bytes()).hexdigest()}
 
 
 def extract(path):
@@ -49,7 +75,9 @@ def extract(path):
                 or [(i.op, i.arg) for i in code[:2]] != [("ldarg", 0), ("ldarg", 1)]
                 or code[6].arg != 1 or code[10].arg != 2):
             raise ValueError("Changed banner operand or gate: " + suffix)
-    return {"sources": sources, "auras": auras}
+    sources.extend(placement_sources(path))
+    mapping = certified_placement_mapping({s["method"]: s["sourceMethodSha256"] for s in sources})
+    return {"sources": sources, "auras": auras, "placementMapping": mapping}
 
 
 def render(data):
@@ -60,7 +88,7 @@ def render(data):
         "    internal static readonly Dictionary<string, string> Certificates = new()", "    {"]
     for source in data["sources"]:
         lines.append('        ["' + source["method"] + '"] = "' + source["sourceMethodSha256"] + ':' + source["sourceModuleVersionId"] + '",')
-    lines += ["    };", '    internal const string AuraJson = """' + json.dumps(data["auras"], separators=(",", ":")) + '""";', "}", ""]
+    lines += ["    };", '    internal const string PlacementMappingJson = """' + json.dumps(data["placementMapping"], separators=(",", ":")) + '""";', '    internal const string AuraJson = """' + json.dumps(data["auras"], separators=(",", ":")) + '""";', "}", ""]
     return "\n".join(lines)
 
 

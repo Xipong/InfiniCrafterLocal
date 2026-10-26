@@ -21,7 +21,16 @@
   и `fallbackAmmoRaw` / `fallbackProjectileRaw` остаются отдельными компактными
   списками. Native producer ограничивает каждый набор тремя кандидатами; Python
   сохраняет порядок, кратность, provenance, slots и наблюдённую пустоту. Это не
-  «лучший патрон» и не effective DPS. При отсутствии собственного `shoot` weapon
+  «лучший патрон» и не effective DPS. Текущее количество `stack` намеренно
+  не передаётся Author: временный запас игрока не является механикой родителя.
+  `playerInventoryObservation` отличает завершённый bounded scan (`observed`)
+  от `unavailable` (`no_player` / `inventory_scan_failed`). Только наблюдённый
+  пустой инвентарь даёт `[]`; отсутствие наблюдения даёт `null` в native wire и
+  отсутствие массива в model-facing packet. Player-free fingerprint не выдаёт
+  отсутствие игрока за пустой инвентарь. Явный request-local `ammoRaw`, даже
+  пустой, не заимствует fingerprint-примеры. Это category-match scan в порядке
+  inventory, не исполнение native PickAmmo и не обещание пригодности к выстрелу.
+  При отсутствии собственного `shoot` weapon
   effective projectile теперь остаётся неизвестным, а не выбирается из инвентаря.
   Это исправление информации о родителе, не изменение игрового выстрела.
 
@@ -33,7 +42,10 @@
 независимые proc rolls. Каждый новый request доказывается при фиксации только
 одного small-range RNG вызова; остальные player/world/AI/random условия остаются
 неизвестными. Диапазон ограничен 16 исходами, кандидаты — 32 вызовами, без
-декартова перебора. В закреплённом binary это, в частности:
+декартова перебора. Прямой random `switch` сохраняет все взаимоисключающие ветви
+и пустой default. Если один draw задаёт proc и duration либо несколько durations,
+они идут одним совместным choice; превышение proof budget отказывает от таких
+связанных ranges, а не изображает их независимыми. В закреплённом binary это, в частности:
 
 - Grass projectile: Poisoned 20, 420 ticks с вероятностью 1/4; иначе нет этого
   запроса. Projectile `StatusNPC` и sword-contact `StatusToNPC` имеют отдельные
@@ -44,9 +56,12 @@
 
 `native_attack_fact_analysis.py` распознаёт только узкие source shapes:
 явный item-type guard, аргументы единственного прямого NewProjectile call,
-branch-local count по CFG либо canonical `i=0; i<rand.Next(lo,hi); i++`.
-Неизвестные выражения, дополнительные входы, неоднозначные guards, изменение
-loop locals по адресу и неподдержанные циклы отказываются от наблюдения.
+branch-local count по CFG либо canonical `i=0; i<limit; i++`. Limit должен
+быть bounded literal, его единственным прямым присваиванием local либо одним
+`rand.Next(lo,hi)`; один прямой spawn на итерацию. Неизвестные control transfers
+(включая throw/leave), alias записи, дополнительные входы и неподдержанные циклы
+отказываются от наблюдения. Fixed-loop recognizer добавляет source-ветки
+TacticalShotgun (6), PiranhaGun/ReleaseDoves/BubbleGun (3), не таблицу семейств.
 
 `nativeShootReference.damageMultiplierAtSpawn` относится к **текущему native
 shot-damage local** после ammo/player/mod и branch-local изменений, не к base
@@ -67,10 +82,16 @@ center ±46×**live projectile.scale** вдоль rotation, width 8×scale. Эт
 
 `nativeEquipmentReference` отделяет вклад одного функционально надетого предмета
 от `conditionalArmorSets`. Offline recognizer распознаёт только прямолинейные
-прибавления native stats под явным item-ID guard, включая OR вариантов. Весь блок
-должен быть распознан: неизвестный call, внешний вход, вложенное условие или loop
-не становятся «безусловным бонусом». В текущем закреплённом binary распознаны
-137 предметов и 26 полных set-веток, не все предметы игры.
+прибавления native stats под явным item-ID guard, включая OR вариантов и bounded
+literal ID ranges из исходного native кода. Весь блок должен быть распознан:
+неизвестный call, внешний вход или loop не становятся «безусловным бонусом».
+Один доказанный Boolean gate может сохраняться как `conditionalEffects` отдельно
+от независимых `effects`, с полным native member/equals и `observed=false`.
+Например, Wizard Hat сохраняет magic contribution и дополнительный minion slot
+при `tenthAnniversaryWorld`, не объявляя это условие текущим состоянием мира.
+Поддержаны также native pick-time, fishing-power и whip-range contributions.
+В текущем закреплённом binary распознаны 151 предмет и 29 полных set-веток,
+не все предметы игры.
 
 У комплектов сохраняются одновременно head/body/legs и все разрешённые OR
 варианты. Это **equip-slot IDs, не ItemIDs**. Смешанный Ancient/обычный Shadow
@@ -89,11 +110,16 @@ stats игрока не вычисляются. Ни один equipment hook н�
 
 `nativeEnvironmentReference` описывает условия native tile scan и banner settings,
 а не активный эффект от лежащего в инвентаре предмета. Для tile aura сохраняются
-frame predicates, функционально поставленная active tile и прямоугольный scan;
-размер scan не называется круглым радиусом. Runtime передаёт только однозначные
-style-0 Campfire/fireplace/Bast: source rows для Heart/Star tile42 пока остаются
-offline-only, потому что createTile без проверенного style mapping недостаточен.
-Banner требует именно matching
+frame predicates, функционально поставленная active tile и прямоугольный scan.
+Точный source certificate `TileObject.Place` и связанных metadata getters
+разрешает сопоставить current `TileObjectData` с initial tile-cell frames:
+Heart Lantern получает только Heart aura, Star in a Bottle — только Star aura,
+обычный lantern — ни одну. Доказанные Campfire/fireplace/Bast styles не ограничены
+нулём. Передаются alternate, matching cell frames и metadata provenance.
+Произвольная изменённая item tile/style пара, legacy placement dispatch,
+custom hooks, random styles, frame overflow или неподдержанные metadata
+отказываются от наблюдения. Успешная placement, текущее включение/wiring и
+активный world buff не наблюдаются. Banner требует именно matching
 opponent-banner buff и правильного BannerToItem; raw registry не доказывает
 активацию, а multipliers описывают компоненты, не конечный damage.
 

@@ -58,6 +58,71 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private static void JournalSessionRetiresWithoutDrawing()
+    {
+        using var actors = new NativeActorState();
+        var system = new RecipeJournalUISystem();
+        var keys = Terraria.Main.keyState; var oldKeys = Terraria.Main.oldKeyState;
+        bool menu = Terraria.Main.gameMenu, focus = Terraria.Main.hasFocus, inventory = Terraria.Main.playerInventory;
+        bool block = Terraria.Main.blockInput, writing = PlayerInput.WritingText, chat = Terraria.Main.drawingPlayerChat;
+        bool left = Terraria.Main.mouseLeft, right = Terraria.Main.mouseRight;
+        int world = Terraria.Main.worldID;
+        var trigger = typeof(RecipeJournalUISystem).GetField("_toggleJournalTrigger", BindingFlags.Static | BindingFlags.NonPublic)!;
+        object? savedTrigger = trigger.GetValue(null);
+        try
+        {
+            system.OnWorldUnload(); trigger.SetValue(null, "");
+            Terraria.Main.myPlayer = 0; Terraria.Main.netMode = 0;
+            var player = Terraria.Main.player[0] = new Terraria.Player { whoAmI = 0, active = true };
+            Terraria.Main.hasFocus = true; Terraria.Main.gameMenu = false;
+            Terraria.Main.blockInput = PlayerInput.WritingText = Terraria.Main.drawingPlayerChat = false;
+            Terraria.Main.mouseLeft = Terraria.Main.mouseRight = false;
+            Terraria.Main.keyState = Terraria.Main.oldKeyState = new Microsoft.Xna.Framework.Input.KeyboardState();
+            foreach (string retirement in new[] { "escape", "player", "world", "inactive", "inventory", "death", "menu" })
+            {
+                RecipeJournalUISystem.Open(); RecipeJournalUISystem.SetSearchFocus(true);
+                Equal(true, Terraria.Main.blockInput && PlayerInput.WritingText, "fixture owns text focus");
+                switch (retirement)
+                {
+                    case "escape": Terraria.Main.keyState = new Microsoft.Xna.Framework.Input.KeyboardState(Microsoft.Xna.Framework.Input.Keys.Escape); break;
+                    case "player": Terraria.Main.player[0] = new Terraria.Player { whoAmI = 0, active = true }; break;
+                    case "world": Terraria.Main.worldID++; break;
+                    case "inactive": player.active = false; break;
+                    case "inventory": Terraria.Main.playerInventory = false; break;
+                    case "death": player.dead = true; break;
+                    case "menu": Terraria.Main.gameMenu = true; break;
+                }
+                // Never invoke Draw: hidden/unregistered layers cannot own lifecycle.
+                system.PostUpdateInput();
+                Equal(false, RecipeJournalUISystem.IsOpen, retirement + " retires journal before draw");
+                Equal(false, Terraria.Main.blockInput || PlayerInput.WritingText, retirement + " releases owned search focus");
+                Terraria.Main.player[0] = player; player.active = true; player.dead = false;
+                Terraria.Main.gameMenu = false; Terraria.Main.worldID = world;
+                Terraria.Main.keyState = new Microsoft.Xna.Framework.Input.KeyboardState();
+            }
+            Terraria.Main.mouseLeft = true;
+            RecipeJournalUISystem.Open();
+            Equal(false, RecipeJournalUISystem.CanResumeInput(false, true, false), "opening click must release before journal activation");
+            Equal(true, RecipeJournalUISystem.CanResumeInput(false, false, false), "release permits journal activation");
+            RecipeJournalUISystem.Open(); // Held mouse reinstates the opening release fence.
+            Terraria.Main.keyState = new Microsoft.Xna.Framework.Input.KeyboardState(Microsoft.Xna.Framework.Input.Keys.Escape);
+            system.PostUpdateInput();
+            Equal(false, RecipeJournalUISystem.IsOpen, "keyboard close is independent of the mouse-release fence");
+            Terraria.Main.keyState = new Microsoft.Xna.Framework.Input.KeyboardState();
+            Terraria.Main.blockInput = PlayerInput.WritingText = true;
+            system.OnWorldUnload();
+            Equal(true, Terraria.Main.blockInput && PlayerInput.WritingText, "closed search does not clear a foreign text owner");
+        }
+        finally
+        {
+            system.OnWorldUnload(); trigger.SetValue(null, savedTrigger);
+            Terraria.Main.keyState = keys; Terraria.Main.oldKeyState = oldKeys; Terraria.Main.worldID = world;
+            Terraria.Main.gameMenu = menu; Terraria.Main.hasFocus = focus; Terraria.Main.playerInventory = inventory;
+            Terraria.Main.blockInput = block; PlayerInput.WritingText = writing; Terraria.Main.drawingPlayerChat = chat;
+            Terraria.Main.mouseLeft = left; Terraria.Main.mouseRight = right;
+        }
+    }
+
     private static void JournalHotkeyAndCompactControlsStayScoped()
     {
         Equal(true, RecipeJournalUISystem.CanToggleFromKey(true, false, false, false, false, false, false), "ordinary gameplay can toggle");

@@ -169,6 +169,41 @@ def test_reused_random_local_keeps_correlated_requests_in_one_alternative():
     assert [(a["randomValues"], len(a["effects"])) for a in alternatives] == [([0], 2), ([1, 2], 0)]
 
 
+def test_shared_random_duration_and_proc_are_one_correlated_choice():
+    draw = [("call", ("Terraria.Main.get_rand", 0, False, True)), ("const", 1), ("const", 4),
+            ("call", ("Terraria.Utilities.UnifiedRandom.Next", 2, True, True)), ("stloc", 0)]
+    duration = [("ldloc", 0), ("const", 60), ("mul",)]
+    ops = draw + effect(duration) + [("ldloc", 0), ("const", 1), ("bne", "done")] + effect() + [("label", "done"), ("ret",)]
+    result = analysis.analyze(labeled(ops), 1)
+    assert result["effects"] == []  # no independent duration range alongside the proc
+    assert len(result["randomOutcomes"]) == 1
+    alternatives = result["randomOutcomes"][0]["alternatives"]
+    assert [(a["randomValues"], [e["durationTicksMin"] for e in a["effects"]]) for a in alternatives] == [([1], [60, 600]), ([2], [120]), ([3], [180])]
+
+
+@pytest.mark.parametrize("high", [4, 100])
+def test_reused_duration_roll_is_joint_or_declined_when_over_bound(high):
+    draw = [("call", ("Terraria.Main.get_rand", 0, False, True)), ("const", 1), ("const", high),
+            ("call", ("Terraria.Utilities.UnifiedRandom.Next", 2, True, True)), ("stloc", 0)]
+    ops = draw + effect([("ldloc", 0), ("const", 60), ("mul",)]) + effect([("ldloc", 0), ("const", 120), ("mul",)]) + [("ret",)]
+    result = analysis.analyze(program(ops), 1)
+    assert result["effects"] == []
+    if high == 4:
+        assert [[e["durationTicksMin"] for e in a["effects"]] for a in result["randomOutcomes"][0]["alternatives"]] == [[60, 120], [120, 240], [180, 360]]
+    else:
+        assert result["randomOutcomes"] == []
+        assert len(result["excludedSites"]) == 2
+
+
+def test_random_switch_retains_every_exclusive_arm_and_empty_default():
+    ops = random_choice(4) + [("switch", (5, 13)), ("br", 20)] + effect() + [("br", 20)] + effect([("const", 120)]) + [("ret",)]
+    result = analysis.analyze(program(ops), 1)
+    assert result["effects"] == []
+    assert len(result["randomOutcomes"]) == 1
+    alternatives = result["randomOutcomes"][0]["alternatives"]
+    assert [(a["randomValues"], [e["durationTicksMin"] for e in a["effects"]]) for a in alternatives] == [([0], [600]), ([1], [120]), ([2, 3], [])]
+
+
 def test_contact_signature_binds_item_type_and_npc_index_without_player_equipment_inference():
     # Unlike projectile StatusNPC, contact signature passes native item type as
     # arg1 and target NPC index as arg2. Player fields remain unknown.

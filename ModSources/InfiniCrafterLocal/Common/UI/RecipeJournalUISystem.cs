@@ -43,9 +43,17 @@ public sealed partial class RecipeJournalUISystem : ModSystem
 
     public override void PostUpdateInput()
     {
-        // Hidden interface layers may not draw, but must still relinquish text focus.
-        if (IsOpen && (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer.dead)) Close();
-        if (IsOpen) CanResumeInput(IsCovered(), Main.mouseLeft, Main.mouseRight);
+        // Lifecycle cannot depend on Draw: covered/removed layers may never run.
+        if (IsOpen && (!ReferenceEquals(_sessionOwner, Main.LocalPlayer) || _sessionWorld != Main.worldID)) ResetSession();
+        if (IsOpen && (Main.gameMenu || !Main.playerInventory || Main.LocalPlayer is not { active: true, dead: false })) Close();
+        if (IsOpen)
+        {
+            bool covered = IsCovered();
+            CanResumeInput(covered, Main.mouseLeft, Main.mouseRight);
+            // The mouse-release fence gates clicks, never keyboard dismissal.
+            if (!covered && Main.keyState.IsKeyDown(Keys.Escape) && Main.oldKeyState.IsKeyUp(Keys.Escape))
+            { Close(); return; }
+        }
         UpdateLineageInput();
         if (Main.LocalPlayer is not { active: true } player
             || !CanToggleFromKey(Main.hasFocus, Main.gameMenu, player.dead, PlayerInput.WritingText,
@@ -83,6 +91,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         if (!ReferenceEquals(_sessionOwner, Main.LocalPlayer) || _sessionWorld != Main.worldID) ResetSession();
         _sessionOwner = Main.LocalPlayer; _sessionWorld = Main.worldID;
         IsOpen = true; SetSearchFocus(false); _snapshotTick = uint.MaxValue;
+        _awaitingMouseRelease = Main.mouseLeft || Main.mouseRight;
         Main.playerInventory = true;
         if (Main.netMode == Terraria.ID.NetmodeID.MultiplayerClient)
             InfiniCrafterLocalMod.GeneratedItems?.RequestFullSyncFromServer();
@@ -97,7 +106,7 @@ public sealed partial class RecipeJournalUISystem : ModSystem
         Main.blockInput = focused;
         PlayerInput.WritingText = focused;
     }
-    private static void Close() { IsOpen = false; SetSearchFocus(false); ClearLineageHover(); _lineageDragging = _lineageBrowserPending = false; }
+    private static void Close() { IsOpen = false; SetSearchFocus(false); ClearLineageHover(); _lineageDragging = _lineageBrowserPending = false; _awaitingMouseRelease = false; }
     private static bool IsCovered()
         => !Main.hasFocus || Main.hideUI || Main.mapFullscreen || Main.ingameOptionsWindow
             || Main.inFancyUI || Main.drawingPlayerChat || PlayerInput.CurrentlyRebinding
