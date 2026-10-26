@@ -132,7 +132,7 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     # Literal source text/provenance is one observation: preserve line order,
     # whitespace, empty lines and source-bound refusal without compacting it.
     for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference",
-                "nativeEquipmentReference", "nativeEnvironmentReference"):
+                "nativeEquipmentReference", "nativeEnvironmentReference", "nativeBuffEffectReference"):
         value = item_field(item, key, None)
         if value is None and key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
             runtime = dict_get_ci(item, "runtimeFacts", {})

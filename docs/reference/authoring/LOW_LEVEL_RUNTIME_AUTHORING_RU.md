@@ -50,7 +50,7 @@ Author выдаёт один JSON: optional sketch `concept`, executable `runtim
 
 Construction facts живут у своих owners, а не в повторных глобальных checklist. Порядок ответа задают system и `requiredJsonShape`; отдельные повторные `gameplayAuthoringStages`, `principle`/`reportEvidenceRule`/`literalSynthesisRule` и `forbidden` не передаются. Полные catalog cards, shape examples и optional advisory guidance доступны во всех response modes, включая `json_object`/off: provider schema их не заменяет.
 
-### Полезная композиция и самостоятельный выбор статусов
+### Полезная композиция баффов и дебаффов
 
 `priorityHeader` получает `AUTHOR_DESIGN_QUALITY_RULE` из prose owner: ценность основного
 действия в обычной ситуации (в бою — в том числе против одиночной цели), достижимая
@@ -62,24 +62,43 @@ Construction facts живут у своих owners, а не в повторны�
 Это ориентиры Author в том же единственном ответе, не кодовые правила баланса,
 admission gates или дополнительная critic-стадия.
 
-`runtimeCapabilityContract.statusIdentityChoices` — один общий read-only словарь
-загруженных buff identities (`source/complete/entries`, где entry содержит
-`id/fullName`), а **не** перечень эффектов, доказанно нанесённых родителями.
-Author вправе явно выбрать оттуда статус для нового предмета даже при неизвестной
-механике родителей; выбор не удостоверяет наследование. Карточки обоих `buffId`
-разрешают supplied identity либо exact parent ID, без старого copy-only ограничения.
-Подсказки различают NPC damage-over-time, давление на defense и воздействие на AI,
-не обещая обхода native immunity или применимости player-only debuff к NPC.
-Recipient, event producer, trigger и duration всё равно выбираются явно.
+Баффы и дебаффы составляются из исполнимых generated-effect примитивов,
+а не выбираются из глобального списка buff-ID. Общее правило
+`AUTHOR_STATUS_COMPOSITION_RULE` доходит до Author и scoped Repair;
+оно не требует наследовать эффект и не создаёт дополнительную LLM-стадию.
 
-Числовой `buffId`, bounds, schema и compiled wire не меняются. Старый запрос без
-словаря не получает вымышленные ID; неполный словарь явно отмечен `complete=false`.
-Repair видит тот же shared словарь без второго полного capability catalog, но
-новая видимость не даёт права менять уже валидный `buffId`, event или соседний call.
-Synthetic offline Author → parse → compile и hostile leaf-local Repair проверены
-в обоих `json_schema`/`json_object`, включая poison без parent mechanic proof.
-Это проверка исполнимости и model-facing контекста, не измерение качества live-model
-генерации и не изменение сохранённых предметов.
+- **Игрок:** `apply_generated_buff_on_use` задаёт длительность и независимо
+  выбранные utility/combat modifiers; named groups, held refresh и существующие
+  event activations остаются отдельными решениями. Знаковые combat/stat modifiers
+  позволяют явно выбрать штраф или tradeoff, а не только положительный бонус.
+  Mining multiplier ниже единицы также является действующим эффектом.
+- **NPC:** `apply_npc_effect_on_event` на item body либо projectile применяется
+  к конкретно поражённому NPC на `on_hit`/`on_crit`. Независимы `damagePerSecond`
+  (потеря регенерации, HP/s), `defenseDelta`, `contactDamageMultiplier` и
+  `velocityRetentionPerTick`; нейтральные пропуски объявлены в registry.
+  Выбираются duration, optional delay и `chancePercent`. Один draw допускает
+  весь выбранный набор; отдельные calls имеют отдельные draws.
+- `velocityRetentionPerTick` — post-AI damping скорости за world tick, не точный
+  множитель native AI/movement speed. Contact damage не включает самостоятельно
+  выпускаемые NPC снаряды. DOT не создаёт скрытый projectile и не повторяет hit
+  events. Native immunity/AI конкретного именованного баффа не наследуются.
+- Повторный hit того же source/owner/action обновляет временный эффект, а не
+  складывает его бесконечно. Независимые эффекты сочетаются в ограниченном
+  native store; expiry и lifecycle сбрасывают их без изменения базовых NPC stats.
+  Owner-hit admission и дальнейший native tick — разные authority boundaries;
+  принимающая сторона не выполняет proc roll повторно.
+
+Существующие `apply_vanilla_buff_on_use`/`apply_status_on_event` сохраняют явную
+интеграцию с native buff-ID и чтение принятых definitions. ID — ссылка на
+native поведение, не его описание и не prerequisite для авторского эффекта.
+Новый общий registry ID отсутствует. Source-подтверждённое действие родителя
+передаётся локально с receiver, операциями, условиями и ограничениями анализа;
+неподдержанные эффекты остаются неизвестными. Repair не получает права менять
+валидные modifiers, события, probability или соседние calls из-за этой видимости.
+
+Offline Author → parse → compile → final wire и native-consumer checks
+проверяют контракт/исполнение. Они не являются замером качества новых ответов
+модели и не переписывают сохранённые предметы.
 
 Call/binding spelling и точные fixed-literal omissions объясняются один раз в `fieldGuide.rowShapes` (`RUNTIME_ROW_SHAPE_RULE`); в Repair та же инструкция передаётся в `rules`. `bindingTarget` сохраняет targeting/contact semantics, `stackCost` — расход/escrow и optional chance, без повторного описания формы. Source-motion guidance живёт в `fieldGuide.projectileMotion`, отдельный header сохраняет предпочтение source tempo. У `present_placed_item_sprite` summary/params/requires владеют PNG, transforms и exact tile reference; overlay добавляет только certified footprint/refusal. Актуальный полный набор cards и executable grammar берётся из canonical registry; число capabilities — в generated inventory.
 

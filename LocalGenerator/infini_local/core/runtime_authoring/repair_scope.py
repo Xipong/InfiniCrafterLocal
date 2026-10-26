@@ -205,9 +205,19 @@ def _component_repair_paths(
             if requirement.kind == "at_least_one_param_nonzero":
                 causal_params.update(requirement.nonzero_params)
             elif requirement.kind == "non_neutral_param":
+                def neutral_leaves(name: str, spec: Any, value: Any) -> set[str]:
+                    if spec.properties:
+                        if not isinstance(value, Mapping):
+                            return set()  # A valid omitted composite does not authorize its required selectors.
+                        return {leaf for key, child in spec.properties.items()
+                                for leaf in neutral_leaves(name + "." + key, child, value.get(key))}
+                    return {name} if spec.neutral is not None else set()
+
+                params = _mapping(call.get("params"))
                 causal_params.update(
-                    name for name, spec in cap.params.items()
-                    if spec.neutral is not None
+                    leaf for name, spec in cap.params.items()
+                    if not requirement.nonzero_params or name in requirement.nonzero_params
+                    for leaf in neutral_leaves(name, spec, params.get(name))
                 )
         paths = {f"params.{name}" for name in causal_params}
         for requirement in cap.requirements:

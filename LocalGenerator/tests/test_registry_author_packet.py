@@ -5,7 +5,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY, BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
 )
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
 import copy
 import json
 import pytest
@@ -51,6 +51,7 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
     )
     for group, identity, expected in inventories:
         actual = _expand_constraint_references(catalog[group], catalog["fieldGuide"]["consumerConstraints"])
+        actual = expand_catalog_targets(actual, catalog["fieldGuide"]["targetKindSets"])
         actual = [{key: value for key, value in row.items() if key != "constructionMeaning"} for row in actual]
         assert sorted(actual, key=lambda row: row[identity]) == sorted(expected, key=lambda row: row[identity]), group
 

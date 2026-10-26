@@ -2360,6 +2360,7 @@
                           "spawn_entity_from_hit_target",
                           "select_targets_and_emit_on_event",
                           "apply_generated_buff_on_event",
+                          "apply_npc_effect_on_event",
                           "apply_status_on_event",
                           "damage_nearby_on_event",
                           "damage_area_on_event",

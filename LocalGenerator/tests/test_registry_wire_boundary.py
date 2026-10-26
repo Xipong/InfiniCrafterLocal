@@ -151,7 +151,7 @@ MALFORMED_BUFF_FIELDS = [
     ("manaRegen", 1.0),
     ("lifeRegen", 1.0),
     ("oreSenseRadiusTiles", True),
-    ("movementSpeed", -0.6),
+    ("movementSpeed", -0.9),
     ("jumpBoost", 9),
     ("manaRegen", 121),
     ("lifeRegen", 121),
@@ -175,7 +175,7 @@ FORGED_EFFECT_FIELDS = [
     ("lifeRegen", 10**1000),
     ("miningSpeedMultiplier", 0),
     ("emitLightStrength", -0.25),
-    ("jumpBoost", -1),
+    ("jumpBoost", -9),
 ]
 
 

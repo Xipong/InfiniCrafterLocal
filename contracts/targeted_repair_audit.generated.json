@@ -1,5 +1,5 @@
 {
-  "authorVisibleCapabilityCount": 68,
+  "authorVisibleCapabilityCount": 69,
   "cases": [
     {
       "brokenCounts": {
@@ -10,7 +10,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 34912,
+      "dossierChars": 36228,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -42,7 +42,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 34344,
+      "dossierChars": 35660,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -77,7 +77,7 @@
         "seek_projectile",
         "set_projectile_lash_geometry"
       ],
-      "dossierChars": 73217,
+      "dossierChars": 74533,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -107,7 +107,7 @@
       "directCapabilities": [
         "configure_item_use"
       ],
-      "dossierChars": 40708,
+      "dossierChars": 42024,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -147,8 +147,8 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 191548,
-  "fullCapabilityCatalogCount": 98,
+  "fullAuthorPayloadChars": 191867,
+  "fullCapabilityCatalogCount": 99,
   "ok": true,
   "policyCoverage": {
     "declaredCodes": 56,

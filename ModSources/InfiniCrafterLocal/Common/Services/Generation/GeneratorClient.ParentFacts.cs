@@ -108,11 +108,6 @@ public sealed partial class GeneratorClient
         // fact adds spriteReferenceRaw. No global null omission.
         if (spriteReference is not null)
             snapshot["spriteReferenceRaw"] = JsonSerializer.SerializeToNode(spriteReference, WireJsonOptions);
-        // Shared design vocabulary, deliberately outside native mechanics and
-        // fingerprint. Python factors the two request observations once for Author.
-        JsonObject? buffIdentities = CaptureLoadedBuffIdentities();
-        if (buffIdentities is not null)
-            snapshot["loadedBuffIdentitiesRaw"] = buffIdentities;
         return snapshot;
     }
 
@@ -359,6 +354,16 @@ public sealed partial class GeneratorClient
             ["buffTime"] = item.buffTime,
             ["material"] = item.material,
         };
+        if (existing is null && item.buffType > InfiniTerrariaSentinels.NoBuffType && item.buffTime > 0)
+        {
+            // Item buff fields are on-use PLAYER requests, never NPC-hit facts.
+            // Keep observed duration distinct from source-certified update effects.
+            JsonObject buffReference = CaptureNativeBuffEffectReference(item.buffType, "player", item.ModItem is null);
+            buffReference["applicationSource"] = "Item.buffType_and_buffTime_on_use_request";
+            buffReference["requestedDurationTicks"] = item.buffTime;
+            buffReference["applicationScope"] = "Native item field request only; item-use admission, refresh rules and loaded hooks were not executed.";
+            facts["nativeBuffEffectReference"] = buffReference;
+        }
         if (existing is null && CaptureNativeContactHitStatusReference(item) is object contactReference)
             facts["nativeContactHitStatusReference"] = JsonSerializer.SerializeToNode(contactReference, WireJsonOptions);
         if (existing is null && CaptureNativeEnvironmentReference(item) is JsonObject environmentReference)

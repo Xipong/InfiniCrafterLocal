@@ -1,5 +1,5 @@
 
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
 """Real builder admission, no provider calls or synthetic responses."""
 import copy
 import json
@@ -37,6 +37,7 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
     assert sent["messages"] == request["messages"]
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expanded = _expand_constraint_references(catalog["capabilities"], catalog["fieldGuide"]["consumerConstraints"])
+    expanded = expand_catalog_targets(expanded, catalog["fieldGuide"]["targetKindSets"])
     assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
             for card in expanded] == compact_capability_catalog()
     assert source == before
@@ -167,7 +168,8 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             row["meaning"] = resolve_param("configure_accessory", param)["meaning"]
         return row
 
-    for fn, card in cards.items():
+    for fn, delivered_card in cards.items():
+        card = expand_catalog_targets([delivered_card], guide["targetKindSets"])[0]
         cap = CAPABILITY_REGISTRY[fn]
         source = cap.audit_card()
         for key in ("fn", "does", "targets", "exclusiveGroup", "acceptedEvents", "emitsEvents",
@@ -213,8 +215,8 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_bounded_loaded_status_vocabulary_and_literal_sources_fit_without_clipping(monkeypatch, mode):
-    """Source-only stress fixture: the native capture's 2048-entry bound, not a live registry."""
+def test_retired_loaded_status_vocabulary_never_reaches_author_or_changes_literal_sources(monkeypatch, mode):
+    """An old producer's global registry is not an Author effect vocabulary."""
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     entries = [{"id": n, "fullName": f"ContextFixture/RegisteredStatus{n}"} for n in range(1, 2049)]
     source = {
@@ -223,20 +225,33 @@ def test_bounded_loaded_status_vocabulary_and_literal_sources_fit_without_clippi
         "loadedBuffIdentitiesRaw": {"source": "native_loaded_buff_registry", "complete": False, "entries": entries},
     }
     before = copy.deepcopy(source)
-    request, text, _ = build_initial_author_request(source, source, "bounded-identities", model_name="offline")
-    packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
-    choices = packet["runtimeCapabilityContract"]["statusIdentityChoices"]
-    assert choices["byMod"] == {"ContextFixture": {f"RegisteredStatus{n}": n for n in range(1, 2049)}}
-    assert choices["complete"] is False
-    compact = json.dumps(choices, ensure_ascii=False, separators=(",", ":"))
-    previous = json.dumps({"entries": entries}, ensure_ascii=False, separators=(",", ":"))
-    assert len(compact) < len(previous) / 2
+    request, text, _ = build_initial_author_request(source, source, "retired-identities", model_name="offline")
+    sent = _serialized_chat_request(monkeypatch, request)
+    packet = request_dossier(sent, declaration=request)
+    assert "statusIdentityChoices" not in packet["runtimeCapabilityContract"]
+    assert "RegisteredStatus2048" not in json.dumps(sent)
+    assert "loadedBuffIdentitiesRaw" not in json.dumps(sent)
     for side in ("A", "B"):
         assert packet["parents"][side]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
-    assert text.count('"RegisteredStatus2048"') == 1
     assert len(packet["runtimeCapabilityContract"]["catalog"]["capabilities"]) == len(compact_capability_catalog())
     assert len(text) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert source == before
+
+
+def test_author_budget_remains_the_authorized_225k_characters():
+    assert PLANNER_PROMPT_LIMIT_CHARS == 225_000
+
+
+def test_shared_target_kind_sets_preserve_every_exact_capability_domain():
+    _, text, _ = build_initial_author_request({}, {}, "target-kind-sharing", model_name="offline")
+    catalog = json.loads(text)["runtimeCapabilityContract"]["catalog"]
+    sets = catalog["fieldGuide"].get("targetKindSets", {})
+    assert sets
+    expected = {card["fn"]: card["targets"] for card in compact_capability_catalog()}
+    for card in catalog["capabilities"]:
+        targets = sets[card["targetsRef"]] if "targetsRef" in card else card["targets"]
+        assert targets == expected[card["fn"]]
+        assert ("targets" in card) != ("targetsRef" in card)
 
 
 @pytest.mark.parametrize("extra_room", [None, 31], ids=["declared-limit", "changed-limit"])

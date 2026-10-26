@@ -30,12 +30,11 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 
 
 _BUFF_ID_SELECTION_RULE = (
-    "Exact supplied BuffID/ModContent.BuffType: select from runtimeCapabilityContract.statusIdentityChoices "
-    "or an explicit parent buffId; never guess modded IDs. Identity choices are not evidence of parent "
-    "behavior and need no inherited ability. For NPC targets, Poisoned/OnFire cause damage over time, "
-    "Ichor lowers defense, and Confused affects susceptible AI; immunity and native target behavior "
-    "still apply. Player-only debuffs need not affect NPCs. Choose the recipient, supported event "
-    "and duration explicitly; identity alone supplies none."
+    "Exact explicit Terraria BuffID or loaded ModContent.BuffType for native interoperability/history; "
+    "the ID identifies the native effect, not a semantic description. Never invent IDs or infer effects "
+    "from names. Prefer generated effect composition for newly authored mechanics. Native immunity "
+    "and target behavior still apply; player-only effects need not affect NPCs. Choose recipient, "
+    "supported event and duration explicitly; identity alone supplies none."
 )
 
 RUNTIME_PROGRAM_API_VERSION: Final[str] = "infini.runtime-program.v5"
@@ -921,6 +920,7 @@ class CapabilitySpec:
     meaningful_for_stationary: bool = False
     effect_groupable: bool = False
     wire_action: str = ""
+    wire_components: Mapping[str, str] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     fixed_wire_literals: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}), compare=False)
     wire_presence_path: str = ""  # Optional whole component selected only by this capability.
     author_visible: bool = True
@@ -950,6 +950,21 @@ class CapabilitySpec:
         neutral_fields = tuple(spec.wire_name or name for name, spec in self.params.items()
             if name not in self.nested_components and self.category == "motion_primitive" and not spec.required and spec.default is not None
             and type(spec.default) is type(spec.neutral) and spec.default == spec.neutral)
+        if self.wire_components:
+            nested = []
+            for properties, required in variants:
+                properties, required = dict(properties), list(required)
+                for component in self.wire_components:
+                    prefix = component + "."
+                    children = {key[len(prefix):]: value for key, value in properties.items() if key.startswith(prefix)}
+                    child_required = [key[len(prefix):] for key in required if key.startswith(prefix)]
+                    properties = {key: value for key, value in properties.items() if not key.startswith(prefix)}
+                    required = [key for key in required if not key.startswith(prefix)]
+                    properties[component] = {"type": "object", "additionalProperties": False,
+                                             "properties": children, "required": child_required}
+                    required.append(component)
+                nested.append((properties, tuple(required)))
+            variants = tuple(nested)
         schemas = [self.timing_params_schema(properties, list(dict.fromkeys((*required, *neutral_fields))), wire=True)
                    for properties, required in variants]
         return schemas[0] if len(schemas) == 1 else {"oneOf": schemas}
@@ -1091,9 +1106,12 @@ class CapabilitySpec:
                 return any(nested_effect(child, value.get(key)) for key, child in spec.properties.items())
             return (spec.neutral is not None and type(value) in (int, float, bool)
                     and (type(value) is not float or math.isfinite(value)) and value != spec.neutral)
-        if any(nested_effect(spec, params.get(name)) for name, spec in self.params.items() if spec.kind == "object"):
+        effect_names = {name for rule in self.requirements if rule.kind == "non_neutral_param"
+                        for name in rule.nonzero_params}
+        specs = {name: spec for name, spec in self.params.items() if not effect_names or name in effect_names}
+        if any(nested_effect(spec, params.get(name)) for name, spec in specs.items() if spec.kind == "object"):
             return True
-        effect_params = {name: spec for name, spec in self.params.items() if spec.neutral is not None}
+        effect_params = {name: spec for name, spec in specs.items() if spec.neutral is not None}
         if not effect_params:
             return True
         for name, spec in effect_params.items():
@@ -1234,6 +1252,7 @@ class CapabilitySpec:
             "positionOwnership": self.position_ownership,
             "requires": [row.card() for row in self.requirements],
             "wirePaths": list(self.final_wire_paths),
+            **({"wireComponents": dict(self.wire_components)} if self.wire_components else {}),
             "csharpOwner": self.csharp_owner,
             "multiplicity": self.multiplicity,
             "effectGroupable": self.effect_groupable,
@@ -1406,6 +1425,7 @@ def _cap(
     meaningful_for_stationary: bool = False,
     effect_groupable: bool = False,
     wire_action: str = "",
+    wire_components: Mapping[str, str] | None = None,
     fixed_wire_literals: Mapping[str, Any] | None = None,
     wire_presence_path: str = "",
     author_visible: bool = True,
@@ -1447,6 +1467,7 @@ def _cap(
         meaningful_for_stationary=meaningful_for_stationary,
         effect_groupable=effect_groupable,
         wire_action=wire_action,
+        wire_components=MappingProxyType(dict(wire_components or {})),
         fixed_wire_literals=MappingProxyType(dict(fixed_wire_literals or {})),
         wire_presence_path=wire_presence_path,
         author_visible=author_visible, max_per_target=max_per_target,
@@ -2101,23 +2122,23 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
-            "combat": _p("object", "Optional temporary combat bonuses; all fields explicit when selected. Zero values have no effect. Same-effect refresh does not stack. No automatic active binding.", required=False, properties={
-                "defensePoints": _p("integer", "Flat Player.statDefense points; aggregate generated-buff cap 100", minimum=0, maximum=100, neutral=0, wire_name="combat.defensePoints"),
-                "attackSpeedPercent": _p("number", "Add percent/100 to generic attack speed; aggregate generated-buff cap 100", minimum=0, maximum=100, neutral=0, wire_name="combat.attackSpeedPercent", consumer_storage="float32"),
-                "critChancePoints": _p("number", "Add percentage points to generic critical chance; aggregate generated-buff cap 100", minimum=0, maximum=100, neutral=0, wire_name="combat.critChancePoints", consumer_storage="float32"),
-                "damagePercent": _p("number", "Add percent/100 to the explicitly selected damage class; aggregate generated-buff cap 200 per selected class. Generic and specific bonuses may combine through native inheritance", minimum=0, maximum=200, neutral=0, wire_name="combat.damagePercent", consumer_storage="float32"),
+            "combat": _p("object", "Optional signed temporary combat modifiers; all fields explicit when selected. Negative values penalize their selected stat; zero has no effect. Same-effect refresh does not stack. No automatic active binding.", required=False, properties={
+                "defensePoints": _p("integer", "Signed Player.statDefense points; negative weakens defense; aggregate generated-buff range -100..100", minimum=-100, maximum=100, neutral=0, wire_name="combat.defensePoints"),
+                "attackSpeedPercent": _p("number", "Signed additive generic attack speed percent; negative slows attacks; aggregate range -80..100", minimum=-80, maximum=100, neutral=0, wire_name="combat.attackSpeedPercent", consumer_storage="float32"),
+                "critChancePoints": _p("number", "Signed percentage-point contribution to generic critical chance; negative reduces chance; aggregate range -100..100", minimum=-100, maximum=100, neutral=0, wire_name="combat.critChancePoints", consumer_storage="float32"),
+                "damagePercent": _p("number", "Signed additive damage percent to the explicitly selected class; negative reduces damage; aggregate range -90..200 per class. Generic and specific contributions may combine through native inheritance", minimum=-90, maximum=200, neutral=0, wire_name="combat.damagePercent", consumer_storage="float32"),
                 "damageClass": _p("string", "Exact class receiving damagePercent; generic also contributes through native class inheritance", enum=("generic", "melee", "ranged", "magic", "summon", "throwing"), wire_name="combat.damageClass"),
             }),
             "durationSeconds": _seconds(_p("integer", "Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration", minimum=1, maximum=21600, units="ticks"), "durationTicks"),
             "exhaustionSeconds": _seconds(_p("integer", "Optional per-player/item-definition generated-buff lockout; copies/groups share it, including zero/omitted groups while active. Blocked attempts refresh neither timer. Omission stays absent; explicit zero stays zero; neither starts exhaustion. Policy only, not a buff stat or normal-attack cooldown.", minimum=0, maximum=21600, units="world ticks", required=False, wire_presence_requires_receipt=True), "exhaustionTicks"),
-            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1, consumer_storage="float32"),
+            "miningSpeedMultiplier": _p("number", "Divides Player.pickSpeed (mining-time factor); >1 mines faster, <1 is a real mining-speed penalty, 1 is neutral", minimum=0.25, maximum=4, units="engine units: pickSpeed divisor", required=False, default=1, neutral=1, consumer_storage="float32"),
             "lightStrength": _p("number", "Client light RGB coefficient multiplying selected light color; not tile radius", minimum=0, maximum=1.5, wire_name="emitLightStrength", units="engine units: RGB coefficient", neutral=0, consumer_storage="float32"),
             "lightColor": _p("string", "Canonical light color", enum=_COLOR, wire_name="lightColorName"),
             "oreSenseEnabled": _p("boolean", "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter", semantic_type="boolean_capability", wire_name="oreSenseRadiusTiles", wire_boolean_true_value=1, neutral=False, required=False, default=False),
-            "moveSpeedBonusPercent": _p("number", "Add percent/100 to Player.moveSpeed; 20 adds 20% before other modifiers", minimum=-50, maximum=200, wire_name="movementSpeed", wire_divisor=100, units="additive_percent", semantic_type="additive_percent", required=False, default=0, neutral=0, consumer_storage="float32"),
-            "jumpSpeedBonusBlocksPerSecond": _world_units(_p("number", "Add to Player.jumpSpeedBoost in pixels/tick", minimum=0, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"), "jumpSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s'),
-            "manaRegenBonusPoints": _p("integer", "Add Player.manaRegenBonus engine points; not directly mana/second", minimum=0, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0),
-            "lifeRegenHpPerSecond": _p("number", "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)", minimum=0, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0),
+            "moveSpeedBonusPercent": _p("number", "Signed additive Player.moveSpeed percent; 20 adds 20%, -20 subtracts 20% before other modifiers", minimum=-80, maximum=200, wire_name="movementSpeed", wire_divisor=100, units="additive_percent", semantic_type="additive_percent", required=False, default=0, neutral=0, consumer_storage="float32"),
+            "jumpSpeedBonusBlocksPerSecond": _world_units(_p("number", "Signed Player.jumpSpeedBoost contribution; negative reduces jump launch speed, not an exact height", minimum=-8, maximum=8, wire_name="jumpBoost", units="pixels/world tick", required=False, default=0, neutral=0, consumer_storage="float32"), "jumpSpeedBonusPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s'),
+            "manaRegenBonusPoints": _p("integer", "Signed Player.manaRegenBonus contribution; negative penalizes regeneration; not directly mana/second", minimum=-100, maximum=120, wire_name="manaRegen", units="engine units: manaRegenBonus points", required=False, default=0, neutral=0),
+            "lifeRegenHpPerSecond": _p("number", "Signed HP/s regeneration contribution before other effects; negative causes regeneration loss. Exact half-HP/s steps map to Player.lifeRegen units (2 units = 1 HP/s)", minimum=-50, maximum=60, multiple_of=0.5, units="HP/s", wire_name="lifeRegen", wire_multiplier=2, required=False, default=0, neutral=0),
         },
         component_slot="generated_use_buff",
         py=_COMPILER_OWNER,
@@ -2961,6 +2982,27 @@ _CAPS.extend([
         events=("on_hurt", "on_enemy_kill"),
     ),
     _cap(
+        "apply_npc_effect_on_event",
+        "Apply independently composed timed modifiers to the actually hit NPC, without a BuffID or name-to-effect mapping. The same item/entity/action/owner refreshes remaining duration, not strength per hit; independent records may combine under bounded native caps. Chance rolls once per hit/crit admission before delay; the server receiver never rerolls, and independent calls draw independently. This is a bounded set of modifiers, not the full native buff repertoire.",
+        "event", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
+        {
+            "when": _event_when_param(("on_hit", "on_crit")),
+            "durationSeconds": _seconds(_p("integer", "Timed modifier lifetime after application; repeat hits refresh duration rather than additive stacking", minimum=1, maximum=3600, units="world ticks"), "durationTicks"),
+            "damagePerSecond": _p("number", "Actual NPC life regeneration loss in HP/s, not repeated strikes; half-HP/s steps map to two native regeneration units per HP/s. Zero adds no degeneration", minimum=0, maximum=200, multiple_of=0.5, units="HP/s", wire_name="npcEffect.lifeRegenPenalty", wire_multiplier=2, required=False, default=0, neutral=0),
+            "defenseDelta": _p("integer", "Signed defense-point contribution to incoming hits while active; negative weakens defense, positive reinforces it. Does not persistently mutate NPC.defense", minimum=-100, maximum=100, units="defense points", wire_name="npcEffect.defenseDelta", required=False, default=0, neutral=0),
+            "contactDamageMultiplier": _p("number", "Multiplier of NPC body-contact damage only; not its fired projectiles. Below 1 weakens contact, above 1 strengthens it; 1 is neutral", minimum=0.1, maximum=3, units="multiplier", wire_name="npcEffect.contactDamageMultiplier", required=False, default=1, neutral=1, consumer_storage="float32"),
+            "velocityRetentionPerTick": _p("number", "Multiply NPC velocity after AI on every world tick (60/s). Below 1 damps velocity, 1 leaves it unchanged; not an exact speed, AI replacement or guaranteed immobilization", minimum=0.1, maximum=1, units="velocity fraction/world tick", wire_name="npcEffect.velocityRetentionPerTick", required=False, default=1, neutral=1, consumer_storage="float32"),
+            "chancePercent": _p("number", "Independent 0..100 percent probability; roll once at hit/crit admission before queue delay, never reroll on the receiving server. Independent calls draw independently; 0 never applies, 100 always attempts. Probability is not itself a modifier", minimum=0, maximum=100, units="percent probability", wire_name="npcEffect.chance", wire_divisor=100, required=False, default=100, neutral=100, consumer_storage="float32"),
+        },
+        requirements=(RequirementSpec("non_neutral_param", nonzero_params=("damagePerSecond", "defenseDelta", "contactDamageMultiplier", "velocityRetentionPerTick"), message="Select at least one non-neutral NPC modifier; chance and delay alone are not effects."),),
+        component_slot="event_action", authority="owner_execute_sync",
+        meaningful_for_stationary=True, multiplicity="many_per_target", py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        events=("on_hit", "on_crit"),
+        wire_components={"npcEffect": "RuntimeNpcEffectSpec"},
+        budget="bounded native timed-NPC record store; same source refreshes duration without per-hit strength stacking",
+    ),
+    _cap(
         "apply_status_on_event",
         "Apply one concrete Terraria debuff/buff to the hit target on a supported event.",
         "event",
@@ -3744,6 +3786,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "select_targets_and_emit_on_event": 8,
     "apply_generated_buff_on_event": 9,
     "damage_nearby_on_event": 10,
+    "apply_npc_effect_on_event": 11,
 })
 
 

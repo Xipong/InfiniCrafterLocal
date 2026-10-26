@@ -1850,6 +1850,7 @@ public static class RuntimeEventActionCode
     public const int SelectTargetsAndEmit = 8;
     public const int ApplyGeneratedBuff = 9;
     public const int DamageNearby = 10;
+    public const int ApplyNpcEffect = 11;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -1955,6 +1956,13 @@ public sealed class RuntimeHitTargetSpawnSpec
 
 public sealed class RuntimeEventActionSpec
 {
+    private RuntimeNpcEffectSpec? _npcEffect;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeNpcEffectSpec? NpcEffect
+    {
+        get => _npcEffect;
+        set => _npcEffect = value ?? throw new InvalidDataException("present npcEffect cannot be null");
+    }
     public string Id { get; set; } = "";
     public string Event { get; set; } = "";
     private string? _useInput;
@@ -2126,6 +2134,18 @@ public sealed class RuntimeEventActionSpec
 
     public void NormalizeAndValidate()
     {
+        if (ActionCode == RuntimeEventActionCode.ApplyNpcEffect)
+        {
+            if (Action != "apply_npc_effect_on_event" || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                || NpcEffect is null || DurationTicks is < 1 or > 3600 || DelayTicks is < 0 or > 600
+                || EntityId != "" || Count != 1 || SpreadRadians != 0f || DamageMultiplier != 1f || PeriodTicks != 0
+                || BuffId != -1 || RadiusPx != 0 || RangeTiles != 0f || Mode != "" || Strength != 0f
+                || RadiusTiles != 0f || DamageFraction != 0f || MaxHeal != 0 || CooldownTicks != 0 || !SafeTileOnly)
+                throw new InvalidDataException("NPC effect requires exact direct-hit action, effect, duration and neutral foreign fields");
+            NpcEffect.Validate();
+        }
+        else if (NpcEffect is not null)
+            throw new InvalidDataException("npcEffect requires apply_npc_effect_on_event");
         if (HitTargetSpawn is not null)
         {
             HitTargetSpawn.Validate();
@@ -2147,7 +2167,7 @@ public sealed class RuntimeEventActionSpec
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.DamageNearby)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyNpcEffect)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
@@ -2295,7 +2315,7 @@ internal static class RuntimeOpcodeNames
     {
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
-        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event",
+        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";

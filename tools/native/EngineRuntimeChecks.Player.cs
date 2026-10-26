@@ -215,9 +215,9 @@ internal static partial class EngineRuntimeChecks
                 generated.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 10,
                     MiningSpeedMultiplier = upper ? 3f : 0.25f, MovementSpeed = upper ? 1.5f : -0.5f });
                 generated.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 10,
-                    MiningSpeedMultiplier = upper ? 4f : 0.5f, MovementSpeed = upper ? 2f : -0.25f });
+                    MiningSpeedMultiplier = upper ? 4f : 0.5f, MovementSpeed = upper ? 2f : -0.5f });
                 generated.PostUpdateEquips();
-                Equal(upper ? 3f : 0.5f, player.moveSpeed, "movement cap retained");
+                Equal(upper ? 3f : 1f - 0.8f, player.moveSpeed, "declared signed movement cap retained");
                 Equal(upper ? 0.25f : 4f, player.pickSpeed, "mining cap retained");
             });
         WithPlayer((player, generated) =>

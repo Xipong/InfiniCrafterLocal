@@ -4437,7 +4437,7 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 65535,
-                        "description": "Exact supplied BuffID/ModContent.BuffType: select from runtimeCapabilityContract.statusIdentityChoices or an explicit parent buffId; never guess modded IDs. Identity choices are not evidence of parent behavior and need no inherited ability. For NPC targets, Poisoned/OnFire cause damage over time, Ichor lowers defense, and Confused affects susceptible AI; immunity and native target behavior still apply. Player-only debuffs need not affect NPCs. Choose the recipient, supported event and duration explicitly; identity alone supplies none.",
+                        "description": "Exact explicit Terraria BuffID or loaded ModContent.BuffType for native interoperability/history; the ID identifies the native effect, not a semantic description. Never invent IDs or infer effects from names. Prefer generated effect composition for newly authored mechanics. Native immunity and target behavior still apply; player-only effects need not affect NPCs. Choose recipient, supported event and duration explicitly; identity alone supplies none.",
                         "x-infini-semanticType": "terraria_buff_id"
                       },
                       "durationSeconds": {
@@ -4505,16 +4505,16 @@
                         "properties": {
                           "defensePoints": {
                             "type": "integer",
-                            "minimum": 0,
+                            "minimum": -100,
                             "maximum": 100,
-                            "description": "Flat Player.statDefense points; aggregate generated-buff cap 100",
+                            "description": "Signed Player.statDefense points; negative weakens defense; aggregate generated-buff range -100..100",
                             "x-infini-neutral": 0
                           },
                           "attackSpeedPercent": {
                             "type": "number",
-                            "minimum": 0,
+                            "minimum": -80,
                             "maximum": 100,
-                            "description": "Add percent/100 to generic attack speed; aggregate generated-buff cap 100",
+                            "description": "Signed additive generic attack speed percent; negative slows attacks; aggregate range -80..100",
                             "x-infini-neutral": 0,
                             "x-infini-consumerConstraint": {
                               "storage": "float32",
@@ -4525,9 +4525,9 @@
                           },
                           "critChancePoints": {
                             "type": "number",
-                            "minimum": 0,
+                            "minimum": -100,
                             "maximum": 100,
-                            "description": "Add percentage points to generic critical chance; aggregate generated-buff cap 100",
+                            "description": "Signed percentage-point contribution to generic critical chance; negative reduces chance; aggregate range -100..100",
                             "x-infini-neutral": 0,
                             "x-infini-consumerConstraint": {
                               "storage": "float32",
@@ -4538,9 +4538,9 @@
                           },
                           "damagePercent": {
                             "type": "number",
-                            "minimum": 0,
+                            "minimum": -90,
                             "maximum": 200,
-                            "description": "Add percent/100 to the explicitly selected damage class; aggregate generated-buff cap 200 per selected class. Generic and specific bonuses may combine through native inheritance",
+                            "description": "Signed additive damage percent to the explicitly selected class; negative reduces damage; aggregate range -90..200 per class. Generic and specific contributions may combine through native inheritance",
                             "x-infini-neutral": 0,
                             "x-infini-consumerConstraint": {
                               "storage": "float32",
@@ -4570,7 +4570,7 @@
                           "damageClass"
                         ],
                         "additionalProperties": false,
-                        "description": "Optional temporary combat bonuses; all fields explicit when selected. Zero values have no effect. Same-effect refresh does not stack. No automatic active binding.",
+                        "description": "Optional signed temporary combat modifiers; all fields explicit when selected. Negative values penalize their selected stat; zero has no effect. Same-effect refresh does not stack. No automatic active binding.",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "durationSeconds": {
@@ -4601,7 +4601,7 @@
                         "type": "number",
                         "minimum": 0.25,
                         "maximum": 4,
-                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster",
+                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster, <1 is a real mining-speed penalty, 1 is neutral",
                         "x-infini-units": "engine units: pickSpeed divisor",
                         "x-infini-semanticType": "unitless_scalar",
                         "default": 1,
@@ -4655,9 +4655,9 @@
                       },
                       "moveSpeedBonusPercent": {
                         "type": "number",
-                        "minimum": -50,
+                        "minimum": -80,
                         "maximum": 200,
-                        "description": "Add percent/100 to Player.moveSpeed; 20 adds 20% before other modifiers",
+                        "description": "Signed additive Player.moveSpeed percent; 20 adds 20%, -20 subtracts 20% before other modifiers",
                         "x-infini-units": "additive_percent",
                         "x-infini-semanticType": "additive_percent",
                         "default": 0,
@@ -4675,9 +4675,9 @@
                       },
                       "jumpSpeedBonusBlocksPerSecond": {
                         "type": "number",
-                        "minimum": 0.0,
+                        "minimum": -30.0,
                         "maximum": 30.0,
-                        "description": "Author units: blocks/s. Native consumer: Add to Player.jumpSpeedBoost in pixels/tick",
+                        "description": "Author units: blocks/s. Native consumer: Signed Player.jumpSpeedBoost contribution; negative reduces jump launch speed, not an exact height",
                         "x-infini-units": "blocks/s",
                         "x-infini-semanticType": "blocks/s",
                         "default": 0.0,
@@ -4694,9 +4694,9 @@
                       },
                       "manaRegenBonusPoints": {
                         "type": "integer",
-                        "minimum": 0,
+                        "minimum": -100,
                         "maximum": 120,
-                        "description": "Add Player.manaRegenBonus engine points; not directly mana/second",
+                        "description": "Signed Player.manaRegenBonus contribution; negative penalizes regeneration; not directly mana/second",
                         "x-infini-units": "engine units: manaRegenBonus points",
                         "x-infini-semanticType": "unitless_scalar",
                         "default": 0,
@@ -4704,10 +4704,10 @@
                       },
                       "lifeRegenHpPerSecond": {
                         "type": "number",
-                        "minimum": 0,
+                        "minimum": -50,
                         "maximum": 60,
                         "multipleOf": 0.5,
-                        "description": "Generated buff: HP restored per second before other effects; exact half-HP steps map to Terraria Player.lifeRegen units (2 units = 1 HP/s)",
+                        "description": "Signed HP/s regeneration contribution before other effects; negative causes regeneration loss. Exact half-HP/s steps map to Player.lifeRegen units (2 units = 1 HP/s)",
                         "x-infini-units": "HP/s",
                         "x-infini-semanticType": "unitless_scalar",
                         "default": 0,
@@ -9608,6 +9608,162 @@
                     "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
                   },
                   "fn": {
+                    "const": "apply_npc_effect_on_event"
+                  },
+                  "target": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Authored entity id. Target kind is checked locally.",
+                    "x-infini-reference": {
+                      "namespace": "entity",
+                      "targetKinds": [
+                        "item_body",
+                        "owner_attached_projectile",
+                        "free_projectile",
+                        "stationary_projectile",
+                        "temporary_helper",
+                        "field",
+                        "child_projectile"
+                      ],
+                      "allowSelf": true,
+                      "graphEdge": false
+                    }
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "when": {
+                        "type": "string",
+                        "enum": [
+                          "on_hit",
+                          "on_crit"
+                        ],
+                        "description": "Exact emitted event",
+                        "x-infini-semanticType": "runtime_event_trigger"
+                      },
+                      "durationSeconds": {
+                        "type": "number",
+                        "minimum": 0.008333333333333333,
+                        "maximum": 60.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Timed modifier lifetime after application; repeat hits refresh duration rather than additive stacking",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      },
+                      "damagePerSecond": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 200,
+                        "multipleOf": 0.5,
+                        "description": "Actual NPC life regeneration loss in HP/s, not repeated strikes; half-HP/s steps map to two native regeneration units per HP/s. Zero adds no degeneration",
+                        "x-infini-units": "HP/s",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 0,
+                        "x-infini-neutral": 0
+                      },
+                      "defenseDelta": {
+                        "type": "integer",
+                        "minimum": -100,
+                        "maximum": 100,
+                        "description": "Signed defense-point contribution to incoming hits while active; negative weakens defense, positive reinforces it. Does not persistently mutate NPC.defense",
+                        "x-infini-units": "defense points",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 0,
+                        "x-infini-neutral": 0
+                      },
+                      "contactDamageMultiplier": {
+                        "type": "number",
+                        "minimum": 0.1,
+                        "maximum": 3,
+                        "description": "Multiplier of NPC body-contact damage only; not its fired projectiles. Below 1 weakens contact, above 1 strengthens it; 1 is neutral",
+                        "x-infini-units": "multiplier",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 1,
+                        "x-infini-neutral": 1,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 1,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "velocityRetentionPerTick": {
+                        "type": "number",
+                        "minimum": 0.1,
+                        "maximum": 1,
+                        "description": "Multiply NPC velocity after AI on every world tick (60/s). Below 1 damps velocity, 1 leaves it unchanged; not an exact speed, AI replacement or guaranteed immobilization",
+                        "x-infini-units": "velocity fraction/world tick",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 1,
+                        "x-infini-neutral": 1,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 1,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                        }
+                      },
+                      "chancePercent": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100,
+                        "description": "Independent 0..100 percent probability; roll once at hit/crit admission before queue delay, never reroll on the receiving server. Independent calls draw independently; 0 never applies, 100 always attempts. Probability is not itself a modifier",
+                        "x-infini-units": "percent probability",
+                        "x-infini-semanticType": "unitless_scalar",
+                        "default": 100,
+                        "x-infini-neutral": 100,
+                        "x-infini-consumerConstraint": {
+                          "storage": "float32",
+                          "neutral": 100,
+                          "rule": "nonneutral_must_remain_nonneutral",
+                          "meaning": "Apply wireProjection in binary64, then finite float32 storage. Non-neutral values must stay non-neutral at both steps; exact neutral is allowed. No rounding or replacement by validation. Guards neutral collapse, not exact float round-trip or later gameplay arithmetic.",
+                          "wireProjection": {
+                            "divisor": 100,
+                            "multiplier": 1
+                          }
+                        }
+                      },
+                      "delaySeconds": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 10.0,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                        "x-infini-units": "seconds",
+                        "x-infini-semanticType": "seconds",
+                        "x-infini-neutral": 0.0,
+                        "x-infini-authorProjection": {
+                          "nonzeroMustRemainNonzero": true,
+                          "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                        }
+                      }
+                    },
+                    "required": [
+                      "when",
+                      "durationSeconds"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "fn",
+                  "target",
+                  "params"
+                ]
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                    "description": "Stable call id used by Repair and self-evaluation runtimeRefs."
+                  },
+                  "fn": {
                     "const": "apply_status_on_event"
                   },
                   "target": {
@@ -9646,7 +9802,7 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 65535,
-                        "description": "Exact supplied BuffID/ModContent.BuffType: select from runtimeCapabilityContract.statusIdentityChoices or an explicit parent buffId; never guess modded IDs. Identity choices are not evidence of parent behavior and need no inherited ability. For NPC targets, Poisoned/OnFire cause damage over time, Ichor lowers defense, and Confused affects susceptible AI; immunity and native target behavior still apply. Player-only debuffs need not affect NPCs. Choose the recipient, supported event and duration explicitly; identity alone supplies none.",
+                        "description": "Exact explicit Terraria BuffID or loaded ModContent.BuffType for native interoperability/history; the ID identifies the native effect, not a semantic description. Never invent IDs or infer effects from names. Prefer generated effect composition for newly authored mechanics. Native immunity and target behavior still apply; player-only effects need not affect NPCs. Choose recipient, supported event and duration explicitly; identity alone supplies none.",
                         "x-infini-semanticType": "terraria_buff_id"
                       },
                       "durationSeconds": {

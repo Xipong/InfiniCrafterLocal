@@ -241,7 +241,7 @@ internal static class RuntimeDelayedActionScheduler
             // A direct-hit pull cannot silently become an area pull if its NPC
             // died or the slot was recycled during the authored delay.
             if (pending.Target is not null && target is null
-                && (pending.Action.ActionCode == RuntimeEventActionCode.SelectTargetsAndEmit
+                && (pending.Action.ActionCode is RuntimeEventActionCode.SelectTargetsAndEmit or RuntimeEventActionCode.ApplyNpcEffect
                     || pending.Action.ActionCode == RuntimeEventActionCode.Pull
                     && pending.Action.Event is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit))
             {

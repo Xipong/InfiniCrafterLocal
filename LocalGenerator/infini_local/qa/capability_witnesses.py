@@ -104,6 +104,7 @@ def _params(fn: str) -> dict[str, Any]:
         "target_and_fire": {"shotEntity": "witness_shot", "intervalSeconds": 0.5, "rangeTiles": 20, "sameTargetBias": 0.2, "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0},
         "spawn_entity_on_event": {"when": "on_hit", "entity": "witness_child", "count": 1, "spreadRadians": 0.0, "damageMultiplier": 0.5, "delaySeconds": 0, "damageBasis": "authored_child", "knockbackBasis": "authored_child"},
         "apply_status_on_event": {"when": "on_hit", "buffId": 20, "durationSeconds": 1},
+        "apply_npc_effect_on_event": {"when": "on_hit", "durationSeconds": 2, "damagePerSecond": 7.5, "defenseDelta": -4},
         "damage_nearby_on_event": {"when": "on_hit", "radiusTiles": 8, "maxTargets": 1, "damageMultiplier": 0.5},
         "damage_area_on_event": {"when": "on_hit", "radiusTiles": 3, "damageMultiplier": 0.5},
         "damage_nearest_on_event": {"when": "on_hit", "maxTargets": 1, "rangeTiles": 8, "damageMultiplier": 0.5},

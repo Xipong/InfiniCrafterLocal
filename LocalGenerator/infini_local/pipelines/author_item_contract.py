@@ -27,6 +27,16 @@ AUTHOR_DESIGN_QUALITY_RULE = (
     "per-parent effect quota. These are design aims, not admission gates or required reports."
 )
 
+AUTHOR_STATUS_COMPOSITION_RULE = (
+    "Compose buffs and debuffs from generated effect primitives: explicitly choose the recipient, "
+    "modifiers, activation, duration and any supported chance. Signed modifiers can impose penalties "
+    "or tradeoffs. A native buff ID identifies existing native behavior; it is not an effect description "
+    "or a prerequisite for an invented effect. Parent effect references certify only their listed "
+    "receiver, operations and source conditions; partial/unknown behavior remains unknown. Custom "
+    "effects do not inherit a named native buff's immunity, AI or other unselected mechanics. "
+    "Describe the actual composed effects, not unimplemented equivalence to a familiar buff."
+)
+
 PRIMARY_REPAIR_SYSTEM_RULE = (
     f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
 )

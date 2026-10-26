@@ -35,6 +35,7 @@ internal static class RuntimeProgramExecutor
         {
             RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.HealOwner or RuntimeEventActionCode.MoveOwner
                 => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
+            RuntimeEventActionCode.ApplyNpcEffect => InfiniRuntimeAuthority.ShouldRunNpcGameplay(),
             RuntimeEventActionCode.ApplyGeneratedBuff => InfiniRuntimeAuthority.ShouldRunPlayerGameplay(owner),
             RuntimeEventActionCode.SelectTargetsAndEmit => InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner),
             RuntimeEventActionCode.ApplyStatus or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ChainDamage or RuntimeEventActionCode.DamageNearby
@@ -108,6 +109,9 @@ internal static class RuntimeProgramExecutor
                 break;
             case RuntimeEventActionCode.SelectTargetsAndEmit:
                 SelectTargetsAndEmit(data, action, owner, source, directTarget, childDepth, budget, reservedSpawnBudget);
+                break;
+            case RuntimeEventActionCode.ApplyNpcEffect:
+                RuntimeNpcEffects.Apply(data, sourceEntity, action, owner, directTarget);
                 break;
             case RuntimeEventActionCode.ApplyStatus:
                 if (directTarget is { active: true })

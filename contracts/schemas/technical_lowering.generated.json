@@ -1474,6 +1474,25 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "apply_npc_effect_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].durationTicks",
+        "runtimeProgram.entities[].events[].npcEffect.lifeRegenPenalty",
+        "runtimeProgram.entities[].events[].npcEffect.defenseDelta",
+        "runtimeProgram.entities[].events[].npcEffect.contactDamageMultiplier",
+        "runtimeProgram.entities[].events[].npcEffect.velocityRetentionPerTick",
+        "runtimeProgram.entities[].events[].npcEffect.chance",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "apply_status_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",

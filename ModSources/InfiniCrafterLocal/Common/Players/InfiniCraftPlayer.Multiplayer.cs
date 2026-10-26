@@ -609,10 +609,10 @@ public sealed partial class InfiniCraftPlayer
             EmitLightStrength = Math.Clamp(lightStrength, 0f, 1.5f),
             LightColorName = lightColor[..Math.Min(lightColor.Length, 32)],
             OreSenseRadiusTiles = Math.Clamp(reader.ReadInt32(), 0, 60),
-            MovementSpeed = Math.Clamp(reader.ReadSingle(), -0.5f, 2f),
-            JumpBoost = Math.Clamp(reader.ReadSingle(), 0f, 8f),
-            ManaRegen = Math.Clamp(reader.ReadInt32(), 0, 120),
-            LifeRegen = Math.Clamp(reader.ReadInt32(), 0, 120),
+            MovementSpeed = Math.Clamp(reader.ReadSingle(), -0.8f, 2f),
+            JumpBoost = Math.Clamp(reader.ReadSingle(), -8f, 8f),
+            ManaRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
+            LifeRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
             Combat = reader.ReadBoolean() ? GeneratedCombatBuffSpec.Read(reader) : null,
         };
     }
@@ -627,10 +627,10 @@ public sealed partial class InfiniCraftPlayer
         _generatedLightStrength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
         _generatedLightColorName = string.IsNullOrWhiteSpace(_generatedLightColorName) ? "" : _generatedLightColorName.Trim()[..Math.Min(_generatedLightColorName.Trim().Length, 32)];
         _generatedOreSenseRadiusTiles = Math.Clamp(_generatedOreSenseRadiusTiles, 0, 60);
-        _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed, -0.5f, 2f);
-        _generatedJumpBoost = Math.Clamp(_generatedJumpBoost, 0f, 8f);
-        _generatedManaRegen = Math.Clamp(_generatedManaRegen, 0, 120);
-        _generatedLifeRegen = Math.Clamp(_generatedLifeRegen, 0, 120);
+        _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed, -0.8f, 2f);
+        _generatedJumpBoost = Math.Clamp(_generatedJumpBoost, -8f, 8f);
+        _generatedManaRegen = Math.Clamp(_generatedManaRegen, -100, 120);
+        _generatedLifeRegen = Math.Clamp(_generatedLifeRegen, -100, 120);
         _generatedMobilityCooldownTicks = Math.Clamp(_generatedMobilityCooldownTicks, 0, 36000);
     }
 

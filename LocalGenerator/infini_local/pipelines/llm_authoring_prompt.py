@@ -21,21 +21,24 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (
 )
 from infini_local.pipelines.author_item_contract import (
     AUTHOR_DESIGN_QUALITY_RULE,
+    AUTHOR_STATUS_COMPOSITION_RULE,
     RUNTIME_ROW_SHAPE_RULE,
     author_item_prompt_shape_card,
     primary_entity_llm_invariant,
 )
 from infini_local.pipelines.combine_balance import stat_profile_for
-from infini_local.pipelines.native_reference_context import loaded_status_identity_choices
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+
+from infini_local.pipelines.parent_context_cards import (
+    NATIVE_SOURCE_REFERENCE_RULE, raw_parent_card_for_llm, share_exact_native_parent_facts,
+)
 from infini_local.core.item_identity_tools import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 
 
 # Engineering character guard, not a model token limit: complete compact JSON
-# dossiers include loaded status identities and source-derived ammo variants.
+# dossiers include parent-local source effects and source-derived ammo variants.
 # Preserve literal tooltips, accepted graphs and capabilities; never clip to fit.
-PLANNER_PROMPT_LIMIT_CHARS = 400_000
+PLANNER_PROMPT_LIMIT_CHARS = 225_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "
@@ -47,6 +50,7 @@ VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(name for name, capability in CAPABILITY_
 def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
     """Shared Author units and source-grounded scale, not an extra design stage."""
     return {
+        "nativeSourceReferences": NATIVE_SOURCE_REFERENCE_RULE,
         "time": (
             "Write world durations/intervals in decimal seconds. The engine has 60 world ticks = 1 second; "
             "lowering resolves seconds to the nearest world tick, half-tick ties upward. "
@@ -87,6 +91,7 @@ def planner_priority_header_for_llm() -> list[str]:
         "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; author every mechanic explicitly in runtimeProgram.",
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
         AUTHOR_DESIGN_QUALITY_RULE,
+        AUTHOR_STATUS_COMPOSITION_RULE,
         "Source provenance constrains factual claims about the parents, not the mechanics you may invent. Create new purposeful mechanics from catalog primitives inspired by both parent identities; neither parent needs to have performed them. Do not present invented effects as observed parent abilities. No forced twist or unrelated gimmick is required.",
         "Use source tempo when available and useful to the composition; make deviations intentional.",
         "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. attach_projectile.reachCurve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
@@ -352,6 +357,24 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         if event["event"] in event_detail:
             event["constructionMeaning"] = event_detail[event["event"]]
     capabilities = compact_capability_catalog()
+    target_groups: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    for card in capabilities:
+        target_groups.setdefault(tuple(card["targets"]), []).append(card)
+    target_sets: dict[str, list[str]] = {}
+    for targets, cards in target_groups.items():
+        if len(cards) < 2 or len(json.dumps(targets, separators=(",", ":"))) < 48:
+            continue
+        reference = "k" + str(len(target_sets))
+        target_sets[reference] = list(targets)
+        for card in cards:
+            card["targetsRef"] = reference
+            del card["targets"]
+    if target_sets:
+        field_guide["targetKindSets"] = target_sets
+        field_guide["targetKindReadingRule"] = (
+            "targetsRef names the exact allowed entity kinds in fieldGuide.targetKindSets; "
+            "it replaces only a repeated literal targets list, not an Author value or a default."
+        )
     field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
     field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
     field_guide["consumerConstraintReadingRule"] = (
@@ -390,17 +413,10 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
         "capabilities": capabilities,
     }
 
-def engine_runtime_capability_contract_for_llm(
-    a: dict[str, Any],
-    b: dict[str, Any],
-    envelope: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    del envelope
-    choices = loaded_status_identity_choices(a, b)
+def engine_runtime_capability_contract_for_llm() -> dict[str, Any]:
     return {
         "catalog": sharp_engine_fn_catalog_for_llm(include_source_units=False),
         "technicalNotes": concise_terraria_tick_guide_for_llm(),
-        **({"statusIdentityChoices": choices} if choices else {}),
     }
 
 
@@ -426,6 +442,8 @@ def runtime_program_invariants_for_llm() -> dict[str, Any]:
 
 def realization_execution_truth_for_llm() -> dict[str, str]:
     return {
+        "nativeSourceReferences": NATIVE_SOURCE_REFERENCE_RULE,
+        "statusEffects": AUTHOR_STATUS_COMPOSITION_RULE,
         "authority": "Optional realization.description, realization.playerExperience and realization.selfEvaluation are advisory context, never executable facts or required reports. Account for the chosen inputs, entities, subscribed events and terminal paths; report only behaviors supported by that exact topology, including their conditions and limits. A newly invented mechanic needs executable support, not parent precedent.",
         "placementUse": "The placement binding action performs the authored placement transaction and does not emit item_body.on_use; contactDamage must be false. If the result must both attack/use its body and place, author those as separate supported inputs. Never describe them as simultaneous on one placement binding.",
         "terminationEvents": "on_expire fires on natural lifetime expiry or explicit set_projectile_proximity_action action=expire_then_kill; an earlier kill does not emit it. on_kill fires on projectile termination, including collision death, penetration exhaustion, natural expiry and explicit kill actions such as arrival. A return trigger alone does not kill or seek. Only attached actions execute; termination does not imply an explosion. on_hit needs actual collision, not proximity alone; on_tile_collision means each collision. Area damage excludes the direct NPC only for on_hit/on_crit; on_kill has no remembered direct target.",
@@ -447,7 +465,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
     payload = {
         "priorityHeader": planner_priority_header_for_llm(),
         "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
-        "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(a, b),
+        "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(),
         "requiredJsonShape": author_item_prompt_shape_card(),
         "diagnosticReport": {"selfEvaluation": realization_execution_truth_for_llm()["selfEvaluation"]},
         # Recipe-specific values stay last. JSON object order is not semantic,
@@ -458,6 +476,7 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         "balanceCorridor": corridor,
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }
+    payload.update(share_exact_native_parent_facts(parents))
     chars = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     if chars > PLANNER_PROMPT_LIMIT_CHARS:
         raise ValueError(

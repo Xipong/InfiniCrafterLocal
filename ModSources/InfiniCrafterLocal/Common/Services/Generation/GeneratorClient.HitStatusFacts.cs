@@ -62,6 +62,9 @@ public sealed partial class GeneratorClient
             durationTicksStep = fact.StepTicks,
             durationDistribution = fact.MinimumTicks == fact.MaximumTicks ? "fixed" : "uniform_integer_steps_inclusive",
             sourceIlOffset = fact.IlOffset,
+            // Same per-request identity, but NPC receiver semantics; never reuse
+            // Player.UpdateBuffs operations for an applied NPC status.
+            buffEffectReference = CaptureNativeBuffEffectReference(fact.BuffId, "npc"),
         };
         return new
         {

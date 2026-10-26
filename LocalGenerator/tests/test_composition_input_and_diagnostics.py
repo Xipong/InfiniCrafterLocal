@@ -47,38 +47,23 @@ def test_author_packet_exposes_input_and_three_buff_activation_alternatives(monk
 
 
 @pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
-def test_explicit_status_choices_reach_author_and_leaf_local_repair_without_parent_precedent(monkeypatch, mode):
+def test_native_status_interoperability_and_frozen_repair_survive_registry_retirement(monkeypatch, mode):
     """Synthetic authored response, not a live-model quality claim or saved-item replay."""
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
-    identities = {'source': 'native_loaded_buff_registry', 'complete': False,
-                  'scope': 'Identity choices, not inflicted-parent behavior', 'entries': [
-        {'id': 20, 'fullName': 'Terraria/Poisoned'},
-        {'id': 31, 'fullName': 'Terraria/Confused'},
-        {'id': 69, 'fullName': 'Terraria/Ichor'},
-        {'id': 601, 'fullName': 'ExampleMod/Resonance'},
-    ]}
-    parents = ({'name': 'Unmeasured ingredient A', 'loadedBuffIdentitiesRaw': identities},
-               {'name': 'Unmeasured ingredient B', 'loadedBuffIdentitiesRaw': deepcopy(identities)})
+    parents = ({'name': 'Observed native contact status',
+                'nativeContactHitStatusReference': {'effects': [{'buffId': 20, 'durationTicks': 210}]}},
+               {'name': 'Observed second native status',
+                'nativeContactHitStatusReference': {'effects': [{'buffId': 69, 'durationTicks': 90}]}})
     before = deepcopy(parents)
-    request, _, _ = author.build_initial_author_request(*parents, 'explicit-status', model_name='offline')
+    request, _, _ = author.build_initial_author_request(*parents, 'native-status-interop', model_name='offline')
     sent = _serialized_chat_request(monkeypatch, request)
     packet = request_dossier(sent, declaration=request)
     cards = packet['runtimeCapabilityContract']['catalog']['capabilities']
-    choices = packet['runtimeCapabilityContract']['statusIdentityChoices']
-    assert choices['byMod'] == {'Terraria': {'Poisoned': 20, 'Confused': 31, 'Ichor': 69}, 'ExampleMod': {'Resonance': 601}}
-    assert choices['complete'] is False
-    assert choices['source'] == identities['source']
-    assert all('buffId' not in row['packet']['raw'].get('item', {})
-               for row in packet['parents'].values())
+    assert 'statusIdentityChoices' not in packet['runtimeCapabilityContract']
     for fn in ('apply_status_on_event', 'apply_vanilla_buff_on_use'):
         meaning = next(row for row in cards if row['fn'] == fn)['params']['buffId']['meaning']
-        assert 'statusIdentityChoices' in meaning
-        assert 'copy from parent facts' not in meaning
-        assert 'not evidence' in meaning and 'modded' in meaning
-        assert 'Poisoned' in meaning and 'damage over time' in meaning
-        assert 'Ichor' in meaning and 'defense' in meaning
-        assert 'Confused' in meaning and 'AI' in meaning
-        assert 'NPC' in meaning and 'immun' in meaning
+        assert 'statusIdentityChoices' not in meaning
+        assert 'generated' in meaning.lower()
 
     item = build_capability_witness('apply_status_on_event')
     item.pop('concept', None)
@@ -107,7 +92,8 @@ def test_explicit_status_choices_reach_author_and_leaf_local_repair_without_pare
     restored = author.try_llm_plan(*parents, 'explicit-status')
     assert len(requests) == 1 and restored is not None
     assert restored['runtimeProgram'] == item['runtimeProgram']
-    assert request_dossier(_serialized_chat_request(monkeypatch, requests[0]), declaration=requests[0])['runtimeCapabilityContract']['statusIdentityChoices'] == choices
+    assert 'statusIdentityChoices' not in request_dossier(
+        _serialized_chat_request(monkeypatch, requests[0]), declaration=requests[0])['runtimeCapabilityContract']
     wire = compile_runtime_program(restored)
     assert validate_runtime_wire(wire)['ok']
     effects = Counter((entity['id'], event['event'], event['buffId'], event['durationTicks'])
@@ -122,7 +108,7 @@ def test_explicit_status_choices_reach_author_and_leaf_local_repair_without_pare
     with pytest.raises(ValueError):
         compile_runtime_program(broken)
     # A useful correction plus a hostile, schema-valid sibling status edit:
-    # new ID vocabulary must not unfreeze a valid authored effect choice.
+    # retired ID vocabulary must not alter accepted native interoperability.
     candidate = deepcopy(status)
     candidate['params']['buffId'] = 69
     repaired, repair_request = repair_with_response(monkeypatch, broken, {
@@ -130,7 +116,9 @@ def test_explicit_status_choices_reach_author_and_leaf_local_repair_without_pare
     }, mode, parents=parents)
     repair_sent = _serialized_chat_request(monkeypatch, repair_request)
     dossier = request_dossier(repair_sent, declaration=repair_request)
-    assert dossier['runtimeCapabilityContract']['statusIdentityChoices'] == choices
+    assert 'runtimeCapabilityContract' not in dossier
+    assert 'Compose buffs and debuffs' in dossier['runtimeExecutionTruth'].get('statusEffects', '')
+    assert any('Compose buffs and debuffs' in row for row in packet['priorityHeader'])
     assert dossier['repairScope']['fieldPermissions']['calls'] == [
         {'id': status['id'], 'paths': ['params.durationSeconds']}]
     repair_card = next(row for row in dossier['existingBrokenCapabilityCards']

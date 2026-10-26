@@ -39,10 +39,10 @@ public sealed partial class InfiniCraftPlayer
             EmitLightStrength = Math.Clamp(buff.EmitLightStrength, 0f, 1.5f),
             LightColorName = buff.LightColorName ?? "",
             OreSenseRadiusTiles = Math.Clamp(buff.OreSenseRadiusTiles, 0, 60),
-            MovementSpeed = Math.Clamp(buff.MovementSpeed, -0.5f, 2f),
-            JumpBoost = Math.Clamp(buff.JumpBoost, 0f, 8f),
-            ManaRegen = Math.Clamp(buff.ManaRegen, 0, 120),
-            LifeRegen = Math.Clamp(buff.LifeRegen, 0, 120),
+            MovementSpeed = Math.Clamp(buff.MovementSpeed, -0.8f, 2f),
+            JumpBoost = Math.Clamp(buff.JumpBoost, -8f, 8f),
+            ManaRegen = Math.Clamp(buff.ManaRegen, -100, 120),
+            LifeRegen = Math.Clamp(buff.LifeRegen, -100, 120),
             Combat = buff.Combat,
         };
 
@@ -155,9 +155,9 @@ public sealed partial class InfiniCraftPlayer
             }
             _generatedOreSenseRadiusTiles = Math.Max(_generatedOreSenseRadiusTiles, active.OreSenseRadiusTiles);
             _generatedMovementSpeed += active.MovementSpeed;
-            _generatedJumpBoost = Math.Clamp(_generatedJumpBoost + active.JumpBoost, 0f, 8f);
-            _generatedManaRegen = Math.Clamp(_generatedManaRegen + active.ManaRegen, 0, 120);
-            _generatedLifeRegen = Math.Clamp(_generatedLifeRegen + active.LifeRegen, 0, 120);
+            _generatedJumpBoost += active.JumpBoost;
+            _generatedManaRegen += active.ManaRegen;
+            _generatedLifeRegen += active.LifeRegen;
             if (active.Combat is { } combat)
             {
                 _generatedDefense += combat.DefensePoints;
@@ -170,12 +170,15 @@ public sealed partial class InfiniCraftPlayer
         // Bound totals, not intermediate sums/products: speed-up and slow-down
         // contributions must not depend on the order effects were received.
         _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
-        _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed, -0.5f, 2f);
-        _generatedDefense = Math.Min(100, _generatedDefense);
-        _generatedAttackSpeed = Math.Min(100f, _generatedAttackSpeed);
-        _generatedCrit = Math.Min(100f, _generatedCrit);
+        _generatedMovementSpeed = Math.Clamp(_generatedMovementSpeed, -0.8f, 2f);
+        _generatedJumpBoost = Math.Clamp(_generatedJumpBoost, -8f, 8f);
+        _generatedManaRegen = Math.Clamp(_generatedManaRegen, -100, 120);
+        _generatedLifeRegen = Math.Clamp(_generatedLifeRegen, -100, 120);
+        _generatedDefense = Math.Clamp(_generatedDefense, -100, 100);
+        _generatedAttackSpeed = Math.Clamp(_generatedAttackSpeed, -80f, 100f);
+        _generatedCrit = Math.Clamp(_generatedCrit, -100f, 100f);
         foreach (string damageClass in _generatedDamage.Keys.ToArray())
-            _generatedDamage[damageClass] = Math.Min(200f, _generatedDamage[damageClass]);
+            _generatedDamage[damageClass] = Math.Clamp(_generatedDamage[damageClass], -90f, 200f);
     }
 
     private void ResetGeneratedUtilityBuffAggregate()
@@ -374,11 +377,11 @@ public sealed partial class InfiniCraftPlayer
             Player.pickSpeed /= Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
         if (_generatedMovementSpeed != 0f)
             Player.moveSpeed += _generatedMovementSpeed;
-        if (_generatedJumpBoost > 0f)
+        if (_generatedJumpBoost != 0f)
             Player.jumpSpeedBoost += _generatedJumpBoost;
-        if (_generatedManaRegen > 0)
+        if (_generatedManaRegen != 0)
             Player.manaRegenBonus += _generatedManaRegen;
-        if (_generatedLifeRegen > 0)
+        if (_generatedLifeRegen != 0)
             Player.lifeRegen += _generatedLifeRegen;
         if (_generatedOreSenseRadiusTiles > 0)
             Player.findTreasure = true;
