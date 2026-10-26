@@ -102,6 +102,8 @@ internal static partial class EngineRuntimeChecks
         bool drawPlacedBodies=scenario["nativeRender"]?["drawPlacedBodies"]?.GetValue<bool>()??false;
         bool drawArtwork=scenario["nativeRender"]?["drawArtwork"]?.GetValue<bool>()??false;
         bool drawPlayer=scenario["nativeRender"]?["drawPlayer"]?.GetValue<bool>()??false;
+        bool drawVanillaProjectiles=scenario["nativeRender"]?["drawVanillaProjectiles"]?.GetValue<bool>()??false;
+        if(drawVanillaProjectiles && (data is not null || !drawPlayer))throw new NotSupportedException("drawVanillaProjectiles requires a vanilla item and drawPlayer=true");
         if((scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)&&!drawPlayer)throw new ArgumentException("drawNativeDust requires drawPlayer=true");
         if(nativeDummy&&!drawPlayer)throw new ArgumentException("native_training_dummy requires nativeRender.drawPlayer=true");
         if(!nativeDummy&&scenario["nativeRender"]?["dummyAssetRoot"] is not null)throw new ArgumentException("dummyAssetRoot requires native_training_dummy");
@@ -409,14 +411,16 @@ internal static partial class EngineRuntimeChecks
                 using var playerAssets=drawPlayer?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("drawPlayer requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
                 if(trainingDummy is not null)trainingDummy.InitializeGraphics(graphics!,scenario["nativeRender"]?["dummyAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_DUMMY_ASSET_DIR")??scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("native_training_dummy requires dummyAssetRoot or playerAssetRoot containing genuine dummy assets"));
                 using var artwork=drawArtwork?new WNativeArtwork(data!,owner,(scenario["nativeRender"]?["artworkFiles"]?.AsArray()??throw new ArgumentException("drawArtwork requires artworkFiles")).Select(f=>f!.GetValue<string>()).ToArray(),WProjectileId):null;
+                using var vanillaProjectileAssets=drawVanillaProjectiles?new WNativeVanillaProjectileAssets(graphics!,scenario["vanillaAssetRoot"]!.GetValue<string>()):null;
                 using var placedBodies=drawPlacedBodies?new WNativePlacedBodies():null;
                 if(placedBodies is not null)nativeRenderer!.SetPlacedBodies(placedBodies);
                 if(nativeRenderer!=null) {
-                    if(artwork is not null) {if(drawPlayer){artwork.EnableNativePlayer();report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"Main.PlayerRenderer.DrawPlayers / native vanilla held-item DrawData":"Main.PlayerRenderer.DrawPlayers / PlayerDrawLayerLoader / GeneratedItem.ModifyItemDraw / ProjectileLoader.PreDraw/PostDraw"));}nativeRenderer.SetArtwork(artwork);if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"PlayerDrawLayers.DrawPlayer_27_HeldItem / Dust.UpdateDust / Lighting.LightTiles":"GeneratedHeldItemDrawLayer.Draw / GeneratedItem.PreDrawInInventory / GeneratedProjectile.DrawAuthoredEntityVisual / InfiniDetachedVfxSystem.DrawProjectiles / Dust.UpdateDust / Lighting.LightTiles"));}
+                    if(artwork is not null) {if(drawPlayer){artwork.EnableNativePlayer();if(drawVanillaProjectiles)artwork.EnableNativeVanillaProjectiles();report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"Main.PlayerRenderer.DrawPlayers / native vanilla held-item DrawData":"Main.PlayerRenderer.DrawPlayers / PlayerDrawLayerLoader / GeneratedItem.ModifyItemDraw / ProjectileLoader.PreDraw/PostDraw"));}nativeRenderer.SetArtwork(artwork);if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"PlayerDrawLayers.DrawPlayer_27_HeldItem / Dust.UpdateDust / Lighting.LightTiles":"GeneratedHeldItemDrawLayer.Draw / GeneratedItem.PreDrawInInventory / GeneratedProjectile.DrawAuthoredEntityVisual / InfiniDetachedVfxSystem.DrawProjectiles / Dust.UpdateDust / Lighting.LightTiles"));}
                     if(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false){
                         report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("Main.DrawDust (original stateful native rendering; capture controls PNG export only)"));
                         var unsupported=report["execution"]!["unsupported"]!.AsArray();for(int u=0;u<unsupported.Count;u++)unsupported[u]=unsupported[u]!.GetValue<string>().Replace(" and native dust sprites","").Replace("native dust sprites, ","").Replace("native dust sprite rendering", "complete world rendering").Replace("/dust rendering", "/world rendering");
                     }
+                    if(drawVanillaProjectiles){nativeRenderer.Report["vanillaProjectileAssets"]=vanillaProjectileAssets!.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("Main.DrawProj (original vanilla projectile rendering)"));}
                     report["nativeRender"]=nativeRenderer.Report;if(trainingDummy is not null)nativeRenderer.SetTrainingDummy(trainingDummy);
                     report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("InfiniDetachedVfxSystem.PostUpdateEverything / BeginDrawBudgetFrame / DrawLayer (BeforeProjectiles,AfterProjectiles)"));
                     if(!drawArtwork) nativeRenderer.Report["unrenderedArtwork"]=new JsonArray((data?.RuntimeProgram.Entities ?? Array.Empty<RuntimeEntitySpec>()).Select(e=>(JsonNode?)new JsonObject{["entityId"]=e.Id,["kind"]=e.Kind,["path"]=e.Visual.SpritePath,["reason"]="VFX-only draw scope; authored entity artwork is not rendered or substituted"}).ToArray());
@@ -430,6 +434,7 @@ internal static partial class EngineRuntimeChecks
                 using var reactionScene=actions.Any(a=>WReactionAction(a!["kind"]!.GetValue<string>()))?new WReactionScene(e=>events.Add(e)):null;
                 var rootBridge = new InfiniCrafterLocal.Common.Systems.GeneratedRootCombatSystem(); rootBridge.Load();
                 try {
+                    nativeRenderer?.ApplyNativeViewport();
                     Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(seed);
                     report["execution"]!["rng"] = new JsonObject{["seed"]=seed,["resetBoundary"]="After all scene/asset/loader initialization, immediately before initial snapshot and gameplay tick0",["scope"]="Same initial native random stream; weapon effects and graphics may consume it differently"};
                     frames.Add(WSnapshot(-1, owner, dummy, new JsonArray()));
@@ -437,7 +442,7 @@ internal static partial class EngineRuntimeChecks
                         MaterialClock((uint)tick);
                         foreach (var action in (scenario["actions"]?.AsArray() ?? new JsonArray()).Where(a => WInt(a, "tick", -1) == tick)) {
                             string kind = action!["kind"]!.GetValue<string>();
-                            if (kind == "aim") { Terraria.Main.mouseX = (int)WFloat(action,"x",owner.Center.X+200); Terraria.Main.mouseY=(int)WFloat(action,"y",owner.Center.Y); events.Add(new JsonObject { ["kind"]="input",["input"]="aim" }); }
+                            if (kind == "aim") { Terraria.Main.mouseX = (int)(WFloat(action,"x",owner.Center.X+200)-Terraria.Main.screenPosition.X); Terraria.Main.mouseY=(int)(WFloat(action,"y",owner.Center.Y)-Terraria.Main.screenPosition.Y); events.Add(new JsonObject { ["kind"]="input",["input"]="aim" }); }
                             else if (kind is "equip" or "unequip" or "vanity") { WPlaceEquipment(owner,item,kind); events.Add(new JsonObject { ["kind"]="input",["input"]=kind,["instanceConserved"]=true }); }
                             else if (kind == "select_slot") { owner.selectedItem=WInt(action,"slot",0); events.Add(new JsonObject { ["kind"]="input",["input"]="select_slot",["slot"]=owner.selectedItem }); }
                             else if (kind is "tile_target" or "break_tile") {worldScene!.Action(kind,action!,events);}

@@ -54,6 +54,38 @@ class NativeReviewTests(unittest.TestCase):
             m=json.loads((out/'native-review.json').read_text());self.assertEqual(len(m['frames']),5)
             self.assertEqual(m['gif']['sourceTicks'],[0,2,4]);self.assertEqual(m['gif']['omittedFrames'],2)
             with self.assertRaises(ValueError):n.export_native_review(t,tp,root/'bad',True,0)
+    def test_same_tick_dust_references_preserve_all_states_and_refuse_tampering(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);t,tp,p=self.fixture(root)
+            t['nativeRender']['snapshots']=[dict(tick=0,nativeDustDrawExecuted=True,nativeDustBeforeDraw=[{'slot':1}],nativeDustAfterDraw=[])]
+            frame=t['nativeRender']['frames'][0]
+            frame.update(nativeDustStateTick=0,nativeDustBeforeDrawCount=1,nativeDustAfterDrawCount=0)
+            self.assertEqual(len(n.native_frames(t,tp)),1)
+            for mutation in ('tick','count','missing','duplicate'):
+                bad=copy.deepcopy(t)
+                if mutation=='tick':bad['nativeRender']['frames'][0]['nativeDustStateTick']=1
+                elif mutation=='count':bad['nativeRender']['frames'][0]['nativeDustBeforeDrawCount']=0
+                elif mutation=='missing':bad['nativeRender']['snapshots']=[]
+                else:bad['nativeRender']['snapshots']*=2
+                with self.subTest(mutation=mutation),self.assertRaisesRegex(ValueError,'dust'):
+                    n.native_frames(bad,tp)
+
+    def test_gif_duration_tracks_cumulative_native_ticks(self):
+        try:import PIL
+        except ImportError:self.skipTest('Optional Pillow is not installed')
+        for stride in (1, 2, 7):
+            with self.subTest(stride=stride), tempfile.TemporaryDirectory() as d:
+                root=Path(d);t,tp,p=self.fixture(root)
+                t['snapshots']=[{**t['snapshots'][0],'tick':i} for i in range(121)]
+                t['timeline']['completedTicks']=121
+                t['nativeRender']['frames']=[{**t['nativeRender']['frames'][0],'tick':i} for i in range(121)]
+                tp.write_text(json.dumps(t));out=root/'review'
+                n.export_native_review(t,tp,out,True,stride)
+                durations=json.loads((out/'native-review.json').read_text())['gif']['frameDurationsMs']
+                self.assertEqual(sum(durations[:-1]), 2000)
+                self.assertEqual(durations[-1], 800)
+                self.assertTrue(all(ms>=10 and ms%10==0 for ms in durations))
+
     def test_observed_bookmarks_do_not_invent_engine_events(self):
         trace={'snapshots':[{'tick':0,'player':{'generatedBuffTicks':1},'projectiles':[{'id':0,'returning':False}]},{'tick':1,'player':{'generatedBuffTicks':0},'projectiles':[{'id':0,'returning':True}]}]}
         marks=n.observed_bookmarks(trace)

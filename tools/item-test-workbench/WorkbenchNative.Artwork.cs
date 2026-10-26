@@ -27,6 +27,14 @@ internal sealed partial class WNativeArtwork:IDisposable {
  bool nativePlayer;Hook? heldObserver,playerObserver,proxyObserver,projectileObserver;
  public bool NativePlayerEnabled=>nativePlayer;
  public bool NativeVanillaEnabled=>reviewData is null;
+ bool drawVanillaProjectiles;
+ public bool NativeVanillaProjectilesEnabled=>drawVanillaProjectiles;
+ public void EnableNativeVanillaProjectiles(){
+  if(!NativeVanillaEnabled||!nativePlayer)throw new NotSupportedException("Native projectile sprites require a vanilla item and full native player artwork");
+  drawVanillaProjectiles=true;
+  Report["vanillaProjectileRendering"]="Original Main.DrawProj with pinned native projectile textures; other types refuse";
+  Report["entrypoints"]=Entrypoints();
+ }
  delegate bool ProxyOriginal(InfiniCrafterLocal.Content.Items.GeneratedItem self,ref PlayerDrawSet draw,ref DrawData item,ref DrawData? colored,ref DrawData? glow);
  delegate bool ProxyObserver(ProxyOriginal orig,InfiniCrafterLocal.Content.Items.GeneratedItem self,ref PlayerDrawSet draw,ref DrawData item,ref DrawData? colored,ref DrawData? glow);
  delegate bool ProjectileDrawOriginal(GeneratedProjectile self,ref Color color);
@@ -148,9 +156,9 @@ internal sealed partial class WNativeArtwork:IDisposable {
  }
  static string Hash(byte[] bytes)=>Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
  static void RejectSymlink(string path) {for(FileSystemInfo? p=new FileInfo(path);p is not null;p=p is FileInfo file?file.Directory:((DirectoryInfo)p).Parent)if(p.LinkTarget is not null||(p.Exists&&(p.Attributes&FileAttributes.ReparsePoint)!=0))throw new InvalidDataException("Artwork symlink/reparse path is not admitted: "+p.FullName);}
- JsonArray Entrypoints()=>NativeVanillaEnabled?new("Main.PlayerRenderer.DrawPlayers","PlayerDrawLayers.DrawPlayer_27_HeldItem","PlayerDrawLayers.DrawPlayer_RenderAllLayers"):nativePlayer?new("Main.PlayerRenderer.DrawPlayers","GeneratedItem.ModifyItemDraw","GeneratedHeldItemDrawLayer.Draw (native layer loader)","PlayerDrawLayers.DrawPlayer_RenderAllLayers","ProjectileLoader.PreDraw / GeneratedProjectile.PreDraw","ProjectileLoader.PostDraw","GeneratedItem.PreDrawInInventory"):new("GeneratedItem.PreDrawInInventory","GeneratedHeldItemDrawLayer.GetDefaultVisibility/Draw","DrawData.Draw","GeneratedProjectile.DrawAuthoredEntityVisual");
+ JsonArray Entrypoints()=>NativeVanillaEnabled?(drawVanillaProjectiles?new("Main.PlayerRenderer.DrawPlayers","PlayerDrawLayers.DrawPlayer_27_HeldItem","PlayerDrawLayers.DrawPlayer_RenderAllLayers","Main.DrawProj -> SpriteBatch.Draw"):new("Main.PlayerRenderer.DrawPlayers","PlayerDrawLayers.DrawPlayer_27_HeldItem","PlayerDrawLayers.DrawPlayer_RenderAllLayers")):nativePlayer?new("Main.PlayerRenderer.DrawPlayers","GeneratedItem.ModifyItemDraw","GeneratedHeldItemDrawLayer.Draw (native layer loader)","PlayerDrawLayers.DrawPlayer_RenderAllLayers","ProjectileLoader.PreDraw / GeneratedProjectile.PreDraw","ProjectileLoader.PostDraw","GeneratedItem.PreDrawInInventory"):new("GeneratedItem.PreDrawInInventory","GeneratedHeldItemDrawLayer.GetDefaultVisibility/Draw","DrawData.Draw","GeneratedProjectile.DrawAuthoredEntityVisual");
  static JsonObject PreviewAnchor()=>new(){["positionX"]=36,["positionY"]=36,["originX"]=24,["originY"]=24,["requestedFrameWidth"]=48,["requestedFrameHeight"]=48,["scope"]="Separate UI preview anchor; original hook determines actual authored PNG size"};
- public void BeginFrame(){heldTextures.Clear();equipmentLayers?.BeginFrame();Frame=new JsonObject{["visualReview"]=PlayerReview(),["projectileGeometry"]=new JsonArray(),["heldGeometry"]=new JsonArray(),["droppedItems"]=new JsonArray(),["unrenderedVanillaProjectiles"]=new JsonArray(),["equipmentOverlayDrawCount"]=0,["equipmentOverlayDrawData"]=new JsonArray(),["playerDrawCount"]=0,["playerRenderAllLayersCalls"]=0,["nativeProxyVetoCount"]=0,["nativeProxyDrawDataCount"]=0,["heldItemDrawCount"]=0,["projectileDrawCount"]=0,["inventoryPreviewDrawCount"]=0,["heldDrawData"]=new JsonArray(),["projectileIds"]=new JsonArray(),["projectileDraws"]=new JsonArray(),["entrypoints"]=Entrypoints(),["inventoryPreviewAnchor"]=PreviewAnchor()};}
+ public void BeginFrame(){heldTextures.Clear();equipmentLayers?.BeginFrame();Frame=new JsonObject{["visualReview"]=PlayerReview(),["projectileGeometry"]=new JsonArray(),["heldGeometry"]=new JsonArray(),["droppedItems"]=new JsonArray(),["unrenderedVanillaProjectiles"]=new JsonArray(),["vanillaProjectileDrawAttemptCount"]=0,["vanillaProjectileDrawAttempts"]=new JsonArray(),["equipmentOverlayDrawCount"]=0,["equipmentOverlayDrawData"]=new JsonArray(),["playerDrawCount"]=0,["playerRenderAllLayersCalls"]=0,["nativeProxyVetoCount"]=0,["nativeProxyDrawDataCount"]=0,["heldItemDrawCount"]=0,["projectileDrawCount"]=0,["inventoryPreviewDrawCount"]=0,["heldDrawData"]=new JsonArray(),["projectileIds"]=new JsonArray(),["projectileDraws"]=new JsonArray(),["entrypoints"]=Entrypoints(),["inventoryPreviewAnchor"]=PreviewAnchor()};}
  void Increment(string key,int amount=1)=>Frame[key]=Frame[key]!.GetValue<int>()+amount;
  public void DrawInventory() {
   if(NativeVanillaEnabled||owner.HeldItem.IsAir)return; // No selected item: no preview, never substitute artwork.
@@ -179,7 +187,19 @@ internal sealed partial class WNativeArtwork:IDisposable {
   try{foreach(var p in Main.projectile.Where(p=>p.active)) {
    if(nativePlayer && p.whoAmI==owner.heldProj)continue; // Native player layer owns this pass exactly once.
    if(p.hide)throw new NotSupportedException("Hidden or specially ordered projectile draw passes are not admitted");
-   if(p.ModProjectile is not GeneratedProjectile){if(!NativeVanillaEnabled)throw new NotSupportedException("Only generated projectile authored core is supported");Frame["unrenderedVanillaProjectiles"]!.AsArray().Add(new JsonObject{["slot"]=p.whoAmI,["nativeType"]=p.type,["reason"]="Native gameplay executes; projectile sprite pass not admitted in vanilla pose review"});continue;}
+   if(p.ModProjectile is not GeneratedProjectile){
+    if(!NativeVanillaEnabled)throw new NotSupportedException("Only generated projectile authored core is supported");
+    if(drawVanillaProjectiles){
+     if(!WNativeVanillaProjectileAssets.Supports(p.type))throw new NotSupportedException("Native projectile draw type not admitted: "+p.type);
+     var draws=WNativeVisualGeometry.Capture(()=>Main.instance.DrawProj(p.whoAmI));
+     if(!p.active)throw new InvalidOperationException("Native projectile rendering deactivated a projectile; swallowed draw errors cannot certify a successful run");
+     Increment("vanillaProjectileDrawAttemptCount");
+     Frame["vanillaProjectileDrawAttempts"]!.AsArray().Add(new JsonObject{["nativeSlot"]=p.whoAmI,["nativeIdentity"]=p.identity,["nativeType"]=p.type,["spriteDrawCount"]=draws.Count,["entrypoint"]="Main.DrawProj (original)"});
+     foreach(var node in draws){var row=node!.AsObject();row["kind"]="vanilla_projectile";row["nativeSlot"]=p.whoAmI;row["nativeIdentity"]=p.identity;row["nativeType"]=p.type;row["collider"]=WNativeVisualGeometry.Rect(p.Hitbox);Frame["projectileGeometry"]!.AsArray().Add(row.DeepClone());}
+     if(draws.Count>0)RecordProjectile(p,"Main.DrawProj -> SpriteBatch.Draw (observed original native sprite submission)");
+    }else Frame["unrenderedVanillaProjectiles"]!.AsArray().Add(new JsonObject{["slot"]=p.whoAmI,["nativeType"]=p.type,["reason"]="Native gameplay executes; projectile sprite pass not admitted in vanilla pose review"});
+    continue;
+   }
    Color color=Lighting.GetColor((int)p.Center.X/16,(int)p.Center.Y/16);if(nativePlayer){Report["fullProjectilePreDrawExecuted"]=true;if(ProjectileLoader.PreDraw(p,ref color))throw new InvalidOperationException("Generated full PreDraw unexpectedly requested vanilla fallback");ProjectileLoader.PostDraw(p,color);}else typeof(GeneratedProjectile).GetMethod("DrawAuthoredEntityVisual",All)!.Invoke(p.ModProjectile,new object[]{color});if(!nativePlayer)RecordProjectile(p,"GeneratedProjectile.DrawAuthoredEntityVisual");
   }}finally{Main.spriteBatch.End();}
  }

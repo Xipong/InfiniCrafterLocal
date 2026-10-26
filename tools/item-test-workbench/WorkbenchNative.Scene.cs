@@ -9,6 +9,18 @@ internal sealed partial class WNativeVfxRenderer
 {
     string lightingMode = "legacy_point";
 
+    public void ApplyNativeViewport()
+    {
+        // Dust.NewDust performs native camera culling during Projectile.Update,
+        // before Step draws. Rendering alone must not be the first camera owner.
+        Vector2 aim=new(Main.mouseX+Main.screenPosition.X,Main.mouseY+Main.screenPosition.Y);
+        Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;
+        Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};
+        Main.mouseX=(int)(aim.X-camera.X);Main.mouseY=(int)(aim.Y-camera.Y);
+        Report["viewportAppliedBeforeGameplay"]=true;
+        Report["viewportScope"]="Native player/projectile/dust updates and draw share this explicit camera; original Dust.NewDust culling is preserved";
+    }
+
     void ConfigureScene(JsonObject settings)
     {
         lightingMode = settings["lightingMode"]?.GetValue<string>() ?? "legacy_point";
