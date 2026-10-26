@@ -226,10 +226,14 @@ def test_bounded_loaded_status_vocabulary_and_literal_sources_fit_without_clippi
     request, text, _ = build_initial_author_request(source, source, "bounded-identities", model_name="offline")
     packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
     choices = packet["runtimeCapabilityContract"]["statusIdentityChoices"]
-    assert choices["entries"] == entries and choices["complete"] is False
+    assert choices["byMod"] == {"ContextFixture": {f"RegisteredStatus{n}": n for n in range(1, 2049)}}
+    assert choices["complete"] is False
+    compact = json.dumps(choices, ensure_ascii=False, separators=(",", ":"))
+    previous = json.dumps({"entries": entries}, ensure_ascii=False, separators=(",", ":"))
+    assert len(compact) < len(previous) / 2
     for side in ("A", "B"):
         assert packet["parents"][side]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
-    assert text.count("ContextFixture/RegisteredStatus2048") == 1
+    assert text.count('"RegisteredStatus2048"') == 1
     assert len(packet["runtimeCapabilityContract"]["catalog"]["capabilities"]) == len(compact_capability_catalog())
     assert len(text) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert source == before

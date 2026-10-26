@@ -20,7 +20,6 @@ public sealed partial class GeneratorClient
         var method = typeof(Player).GetMethod("PickAmmo_TryFindingSpecificMatches", BindingFlags.NonPublic | BindingFlags.Instance);
         return method is null ? null : AmmoMethodCertificate(method);
     });
-    private const string CertifiedAmmoSpecificMatch = "d1bade6144986d5ce52c60faa3759357c9ddfeb5238b3f82b6b29297b6b69422:033e87cd-cefe-4dc6-a1fb-e14aa938bbb2";
 
     private static string? AmmoMethodCertificate(MethodInfo method)
     {
@@ -129,7 +128,7 @@ public sealed partial class GeneratorClient
         unknowns.Add("Known literal item rules do not certify absence of other native rewrites or a final shot. Native item-specific spawn sites may change origin, count and trajectory even when their projectile argument is retained.");
         unknowns.Add("CanShoot, ammo availability, player hooks and other gameplay gates may change or suppress shooting; source inspection does not execute them.");
         if (offsetSelection)
-            unknowns.Add("The specific-match table precedes native category offsets. Unmatched category offsets are unresolved because other native branches may precede them.");
+            unknowns.Add("Verified complete selection chain reads the current specific-match table first, then category offsets or the positive-ammo/default arm. This does not certify later rewrites or a final shot.");
         return new JsonObject {
             ["status"] = "source_inspected", ["ammoProjectileRelation"] = relation,
             ["finalShotOutcome"] = "unknown_without_gameplay_execution",
@@ -167,7 +166,9 @@ public sealed partial class GeneratorClient
         {
             if (stage["method"]!.GetValue<string>() == "Player.PickAmmo")
             {
-                if (stage["defaultProjectileSelection"] is not JsonObject selection || AmmoSpecificMatchCertificate.Value != CertifiedAmmoSpecificMatch)
+                if (stage["defaultProjectileSelection"] is not JsonObject selection
+                    || selection["specificMatchLookupFirst"]?.GetValue<bool>() != true
+                    || AmmoSpecificMatchCertificate.Value != selection["specificMatchLookupCertificate"]?.GetValue<string>())
                     known = false;
                 else try
                 {
@@ -180,8 +181,13 @@ public sealed partial class GeneratorClient
                     else if (selection["categoryOffsetSelectors"] is JsonArray offsets
                         && offsets.OfType<JsonObject>().Any(selector => selector["ammoCategoryId"]!.GetValue<int>() == weapon.useAmmo))
                     {
-                        // Other item-specific branches precede the generic offset arm.
-                        known = false;
+                        current = checked(weapon.shoot + input); changed = current != input;
+                        proofs.Add(new JsonObject { ["method"] = "Player.PickAmmo", ["source"] = "certified_category_offset", ["projectileId"] = current });
+                    }
+                    else if (input <= ProjectileID.None)
+                    {
+                        current = weapon.shoot; changed = current != input;
+                        proofs.Add(new JsonObject { ["method"] = "Player.PickAmmo", ["source"] = "certified_retained_weapon_shoot", ["projectileId"] = current });
                     }
                 }
                 catch { known = false; }
@@ -231,7 +237,7 @@ public sealed partial class GeneratorClient
             ["includeReplacementProjectileProfile"] = changed && known && !suppressed && !opaque && current > ProjectileID.None && current < ProjectileLoader.ProjectileCount,
             ["relation"] = suppressed ? "default_shot_suppressed" : opaque ? "unknown_hook_outcome" : !known ? "unknown_native_ammo_selection" : changed ? "source_rule_projection" : "input_retained_in_supported_source_rules",
             ["matchedSourceRules"] = proofs,
-            ["scope"] = "Candidate input bound through supported source rules and current specific-match table only. Unmatched category offsets, ambient player state, opaque hooks and unmodeled native writes are unresolved; not an observed or guaranteed final shot." };
+            ["scope"] = "Candidate input bound through supported source rules and current specific-match table only. Ambient player state, opaque hooks and unmodeled native writes are unresolved; not an observed or guaranteed final shot." };
         return binding;
     }
 

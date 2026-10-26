@@ -523,7 +523,7 @@ public sealed partial class GeneratorClient
                 Item ammo = player.inventory[i];
                 if (ammo is null || ammo.IsAir || ammo.stack <= 0)
                     continue;
-                if (ammo.ammo == ammoId && ammo.shoot > ProjectileID.None)
+                if (ammo.ammo == ammoId)
                 {
                     outList.Add(new AmmoCandidate
                     {
@@ -557,7 +557,7 @@ public sealed partial class GeneratorClient
                 {
                     Item ammo = new();
                     ammo.SetDefaults(type);
-                    if (ammo.IsAir || ammo.ammo != ammoId || ammo.shoot <= ProjectileID.None)
+                    if (ammo.IsAir || ammo.ammo != ammoId)
                         continue;
                     outList.Add(new AmmoCandidate
                     {

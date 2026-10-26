@@ -6,7 +6,7 @@ from typing import Any
 
 _IDENTITY_SCOPE = (
     "Current loaded buff identities, not evidence that either parent inflicts them. "
-    "Available for explicit child design; effect conditions and immunity remain separate."
+    "byMod[mod][registeredName] is the exact loaded buffId. Effect conditions and immunity remain separate."
 )
 
 
@@ -64,5 +64,9 @@ def loaded_status_identity_choices(parent_a: dict[str, Any], parent_b: dict[str,
     complete = (bool(complete_sets) and not malformed and not conflict
         and all(current == complete_sets[0] for current in complete_sets)
         and all(current <= complete_sets[0] for current in observed))
+    by_mod: dict[str, dict[str, int]] = {}
+    for entry in entries:
+        mod, name = entry["fullName"].split("/", 1)
+        by_mod.setdefault(mod, {})[name] = entry["id"]
     return {"source": "native_loaded_buff_registry", "scope": _IDENTITY_SCOPE,
-        "complete": complete, "entries": entries}
+        "complete": complete, "byMod": by_mod}

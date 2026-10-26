@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import os
 import sys
 from pathlib import Path
 
@@ -93,7 +94,7 @@ def assert_native_hellwing_ammo_packet(packet):
 
 def test_exact_native_ammo_rewrite_and_spawn_extraction():
     from generate_native_ammo_facts import extract
-    installed = Path("/mnt/c/Program Files (x86)/Steam/steamapps/common/tModLoader/tModLoader.dll")
+    installed = Path(os.environ.get("INFINI_NATIVE_AMMO_ASSEMBLY", "/mnt/c/Program Files (x86)/Steam/steamapps/common/tModLoader/tModLoader.dll"))
     if not installed.exists():
         pytest.skip("exact native source assembly unavailable")
     sources = extract(installed)
@@ -120,6 +121,27 @@ def test_exact_native_ammo_rewrite_and_spawn_extraction():
     assert rules[3019][0]["outputProjectileId"] == 485
     assert 39 not in shoot["itemTypeMentions"]  # Plain native stock bow follows default path.
     assert 4381 in shoot["itemTypeMentions"]
+    selection = pick["defaultProjectileSelection"]
+    assert selection["specificMatchLookupFirst"] is True
+    assert selection["nonPositiveAmmoShoot"] == "retain_weapon_shoot"
+    assert selection["specificMatchLookupCertificate"].endswith(":" + pick["sourceModuleVersionId"])
+    from generate_native_hit_status import decode
+    from generate_native_ammo_facts import native_ammo_category_literals
+    from native_ammo_fact_analysis import default_ammo_selection
+    from native_hit_status_analysis import Instruction as I
+    code = decode(installed, "Player", "PickAmmo", allow_opaque=True, overload_index=1)[0]
+    categories = native_ammo_category_literals(installed)
+    lookup = next(n for n, ins in enumerate(code) if ins.op == "call" and ins.arg[0] == "Terraria.Player.PickAmmo_TryFindingSpecificMatches")
+    # Isolated familiar stores are insufficient: altered table precedence,
+    # extra guards and external entry into an arm must all refuse certification.
+    broken_fallthrough = list(code)
+    guard = code[lookup + 1]
+    broken_fallthrough[lookup + 1] = I(guard.offset, guard.op, guard.arg + 1)
+    for changed in (broken_fallthrough,
+                    code[:lookup + 1] + [I(guard.offset - 1, "opaque", "extra_condition")] + code[lookup + 1:],
+                    [I(-1, "br", code[lookup + 2].offset)] + code):
+        with pytest.raises(ValueError):
+            default_ammo_selection(changed, categories)
     dispatch = {row["method"]: row for row in pick["hookDispatchTrace"]}
     assert dispatch["Terraria.ModLoader.ItemLoader.PickAmmo"]["directHookCalls"] == ["Terraria.ModLoader.ModItem.PickAmmo", "Terraria.ModLoader.GlobalItem.PickAmmo"]
     assert dispatch["Terraria.ModLoader.ItemLoader.ModifyShootStats"]["directHookCalls"] == ["Terraria.ModLoader.ModItem.ModifyShootStats", "Terraria.ModLoader.GlobalItem.ModifyShootStats"]

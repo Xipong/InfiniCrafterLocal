@@ -24,11 +24,13 @@ The origin reference is the constructor argument, not a complete final position.
 Native aiming/spread is explicitly unmodeled rather than labeled ordinary direct
 arrow delivery.
 
-Default positive-ammo.shoot selection and category-offset arms come from the
-actual PickAmmo IL. Category values come only from literal AmmoID static field
-initializers, not weapon families or handwritten category semantics. Specific
-launcher/ammo table selection is an unresolved earlier arm, not silently replaced
-with the default or offset formula. Ordered stage call sites and ModItem /
+The complete initial selection chain comes from actual PickAmmo IL: current
+specific launcher/ammo table, then category offsets, then positive ammo.shoot or
+retained weapon.shoot. Every fallthrough and common join is verified, with foreign
+entries refused. The table helper has its own generated SHA256/MVID certificate;
+current entries are read without calling gameplay. Category values come only
+from literal AmmoID static field initializers. Zero-shoot ammo remains eligible:
+its shoot field need not be the resulting projectile identity. Ordered stage call sites and ModItem /
 GlobalItem dispatcher calls come from the same assembly; each dispatcher method
 certificate is checked independently. Unsupported native binaries have no
 certified call-order prose.

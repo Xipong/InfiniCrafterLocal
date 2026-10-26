@@ -17,6 +17,8 @@
       "defaultProjectileSelection": {
         "basis": "positive_selected_ammo_shoot",
         "ammoShootStoreIlOffset": 326,
+        "specificMatchLookupFirst": true,
+        "nonPositiveAmmoShoot": "retain_weapon_shoot",
         "categoryOffsetSelectors": [
           {
             "ammoCategoryId": 771,
@@ -31,9 +33,10 @@
             "sourceStoreIlOffset": 307
           }
         ],
-        "scope": "Default arm only, after specific-match tables and category-offset arms; later native/player/ammo hooks may rewrite"
+        "scope": "Complete source decision chain: current specific-match table, then category offsets, then positive ammo.shoot or retained weapon.shoot. Later native/player/ammo hooks remain separate.",
+        "specificMatchLookupCertificate": "d1bade6144986d5ce52c60faa3759357c9ddfeb5238b3f82b6b29297b6b69422:033e87cd-cefe-4dc6-a1fb-e14aa938bbb2"
       },
-      "scope": "Literal item-type projectile rewrites and explicit native item-branch spawn arguments only. Ambient/player/projectile-set/table rewrites, branch admission, hooks and actual shot outcome remain separate unknowns.",
+      "scope": "Literal item-type projectile rewrites and explicit native item-branch spawn arguments only. The initial selection chain and live table lookup are certified separately; ambient/player/projectile-set rewrites, branch admission, hooks and actual shot outcome remain unknown.",
       "hookDispatchTrace": [
         {
           "method": "Terraria.ModLoader.ItemLoader.PickAmmo",
@@ -313,7 +316,7 @@
         5451
       ],
       "defaultProjectileSelection": null,
-      "scope": "Literal item-type projectile rewrites and explicit native item-branch spawn arguments only. Ambient/player/projectile-set/table rewrites, branch admission, hooks and actual shot outcome remain separate unknowns.",
+      "scope": "Literal item-type projectile rewrites and explicit native item-branch spawn arguments only. The initial selection chain and live table lookup are certified separately; ambient/player/projectile-set rewrites, branch admission, hooks and actual shot outcome remain unknown.",
       "hookDispatchTrace": [],
       "sourceStageCallSites": [
         {

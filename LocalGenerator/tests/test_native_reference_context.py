@@ -17,10 +17,10 @@ def test_loaded_identity_choices_are_shared_detached_and_include_mod_content():
     before = copy.deepcopy(parent)
     result = loaded_status_identity_choices(parent, parent)
     assert result is not None
-    assert result["entries"] == before["loadedBuffIdentitiesRaw"]["entries"]
+    assert result["byMod"] == {"Terraria": {"Poisoned": 20}, "ExampleMod": {"CorrosiveMark": 410}}
     assert result["complete"] is True
     assert "not" in result["scope"].lower() and "parent" in result["scope"].lower()
-    result["entries"][0]["id"] = 99
+    result["byMod"]["Terraria"]["Poisoned"] = 99
     assert parent == before
 
 
@@ -28,7 +28,7 @@ def test_missing_registry_stays_unknown_and_partial_choices_remain_usable():
     assert loaded_status_identity_choices({}, {}) is None
     result = loaded_status_identity_choices(catalog([(20, "Terraria/Poisoned")], complete=False), {})
     assert result is not None and result["complete"] is False
-    assert result["entries"] == [{"id": 20, "fullName": "Terraria/Poisoned"}]
+    assert result["byMod"] == {"Terraria": {"Poisoned": 20}}
 
 
 def test_conflicting_native_identity_observations_never_choose_a_parent():
@@ -37,14 +37,14 @@ def test_conflicting_native_identity_observations_never_choose_a_parent():
     for first, second in [(a, b), (b, a)]:
         result = loaded_status_identity_choices(first, second)
         assert result is not None and result["complete"] is False
-        assert result["entries"] == [{"id": 20, "fullName": "Terraria/Poisoned"}]
+        assert result["byMod"] == {"Terraria": {"Poisoned": 20}}
 
 
 def test_registered_identity_names_are_preserved_not_repaired_or_lexically_reclassified():
     name = "Example-Mod/Residual Flame"
     result = loaded_status_identity_choices(catalog([(410, name)]), {})
     assert result is not None
-    assert result["entries"] == [{"id": 410, "fullName": name}]
+    assert result["byMod"] == {"Example-Mod": {"Residual Flame": 410}}
 
 
 def test_malformed_identity_rows_do_not_invent_or_coerce_a_runtime_id():
@@ -56,4 +56,4 @@ def test_malformed_identity_rows_do_not_invent_or_coerce_a_runtime_id():
     ]
     result = loaded_status_identity_choices(value, {})
     assert result is not None and result["complete"] is False
-    assert result["entries"] == [{"id": 20, "fullName": "Terraria/Poisoned"}]
+    assert result["byMod"] == {"Terraria": {"Poisoned": 20}}

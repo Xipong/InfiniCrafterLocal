@@ -90,7 +90,7 @@ internal static partial class EngineRuntimeChecks
     {
         var owner = new Player();
         foreach (int weaponType in new[] { 1946, 3930 })
-            foreach (int ammoType in new[] { 772, 773, 774 })
+            foreach (int ammoType in new[] { 771, 772, 773, 774 })
             {
                 var weapon = new Item(weaponType);
                 owner.inventory[54] = new Item(ammoType, 20);
@@ -101,8 +101,8 @@ internal static partial class EngineRuntimeChecks
                 Equal(actual, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "specific rocket table precedes generic offset");
                 Equal(actual, raw.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(), "exported rocket projectile profile agrees with native selection");
             }
-        // A live table may be changed by mods. Capture the current entry; never
-        // fall through to the category offset if there is no matching entry.
+        // A live table may be changed by mods. Capture its current entry, then
+        // follow only the next arm of the completely certified native chain.
         var table = AmmoID.Sets.SpecificLauncherAmmoProjectileMatches[1946];
         int original = table[772];
         try
@@ -120,11 +120,19 @@ internal static partial class EngineRuntimeChecks
             {
                 var raw = packet.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
                 var binding = raw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
-                Equal(JsonValueKind.Null, binding.GetProperty("sourceRuleOutputProjectileId").ValueKind, "unmatched rocket selection remains unknown");
-                Equal(false, binding.GetProperty("includeReplacementProjectileProfile").GetBoolean(), "unknown selection exports no replacement profile");
+                Equal(true, owner.PickAmmo(weapon, out int actual, out _, out _, out _, out _, dontConsume: true), "native table-miss selection oracle");
+                Equal(actual, binding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "table miss follows certified offset arm");
+                Equal(actual, raw.GetProperty("nativeReplacementProjectileRaw")[0].GetProperty("type").GetInt32(), "offset exports native output profile");
             }
         }
         finally { table[772] = original; }
+        var flame = new Item(ItemID.Flamethrower); owner.inventory[54] = new Item(ItemID.Gel, 20);
+        Equal(0, owner.inventory[54].shoot, "zero ammo.shoot is a valid native input");
+        Equal(true, owner.PickAmmo(flame, out int flameType, out _, out _, out _, out _, dontConsume: true), "native zero-shoot ammo oracle");
+        using var flamePacket = JsonDocument.Parse(new GeneratorClient().Prepare(flame, new Item(ItemID.DirtBlock), owner).PayloadJson);
+        var flameRaw = flamePacket.RootElement.GetProperty("itemA").GetProperty("ammoRaw");
+        var flameBinding = flameRaw.GetProperty("candidateProjectileBindings").EnumerateArray().First(x => x.GetProperty("inventorySlot").GetInt32() == 54);
+        Equal(flameType, flameBinding.GetProperty("sourceRuleOutputProjectileId").GetInt32(), "non-positive ammo.shoot retains native weapon projectile");
     }
 
     private static void AssertAmmoSourceAgainstNativeShotRequests()

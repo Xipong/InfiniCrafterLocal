@@ -75,14 +75,18 @@ def extract(path):
     sources = []
     trace = hook_dispatch_trace(path)
     categories = native_ammo_category_literals(path)
+    *_, lookup_sha, _, lookup_module = decode(path, "Player", "PickAmmo_TryFindingSpecificMatches", allow_opaque=True)
     for method, overload in (("PickAmmo", 1), ("ItemCheck_Shoot", 0)):
         code, _, _, version, sha, assembly_sha, module = decode(path, "Player", method, "Terraria.ID.ItemID", allow_opaque=True, overload_index=overload)
+        selection = default_ammo_selection(code, categories) if method == "PickAmmo" else None
+        if selection is not None:
+            selection["specificMatchLookupCertificate"] = lookup_sha + ":" + lookup_module
         sources.append({"method": "Player." + method, "sourceMethodSha256": sha,
                         "sourceModuleVersionId": module, "assemblyVersion": version,
                         "assemblySha256": assembly_sha,
                         "itemTypeMentions": item_type_mentions(code, 1 if method == "PickAmmo" else 2),
-                        "defaultProjectileSelection": default_ammo_selection(code, categories) if method == "PickAmmo" else None,
-                        "scope": "Literal item-type projectile rewrites and explicit native item-branch spawn arguments only. Ambient/player/projectile-set/table rewrites, branch admission, hooks and actual shot outcome remain separate unknowns.",
+                        "defaultProjectileSelection": selection,
+                        "scope": "Literal item-type projectile rewrites and explicit native item-branch spawn arguments only. The initial selection chain and live table lookup are certified separately; ambient/player/projectile-set rewrites, branch admission, hooks and actual shot outcome remain unknown.",
                         "hookDispatchTrace": trace if method == "PickAmmo" else [],
                         "sourceStageCallSites": [{"method": ins.arg[0], "sourceCallIlOffset": ins.offset} for ins in code
                                                  if ins.op == "call" and ins.arg[0] in ("Terraria.Player.PickAmmo", "Terraria.ModLoader.ItemLoader.PickAmmo", "Terraria.ModLoader.CombinedHooks.ModifyShootStats", "Terraria.ModLoader.CombinedHooks.Shoot")],

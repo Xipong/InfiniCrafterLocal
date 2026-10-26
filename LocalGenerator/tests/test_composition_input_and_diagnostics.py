@@ -65,7 +65,7 @@ def test_explicit_status_choices_reach_author_and_leaf_local_repair_without_pare
     packet = request_dossier(sent, declaration=request)
     cards = packet['runtimeCapabilityContract']['catalog']['capabilities']
     choices = packet['runtimeCapabilityContract']['statusIdentityChoices']
-    assert [{key: row[key] for key in ('id', 'fullName')} for row in choices['entries']] == identities['entries']
+    assert choices['byMod'] == {'Terraria': {'Poisoned': 20, 'Confused': 31, 'Ichor': 69}, 'ExampleMod': {'Resonance': 601}}
     assert choices['complete'] is False
     assert choices['source'] == identities['source']
     assert all('buffId' not in row['packet']['raw'].get('item', {})

@@ -51,9 +51,11 @@ hook, неизвестная ветка или неполный roster оста�
 исполнения; ammo-owned `PickAmmo` отдельно от weapon `ModifyShootStats`/`Shoot`.
 При подтверждённых сертификатах `PickAmmo` и его lookup читается текущая
 `AmmoID.Sets.SpecificLauncherAmmoProjectileMatches`: моды могут изменять эту
-таблицу. Если пара не найдена и категория допускает offset, идентичность
-остаётся unknown: перед offset возможны другие native-ветки. Позднейшее
-безусловное подтверждённое правило может снова определить идентичность.
+таблицу. Offline-анализатор проверяет всю цепочку с общим join и отсутствием
+посторонних входов: таблица → category offset → положительный ammo.shoot либо
+сохранённый weapon.shoot. Поэтому отсутствие пары в таблице разрешает только
+подтверждённую следующую ветку. Нулевой ammo.shoot не исключает кандидата
+(Rocket I, гель); это поле не обязано само быть итоговым projectile ID.
 
 Регрессии закреплённого binary: Pulse Bow заменяет projectile любого arrow
 input на 357; Hellwing меняет только current projectile 1 на 485, сохраняя
@@ -97,6 +99,9 @@ metadata overrides или другие модовые hooks. Это **идент
 не в `runtimeFacts`/fingerprint. Python передаёт один общий
 `runtimeCapabilityContract.statusIdentityChoices` в реальные Author и frozen
 Repair requests, не повторяя весь словарь в механических карточках A/B.
+Форма для модели — `byMod[mod][registeredName] = buffId`: повторяющиеся ключи
+`id`, `fullName` и префикс мода не дублируются для каждой записи. Это точная
+проекция всех непротиворечивых записей наблюдения, без отбора по смыслу имени.
 Лимит capture — 2048 записей в пределах уже разрешённого `buffId` 1…65535;
 ограниченный/неполный registry явно имеет `complete=false`. Отсутствующее
 наблюдение не заменяется выдуманным каталогом. Конфликтующие пары ID/fullName

@@ -54,29 +54,63 @@ def adjusted_counted_spawn(block, call_offset):
 
 
 def default_ammo_selection(instructions, categories):
-    """Certify default/offset assignments from actual native source shapes."""
+    """Prove the complete table -> offsets -> positive-ammo/default decision chain.
+
+    Matching isolated stores cannot prove which arm wins. Consume every arm,
+    its fallthrough and common join; refuse foreign entries or extra branches.
+    """
     code = [i for i in instructions if i.op != "nop"]
+    calls = [n for n, i in enumerate(code) if i.op == "call"
+             and i.arg == ("Terraria.Player.PickAmmo_TryFindingSpecificMatches", 3, True, True)]
+    if len(calls) != 1:
+        raise ValueError("unrecognized native ammo table lookup")
+    at = calls[0]
+    prefix = [("ldarg", 0), ("ldarg", 1), ("ldfld", "Terraria.Item.type"),
+              ("ldloc", 0), ("ldfld", "Terraria.Item.type")]
+    if (at < 6 or [(i.op, i.arg) for i in code[at - 6:at - 1]] != prefix
+            or code[at - 1].op != "ldloca"):
+        raise ValueError("unrecognized native ammo lookup arguments")
+    start = at - 6
+    out_local = code[at - 1].arg
+    tail = code[at + 1:at + 6]
+    if (len(tail) != 5 or tail[0].op != "brfalse"
+            or [(i.op, i.arg) for i in tail[1:4]] != [("ldarg", 2), ("ldloc", out_local), ("stind.i4", None)]
+            or tail[4].op != "br"):
+        raise ValueError("unrecognized native ammo table arm")
+    join, cursor = tail[4].arg, at + 6
+    if cursor >= len(code) or code[cursor].offset != tail[0].arg:
+        raise ValueError("native ammo table fallthrough")
     offsets = []
-    for n in range(len(code) - 10):
-        a, field, category, guard, dest, old, indirect, ammo, shoot, add, store = code[n:n + 11]
-        if ([(i.op, i.arg) for i in (a, field)] == [("ldarg", 1), ("ldfld", "Terraria.Item.useAmmo")]
-            and category.op == "ldsfld" and category.arg in categories and guard.op == "bne"
-            and [(i.op, i.arg) for i in (dest, old, indirect, ammo, shoot, add, store)]
-                == [("ldarg", 2), ("ldarg", 2), ("ldind.i4", None), ("ldloc", 0), ("ldfld", "Terraria.Item.shoot"), ("add", None), ("stind.i4", None)]
-            and guard.arg > store.offset):
-            offsets.append({"ammoCategoryId": categories[category.arg], "nativeCategoryField": category.arg,
-                            "operation": "weapon_shoot_plus_ammo_shoot", "sourceStoreIlOffset": store.offset})
-    for n in range(len(code) - 8):
-        a, field, zero, branch, destination, source, shoot, store = code[n:n + 8]
-        if ((a.op, a.arg, field.op, field.arg, zero.op, zero.arg, branch.op,
-             destination.op, destination.arg, source.op, source.arg, shoot.op, shoot.arg, store.op)
-                == ("ldloc", 0, "ldfld", "Terraria.Item.shoot", "const", 0, "ble",
-                    "ldarg", 2, "ldloc", 0, "ldfld", "Terraria.Item.shoot", "stind.i4")
-                and branch.arg > store.offset):
-            return {"basis": "positive_selected_ammo_shoot", "ammoShootStoreIlOffset": store.offset,
-                    "categoryOffsetSelectors": offsets,
-                    "scope": "Default arm only, after specific-match tables and category-offset arms; later native/player/ammo hooks may rewrite"}
-    raise ValueError("unrecognized native default ammo projectile selection")
+    while cursor < len(code) and code[cursor].offset < join:
+        arm = code[cursor:cursor + 12]
+        if len(arm) < 12 or [(i.op, i.arg) for i in arm[:2]] != [("ldarg", 1), ("ldfld", "Terraria.Item.useAmmo")]:
+            break
+        category, guard = arm[2:4]
+        if (category.op != "ldsfld" or category.arg not in categories or guard.op != "bne"
+                or [(i.op, i.arg) for i in arm[4:11]] != [
+                    ("ldarg", 2), ("ldarg", 2), ("ldind.i4", None), ("ldloc", 0),
+                    ("ldfld", "Terraria.Item.shoot"), ("add", None), ("stind.i4", None)]
+                or (arm[11].op, arm[11].arg) != ("br", join)
+                or cursor + 12 >= len(code) or code[cursor + 12].offset != guard.arg):
+            raise ValueError("unrecognized native ammo category arm")
+        offsets.append({"ammoCategoryId": categories[category.arg], "nativeCategoryField": category.arg,
+                        "operation": "weapon_shoot_plus_ammo_shoot", "sourceStoreIlOffset": arm[10].offset})
+        cursor += 12
+    arm = code[cursor:cursor + 8]
+    if (len(arm) != 8 or [(i.op, i.arg) for i in arm] != [
+            ("ldloc", 0), ("ldfld", "Terraria.Item.shoot"), ("const", 0), ("ble", join),
+            ("ldarg", 2), ("ldloc", 0), ("ldfld", "Terraria.Item.shoot"), ("stind.i4", None)]
+            or cursor + 8 >= len(code) or code[cursor + 8].offset != join):
+        raise ValueError("unrecognized native default ammo arm")
+    first = code[start].offset
+    for ins in code:
+        targets = ins.arg if ins.op == "switch" else [ins.arg] if ins.op.startswith("b") and isinstance(ins.arg, int) else []
+        if not first <= ins.offset < join and any(first < target < join for target in targets):
+            raise ValueError("foreign entry into native ammo selection")
+    return {"basis": "positive_selected_ammo_shoot", "ammoShootStoreIlOffset": arm[-1].offset,
+            "specificMatchLookupFirst": True, "nonPositiveAmmoShoot": "retain_weapon_shoot",
+            "categoryOffsetSelectors": offsets,
+            "scope": "Complete source decision chain: current specific-match table, then category offsets, then positive ammo.shoot or retained weapon.shoot. Later native/player/ammo hooks remain separate."}
 
 
 def item_type_mentions(instructions, item_argument):
