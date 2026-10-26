@@ -63,11 +63,57 @@ center ±46×**live projectile.scale** вдоль rotation, width 8×scale. Эт
 и mod hooks продолжают влиять на результат. Snapshot width/height не заменяет
 этот дополнительный reference.
 
+## Экипировка, полные комплекты и окружение
+
+`nativeEquipmentReference` отделяет вклад одного функционально надетого предмета
+от `conditionalArmorSets`. Offline recognizer распознаёт только прямолинейные
+прибавления native stats под явным item-ID guard, включая OR вариантов. Весь блок
+должен быть распознан: неизвестный call, внешний вход, вложенное условие или loop
+не становятся «безусловным бонусом». В текущем закреплённом binary распознаны
+137 предметов и 26 полных set-веток, не все предметы игры.
+
+У комплектов сохраняются одновременно head/body/legs и все разрешённые OR
+варианты. Это **equip-slot IDs, не ItemIDs**. Смешанный Ancient/обычный Shadow
+поддерживается исходной веткой; неполный комплект и vanity её не удовлетворяют.
+Каждая Ancient Shadow часть отдельно добавляет 5 процентных пунктов generic crit;
+полный set отдельно устанавливает `shadowArmor`. Последний boolean не превращается
+в выдуманное «+15% moveSpeed»: actual native движение меняет другие поля.
+Локализованный set tooltip передаётся буквально с source key/language/status,
+не парсится в числовые механики. Ограничение строки отказывает от целой строки,
+не обрезает её и не теряет остальные проверенные facts.
+
+Вклад в `StatModifier.Additive`, attackSpeed или moveSpeed не означает ровно тот
+же процент итогового урона, частоты кадров анимации или скорости бега. У всех
+reference остаётся partial scope: неизвестные hooks, runtime gates и конечные
+stats игрока не вычисляются. Ни один equipment hook не вызывается при Prepare.
+
+`nativeEnvironmentReference` описывает условия native tile scan и banner settings,
+а не активный эффект от лежащего в инвентаре предмета. Для tile aura сохраняются
+frame predicates, функционально поставленная active tile и прямоугольный scan;
+размер scan не называется круглым радиусом. Runtime передаёт только однозначные
+style-0 Campfire/fireplace/Bast: source rows для Heart/Star tile42 пока остаются
+offline-only, потому что createTile без проверенного style mapping недостаточен.
+Banner требует именно matching
+opponent-banner buff и правильного BannerToItem; raw registry не доказывает
+активацию, а multipliers описывают компоненты, не конечный damage.
+
+Equipment/environment дополнительно проверяют SHA256 **всей native assembly** и
+ModuleVersionId, включая зависимые getters/helpers. Хеширование кешируется;
+неподдержанный binary и modded/generated родители не заимствуют native поведение.
+Сертификат относится к исходной assembly на диске, а не доказывает отсутствие
+in-memory detours сторонних модов.
+Это не утверждение полного анализа модовых hooks. Существующие literal tooltip,
+item snapshots и полные accepted generated graphs продолжают работать независимо.
+Новые references проходят Python compact packet с полными conditions, нулями,
+false, пустыми альтернативами и независимой копией данных.
+
 ## Воспроизведение и ограничения
 
 ```bash
 python tools/generate/generate_native_hit_status.py --assembly /path/to/tModLoader.dll --check
 python tools/generate/generate_native_attack_facts.py --assembly /path/to/tModLoader.dll --check
+python tools/generate/generate_native_equipment_facts.py --assembly /path/to/tModLoader.dll --check
+python tools/generate/generate_native_environment_facts.py --assembly /path/to/tModLoader.dll --check
 ```
 
 Зависимости offline анализа: `tools/generate/native-hit-status-requirements.txt`.
@@ -80,4 +126,6 @@ oracle; реальный `ItemCheck_Shoot` до наблюдаемой spawn bou
 `Projectile.Colliding`; request capture и отрицательные certificate controls.
 Python проверяет synthetic CFG отказы и полный Author packet. Это не live-world
 DPS, multiplayer, arbitrary C# semantics или доказательство всех use/equipment,
-AI, tile/buff/banner и всех остальных contact-status hooks. Непокрытое остаётся неизвестным.
+AI, tile/buff/banner и всех остальных contact-status hooks. Новые equipment/set
+checks сравнивают source-факты с реальными GrantArmorBenefits/UpdateArmorSets,
+включая mixed/incomplete slots и отсутствие изменения владельца при Prepare. Непокрытое остаётся неизвестным.

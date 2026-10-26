@@ -31,7 +31,7 @@ def read_compressed(data, offset):
     return ((lead & 0x1F) << 24) | int.from_bytes(data[offset + 1:offset + 4], "big"), offset + 4
 
 
-def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="Terraria.ID.ProjectileID"):
+def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="Terraria.ID.ProjectileID", *, allow_opaque=False, overload_index=0):
     import dnfile
     from dncil.cil.body import CilMethodBody
     from dncil.cil.body.reader import CilMethodBodyReaderBytes
@@ -69,11 +69,12 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
 
     projectile_ids = constants(id_owner)
     buff_ids = constants("Terraria.ID.BuffID")
-    method = next(m.row for t in pe.net.mdtables.TypeDef
-                  if str(t.TypeNamespace) == "Terraria" and str(t.TypeName) == method_owner
-                  for m in t.MethodList if str(m.row.Name) == method_name)
+    methods = [m.row for t in pe.net.mdtables.TypeDef
+               if str(t.TypeNamespace) == "Terraria" and str(t.TypeName) == method_owner
+               for m in t.MethodList if str(m.row.Name) == method_name]
+    method = methods[overload_index]
     body = CilMethodBody(CilMethodBodyReaderBytes(pe.get_data(method.Rva, 100_000)))
-    if body.exception_handlers:
+    if body.exception_handlers and not allow_opaque:
         raise ValueError("exception handlers are outside supported native subset")
     instructions = []
     for ins in body.instructions:
@@ -88,16 +89,21 @@ def decode(path, method_owner="Projectile", method_name="StatusNPC", id_owner="T
         elif op.startswith(("ldarg.", "ldloc.", "stloc.", "ldloca.", "ldarga.")):
             base, suffix = op.rsplit(".", 1)
             op, arg = base, arg.index if suffix == "s" else int(suffix)
-        elif op in ("ldfld", "ldsfld", "ldflda"):
+        elif op in ("ldfld", "ldsfld", "ldflda") or (allow_opaque and op in ("stfld", "stsfld")):
             arg = member(arg.value)[0]
         elif op in ("call", "callvirt"):
-            name, row = member(arg.value)
-            sig = row.Signature.value
-            if sig[0] & 0x10:
-                raise ValueError("generic method outside supported subset")
-            count, ret_offset = read_compressed(sig, 1)
-            arg = (name, count, bool(sig[0] & 0x20), sig[ret_offset] != 1)
-            op = "call"
+            try:
+                name, row = member(arg.value)
+                sig = row.Signature.value
+                if sig[0] & 0x10:
+                    raise ValueError("generic method outside supported subset")
+                count, ret_offset = read_compressed(sig, 1)
+                arg = (name, count, bool(sig[0] & 0x20), sig[ret_offset] != 1)
+                op = "call"
+            except ValueError:
+                if not allow_opaque:
+                    raise
+                op, arg = "opaque", "unsupported_call"
         elif op.startswith("ldelem."):
             op = "ldelem"
         elif op.startswith("conv."):

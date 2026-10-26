@@ -1,0 +1,138 @@
+{
+  "schema": "infini.native-environment-sources.v1",
+  "sources": [
+    {
+      "method": "SceneMetrics.ScanAndExportToMain",
+      "overloadIndex": 0,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "7d3da2e3d99a511300a7cdaa16078a22066105a8a59ccfc2734923f706d609c3",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "Player.UpdateLifeRegen",
+      "overloadIndex": 0,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "f9b5c041c06dddb8f4fb8c4f411816711575af3c68dfc2e2dd0f7281bfb07cfa",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "Player.ApplyBannerOffenseBuff",
+      "overloadIndex": 1,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "3fbede09e25d14f2f42e89b0e58299505a2778ca973dd52a173d5ab96adeee88",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "Player.ApplyBannerDefenseBuff",
+      "overloadIndex": 1,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "231746aa41824ec2be599b042b67b4b2419879e6e9b3cf3544b1f311de397f4e",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    },
+    {
+      "method": "Player.HasNPCBannerBuff",
+      "overloadIndex": 0,
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "8ba71410fbac0756ba5ab862683857425ca7ad6753c226ec45c6f68819695098",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5"
+    }
+  ],
+  "auras": [
+    {
+      "tileId": 215,
+      "sceneFlag": "HasCampfire",
+      "tileFrameConditions": [
+        {
+          "field": "frameY",
+          "comparison": "less_than",
+          "value": 36
+        }
+      ],
+      "sourceBranchOffset": 337,
+      "regenerationComponent": {
+        "field": "Player.lifeRegen",
+        "add": 1,
+        "condition": "local_player_and_scene_flag",
+        "units": "native_life_regen_counter_units",
+        "scope": "one native addition before other regeneration, debuff and mod processing; not final HP per second"
+      }
+    },
+    {
+      "tileId": 405,
+      "sceneFlag": "HasCampfire",
+      "tileFrameConditions": [
+        {
+          "field": "frameX",
+          "comparison": "less_than",
+          "value": 54
+        }
+      ],
+      "sourceBranchOffset": 461,
+      "regenerationComponent": {
+        "field": "Player.lifeRegen",
+        "add": 1,
+        "condition": "local_player_and_scene_flag",
+        "units": "native_life_regen_counter_units",
+        "scope": "one native addition before other regeneration, debuff and mod processing; not final HP per second"
+      }
+    },
+    {
+      "tileId": 506,
+      "sceneFlag": "HasCatBast",
+      "tileFrameConditions": [
+        {
+          "field": "frameX",
+          "comparison": "less_than",
+          "value": 72
+        }
+      ],
+      "sourceBranchOffset": 495
+    },
+    {
+      "tileId": 42,
+      "sceneFlag": "HasHeartLantern",
+      "tileFrameConditions": [
+        {
+          "field": "frameY",
+          "comparison": "greater_or_equal",
+          "value": 324
+        },
+        {
+          "field": "frameY",
+          "comparison": "less_or_equal",
+          "value": 358
+        }
+      ],
+      "sourceBranchOffset": 526,
+      "regenerationComponent": {
+        "field": "Player.lifeRegen",
+        "add": 2,
+        "condition": "local_player_and_scene_flag",
+        "units": "native_life_regen_counter_units",
+        "scope": "one native addition before other regeneration, debuff and mod processing; not final HP per second"
+      }
+    },
+    {
+      "tileId": 42,
+      "sceneFlag": "HasStarInBottle",
+      "tileFrameConditions": [
+        {
+          "field": "frameY",
+          "comparison": "greater_or_equal",
+          "value": 252
+        },
+        {
+          "field": "frameY",
+          "comparison": "less_or_equal",
+          "value": 286
+        }
+      ],
+      "sourceBranchOffset": 575
+    }
+  ]
+}

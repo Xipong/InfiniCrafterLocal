@@ -267,3 +267,20 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
         assert raw["ammo"][key] == compact[key]
     assert "exampleAmmo" not in raw["ammo"] and "exampleProjectile" not in raw["ammo"]
     assert live == before
+
+
+def test_equipment_environment_conditions_survive_every_serialized_stage(offline_packets):
+    captured, _ = offline_packets
+    equipment = {"source": "certified", "equipmentSourceCertificate": "exact:module",
+                 "equippedContributions": {"branches": [{"effects": [{"value": 5, "units": "percentage_points"}]}]},
+                 "conditionalArmorSets": [{"condition": {"functionalEquipSlots": {"head": [5, 74], "body": [5, 48], "legs": [5, 44]},
+                                                                      "allSlotsRequired": True, "vanitySatisfies": False}, "effects": []}]}
+    environment = {"source": "certified", "bannerRegistry": {"enabled": False, "normalDamageDealtMultiplier": 0,
+                                                              "nativeBannerIdentities": [87], "condition": "matching active opponent banner"},
+                   "unsupported": [], "scope": "not active-world observation"}
+    parent = {"name": "source conditions", "nativeEquipmentReference": equipment, "nativeEnvironmentReference": environment}
+    before = copy.deepcopy(parent)
+    for raw in _source_packets(parent, captured):
+        assert raw["item"]["nativeEquipmentReference"] == equipment
+        assert raw["item"]["nativeEnvironmentReference"] == environment
+    assert parent == before

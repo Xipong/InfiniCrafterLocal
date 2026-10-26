@@ -356,6 +356,10 @@ public sealed partial class GeneratorClient
         };
         if (existing is null && CaptureNativeContactHitStatusReference(item) is object contactReference)
             facts["nativeContactHitStatusReference"] = JsonSerializer.SerializeToNode(contactReference, WireJsonOptions);
+        if (existing is null && CaptureNativeEnvironmentReference(item) is JsonObject environmentReference)
+            facts["nativeEnvironmentReference"] = environmentReference;
+        if (existing is null && CaptureNativeEquipmentReference(item) is JsonObject equipmentReference)
+            facts["nativeEquipmentReference"] = equipmentReference;
         if (existing is null && CaptureNativeShootReference(item) is JsonObject shootReference)
             facts["nativeShootReference"] = shootReference;
         if (NativeTileStateFacts.Capture(facts["createTile"]?.GetValue<int>(), facts["placeStyle"]?.GetValue<int>()) is JsonObject tileState)

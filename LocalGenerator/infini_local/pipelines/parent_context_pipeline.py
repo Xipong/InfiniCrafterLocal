@@ -125,11 +125,17 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     out = _select_raw_keys(raw, LLM_ITEM_RAW_KEYS)
     # Literal source text/provenance is one observation: preserve line order,
     # whitespace, empty lines and source-bound refusal without compacting it.
-    for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference"):
+    for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference",
+                "nativeEquipmentReference", "nativeEnvironmentReference"):
         value = item_field(item, key, None)
+        if value is None and key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
+            runtime = dict_get_ci(item, "runtimeFacts", {})
+            value = dict_get_ci(runtime, key, None) if isinstance(runtime, dict) else None
         if value is not None:
             out[key] = copy.deepcopy(value)
     if generated_data_of(item):
+        for key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
+            out.pop(key, None)
         for key in ("createTile", "createWall", "placeStyle"):
             out.pop(key, None)
         out.update(_generated_placement_fields(item))
@@ -244,6 +250,8 @@ def compact_vanilla_flags_for_llm(item: dict[str, Any]) -> dict[str, Any]:
         if n > 0 or k in {"createTile", "createWall", "placeStyle"}:
             out[k] = n
     if generated_data_of(item):
+        for key in ("nativeEquipmentReference", "nativeEnvironmentReference"):
+            out.pop(key, None)
         for key in ("createTile", "createWall", "placeStyle"):
             out.pop(key, None)
         out.update(_generated_placement_fields(item))

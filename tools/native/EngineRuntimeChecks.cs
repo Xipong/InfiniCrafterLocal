@@ -44,6 +44,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("parent environment references conditional fail closed", ParentEnvironmentReferencesAreConditionalAndFailClosed),
+            ("parent banner registry matches native conditional components", ParentBannerRegistryMatchesConditionalNativeComponents),
+            ("parent equipment source pieces and conditional sets", ParentEquipmentFactsSeparatePiecesAndConditionalSets),
+            ("parent armor set source mixed and incomplete variants", ParentArmorSetConditionsAgreeWithNativeMixedAndIncompleteSets),
             ("parent contact status native item target signature", ParentContactStatusFactsKeepNativeItemAndTargetSignature),
             ("parent attack source certificates match native shooting collision", ParentAttackCertificatesMatchNativeShootingAndCollision),
             ("parent quantified snapshots and ammo observation identity", ParentQuantifiedFactsKeepSnapshotsAndObservationIdentity),
