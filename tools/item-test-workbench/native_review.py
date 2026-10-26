@@ -42,6 +42,12 @@ def native_frames(trace,trace_path):
     for f in frames:
         if not isinstance(f,dict) or type(f.get('tick')) is not int or f['tick']<=previous:raise ValueError('Native render ticks must be strictly increasing')
         if f['tick'] not in completed:raise ValueError('Native frame has no same-tick completed telemetry')
+        if 'nativeDustStateTick' in f:
+            if type(f['nativeDustStateTick']) is not int or f['nativeDustStateTick']!=f['tick']:raise ValueError('Native dust state tick disagrees with PNG')
+            matches=[s for s in trace['nativeRender'].get('snapshots',[]) if s.get('tick')==f['tick']]
+            if len(matches)!=1 or matches[0].get('nativeDustDrawExecuted') is not True:raise ValueError('Native dust state reference is missing or ambiguous')
+            for state_key,count_key in [('nativeDustBeforeDraw','nativeDustBeforeDrawCount'),('nativeDustAfterDraw','nativeDustAfterDrawCount')]:
+                if not isinstance(matches[0].get(state_key),list) or type(f.get(count_key)) is not int or f[count_key]!=len(matches[0][state_key]):raise ValueError('Native dust state count disagrees with PNG receipt')
         previous=f['tick'];relative=Path(f.get('path',''))
         if relative.is_absolute() or '..' in relative.parts or not relative.parts:raise ValueError('Native PNG path must stay within trace directory')
         path=(parent/relative).resolve()
@@ -111,10 +117,12 @@ def export_native_review(trace,trace_path,output,gif=False,gif_stride=1):
         images=[]
         for _,path in gif_frames:
             with Image.open(path) as im:images.append(im.convert('RGB'))
-        durations=[max(20,round((gif_frames[i+1][0]['tick']-gif_frames[i][0]['tick'])*100/60)*10) for i in range(len(gif_frames)-1)]+[800]
+        # Quantize cumulative native tick times, so 60/30fps rounding cannot drift.
+        times=[round((f['tick']-gif_frames[0][0]['tick'])*100/60) for f,_ in gif_frames]
+        durations=[max(10,(b-a)*10) for a,b in zip(times,times[1:])]+[800]
         images[0].save(output/'native.gif',save_all=True,append_images=images[1:],duration=durations,loop=0)
         metadata['gif']={'path':'native.gif','frameDurationsMs':durations,'sourceTicks':[f['tick'] for f,_ in gif_frames],'stride':gif_stride,'omittedFrames':len(frames)-len(gif_frames),'note':'Original PNG samples only; optional stride omits GIF frames, never HTML/native data. Palette/timing quantized; last frame pause800ms.'}
-    (output/'native-review.json').write_text(json.dumps(metadata,indent=2))
+    (output/'native-review.json').write_text(json.dumps(metadata,separators=(',',':')))
     data=json.dumps({'bookmarks':bookmarks,'frames':descriptors,'status':trace['status'],'render':{k:v for k,v in trace['nativeRender'].items() if k!='frames'},'coverage':trace.get('coverage'),'execution':trace.get('execution'),'states':trace['snapshots'],'resources':trace.get('resources'),'scene':trace.get('scene'),'assertions':trace.get('assertions'),'input':trace.get('input')},ensure_ascii=False).replace('<','\\u003c').replace('>','\\u003e').replace('&','\\u0026')
     page='''<!doctype html><meta charset="utf-8"><title>Original native VFX pixels</title><style>body{background:#111827;color:#e5e7eb;font:16px system-ui;max-width:1100px;margin:28px auto;padding:12px}h1{font-size:23px;color:#fbbf24}button,input{margin:8px}img{display:block;max-width:100%;image-rendering:pixelated;border:1px solid #64748b}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#1f2937;padding:14px}a{color:#7dd3fc}</style><h1 id="title">ORIGINAL NATIVE MOD PIXELS</h1><p>Native drawing on a neutral background. Not a complete Terraria world render. Raw PNG pixels, no JS physics or redraw.</p><p id="draw-scope" style="color:#fbbf24"></p><p id="status"></p><p id="input-boundary" style="color:#fbbf24"></p><button id="back">Previous</button><button id="play">Play</button><button id="next">Next</button><button id="restart">Restart</button><label>Playback <select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select></label><input id="seek" type="range" min="0" value="0"><p id="frame"></p><div id="event-jumps"></div><details><summary>Recorded state transitions (not synthetic engine events)</summary><div id="state-jumps"></div></details><a id="raw" target="_blank">Open exact native PNG</a><img id="native" alt="Original native render target pixels"><p>Display may scale to fit; PNG dimensions and camera zoom are recorded below. Missing artwork is not silently replaced.</p><h2>Exact same-tick telemetry</h2><p id="state-summary"></p><details open><summary>Recorded state, phase/input commands, events and native particles (no interpolation)</summary><pre id="state"></pre></details><details><summary>Native scope / missing artwork / resource readiness / end-of-run totals</summary><pre id="scope"></pre></details><p><a href="native-review.json">Frame hashes and original native rendering metadata</a></p><script>
 const data=TRACE_DATA,frames=data.frames,seek=document.getElementById('seek');let timer=null;

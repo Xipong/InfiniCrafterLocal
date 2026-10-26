@@ -77,7 +77,7 @@ class PerformanceTests(unittest.TestCase):
         root=Path(__file__).parent
         manifest=json.loads((root/'performance-assets-manifest.json').read_text())
         loader=(root/'WorkbenchNative.Graphics.cs').read_text()
-        self.assertEqual(len(manifest['files']),9)
+        self.assertEqual(len(manifest['files']),12)
         for row in manifest['files']:self.assertIn(row['sha256'],loader)
 
     def test_native_identity_requires_both_name_and_id(self):

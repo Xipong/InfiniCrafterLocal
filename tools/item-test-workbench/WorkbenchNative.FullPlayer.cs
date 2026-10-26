@@ -29,6 +29,8 @@ internal static partial class EngineRuntimeChecks
         Terraria.GameContent.Creative.CreativePowerManager.Initialize();
         Terraria.Main.item = Enumerable.Range(0, Terraria.Main.maxItems + 1).Select(_ => new Item()).ToArray();
         Terraria.Main.dust = Enumerable.Range(0, Terraria.Main.maxDust + 1).Select(_ => new Dust()).ToArray();
+        // Native arrow impacts allocate cosmetic fragments even without a Gore draw pass.
+        Terraria.Main.gore = Enumerable.Range(0, Terraria.Main.maxGore + 1).Select(_ => new Gore()).ToArray();
         Terraria.GameInput.PlayerInput.Triggers.Initialize();
         // This scene has no registered crafting recipes; still execute native FindRecipes after stack debits.
         Terraria.Main.guideItem = new Item();

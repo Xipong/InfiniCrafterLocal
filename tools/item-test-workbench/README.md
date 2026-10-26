@@ -572,7 +572,7 @@ targets have an initial 0.5 px/tick velocity integrated by original `NPC.UpdateN
 not a separate physics model. Zero-defense and configured-defense results are not
 interchangeable. None of these measurements emits a balance/quality PASS.
 
-The nine optional vanilla geometry textures are source PNGs from the pinned
+The twelve optional vanilla geometry textures are source PNGs from the pinned
 community 1.4.4.9 extraction, **not official-byte-certified**, and are not bundled.
 Private definitions, authored art, logs and rendered evidence stay outside git.
 
@@ -627,3 +627,66 @@ generated replacement/veto. Bullet simulation/hits still execute, but **vanilla
 projectile sprites are explicitly not rendered** in this pose mode. Full-world
 parity and an inferred vanilla hand/grip point are not claimed. Asset provenance
 remains pinned community extraction, not official byte certification.
+
+
+### Native vanilla projectile capture
+
+Opt in with `nativeRender.drawVanillaProjectiles: true` alongside `drawArtwork`
+and `drawPlayer`. Gameplay continues through original `Player.Update` / ItemCheck,
+`Projectile.Update` and native hit hooks; the sprite pass calls original
+`Main.DrawProj`. This admits only the pinned wooden arrow (1), ordinary bullet
+(14), Holy Arrow (91), Hallow Star (92), Pulse Bolt (357) and Hellwing (485).
+Other active types, hidden/special draw passes, missing PNGs and hash mismatches
+refuse; no generated projectile or schematic sprite substitutes for them.
+The default vanilla pose mode still omits projectile sprites explicitly.
+
+```sh
+python tools/item-test-workbench/fetch_performance_assets.py \
+  --out artifacts/dependencies/vanilla-assets --include-projectiles
+python tools/item-test-workbench/fetch_player_assets.py \
+  --out artifacts/dependencies/player-assets --include-dummy
+export INFINI_PLAYER_ASSET_DIR="$PWD/artifacts/dependencies/player-assets"
+# Also configure the native tML/ParticleLibrary dependencies described above.
+python tools/item-test-workbench/verify_vanilla_projectiles.py \
+  --vanilla-assets artifacts/dependencies/vanilla-assets \
+  --out artifacts/vanilla-projectiles --gif
+```
+
+The verifier builds once, runs Daedalus with wooden arrows, Pulse Bow and Hellwing
+Bow with wooden/Holy arrows, and a bullet control. It retains native assertion,
+ammo-source, hit and exact-frame evidence. Additional controls cover no ammo,
+legacy omission, original camera culling, capture-disabled rendering without dust,
+unsupported projectile type, invalid mode, and missing/tampered assets. An explicit
+`--native-dll PATH --no-build` records an independent binary hash; retain its
+source/reference build receipt. `--case NAME` runs a labelled subset, not the full
+matrix. GIF/HTML review is exported under each passing bow's `review` directory;
+no game PNGs, captured frames or private runs are bundled in source.
+
+`scenarios/daedalus-stormbow.json` is the reusable native training-dummy scene.
+Its relative `vanillaAssetRoot` matches the downloader command above. It asserts
+native hits rather than an HP drop: the real dummy is immortal. The verifier's
+other bows use a separate explicit side-view scene and solid wall. The wall has
+native collision but no terrain artwork in this controlled renderer.
+
+The explicit camera now applies **before player/projectile updates**, preserving
+world-space aim. Original `Dust.NewDust` performs its real camera culling during
+those updates; a distant scene no longer loses every trail before drawing starts.
+The Pulse Bolt's pinned sprite is genuinely a transparent 1px resource: its visible
+trail is original native dust, so enable `drawNativeDust` for its visual review.
+Native Gore allocation is initialized for Holy Arrow impacts; Gore update/drawing,
+full terrain/world rendering and audio remain outside this lane.
+
+Reports distinguish `vanillaProjectileDrawAttemptCount` and per-projectile
+`vanillaProjectileDrawAttempts` from observed `SpriteBatch.Draw` submissions in
+`projectileDrawCount` / `projectileGeometry`. An off-camera `Main.DrawProj` attempt
+cannot certify sprite drawing. A submitted draw still does not prove visible
+pixels or aesthetic quality; inspect the original PNGs. Both scalar and vector
+SpriteBatch overloads are observed once even when one forwards to the other.
+`capture:false` with this opt-in still executes the native GPU lifecycle and omits
+only PNG encoding, including when native dust drawing is disabled.
+
+Native GIF export rounds cumulative native tick timestamps to centiseconds, so
+60fps and stride-2 review do not accumulate a speed error. Palette conversion and
+an explicit final 800ms pause remain; no intermediate game frame is invented.
+
+Complete before/after native dust states live once in `nativeRender.snapshots`; PNG frame receipts refer to the same tick with `nativeDustStateTick` and counts. Compact JSON preserves every observation without duplicating particle arrays, keeping trail-heavy bow traces within the portable reader budget.

@@ -50,6 +50,6 @@ internal static class WorkbenchProgram
     private static void Write(string path, JsonObject report)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, report.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        File.WriteAllText(path, report.ToJsonString());
     }
 }

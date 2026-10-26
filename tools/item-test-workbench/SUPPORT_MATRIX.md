@@ -19,6 +19,7 @@ false: the utility initializes a controlled scene instead of running all of Main
 | Authored PNGs | Original sprite resolver and item/projectile drawing paths; publication identity checks | Baked/reused PNG subset; no silent geometry/asset fallback |
 | Player artwork | Original player renderer/layer ordering, starter skin/hair, generated held layer once | No arbitrary armor, appearance variants, mounts, world background or complete Main.Draw |
 | Training dummy | Original tile378 placement, tile entity, linked NPC488, native AI/frame and tile renderer | Native immortal target differs from damageable fixture; reactivation/respawn not certified |
+| Vanilla projectile artwork | Opt-in original Main.DrawProj; pinned types1/14/91/92/357/485, actual sprite submissions and native dust trails | Default pose mode still omits sprites; unknown types/special draw passes refuse; Pulse Bolt is dust-rendered; no complete Main.Draw/world or Gore pass |
 | Native dust | Original Dust.UpdateDust and Main.DrawDust with recorded state | Draw can deactivate particles; only exercised atlas/shader cases are evidenced |
 | Vision | Real PNGs with hashes and tick-aligned HTML/GIF review | Schematic replay is separately labelled; no interpolated game frames |
 | Determinism | Seeded input and recorded native state/draw-RNG comparisons | No multiplayer, arbitrary mods or universal cross-platform determinism claim |
@@ -91,4 +92,6 @@ as a player mining action. Reusable synthetic matrix: `verify_world.py`.
 | Dropped body | Actual generated PreDrawInWorld on native world instances | Neutral white/zero rotation diagnostic caller; optional original Item.UpdateItem settling; no full Main.DrawItem, pickup UI or world ecology parity |
 | Equipped badge | Actual native layer/anchor plus authored mount, native player scale | Visibility alone does not establish good appearance |
 | Context terrain | Optional configured tile boundary overlay | Clearly schematic, never native terrain art |
-| Requested vanilla controls | Explicit stable identity, separate from authored parents; genuine PlayerRenderer/item PNG and native firing | No invented vanilla grip; projectile sprites omitted explicitly in pose mode; hold vs repeated native input distinguished |
+| Requested vanilla controls | Explicit stable identity, separate from authored parents; genuine PlayerRenderer/item PNG and native firing | No invented vanilla grip; projectile sprites omitted in default pose mode, bounded opt-in Main.DrawProj available; hold vs repeated native input distinguished |
+
+The configured render camera applies before native gameplay updates as well as drawing. Original dust-emission culling remains active. Native Gore allocations required by Holy Arrow impacts are provisioned, but Gore update/rendering is not certified. A native draw attempt outside the camera is recorded separately from observed SpriteBatch submissions; neither alone is visual approval.

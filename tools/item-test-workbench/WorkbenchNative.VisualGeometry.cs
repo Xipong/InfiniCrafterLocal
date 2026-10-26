@@ -8,12 +8,15 @@ using Microsoft.Xna.Framework.Graphics;
 using MonoMod.RuntimeDetour;
 using Terraria;
 
-// Observes the original SpriteBatch overload. Never substitutes a production pose.
+// Observe scalar/vector SpriteBatch draws once, including overload forwarding.
 internal sealed class WNativeVisualGeometry : IDisposable
 {
     delegate void Original(SpriteBatch self,Texture2D texture,Vector2 position,Rectangle? source,Color color,float rotation,Vector2 origin,float scale,SpriteEffects effects,float depth);
     delegate void Observe(Original orig,SpriteBatch self,Texture2D texture,Vector2 position,Rectangle? source,Color color,float rotation,Vector2 origin,float scale,SpriteEffects effects,float depth);
-    readonly Hook hook;
+    delegate void VectorOriginal(SpriteBatch self,Texture2D texture,Vector2 position,Rectangle? source,Color color,float rotation,Vector2 origin,Vector2 scale,SpriteEffects effects,float depth);
+    delegate void VectorObserve(VectorOriginal orig,SpriteBatch self,Texture2D texture,Vector2 position,Rectangle? source,Color color,float rotation,Vector2 origin,Vector2 scale,SpriteEffects effects,float depth);
+    readonly Hook hook,vectorHook;
+    int drawDepth;
     static Action<Texture2D,Vector2,Rectangle?,Color,float,Vector2,Vector2,SpriteEffects>? sink;
     // Published artwork is immutable for the lifetime of this isolated renderer.
     static readonly Dictionary<Texture2D,Color[]> pixels=new();
@@ -21,9 +24,20 @@ internal sealed class WNativeVisualGeometry : IDisposable
     {
         hook=new Hook(typeof(SpriteBatch).GetMethod("Draw",new[]{typeof(Texture2D),typeof(Vector2),typeof(Rectangle?),typeof(Color),typeof(float),typeof(Vector2),typeof(float),typeof(SpriteEffects),typeof(float)})!,
             (Observe)((orig,self,texture,position,source,color,rotation,origin,scale,effects,depth)=>{
-                orig(self,texture,position,source,color,rotation,origin,scale,effects,depth);
-                sink?.Invoke(texture,position,source,color,rotation,origin,new Vector2(scale),effects);
+                drawDepth++;
+                try{orig(self,texture,position,source,color,rotation,origin,scale,effects,depth);}
+                finally{drawDepth--;}
+                if(drawDepth==0)sink?.Invoke(texture,position,source,color,rotation,origin,new Vector2(scale),effects);
             }));
+        try{
+            vectorHook=new Hook(typeof(SpriteBatch).GetMethod("Draw",new[]{typeof(Texture2D),typeof(Vector2),typeof(Rectangle?),typeof(Color),typeof(float),typeof(Vector2),typeof(Vector2),typeof(SpriteEffects),typeof(float)})!,
+                (VectorObserve)((orig,self,texture,position,source,color,rotation,origin,scale,effects,depth)=>{
+                    drawDepth++;
+                    try{orig(self,texture,position,source,color,rotation,origin,scale,effects,depth);}
+                    finally{drawDepth--;}
+                    if(drawDepth==0)sink?.Invoke(texture,position,source,color,rotation,origin,scale,effects);
+                }));
+        }catch{hook.Dispose();throw;}
     }
     public static JsonArray Capture(Action action,Vector2? grip=null,float? supportY=null)
     {
@@ -72,5 +86,5 @@ internal sealed class WNativeVisualGeometry : IDisposable
         if(supportY is float sy && contour.Count>0){var gaps=contour.Values.Select(v=>sy-v).OrderBy(v=>v).ToArray();row["supportY"]=sy;row["minimumGapPx"]=gaps[0];row["medianColumnGapPx"]=gaps[gaps.Length/2];row["contactColumnsWithin1Px"]=gaps.Count(g=>Math.Abs(g)<=1);row["contourColumns"]=gaps.Length;}
         return row;
     }
-    public void Dispose(){hook.Dispose();sink=null;pixels.Clear();}
+    public void Dispose(){vectorHook.Dispose();hook.Dispose();sink=null;pixels.Clear();}
 }

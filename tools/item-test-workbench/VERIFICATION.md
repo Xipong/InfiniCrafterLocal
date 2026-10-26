@@ -223,3 +223,23 @@ matrix measured held and repeated-input trials separately; requested controls
 never rewrite or masquerade as recipe parents. Native bullet simulation is
 measured, while vanilla bullet sprite rendering remains explicitly notRun in
 pose views. One seed/layout/window is not a universal balance recommendation.
+
+
+### Vanilla bow/projectile extension
+
+`verify_vanilla_projectiles.py` is the executable acceptance matrix for the opt-in
+native sprite pass. It retains native cases, exact PNG hashes, ammo source IDs,
+hit callbacks and expected failures; `--gif` also exports the recorded bow frames.
+Its named no-ammo case must remain native `failed` with exactly the requested
+projectile/hit failures, while the verifier accepts that detector outcome.
+Capture-disabled/no-dust execution must still render and match the captured
+control's native gameplay. Off-camera attempts must not count as submitted sprites.
+Missing/corrupt PNGs and unsupported projectile types remain errors.
+
+Offline synthetic checks additionally cover optional projectile-resource download,
+verified reuse, corruption before any write, manifest/path refusals, and GIF
+playback duration over 121 native ticks at several strides. They do not replace
+the native matrix or human inspection of the captured PNGs. Current source and
+installed tML changes require rerunning the affected cases; prior development
+numbers above remain historical. The new lane initializes native Gore allocation,
+not Gore update/rendering or full world parity.

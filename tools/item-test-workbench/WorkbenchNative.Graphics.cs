@@ -64,6 +64,9 @@ internal sealed class WorkbenchGraphicsContext : IDisposable
             162 => "acda075ed8b513f707a156122aaf60333cd281314206dcb5d950e65c7ec71212",
             168 => "c7362c0174942b4b5ca1e0fa1c48455e0420999bf3f1fcba8861021411420830",
             3485 => "13a8766a6ec5f100e4f3ca3e5f603e136a03767bfa8c8452c77cf2e5744b612f",
+            3029 => "dee434ceefe9095959ebac3a9f5e89f0f2cb999cb41a9c81f777a5153a0b1c0f",
+            2223 => "63ca70e9da8b5d8fe702b4862a741d946b99a47da3a484ae5231d823cfc38263",
+            3019 => "1c4245fb09078cdca936024e071b7f9eda5d23b5909306c004993be9aac9f05e",
             _ => throw new NotSupportedException("No pinned native item geometry asset for vanilla parent "+id)
         };
         string path=Path.GetFullPath(Path.Combine(root,"Images","Item_"+id+".png"));
