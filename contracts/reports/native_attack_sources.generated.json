@@ -1,0 +1,538 @@
+{
+  "schema": "infini.native-attack-sources.v1",
+  "sources": [
+    {
+      "method": "Player.ItemCheck_Shoot",
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "2d9c88b84cb866aab917eb5655e59f44839eddfd2c791cc04cf43f4a3547dea0",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+      "records": [
+        {
+          "itemId": 1319,
+          "sourceGuardIlOffset": 4878,
+          "sourceSpawnIlOffset": 4973,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/SnowballCannon"
+        },
+        {
+          "itemId": 3107,
+          "sourceGuardIlOffset": 4991,
+          "sourceSpawnIlOffset": 5086,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/NailGun"
+        },
+        {
+          "itemId": 3053,
+          "sourceGuardIlOffset": 5341,
+          "sourceSpawnIlOffset": 5630,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/ShadowFlameHexDoll"
+        },
+        {
+          "itemId": 3019,
+          "sourceGuardIlOffset": 5648,
+          "sourceSpawnIlOffset": 6039,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/HellwingBow"
+        },
+        {
+          "itemId": 2270,
+          "sourceGuardIlOffset": 6397,
+          "sourceSpawnIlOffset": 6572,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Gatligator"
+        },
+        {
+          "itemId": 5065,
+          "sourceGuardIlOffset": 8459,
+          "sourceSpawnIlOffset": 8509,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/PrincessWeapon"
+        },
+        {
+          "itemId": 1929,
+          "sourceGuardIlOffset": 9128,
+          "sourceSpawnIlOffset": 9223,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/ChainGun"
+        },
+        {
+          "itemId": 1553,
+          "sourceGuardIlOffset": 9241,
+          "sourceSpawnIlOffset": 9336,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/SDMG"
+        },
+        {
+          "itemId": 518,
+          "sourceGuardIlOffset": 9354,
+          "sourceSpawnIlOffset": 9457,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/CrystalStorm"
+        },
+        {
+          "itemId": 534,
+          "sourceGuardIlOffset": 11025,
+          "sourceSpawnIlOffset": 11150,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 4,
+            "maximum": 5,
+            "distribution": "uniform_integer_inclusive"
+          },
+          "fullName": "Terraria/Shotgun"
+        },
+        {
+          "itemId": 4270,
+          "sourceGuardIlOffset": 11506,
+          "sourceSpawnIlOffset": 11700,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/SharpTears"
+        },
+        {
+          "itemId": 4715,
+          "sourceGuardIlOffset": 11718,
+          "sourceSpawnIlOffset": 12076,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/SparkleGuitar"
+        },
+        {
+          "itemId": 1258,
+          "sourceGuardIlOffset": 13286,
+          "sourceSpawnIlOffset": 13456,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Stynger"
+        },
+        {
+          "itemId": 964,
+          "sourceGuardIlOffset": 13474,
+          "sourceSpawnIlOffset": 13599,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 3,
+            "maximum": 4,
+            "distribution": "uniform_integer_inclusive"
+          },
+          "fullName": "Terraria/Boomstick"
+        },
+        {
+          "itemId": 1155,
+          "sourceGuardIlOffset": 15059,
+          "sourceSpawnIlOffset": 15184,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 2,
+            "maximum": 4,
+            "distribution": "uniform_integer_inclusive"
+          },
+          "fullName": "Terraria/WaspGun"
+        },
+        {
+          "itemId": 1801,
+          "sourceGuardIlOffset": 15214,
+          "sourceSpawnIlOffset": 15339,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 2,
+            "maximum": 3,
+            "distribution": "uniform_integer_inclusive"
+          },
+          "fullName": "Terraria/BatScepter"
+        },
+        {
+          "itemId": 3210,
+          "sourceGuardIlOffset": 15917,
+          "sourceSpawnIlOffset": 16157,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Toxikarp"
+        },
+        {
+          "itemId": 434,
+          "sourceGuardIlOffset": 16175,
+          "sourceSpawnIlOffset": 16394,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/ClockworkAssaultRifle"
+        },
+        {
+          "itemId": 3006,
+          "sourceGuardIlOffset": 18594,
+          "sourceSpawnIlOffset": 18657,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/SoulDrain"
+        },
+        {
+          "itemId": 3384,
+          "sourceGuardIlOffset": 19380,
+          "sourceSpawnIlOffset": 19440,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/PortalGun"
+        },
+        {
+          "itemId": 3473,
+          "sourceGuardIlOffset": 19458,
+          "sourceSpawnIlOffset": 19563,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/SolarEruption"
+        },
+        {
+          "itemId": 4956,
+          "sourceGuardIlOffset": 19581,
+          "sourceSpawnIlOffset": 19956,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Zenith"
+        },
+        {
+          "itemId": 3836,
+          "sourceGuardIlOffset": 19974,
+          "sourceSpawnIlOffset": 20047,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/MonkStaffT2"
+        },
+        {
+          "itemId": 3787,
+          "sourceGuardIlOffset": 21419,
+          "sourceSpawnIlOffset": 21843,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/SkyFracture"
+        },
+        {
+          "itemId": 46,
+          "sourceGuardIlOffset": 22345,
+          "sourceSpawnIlOffset": 22742,
+          "damageMultiplierAtSpawn": 0.5,
+          "damageIntegerConversion": "native_truncate_toward_zero",
+          "shotDamageLocalMayBeModifiedInBranch": true,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/LightsBane"
+        },
+        {
+          "itemId": 190,
+          "sourceGuardIlOffset": 23811,
+          "sourceSpawnIlOffset": 24632,
+          "damageMultiplierAtSpawn": 0.25,
+          "damageIntegerConversion": "native_truncate_toward_zero",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/BladeofGrass"
+        },
+        {
+          "itemId": 3475,
+          "sourceGuardIlOffset": 24684,
+          "sourceSpawnIlOffset": 24742,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/VortexBeater"
+        },
+        {
+          "itemId": 3930,
+          "sourceGuardIlOffset": 24760,
+          "sourceSpawnIlOffset": 24818,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Celeb2"
+        },
+        {
+          "itemId": 3540,
+          "sourceGuardIlOffset": 24836,
+          "sourceSpawnIlOffset": 24883,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Phantasm"
+        },
+        {
+          "itemId": 5451,
+          "sourceGuardIlOffset": 24901,
+          "sourceSpawnIlOffset": 25045,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/JimsDrone"
+        },
+        {
+          "itemId": 3854,
+          "sourceGuardIlOffset": 25063,
+          "sourceSpawnIlOffset": 25110,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/DD2PhoenixBow"
+        },
+        {
+          "itemId": 3350,
+          "sourceGuardIlOffset": 25420,
+          "sourceSpawnIlOffset": 25658,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/PainterPaintballGun"
+        },
+        {
+          "itemId": 65,
+          "sourceGuardIlOffset": 26344,
+          "sourceSpawnIlOffset": 26552,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Starfury"
+        },
+        {
+          "itemId": 4923,
+          "sourceGuardIlOffset": 26570,
+          "sourceSpawnIlOffset": 26627,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/PiercingStarlight"
+        },
+        {
+          "itemId": 1910,
+          "sourceGuardIlOffset": 26645,
+          "sourceSpawnIlOffset": 26688,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/ElfMelter"
+        },
+        {
+          "itemId": 5134,
+          "sourceGuardIlOffset": 26706,
+          "sourceSpawnIlOffset": 26749,
+          "damageMultiplierAtSpawn": 1.0,
+          "damageIntegerConversion": "none",
+          "shotDamageLocalMayBeModifiedInBranch": false,
+          "explicitSpawnCount": {
+            "minimum": 1,
+            "maximum": 1,
+            "distribution": "fixed"
+          },
+          "fullName": "Terraria/Clentaminator2"
+        }
+      ]
+    },
+    {
+      "method": "Projectile.Colliding",
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "a60758ab1367ca39f7eea6e510216e69680b12ae0b5ab79a019a9d76ea173c33",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+      "records": [
+        {
+          "projectileId": 974,
+          "sourceGuardIlOffset": 1595,
+          "sourceCollisionCallIlOffset": 1735,
+          "halfLengthTimesProjectileScale": 46.0,
+          "lineWidthTimesProjectileScale": 8.0,
+          "center": "projectile.Center",
+          "direction": "projectile.rotation",
+          "scope": "Arguments of the native line-collision test; native broadphase and mod hooks still gate collision. Scale is live AI state, not necessarily SetDefaults scale.",
+          "fullName": "Terraria/LightsBane"
+        }
+      ]
+    }
+  ]
+}

@@ -231,7 +231,7 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
         "playerInventoryAmmoRaw": [{"type": 97, "damage": 5}], "playerInventoryProjectileRaw": [{"type": 1}],
         "fallbackAmmoRaw": [{"type": 97}], "fallbackProjectileRaw": [{"type": 1}]}}
     compact = parents.compact_ammo_profile(item)
-    assert compact == {"mode": "weapon_uses_ammo", "ammoId": 97}
+    assert compact == item["ammoRaw"]
     assert parents.effective_projectile_profile_of(item) == {}
     looked_up = []
     def lookup(projectile_id):
@@ -255,12 +255,15 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
     assert parents.compact_ammo_profile(live) == {
         "mode": "weapon_uses_ammo", "ammoId": 97, "ammoItemRaw": {"type": 97, "damage": 5},
         "projectileRaw": {"type": 42}, "weaponShootFieldProjectileRaw": {"type": 42},
+        **{key: compact[key] for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw",
+                                       "fallbackAmmoRaw", "fallbackProjectileRaw")},
     }
     assert parents.effective_projectile_profile_of(live) == live["effectiveProjectileRaw"]
     raw = raw_parent_card_for_llm(live)["raw"]
     assert raw["effectiveProjectile"] == {"type": 43, "source": "literal native observation"}
     assert raw["directProjectile"]["type"] == 42
     assert raw["ammo"]["ammoItemRaw"]["type"] == 97
-    assert all(key not in raw["ammo"] for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw",
-                                                  "fallbackAmmoRaw", "fallbackProjectileRaw", "exampleAmmo", "exampleProjectile"))
+    for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw", "fallbackAmmoRaw", "fallbackProjectileRaw"):
+        assert raw["ammo"][key] == compact[key]
+    assert "exampleAmmo" not in raw["ammo"] and "exampleProjectile" not in raw["ammo"]
     assert live == before

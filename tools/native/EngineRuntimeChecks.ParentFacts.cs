@@ -83,7 +83,7 @@ internal static partial class EngineRuntimeChecks
             Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,channel,"
                 + "consumable,craftInput,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
                 + "effectiveProjectileRaw,fingerprint,fishingPole,fullName,generatedData,hammerPower,headSlot,healLife,healMana,"
-                + "id,internalName,knockback,legSlot,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"
+                + "id,internalName,knockback,legSlot,lifeRegen,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"
                 + "noUseGraphic,notAmmo,originalPrefix,pickPower,placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,"
                 + "reuseDelay,runtimeFacts,shoot,shootProjectileFullName,shootSpeed,sourceMod,stack,tags,tooltipLines,"
                 + "tooltipSource,useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
@@ -91,13 +91,13 @@ internal static partial class EngineRuntimeChecks
             Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,buffTime,buffType,"
                 + "channel,consumable,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
                 + "effectiveProjectileRaw,fishingPole,fullName,hammerPower,headSlot,healLife,healMana,internalName,isVanilla,"
-                + "knockback,legSlot,manaCost,maxStack,name,nameTokens,noMelee,noUseGraphic,notAmmo,originalPrefix,pickPower,"
+                + "knockback,legSlot,lifeRegen,manaCost,maxStack,name,nameTokens,noMelee,noUseGraphic,notAmmo,originalPrefix,pickPower,"
                 + "placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,runtimeFacts,shoot,shootSpeed,sourceMod,type,"
                 + "useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
                 string.Join(",", fingerprint.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact fingerprint keys");
             Equal("accessory,ammo,ammoCategoryName,autoReuse,axePower,bait,bodySlot,buffTime,buffType,channel,consumable,"
                 + "createTile,createWall,crit,damage,damageClass,defense,dropSeedsIfInInventory,fishingPole,hammerPower,headSlot,healLife,healMana,"
-                + "knockback,legSlot,manaCost,material,maxStack,noMelee,noUseGraphic,notAmmo,pickPower,placeStyle,potion,rare,"
+                + "knockback,legSlot,lifeRegen,manaCost,material,maxStack,noMelee,noUseGraphic,notAmmo,pickPower,placeStyle,potion,rare,"
                 + "rarityDetails,reuseDelay,shoot,shootProjectileFullName,shootSpeed,type,useAmmo,useAmmoCategoryName,useAnimation,useStyle,"
                 + "useStyleName,useTime,useTurn,value",
                 string.Join(",", facts.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact facts keys");

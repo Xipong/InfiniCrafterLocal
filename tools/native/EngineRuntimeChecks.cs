@@ -44,6 +44,13 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("parent contact status native item target signature", ParentContactStatusFactsKeepNativeItemAndTargetSignature),
+            ("parent attack source certificates match native shooting collision", ParentAttackCertificatesMatchNativeShootingAndCollision),
+            ("parent quantified snapshots and ammo observation identity", ParentQuantifiedFactsKeepSnapshotsAndObservationIdentity),
+            ("parent random status mutually exclusive native outcomes", ParentRandomStatusFactsMatchExclusiveNativeOutcomes),
+            ("dropped alpha support exact rotated pixels", DroppedAlphaSupportTracksActualRotatedPixels),
+            ("held contact native pose and network agreement", HeldContactProjectionAndPacketAgree),
+            ("held contact preserves authored projectile reach", HeldContactCorrectionDoesNotCancelAuthoredReach),
             ("journal hotkey trigger lifecycle", JournalHotkeyToleratesTriggerLifecycle),
             ("coincident seek finite motion and exact retirement", CoincidentSeekPreservesFiniteMotionAndExplicitRetirement),
             ("single-active weapon admission without chat warning", SingleActiveWeaponBusyKeepsAdmissionWithoutChatWarning),
