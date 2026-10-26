@@ -172,3 +172,45 @@ For an independently built executable, pass `--no-build --native-dll PATH` where
 supported. Its exact binary hash is evidence, but not proof that the normal
 MSBuild/wrapper path passed. Preserve failed controls and environment errors as
 such; do not relabel unsupported or unexecuted paths as generic success.
+
+### Quality/performance extension acceptance
+
+Local extension checks (independent direct official Roslyn build; retain the
+source/reference receipt, not a normal MSBuild-provenance claim):
+
+- 86 offline workbench Python tests passed, including explicit facing/aim,
+  input hold/release, non-authoritative frame-arm metrics, exact parent identity,
+  shared scenario/loadout/RNG admission, repeated input, and asset manifest controls.
+- All 59 existing native scenario/negative regression checks passed using
+  `verify_native.py --no-build --native-dll PATH`.
+- `verify_quality.py` passed original placement positives, intentional assertion
+  negative and missing-PNG refusal, plus seven quality checks. Its neutral sparse
+  base has zero minimum gap but an 18px median gap and only 6/42 contact columns.
+  Original `Item.UpdateItem` moves the returned instance and settles its collider
+  on the configured floor. The fixture never grants visual approval.
+- Native vanilla contact, ammo and empty-ammo controls executed. Matched
+  single-use and repeated-use parent comparisons execute the same client update
+  phases with the seed reset after setup; actual use clocks, not damage formulas,
+  measure cadence. A supplied single-use window is not sustained DPS.
+- Private immutable original-art cases were inspected across actual observed
+  facings, native movement/jump and explicit inverted-gravity buff scenes;
+  root held / held projectile / equipment / placed / dropped observations remain
+  separate. No private inputs or output artifacts are committed.
+
+Useful commands:
+
+```sh
+python tools/item-test-workbench/workbench.py test
+python tools/item-test-workbench/verify_native.py --no-build --native-dll /absolute/ItemTestWorkbench.dll --out /private/regressions
+python tools/item-test-workbench/verify_quality.py --native-dll /absolute/ItemTestWorkbench.dll --out /private/quality
+```
+
+The old ordinary local MSBuild path remains blocked by NuGet migration mutex
+initialization in this environment; GitHub exact-head build CI is recorded on
+the draft PR. Optional JavaScript replay checks were not run here because `jsdom`
+is unavailable (their code is unchanged). Live packaged-game self-test, complete
+terrain/world renderer, multiplayer, audio output and pickup popup/font UI remain
+notRun, not implied by native or CI success. Dropped frames are sampled before
+that tick's world update; world snapshots are after it and must not be mistaken
+for identical pose samples. Numeric observations and negative controls passing
+never imply that an authored item looks good or is well balanced.

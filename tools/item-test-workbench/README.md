@@ -447,3 +447,142 @@ existing generated-use-refusal text sink. It records `native_achievement_complet
 and `native_ui_message`; chat glyph rendering and audible audio are not certified.
 This adapter does not alter world position, movement, achievement conditions or
 item behavior. Unrelated chat paths are not silently swallowed.
+
+## Item quality review (not just hook execution)
+
+`quality_review.py` keeps native execution, numeric observations and visual judgment
+separate. It never labels art acceptable because a draw occurred, a collider
+passed, an overlay was visible, or the lowest alpha pixel touched a reference.
+
+```bash
+# Start with a proven private native scene: exact artworkFiles/player assets,
+# correct ammo inventory, camera, terrain and item boundary. No asset rewriting.
+python tools/item-test-workbench/quality_review.py cycle \
+  --item /private/item.json --scenario /private/native-scene.json \
+  --native-dll /absolute/ItemTestWorkbench.dll --hold-ticks 30 --out /private/review
+# For passive equipment add --equipment (native equip, not invented use input).
+# A single existing trace, including placement/drop scenes:
+python tools/item-test-workbench/quality_review.py report /private/native.json \
+  --out /private/report --terrain-reference
+# Neutral sparse-support regression; requires existing native asset environment:
+python tools/item-test-workbench/verify_quality.py \
+  --native-dll /absolute/ItemTestWorkbench.dll --out /private/quality-controls
+```
+
+The compact cycle runs both facings, idle and native moving/jumping, with an
+explicit held-input interval and release. It preserves ammo/environment settings
+but replaces item-specific assertions with `no_nonfinite`: changed input cannot
+inherit old shot counts. Inspect resource snapshots and observed held frames;
+no-ammo refusal is not a missing animation. Use a long enough scene for recovery.
+A separate scene may set `player.gravityDirection:-1` **and**
+`player.gravitationPotion:true`: the real native buff permits inverted gravity.
+Do not infer inverted-gravity coverage from ordinary facing tests; the summary
+reports observed states. This is a native input scene, not a physics simulator.
+
+Every artwork frame includes:
+- Native front hand, rendered front hand (including `gfxOffY`), composite-arm
+  authority, facing, gravity, velocity and input/use clocks. A frame-arm getter
+  is not authoritative when the composite arm is disabled.
+- Root held geometry **after** native player draw-data transformation, versus
+  generated-projectile core geometry observed at actual `SpriteBatch.Draw`.
+  Authored grip is projected through that exact draw. Distances and attachment
+  offsets are observations: intentional authored reach is **review required**,
+  never automatically canceled or declared invalid.
+- Player/projectile colliders, placed footprint, and actual equipped layer draw
+  anchors plus authored accessory mount. A visible badge can still be misplaced,
+  badly scaled or aesthetically unsuitable.
+- Placed-body alpha support per world-pixel column, clipped against transformed
+  pixel polygons (`alpha>=128`, reported explicitly), contact-column count,
+  minimum **and median** gap. Leaves or a single tilted end cannot turn a zero
+  minimum into a generic support PASS. This measures silhouette, not structural
+  material or semantic base. Textures are immutable during this isolated run.
+
+Set `nativeRender.drawDroppedItems:true` alongside `drawArtwork` to execute
+`GeneratedItem.PreDrawInWorld` on actual active generated `Main.item` instances
+(e.g. native placement returns). Its collider, authored offsets and original
+sprite draws are recorded separately. The diagnostic caller explicitly uses
+white light and zero rotation; it is not complete `Main.DrawItem` treatment,
+full-world item treatment, or detected terrain contact. Set explicit
+`world.updateDroppedItems:true` to execute original `Item.UpdateItem` for active
+world instances; snapshots record position/velocity and exact update scope. The
+neutral regression moves the player away using native controls and verifies
+settling on the configured tile floor. Pickup popup/font UI remains outside
+this focused scene (keep the player away); no custom physics is substituted.
+Collider/footprint bottoms are
+reference lines, and authored offsets may deliberately produce nonzero gaps.
+
+Reports retain byte-identical hash-verified original PNGs beside diagnostic
+copies. Optional brown terrain rectangles are **schematic context only**, never
+Terraria terrain pixels or full-world parity. No actual user definitions, art,
+logs, videos or reports belong in the repository. Synthetic fixtures alone are
+public. Direct DLL users must retain the independent source/reference build
+receipt and use final exact source hashes; a successful render is not a packaged
+live-game self-test.
+
+### Native performance against the actual parents
+
+`performance_review.py` runs one supplied use schedule against **lone, moving and
+three grouped controlled Zombies**, once for the item and each exact distinct
+`recipeMeta.parentIdentities` entry. Names in prose are never guessed as parents.
+Missing generated parents and noncombat ingredients are `notRun`/`notMeasured`,
+not zero-damage controls. Supply an actual generated parent with
+`--parent-item 'generated:ID=/private/parent.json'`. Modded native parents are not
+admitted. The recorded vanilla numeric ID must agree with native stable-name lookup.
+
+```sh
+python tools/item-test-workbench/fetch_performance_assets.py --out /private/parent-assets
+python tools/item-test-workbench/performance_review.py \
+  --item /private/item.json --item-boundary local_cache \
+  --scenario tools/item-test-workbench/scenarios/performance-primary.json \
+  --out /private/performance --plan
+# Remove --plan to execute. For a separately source-built native binary also use:
+# --native-dll /private/ItemTestWorkbench.dll
+# For client contact geometry: --vanilla-assets /private/parent-assets
+```
+
+The example is **two explicit hold/release cycles**, not universal input for every
+weapon. Tune range, aim, duration and holds to the authored item, then keep them
+identical for all candidates. A non-auto-reuse sword held down may swing only once;
+the report shows actual `Player.ApplyItemTime` ticks rather than calling the whole
+held interval continuous fire. Ammo inventory is shared and actual matching-ammo
+availability, native consumption callbacks and final stack debits are separate.
+Full CPU scenes refuse native-contact weapons instead of reporting false zero
+melee damage. For such weapons supply a `client_hybrid` scene (no VFX) or a
+`client_vfx` scene with the item's exact admitted publication files.
+
+In performance `client_vfx` runs, drawing and PNG capture are deliberately disabled
+for **every** candidate; material assets still load where required. Vanilla items
+use their pinned real item PNG for native use-style/hitbox geometry, never the
+generated proxy. Native player/projectile/NPC, dust/lighting and detached-VFX
+updates execute in the same mode. Draw-required effects such as `impactRing` may
+refuse this non-drawing workload and remain explicitly unmeasured. Use the separate
+visual workflow to inspect artwork; this report does not certify visuals.
+
+`performance.json` and `.md` preserve each trial status and raw trace/log/hash
+receipts. Measurements include separate item/projectile/direct-damage callbacks,
+actual target HP lost, critical hits, sampled per-target native buff uptime, target
+positions/armor, native use-clock intervals, paid mana and inventory debits. The
+channels are **not blindly added**: direct damage may nest callbacks and health
+loss also reflects DoT/regeneration. A dead target censors the remaining trial.
+The same native RNG seed is reset **after scene/assets setup, before tick 0**;
+weapons still consume RNG differently, so a single seed is not a distribution.
+Initial native player/ammo and seed receipts are checked for equality. No prefixes,
+armor/accessory loadout, real NPC AI or full-world certification is claimed. Moving
+targets have an initial 0.5 px/tick velocity integrated by original `NPC.UpdateNPC`,
+not a separate physics model. Zero-defense and configured-defense results are not
+interchangeable. None of these measurements emits a balance/quality PASS.
+
+The seven optional vanilla geometry textures are source PNGs from the pinned
+community 1.4.4.9 extraction, **not official-byte-certified**, and are not bundled.
+Private definitions, authored art, logs and rendered evidence stay outside git.
+
+For a sustained **repeated-press** view, choose an explicit schedule rather than
+assuming auto-reuse. For example, add `--input-pattern repeated --repeat-every 30
+--hold-ticks 5` (primary by default; `--repeat-input alt` selects alternate).
+This replaces only use/release actions, preserving aim/movement and all scene
+conditions, and applies the **same** schedule to every candidate. The report labels
+these `repeated-*` scenes and shows actual native use-clock applications even when
+a cooldown or channel lifetime prevents a requested press from firing. `both`
+keeps the caller's supplied schedule too (six scenes instead of three); the bounded
+default remains `supplied`. These are requested input opportunities, not invented
+attack counts or a universal optimal firing schedule.

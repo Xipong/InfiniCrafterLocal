@@ -18,7 +18,7 @@ using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
 using InfiniCrafterLocal.Content.Projectiles;
-internal sealed class WNativeArtwork:IDisposable {
+internal sealed partial class WNativeArtwork:IDisposable {
  const BindingFlags All=BindingFlags.Public|BindingFlags.NonPublic|BindingFlags.Instance|BindingFlags.Static;
  readonly RuntimeSpriteCache cache=new();readonly GeneratedAssetSyncService sync=new();readonly Player owner;
  readonly object? oldCache,oldSync;readonly GeneratedHeldItemDrawLayer layer=new();readonly Func<Projectile,int> projectileId;
@@ -50,6 +50,7 @@ internal sealed class WNativeArtwork:IDisposable {
    Frame["playerRenderAllLayersCalls"]=(Frame["playerRenderAllLayersCalls"]?.GetValue<int>()??0)+1;
    Frame["nativePlayerDrawDataCount"]=draw.DrawDataCache.Count;Frame["nativeGeneratedHeldDrawDataCount"]=draw.DrawDataCache.Count(d=>d.texture is not null&&heldTextures.Contains(d.texture));
    var nativeData=new JsonArray();foreach(var entry in draw.DrawDataCache){
+    if(entry.texture is not null&&heldTextures.Contains(entry.texture))RecordHeldGeometry(entry);
     string textureIdentity=entry.texture is not null&&heldTextures.Contains(entry.texture)?"generated_held_item":"other";for(int part=0;part<Terraria.ID.PlayerTextureID.Count;part++)if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.Players[owner.skinVariant,part]?.Value))textureIdentity="Player_"+owner.skinVariant+"_"+part;
     if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.PlayerHair[owner.hair].Value))textureIdentity="Player_Hair_"+(owner.hair+1);
     if(ReferenceEquals(entry.texture,Terraria.GameContent.TextureAssets.PlayerHairAlt[owner.hair].Value))textureIdentity="Player_HairAlt_"+(owner.hair+1);
@@ -62,7 +63,7 @@ internal sealed class WNativeArtwork:IDisposable {
    orig(ref draw);
   }));
   proxyObserver=new Hook(typeof(InfiniCrafterLocal.Content.Items.GeneratedItem).GetMethod("ModifyItemDraw",All)!, (ProxyObserver)((ProxyOriginal orig,InfiniCrafterLocal.Content.Items.GeneratedItem self,ref PlayerDrawSet draw,ref DrawData item,ref DrawData? colored,ref DrawData? glow)=>{
-   bool result=orig(self,ref draw,ref item,ref colored,ref glow);
+   Frame["nativeProxyBeforeVeto"]=new JsonObject{["positionX"]=item.position.X,["positionY"]=item.position.Y,["originX"]=item.origin.X,["originY"]=item.origin.Y,["rotation"]=item.rotation};bool result=orig(self,ref draw,ref item,ref colored,ref glow);
    if(!result)Frame["nativeProxyVetoCount"]=(Frame["nativeProxyVetoCount"]?.GetValue<int>()??0)+1;
    return result;
   }));
@@ -71,7 +72,7 @@ internal sealed class WNativeArtwork:IDisposable {
  public JsonObject Report {get;}=new();
  public JsonObject Frame {get;private set;}=new();
  public WNativeArtwork(GeneratedItemData data,Player owner,string[] files,Func<Projectile,int>? projectileId=null) {
-  this.owner=owner;this.projectileId=projectileId??(p=>p.identity);
+  this.owner=owner;reviewData=data;this.projectileId=projectileId??(p=>p.identity);
   oldCache=typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.GetValue(null);oldSync=typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.GetValue(null);
   var rootIdentity=new[]{data.Id,"item","",data.Id};
   var selected=new List<(string Role,SpritePresentationSelection Selection,string[] Identity)>{("item",SpritePresentation.Root(data),rootIdentity)};
@@ -136,13 +137,13 @@ internal sealed class WNativeArtwork:IDisposable {
     var aliases=receipt["selectedAliases"] as JsonArray??new JsonArray();if(receipt["selectedAliases"] is null)receipt["selectedAliases"]=aliases;aliases.Add(JsonValue.Create(alias));
    }
   }catch {Dispose();throw;}finally{Main.dedServ=old;}
-  Report=new JsonObject{["scope"]="Original authored PNG core, native held layer and separate inventory preview; not full PreDraw or Terraria world rendering",["descriptorMutated"]=false,["admissionLimits"]=new JsonObject{["maxFileBytes"]=8*1024*1024,["maxWidth"]=4096,["maxHeight"]=4096,["maxPixels"]=16*1024*1024},["assetReceipts"]=receipts,["entrypoints"]=Entrypoints(),["fullProjectilePreDrawExecuted"]=false,["missingFullPreDrawAsset"]="Terraria Content/Images/MagicPixel.xnb",["inventoryPreviewAnchor"]=PreviewAnchor()};BeginFrame();
+  Report=new JsonObject{["scope"]="Original authored PNG core, native held layer and separate inventory preview; not full PreDraw or Terraria world rendering",["descriptorMutated"]=false,["admissionLimits"]=new JsonObject{["maxFileBytes"]=8*1024*1024,["maxWidth"]=4096,["maxHeight"]=4096,["maxPixels"]=16*1024*1024},["assetReceipts"]=receipts,["entrypoints"]=Entrypoints(),["fullProjectilePreDrawExecuted"]=false,["missingFullPreDrawAsset"]="Terraria Content/Images/MagicPixel.xnb",["inventoryPreviewAnchor"]=PreviewAnchor()};geometryObserver=new WNativeVisualGeometry();EnableVisualObserver();BeginFrame();
  }
  static string Hash(byte[] bytes)=>Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
  static void RejectSymlink(string path) {for(FileSystemInfo? p=new FileInfo(path);p is not null;p=p is FileInfo file?file.Directory:((DirectoryInfo)p).Parent)if(p.LinkTarget is not null||(p.Exists&&(p.Attributes&FileAttributes.ReparsePoint)!=0))throw new InvalidDataException("Artwork symlink/reparse path is not admitted: "+p.FullName);}
  JsonArray Entrypoints()=>nativePlayer?new("Main.PlayerRenderer.DrawPlayers","GeneratedItem.ModifyItemDraw","GeneratedHeldItemDrawLayer.Draw (native layer loader)","PlayerDrawLayers.DrawPlayer_RenderAllLayers","ProjectileLoader.PreDraw / GeneratedProjectile.PreDraw","ProjectileLoader.PostDraw","GeneratedItem.PreDrawInInventory"):new("GeneratedItem.PreDrawInInventory","GeneratedHeldItemDrawLayer.GetDefaultVisibility/Draw","DrawData.Draw","GeneratedProjectile.DrawAuthoredEntityVisual");
  static JsonObject PreviewAnchor()=>new(){["positionX"]=36,["positionY"]=36,["originX"]=24,["originY"]=24,["requestedFrameWidth"]=48,["requestedFrameHeight"]=48,["scope"]="Separate UI preview anchor; original hook determines actual authored PNG size"};
- public void BeginFrame(){heldTextures.Clear();equipmentLayers?.BeginFrame();Frame=new JsonObject{["equipmentOverlayDrawCount"]=0,["equipmentOverlayDrawData"]=new JsonArray(),["playerDrawCount"]=0,["playerRenderAllLayersCalls"]=0,["nativeProxyVetoCount"]=0,["nativeProxyDrawDataCount"]=0,["heldItemDrawCount"]=0,["projectileDrawCount"]=0,["inventoryPreviewDrawCount"]=0,["heldDrawData"]=new JsonArray(),["projectileIds"]=new JsonArray(),["projectileDraws"]=new JsonArray(),["entrypoints"]=Entrypoints(),["inventoryPreviewAnchor"]=PreviewAnchor()};}
+ public void BeginFrame(){heldTextures.Clear();equipmentLayers?.BeginFrame();Frame=new JsonObject{["visualReview"]=PlayerReview(),["projectileGeometry"]=new JsonArray(),["heldGeometry"]=new JsonArray(),["droppedItems"]=new JsonArray(),["equipmentOverlayDrawCount"]=0,["equipmentOverlayDrawData"]=new JsonArray(),["playerDrawCount"]=0,["playerRenderAllLayersCalls"]=0,["nativeProxyVetoCount"]=0,["nativeProxyDrawDataCount"]=0,["heldItemDrawCount"]=0,["projectileDrawCount"]=0,["inventoryPreviewDrawCount"]=0,["heldDrawData"]=new JsonArray(),["projectileIds"]=new JsonArray(),["projectileDraws"]=new JsonArray(),["entrypoints"]=Entrypoints(),["inventoryPreviewAnchor"]=PreviewAnchor()};}
  void Increment(string key,int amount=1)=>Frame[key]=Frame[key]!.GetValue<int>()+amount;
  public void DrawInventory() {
   if(owner.HeldItem.IsAir)return; // No selected item: no preview, never substitute artwork.
@@ -165,7 +166,7 @@ internal sealed class WNativeArtwork:IDisposable {
   Main.spriteBatch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
   try{foreach(var entry in draw.DrawDataCache){entry.Draw(Main.spriteBatch);RecordHeld(entry);}}finally{Main.spriteBatch.End();}
  }
- void RecordHeld(DrawData entry){if(entry.texture is null)throw new InvalidOperationException("Native generated held draw has null texture");heldTextures.Add(entry.texture);Increment("heldItemDrawCount");Frame["heldDrawData"]!.AsArray().Add(new JsonObject{["positionX"]=entry.position.X,["positionY"]=entry.position.Y,["originX"]=entry.origin.X,["originY"]=entry.origin.Y,["scaleX"]=entry.scale.X,["scaleY"]=entry.scale.Y,["rotation"]=entry.rotation,["colorR"]=entry.color.R,["colorG"]=entry.color.G,["colorB"]=entry.color.B,["colorA"]=entry.color.A,["effects"]=entry.effect.ToString(),["textureWidth"]=entry.texture.Width,["textureHeight"]=entry.texture.Height});}
+ void RecordHeld(DrawData entry){if(entry.texture is null)throw new InvalidOperationException("Native generated held draw has null texture");if(!nativePlayer)RecordHeldGeometry(entry);heldTextures.Add(entry.texture);Increment("heldItemDrawCount");Frame["heldDrawData"]!.AsArray().Add(new JsonObject{["positionX"]=entry.position.X,["positionY"]=entry.position.Y,["originX"]=entry.origin.X,["originY"]=entry.origin.Y,["scaleX"]=entry.scale.X,["scaleY"]=entry.scale.Y,["rotation"]=entry.rotation,["colorR"]=entry.color.R,["colorG"]=entry.color.G,["colorB"]=entry.color.B,["colorA"]=entry.color.A,["effects"]=entry.effect.ToString(),["textureWidth"]=entry.texture.Width,["textureHeight"]=entry.texture.Height});}
  public void DrawProjectiles() {
   Main.spriteBatch.Begin(SpriteSortMode.Deferred,BlendState.AlphaBlend,SamplerState.PointClamp,DepthStencilState.None,Main.Rasterizer,null,Main.GameViewMatrix.TransformationMatrix);
   try{foreach(var p in Main.projectile.Where(p=>p.active)) {
@@ -178,5 +179,5 @@ internal sealed class WNativeArtwork:IDisposable {
  void RecordProjectile(Projectile p,string entrypoint){
   Increment("projectileDrawCount");int id=projectileId(p);Frame["projectileIds"]!.AsArray().Add(JsonValue.Create(id));Frame["projectileDraws"]!.AsArray().Add(new JsonObject{["projectileId"]=id,["nativeSlot"]=p.whoAmI,["nativeIdentity"]=p.identity,["entrypoint"]=entrypoint});
  }
- public void Dispose(){equipmentLayers?.Dispose();projectileObserver?.Dispose();heldObserver?.Dispose();playerObserver?.Dispose();proxyObserver?.Dispose();if(nativePlayer)typeof(PlayerDrawLayerLoader).GetMethod("Unload",All)!.Invoke(null,null);cache.Dispose();sync.Dispose();typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,oldCache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,oldSync);}
+ public void Dispose(){visualObserver?.Dispose();geometryObserver?.Dispose();equipmentLayers?.Dispose();projectileObserver?.Dispose();heldObserver?.Dispose();playerObserver?.Dispose();proxyObserver?.Dispose();if(nativePlayer)typeof(PlayerDrawLayerLoader).GetMethod("Unload",All)!.Invoke(null,null);cache.Dispose();sync.Dispose();typeof(InfiniCrafterLocalMod).GetProperty("Sprites")!.SetValue(null,oldCache);typeof(InfiniCrafterLocalMod).GetProperty("AssetSync")!.SetValue(null,oldSync);}
 }

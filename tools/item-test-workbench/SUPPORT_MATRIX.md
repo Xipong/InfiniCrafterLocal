@@ -80,3 +80,14 @@ return. Primary pickaxe mining is separately exercised through the client branch
 Tracked tiles and timed assertions are evidence, not world/render parity. The
 `break_tile` command is an external native-world stimulus; it must not be described
 as a player mining action. Reusable synthetic matrix: `verify_world.py`.
+
+### Quality observations
+
+| Surface | Native observation | Remaining boundary |
+|---|---|---|
+| Root held vs held projectile | Final native player DrawData / actual projectile SpriteBatch core; authored grip, rendered hand, displacement | Ordinary frame-arm hand getter not authoritative; intentional reach is not auto-invalid |
+| Full use cycle | Explicit input hold/release, ammo, left/right, native move/jump | Check requested vs observed states; inverted gravity requires separate explicit buff scene |
+| Placed support | Actual DrawBody transform, footprint, alpha-column support and median gap | Silhouette does not identify structural base; no aesthetic PASS |
+| Dropped body | Actual generated PreDrawInWorld on native world instances | Neutral white/zero rotation diagnostic caller; optional original Item.UpdateItem settling; no full Main.DrawItem, pickup UI or world ecology parity |
+| Equipped badge | Actual native layer/anchor plus authored mount, native player scale | Visibility alone does not establish good appearance |
+| Context terrain | Optional configured tile boundary overlay | Clearly schematic, never native terrain art |

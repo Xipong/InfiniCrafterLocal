@@ -14,7 +14,7 @@ internal static partial class EngineRuntimeChecks
     {
         if(hostiles is null)return;
         if(hostiles is not JsonArray rows || rows.Count>8)throw new ArgumentException("hostiles must be an array of at most eight controlled NPCs");
-        foreach(var row in rows){WKeys(row,"controlled hostile","x","y","life");if(WFloat(row,"x",-1)<16 || WFloat(row,"x",0)>1500 || WFloat(row,"y",-1)<16 || WFloat(row,"y",0)>9400 || WInt(row,"life",10000) is <1 or >1000000)throw new ArgumentException("Controlled hostile outside bounded scene or invalid life");}
+        foreach(var row in rows){WKeys(row,"controlled hostile","x","y","life","width","height","defense","vx","vy");WValidateTarget(row);if(WFloat(row,"x",-1)<16 || WFloat(row,"x",0)>1500 || WFloat(row,"y",-1)<16 || WFloat(row,"y",0)>9400 || WInt(row,"life",10000) is <1 or >1000000)throw new ArgumentException("Controlled hostile outside bounded scene or invalid life");}
     }
     private static void WInitializeHostiles(JsonNode? hostiles)
     {
@@ -22,12 +22,12 @@ internal static partial class EngineRuntimeChecks
         foreach(var row in hostiles?.AsArray()??new JsonArray()){
             var npc=Terraria.Main.npc[slot];npc.SetDefaults(NPCID.Zombie);npc.whoAmI=slot++;npc.active=true;
             npc.position=new Microsoft.Xna.Framework.Vector2(WFloat(row,"x",0),WFloat(row,"y",0));npc.life=npc.lifeMax=WInt(row,"life",10000);
-            npc.aiStyle=-1;npc.noGravity=true;npc.noTileCollide=true;npc.knockBackResist=0;npc.damage=0;npc.defense=0;
+            npc.aiStyle=-1;npc.noGravity=true;npc.noTileCollide=true;npc.knockBackResist=0;npc.damage=0;npc.defense=0;WConfigureTarget(npc,row);npc.width=WInt(row,"width",npc.width);npc.height=WInt(row,"height",npc.height);
             new InfiniCrafterLocal.Common.Runtime.RuntimeHitNpcGeneration().OnSpawn(npc,Terraria.Main.player[0].GetSource_Misc("workbench-controlled-hostile"));
         }
     }
     private static JsonArray WHostileSnapshots()=>new(Terraria.Main.npc.Skip(2).Take(8).Where(n=>n.type==NPCID.Zombie).Select(n=>(JsonNode?)new JsonObject{
-        ["slot"]=n.whoAmI,["nativeType"]=n.type,["active"]=n.active,["life"]=n.life,["x"]=WFinite(n.position.X),["y"]=WFinite(n.position.Y),["width"]=n.width,["height"]=n.height,["nonFinite"]=!WEntityFinite(n),["controlledAiStyle"]=n.aiStyle}).ToArray());
+        ["targetState"]=WTargetState(n),["slot"]=n.whoAmI,["nativeType"]=n.type,["active"]=n.active,["life"]=n.life,["x"]=WFinite(n.position.X),["y"]=WFinite(n.position.Y),["width"]=n.width,["height"]=n.height,["nonFinite"]=!WEntityFinite(n),["controlledAiStyle"]=n.aiStyle}).ToArray());
     private static bool WReactionAction(string kind)=>kind is "hurt_player" or "strike_hostile";
     private static void WValidateReactionAction(JsonNode action,bool full,bool client)
     {

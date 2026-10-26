@@ -33,6 +33,6 @@ internal static partial class EngineRuntimeChecks
     {
         if(WBindingRefusal(data,input,full,client,hybrid,render) is string reason) throw new NotSupportedException(reason);
     }
-    private static JsonObject WItemProjection(Item item)=>new(){["type"]=item.type,["stack"]=item.stack,["createTile"]=item.createTile,["createWall"]=item.createWall,["placeStyle"]=item.placeStyle,["consumable"]=item.consumable,["shoot"]=item.shoot,["buffType"]=item.buffType,["buffTime"]=item.buffTime,["mana"]=item.mana,["damage"]=item.damage,["noMelee"]=item.noMelee};
+    private static JsonObject WItemProjection(Item item)=>new(){["type"]=item.type,["stack"]=item.stack,["createTile"]=item.createTile,["createWall"]=item.createWall,["placeStyle"]=item.placeStyle,["consumable"]=item.consumable,["shoot"]=item.shoot,["buffType"]=item.buffType,["buffTime"]=item.buffTime,["mana"]=item.mana,["damage"]=item.damage,["noMelee"]=item.noMelee,["useAmmo"]=item.useAmmo,["useTime"]=item.useTime,["useAnimation"]=item.useAnimation,["autoReuse"]=item.autoReuse,["channel"]=item.channel,["damageClass"]=item.DamageType.Name};
     private static JsonArray WExhaustion(Player owner)=>new(owner.GetModPlayer<InfiniCraftPlayer>().CaptureGeneratedItemExhaustion().Select(e=>(JsonNode?)new JsonObject{["itemId"]=e.ItemId,["definitionIdentity"]=e.DefinitionIdentity,["remainingTicks"]=e.RemainingTicks}).ToArray());
 }

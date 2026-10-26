@@ -28,7 +28,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     readonly WorkbenchGraphicsContext graphics;
     readonly string framesDir,contentRoot;
     readonly int width,height;
-    readonly bool capture,drawNativeDust;
+    readonly bool capture,drawNativeDust,drawDroppedItems;
     readonly Vector2 camera;
     readonly float zoom;
     readonly Game game;
@@ -68,8 +68,8 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     public WNativeVfxRenderer(WorkbenchGraphicsContext graphics,JsonObject settings,string absoluteFramesDir)
     {
         this.graphics=graphics;framesDir=Path.GetFullPath(absoluteFramesDir);
-        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies"))throw new ArgumentException("Unknown nativeRender setting: "+key);
-        ConfigureScene(settings);
+        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems"))throw new ArgumentException("Unknown nativeRender setting: "+key);
+        ConfigureScene(settings);drawDroppedItems=settings["drawDroppedItems"]?.GetValue<bool>()??false; if(drawDroppedItems && !(settings["drawArtwork"]?.GetValue<bool>()??false))throw new ArgumentException("drawDroppedItems requires drawArtwork");
         width=settings["width"]?.GetValue<int>()??512;height=settings["height"]?.GetValue<int>()??512;
         drawNativeDust=settings["drawNativeDust"]?.GetValue<bool>()??false;if(drawNativeDust && !(settings["drawPlayer"]?.GetValue<bool>()??false))throw new ArgumentException("drawNativeDust requires drawPlayer=true and genuine loaded Dust texture");capture=settings["capture"]?.GetValue<bool>()??true;zoom=settings["zoom"]?.GetValue<float>()??1;
         camera=new Vector2(settings["cameraX"]?.GetValue<float>()??0,settings["cameraY"]?.GetValue<float>()??0);
@@ -120,7 +120,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
             int savedWidth=Main.screenWidth,savedHeight=Main.screenHeight;Vector2 savedCamera=Main.screenPosition;var savedView=Main.GameViewMatrix;
             JsonObject? scene = null;
             graphics.Device.SetRenderTarget(target);
-            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);trainingDummy?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
+            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);if(drawDroppedItems)artwork?.DrawDroppedItems();trainingDummy?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
             finally {graphics.Device.SetRenderTarget(null);Main.screenWidth=savedWidth;Main.screenHeight=savedHeight;Main.screenPosition=savedCamera;Main.GameViewMatrix=savedView;}
             string afterDraw=Rng();
             Report["gpuRenderLifecycleExecuted"]=true;

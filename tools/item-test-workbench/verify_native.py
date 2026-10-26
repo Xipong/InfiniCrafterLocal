@@ -11,12 +11,13 @@ import workbench as w
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--no-build',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--out',type=Path,required=True);parser.add_argument('--no-build',action='store_true');parser.add_argument('--native-dll',type=Path,help='Direct executable, with independent build receipt; not wrapper provenance');args=parser.parse_args()
+    if args.native_dll and not args.no_build:parser.error('--native-dll requires --no-build')
     out=args.out.resolve()
     if out.exists() and any(out.iterdir()):raise SystemExit('Use a fresh output directory')
     out.mkdir(parents=True,exist_ok=True)
     if not args.no_build:w.build()
-    dll=w.HERE/'bin/Release/net8.0/ItemTestWorkbench.dll'
+    dll=(args.native_dll or w.HERE/'bin/Release/net8.0/ItemTestWorkbench.dll').resolve();binary=w.digest(dll)
     fixtures=out/'fixtures';subprocess.run([os.environ.get('DOTNET','dotnet'),str(dll),'--write-fixtures',str(fixtures)],cwd=w.ROOT,check=True)
     base=w.read_json(w.HERE/'scenarios/primary.json')
     def modified(**changes):
@@ -107,9 +108,11 @@ def main():
     for name,item,scenario,expected in cases:
         scenario_path=out/(name+'-scenario.json');scenario_path.write_text(json.dumps(scenario,indent=2))
         command=[sys.executable,str(w.HERE/'workbench.py'),'run']+(['--vanilla-item',str(item)] if isinstance(item,int) else ['--item',str(fixtures/item)])+['--scenario',str(scenario_path),'--out',str(out/name),'--no-build']
+        if args.native_dll:
+            command=[os.environ.get('DOTNET','dotnet'),str(dll)]+(['--vanilla-item',str(item)] if isinstance(item,int) else ['--item',str(fixtures/item)])+['--scenario',str(scenario_path),'--output',str(out/name/'native.json')]
         proc=subprocess.run(command,cwd=w.ROOT,capture_output=True,text=True,timeout=240)
         trace_path=out/name/'native.json';trace=w.read_json(trace_path) if trace_path.exists() else {}
-        passed=proc.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
+        passed=w.digest(dll)==binary and proc.returncode==expected and trace.get('status')=={0:'passed',1:'failed',2:'error'}[expected]
         if name=='negative-held-buff':
             passed=passed and 'NotSupportedException' in trace.get('error','') and 'held' in trace.get('error','').lower()
         if name=='return-coincident-finite-regression':
@@ -143,7 +146,7 @@ def main():
                 passed=passed and abs(speed-expected_speed)<.0001 and root['initialDamage']==damage and root['initialKnockback']==knockback
             passed=passed and bool(trace.get('snapshots')) and all(any(i['slot']==0 and i['stack']==1 for i in frame['player']['inventory']) for frame in trace.get('snapshots',[]))
         rows.append({'name':'ammo-'+category+'-native-launch-policy-and-weapon-preservation','passed':passed,'observed':observed})
-    summary={'fullGameParity':False,'scope':'Actual native scenarios and explicit negative controls; not universal item coverage','passed':all(r['passed'] for r in rows),'itemReadiness':'not certified','regressionScope':'Coincident return seek must remain finite after the production fix; negative controls still require their exact intended failures','checks':rows}
+    summary={'nativeDllSha256':binary,'buildProvenance':'Explicit direct executable; independent source-build receipt required' if args.native_dll else 'standard workbench wrapper','fullGameParity':False,'scope':'Actual native scenarios and explicit negative controls; not universal item coverage','passed':all(r['passed'] for r in rows),'itemReadiness':'not certified','regressionScope':'Coincident return seek must remain finite after the production fix; negative controls still require their exact intended failures','checks':rows}
     (out/'summary.json').write_text(json.dumps(summary,indent=2))
     return 0 if summary['passed'] else 1
 

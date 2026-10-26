@@ -79,7 +79,7 @@ internal static partial class EngineRuntimeChecks
         var result=new JsonArray();
         for(int slot=0;slot<items.Length;slot++) if(!items[slot].IsAir) {
             var item=items[slot];
-            result.Add(new JsonObject { ["slot"]=slot,["nativeType"]=item.type,["stack"]=item.stack,
+            result.Add(new JsonObject { ["slot"]=slot,["nativeType"]=item.type,["stack"]=item.stack,["ammoCategory"]=item.ammo,
                 ["itemId"]=item.ModItem is GeneratedItem generated?generated.Data.Id:null,
                 ["placement"]=armor?(slot<10?"functional":"vanity"):"inventory" });
         }

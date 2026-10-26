@@ -24,9 +24,9 @@ internal sealed class WNativePlacedBodies : IDisposable
         if(!GeneratedPlacedBodyNativeAdapter.FeatureAvailable)throw new InvalidOperationException("Native placed-body adapter unavailable: "+GeneratedPlacedBodyNativeAdapter.UnsupportedBoundary);
         observer=new Hook(typeof(GeneratedPlacedBodyDrawSystem).GetMethod("DrawBody",BindingFlags.NonPublic|BindingFlags.Static)!,
             (DrawObserver)((orig,batch,texture,body,footprint,camera,color,alpha)=>{
-                bool drawn=orig(batch,texture,body,footprint,camera,color,alpha);
+                bool drawn=false;var geometry=WNativeVisualGeometry.Capture(()=>drawn=orig(batch,texture,body,footprint,camera,color,alpha),supportY:footprint.Bottom);
                 if(drawn)SuccessfulDraws++;
-                current.Add(new JsonObject{["nativeDrawReturned"]=drawn,["footprintX"]=footprint.X,["footprintY"]=footprint.Y,["footprintWidth"]=footprint.Width,["footprintHeight"]=footprint.Height,["textureWidth"]=texture.Width,["textureHeight"]=texture.Height,["renderSizePx"]=body.RenderSizePx,["pivotSpace"]=body.PivotSpace,["imagePivotX"]=body.ImagePivotX,["imagePivotY"]=body.ImagePivotY,["cameraX"]=camera.X,["cameraY"]=camera.Y,["lightR"]=color.R,["lightG"]=color.G,["lightB"]=color.B,["entrypoint"]="Original GeneratedPlacedBodyDrawSystem.DrawBody -> SpriteBatch.Draw"});
+                current.Add(new JsonObject{["geometry"]=geometry,["supportScope"]="Footprint bottom reference, not structural-base classification",["nativeDrawReturned"]=drawn,["footprintX"]=footprint.X,["footprintY"]=footprint.Y,["footprintWidth"]=footprint.Width,["footprintHeight"]=footprint.Height,["textureWidth"]=texture.Width,["textureHeight"]=texture.Height,["renderSizePx"]=body.RenderSizePx,["pivotSpace"]=body.PivotSpace,["imagePivotX"]=body.ImagePivotX,["imagePivotY"]=body.ImagePivotY,["cameraX"]=camera.X,["cameraY"]=camera.Y,["lightR"]=color.R,["lightG"]=color.G,["lightB"]=color.B,["entrypoint"]="Original GeneratedPlacedBodyDrawSystem.DrawBody -> SpriteBatch.Draw"});
                 return drawn;
             }));
     }

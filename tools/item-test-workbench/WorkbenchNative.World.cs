@@ -34,7 +34,7 @@ internal static partial class EngineRuntimeChecks
         var world=scenario["world"];
         if(world is null) return;
         if(!fullPlayer) throw new ArgumentException("world scenarios require full Player.Update");
-        WKeys(world,"world","trackTiles","walls");
+        WKeys(world,"world","trackTiles","walls","updateDroppedItems");
         if(world["trackTiles"] is not JsonArray {Count:>0} cells || cells.Count>256) throw new ArgumentException("world.trackTiles requires 1..256 explicit cells");
         foreach(var cell in cells) { WKeys(cell,"tracked tile","tileX","tileY"); WWorldCoordinates(cell); }
         var walls=world["walls"]?.AsArray()??new JsonArray();
@@ -86,6 +86,7 @@ internal static partial class EngineRuntimeChecks
         private readonly IDisposable boolSerializer=WithPersistenceBoolSerializer();
         private readonly JsonArray cells;
         private readonly string itemId;
+        private readonly bool updateDroppedItems;
         private readonly string sourceNetworkDefinitionHash;
         private static string NetworkDefinitionHash(GeneratedItemData data) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(data.ToNetworkJson()))).ToLowerInvariant();
         private readonly FieldInfo dropField=typeof(TileLoader).GetField("HookCanDrop",PersistenceStatic)!;
@@ -94,7 +95,7 @@ internal static partial class EngineRuntimeChecks
         private readonly bool oldGen=WorldGen.gen,oldMap=Terraria.Main.mapEnabled;
         public WWorldScene(JsonObject settings, GeneratedPlacementLedgerSystem ledger, GeneratedItemData? data, JsonObject report)
         {
-            this.ledger=ledger;this.itemId=data?.Id??"";sourceNetworkDefinitionHash=data is null?"":NetworkDefinitionHash(data);cells=settings["trackTiles"]!.AsArray();
+            this.ledger=ledger;updateDroppedItems=settings["updateDroppedItems"]?.GetValue<bool>()??false;this.itemId=data?.Id??"";sourceNetworkDefinitionHash=data is null?"":NetworkDefinitionHash(data);cells=settings["trackTiles"]!.AsArray();
             typeof(Terraria.Main).GetMethod("Initialize_TileAndNPCData2",PersistenceStatic)!.Invoke(null,null);
             // The native loader executes the unmodified production GlobalTile callback.
             // No fake CanDrop, placement outcome, return spawn or tile mutation is injected.
@@ -117,7 +118,11 @@ internal static partial class EngineRuntimeChecks
             else WorldGen.KillTile(x,y,fail:false,effectOnly:false,noItem:false);
             events.Add(new JsonObject{["kind"]="world_input",["input"]=kind,["tileX"]=x,["tileY"]=y,["entrypoint"]=kind=="tile_target"?"Native film input tile target and mouse coordinates":"WorldGen.KillTile (external break stimulus)"});
         }
-        public void Update() => ledger.PostUpdateWorld();
+        public void Update()
+        {
+            ledger.PostUpdateWorld();
+            if(updateDroppedItems)for(int i=0;i<Terraria.Main.maxItems;i++)if(Terraria.Main.item[i].active)Terraria.Main.item[i].UpdateItem(i);
+        }
         public JsonObject Snapshot()
         {
             var saved=new TagCompound();ledger.SaveWorldData(saved);
@@ -126,7 +131,7 @@ internal static partial class EngineRuntimeChecks
             var items=Terraria.Main.item.Where(i=>i is {active:true,stack:>0} && i.ModItem is GeneratedItem g && g.Data.Id==itemId).ToArray();
             var tiles=new JsonArray();
             foreach(var c in cells) {int x=WInt(c,"tileX",0),y=WInt(c,"tileY",0);var t=Terraria.Main.tile[x,y];tiles.Add(new JsonObject{["tileX"]=x,["tileY"]=y,["hasTile"]=t.HasTile,["tileId"]=(int)t.TileType,["wallId"]=(int)t.WallType,["frameX"]=(int)t.TileFrameX,["frameY"]=(int)t.TileFrameY});}
-            return new JsonObject{["sourceNetworkDefinitionSha256"]=sourceNetworkDefinitionHash,["mismatchedReturnedDefinitions"]=items.Count(i=>NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data)!=sourceNetworkDefinitionHash),["tiles"]=tiles,["targetX"]=Player.tileTargetX,["targetY"]=Player.tileTargetY,["placementGroups"]=groups.Count,["pendingReturns"]=pending.Count,["quarantinedReturns"]=saved.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Count,["returnFailures"]=new JsonArray(saved.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Select(q=>(JsonNode?)JsonValue.Create(q.GetString("cause"))).ToArray()),["generatedWorldItemUnits"]=items.Sum(i=>i.stack),["returnedItems"]=new JsonArray(items.Select(i=>(JsonNode?)new JsonObject{["slot"]=i.whoAmI,["stack"]=i.stack,["itemId"]=((GeneratedItem)i.ModItem).Data.Id,["networkDefinitionSha256"]=NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data),["definitionMatchesSource"]=NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data)==sourceNetworkDefinitionHash,["definitionSha256"]=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(((GeneratedItem)i.ModItem).Data.ToJson()))).ToLowerInvariant()}).ToArray())};
+            return new JsonObject{["droppedItemUpdateScope"]=updateDroppedItems?"Original Item.UpdateItem each active native world item; no complete Main.UpdateWorld ecology":"notRun",["sourceNetworkDefinitionSha256"]=sourceNetworkDefinitionHash,["mismatchedReturnedDefinitions"]=items.Count(i=>NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data)!=sourceNetworkDefinitionHash),["tiles"]=tiles,["targetX"]=Player.tileTargetX,["targetY"]=Player.tileTargetY,["placementGroups"]=groups.Count,["pendingReturns"]=pending.Count,["quarantinedReturns"]=saved.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Count,["returnFailures"]=new JsonArray(saved.GetList<TagCompound>("infiniGeneratedPlacementReturnQuarantineV1").Select(q=>(JsonNode?)JsonValue.Create(q.GetString("cause"))).ToArray()),["generatedWorldItemUnits"]=items.Sum(i=>i.stack),["returnedItems"]=new JsonArray(items.Select(i=>(JsonNode?)new JsonObject{["slot"]=i.whoAmI,["x"]=i.position.X,["y"]=i.position.Y,["vx"]=i.velocity.X,["vy"]=i.velocity.Y,["width"]=i.width,["height"]=i.height,["stack"]=i.stack,["itemId"]=((GeneratedItem)i.ModItem).Data.Id,["networkDefinitionSha256"]=NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data),["definitionMatchesSource"]=NetworkDefinitionHash(((GeneratedItem)i.ModItem).Data)==sourceNetworkDefinitionHash,["definitionSha256"]=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(((GeneratedItem)i.ModItem).Data.ToJson()))).ToLowerInvariant()}).ToArray())};
         }
         public void Dispose(){WActiveWorld=null;ledger.Unload();boolSerializer.Dispose();dropField.SetValue(null,oldDrop);Player.tileTargetX=oldX;Player.tileTargetY=oldY;WorldGen.gen=oldGen;Terraria.Main.mapEnabled=oldMap;}
     }
