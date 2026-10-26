@@ -572,7 +572,7 @@ targets have an initial 0.5 px/tick velocity integrated by original `NPC.UpdateN
 not a separate physics model. Zero-defense and configured-defense results are not
 interchangeable. None of these measurements emits a balance/quality PASS.
 
-The seven optional vanilla geometry textures are source PNGs from the pinned
+The nine optional vanilla geometry textures are source PNGs from the pinned
 community 1.4.4.9 extraction, **not official-byte-certified**, and are not bundled.
 Private definitions, authored art, logs and rendered evidence stay outside git.
 
@@ -586,3 +586,44 @@ a cooldown or channel lifetime prevents a requested press from firing. `both`
 keeps the caller's supplied schedule too (six scenes instead of three); the bounded
 default remains `supplied`. These are requested input opportunities, not invented
 attack counts or a universal optimal firing schedule.
+
+Additional **user-requested controls** can be added without changing recipe
+metadata: `--control item:Terraria/Minishark:98 --control item:Terraria/Musket:96`.
+They are labelled `requestedControl`, never `authoredParent`; both stable name and
+native ID are verified. The report assesses requested-control comparability
+separately so a real noncombat ingredient does not become a fake zero-damage
+weapon. For bullet guns share the same bullet inventory; compare actual native
+use-clock counts with ammo callbacks and stack debits. Native ammo conservation
+and `autoReuse` remain active, not normalized away. Flare-gun utility/lighting and
+status uptime are distinct from bullet-gun direct damage.
+
+### Explicit vanilla controls and actual vanilla player layers
+
+`performance_review.py --control item:Terraria/Minishark:98 --control item:Terraria/Musket:96`
+adds **requested controls**, not fabricated recipe parents. They retain separate
+comparison/admission rows. A noncombat parent refusal does not erase valid
+requested-control measurements. Use both supplied held input and explicit
+repeated presses: autoReuse and native ammo conservation change actual counts.
+Never infer damage/resource rates from nominal damage or reuse flags alone.
+
+For actual vanilla player/item artwork, set `drawArtwork:true`, `drawPlayer:true`,
+`artworkFiles:[]` and the explicit `vanillaAssetRoot`. The ordinary native held-item
+layer uses its genuine pinned texture; no generated proxy/layer replaces it.
+Native items have no fabricated authored grip: their exact DrawData is recorded
+and numerical grip error remains unavailable. Generated composite poses and
+vanilla frame-arm poses may deliberately differ. `initialX/Y` and
+`requestedSpawnX/Y` record actual/native requested projectile spawn centers,
+not a guessed image muzzle marker.
+
+```sh
+python tools/item-test-workbench/verify_vanilla_pose.py \
+  --native-dll /absolute/ItemTestWorkbench.dll \
+  --vanilla-assets /private/performance-assets --out /private/vanilla-poses
+```
+
+This compact native control covers Minishark/Musket in both actual observed
+facings, original player/item draw, original dust, PNG integrity and absence of
+generated replacement/veto. Bullet simulation/hits still execute, but **vanilla
+projectile sprites are explicitly not rendered** in this pose mode. Full-world
+parity and an inferred vanilla hand/grip point are not claimed. Asset provenance
+remains pinned community extraction, not official byte certification.

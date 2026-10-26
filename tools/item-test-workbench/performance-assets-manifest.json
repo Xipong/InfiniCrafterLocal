@@ -57,6 +57,22 @@
       "bytes": 477,
       "width": 32,
       "height": 32
+    },
+    {
+      "path": "Images/Item_96.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Item_96.png",
+      "sha256": "a79952bd1872b03989644b5b0f327ef46a3432b2fd1e326ee61e317ba74ba253",
+      "bytes": 496,
+      "width": 56,
+      "height": 18
+    },
+    {
+      "path": "Images/Item_98.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Item_98.png",
+      "sha256": "5074f5d67a76b71008159acb680caee6737cf0670378dfd57958642f29863573",
+      "bytes": 690,
+      "width": 56,
+      "height": 20
     }
   ]
 }

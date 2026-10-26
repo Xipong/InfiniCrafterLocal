@@ -13,14 +13,14 @@ using Terraria.DataStructures;
 
 internal sealed partial class WNativeArtwork
 {
-    readonly GeneratedItemData reviewData;
+    readonly GeneratedItemData? reviewData;
     readonly WNativeVisualGeometry geometryObserver;
     Hook? visualObserver;
     delegate void VisualOriginal(GeneratedProjectile self,Color color);
     delegate void VisualObserve(VisualOriginal orig,GeneratedProjectile self,Color color);
     Vector2 FrontHand()=>owner.RotatedRelativePoint(owner.GetFrontHandPosition(owner.compositeFrontArm.stretch,owner.compositeFrontArm.rotation),addGfxOffY:false);
     Vector2 RenderedFrontHand()=>owner.RotatedRelativePoint(owner.GetFrontHandPosition(owner.compositeFrontArm.stretch,owner.compositeFrontArm.rotation),addGfxOffY:true);
-    JsonObject PlayerReview()=>new(){["nativeFrontHand"]=WNativeVisualGeometry.Point(FrontHand()),["nativeRenderedFrontHand"]=WNativeVisualGeometry.Point(RenderedFrontHand()),["compositeArmEnabled"]=owner.compositeFrontArm.enabled,["armStretch"]=owner.compositeFrontArm.stretch.ToString(),["armRotation"]=owner.compositeFrontArm.rotation,["handScope"]="Native GetFrontHandPosition; authoritative only when composite arm is enabled. For ordinary frame arms inspect native proxy and rendered pixels; do not auto-fail the distance.",["collider"]=WNativeVisualGeometry.Rect(owner.Hitbox),["direction"]=owner.direction,["gravityDirection"]=owner.gravDir,["velocity"]=WNativeVisualGeometry.Point(owner.velocity),["gfxOffY"]=owner.gfxOffY,["fullRotation"]=owner.fullRotation,["accessoryMount"]=reviewData.Visual.AccessoryMount,["itemAnimation"]=owner.itemAnimation,["itemTime"]=owner.itemTime,["controlUseItem"]=owner.controlUseItem,["channel"]=owner.channel,["visualVerdict"]="review_required",["scope"]="Draw execution/visibility is not aesthetic acceptance; authored reach can intentionally separate grip from hand."};
+    JsonObject PlayerReview()=>new(){["nativeFrontHand"]=WNativeVisualGeometry.Point(FrontHand()),["nativeRenderedFrontHand"]=WNativeVisualGeometry.Point(RenderedFrontHand()),["compositeArmEnabled"]=owner.compositeFrontArm.enabled,["armStretch"]=owner.compositeFrontArm.stretch.ToString(),["armRotation"]=owner.compositeFrontArm.rotation,["handScope"]="Native GetFrontHandPosition; authoritative only when composite arm is enabled. For ordinary frame arms inspect native proxy and rendered pixels; do not auto-fail the distance.",["collider"]=WNativeVisualGeometry.Rect(owner.Hitbox),["direction"]=owner.direction,["gravityDirection"]=owner.gravDir,["velocity"]=WNativeVisualGeometry.Point(owner.velocity),["gfxOffY"]=owner.gfxOffY,["fullRotation"]=owner.fullRotation,["accessoryMount"]=reviewData?.Visual.AccessoryMount,["itemAnimation"]=owner.itemAnimation,["itemTime"]=owner.itemTime,["controlUseItem"]=owner.controlUseItem,["channel"]=owner.channel,["visualVerdict"]="review_required",["scope"]="Draw execution/visibility is not aesthetic acceptance; authored reach can intentionally separate grip from hand."};
     void AddGripDistance(JsonObject row)
     {
         if(row["authoredGrip"] is not JsonObject grip)return;
@@ -29,9 +29,9 @@ internal sealed partial class WNativeArtwork
     }
     void RecordHeldGeometry(DrawData entry)
     {
-        var selected=SpritePresentation.Root(reviewData);Vector2? grip=selected.Grip is {} g?new Vector2((float)g.NormalizedX,(float)g.NormalizedY):null;
+        Vector2? grip=null;if(reviewData is not null){var selected=SpritePresentation.Root(reviewData);if(selected.Grip is {} g)grip=new Vector2((float)g.NormalizedX,(float)g.NormalizedY);}
         var row=WNativeVisualGeometry.Describe(entry.texture,entry.position,entry.sourceRect,entry.color,entry.rotation,entry.origin,entry.scale,entry.effect,grip);
-        row["kind"]="root_held_item";row["transformStage"]=nativePlayer?"DrawPlayer_RenderAllLayers: after native DrawPlayer_TransformDrawData":"partial held layer: no full player transform";AddGripDistance(row);Frame["heldGeometry"]!.AsArray().Add(row);
+        row["kind"]=NativeVanillaEnabled?"vanilla_held_item":"root_held_item";if(NativeVanillaEnabled)row["gripDistanceStatus"]="not_available: no authored vanilla grip; inspect actual native item/player pixels, not ItemLocation-as-hand";row["transformStage"]=nativePlayer?"DrawPlayer_RenderAllLayers: after native DrawPlayer_TransformDrawData":"partial held layer: no full player transform";AddGripDistance(row);Frame["heldGeometry"]!.AsArray().Add(row);
     }
     void EnableVisualObserver()
     {
@@ -39,7 +39,7 @@ internal sealed partial class WNativeArtwork
             (VisualObserve)((orig,self,color)=>{
                 var entity=(RuntimeEntitySpec?)typeof(GeneratedProjectile).GetField("_entity",All)!.GetValue(self);
                 if(entity is null){orig(self,color);return;}
-                var selected=SpritePresentation.Entity(reviewData,entity);Vector2? grip=selected.Grip is {} g?new Vector2((float)g.NormalizedX,(float)g.NormalizedY):null;
+                var selected=SpritePresentation.Entity(reviewData!,entity);Vector2? grip=selected.Grip is {} g?new Vector2((float)g.NormalizedX,(float)g.NormalizedY):null;
                 var rows=WNativeVisualGeometry.Capture(()=>orig(self,color),grip);
                 foreach(var node in rows){var row=node!.AsObject();row["kind"]="projectile";row["entityId"]=entity.Id;row["nativeSlot"]=self.Projectile.whoAmI;row["heldByNativePlayer"]=self.Projectile.whoAmI==owner.heldProj;row["frontHandAttachment"]=self.HasFrontHandAttachment;row["collider"]=WNativeVisualGeometry.Rect(self.Projectile.Hitbox);row["gfxOffY"]=self.Projectile.gfxOffY;row["attachmentOffset"]=WNativeVisualGeometry.Point(self.FrontHandAttachmentOffset);AddGripDistance(row);Frame["projectileGeometry"]!.AsArray().Add(row.DeepClone());}
             }));

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fetch seven pinned community vanilla item PNGs for native contact geometry.
+"""Fetch nine pinned community vanilla item PNGs for native contact geometry.
 
 No official-byte or rendered-world parity claim. No downloaded code executes.
 """
@@ -12,13 +12,13 @@ from fetch_player_assets import COMMIT, PREFIX, verify_png
 from fetch_vfx_assets import destination, download
 
 MANIFEST = Path(__file__).with_name('performance-assets-manifest.json')
-IDS = {46, 162, 168, 190, 930, 964, 3485}
+IDS = {46, 96, 98, 162, 168, 190, 930, 964, 3485}
 
 
 def provision(out, manifest, fetch=download):
     entries = manifest['files']
     if manifest['commit'] != COMMIT or len(entries) != len(IDS) or {e['path'] for e in entries} != {f'Images/Item_{i}.png' for i in IDS}:
-        raise ValueError('Exact pinned seven-item geometry manifest required')
+        raise ValueError('Exact pinned nine-item geometry manifest required')
     rows = []
     for entry in entries:
         if entry['sourceURL'] != PREFIX + Path(entry['path']).name or not 24 <= entry['bytes'] <= 4*1024*1024:

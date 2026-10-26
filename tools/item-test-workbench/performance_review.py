@@ -32,7 +32,7 @@ def parent_candidates(item, supplied=None):
     result = []
     for index, identity in enumerate(dict.fromkeys(identities)):
         match = re.fullmatch(r'item:Terraria[/:]([A-Za-z][A-Za-z0-9_]*):([1-9][0-9]*)', identity)
-        row = {'name': f'parent-{index + 1}', 'identity': identity}
+        row = {'name': f'parent-{index + 1}', 'identity': identity, 'role': 'authoredParent'}
         if match:
             row.update(vanillaItem=match[1], recordedId=int(match[2]))
         elif identity.startswith('generated:') and identity in supplied:
@@ -44,6 +44,17 @@ def parent_candidates(item, supplied=None):
             row.update(status='notRun', reason='Exact generated parent JSON or supported vanilla stable identity unavailable; no substitution')
         result.append(row)
     return result
+
+
+def requested_controls(identities):
+    rows = []
+    for index, identity in enumerate(dict.fromkeys(identities)):
+        match = re.fullmatch(r'item:Terraria[/:]([A-Za-z][A-Za-z0-9_]*):([1-9][0-9]*)', identity)
+        if match is None:
+            raise ValueError('Requested control requires exact item:Terraria/StableName:ID identity')
+        rows.append({'name': f'control-{index + 1}', 'identity': identity, 'role': 'requestedControl',
+                     'vanillaItem': match[1], 'recordedId': int(match[2])})
+    return rows
 
 
 def scenarios(base):
@@ -155,6 +166,7 @@ def measure(trace):
                           'initialMana': before['player']['mana'], 'finalMana': frames[-1]['player']['mana'], 'inventory': debits,
                           'ammoConsumptionCallbacks': sum(e.get('kind') == 'native_ammo_consumption' for _, e in events)},
             'input': {'heldUseTicks': sum(bool(f['player']['controlUseItem']) for f in frames), 'channelTicks': sum(bool(f['player']['channel']) for f in frames)},
+            'activeProjectilesAtEnd': sum(bool(p.get('active')) for p in frames[-1].get('projectiles', [])),
             'targetDied': any(not r['activeAtEnd'] or r['finalLife'] <= 0 for r in health)}
 
 
@@ -200,7 +212,7 @@ def run(args):
         if identity in mappings:
             raise ValueError('Duplicate supplied parent identity')
         mappings[identity] = path
-    candidates = [{'name': 'generated', 'identity': 'generated:' + item['id'], 'item': str(item_path)}, *parent_candidates(item, mappings)]
+    candidates = [{'name': 'generated', 'identity': 'generated:' + item['id'], 'role': 'generated', 'item': str(item_path)}, *parent_candidates(item, mappings), *requested_controls(args.control)]
     matrix = []
     if args.input_pattern in ('supplied', 'both'):
         matrix += [(('supplied-' if args.input_pattern == 'both' else '') + name, scene) for name, scene in scenarios(base)]
@@ -223,7 +235,7 @@ def run(args):
     rows = []
     for scene_name, scenario in matrix:
         for candidate in candidates:
-            row = {'candidate': candidate['name'], 'identity': candidate['identity'], 'scene': scene_name}
+            row = {'candidate': candidate['name'], 'identity': candidate['identity'], 'role': candidate['role'], 'scene': scene_name}
             rows.append(row)
             if candidate.get('status') == 'notRun':
                 row.update(status='notRun', reason=candidate['reason']); continue
@@ -277,24 +289,28 @@ def run(args):
     unchanged = sha(dll) == dll_hash
     summary = {**plan, 'complete': True, 'nativeDllSha256': dll_hash, 'executableUnchanged': unchanged,
                'buildProvenance': 'Explicit native executable; preserve independent build receipt. This is not normal wrapper provenance certification.',
+               'requestedControlComparisons': assess_comparisons([r for r in rows if r['role'] in ('generated', 'requestedControl')], [name for name, _ in matrix]) if args.control else [],
+               'allRequestedControlsMeasured': bool(args.control) and unchanged and all(r['status'] == 'measured' for r in rows if r['role'] in ('generated', 'requestedControl')),
                'comparisons': comparisons, 'allTrialsMeasured': unchanged and all(r['status'] == 'measured' for r in rows), 'trials': rows,
                'caveats': ['No automatic balance/visual PASS. Noncombat or missing parents are not zero-damage controls.',
                            'Native RNG is seeded, but weapons consume RNG differently; one seed is not a population estimate.',
                            'Controlled target AI/gravity/contact disabled. Native armor, immunity, collision, buffs and DoT remain active.',
                            'Uptime counts end-of-tick presence; first/last sub-tick changes are not resolved.',
-                           'Damage channels can overlap; actual target life loss is separate. Dead targets censor the remainder.',
+                           'Damage channels can overlap; actual target life loss is separate. Dead targets censor the remainder; still-active projectiles at the window end have not necessarily landed their damage.',
                            'Identical unarmored player and ammo inventory; no prefixes/accessory/set progression.',
                            'client_vfx trials execute equal native dust/lighting/VFX update phases with all drawing disabled. Assets still load for generated material admission and vanilla contact geometry. Effects requiring actual draw hooks may refuse; full-world parity not claimed.']}
     (out/'performance.json').write_text(json.dumps(summary, indent=2))
     lines = ['# Native item performance', '', 'Measurements only — no balance or visual approval.', '',
-             '| Scene | Candidate | Status | Target HP lost | Item / projectile hits | Mana paid |', '|---|---|---|---:|---:|---:|']
+             '| Scene | Candidate / role | Status | Target HP lost | Item / projectile hits | Mana paid |', '|---|---|---|---:|---:|---:|']
     for r in rows:
         channels = r.get('channels', {})
-        lines.append(f"| {r['scene']} | {r['identity']} | {r['status']} | {r.get('observedTargetLifeLost', '—')} | {channels.get('item_hit', {}).get('calls', '—')} / {channels.get('hit', {}).get('calls', '—')} | {r.get('resources', {}).get('observedManaPayments', '—')} |")
+        lines.append(f"| {r['scene']} | {r['identity']} ({r['role']}) | {r['status']} | {r.get('observedTargetLifeLost', '—')} | {channels.get('item_hit', {}).get('calls', '—')} / {channels.get('hit', {}).get('calls', '—')} | {r.get('resources', {}).get('observedManaPayments', '—')} |")
         if r.get('reason'): lines.append('\nReason: ' + r['reason'].replace('\n', ' ') + '\n')
     lines += ['', *[c['scene'] + ': ' + c['status'] + (' — ' + '; '.join(c['limitations']) if c['limitations'] else '') for c in comparisons], '', 'Detailed channels, target movement/defense, uptime, input, use-clock intervals and stack debits: `performance.json`.', '', *['- '+c for c in summary['caveats']]]
+    if summary['requestedControlComparisons']:
+        lines += ['', '## Requested controls (separate from authored parents)', *[c['scene'] + ': ' + c['status'] + (' — ' + '; '.join(c['limitations']) if c['limitations'] else '') for c in summary['requestedControlComparisons']]]
     (out/'performance.md').write_text('\n'.join(lines)+'\n')
-    print(json.dumps({'complete': True, 'allTrialsMeasured': summary['allTrialsMeasured'], 'trials': len(rows), 'report': str(out/'performance.md')}))
+    print(json.dumps({'complete': True, 'allTrialsMeasured': summary['allTrialsMeasured'], 'allRequestedControlsMeasured': summary['allRequestedControlsMeasured'], 'trials': len(rows), 'report': str(out/'performance.md')}))
     return 0 if summary['allTrialsMeasured'] else 2
 
 
@@ -304,6 +320,7 @@ def main():
     parser.add_argument('--out', type=Path, required=True); parser.add_argument('--native-dll', type=Path)
     parser.add_argument('--item-boundary', choices=('fresh', 'local_cache'), default='fresh')
     parser.add_argument('--vanilla-assets', type=Path); parser.add_argument('--parent-item', action='append', default=[], metavar='IDENTITY=PATH')
+    parser.add_argument('--control', action='append', default=[], metavar='item:Terraria/StableName:ID', help='Additional explicitly requested vanilla benchmark, never relabeled as a recipe parent')
     parser.add_argument('--input-pattern', choices=('supplied', 'repeated', 'both'), default='supplied')
     parser.add_argument('--repeat-every', type=int); parser.add_argument('--hold-ticks', type=int)
     parser.add_argument('--repeat-input', choices=('primary', 'alt'), default='primary')

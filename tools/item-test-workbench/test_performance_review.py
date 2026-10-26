@@ -77,7 +77,7 @@ class PerformanceTests(unittest.TestCase):
         root=Path(__file__).parent
         manifest=json.loads((root/'performance-assets-manifest.json').read_text())
         loader=(root/'WorkbenchNative.Graphics.cs').read_text()
-        self.assertEqual(len(manifest['files']),7)
+        self.assertEqual(len(manifest['files']),9)
         for row in manifest['files']:self.assertIn(row['sha256'],loader)
 
     def test_native_identity_requires_both_name_and_id(self):
@@ -110,5 +110,18 @@ class PerformanceTests(unittest.TestCase):
             with self.assertRaises(ValueError): p.repeated_schedule(base,every,hold)
         with self.assertRaisesRegex(ValueError,'256'): p.repeated_schedule({'ticks':600},2,1)
 
+
+    def test_requested_controls_are_not_forged_parents(self):
+        item={'recipeMeta':{'parentIdentities':['item:Terraria/Boomstick:964']}}
+        before=copy.deepcopy(item)
+        parents=p.parent_candidates(item)
+        controls=p.requested_controls(['item:Terraria/Minishark:98','item:Terraria/Musket:96','item:Terraria/Minishark:98'])
+        self.assertEqual(item,before)
+        self.assertEqual(parents[0]['role'],'authoredParent')
+        self.assertEqual(len(controls),2)
+        self.assertTrue(all(row['role']=='requestedControl' for row in controls))
+        self.assertEqual([row['recordedId'] for row in controls],[98,96])
+        for bad in ['Minishark','item:Terraria/Minishark:0','generated:fake']:
+            with self.assertRaises(ValueError):p.requested_controls([bad])
 
 if __name__=='__main__': unittest.main()

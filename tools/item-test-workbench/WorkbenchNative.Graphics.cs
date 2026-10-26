@@ -55,6 +55,8 @@ internal sealed class WorkbenchGraphicsContext : IDisposable
     public Asset<Texture2D> LoadVanillaItemTexture(int id,string root)
     {
         string expected=id switch {
+            96 => "a79952bd1872b03989644b5b0f327ef46a3432b2fd1e326ee61e317ba74ba253",
+            98 => "5074f5d67a76b71008159acb680caee6737cf0670378dfd57958642f29863573",
             190 => "709da5dd2aad04d007194bc89d45883426debaaaca2bc779829c874eb691ed44",
             46 => "ce5cadf297077a5a05e44fd1c838fa7af40f12700b904cefdb77a3f77767d60e",
             964 => "cf4a7c175939aa78f5ef9e486c6bc03babe8ae9b1aa8b7fd3dc9a0a640192d3e",
@@ -70,7 +72,7 @@ internal sealed class WorkbenchGraphicsContext : IDisposable
         byte[] bytes=File.ReadAllBytes(path);string hash=Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         if(hash!=expected)throw new InvalidDataException("Vanilla item source differs from pinned community Item_"+id+".png");
         using var input=new MemoryStream(bytes,writable:false);var texture=assets.CreateUntracked<Texture2D>(input,"Item_"+id+".png",AssetRequestMode.ImmediateLoad);
-        Provenance["vanillaItem"] = new JsonObject { ["path"]=path,["sha256"]=hash,["state"]=texture.State.ToString(),["width"]=texture.Value.Width,["height"]=texture.Value.Height,["source"]="Pinned community Terraria 1.4.4.9 source PNG, not official-byte-certified",["scope"]="Native Item.GetDrawHitbox/use-style geometry only; no vanilla artwork draw or fake generated proxy substitution" };
+        Provenance["vanillaItem"] = new JsonObject { ["path"]=path,["sha256"]=hash,["state"]=texture.State.ToString(),["width"]=texture.Value.Width,["height"]=texture.Value.Height,["source"]="Pinned community Terraria 1.4.4.9 source PNG, not official-byte-certified",["scope"]="Native Item.GetDrawHitbox/use-style geometry and optional actual vanilla PlayerRenderer artwork; no generated proxy substitution" };
         return texture;
     }
     public Asset<Texture2D> LoadEmptyItemTexture(string root)

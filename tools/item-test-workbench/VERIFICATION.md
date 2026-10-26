@@ -178,7 +178,7 @@ such; do not relabel unsupported or unexecuted paths as generic success.
 Local extension checks (independent direct official Roslyn build; retain the
 source/reference receipt, not a normal MSBuild-provenance claim):
 
-- 86 offline workbench Python tests passed, including explicit facing/aim,
+- 87 offline workbench Python tests passed, including explicit facing/aim,
   input hold/release, non-authoritative frame-arm metrics, exact parent identity,
   shared scenario/loadout/RNG admission, repeated input, and asset manifest controls.
 - All 59 existing native scenario/negative regression checks passed using
@@ -214,3 +214,12 @@ notRun, not implied by native or CI success. Dropped frames are sampled before
 that tick's world update; world snapshots are after it and must not be mistaken
 for identical pose samples. Numeric observations and negative controls passing
 never imply that an authored item looks good or is well balanced.
+
+
+Requested vanilla controls add four passing native pose cases (Minishark/Musket,
+both actual observed facings): original vanilla DrawData, no generated replacement
+or veto, PNG integrity and immutable binary. The supplied actual item-control
+matrix measured held and repeated-input trials separately; requested controls
+never rewrite or masquerade as recipe parents. Native bullet simulation is
+measured, while vanilla bullet sprite rendering remains explicitly notRun in
+pose views. One seed/layout/window is not a universal balance recommendation.

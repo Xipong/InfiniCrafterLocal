@@ -91,3 +91,4 @@ as a player mining action. Reusable synthetic matrix: `verify_world.py`.
 | Dropped body | Actual generated PreDrawInWorld on native world instances | Neutral white/zero rotation diagnostic caller; optional original Item.UpdateItem settling; no full Main.DrawItem, pickup UI or world ecology parity |
 | Equipped badge | Actual native layer/anchor plus authored mount, native player scale | Visibility alone does not establish good appearance |
 | Context terrain | Optional configured tile boundary overlay | Clearly schematic, never native terrain art |
+| Requested vanilla controls | Explicit stable identity, separate from authored parents; genuine PlayerRenderer/item PNG and native firing | No invented vanilla grip; projectile sprites omitted explicitly in pose mode; hold vs repeated native input distinguished |
