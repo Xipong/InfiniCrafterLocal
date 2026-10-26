@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Explicitly fetch 19 pinned COMMUNITY Terraria source PNGs, not official assets.
+"""Explicitly fetch 20 pinned COMMUNITY Terraria source PNGs, not official assets.
 
   python fetch_player_assets.py --out /path/to/terraria-player-assets
   python fetch_player_assets.py --out /path/to/terraria-player-assets --include-dummy
@@ -22,7 +22,7 @@ from fetch_vfx_assets import destination, verify, download
 MANIFEST = Path(__file__).with_name("player-assets-manifest.json")
 COMMIT = "c835594415e31ed88734dc778661014b48ffb648"
 PREFIX = f"https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/{COMMIT}/source-pngs/"
-REQUIRED = {f"Player_0_{i}.png" for i in [*range(14), 15]} | {"Player_Hair_1.png", "Player_HairAlt_1.png", "MagicPixel.png", "Dust.png"}
+REQUIRED = {f"Player_0_{i}.png" for i in [*range(14), 15]} | {"Player_Hair_1.png", "Player_HairAlt_1.png", "MagicPixel.png", "Dust.png", "Item_0.png"}
 
 DUMMY_REQUIRED = {"NPC_488.png", "Tiles_378.png"}
 
@@ -40,7 +40,7 @@ def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool 
         raise ValueError("Unsupported community source commit")
     entries = list(manifest["files"])
     if len(entries) != len(REQUIRED) or {e["path"] for e in entries} != {"Images/" + name for name in REQUIRED}:
-        raise ValueError("Manifest must contain exactly the 19 admitted player/source textures")
+        raise ValueError("Manifest must contain exactly the 20 admitted player/source textures")
     if include_dummy:
         extra = manifest.get("trainingDummyFiles", [])
         if len(extra) != 2 or {e["path"] for e in extra} != {"Images/" + name for name in DUMMY_REQUIRED}:
@@ -88,7 +88,7 @@ def provision(out: Path, manifest: dict, fetch=download, *, include_dummy: bool 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--include-dummy", action="store_true", help="Also fetch the two pinned native training-dummy textures (default: player19 only)")
+    parser.add_argument("--include-dummy", action="store_true", help="Also fetch the two pinned native training-dummy textures (default: 20 player/empty-item textures)")
     args = parser.parse_args()
     try:
         result = provision(args.out, json.loads(MANIFEST.read_text(encoding="utf-8")), include_dummy=args.include_dummy)

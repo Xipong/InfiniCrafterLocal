@@ -159,6 +159,14 @@
       "bytes": 36526,
       "width": 1000,
       "height": 120
+    },
+    {
+      "path": "Images/Item_0.png",
+      "sourceURL": "https://raw.githubusercontent.com/sullerandras/terraria-hd-textures/c835594415e31ed88734dc778661014b48ffb648/source-pngs/Item_0.png",
+      "sha256": "6a1806fb50eedd97f370b8fa512512b47c8066711a4d88cce14d836cfd1c8e93",
+      "bytes": 79,
+      "width": 16,
+      "height": 16
     }
   ],
   "matchingRelease": {

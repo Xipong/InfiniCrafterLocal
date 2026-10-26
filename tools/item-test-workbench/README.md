@@ -239,8 +239,8 @@ export INFINI_PLAYER_ASSET_DIR="$PWD/artifacts/dependencies/player-assets"
 ```
 
 The VFX fetcher checks the installed DLL and downloads pinned upstream resources;
-it does not replace the DLL. The player fetcher downloads 19 pinned **community
-source PNGs**, or 21 with `--include-dummy`, not HD upscales. These are labelled
+it does not replace the DLL. The player fetcher downloads 20 pinned **community
+source PNGs**, or 22 with `--include-dummy`, not HD upscales. These are labelled
 1.4.4.9 upstream but are not certified against official game XNB bytes. Both fetchers
 verify hashes/sizes and refuse mismatches/symlinks instead of silently overwriting.
 Game assets and external dependency binaries are **not bundled** with this utility.
@@ -277,3 +277,353 @@ its build instructions; replay requires no LLM API key.
 6. Re-run both cases after a change. Do not relax assertions merely to obtain green output.
 
 See [VERIFICATION.md](VERIFICATION.md) for portable checks and interpretation.
+
+### Camera and controlled lighting diagnostics
+
+`nativeRender.lightingMode` accepts `legacy_point` (default native white point at
+ tile 50,45) or `viewport_fill` (explicit diagnostic white native lights on a
+ four-tile grid). Both use **original** `Lighting.AddLight/LightTiles`. The processed
+ region now follows the actual camera/zoom matrix, with a 16-tile margin clipped
+ to the initialized world, rather than a fixed Y=32..56 band. This is controlled
+ test illumination, not Terraria world-light parity; the fill mode is opt-in.
+
+Every captured PNG's frame record includes `scene`: the camera, native-transformed
+ player/projectile collision bounds, `hitboxIntersectsViewport`, and sampled
+ `centerLightRgb`. This separates an off-camera or dark object from a missing
+ spawn. Hitbox overlap and a draw call do **not** prove visible sprite pixels,
+ complete VFX coverage, grip correctness or visual quality. Review original PNGs.
+ The camera does not auto-follow or change gameplay; enlarge/reposition it in the
+ explicit scenario when an intended lifecycle leaves the viewport.
+
+### Authored material and impact textures
+
+The original detached renderer also admits `spriteElement`, `texturedPath`, and
+`impactSprite` when `drawArtwork=true`. Supply the exact referenced VFX and impact
+PNG files alongside item/entity files in `artworkFiles`; unrelated files still
+refuse. VFX files are checked against the canonical `[recipeId, assetId]` + NUL +
+PNG identity (`infini_vfx_png_`); impact files use the canonical default impact
+logical asset identity (`infini_asset_png_`). Missing, substituted or incorrectly
+named bytes do not pass admission. Custom logical impact IDs remain unsupported.
+
+`impactRing` additionally requires `drawPlayer=true` and `drawNativeDust=true`:
+the original MagicPixel/Dust resources and complete native projectile hooks are
+required, not reconstructed rings. Native snapshots now expose original material
+path histories/geometries and detached impact records as well as particles. A
+record proves state exists, not that it was drawn or visually approved; inspect
+the corresponding original PNG frames and renderer coverage separately.
+
+### Equipment reactions and secondary targets
+
+CPU `playerUpdate: "full"` admits a single authored head/body/legs armor item or
+accessory via `equip`, `vanity`, and `unequip`. The instance moves, rather than
+being copied. Armor uses its actual generated armor proxy and native equip-slot
+registration; `Player.Update` owns effects and reset. `player_stat_at` also accepts
+`genericCrit` (including the native baseline).
+
+Reaction scenarios can schedule `{"tick":5,"kind":"hurt_player","damage":10}`
+or `{"tick":5,"kind":"strike_hostile","damage":10}`. They run **after** that
+tick's native player update, so functional equipment registration, defense,
+immunity, death credit and cooldowns are real. `strike_hostile` allocates a declared
+one-HP, stationary Zombie fixture in slot 1 and calls `Player.StrikeNPCDirect`;
+`GeneratedEquipmentKillGlobalNPC` is registered in the actual native loader.
+Native death callbacks and player damage are recorded. The controlled hostile uses
+an explicitly empty native loot table: this tests kill/reaction hooks, not vanilla
+loot, enemy AI, graphical enemy death or multiplayer. A live previous hostile is
+never silently overwritten. These stimuli are not admitted in rendered modes.
+
+Optional `hostiles: [{"x":960,"y":700,"life":10000}]` provisions up to eight
+additional stationary controlled Zombies in slots 2–9. They retain native geometry,
+NPC updates, collision and damage hooks, but have disabled AI/gravity/contact damage
+and zero defense/knockback. Their snapshots let a scenario distinguish secondary
+projectile targeting from a hit on the first dummy. This is not NPC-AI certification.
+
+```sh
+python tools/item-test-workbench/verify_equipment_reactions.py --out artifacts/equipment
+# For an independently source-built native executable, preserve its build receipt:
+python tools/item-test-workbench/verify_equipment_reactions.py --out artifacts/equipment \
+  --no-build --native-dll /path/to/ItemTestWorkbench.dll
+```
+
+### Native placement and mining world scenes
+
+`world.trackTiles` selects explicit `{tileX,tileY}` cells for native telemetry.
+Optional `world.walls` initializes bounded vanilla wall rectangles with `tileX`,
+`tileY`, `width`, `height`, `wallId`; `tiles` still supplies Dirt terrain.
+The scene loads Terraria's actual second tile/NPC metadata initializer, the
+production placement ledger and its native `GlobalTile.CanDrop` callback, plus
+native NBT bool serialization. It does not implement a parallel material ledger.
+
+- `tile_target` sets the native tile target and mouse coordinates. Subsequent
+  `primary`/`alt` runs real `Player.Update`/`ItemCheck`, `PlaceThing` or mining hooks.
+- `break_tile` calls original `WorldGen.KillTile` as an **external break stimulus**.
+  It is not evidence that a player mined the object. Primary pickaxe tests use
+  ordinary input instead and observe the actual native tile removal.
+- `tile_at`, `placement_groups_at`, `placement_pending_at` and
+  `generated_world_items_at` assert native state at an explicit post-update `tick`.
+  `tile_at` requires `tileX`, `tileY`, `hasTile` and, for a present tile, `tileId`.
+  Count assertions require `value`. Assert stack debit separately with
+  `generated_stack_at`; an observed world item count alone is not conservation.
+- Snapshots include exact tile frames, pending/quarantined return counts and
+  returned generated-item definition hashes. `GeneratedPlacementLedgerSystem`
+  performs real post-world maintenance and `Item.NewItem` allocation.
+
+```sh
+python tools/item-test-workbench/verify_world.py --out artifacts/world-controls
+```
+
+The synthetic controls cover native campfire placement/last-unit debit, full
+footprint removal, repeated break without duplicate return, a deliberately wrong
+return count, native pickaxe mining versus no use, and an out-of-world refusal.
+Placement lifecycle tests use `full` (dedicated visual branch); mining/contact uses
+`client`. These controls do not certify placed-body artwork, wall breaking,
+chests, arbitrary vanilla tiles, wiring, multiplayer, or the client renderer after
+consuming the final held unit. World maps are disabled in this controlled scene;
+map UI and full world ecology are not simulated.
+
+### Resource, entity and long-lifecycle checks
+
+`itemStack` provisions the actual generated item instance (default 1, bounded by
+its native `maxStack`). Native `ItemCheck` owns consumption; the bench does not
+subtract stacks. Arrow, bullet and flare inventory go through native ammo selection.
+Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded to
+600. This permits full multi-minute field expiry without increasing image budgets.
+
+- `entity_spawn_count` counts distinct observed configured native lifetimes.
+- `entity_hit_count_at_least` counts actual projectile hit callbacks.
+- `entity_peak_active_at_most` checks native snapshots and configuration-time
+  counts, including allocations between snapshots. All take `entityId` and `value`.
+- `entity_inactive` and `entity_natural_expiry` take `entityId`; they inspect final
+  native activity or observed lifetime-depleted Kill, respectively.
+- `generated_stack_at` and `exhaustion_at` take post-update `tick` and exact `value`.
+  Stack assertions sum the single generated identity across inventory/equipment.
+- Direct `Player.ApplyDamageToNPC` calls are observed separately from native
+  item/projectile hit callbacks, so nearby-event damage is not mistaken for zero
+  damage simply because it bypasses projectile contact callbacks.
+
+```sh
+python tools/item-test-workbench/verify_lifecycle.py --out artifacts/lifecycle
+```
+
+For separately source-built executables, the new lifecycle/world/equipment
+verifiers accept `--no-build --native-dll PATH`. They record binary identity and
+refuse a changed binary mid-matrix. This is direct native execution, **not** proof
+of the standard wrapper's build provenance, archive or optional exports. Preserve
+the external compiler/source/reference receipt with that evidence.
+
+### Native placed-body drawing
+
+`nativeRender.drawPlacedBodies: true` requires `drawArtwork: true` and an explicit
+`world` scene. It calls the original `GeneratedPlacedBodyDrawSystem.PostDrawTiles`
+over the real placement ledger and records successful original `DrawBody` calls.
+`placed_body_draw_count_at_least` requires a positive `minimum`; no emitted body
+cannot count as visual-path coverage. No native terrain texture or background is
+invented. This verifies the authored placed-body renderer, not the complete world.
+
+Returned material telemetry includes both the retained canonical source and returned
+`ToNetworkJson` hashes. `generated_world_items_at` also rejects any returned item
+whose canonical definition differs from the source; item ID/count alone is not
+sufficient evidence that a placement round-trip preserved the definition.
+
+Native movement inputs are explicit and persistent until changed:
+`{"tick":20,"kind":"controls","left":false,"right":true,"jump":true}`.
+All three booleans are required. Release them with all three `false`; ordinary
+weapon `release` does not release movement. This requires full `Player.Update`,
+which remains responsible for acceleration, jump, gravity, collisions and friction.
+No workbench motion/physics model is used. Native input flags are in every player
+snapshot. `verify_controls.py` checks run, jump, release and preflight refusals.
+
+For equipped PNG checks, `verify_equipment_render.py` accepts `--item`, exact
+`--artwork` PNG paths and `--player-assets`, plus the common output/build options.
+It runs actual equipment layers and checks the idle player-region pixels against
+unequip, retaining raw PNGs. A dispatched draw is **not** sufficient: fully occluded
+overlays fail its visibility check. Facing/animation coverage remains explicit.
+All equipment artwork runs require both exact item and `equipOverlayPath` PNGs,
+even when the supplied scenario only uses the item in hand or places it.
+
+Rendered movement can complete native achievements in the controlled scene. The
+workbench preserves native achievement completion and its original notification/
+sound dispatch, but captures achievement chat text before font layout, like the
+existing generated-use-refusal text sink. It records `native_achievement_completed`
+and `native_ui_message`; chat glyph rendering and audible audio are not certified.
+This adapter does not alter world position, movement, achievement conditions or
+item behavior. Unrelated chat paths are not silently swallowed.
+
+## Item quality review (not just hook execution)
+
+`quality_review.py` keeps native execution, numeric observations and visual judgment
+separate. It never labels art acceptable because a draw occurred, a collider
+passed, an overlay was visible, or the lowest alpha pixel touched a reference.
+
+```bash
+# Start with a proven private native scene: exact artworkFiles/player assets,
+# correct ammo inventory, camera, terrain and item boundary. No asset rewriting.
+python tools/item-test-workbench/quality_review.py cycle \
+  --item /private/item.json --scenario /private/native-scene.json \
+  --native-dll /absolute/ItemTestWorkbench.dll --hold-ticks 30 --out /private/review
+# For passive equipment add --equipment (native equip, not invented use input).
+# A single existing trace, including placement/drop scenes:
+python tools/item-test-workbench/quality_review.py report /private/native.json \
+  --out /private/report --terrain-reference
+# Neutral sparse-support regression; requires existing native asset environment:
+python tools/item-test-workbench/verify_quality.py \
+  --native-dll /absolute/ItemTestWorkbench.dll --out /private/quality-controls
+```
+
+The compact cycle runs both facings, idle and native moving/jumping, with an
+explicit held-input interval and release. It preserves ammo/environment settings
+but replaces item-specific assertions with `no_nonfinite`: changed input cannot
+inherit old shot counts. Inspect resource snapshots and observed held frames;
+no-ammo refusal is not a missing animation. Use a long enough scene for recovery.
+A separate scene may set `player.gravityDirection:-1` **and**
+`player.gravitationPotion:true`: the real native buff permits inverted gravity.
+Do not infer inverted-gravity coverage from ordinary facing tests; the summary
+reports observed states. This is a native input scene, not a physics simulator.
+
+Every artwork frame includes:
+- Native front hand, rendered front hand (including `gfxOffY`), composite-arm
+  authority, facing, gravity, velocity and input/use clocks. A frame-arm getter
+  is not authoritative when the composite arm is disabled.
+- Root held geometry **after** native player draw-data transformation, versus
+  generated-projectile core geometry observed at actual `SpriteBatch.Draw`.
+  Authored grip is projected through that exact draw. Distances and attachment
+  offsets are observations: intentional authored reach is **review required**,
+  never automatically canceled or declared invalid.
+- Player/projectile colliders, placed footprint, and actual equipped layer draw
+  anchors plus authored accessory mount. A visible badge can still be misplaced,
+  badly scaled or aesthetically unsuitable.
+- Placed-body alpha support per world-pixel column, clipped against transformed
+  pixel polygons (`alpha>=128`, reported explicitly), contact-column count,
+  minimum **and median** gap. Leaves or a single tilted end cannot turn a zero
+  minimum into a generic support PASS. This measures silhouette, not structural
+  material or semantic base. Textures are immutable during this isolated run.
+
+Set `nativeRender.drawDroppedItems:true` alongside `drawArtwork` to execute
+`GeneratedItem.PreDrawInWorld` on actual active generated `Main.item` instances
+(e.g. native placement returns). Its collider, authored offsets and original
+sprite draws are recorded separately. The diagnostic caller explicitly uses
+white light and zero rotation; it is not complete `Main.DrawItem` treatment,
+full-world item treatment, or detected terrain contact. Set explicit
+`world.updateDroppedItems:true` to execute original `Item.UpdateItem` for active
+world instances; snapshots record position/velocity and exact update scope. The
+neutral regression moves the player away using native controls and verifies
+settling on the configured tile floor. Pickup popup/font UI remains outside
+this focused scene (keep the player away); no custom physics is substituted.
+Collider/footprint bottoms are
+reference lines, and authored offsets may deliberately produce nonzero gaps.
+
+Reports retain byte-identical hash-verified original PNGs beside diagnostic
+copies. Optional brown terrain rectangles are **schematic context only**, never
+Terraria terrain pixels or full-world parity. No actual user definitions, art,
+logs, videos or reports belong in the repository. Synthetic fixtures alone are
+public. Direct DLL users must retain the independent source/reference build
+receipt and use final exact source hashes; a successful render is not a packaged
+live-game self-test.
+
+### Native performance against the actual parents
+
+`performance_review.py` runs one supplied use schedule against **lone, moving and
+three grouped controlled Zombies**, once for the item and each exact distinct
+`recipeMeta.parentIdentities` entry. Names in prose are never guessed as parents.
+Missing generated parents and noncombat ingredients are `notRun`/`notMeasured`,
+not zero-damage controls. Supply an actual generated parent with
+`--parent-item 'generated:ID=/private/parent.json'`. Modded native parents are not
+admitted. The recorded vanilla numeric ID must agree with native stable-name lookup.
+
+```sh
+python tools/item-test-workbench/fetch_performance_assets.py --out /private/parent-assets
+python tools/item-test-workbench/performance_review.py \
+  --item /private/item.json --item-boundary local_cache \
+  --scenario tools/item-test-workbench/scenarios/performance-primary.json \
+  --out /private/performance --plan
+# Remove --plan to execute. For a separately source-built native binary also use:
+# --native-dll /private/ItemTestWorkbench.dll
+# For client contact geometry: --vanilla-assets /private/parent-assets
+```
+
+The example is **two explicit hold/release cycles**, not universal input for every
+weapon. Tune range, aim, duration and holds to the authored item, then keep them
+identical for all candidates. A non-auto-reuse sword held down may swing only once;
+the report shows actual `Player.ApplyItemTime` ticks rather than calling the whole
+held interval continuous fire. Ammo inventory is shared and actual matching-ammo
+availability, native consumption callbacks and final stack debits are separate.
+Full CPU scenes refuse native-contact weapons instead of reporting false zero
+melee damage. For such weapons supply a `client_hybrid` scene (no VFX) or a
+`client_vfx` scene with the item's exact admitted publication files.
+
+In performance `client_vfx` runs, drawing and PNG capture are deliberately disabled
+for **every** candidate; material assets still load where required. Vanilla items
+use their pinned real item PNG for native use-style/hitbox geometry, never the
+generated proxy. Native player/projectile/NPC, dust/lighting and detached-VFX
+updates execute in the same mode. Draw-required effects such as `impactRing` may
+refuse this non-drawing workload and remain explicitly unmeasured. Use the separate
+visual workflow to inspect artwork; this report does not certify visuals.
+
+`performance.json` and `.md` preserve each trial status and raw trace/log/hash
+receipts. Measurements include separate item/projectile/direct-damage callbacks,
+actual target HP lost, critical hits, sampled per-target native buff uptime, target
+positions/armor, native use-clock intervals, paid mana and inventory debits. The
+channels are **not blindly added**: direct damage may nest callbacks and health
+loss also reflects DoT/regeneration. A dead target censors the remaining trial.
+The same native RNG seed is reset **after scene/assets setup, before tick 0**;
+weapons still consume RNG differently, so a single seed is not a distribution.
+Initial native player/ammo and seed receipts are checked for equality. No prefixes,
+armor/accessory loadout, real NPC AI or full-world certification is claimed. Moving
+targets have an initial 0.5 px/tick velocity integrated by original `NPC.UpdateNPC`,
+not a separate physics model. Zero-defense and configured-defense results are not
+interchangeable. None of these measurements emits a balance/quality PASS.
+
+The nine optional vanilla geometry textures are source PNGs from the pinned
+community 1.4.4.9 extraction, **not official-byte-certified**, and are not bundled.
+Private definitions, authored art, logs and rendered evidence stay outside git.
+
+For a sustained **repeated-press** view, choose an explicit schedule rather than
+assuming auto-reuse. For example, add `--input-pattern repeated --repeat-every 30
+--hold-ticks 5` (primary by default; `--repeat-input alt` selects alternate).
+This replaces only use/release actions, preserving aim/movement and all scene
+conditions, and applies the **same** schedule to every candidate. The report labels
+these `repeated-*` scenes and shows actual native use-clock applications even when
+a cooldown or channel lifetime prevents a requested press from firing. `both`
+keeps the caller's supplied schedule too (six scenes instead of three); the bounded
+default remains `supplied`. These are requested input opportunities, not invented
+attack counts or a universal optimal firing schedule.
+
+Additional **user-requested controls** can be added without changing recipe
+metadata: `--control item:Terraria/Minishark:98 --control item:Terraria/Musket:96`.
+They are labelled `requestedControl`, never `authoredParent`; both stable name and
+native ID are verified. The report assesses requested-control comparability
+separately so a real noncombat ingredient does not become a fake zero-damage
+weapon. For bullet guns share the same bullet inventory; compare actual native
+use-clock counts with ammo callbacks and stack debits. Native ammo conservation
+and `autoReuse` remain active, not normalized away. Flare-gun utility/lighting and
+status uptime are distinct from bullet-gun direct damage.
+
+### Explicit vanilla controls and actual vanilla player layers
+
+`performance_review.py --control item:Terraria/Minishark:98 --control item:Terraria/Musket:96`
+adds **requested controls**, not fabricated recipe parents. They retain separate
+comparison/admission rows. A noncombat parent refusal does not erase valid
+requested-control measurements. Use both supplied held input and explicit
+repeated presses: autoReuse and native ammo conservation change actual counts.
+Never infer damage/resource rates from nominal damage or reuse flags alone.
+
+For actual vanilla player/item artwork, set `drawArtwork:true`, `drawPlayer:true`,
+`artworkFiles:[]` and the explicit `vanillaAssetRoot`. The ordinary native held-item
+layer uses its genuine pinned texture; no generated proxy/layer replaces it.
+Native items have no fabricated authored grip: their exact DrawData is recorded
+and numerical grip error remains unavailable. Generated composite poses and
+vanilla frame-arm poses may deliberately differ. `initialX/Y` and
+`requestedSpawnX/Y` record actual/native requested projectile spawn centers,
+not a guessed image muzzle marker.
+
+```sh
+python tools/item-test-workbench/verify_vanilla_pose.py \
+  --native-dll /absolute/ItemTestWorkbench.dll \
+  --vanilla-assets /private/performance-assets --out /private/vanilla-poses
+```
+
+This compact native control covers Minishark/Musket in both actual observed
+facings, original player/item draw, original dust, PNG integrity and absence of
+generated replacement/veto. Bullet simulation/hits still execute, but **vanilla
+projectile sprites are explicitly not rendered** in this pose mode. Full-world
+parity and an inferred vanilla hand/grip point are not claimed. Asset provenance
+remains pinned community extraction, not official byte certification.

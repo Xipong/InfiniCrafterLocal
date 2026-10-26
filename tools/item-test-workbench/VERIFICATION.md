@@ -122,3 +122,104 @@ workbench and every scenario ran.
 - Real pixels can establish visible pose/grip/direction only for loaded assets and
   executed passes. Read [SUPPORT_MATRIX.md](SUPPORT_MATRIX.md) before extending that
   conclusion to other appearances, worlds, shaders or multiplayer.
+
+### Synthetic material / scene controls
+
+```sh
+python tools/item-test-workbench/verify_materials.py --out artifacts/material-controls
+```
+
+This generates explicitly synthetic native fixture JSON and two colored control
+PNGs locally, then executes the original material-path renderer. It checks path
+history/retirement, native light bounds for a distant camera, and missing/tampered
+publication and invalid lighting-mode refusals. A synthetic VFX-off control must
+produce identical native gameplay snapshots; both original PNG sets are hash-checked
+and the VFX-on frames must contain actual RGB differences. This verifies visible
+material output in that controlled scene, not authored visual quality. No captured user
+item or game PNG is bundled. `--native-dll PATH --no-build` accepts an independently built
+native executable and records its hash; it does not claim a wrapper build receipt.
+
+Native client consumable-depletion cases additionally require the pinned original
+community `Images/Item_0.png`, provisioned by `fetch_player_assets.py` (20 core
+PNGs, plus two optional dummy PNGs). This initializes native PlayerFrame after the
+last item is consumed. The genuine repository GeneratedProjectile.png is loaded
+for Main.LoadProjectile; authored item art is never replaced with that proxy.
+
+### Lifecycle, world, equipment and input controls
+
+Run each verifier into a fresh directory:
+
+```sh
+python tools/item-test-workbench/verify_lifecycle.py --out artifacts/lifecycle
+python tools/item-test-workbench/verify_world.py --out artifacts/world
+python tools/item-test-workbench/verify_placed_render.py --out artifacts/placed-render
+python tools/item-test-workbench/verify_equipment_reactions.py --out artifacts/equipment-reactions
+python tools/item-test-workbench/verify_equipment_render.py --item /path/to/equipment.json --artwork /path/to/item.png /path/to/overlay.png --player-assets /path/to/player-assets --out artifacts/equipment-render
+python tools/item-test-workbench/verify_controls.py --out artifacts/controls
+```
+
+These execute original native gameplay/draw paths and explicit negative controls.
+World removal via `break_tile` is native `WorldGen.KillTile`, not a claim that the
+player mined the object; the separate mining scenario executes native player item
+use. Returned generated items are compared with the complete source network
+serialization, not merely name/ID/count. Placed rendering invokes the production
+ledger renderer against a neutral background; it is not the complete terrain pass.
+Equipment reactions use native hurt/death, and movement controls set only native
+input flags before `Player.Update`. Draw calls alone do not establish visibility:
+inspect output pixels and paired functional/vanity/unequipped scenes separately.
+
+For an independently built executable, pass `--no-build --native-dll PATH` where
+supported. Its exact binary hash is evidence, but not proof that the normal
+MSBuild/wrapper path passed. Preserve failed controls and environment errors as
+such; do not relabel unsupported or unexecuted paths as generic success.
+
+### Quality/performance extension acceptance
+
+Local extension checks (independent direct official Roslyn build; retain the
+source/reference receipt, not a normal MSBuild-provenance claim):
+
+- 87 offline workbench Python tests passed, including explicit facing/aim,
+  input hold/release, non-authoritative frame-arm metrics, exact parent identity,
+  shared scenario/loadout/RNG admission, repeated input, and asset manifest controls.
+- All 59 existing native scenario/negative regression checks passed using
+  `verify_native.py --no-build --native-dll PATH`.
+- `verify_quality.py` passed original placement positives, intentional assertion
+  negative and missing-PNG refusal, plus seven quality checks. Its neutral sparse
+  base has zero minimum gap but an 18px median gap and only 6/42 contact columns.
+  Original `Item.UpdateItem` moves the returned instance and settles its collider
+  on the configured floor. The fixture never grants visual approval.
+- Native vanilla contact, ammo and empty-ammo controls executed. Matched
+  single-use and repeated-use parent comparisons execute the same client update
+  phases with the seed reset after setup; actual use clocks, not damage formulas,
+  measure cadence. A supplied single-use window is not sustained DPS.
+- Private immutable original-art cases were inspected across actual observed
+  facings, native movement/jump and explicit inverted-gravity buff scenes;
+  root held / held projectile / equipment / placed / dropped observations remain
+  separate. No private inputs or output artifacts are committed.
+
+Useful commands:
+
+```sh
+python tools/item-test-workbench/workbench.py test
+python tools/item-test-workbench/verify_native.py --no-build --native-dll /absolute/ItemTestWorkbench.dll --out /private/regressions
+python tools/item-test-workbench/verify_quality.py --native-dll /absolute/ItemTestWorkbench.dll --out /private/quality
+```
+
+The old ordinary local MSBuild path remains blocked by NuGet migration mutex
+initialization in this environment; GitHub exact-head build CI is recorded on
+the draft PR. Optional JavaScript replay checks were not run here because `jsdom`
+is unavailable (their code is unchanged). Live packaged-game self-test, complete
+terrain/world renderer, multiplayer, audio output and pickup popup/font UI remain
+notRun, not implied by native or CI success. Dropped frames are sampled before
+that tick's world update; world snapshots are after it and must not be mistaken
+for identical pose samples. Numeric observations and negative controls passing
+never imply that an authored item looks good or is well balanced.
+
+
+Requested vanilla controls add four passing native pose cases (Minishark/Musket,
+both actual observed facings): original vanilla DrawData, no generated replacement
+or veto, PNG integrity and immutable binary. The supplied actual item-control
+matrix measured held and repeated-input trials separately; requested controls
+never rewrite or masquerade as recipe parents. Native bullet simulation is
+measured, while vanilla bullet sprite rendering remains explicitly notRun in
+pose views. One seed/layout/window is not a universal balance recommendation.
