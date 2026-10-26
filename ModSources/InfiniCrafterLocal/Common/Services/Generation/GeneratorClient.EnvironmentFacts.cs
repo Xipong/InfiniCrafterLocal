@@ -33,7 +33,7 @@ public sealed partial class GeneratorClient
 
     internal static JsonObject? VerifiedNativeEnvironmentReference(Item item, bool moduleVerified)
     {
-        if (!moduleVerified || item.ModItem is not null || item.type <= 0 || item.type >= ItemID.Count)
+        if (!moduleVerified || item.ModItem is not null || item.type <= ItemID.None || item.type >= ItemID.Count)
             return null;
         var facts = new JsonObject();
         var auras = new JsonArray();
