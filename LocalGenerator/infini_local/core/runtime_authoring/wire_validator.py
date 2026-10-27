@@ -32,7 +32,7 @@ from infini_local.core.runtime_authoring.program_schema import GENERATED_ITEM_RO
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts, _wire_projection_witness
 from infini_local.core.runtime_authoring.validator import (
-    MAX_CHILD_DEPTH, MAX_EVENT_SPAWNS_PER_ACTIVATION, MAX_RUNTIME_ENTITIES,
+    MAX_CHILD_DEPTH, MAX_EVENT_SPAWNS_PER_ACTIVATION, MAX_RUNTIME_ENTITIES, MAX_RUNTIME_EVENTS_PER_ENTITY,
     _graph_cycle, _has_non_neutral_generated_buff, _max_depth, _motion_composition_issues,
 )
 
@@ -1004,6 +1004,11 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         if not isinstance(events_raw, list):
             errors.append({"path": f"$.runtimeProgram.entities[{index}].events", "code": "required_array", "message": "Compiled events must be an array."})
             events_raw = []
+        if len(events_raw) > MAX_RUNTIME_EVENTS_PER_ENTITY:
+            errors.append({"path": f"$.runtimeProgram.entities[{index}].events",
+                           "code": "entity_event_budget",
+                           "message": f"Native entities admit at most {MAX_RUNTIME_EVENTS_PER_ENTITY} event actions; "
+                                      f"received {len(events_raw)}."})
         for event_index, event in enumerate(events_raw):
             if not isinstance(event, Mapping):
                 errors.append({"path": f"$.runtimeProgram.entities[{index}].events[{event_index}]", "code": "required_object", "message": "Event entry must be an object."})

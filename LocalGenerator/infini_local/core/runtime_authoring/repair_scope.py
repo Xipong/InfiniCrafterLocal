@@ -95,6 +95,7 @@ REPAIR_ERROR_POLICY: dict[str, dict[str, Any]] = {
     "entity_not_binding_spawnable": {"strategy": "patch_exact_binding_action", "llmRepairable": True, "allowNodeDelete": False},
     "event_not_emitted": {"strategy": "patch_or_synthesize_exact_event_producer", "llmRepairable": True, "allowNodeDelete": False},
     "event_spawn_budget": {"strategy": "patch_spawn_count_or_delete_edge", "llmRepairable": True, "allowNodeDelete": True},
+    "entity_event_budget": {"strategy": "delete_or_retarget_overflow_event_only", "llmRepairable": True, "allowNodeDelete": True},
     "overlapping_motion_windows": {"strategy": "patch_window_or_delete_conflicting_call", "llmRepairable": True, "allowNodeDelete": True},
     "retained_motion_stage_conflict": {"strategy": "reject_conflicting_saved_wire", "llmRepairable": False, "allowNodeDelete": False},
     "exclusive_component_conflict": {"strategy": "patch_or_delete_conflicting_call", "llmRepairable": True, "allowNodeDelete": True},
@@ -1827,6 +1828,25 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
             for row_id in related:
                 if row_id != node_id:
                     context_id(row_id)
+        elif code == "entity_event_budget":
+            if node_namespace == "calls" and node_id:
+                mark("calls", node_id, can_delete=True)
+                # A different existing, compatible owner is an explicit choice,
+                # never an inferred fallback; its own event count must leave room.
+                count_by_target: dict[str, int] = {}
+                for candidate in rows["calls"]:
+                    candidate_cap = CAPABILITY_REGISTRY.get(str(candidate.get("fn") or ""))
+                    if candidate_cap is not None and candidate_cap.category == "event":
+                        target = str(candidate.get("target") or "")
+                        count_by_target[target] = count_by_target.get(target, 0) + 1
+                eligible = [
+                    target for target in _matching_entity_ids(rows, _call_target_kinds(node_row))
+                    if target != str(node_row.get("target") or "")
+                    and count_by_target.get(target, 0) < 16
+                ]
+                if eligible:
+                    call_target_change_ids.add(node_id)
+                    retarget_call_ids.update(eligible)
         elif code == "overlapping_motion_windows":
             if node_namespace == "calls" and node_id:
                 mark("calls", node_id, can_delete=True)
