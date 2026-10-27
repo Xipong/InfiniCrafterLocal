@@ -217,6 +217,7 @@ def test_real_author_builder_preserves_present_accepted_parent_without_visuals(m
     ("observed_local_hooks", []),
     ("unavailable_or_hook_failed", []),
     ("observed_literal_hook_failed", ["[DYNAMIC]"]),
+    ("client_reported", ["Наблюдение клиента", "локальный бафф"]),
     ("refused_line_bound", []),
     ("refused_character_bound", []),
 ])
@@ -243,6 +244,9 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
             "scope": "native_description_and_hook_changes_on_base_defaults_clone_with_mod_instance_state",
         },
     }
+    if status == "client_reported":
+        parent["tooltipSource"].update({"source": "client_reported", "verified": False,
+                                        "scope": "requester_local_tooltip_hook_observation_unverified"})
     before = copy.deepcopy(parent)
     request, user, _ = author.build_initial_author_request(parent, {}, "literal-tooltip", model_name="offline-test-model")
     author_packet = json.loads(user)["parents"]["A"]["packet"]

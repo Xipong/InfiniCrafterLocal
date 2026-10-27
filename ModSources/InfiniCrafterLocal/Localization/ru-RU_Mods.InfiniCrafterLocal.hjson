@@ -90,6 +90,13 @@ Mods: {
 		Projectiles.GeneratedProjectile.DisplayName: Сгенерированный снаряд
 
 		Configs: {
+            InfiniParentTooltipServerConfig: {
+                DisplayName: Тултипы родительских предметов
+                TrustClientParentTooltips: {
+                    Label: Использовать тултипы от клиента
+                    Tooltip: "Принимать непроверенный текст от игрока. Новые рецепты общие для мира и сохраняются после отключения; существующие рецепты не пересоздаются. Включайте только для доверенных игроков. На одиночную игру настройка не влияет."
+                }
+            }
 			InfiniVfxClientConfig: {
 				DisplayName: VFX Client Options
 				Headers.GeneratedVFX: Сгенерированные VFX

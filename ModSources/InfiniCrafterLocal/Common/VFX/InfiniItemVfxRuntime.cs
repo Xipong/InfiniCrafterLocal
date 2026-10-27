@@ -8,6 +8,8 @@ using System.Collections.Generic;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
+using Terraria.ModLoader;
+using Terraria.ModLoader.Default;
 
 namespace InfiniCrafterLocal.Common.VFX;
 
@@ -58,9 +60,90 @@ public static partial class InfiniItemVfxRuntime
         return PeriodicSlotsThisTick.Add((player.whoAmI, data.Id, entityId, slot.Id));
     }
 
+    // Witness the actual source in each slot rather than relying on an item’s
+    // numeric net version, which can coincide for two independent instances.
+    private static readonly Dictionary<string, (Item Item, object Generation)> ItemSlotWitnesses = new();
+    private static Player? ItemSlotWitnessPlayer;
+    private static object? ItemSlotWitnessSocket;
+
+    internal static void ObserveItemPresentationSlot(Player player, Item item, bool equipment)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || player.whoAmI != Main.myPlayer
+            || !ReferenceEquals(Main.player[Main.myPlayer], player) || Main.clientPlayer is null
+            || item.ModItem is not GeneratedItem generated) return;
+        object? socket = Netplay.Connection?.Socket;
+        if (!ReferenceEquals(ItemSlotWitnessPlayer, player) || !ReferenceEquals(ItemSlotWitnessSocket, socket)) {
+            ItemSlotWitnesses.Clear(); ItemSlotWitnessPlayer = player; ItemSlotWitnessSocket = socket;
+        }
+        string? key = null; Item? baseline = null;
+        if (!equipment) {
+            int slot = player.selectedItem;
+            if (slot >= 0 && slot < player.inventory.Length && slot < Main.clientPlayer.inventory.Length
+                && ReferenceEquals(player.inventory[slot], item)) {
+                key = "inventory:" + slot; baseline = Main.clientPlayer.inventory[slot];
+            }
+        } else {
+            for (int i = 0; i < player.armor.Length && i < Main.clientPlayer.armor.Length; i++) {
+                if (!ReferenceEquals(player.armor[i], item)) continue;
+                key = "armor:" + i; baseline = Main.clientPlayer.armor[i]; break;
+            }
+            if (key is null) {
+                foreach (var slot in ModContent.GetContent<ModAccessorySlot>()) {
+                    int i = slot.Type;
+                    if (i < 0 || i >= player.GetModPlayer<ModAccessorySlotPlayer>().LoadedSlotCount
+                        || i >= Main.clientPlayer.GetModPlayer<ModAccessorySlotPlayer>().LoadedSlotCount) continue;
+                    Item live;
+                    using (new Main.CurrentPlayerOverride(player)) live = slot.FunctionalItem;
+                    if (!ReferenceEquals(live, item)) continue;
+                    using (new Main.CurrentPlayerOverride(Main.clientPlayer)) baseline = slot.FunctionalItem;
+                    key = "mod-accessory:" + i; break;
+                }
+            }
+        }
+        if (key is null || baseline is null) return;
+        if (ItemSlotWitnesses.TryGetValue(key, out var previous)
+            && ReferenceEquals(previous.Item, item) && ReferenceEquals(previous.Generation, generated.PresentationGeneration)) return;
+        ItemSlotWitnesses[key] = (item, generated.PresentationGeneration);
+        // Only native synchronization transports metadata. Force a version
+        // difference if the exact current slot baseline would hide this item.
+        if (generated.HasItemEventVfx && !item.IsNetStateDifferent(baseline)) item.NetStateChanged();
+    }
+
+    // A replacement may have no GeneratedItem callbacks. Forget witnesses for
+    // slots whose content changed, even while they do not produce VFX.
+    internal static void RefreshItemPresentationWitnesses(Player player)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || !ReferenceEquals(ItemSlotWitnessPlayer, player)
+            || player.whoAmI != Main.myPlayer || ItemSlotWitnesses.Count == 0) return;
+        Dictionary<int, Item>? currentModSlots = null;
+        foreach (string key in ItemSlotWitnesses.Keys) {
+            if (!key.StartsWith("mod-accessory:", StringComparison.Ordinal)) continue;
+            currentModSlots = new Dictionary<int, Item>();
+            foreach (var slot in ModContent.GetContent<ModAccessorySlot>()) {
+                int i = slot.Type;
+                if (i < 0 || i >= player.GetModPlayer<ModAccessorySlotPlayer>().LoadedSlotCount) continue;
+                using (new Main.CurrentPlayerOverride(player)) currentModSlots[i] = slot.FunctionalItem;
+            }
+            break;
+        }
+        List<string>? removed = null;
+        foreach (var entry in ItemSlotWitnesses) {
+            int separator = entry.Key.IndexOf(':');
+            if (separator < 0 || !int.TryParse(entry.Key.Substring(separator + 1), out int index)) { (removed ??= new()).Add(entry.Key); continue; }
+            var kind = entry.Key.Substring(0, separator);
+            Item? current = kind == "inventory" && index >= 0 && index < player.inventory.Length ? player.inventory[index]
+                : kind == "armor" && index >= 0 && index < player.armor.Length ? player.armor[index]
+                : kind == "mod-accessory" && currentModSlots is not null && currentModSlots.TryGetValue(index, out var modItem) ? modItem : null;
+            if (!ReferenceEquals(current, entry.Value.Item)) (removed ??= new()).Add(entry.Key);
+        }
+        if (removed is not null) foreach (string key in removed) ItemSlotWitnesses.Remove(key);
+    }
+
     public static void ClearUseEventCaches()
     {
+        ItemSlotWitnesses.Clear(); ItemSlotWitnessPlayer = null; ItemSlotWitnessSocket = null;
         MaterialItemEventStream.Clear();
+        Array.Clear(PendingItemEvents);
         Array.Clear(HeldEventWitnesses);
         Array.Clear(ServerEvents);
         Array.Clear(ClientEvents);
@@ -108,6 +191,7 @@ public static partial class InfiniItemVfxRuntime
     public static void OnPeriodic(Player player, GeneratedItemData? data, string entityId, Item? sourceItem=null, bool allowLightCue=true)
     {
         if (Main.dedServ || player is null || !player.active || data is null) return;
+        ObserveItemPresentationSlot(player, sourceItem ?? player.HeldItem, sourceItem is not null);
         string sourceKey=$"item:{player.whoAmI}:{data.Id}:{entityId}";
         InfiniDetachedVfxSystem.RegisterPeriodicElements(data,entityId,sourceKey,VfxSourceBinding.Capture(player,sourceItem,data),item:true);
         EmitLocal(player, data, entityId, RuntimeEventKind.Periodic, cadence: true, allowLightCue: allowLightCue);

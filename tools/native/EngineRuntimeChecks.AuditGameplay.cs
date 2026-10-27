@@ -50,7 +50,7 @@ internal static partial class EngineRuntimeChecks
                     });
                     using var stream = new MemoryStream();
                     using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) {
-                        writer.Write(InfiniNetPacketIds.StationEscrowResult); writer.Write(2); writer.Write(scope);
+                        writer.Write(InfiniNetPacketIds.StationEscrowResult); writer.Write(3); writer.Write(scope);
                         writer.Write(operation); writer.Write(action); writer.Write(index); writer.Write(true); writer.Write("");
                     }
                     byte[] ack = stream.ToArray();

@@ -81,6 +81,7 @@ public sealed partial class InfiniDetachedVfxSystem : ModSystem
     // Retire simple-renderer snapshots and source budgets even when no Draw follows.
     public override void PostUpdateEverything()
     {
+        InfiniItemVfxRuntime.UpdatePendingItemEvents();
         if (!Main.dedServ) {
             UpdateMaterials();
             PruneExpired();

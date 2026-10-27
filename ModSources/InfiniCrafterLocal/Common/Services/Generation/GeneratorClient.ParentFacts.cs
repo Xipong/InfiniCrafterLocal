@@ -40,7 +40,7 @@ public sealed partial class GeneratorClient
         catch { return null; }
     });
 
-    private static object ToWireItem(Item item, Player? player = null)
+    private static object ToWireItem(Item item, Player? player = null, ClientTooltipObservation? clientTooltip = null)
     {
         GeneratedItemData? existing = item.ModItem is GeneratedItem generated ? generated.Data : null;
         if (GeneratedItemData.IsPlayerSaveReferenceOnly(existing))
@@ -61,6 +61,25 @@ public sealed partial class GeneratorClient
         string sourceMod = SourceModName(craftItem);
         string internalName = InternalName(craftItem);
         var tooltip = CaptureLiteralParentTooltip(item, existing, sourceMod + "/" + internalName, player);
+        // The caller may supply this only after server policy/escrow admission.
+        // It remains an explicitly unverified local-client observation; identity,
+        // stats and other native facts below are always collected on the server.
+        if (Main.netMode == NetmodeID.Server && existing is null && item.ModItem is not GeneratedItem && clientTooltip is not null)
+        {
+            if (clientTooltip.Status == "observed")
+                tooltip = (clientTooltip.Lines.ToArray(), new { source = "client_reported", fullName = sourceMod + "/" + internalName,
+                    language = clientTooltip.Language, status = "client_reported", verified = false,
+                    scope = "requester_local_tooltip_hook_observation_unverified",
+                    modifiedNativeLines = "player_adjusted_display_text_not_base_item_stats" });
+            else if (clientTooltip.Status is "refused_utf8_bound" or "refused_invalid_encoding")
+            {
+                // No partial or clipped client text; keep the separately captured
+                // server literal and expose why the client observation is absent.
+                var source = JsonSerializer.SerializeToNode(tooltip.Source, WireJsonOptions) as JsonObject ?? new JsonObject();
+                source["clientObservationStatus"] = clientTooltip.Status;
+                tooltip = (tooltip.Lines, source);
+            }
+        }
         ParentNativeFacts native = CaptureParentNativeFacts(craftItem, existing);
         // The three historical envelopes share one observed native snapshot. Only
         // these explicit shape differences belong here; no native field is read
@@ -196,6 +215,19 @@ public sealed partial class GeneratorClient
             return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName, language,
                 status = "unavailable_or_hook_failed", stage, errorType = ex.GetType().Name });
         }
+    }
+
+    internal static ClientTooltipObservation? CaptureClientTooltip(Item item, Player player)
+    {
+        if (Main.netMode != NetmodeID.MultiplayerClient || item is null || item.IsAir
+            || item.ModItem is GeneratedItem || player is null) return null;
+        var observed = CaptureLiteralParentTooltip(item, null, SourceModName(item) + "/" + InternalName(item), player);
+        if (observed.Source is null) return null;
+        var source = JsonSerializer.SerializeToElement(observed.Source, WireJsonOptions);
+        if (!source.TryGetProperty("status", out var status) || status.GetString() != "observed_local_hooks"
+            || !source.TryGetProperty("language", out var language) || language.GetString() is not { } lang)
+            return null;
+        return new ClientTooltipObservation(observed.Lines.ToArray(), lang);
     }
 
     private sealed record ParentSpriteFrameReference(string Source,

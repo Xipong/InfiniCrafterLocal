@@ -90,6 +90,13 @@ Mods: {
 		Projectiles.GeneratedProjectile.DisplayName: Generated Projectile
 
 		Configs: {
+            InfiniParentTooltipServerConfig: {
+                DisplayName: Parent tooltip reports
+                TrustClientParentTooltips: {
+                    Label: Use client-reported parent tooltips
+                    Tooltip: "Accept unverified tooltip text from the crafting player. New recipes are shared world-wide and persist after disabling; existing recipes are not regenerated. Only enable for trusted players. Single-player is unchanged."
+                }
+            }
 			InfiniVfxClientConfig: {
 				DisplayName: VFX Client Options
 				Headers.GeneratedVFX: Generated VFX
