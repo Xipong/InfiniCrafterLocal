@@ -35,6 +35,33 @@ class WorkbenchTests(unittest.TestCase):
                     else:
                         with self.assertRaises(RuntimeError):w.execute_loader_run(args)
 
+    def test_loader_receipt_tracks_effective_production_content_override(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);dll=root/'ItemTestWorkbench.dll';dll.write_bytes(b'host')
+            scene=root/'scene.json';scene.write_text('{"ticks":1}')
+            content=root/'custom-mod';content.mkdir();metadata=content/'build.txt'
+            report={'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}
+            for mutate in (False,True):
+                metadata.write_text('version=1')
+                args=SimpleNamespace(timeout=10,item=None,native_item='WoodenBoomerang',scenario=scene,
+                    out=root/str(mutate),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None)
+                def run(command,**kwargs):
+                    Path(command[command.index('--output')+1]).write_text(json.dumps(report))
+                    if mutate:metadata.write_text('version=2')
+                    return subprocess.CompletedProcess(command,0,'','')
+                with patch.dict(w.os.environ,{'INFINI_MOD_SOURCE_ROOT':str(content)}), \
+                     patch.object(w,'native_executable',return_value=(dll,{})), \
+                     patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                    if mutate:
+                        with self.assertRaisesRegex(RuntimeError,'changed during execution'):w.execute_loader_run(args)
+                    else:self.assertEqual(w.execute_loader_run(args),0)
+                receipt=json.loads((args.out/'receipt.json').read_text())
+                self.assertEqual(receipt['productionContent']['root'],str(content))
+                self.assertEqual(receipt['productionContent']['files']['build.txt'],w.hashlib.sha256(b'version=1').hexdigest())
+                self.assertEqual(receipt['binariesUnchanged'],not mutate)
+
     def test_direct_native_receipt_tracks_host_and_separate_mod(self):
         with tempfile.TemporaryDirectory() as d:
             host=Path(d)/'ItemTestWorkbench.dll';mod=Path(d)/'InfiniCrafterLocal.dll'

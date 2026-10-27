@@ -17,6 +17,9 @@ environment described below is required. Native metadata is held in memory;
 no archive is written. The process autoloads tML's built-in content and IFC,
 builds native hook tables and uses actual Player/NPC/Projectile updates with
 SystemLoader phases. It does not enumerate IFC gameplay handlers by name.
+The wrapper records the effective production metadata/assets in `receipt.json`,
+including an `INFINI_MOD_SOURCE_ROOT` override, and refuses evidence if those
+inputs change during the run.
 
 For a registered item use `--native-item WoodenBoomerang`, a native ID, or
 `--native-item ModName/ItemName` instead of generated JSON. An additional mod

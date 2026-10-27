@@ -125,7 +125,7 @@ internal static partial class EngineRuntimeChecks
         foreach(var row in scenario["tiles"]?.AsArray() ?? new JsonArray()) {
             WKeys(row!,"tile","tileX","tileY","width","height");
             int x=WInt(row,"tileX",-1),y=WInt(row,"tileY",-1),w=WInt(row,"width",0),h=WInt(row,"height",0);
-            if(x<1||y<1||w<1||h<1||x+w>=99||y+h>=599)throw new ArgumentException("Tile rectangle outside isolated world");
+            if(x<1||y<1||w<1||h<1||(long)x+w>=99||(long)y+h>=599)throw new ArgumentException("Tile rectangle outside isolated world");
             for(int tx=x;tx<x+w;tx++)for(int ty=y;ty<y+h;ty++){var tile=Terraria.Main.tile[tx,ty];tile.HasTile=true;tile.TileType=TileID.Dirt;}
         }
         foreach(var p in Terraria.Main.player)p.active=false;

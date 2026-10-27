@@ -92,6 +92,23 @@ def main():
         assert control_observer.get('counts',{}).get('GlobalNPC.ModifyHitByProjectile',0)>0
         missing_proc, missing_trace, _=run('missing-mod',None,False,'WorkbenchObserverFixture/ProbeItem',probe_path)
         assert missing_proc.returncode == 2 and missing_trace['status'] == 'error', (missing_proc.returncode, missing_trace)
+        # Out-of-world rectangles must not overflow to an empty, silently
+        # ignored range and produce a false successful scene.
+        for axis in ('width', 'height'):
+            overflow_scene={'ticks':1,'player':{'x':640,'y':640},'dummy':{'x':850,'y':640},
+                'actions':[],'assertions':[{'kind':'no_nonfinite'}],
+                'tiles':[{'tileX':2,'tileY':2,'width':1,'height':1,axis:2147483647}]}
+            overflow_path=temp/('overflow-'+axis+'.json');overflow_path.write_text(json.dumps(overflow_scene),encoding='utf-8')
+            bad_proc,bad_trace,_=run('overflow-result-'+axis,None,False,'WoodenBoomerang',overflow_path)
+            assert bad_proc.returncode==2 and bad_trace['status']=='error' and 'Tile rectangle outside' in bad_trace.get('error',''), (bad_proc.returncode,bad_trace)
+        # The loader must reject a foreign world rather than normalizing the
+        # generated input into the current world's registry.
+        foreign=json.loads(positive.read_text(encoding='utf-8'));foreign['recipeMeta']['worldId']='999'
+        foreign_path=temp/'foreign-world.json';foreign_path.write_text(json.dumps(foreign),encoding='utf-8')
+        original_bytes=foreign_path.read_bytes()
+        foreign_proc,foreign_trace,_=run('foreign-world-result',foreign_path)
+        assert foreign_proc.returncode==2 and foreign_trace['status']=='error' and 'scenario worldId' in foreign_trace.get('error',''), (foreign_proc.returncode,foreign_trace)
+        assert foreign_path.read_bytes()==original_bytes
         vanilla_scene=json.loads((here/'scenarios/full-vanilla.json').read_text(encoding='utf-8'))
         vanilla_scene['assertions']=[{'kind':'spawned'},{'kind':'dummy_damaged'},{'kind':'all_inactive'},{'kind':'no_nonfinite'}]
         vanilla_path=temp/'vanilla-scene.json';vanilla_path.write_text(json.dumps(vanilla_scene),encoding='utf-8')

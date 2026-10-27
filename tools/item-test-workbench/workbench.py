@@ -510,7 +510,14 @@ def execute_loader_run(args):
         paths={root/"build.txt"}
         for name in ("Localization","Assets","asset-content"):
             paths.update(p for p in (root/name).rglob("*") if p.is_file())
-        return {str(p.relative_to(root)):digest(p) for p in sorted(paths)}
+        return {str(p.relative_to(root)):digest(p) if p.is_file() else None for p in sorted(paths)}
+    # The native host permits a source-root override. Bind evidence to the
+    # effective metadata/assets, not just the default copied build content.
+    env = os.environ.copy()
+    configured_root = env.get("INFINI_MOD_SOURCE_ROOT", "")
+    production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
+    env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
+    production_content = {"root": str(production_root), "files": mod_content_state(production_root)}
     if args.probe_dll:
         probe = args.probe_dll.resolve(strict=True)
         probe_root = args.probe_mod_root.resolve(strict=True)
@@ -518,7 +525,7 @@ def execute_loader_run(args):
         external[str(probe)] = digest(probe)
         external_content[str(probe_root)] = mod_content_state(probe_root)
     try:
-        proc = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=args.timeout)
+        proc = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=args.timeout)
     except subprocess.TimeoutExpired as exc:
         decode = lambda v: v.decode(errors="replace") if isinstance(v, bytes) else v or ""
         proc = subprocess.CompletedProcess(command, 124, decode(exc.stdout), decode(exc.stderr) + "\nNative loader scene timed out")
@@ -526,10 +533,11 @@ def execute_loader_run(args):
     (output / "stderr.log").write_text(proc.stderr, encoding="utf-8")
     unchanged = build_state(dll) == provenance and all(Path(p).is_file() and digest(Path(p)) == h for p,h in external.items())
     unchanged = unchanged and all(mod_content_state(Path(p)) == h for p,h in external_content.items())
+    unchanged = unchanged and mod_content_state(production_root) == production_content["files"]
     unchanged = unchanged and (item is None or digest(output / "item.json") == item_sha) and digest(output / "scenario.json") == scenario_sha
     receipt = {"command": command, "exitCode": proc.returncode, "build": provenance,
                "itemSha256": item_sha, "nativeItem": native_item, "scenarioSha256": scenario_sha,
-               "extraAssemblies": external, "extraContent": external_content, "binariesUnchanged": unchanged}
+               "extraAssemblies": external, "extraContent": external_content, "productionContent": production_content, "binariesUnchanged": unchanged}
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     if not unchanged:
         raise RuntimeError("Native loader inputs or binaries changed during execution")
