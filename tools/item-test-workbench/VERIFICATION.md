@@ -74,8 +74,10 @@ unconditional installation checks or proof of all-item parity.
 
 ## Evidence reviewed during development
 
-Probe CLI verification (2026-10-27): 101 offline workbench tests and 9 public-entry
-tests passed, along with the workbench build against the documented references.
+Probe CLI verification (2026-10-27): 101 offline workbench tests, 9 public-entry
+tests and 8 executable CI workflow regression tests passed, along with the
+workbench build against the documented references. The isolated CI fixture copies
+the probe parser's actual frontend dependencies before checking doctor/build status.
 Actual native runs through `probe` exercised primary/alternate held input, charge
 and release, explicit clicks at ticks 0/30/60/90, bullet consumption, vanilla and
 saved-cache inputs. Exact negative assertions stayed failed; unexpected failures
