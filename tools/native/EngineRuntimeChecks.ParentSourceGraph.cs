@@ -130,6 +130,13 @@ internal static partial class EngineRuntimeChecks
             foreach (JsonObject edge in result["edges"]!.AsArray().OfType<JsonObject>())
                 foreach (string end in new[] { "from", "to" })
                     if (edge[end] is JsonNode id) Equal(true, ids.Contains(id.GetValue<int>()), "graph bounds never leave dangling method references");
+            object mixedGraph = Activator.CreateInstance(graphType, nonPublic: true)!;
+            graphType.GetMethod("Hooks", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(mixedGraph, new object[]
+                { typeof(ConditionalIdentitySource), typeof(ModProjectile), new System.Collections.Generic.HashSet<string>(new[] { "OnHitNPC" }, StringComparer.Ordinal), "parent_ModProjectile", "npc" });
+            var mixed = (JsonObject)graphType.GetMethod("Finish", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(mixedGraph, null)!;
+            var mixedEdges = mixed["edges"]!.AsArray().OfType<JsonObject>().Where(e => e["kind"]?.GetValue<string>() == "buff_request").ToArray();
+            Equal(true, mixedEdges.Any(e => e["context"] is JsonObject context && context["buffId"]?.GetValue<int>() == BuffID.Ichor), "known conditional identity remains a source candidate");
+            Equal(true, mixedEdges.Any(e => e["unresolved"] is JsonValue), "a known identity arm never hides its unresolved alternative");
             ModBuffSourceExecuted = 0;
             object buffGraph = Activator.CreateInstance(graphType, nonPublic: true)!;
             graphType.GetMethod("Hooks", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(buffGraph, new object[]

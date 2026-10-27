@@ -527,7 +527,7 @@ public sealed partial class GeneratorClient
             int parameter = Array.FindIndex(method.GetParameters(), p => string.Equals(p.Name, parameterName, StringComparison.OrdinalIgnoreCase));
             int slot = parameter + (method.IsStatic ? 0 : 1);
             if (parameter < 0 || slot >= call.Inputs.Count) { Edge(node, null, "identity_request", call.At, unresolved: "unsupported_request_signature"); return; }
-            bool resolved = false;
+            bool resolved = false, unknownAlternative = false;
             foreach (var definition in IdentityDefinitions(body, call.Inputs[slot], new HashSet<string>(), 0))
             {
                 int? id = definition.Op == "const" && definition.Operand is int literal ? literal : null;
@@ -543,19 +543,21 @@ public sealed partial class GeneratorClient
                     else for (int candidate = BuffID.Count; candidate < BuffLoader.BuffCount; candidate++)
                         if (BuffLoader.GetBuff(candidate)?.GetType() == type) { id = candidate; break; }
                 }
-                if (id is null) continue;
+                if (id is null) { unknownAlternative = true; continue; }
                 resolved = true;
                 if (receiver == "projectile") Projectile(id.Value, node, call.At, "conditional_projectile_spawn_candidate");
                 else Buff(id.Value, receiver, node, call.At);
             }
-            if (!resolved) Edge(node, null, receiver == "projectile" ? "projectile_spawn" : "buff_request", call.At,
+            if (!resolved || unknownAlternative) Edge(node, null, receiver == "projectile" ? "projectile_spawn" : "buff_request", call.At,
                 JsonValue.Create(call.Inputs[slot]), "identity_requires_helper_or_runtime_expression; see_source_values");
         }
 
         private IEnumerable<ParentSourceMethod.Value> IdentityDefinitions(ParentSourceMethod body, string id, HashSet<string> seen, int depth,
             (ParentSourceMethod Body, ParentSourceMethod.Value Call)? binding = null)
         {
-            if (depth > DepthLimit || !seen.Add(MethodKey(body.Method) + ":" + id + ":" + binding?.Call.At)) yield break;
+            string bindingKey = binding is { } caller ? MethodKey(caller.Body.Method) + ":" + caller.Call.At : "root";
+            if (depth > DepthLimit || !seen.Add(MethodKey(body.Method) + ":" + id + ":" + bindingKey))
+            { yield return new ParentSourceMethod.Value { Op = "unresolved_identity_dependency_bound" }; yield break; }
             foreach (var value in body.Definitions(id))
             {
                 if (value.Op == "ldarg" && value.Operand is int argument)

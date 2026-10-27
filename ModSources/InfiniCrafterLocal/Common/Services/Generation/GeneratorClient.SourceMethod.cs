@@ -317,6 +317,7 @@ public sealed partial class GeneratorClient
                     foreach (string input in value.Inputs) pending.Push(input);
                 else yield return value;
             }
+            if (pending.Count > 0) yield return new Value { Op = "unresolved_definition_traversal_bound" };
         }
 
         internal JsonObject Project(IEnumerable<Value> roots, int controlLimit = 64)
