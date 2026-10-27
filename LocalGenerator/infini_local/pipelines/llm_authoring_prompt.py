@@ -88,11 +88,10 @@ def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
 
 def planner_priority_header_for_llm() -> list[str]:
     return [
+        AUTHOR_DESIGN_QUALITY_RULE,
         "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; author every mechanic explicitly in runtimeProgram.",
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
-        AUTHOR_DESIGN_QUALITY_RULE,
         AUTHOR_STATUS_COMPOSITION_RULE,
-        "Source provenance constrains factual claims about the parents, not the mechanics you may invent. Create new purposeful mechanics from catalog primitives inspired by both parent identities; neither parent needs to have performed them. Do not present invented effects as observed parent abilities. No forced twist or unrelated gimmick is required.",
         "Use source tempo when available and useful to the composition; make deviations intentional.",
         "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. attach_projectile.reachCurve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",

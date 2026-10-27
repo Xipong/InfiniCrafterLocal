@@ -74,8 +74,8 @@ _FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "requiredJsonShap
 
 
 _AUTHOR_SYSTEM = (
-    "You are Gameplay Author for InfiniCrafterLocal. Construct a single immutable JSON object "
-    "matching requiredJsonShape, using the supplied capability catalog. "
+    "You are Gameplay Author for InfiniCrafterLocal. Design a worthwhile fusion of the supplied parents, "
+    "expressed as one immutable JSON object matching requiredJsonShape and the capability catalog. "
     "runtimeProgram alone defines executable gameplay. Optional concept, realization and selfEvaluation "
     "may help your design and self-check, but are advisory only: no mandatory report ceremony, "
     "acceptance evidence or prose-based rejection. Code does not invent missing mechanics. "

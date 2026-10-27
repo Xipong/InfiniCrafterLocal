@@ -17,14 +17,17 @@ from infini_local.core.schema_validation import strict_schema_errors
 
 
 AUTHOR_DESIGN_QUALITY_RULE = (
-    "Compose for useful player decisions, not call count. Give the main action a clear practical payoff "
-    "in ordinary use (for combat, consider an isolated target); make a secondary action or event bonus "
-    "reachable and worth its control/cost, or deliberately keep it niche. Let complementary effects "
-    "reinforce a purpose or offer a meaningful alternative, rather than hide a weak main action behind "
-    "an unlikely chain. Weigh actual recurring economy and risk against actual reward: a restriction "
-    "is a tradeoff only when it affects the use gaining that reward. Simple results, deliberate "
-    "sidegrades and strong earned benefits are valid; no always-upgrade rule, mandatory twist or "
-    "per-parent effect quota. These are design aims, not admission gates or required reports."
+    "Design a fusion worth choosing in play, inspired by both actual parents. "
+    "Prefer a coherent interaction or reinterpretation of their behavior, handling or identity over a renamed parent or unrelated effects. "
+    "Direct combinations and simple results are valid; simple controls need not mean generic mechanics. "
+    "Give the main action a clear payoff in ordinary use (for combat, consider an isolated target); "
+    "make secondary actions or event bonuses reachable and worth their control/cost, or deliberately niche. "
+    "Judge useful decisions, not call count or an unlikely chain hiding a weak main action. "
+    "Weigh recurring economy and risk against reward: a restriction is a tradeoff only if it affects the use gaining that reward. "
+    "Invent purposeful mechanics from catalog primitives; provenance constrains claims about parents, not new designs. "
+    "Do not present invented effects as observed parent abilities. "
+    "Sidegrades and strong earned benefits are valid; no always-upgrade rule, mandatory twist or per-parent effect quota. "
+    "These are design aims, not admission gates or required reports."
 )
 
 AUTHOR_STATUS_COMPOSITION_RULE = (
@@ -146,7 +149,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 "inheriting every parent capability."
             ),
             "coreMechanic": (
-                "non-empty string: describe coherent, purposeful mechanics with simple, immediately useful play. "
+                "non-empty string: describe the fusion's practical purpose and recognizable way of playing, with clear controls. "
                 "A clear central purpose can include multiple complementary actions; this is not a single-loop rule "
                 "or a capability restriction. Let complexity serve player value. Ground power in the actual ingredient power, "
                 "rarity, acquisition facts and resource economy together; distinguish source observations from assumptions. "

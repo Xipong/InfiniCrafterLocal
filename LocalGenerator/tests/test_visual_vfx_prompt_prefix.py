@@ -59,6 +59,7 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
             assert request["response_format"]["json_schema"]["strict"] is True
             assert request["response_format"]["json_schema"]["schema"] == schema
         if director == "visual":
+            assert packet["itemReadOnly" if repair else "item"]["literalSynthesis"] == data["concept"]["literalSynthesis"]
             parent_reference = (packet["parentSizeReferencesReadOnly"]["parentA"]["spriteReference"] if repair
                                 else packet["parents"]["parentA"]["packet"]["raw"]["spriteReference"])
             assert parent_reference == {
@@ -104,6 +105,48 @@ def test_catalog_revision_reaches_outgoing_instruction_not_recipe_tail(wire_tran
     assert sent[0]["messages"][1]["content"] != sent[1]["messages"][1]["content"]
     assert sent[0]["messages"][2]["content"] == sent[1]["messages"][2]["content"]
     assert request_dossier(sent[1])["assetModeCatalog"] == catalog
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_visual_preserves_literal_synthesis_without_promoting_gameplay_intent(wire_transport, monkeypatch, mode):
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    responses, sent = wire_transport
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data.pop("realization", None)
+    packets = []
+    for synthesis in (" A glass door hangs from a copper chain.\n", "The copper chain forms a handle around the glass door."):
+        data["concept"] = {
+            "literalSynthesis": synthesis,
+            "coreMechanic": "UNREALIZED_GAMEPLAY_INTENT",
+            "plannedPlayerActions": [{"input": "alternate_use", "intent": "UNREALIZED_GAMEPLAY_INTENT"}],
+        }
+        before = copy.deepcopy(data)
+        responses.append({})
+        visual._request_visual_kit(data, {}, {})
+        packet = request_dossier(sent[-1])
+        assert packet["item"] == {"name": data["name"], "realization": {}, "literalSynthesis": synthesis}
+        assert "UNREALIZED_GAMEPLAY_INTENT" not in str(sent[-1]["messages"])
+        assert data == before
+        packets.append(packet)
+    assert sent[0]["messages"][:2] == sent[1]["messages"][:2]
+    assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
+    assert sent[0]["response_format"] == sent[1]["response_format"]
+    assert packets[0]["runtimeEntities"] == packets[1]["runtimeEntities"]
+    assert packets[0]["acceptedPresentationMechanicsReadOnly"] == packets[1]["acceptedPresentationMechanicsReadOnly"]
+    assert len(sent) == 2 and not responses
+
+
+@pytest.mark.parametrize("concept", [None, {}, "informal concept", {"literalSynthesis": None},
+                                    {"literalSynthesis": 42}, {"literalSynthesis": " \n"}])
+def test_visual_does_not_invent_literal_synthesis_from_missing_or_malformed_advisory(wire_transport, concept):
+    responses, sent = wire_transport
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data["concept"] = concept
+    before = copy.deepcopy(data)
+    responses.append({})
+    visual._request_visual_kit(data, {}, {})
+    assert "literalSynthesis" not in request_dossier(sent[0])["item"]
+    assert data == before and not responses
 
 
 @pytest.mark.parametrize("mirror", [pytest.param(False, id="independent-hitbox"), pytest.param(True, id="explicit-mirroring")])
