@@ -358,7 +358,7 @@ public sealed partial class GeneratorClient
         {
             // Item buff fields are on-use PLAYER requests, never NPC-hit facts.
             // Keep observed duration distinct from source-certified update effects.
-            JsonObject buffReference = CaptureNativeBuffEffectReference(item.buffType, "player", item.ModItem is null);
+            JsonObject buffReference = CaptureNativeBuffEffectReference(item.buffType, "player");
             buffReference["applicationSource"] = "Item.buffType_and_buffTime_on_use_request";
             buffReference["requestedDurationTicks"] = item.buffTime;
             buffReference["applicationScope"] = "Native item field request only; item-use admission, refresh rules and loaded hooks were not executed.";

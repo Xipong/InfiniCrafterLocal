@@ -37,10 +37,11 @@ public sealed partial class GeneratorClient
         catch { return null; }
     });
 
-    internal static JsonObject CaptureNativeBuffEffectReference(int buffId, string receiver, bool nativeSource = true)
-        => VerifiedNativeBuffEffectReference(buffId, receiver, nativeSource, BuffEffectSourceCertificate.Value);
+    internal static JsonObject CaptureNativeBuffEffectReference(int buffId, string receiver)
+        => CaptureModBuffEffectReference(buffId, receiver)
+            ?? VerifiedNativeBuffEffectReference(buffId, receiver, BuffEffectSourceCertificate.Value);
 
-    private static JsonObject VerifiedNativeBuffEffectReference(int buffId, string receiver, bool nativeSource, string? certificate)
+    private static JsonObject VerifiedNativeBuffEffectReference(int buffId, string receiver, string? certificate)
     {
         string? fullName = null;
         try
@@ -54,8 +55,11 @@ public sealed partial class GeneratorClient
         catch { }
         // Unknown/modded identities remain visible only for this observed parent.
         // Never advertise unknown semantics as an empty/complete effect set.
-        string reason = !nativeSource || buffId <= 0 || buffId >= BuffID.Count
-            ? "non_vanilla_buff_or_source_semantics_not_analyzed"
+        // The carrier can be modded while the requested buff is vanilla. Its
+        // provenance does not change the certified implementation of that ID.
+        // Application/admission and loaded hooks remain outside these fragments.
+        string reason = buffId <= 0 || buffId >= BuffID.Count
+            ? "buff_identity_outside_native_source_subset"
             : receiver is not ("player" or "npc") ? "unsupported_receiver"
             : certificate is null || !NativeBuffEffectCatalog.Sources.ContainsKey(certificate)
                 ? "unknown_native_binary_or_method_certificate"

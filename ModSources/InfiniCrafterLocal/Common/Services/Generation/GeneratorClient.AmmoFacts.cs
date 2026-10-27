@@ -277,11 +277,12 @@ public sealed partial class GeneratorClient
     private static readonly Dictionary<short, OpCode> AmmoOpcodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
         .Where(f => f.FieldType == typeof(OpCode)).Select(f => (OpCode)f.GetValue(null)!).ToDictionary(op => op.Value);
 
-    private static List<AmmoIl> ReadAmmoIl(MethodInfo method)
+    private static List<AmmoIl> ReadAmmoIl(MethodBase method, bool preserveStructure = false)
     {
         var body = method.GetMethodBody();
         byte[] il = body?.GetILAsByteArray() ?? throw new NotSupportedException();
         if (il.Length > 2048 || body!.ExceptionHandlingClauses.Count != 0) throw new NotSupportedException();
+        Type[] methodArguments = method is MethodInfo genericMethod ? genericMethod.GetGenericArguments() : Type.EmptyTypes;
         var result = new List<AmmoIl>();
         for (int p = 0; p < il.Length;)
         {
@@ -299,9 +300,22 @@ public sealed partial class GeneratorClient
                 case OperandType.InlineVar: arg = (int)BitConverter.ToUInt16(il, p); p += 2; break;
                 case OperandType.ShortInlineBrTarget: arg = p + 1 + (sbyte)il[p]; p++; break;
                 case OperandType.InlineBrTarget: arg = p + 4 + BitConverter.ToInt32(il, p); p += 4; break;
-                case OperandType.InlineMethod: arg = method.Module.ResolveMethod(BitConverter.ToInt32(il, p)); p += 4; break;
-                case OperandType.InlineField: arg = method.Module.ResolveField(BitConverter.ToInt32(il, p)); p += 4; break;
+                case OperandType.InlineMethod: arg = method.Module.ResolveMethod(BitConverter.ToInt32(il, p), method.DeclaringType?.GetGenericArguments(), methodArguments); p += 4; break;
+                case OperandType.InlineField: arg = method.Module.ResolveField(BitConverter.ToInt32(il, p), method.DeclaringType?.GetGenericArguments(), methodArguments); p += 4; break;
                 case OperandType.ShortInlineR: arg = BitConverter.ToSingle(il, p); p += 4; break;
+                case OperandType.InlineR: arg = BitConverter.ToDouble(il, p); p += 8; break;
+                case OperandType.InlineI8: arg = BitConverter.ToInt64(il, p); p += 8; break;
+                case OperandType.InlineType:
+                case OperandType.InlineTok:
+                case OperandType.InlineString:
+                case OperandType.InlineSig: arg = BitConverter.ToInt32(il, p); p += 4; break;
+                case OperandType.InlineSwitch:
+                    int count = BitConverter.ToInt32(il, p); p += 4;
+                    if (count < 0 || count > (il.Length - p) / 4) throw new NotSupportedException();
+                    int end = p + count * 4;
+                    var targets = new int[count];
+                    for (int i = 0; i < count; i++, p += 4) targets[i] = end + BitConverter.ToInt32(il, p);
+                    arg = targets; break;
                 default: throw new NotSupportedException();
             }
             if (op is "ldc.i4" or "ldc.i4.s") op = "const";
@@ -312,8 +326,9 @@ public sealed partial class GeneratorClient
                 if (!op.EndsWith(".s")) arg = int.Parse(op.Substring(prefix.Length + 1));
                 op = prefix;
             }
-            if (op != "nop") result.Add(new AmmoIl(offset, op, arg));
+            if (preserveStructure || op != "nop") result.Add(new AmmoIl(offset, op, arg));
         }
+        if (preserveStructure) return result;
         // An unconditional transfer to the immediately following instruction is
         // compiler structure, not a gameplay condition.
         for (int i = result.Count - 2; i >= 0; i--)
