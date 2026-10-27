@@ -221,10 +221,14 @@ internal static class RuntimeDelayedActionScheduler
                 continue;
             }
             Player owner = Main.player[pending.OwnerId];
+            bool capturedNpcEffect = pending.Action.ActionCode is RuntimeEventActionCode.ApplyStatus
+                or RuntimeEventActionCode.ApplyNpcEffect;
             // RemoteClient.Reset replaces Player: a reused slot is not the author
             // of this pending action, even if the newcomer is already active.
+            // NPC statuses do not consume the source after admission; retaining
+            // their captured target must not depend on a recycled projectile slot.
             if (owner is null || !owner.active || !ReferenceEquals(owner, pending.Owner)
-                || !SourceIsCurrent(pending, owner))
+                || !capturedNpcEffect && !SourceIsCurrent(pending, owner))
             {
                 pending.Budget.Return(pending.ReservedSpawnBudget);
                 continue;
@@ -248,20 +252,30 @@ internal static class RuntimeDelayedActionScheduler
                 pending.Budget.Return(pending.ReservedSpawnBudget);
                 continue;
             }
-            RuntimeProgramExecutor.ExecuteAction(
-                pending.Data,
-                pending.SourceEntity,
-                pending.Action,
-                owner,
-                pending.Source,
-                pending.Position,
-                pending.Direction,
-                target,
-                pending.DamageDone,
-                pending.ChildDepth,
-                pending.Budget,
-                pending.ReservedSpawnBudget,
-                parentCombat: pending.ParentCombat, hitTargetSpawn: pending.HitTargetSpawn);
+            if (capturedNpcEffect)
+            {
+                // Avoid even forwarding a stale EntitySource_Parent to the
+                // executor: only the immutable definition and fenced NPC are used.
+                RuntimeProgramExecutor.ExecuteNpcStatusAction(pending.Data, pending.SourceEntity,
+                    pending.Action, owner, target);
+            }
+            else
+            {
+                RuntimeProgramExecutor.ExecuteAction(
+                    pending.Data,
+                    pending.SourceEntity,
+                    pending.Action,
+                    owner,
+                    pending.Source,
+                    pending.Position,
+                    pending.Direction,
+                    target,
+                    pending.DamageDone,
+                    pending.ChildDepth,
+                    pending.Budget,
+                    pending.ReservedSpawnBudget,
+                    parentCombat: pending.ParentCombat, hitTargetSpawn: pending.HitTargetSpawn);
+            }
             ExecutedThisTick++;
         }
     }

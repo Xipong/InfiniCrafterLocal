@@ -213,6 +213,10 @@ def test_real_author_builder_preserves_present_accepted_parent_without_visuals(m
 
 @pytest.mark.parametrize("status,lines", [
     ("observed_literal", ["  Телепортирует вас домой  ", "", "\tДословная строка\n"]),
+    ("observed_local_hooks", ["Модовая строка", "добавлено хуком"]),
+    ("observed_local_hooks", []),
+    ("unavailable_or_hook_failed", []),
+    ("observed_literal_hook_failed", ["[DYNAMIC]"]),
     ("refused_line_bound", []),
     ("refused_character_bound", []),
 ])
@@ -234,8 +238,9 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
     parent = {
         "name": "literal source", "fullName": "Terraria/RecallPotion",
         "tooltipLines": lines, "tooltipSource": {
-            "source": "Lang.GetTooltip", "fullName": "Terraria/RecallPotion",
-            "language": "ru-RU", "status": status,
+            "source": "ItemLoader.ModifyTooltips" if status in {"observed_local_hooks", "unavailable_or_hook_failed"} else "Lang.GetTooltip",
+            "fullName": "Terraria/RecallPotion", "language": "ru-RU", "status": status,
+            "scope": "native_description_and_hook_changes_on_base_defaults_clone_with_mod_instance_state",
         },
     }
     before = copy.deepcopy(parent)

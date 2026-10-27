@@ -102,7 +102,7 @@ internal static partial class EngineRuntimeChecks
         return ParseMaterialElement(JsonNode.Parse(data.ToJson())!.AsObject());
     }
 
-    private static void MaterialNonownerPathAndLegacyRemainLocal()
+    private static void MaterialNonownerPathRemainsLocalEventsAwaitRelay()
     {
         WithLighting((_, __) => {
             using var peers = new ReviewPeers();
@@ -118,9 +118,129 @@ internal static partial class EngineRuntimeChecks
             var paths = (IList)typeof(InfiniDetachedVfxSystem).GetField("MaterialPaths", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
             var emissions = (IList)typeof(InfiniDetachedVfxSystem).GetField("Emissions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
             Equal(1, paths.Count, "nonowner actual local spawn event still registers its live path without a relay");
-            Equal(1, emissions.Count, "legacy local presentation remains available");
+            Equal(0, emissions.Count, "remote discrete presentation awaits its validated relay");
             typeof(GeneratedProjectile).GetMethod("EmitAndSyncVfxEvent", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(remote, new object[] { "on_spawn", remote.Projectile.Center });
-            Equal(1, paths.Count, "live path registration deduplicates the same generation"); Equal(1, emissions.Count, "legacy one-per-tick semantics preserved");
+            Equal(1, paths.Count, "live path registration deduplicates the same generation"); Equal(0, emissions.Count, "repeated callback cannot bypass relay ownership");
+        });
+    }
+
+    private static void ItemEventOccurrencesRelaySimpleAndMixed()
+    {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
+        foreach (bool mixed in new[] { false, true }) WithLighting((_, lights) => {
+            using var peers = new ReviewPeers();
+            InfiniItemVfxRuntime.ClearUseEventCaches();
+            var data = ReviewContactItemData(); data.Id = mixed ? "mixed_event" : "simple_event";
+            var material = data.VfxManifest.Slots[0]; material.Anchor = "hitPoint";
+            var simple = LightManifest(material.EntityId, RuntimeEventKind.OnHit).Slots[0];
+            simple.Id = "simple_hit"; simple.Anchor = "hitPoint";
+            data.VfxManifest.Slots = mixed ? new[] { material, simple } : new[] { simple };
+            if (!mixed) data.VfxManifest.Assets = Array.Empty<VfxAssetSpec>();
+            data.Normalize();
+            peers.Register(data);
+            var player = Terraria.Main.player[0]; player.selectedItem = 0; player.Center = new Vector2(200,200);
+            var owner = ReviewItem(data); player.inventory[0] = owner.Item;
+            peers.Mode(NetmodeID.MultiplayerClient, 0);
+            var points = new[] { new Vector2(320,240), new Vector2(320,240), new Vector2(640,240) };
+            foreach (var point in points) owner.OnHitNPC(player, new NPC { active = true, Center = point }, new NPC.HitInfo(), 1);
+            Equal(3, peers.Sent.Count, "same-coordinate and distinct hits each send a distinct event");
+            var claims = peers.Sent.ToArray(); peers.Sent.Clear();
+            using var wire = new MemoryStream(); owner.NetSend(new BinaryWriter(wire));
+            wire.Position = 0; Equal(8, new BinaryReader(wire).ReadInt32(), "simple events also synchronize presentation token");
+            var server = ReviewItem(data); wire.Position = 0; server.NetReceive(new BinaryReader(wire)); player.inventory[0] = server.Item;
+            Equal(owner.PresentationToken, server.PresentationToken, "event source identity survives native item sync");
+            peers.Mode(NetmodeID.Server, 255);
+            peers.Receive(claims[0], 1); Equal(0, peers.Sent.Count, "other owner cannot send this event");
+            player.inventory[0] = ReviewItem(data).Item;
+            peers.Receive(claims[0], 0); Equal(0, peers.Sent.Count, "stale item generation is rejected");
+            player.inventory[0] = server.Item;
+            foreach (var claim in claims) peers.Receive(claim, 0);
+            Equal(3, peers.Sent.Count, "server relays each distinct occurrence");
+            foreach (var claim in claims) peers.Receive(claim, 0);
+            Equal(3, peers.Sent.Count, "replayed owner occurrences do not relay");
+            var relays = peers.Sent.ToArray(); peers.Sent.Clear();
+            peers.System.OnWorldUnload();
+            var remote = ReviewItem(data); wire.Position = 0; remote.NetReceive(new BinaryReader(wire)); player.inventory[0] = remote.Item;
+            peers.Mode(NetmodeID.MultiplayerClient, 2); lights.Clear();
+            foreach (var relay in relays) peers.Receive(relay);
+            Equal(3, lights.Count, "simple effect emitted for each real occurrence");
+            Equal(points[0].ToTileCoordinates(), (Point)lights[0]!.GetType().GetField("Position")!.GetValue(lights[0])!, "first hit coordinate retained");
+            Equal(points[2].ToTileCoordinates(), (Point)lights[2]!.GetType().GetField("Position")!.GetValue(lights[2])!, "different hit coordinate retained");
+            Equal(mixed ? 3 : 0, OwnedMaterialQueue().Count, "mixed material and simple effects stay in sync");
+            foreach (var relay in relays) peers.Receive(relay);
+            Equal(3, lights.Count, "replayed relay occurrence does not emit simple effect");
+            Equal(mixed ? 3 : 0, OwnedMaterialQueue().Count, "replayed relay occurrence does not emit material effect");
+            InfiniItemVfxRuntime.ClearUseEventCaches();
+        });
+    }
+
+    private static void ItemEventNetworkRateLimit()
+    {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
+        WithLighting((_, lights) => {
+            using var peers = new ReviewPeers();
+            InfiniItemVfxRuntime.ClearUseEventCaches();
+            var data = ReviewContactItemData(); data.Id = "item_event_limit";
+            data.VfxManifest.Slots = LightManifest(data.RuntimeProgram.ItemEntityId, RuntimeEventKind.OnHit).Slots;
+            data.VfxManifest.Assets = Array.Empty<VfxAssetSpec>();
+            data.Normalize();
+            peers.Register(data);
+            var player = Terraria.Main.player[0]; player.selectedItem = 0; player.Center = new Vector2(200,200);
+            var owner = ReviewItem(data); player.inventory[0] = owner.Item;
+            peers.Mode(NetmodeID.MultiplayerClient, 0);
+            for (int i = 0; i < 65; i++) owner.OnHitNPC(player, new NPC { active = true, Center = new Vector2(320,240) }, new NPC.HitInfo(), 1);
+            Equal(65, peers.Sent.Count, "all real producer events get distinct occurrences");
+            var claims = peers.Sent.ToArray(); peers.Sent.Clear();
+            using var wire = new MemoryStream(); owner.NetSend(new BinaryWriter(wire));
+            var server = ReviewItem(data); wire.Position = 0; server.NetReceive(new BinaryReader(wire)); player.inventory[0] = server.Item;
+            peers.Mode(NetmodeID.Server, 255);
+            foreach (var claim in claims) peers.Receive(claim, 0);
+            Equal(64, peers.Sent.Count, "server caps per-owner relay work in one world tick");
+            // Reconnecting a player is a new transport/owner session, even if
+            // it reuses the same numeric owner slot in the same world tick.
+            var rejoined = new Player { active = true, whoAmI = 0, selectedItem = 0 };
+            rejoined.inventory[0] = server.Item; Terraria.Main.player[0] = rejoined;
+            peers.Sent.Clear(); peers.Receive(ReviewReplaceOccurrence(claims[0], true, 1), 0);
+            Equal(1, peers.Sent.Count, "new player session does not inherit old per-tick rate count");
+            Terraria.Main.player[0] = player; peers.Sent.Clear();
+            MaterialClock(Terraria.Main.GameUpdateCount + 1);
+            peers.Mode(NetmodeID.MultiplayerClient, 0); player.inventory[0] = owner.Item;
+            owner.OnHitNPC(player, new NPC { active = true, Center = new Vector2(320,240) }, new NPC.HitInfo(), 1);
+            var next = peers.Sent.Last(); peers.Sent.Clear(); player.inventory[0] = server.Item;
+            peers.Mode(NetmodeID.Server, 255); peers.Receive(next, 0);
+            Equal(1, peers.Sent.Count, "server restores capacity next tick");
+
+            // A remote client enforces its own per-owner tick ceiling too.
+            InfiniItemVfxRuntime.ClearUseEventCaches(); peers.Mode(NetmodeID.MultiplayerClient, 2);
+            MaterialClock(200); lights.Clear();
+            for (ulong i = 1; i <= 65; i++) peers.Receive(ReviewReplaceOccurrence(claims[0], true, i));
+            Equal(64, lights.Count, "remote caps admitted occurrences per owner and tick");
+            MaterialClock(201); peers.Receive(ReviewReplaceOccurrence(claims[0], true, 66));
+            Equal(65, lights.Count, "remote restores capacity next tick");
+            InfiniItemVfxRuntime.ClearUseEventCaches();
+        });
+    }
+
+    private static void ProjectileHitOccurrencesStayDistinct()
+    {
+        WithLighting((_, lights) => {
+            var data = ReviewProjectileData("on_hit"); var entity = data.RuntimeProgram.TryGetEntity("actor")!;
+            data.VfxManifest.Slots = LightManifest(entity.Id, RuntimeEventKind.OnHit).Slots;
+            data.VfxManifest.Slots[0].Anchor = "hitPoint";
+            var source = new Projectile { active = true, owner = 0, identity = 71, scale = 1, Center = new Vector2(100,150), velocity = Vector2.UnitX };
+            var state = new InfiniVfxState(); lights.Clear();
+            InfiniVfxRuntime.OnEvent(source, data, entity.Id, RuntimeEventKind.OnHit, data.VfxManifest, ref state, new Vector2(320,240));
+            InfiniVfxRuntime.OnEvent(source, data, entity.Id, RuntimeEventKind.OnHit, data.VfxManifest, ref state, new Vector2(320,240));
+            InfiniVfxRuntime.OnEvent(source, data, entity.Id, RuntimeEventKind.OnHit, data.VfxManifest, ref state, new Vector2(640,240));
+            Equal(3, lights.Count, "each native projectile hit is distinct even at the same point");
+            data.VfxManifest.Slots[0].Event = RuntimeEventKind.OnKill;
+            InfiniVfxRuntime.OnEvent(source, data, entity.Id, RuntimeEventKind.OnKill, data.VfxManifest, ref state, source.Center);
+            InfiniVfxRuntime.OnEvent(source, data, entity.Id, RuntimeEventKind.OnKill, data.VfxManifest, ref state, source.Center);
+            Equal(4, lights.Count, "duplicate lifecycle event remains guarded within the tick");
         });
     }
 
@@ -197,6 +317,9 @@ internal static partial class EngineRuntimeChecks
     }
     private static void MaterialPeerSessionReset(bool item)
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((_, __) => {
             using var peers = new ReviewPeers();
             var data = item ? ReviewContactItemData() : ReviewProjectileData("on_hit"); data.VfxManifest.Slots[0].Duration = 3; peers.Register(data);
@@ -266,6 +389,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void MaterialDeadItemDelayKeepsWorldSnapshotAndFencesSource()
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((config, _) => {
             using var peers = new ReviewPeers(); config.ParticleSpawnMultiplier = 1;
             foreach (int mode in new[] { NetmodeID.SinglePlayer, NetmodeID.MultiplayerClient })

@@ -83,7 +83,8 @@ internal readonly record struct InfiniVfxProjectileSnapshot(
         Vector2? ownerCenter = projectile.owner >= 0 && projectile.owner < Main.player.Length
             && Main.player[projectile.owner] is { active: true } owner ? owner.Center : null;
         RuntimeEntitySpec? entity = data.RuntimeProgram.TryGetEntity(entityId);
-        float bodyScale = UsesExactFrontHandScale(entity) ? projectile.scale : Math.Clamp(projectile.scale, 0.1f, 8f);
+        float bodyScale = Content.Projectiles.GeneratedProjectile.PreservesExplicitBodyScale(entity)
+            ? projectile.scale : Math.Clamp(projectile.scale, 0.1f, 8f);
         return new(projectile.Center, InfiniVfxRuntime.ForwardTip(projectile, data, entityId),
             InfiniVfxRuntime.ForwardAxis(projectile, data, entityId), ownerCenter,
             new(projectile.rotation, bodyScale,
@@ -103,13 +104,9 @@ internal readonly record struct InfiniVfxProjectileSnapshot(
     // Reuse the existing pose.Scale float on the event wire, not a second
     // scale/anchor payload. Exact bounds are .25*.25*.25 .. 4*4*8.
     // The decoder checks this bounded envelope; the resolved entity below
-    // narrows it back to the historical clamp for every other driver.
+    // narrows it back to the historical clamp when no explicit scale component owns it.
     internal bool IsValidFor(RuntimeEntitySpec? entity)
-        => IsValid && (UsesExactFrontHandScale(entity) || Pose.Scale is >= 0.1f and <= 8f);
-
-    private static bool UsesExactFrontHandScale(RuntimeEntitySpec? entity)
-        => entity?.VisualScaleRate is not null || (entity?.Movement.Code == 20 || entity?.Attachment?.Anchor == "front_hand")
-            && (entity!.HitboxCurve?.MirrorToSprite == true || entity.VisualScaleCurve is not null);
+        => IsValid && (Content.Projectiles.GeneratedProjectile.PreservesExplicitBodyScale(entity) || Pose.Scale is >= 0.1f and <= 8f);
 
     private static bool Finite(Vector2 value) => float.IsFinite(value.X) && float.IsFinite(value.Y);
 
@@ -152,14 +149,14 @@ public static class InfiniVfxRuntime
         }
     }
 
-    public static bool OnEvent(Projectile projectile, GeneratedItemData data, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center,ulong occurrence=0,bool includeMaterialElements=true)
+    public static bool OnEvent(Projectile projectile, GeneratedItemData data, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center,ulong occurrence=0,bool includeEventEmissions=true)
     {
         if (Main.dedServ || manifest is null || !manifest.HasSlots) return false;
         BeginPresentationTick(projectile, data, entityId, ref state);
         InfiniVfxProjectileSnapshot snapshot = InfiniVfxProjectileSnapshot.Capture(projectile, data, entityId);
         if (!snapshot.IsValidFor(data.RuntimeProgram.TryGetEntity(entityId))) return false;
         if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
-        bool admitMaterials=includeMaterialElements&&InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(occurrence,relay:false);
+        bool admitMaterials=includeEventEmissions&&InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(occurrence,relay:false);
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
@@ -169,13 +166,22 @@ public static class InfiniVfxRuntime
                 InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
                 continue;
             }
+            // A remote native callback registers live paths, but discrete events
+            // have one producer: the validated relay (regardless of arrival order).
+            if (!includeEventEmissions) continue;
             if (InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!admitMaterials||!snapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
                 emitted |= InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,state.SourceKey,new(anchor,
                     slot.Anchor=="velocity"?projectile.velocity.SafeNormalize(snapshot.Forward):snapshot.Forward,snapshot.MaterialVelocity){SourceCenter=snapshot.Center},VfxSourceBinding.Capture(projectile));
                 continue;
             }
-            if (!TryMarkSlotEmission(projectile, entityId, eventName, slot, ref state)) continue;
+            // An entity can hit several NPCs (or the same NPC more than once)
+            // in one world tick. Keep the tick guard for lifecycle callbacks,
+            // but each native hit/crit callback owns a separate occurrence.
+            bool firstThisTick = TryMarkSlotEmission(projectile, entityId, eventName, slot, ref state);
+            bool localHit = eventName is (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                && (Main.netMode != NetmodeID.MultiplayerClient || projectile.owner == Main.myPlayer);
+            if (!firstThisTick && !localHit) continue;
             emitted = true;
             EmitPrimitive(data, anchor, slot.Anchor == "velocity" ? projectile.velocity : snapshot.Forward, slot, manifest, state.SourceKey);
             if (VfxRendererRegistry.Resolve(slot) != InfiniVfxRendererKind.ImpactSprite)
@@ -430,7 +436,7 @@ public static class InfiniVfxRuntime
         if (pose is { } captured)
         {
             // Snapshot/network remains raw native pose + dimensionless body scale;
-            // only explicit code20 curves bypass the historical capture clamp.
+            // Explicit authored scale components preserve the same scale as the body.
             // Capture the selected texture's corrected pose and base size only here.
             var entity = data.RuntimeProgram.TryGetEntity(entityId);
             var selectedPose = captured with { Rotation = entity is not null
@@ -511,8 +517,7 @@ public static class InfiniVfxRuntime
             : selected.ProjectileRotation(entity, projectile.rotation, effects);
         float drawScale = selected.ImpactTexture ? Math.Max(0.05f, projectile.scale * scale)
             : Math.Clamp(projectile.scale, 0.1f, 8f) * scale * selected.FrameScale(texture.Width, texture.Height);
-        if (!selected.ImpactTexture && (entity?.VisualScaleRate is not null || (selected.FrontHandBody || entity?.Attachment?.Anchor == "front_hand")
-            && entity is not null && (entity.HitboxCurve?.MirrorToSprite == true || entity.VisualScaleCurve is not null)))
+        if (!selected.ImpactTexture && Content.Projectiles.GeneratedProjectile.PreservesExplicitBodyScale(entity))
             drawScale = projectile.scale * scale * selected.FrameScale(texture.Width, texture.Height);
         Vector2 origin = entity is not null ? Content.Projectiles.GeneratedProjectile.MotionSpriteOrigin(entity, selected,
             texture.Width, texture.Height, drawScale, effects, rotation,
