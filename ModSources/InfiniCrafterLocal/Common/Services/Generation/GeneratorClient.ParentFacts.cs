@@ -362,12 +362,15 @@ public sealed partial class GeneratorClient
             // Base Item.crit only: CraftIdentityItem already removed the reforge.
             // Player/equipment-effective crit remains a separate observation.
             ["crit"] = item.crit,
+            ["armorPenetration"] = item.ArmorPenetration,
+            ["itemScale"] = item.scale,
             ["damageClass"] = DamageClassName(item),
             ["shootProjectileFullName"] = ProjectileFullName(item.shoot),
             ["useStyle"] = item.useStyle,
             ["useStyleName"] = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
             ["useTime"] = item.useTime,
             ["useAnimation"] = item.useAnimation,
+            ["useLimitPerAnimation"] = item.useLimitPerAnimation,
             ["reuseDelay"] = item.reuseDelay,
             ["channel"] = item.channel,
             ["noMelee"] = item.noMelee,

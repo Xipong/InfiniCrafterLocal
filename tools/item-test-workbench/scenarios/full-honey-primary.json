@@ -87,13 +87,13 @@
       "kind": "player_stat_at",
       "stat": "generatedBuffTicks",
       "tick": 0,
-      "value": 599
+      "value": 600
     },
     {
       "kind": "player_stat_at",
       "stat": "generatedBuffTicks",
       "tick": 60,
-      "value": 539
+      "value": 540
     },
     {
       "kind": "player_stat_at",
@@ -105,7 +105,7 @@
       "kind": "player_stat_at",
       "stat": "generatedBuffTicks",
       "tick": 1801,
-      "value": 599
+      "value": 600
     },
     {
       "kind": "player_stat_at",
@@ -117,6 +117,12 @@
       "kind": "player_stat_at",
       "stat": "moveSpeed",
       "tick": 600,
+      "value": 1.1
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "moveSpeed",
+      "tick": 601,
       "value": 1
     }
   ]
