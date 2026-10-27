@@ -197,7 +197,8 @@ class SuiteTests(unittest.TestCase):
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             plan = json.loads(proc.stdout)
-            self.assertEqual(len(plan["cases"]), 5)
+            self.assertEqual(len(plan["cases"]), 8)
+            self.assertIn("npc-effect-lifecycle", [case["name"] for case in plan["cases"]])
             self.assertEqual(list(root.iterdir()), [])
 
     def test_removed_compare_command_is_rejected_without_outputs(self):
@@ -256,6 +257,10 @@ class SuiteTests(unittest.TestCase):
             self.assertEqual(result["completedCases"], 3)
             self.assertEqual([r["expectationMatched"] for r in result["cases"]], [False, True, True])
             self.assertEqual(result["cases"][1]["nativeStatus"], "failed")
+            observed = result["cases"][2]["observations"]
+            self.assertEqual(observed["eventCounts"], {})
+            self.assertEqual(observed["nativeHits"]["hit"]["count"], 0)
+            self.assertEqual(observed["nativeHits"]["item_hit"]["count"], 0)
             self.assertTrue((root / "out/summary.json").is_file())
 
 

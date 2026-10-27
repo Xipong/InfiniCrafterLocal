@@ -1,0 +1,89 @@
+{
+  "ticks": 120,
+  "seed": 1,
+  "player": {
+    "x": 640,
+    "y": 640,
+    "life": 100,
+    "mana": 200
+  },
+  "dummy": {
+    "x": 850,
+    "y": 640,
+    "width": 32,
+    "height": 48,
+    "life": 10000
+  },
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "aim",
+      "x": 850,
+      "y": 661
+    },
+    {
+      "tick": 0,
+      "kind": "primary"
+    },
+    {
+      "tick": 1,
+      "kind": "release"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "spawned"
+    },
+    {
+      "kind": "dummy_damaged"
+    },
+    {
+      "kind": "all_inactive"
+    },
+    {
+      "kind": "no_nonfinite"
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 25,
+      "stat": "count",
+      "value": 1
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 25,
+      "stat": "lifeRegen",
+      "value": -3
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 25,
+      "stat": "defenseDelta",
+      "value": -4
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 25,
+      "stat": "contactMultiplier",
+      "value": 0.7
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 25,
+      "stat": "velocityRetentionPerTick",
+      "value": 0.9
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 54,
+      "stat": "count",
+      "value": 0
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 54,
+      "stat": "lifeRegen",
+      "value": 0
+    }
+  ]
+}

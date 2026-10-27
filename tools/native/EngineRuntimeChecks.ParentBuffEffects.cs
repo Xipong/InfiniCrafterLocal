@@ -18,8 +18,8 @@ internal static partial class EngineRuntimeChecks
         Terraria.Main.netMode = NetmodeID.SinglePlayer;
         Terraria.Main.player[0] = new Player();
         var capture = typeof(GeneratorClient).GetMethod("CaptureNativeBuffEffectReference", BindingFlags.Static | BindingFlags.NonPublic)!;
-        JsonObject Read(int id, string receiver, bool native = true)
-            => (JsonObject)capture.Invoke(null, new object[] { id, receiver, native })!;
+        JsonObject Read(int id, string receiver)
+            => (JsonObject)capture.Invoke(null, new object[] { id, receiver })!;
         foreach (var pair in new[] { (BuffID.Mining, "Terraria.Player.pickSpeed", -0.25),
                                     (BuffID.Poisoned, "Terraria.NPC.lifeRegen", -12.0),
                                     (BuffID.Ichor, "NPC.HitModifiers.Defense.Flat", -15.0) })
@@ -38,14 +38,26 @@ internal static partial class EngineRuntimeChecks
             "boolean utility source write is not a copied tooltip");
         var verified = typeof(GeneratorClient).GetMethod("VerifiedNativeBuffEffectReference", BindingFlags.Static | BindingFlags.NonPublic)!;
         foreach (var args in new object?[][] {
-            new object?[] { BuffID.Mining, "player", true, "unknown-binary:unknown-module" },
-            new object?[] { BuffID.Mining, "player", false, null },
-            new object?[] { BuffID.Count + 900, "player", true, null },
+            new object?[] { BuffID.Mining, "player", "unknown-binary:unknown-module" },
+            new object?[] { BuffID.Count + 900, "player", null },
         })
         {
             JsonObject refused = (JsonObject)verified.Invoke(null, args)!;
             Equal("unsupported", refused["completeness"]!.GetValue<string>(), "unknown binary/modded semantics fail closed");
             Equal(0, refused["fragments"]!.AsArray().Count, "unknown semantics receive no guessed stats");
+        }
+        var skin = Read(BuffID.ObsidianSkin, "player")["fragments"]!.AsArray()
+            .SelectMany(f => f!["operations"]!.AsArray()).ToArray();
+        Equal(true, skin.Any(o => o!["nativeMember"]!.GetValue<string>() == "Terraria.Player.buffImmune"
+            && o["arrayIndex"]!.GetValue<int>() == BuffID.OnFire && o["value"]!.GetValue<bool>()),
+            "array immunity write no longer discards the entire ObsidianSkin branch");
+        foreach (var pair in new[] { (BuffID.Ironskin, "Terraria.Player.statDefense", 8.0),
+                                    (BuffID.MagicPower, "Terraria.Player.get_magicDamage", (double)0.2f) })
+        {
+            var ops = Read(pair.Item1, "player")["fragments"]!.AsArray().SelectMany(f => f!["operations"]!.AsArray());
+            Equal(true, ops.Any(o => o!["nativeMember"]!.GetValue<string>() == pair.Item2
+                && o["operation"]!.GetValue<string>() == "operator_call_and_assign"
+                && o["value"]!.GetValue<double>() == pair.Item3), "typed native operator arguments reach parent facts");
         }
 
         var client = new GeneratorClient();

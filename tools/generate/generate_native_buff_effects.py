@@ -31,15 +31,19 @@ UNITS = {
     "dimensionless_factor": "Multiply the named member's current native value by this factor at this source site, not a final effective-stat guarantee.",
     "native_lifeRegen_units": "Signed NPC.lifeRegen contribution after clearing positive regen. Optional unitEvidence proves a local accumulator/HP relation; nominalHpLossPerSecondAt60Updates explicitly assumes 60 updates/s, not proved scheduling or final HP loss. Other contributions, target immortality, routing and hooks still apply.",
     "defense_points": "Hit-local StatModifier.Flat defense-point contribution; not a persistent NPC.defense mutation or a guaranteed final defense/damage delta.",
+    "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name.",
 }
 
 
 def metadata(path):
     import dnfile
     pe = dnfile.dnPE(str(path))
-    signatures = {b"\x06\x02": "boolean", b"\x06\x08": "int32", b"\x06\x0c": "float32", b"\x06\x0d": "float64"}
+    signatures = {b"\x06\x02": "boolean", b"\x06\x08": "int32", b"\x06\x0c": "float32", b"\x06\x0d": "float64",
+                  b"\x06\x1d\x02": "boolean_array"}
     fields = {str(t.TypeNamespace) + "." + str(t.TypeName) + "." + str(f.row.Name): signatures[f.row.Signature.value]
               for t in pe.net.mdtables.TypeDef for f in t.FieldList if f.row.Signature.value in signatures}
+    fields.update({str(t.TypeNamespace) + "." + str(t.TypeName) + "." + str(f.row.Name): "value_type"
+                   for t in pe.net.mdtables.TypeDef for f in t.FieldList if f.row.Signature.value.startswith(b"\x06\x11")})
     incoming = next(m.row for t in pe.net.mdtables.TypeDef if str(t.TypeNamespace) == "Terraria" and str(t.TypeName) == "NPC"
                     for m in t.MethodList if str(m.row.Name) == "GetIncomingStrikeModifiers")
     params = {p.row.Sequence: str(p.row.Name) for p in incoming.ParamList}

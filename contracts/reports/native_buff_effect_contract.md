@@ -10,7 +10,7 @@
 
 `tools/generate/generate_native_buff_effects.py` uses the existing read-only `dnfile`/`dncil` IL decoder. Native field signatures distinguish booleans from numeric fields. BuffID constants label branches **after** their ID has been derived from source comparisons; names do not select operations.
 
-The runtime checks the entire DLL SHA256, module MVID, and every dependent method's IL SHA256 before looking up a row. Current generated support is exactly installed DLL `fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5`, MVID `033e87cd-cefe-4dc6-a1fb-e14aa938bbb2`. Certified methods: Player.UpdateBuffs; NPC.UpdateNPC_BuffSetFlags, UpdateNPC_BuffFlagsReset, UpdateNPC_BuffApplyDOTs and GetIncomingStrikeModifiers. Unknown binaries, modded buff/source semantics and absent source coverage return explicit unsupported observations, never guessed values.
+The runtime checks the entire DLL SHA256, module MVID, and every dependent method's IL SHA256 before looking up a row. Current generated support is exactly installed DLL `fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5`, MVID `033e87cd-cefe-4dc6-a1fb-e14aa938bbb2`. Certified methods: Player.UpdateBuffs; NPC.UpdateNPC_BuffSetFlags, UpdateNPC_BuffFlagsReset, UpdateNPC_BuffApplyDOTs and GetIncomingStrikeModifiers. Unknown native binaries and absent source coverage return explicit unsupported observations, never guessed values. Loaded ModBuff identities use bounded source inspection of their own Update, registration and initializer methods; they do not borrow a vanilla certificate.
 
 ```sh
 /home/xipong/agent-work-main/scripts/agent-storage run --task buff-repro -- \
@@ -22,19 +22,24 @@ Generated products are `NativeBuffEffectCatalog.g.cs` and `native_buff_effect_so
 
 ## Coverage and limits
 
-Current source yields 77 player rows with direct typed boolean assignments and/or scalar additions/multiplications. These are **statement fragments**, not full effect implementations: e.g. Mining's source subtracts0.25 from Player.pickSpeed; Spelunker's source assigns Player.findTreasure=true. A flag is not advertised as its full downstream utility/AI behavior.
+Current source yields 96 player rows with typed boolean/constant-index bool-array writes, scalar/ref contributions and value-type operator calls. These are **statement fragments**, not full effect implementations: e.g. Mining's source subtracts0.25 from Player.pickSpeed; Spelunker's source assigns Player.findTreasure=true. ObsidianSkin retains lavaImmune, fireWalk and buffImmune[OnFire]=true together. A flag is not advertised as its full downstream utility/AI behavior.
 
 NPC source joins8 direct flag-gated periodic-regen penalty fragments and2 hit-local defense Flat contributions. Regression examples only: Poisoned's flag leads to clearing positive lifeRegen then subtracting12; Ichor leads to HitModifiers.Defense.Flat subtract15 only with ignoreArmorDebuffs=false. The latter is not a persistent NPC.defense mutation. The8 regen consumers are Poisoned, OnFire, CursedInferno, Frostburn, Venom, ShadowFlame, OnFire3 and Frostburn2; these names are generated results, not recognition selectors. BetsysCurse is the other defense consumer.
 
-18 NPC rows are unsupported/flag-only, including Confused, Midas, SoulDrain, Oiled, Daybreak, projectile-count-dependent effects, progression-dependent Dryad effects and Shimmer. The analysis also retains177 player and1 NPC literal branch refusals. Complex calls, ref/StatModifier getter operations, nested branching, indirect/array stores, AI effects, contact-damage and velocity semantics remain outside this bounded subset. No claim is made about unrecognized dispatch shapes, all vanilla effects, mod effects, admission/immunity, actual duration refresh or final stats/damage.
+18 NPC rows are unsupported/flag-only, including Confused, Midas, SoulDrain, Oiled, Daybreak, projectile-count-dependent effects, progression-dependent Dryad effects and Shimmer. The analysis also retains158 player and1 NPC literal branch refusals. Complex calls, conditional/ref operations beyond the recognized straight-line forms, nested branching, dynamic-index stores, AI effects, contact-damage and velocity semantics remain outside this bounded subset. No claim is made about unrecognized dispatch shapes, all vanilla effects, mod effects, admission/immunity, actual duration refresh or final stats/damage.
+
+Vanilla buff implementations are selected by the observed buff ID and receiver, even when a modded item applies them. This does not certify loaded-mod changes to that implementation. Attached mod/global OnHitNPC overrides now contribute parent-local direct AddBuff source statements through `hitHookSource`; their conditions and unknown semantics stay separate from the certified native status catalog. See [the vanilla/Calamity audit](parent_source_coverage_audit.md) for the tested boundaries and remaining gaps.
 
 Each scalar fragment retains `buffTypeEquals`, slot-local identity, source test/operation offsets and **nativeControlFlowMustReachTest**. Enclosing path conditions are explicitly unresolved, never silently dropped to claim an unconditional whole-buff effect. NPC consumer fragments additionally retain dontTakeDamage=false, the flag=true predicate, the buff-to-flag branch condition, reset-method provenance, and the defense consumer's ignoreArmorDebuffs gate.
+
+Value-type operations retain the exact operator and literal argument as `operator_call_and_assign`, rather than guessing a final stat or flattening StatModifier components. Examples now delivered include Ironskin, MagicPower, Archery, Wrath and Rage.
 
 ## Numeric source units
 
 - `native_member_units`: exact signed native-field contribution plus storage type. It is not automatically a percent/final stat. No per-stat primitive naming table is duplicated here.
 - `dimensionless_factor`: multiply the current native member at that source site; not the final effective-stat multiplier.
 - `native_lifeRegen_units`: signed native regen contribution, with positive-regen clearing retained. Independent source-shape evidence proves lifeRegenCount accumulation and120 accumulator units per one-HP decrement; the target uses realLife when nonnegative and is subject to resolved-target immortality. `nominalHpLossPerSecondAt60Updates` is an explicit unit comparison assuming60 accumulator updates/s (Poisoned6), not proved scheduling or final damage. Hooks, other contributions and grouped damage still apply.
+- `native_operator_argument`: literal second argument of the named operator, with the current member as first argument and the result stored back. Operator internals and final-stat implications are not expanded.
 - `defense_points`: hit-local HitModifiers.Defense.Flat contribution, not a persistent defense write or guaranteed damage delta.
 
 ## Verification handoff

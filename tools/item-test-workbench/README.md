@@ -1,5 +1,51 @@
 # Item Test Workbench
 
+## Standalone native loader
+
+`loader-run` is the new CPU path for native tModLoader autoload from separate
+DLLs. It needs no `.tmod` packaging, installation, game client or saved world:
+
+```bash
+python tools/item-test-workbench/workbench.py loader-run \
+  --item /path/to/item.json --scenario /path/to/scenario.json --out /path/to/run
+```
+
+The first invocation builds the host and a separate production
+`InfiniCrafterLocal.dll` from the real mod sources. Later invocations can use
+`--no-build` while their build receipt remains valid. The usual reference DLL
+environment described below is required. Native metadata is held in memory;
+no archive is written. The process autoloads tML's built-in content and IFC,
+builds native hook tables and uses actual Player/NPC/Projectile updates with
+SystemLoader phases. It does not enumerate IFC gameplay handlers by name.
+The wrapper records the effective production metadata/assets in `receipt.json`,
+including an `INFINI_MOD_SOURCE_ROOT` override, and refuses evidence if those
+inputs change during the run.
+
+For a registered item use `--native-item WoodenBoomerang`, a native ID, or
+`--native-item ModName/ItemName` instead of generated JSON. An additional mod
+can be autoloaded from its separately built DLL using `--probe-dll PATH` and
+`--probe-mod-root PATH` (directory containing its build.txt, localization and
+assets). Its declared dependencies, including weak references, must be loaded;
+unavailable ones are refused because this host does not emulate tML's separate
+mod assembly contexts and weak-dependency type filtering.
+For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.
+
+This path currently supports CPU scenes with aim/primary/alt/release, a bounded
+tile layout, a controlled vanilla target or a mod NPC with its native defaults
+and AI, plus the explicitly admitted assertions. Generated JSON must match the
+scenario `worldId`; it is not rewritten. Reports disclose skipped world,
+dust, gore, dropped-item and time phases and missing IFC mod dependencies.
+ParticleLibrary/Luminance DLL references are present, but their complete mod
+content and VFX lifecycle are not loaded by this path. This is not complete
+game/client, arbitrary dependency graph, melee geometry or visual parity.
+Unsupported scenario features fail explicitly; they do not fall back to the
+older runner. The existing `run` and rendering tools retain their earlier scope.
+
+`verify_native_loader.py` checks autoload and a missing-dependency control.
+`verify_loader_scene.py` checks real combat and effects plus independent hooks
+from `fixture-mod/WorkbenchObserverFixture.Standalone.csproj`. These are
+standalone child processes, without launching `Terraria.Main` or a server.
+
 A separate local utility for exercising an **already generated InfiniCrafterLocal
 item JSON**, then inspecting its behavior with code and vision. Runs do not call an
 LLM or image API. The C# project links the mod sources from this checkout and uses
@@ -52,6 +98,73 @@ python tools/item-test-workbench/workbench.py build
 ```
 
 ## Fast agent workflow
+
+For your own item, start with `probe`. It prepares the scene and suite and invokes
+the existing native runner; no helper Python script or handwritten manifest is needed.
+
+```sh
+# One item, one click, full native Player.Update, compact reports.
+python -m toolbox workbench probe --item /path/item.json
+# Several items × explicit inputs. Shell globs expand into separate inputs.
+python -m toolbox workbench probe --item /path/items/*.json --input primary alt \
+  --out artifacts/my-probes
+# Hold alternate for 90 ticks, release, observe until tick 179.
+python -m toolbox workbench probe --item /path/item.json --input alt --hold 90 \
+  --assert '{"kind":"entity_spawn_count","entityId":"my_projectile","value":1}'
+# Repeated clicks every 30 ticks, with a real release after each press.
+python -m toolbox workbench probe --item /path/item.json --repeat 30 \
+  --assert dummy_damaged --set dummy.x=840 --set tiles.0.tileY=44
+# Inspect the exact matrix/scenarios without an SDK, building, running or writing.
+python -m toolbox workbench probe --item /path/item.json --input primary alt --plan
+# Prepare a portable suite, including byte-identical item copies, entirely offline.
+python -m toolbox workbench probe --item /path/item.json --prepare --out artifacts/prepared
+python -m toolbox workbench suite artifacts/prepared/suite.json --out artifacts/prepared-runs
+```
+
+The default [probe scene](scenarios/probe.json) is a controlled floor and target,
+180 ticks, seed 1, full player loop, one primary press at tick 0 and release at tick 1.
+Its **only default assertion is `no_nonfinite`**. Exit 0 alone does not demonstrate
+damage, successful input, correct mechanics or visuals. Add `--assert KIND` or
+`--assert '{"kind":..., ...}'` for the behavior you intend to verify. Assertions and
+native admission are still owned by C#, including unknown-kind/field refusals.
+
+`--input primary alt idle equip` selects an explicit item × input matrix; an
+unsupported binding remains an error. `--hold N` changes the press-to-release
+interval; `--repeat N` sets the interval between presses. Repeat must exceed hold,
+every release must fit inside `--ticks`, and the native 256-action/128-case limits
+are checked before execution. No per-tick alternate-input script is required.
+Use `--start`, `--ticks` and `--seed` to control timing and reproducibility.
+
+`--set dotted.path=JSON` edits the scene, including array indices, without touching
+the item. For example, supply ammunition explicitly with
+`--set 'inventory=[{"slot":54,"itemId":97,"stack":100}]'`, or use
+`--mode client_hybrid` for admitted client contact. `--mode client_vfx` requires
+explicit `--set 'nativeRender={...}'` settings and the existing graphics/assets
+setup. `--action '{"kind":"aim","tick":0,"x":850,"y":700}'` appends a native
+action; same-tick additions follow generated press/release actions in supplied
+order. Missing intermediate objects must be set as objects first. The item is
+never rewritten to remove VFX or bypass native admission, and ammo, assertions,
+mechanics and retries in another mode are never inferred from item names.
+
+Explicit negative controls use the same exact suite expectation contract, e.g.
+`--assert dummy_damaged --expect '{"status":"failed","failedAssertions":["dummy_damaged"]}'`.
+The expectation applies to every selected case. A crash or an extra failed assertion
+cannot satisfy it. Use separate commands or an explicit suite for differing expectations.
+
+Without `--out`, execution/preparation chooses a fresh timestamped directory under
+`artifacts/workbench`. It contains `suite.json`, `probe-plan.json`, `inputs/` and,
+after execution, `probe-result.json`, `runs/summary.json` and each case's native trace
+and agent report. The probe result includes original item paths and authored display
+names, so a batch of files all named `item.json` remains distinguishable. Case
+`observations` include native spawn/use/ammo event counts, separate projectile and
+item-body hit/damage totals and resource endpoints. Zero recorded shots stay zero
+even when the selected finite-state assertion passes; supply ammo and assert the
+behavior you actually want to check.
+The emitted manifest uses relative paths and survives moving the prepared directory.
+Run all cases with one build; failures do not stop later cases. `--no-build` retains
+the existing stale-build refusal. `--prepare` means **native notRun**, while `--plan`
+is read-only and creates no directory. These conveniences use the existing isolated
+native host; the separate tModLoader-process prototype has its own launcher.
 
 All commands also work through `python -m toolbox workbench`. `catalog`, `report`
 and `suite --plan` are offline/read-only unless an explicit report output
@@ -384,7 +497,7 @@ map UI and full world ecology are not simulated.
 
 `itemStack` provisions the actual generated item instance (default 1, bounded by
 its native `maxStack`). Native `ItemCheck` owns consumption; the bench does not
-subtract stacks. Arrow, bullet and flare inventory go through native ammo selection.
+subtract stacks. Arrow, bullet, flare and fallen star inventory go through native ammo selection.
 Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded to
 600. This permits full multi-minute field expiry without increasing image budgets.
 
@@ -396,6 +509,15 @@ Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded t
   native activity or observed lifetime-depleted Kill, respectively.
 - `generated_stack_at` and `exhaustion_at` take post-update `tick` and exact `value`.
   Stack assertions sum the single generated identity across inventory/equipment.
+- `target_effect_at` takes `tick`, `stat` and `value`. It samples the dummy's
+  `lifeRegen`, `vx`, `vy` or active generated effect `count`, `lifeRegenPenalty`,
+  `defenseDelta`, `contactMultiplier`, `velocityRetentionPerTick`. The latter are
+  modifier totals, not proof of a particular hit or outgoing contact. Defense is
+  applied by the registered `RuntimeHitNpcGeneration.ModifyIncomingHit` hook and
+  does not change `npc.defense`. `target_hit_damage_at` checks actual item or
+  projectile hit damage to the dummy at the specified tick; RNG and defense affect
+  this value. The smoke controls check regen, expiry, velocity and a second hit,
+  with an otherwise identical item lacking the effect as a negative control.
 - Direct `Player.ApplyDamageToNPC` calls are observed separately from native
   item/projectile hit callbacks, so nearby-event damage is not mistaken for zero
   damage simply because it bypasses projectile contact callbacks.
@@ -468,6 +590,12 @@ python tools/item-test-workbench/quality_review.py report /private/native.json \
 python tools/item-test-workbench/verify_quality.py \
   --native-dll /absolute/ItemTestWorkbench.dll --out /private/quality-controls
 ```
+
+Scripted `primary` and `alt` represent held use intent until `release` or a
+different use command. For held `alt` the harness reasserts alternate intent on
+each update, since the native animation resets `altFunctionUse`; otherwise a
+long hold can silently become primary use. This is an explicit scripted input
+adapter, not a certification of physical right-click polling or repeat rules.
 
 The compact cycle runs both facings, idle and native moving/jumping, with an
 explicit held-input interval and release. It preserves ammo/environment settings
@@ -549,6 +677,15 @@ availability, native consumption callbacks and final stack debits are separate.
 Full CPU scenes refuse native-contact weapons instead of reporting false zero
 melee damage. For such weapons supply a `client_hybrid` scene (no VFX) or a
 `client_vfx` scene with the item's exact admitted publication files.
+
+A Live10 Terra ShadowFrost mechanical probe used the archived `test_fixture`
+item, whose asset PNGs were already synthetic. The only change to its item JSON
+was removing VFX slots, because `client_hybrid` does not execute authored VFX;
+the runtime mechanics remained unchanged. In a close-range interior scene
+(player 800,700; dummy 828,700; floor tileY 47), native contact and projectile
+hits were both observed. This mode uses the repository's 32×32 generated proxy
+texture for contact geometry, so it does not certify contact reach for final
+artwork, VFX appearance, or a complete in-game fight.
 
 In performance `client_vfx` runs, drawing and PNG capture are deliberately disabled
 for **every** candidate; material assets still load where required. Vanilla items

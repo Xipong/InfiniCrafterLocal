@@ -30,6 +30,20 @@ def scalar_writes(block, owner, field_types):
     writes, n = [], 0
     while n < len(block):
         part = block[n:]
+        if len(part) >= 5:
+            a, b, index, value, store = part[:5]
+            if ((a.op, a.arg) == ("ldarg", 0) and b.op == "ldfld"
+                    and isinstance(b.arg, str) and b.arg.startswith("Terraria." + owner + ".")
+                    and field_types.get(b.arg) == "boolean_array"
+                    and index.op == "const" and type(index.arg) is int and index.arg >= 0
+                    and value.op == "const" and type(value.arg) is int and value.arg in (0, 1)
+                    and store.op == "stelem.i1"):
+                writes.append({"nativeMember": b.arg, "arrayIndex": index.arg,
+                               "operation": "assign", "value": bool(value.arg),
+                               "units": "boolean_flag_only", "storageType": "boolean_array_element",
+                               "sourceIlOffset": store.offset})
+                n += 5
+                continue
         if len(part) >= 3:
             a, b, c = part[:3]
             if ((a.op, a.arg) == ("ldarg", 0) and literal(b) and c.op == "stfld"
@@ -44,6 +58,18 @@ def scalar_writes(block, owner, field_types):
             storage = field_types.get(c.arg) if c.op == "ldfld" else None
             if (pairs([a, b]) == [("ldarg", 0), ("ldarg", 0)]
                     and isinstance(c.arg, str) and c.arg.startswith("Terraria." + owner + ".")
+                    and storage == "value_type" and literal(d) and e.op == "call"
+                    and e.arg[1:] == (2, False, True)
+                    and e.arg[0].endswith((".op_Addition", ".op_Subtraction", ".op_Multiply"))
+                    and (f.op, f.arg) == ("stfld", c.arg)):
+                writes.append({"nativeMember": c.arg, "operation": "operator_call_and_assign",
+                               "nativeOperator": e.arg[0], "value": d.arg,
+                               "units": "native_operator_argument", "storageType": storage,
+                               "sourceIlOffset": f.offset})
+                n += 6
+                continue
+            if (pairs([a, b]) == [("ldarg", 0), ("ldarg", 0)]
+                    and isinstance(c.arg, str) and c.arg.startswith("Terraria." + owner + ".")
                     and storage in ("int32", "float32", "float64") and literal(d)
                     and e.op in ("add", "sub", "mul") and (f.op, f.arg) == ("stfld", c.arg)):
                 writes.append({"nativeMember": c.arg, "operation": "multiply" if e.op == "mul" else "add",
@@ -52,6 +78,30 @@ def scalar_writes(block, owner, field_types):
                                "storageType": storage, "sourceIlOffset": f.offset})
                 n += 6
                 continue
+        if len(part) >= 7:
+            a, getter, dup, read, value, op, store = part[:7]
+            if ((a.op, a.arg) == ("ldarg", 0) and getter.op == "call"
+                    and getter.arg[0].startswith("Terraria." + owner + ".")
+                    and getter.arg[1:] == (0, True, True) and dup.op == "dup" and literal(value)):
+                if (read.op in ("ldind.r4", "ldind.i4") and op.op in ("add", "sub", "mul")
+                        and store.op == {"ldind.r4": "stind.r4", "ldind.i4": "stind.i4"}[read.op]):
+                    writes.append({"nativeMember": getter.arg[0], "operation": "multiply" if op.op == "mul" else "add",
+                                   "value": -value.arg if op.op == "sub" else value.arg,
+                                   "units": "dimensionless_factor" if op.op == "mul" else "native_member_units",
+                                   "storageType": "ref_float32" if read.op == "ldind.r4" else "ref_int32",
+                                   "sourceIlOffset": store.offset})
+                    n += 7
+                    continue
+                if (read.op == "ldobj" and store.op == "stobj"
+                        and getattr(read.arg, "value", read.arg) == getattr(store.arg, "value", store.arg)
+                        and op.op == "call" and op.arg[1:] == (2, False, True)
+                        and op.arg[0].endswith((".op_Addition", ".op_Subtraction", ".op_Multiply"))):
+                    writes.append({"nativeMember": getter.arg[0], "operation": "operator_call_and_assign",
+                                   "nativeOperator": op.arg[0], "value": value.arg,
+                                   "units": "native_operator_argument", "storageType": "ref_value_type",
+                                   "sourceIlOffset": store.offset})
+                    n += 7
+                    continue
         return None
     return writes or None
 

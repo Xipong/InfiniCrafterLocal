@@ -386,8 +386,10 @@ def doctor():
 def source_fingerprint():
     files = sorted([*ROOT.glob("ModSources/InfiniCrafterLocal/**/*.cs"),
                     *ROOT.glob("tools/native/EngineRuntimeChecks*.cs"),
-                    *HERE.glob("*.cs"), *HERE.glob("*.csproj"),
-                    ROOT/"ModSources/InfiniCrafterLocal/Assets/GeneratedItem.png", ROOT/"ModSources/InfiniCrafterLocal/Assets/GeneratedProjectile.png"])
+                    *HERE.glob("*.cs"), *HERE.glob("*.csproj"), *HERE.glob("production-mod/*.csproj"),
+                    *ROOT.glob("ModSources/InfiniCrafterLocal/Assets/**/*.*"),
+                    *ROOT.glob("ModSources/InfiniCrafterLocal/Localization/**/*.*"),
+                    ROOT/"ModSources/InfiniCrafterLocal/build.txt"])
     hasher = hashlib.sha256()
     for path in files:
         if "obj" in path.parts or "bin" in path.parts:
@@ -410,12 +412,23 @@ def configured_reference_paths():
 
 
 def build_state(dll):
-    assets={str(p.relative_to(dll.parent)):digest(p) for p in sorted((dll.parent/"native-assets").glob("*.png"))}
+    assets={str(p.relative_to(dll.parent)):digest(p) for p in sorted([
+        *(dll.parent/"native-assets").glob("*.png"),
+        *(p for p in (dll.parent/"native-mod").rglob("*") if p.is_file())])}
     runtime = sorted({*dll.parent.glob("*.dll"), *dll.parent.glob("*.deps.json"), *dll.parent.glob("*.runtimeconfig.json")})
     references = {name:{"path":str(path),"sha256":digest(path) if path.is_file() else None}
                   for name,path in configured_reference_paths().items()}
     return {"sourceSha256":source_fingerprint(),"dllSha256":digest(dll),"nativeAssetSha256":assets,
             "runtimeFilesSha256":{p.name:digest(p) for p in runtime},"configuredReferences":references}
+
+
+def native_binaries_state(dll):
+    """Bind direct native evidence to both the host and its IFC assembly."""
+    dll = Path(dll)
+    mod = dll.parent / "InfiniCrafterLocal.dll"
+    if not dll.is_file() or not mod.is_file():
+        raise FileNotFoundError("Both ItemTestWorkbench.dll and its sibling InfiniCrafterLocal.dll are required")
+    return {"nativeDllSha256": digest(dll), "productionDllSha256": digest(mod)}
 
 
 def build():
@@ -463,6 +476,82 @@ def fixtures(output, no_build=False):
         raise RuntimeError("Native fixture writer produced no JSON files")
     return {"kind": "synthetic-native-fixtures", "directory": str(output),
             "files": {p.name: digest(p) for p in paths}}
+
+
+def execute_loader_run(args):
+    """Run the real DLL autoload path without packaging or launching Terraria."""
+    if not 1 <= args.timeout <= 3600:
+        raise ValueError("Timeout must be 1..3600 seconds")
+    if bool(args.probe_dll) != bool(args.probe_mod_root):
+        raise ValueError("--probe-dll and --probe-mod-root must be supplied together")
+    item = args.item.resolve() if args.item is not None else None
+    native_item = getattr(args,"native_item",None)
+    if (item is None) == (native_item is None):
+        raise ValueError("Supply exactly one --item or --native-item")
+    if item is None and args.item_boundary != "fresh":
+        raise ValueError("item-boundary applies only to generated JSON")
+    scenario, output = args.scenario.resolve(), args.out.resolve()
+    if item is not None:read_json(item)
+    scene = read_json(scenario)
+    if output.exists() and (not output.is_dir() or any(output.iterdir())):
+        raise ValueError("Use a fresh output directory")
+    dll, provenance = native_executable(args.no_build)
+    output.mkdir(parents=True, exist_ok=True)
+    if item is not None:shutil.copyfile(item, output / "item.json")
+    shutil.copyfile(scenario, output / "scenario.json")
+    item_sha, scenario_sha = digest(output / "item.json") if item is not None else None, digest(output / "scenario.json")
+    command = [os.environ.get("DOTNET", "dotnet"), str(dll), "--native-loader-scene"]
+    command += ["--item",str(output/"item.json")] if item is not None else ["--native-item",native_item]
+    command += ["--scenario", str(output / "scenario.json"),
+               "--output", str(output / "native.json"), "--item-boundary", args.item_boundary]
+    external = {}
+    external_content = {}
+    def mod_content_state(root):
+        paths={root/"build.txt"}
+        for name in ("Localization","Assets","asset-content"):
+            paths.update(p for p in (root/name).rglob("*") if p.is_file())
+        return {str(p.relative_to(root)):digest(p) if p.is_file() else None for p in sorted(paths)}
+    # The native host permits a source-root override. Bind evidence to the
+    # effective metadata/assets, not just the default copied build content.
+    env = os.environ.copy()
+    configured_root = env.get("INFINI_MOD_SOURCE_ROOT", "")
+    production_root = (Path(configured_root) if configured_root.strip() else dll.parent / "native-mod").resolve()
+    env["INFINI_MOD_SOURCE_ROOT"] = str(production_root)
+    production_content = {"root": str(production_root), "files": mod_content_state(production_root)}
+    if args.probe_dll:
+        probe = args.probe_dll.resolve(strict=True)
+        probe_root = args.probe_mod_root.resolve(strict=True)
+        command.extend(["--probe-dll", str(probe), "--probe-mod-root", str(probe_root)])
+        external[str(probe)] = digest(probe)
+        external_content[str(probe_root)] = mod_content_state(probe_root)
+    try:
+        proc = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True, timeout=args.timeout)
+    except subprocess.TimeoutExpired as exc:
+        decode = lambda v: v.decode(errors="replace") if isinstance(v, bytes) else v or ""
+        proc = subprocess.CompletedProcess(command, 124, decode(exc.stdout), decode(exc.stderr) + "\nNative loader scene timed out")
+    (output / "stdout.log").write_text(proc.stdout, encoding="utf-8")
+    (output / "stderr.log").write_text(proc.stderr, encoding="utf-8")
+    unchanged = build_state(dll) == provenance and all(Path(p).is_file() and digest(Path(p)) == h for p,h in external.items())
+    unchanged = unchanged and all(mod_content_state(Path(p)) == h for p,h in external_content.items())
+    unchanged = unchanged and mod_content_state(production_root) == production_content["files"]
+    unchanged = unchanged and (item is None or digest(output / "item.json") == item_sha) and digest(output / "scenario.json") == scenario_sha
+    receipt = {"command": command, "exitCode": proc.returncode, "build": provenance,
+               "itemSha256": item_sha, "nativeItem": native_item, "scenarioSha256": scenario_sha,
+               "extraAssemblies": external, "extraContent": external_content, "productionContent": production_content, "binariesUnchanged": unchanged}
+    (output / "receipt.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
+    if not unchanged:
+        raise RuntimeError("Native loader inputs or binaries changed during execution")
+    trace = read_json(output / "native.json")
+    status = trace.get("status")
+    expected = {"passed": 0, "failed": 1, "error": 2}.get(status)
+    if expected is None or proc.returncode != expected:
+        raise RuntimeError("Native loader report and process exit disagree; inspect logs")
+    if status == "passed":
+        frames, checks = trace.get("snapshots", []), trace.get("assertions", [])
+        if not checks or any(c.get("status") != "passed" for c in checks) or not frames or frames[-1].get("tick") != scene.get("ticks",120)-1:
+            raise RuntimeError("Incomplete native loader report cannot pass")
+    print(json.dumps({"status": status, "trace": str(output / "native.json"), "combat": trace.get("combat")}, ensure_ascii=False))
+    return expected
 
 
 def execute_run(args):
@@ -576,9 +665,16 @@ def execute_run(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     sub=parser.add_subparsers(dest="command",required=True)
+    from probe import add_parser,execute_probe
+    add_parser(sub)
     sub.add_parser("doctor");sub.add_parser("build");sub.add_parser("test",help="Run offline utility tests; not native gameplay verification")
     sub.add_parser("catalog",help="Read-only inventory of supplied scenarios, actions and assertions")
     r=sub.add_parser("fixtures",help="Write synthetic fixtures through the native owner");r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true")
+    r=sub.add_parser("loader-run",help="Standalone native tML DLL autoload and controlled combat scene; no .tmod or game launch")
+    sources=r.add_mutually_exclusive_group(required=True);sources.add_argument("--item",type=Path);sources.add_argument("--native-item",help="Native ItemID/name or registered Mod/Item")
+    r.add_argument("--scenario",type=Path,required=True);r.add_argument("--out",type=Path,required=True)
+    r.add_argument("--no-build",action="store_true");r.add_argument("--item-boundary",choices=("fresh","local_cache"),default="fresh")
+    r.add_argument("--timeout",type=int,default=180);r.add_argument("--probe-dll",type=Path);r.add_argument("--probe-mod-root",type=Path)
     r=sub.add_parser("report",help="Audit a saved run and emit compact agent evidence; no execution");r.add_argument("run",type=Path);r.add_argument("--out",type=Path);r.add_argument("--contact-sheet",action="store_true")
     r=sub.add_parser("suite",help="Execute an explicit scenario matrix, preserving expected native failures");r.add_argument("manifest",type=Path);r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true");r.add_argument("--plan",action="store_true",help="Read-only input validation and case listing; not a run")
     r=sub.add_parser("inspect");r.add_argument("trace",type=Path);r.add_argument("--tick",type=int);r.add_argument("--events",action="store_true");r.add_argument("--kind");r.add_argument("--summary",action="store_true",help="Compact read-only resource/hit/event aggregates")
@@ -598,7 +694,12 @@ def main():
         if args.command=="doctor":
             state=doctor();print(json.dumps(state,indent=2));return 0 if state["ready"] else 2
         if args.command=="build":build();return 0
+        if args.command=="probe":
+            data=execute_probe(args)
+            print(json.dumps(data,indent=2,allow_nan=False))
+            return 0 if args.plan or args.prepare or data["passed"] else 1
         if args.command=="fixtures":print(json.dumps(fixtures(args.out,args.no_build),indent=2));return 0
+        if args.command=="loader-run":return execute_loader_run(args)
         if args.command=="catalog":
             rows=[]
             for path in sorted((HERE/"scenarios").glob("*.json")):

@@ -18,7 +18,7 @@ internal static partial class EngineRuntimeChecks
     {
         var binding=data.RuntimeProgram.BindingForInput(input);
         if(binding is null) return "No binding for input "+input;
-        if(!client && binding.UsePolicy.ContactDamage) return "Item-body contact requires client mode for input "+input;
+        if(!client && binding.UsePolicy.ContactDamage) return "Item-body contact requires native client geometry for input "+input+"; use client_hybrid for admitted no-VFX projectile combinations or client_vfx for supported VFX";
         string kind=binding.UsePolicy.Action.Kind;
         if(client && kind!=RuntimeBindingAction.UseItemBody && !(hybrid && kind==RuntimeBindingAction.SpawnEntity) && !(render && kind==RuntimeBindingAction.ApplyItemEffects) && kind!=RuntimeBindingAction.PlaceItem && !(render && kind==RuntimeBindingAction.EquipPassive)) return "Client input requires use_item_body or hybrid spawn_entity: "+input;
         bool effects=full && kind==RuntimeBindingAction.ApplyItemEffects;
