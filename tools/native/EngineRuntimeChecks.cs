@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("native parent tooltip hooks", ParentTooltipRunsNativeHooks),
             ("journal lifecycle without draw", JournalSessionRetiresWithoutDrawing),
             ("parent fixed spawn source native oracle", ParentFixedSpawnFactsMatchNativeBranchAndRequest),
             ("parent ammo inventory observation unknown versus empty", ParentAmmoInventoryObservationDistinguishesUnavailableAndEmpty),
@@ -97,6 +98,7 @@ internal static partial class EngineRuntimeChecks
             ("projectile first hydration preserves native top-left", FirstProjectileHydrationPreservesNativeTopLeft),
             ("composable motion beam VFX snapshot uses actual line", ComposableMotionBeamVfxSnapshotUsesActualLine),
             ("composable motion scale-rate snapshot preserves explicit scale", ComposableMotionScaleRateSnapshotPreservesSmallExplicitScale),
+            ("free projectile sprite trail preserves explicit body scale", FreeProjectileSpriteTrailPreservesExplicitBodyScale),
             ("composable motion absolute tile policy requires reachable consumer", ComposableMotionAbsoluteTilePolicyRequiresReachableConsumer),
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
@@ -334,6 +336,9 @@ internal static partial class EngineRuntimeChecks
             ("individual material item periodic equipment slot transitions", MaterialItemPeriodicSurvivesEquipmentSlotTransitions),
             ("individual material owner hit validated relay remote delivery", MaterialOwnerHitReachesValidatedServerRelayAndRemote),
             ("individual material item snapshot relay immutable pose and instance", MaterialItemSnapshotRelayPreservesPoseAndInstance),
+            ("item event occurrences relay simple and mixed", ItemEventOccurrencesRelaySimpleAndMixed),
+            ("item event network rate limit", ItemEventNetworkRateLimit),
+            ("projectile hit occurrences stay distinct", ProjectileHitOccurrencesStayDistinct),
             ("individual material budgets share legacy active detached costs", MaterialBudgetsShareLegacyActiveAndDetachedCosts),
             ("individual material occurrence identity distinguishes hits and replay", MaterialOccurrencesKeepTwoRealHitsButRejectSameOccurrence),
             ("explicit ParticleLibrary readiness count capture and expiry", ExplicitLibraryReadinessWaitPreservesCountAndExpires),
@@ -454,6 +459,7 @@ internal static partial class EngineRuntimeChecks
             ("owner projectile hit bridges exact NPC pull", OwnerProjectileHitBridgesNpcPull),
             ("rt01 delayed NPC native hook incarnation fence", NativeDelayedNpcIncarnationRejectsInPlaceReuse),
             ("rt01 delayed NPC real status incarnation fence", NativeDelayedNpcStatusRejectsNewIncarnation),
+            ("delayed NPC statuses survive projectile slot reuse", DelayedNpcStatusSurvivesProjectileReuse),
             ("item hit cannot turn into next held item effect", ItemHitCannotSwitchAuthoredSource),
             ("NPC hit generation survives real Transform", NpcHitGenerationSurvivesTransform),
             ("delayed actions keep original owner", DelayedActionsKeepOriginalOwner),

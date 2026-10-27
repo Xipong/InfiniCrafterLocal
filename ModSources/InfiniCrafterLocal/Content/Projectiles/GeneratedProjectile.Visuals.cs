@@ -11,8 +11,8 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
-    private bool PreservesExplicitBodyScale()
-        => _entity?.HitboxCurve?.MirrorToSprite == true || _entity?.VisualScaleCurve is not null || _entity?.VisualScaleRate is not null;
+    internal static bool PreservesExplicitBodyScale(RuntimeEntitySpec? entity)
+        => entity?.HitboxCurve?.MirrorToSprite == true || entity?.VisualScaleCurve is not null || entity?.VisualScaleRate is not null;
 
     public override bool PreDraw(ref Color lightColor)
     {
@@ -45,7 +45,7 @@ public sealed partial class GeneratedProjectile
         Rectangle source = texture.Bounds;
         // An explicit mirror or visual curve owns the complete bounded product.
         // Ordinary drivers retain the native bounded scale without either curve owner.
-        float scale = (PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
+        float scale = (PreservesExplicitBodyScale(_entity) ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
             * selected.FrameScale(source.Width, source.Height);
         SpriteEffects effects = Projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
         float rotation = MotionSpriteRotation(_entity, selected, Projectile.rotation, effects);
@@ -81,7 +81,7 @@ public sealed partial class GeneratedProjectile
             ? Projectile.rotation.ToRotationVector2()
             : _entity.Movement.Code == 20 ? (Projectile.rotation - MathHelper.PiOver2).ToRotationVector2()
             : Projectile.velocity.SafeNormalize(_initialDirection);
-        bool exactScale = PreservesExplicitBodyScale();
+        bool exactScale = PreservesExplicitBodyScale(_entity);
         float length = exactScale ? _entity.Hitbox.WidthPx * Projectile.scale : Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale);
         float width = exactScale ? _entity.Hitbox.HeightPx * Projectile.scale * 0.35f : Math.Max(2f, _entity.Hitbox.HeightPx * Projectile.scale * 0.35f);
         Vector2 delta = direction.SafeNormalize(Vector2.UnitX) * length;

@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.VFX;
 namespace InfiniCrafterLocal.Content.Items;
 public partial class GeneratedItem
@@ -8,7 +9,9 @@ public partial class GeneratedItem
     private long _itemPresentationToken;
     // Retained v6 capability is independent of asynchronously hydrated slots.
     private bool _hasMaterialTransportIdentity;
-    private bool HasMaterialTransportIdentity=>HasMaterialVfx||_hasMaterialTransportIdentity;
+    private bool HasMaterialTransportIdentity=>HasMaterialVfx||_hasMaterialTransportIdentity
+        ||Array.Exists(Data.VfxManifest.Slots,s=>s.PlacementBindingId is null
+            &&s.EntityId==Data.RuntimeProgram.ItemEntityId&&s.Event!=RuntimeEventKind.Periodic);
     private object _itemPresentationGeneration=new();
     internal object PresentationGeneration=>_itemPresentationGeneration;
     internal long PresentationToken {

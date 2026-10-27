@@ -244,7 +244,7 @@ internal static partial class EngineRuntimeChecks
     private delegate Terraria.ModLoader.ModPacket VfxGetPacketHook(VfxGetPacketOriginal orig,Terraria.ModLoader.Mod mod,int capacity);
     private static void MaterialOwnerHitReachesValidatedServerRelayAndRemote()
     {
-        WithLighting((_,__)=> {
+        WithLighting((_,lights)=> {
             using var peers = new ReviewPeers();
             var system = peers.System; var mod = peers.Mod; var registry = peers.Registry; var outgoing = peers.Sent;
             var tick = Terraria.Main.GameUpdateCount;
@@ -253,7 +253,9 @@ internal static partial class EngineRuntimeChecks
             var data=ParseMaterialElement(MaterialElementWire());data.Id="network_material";InfiniCrafterLocal.Common.Services.GeneratedItemRegistryService.StampCurrentWorld(data);
             var entity=Entity();entity.Id="probe";data.RuntimeProgram.Entities=new[]{entity};
             var slot=data.VfxManifest.Slots[0];slot.EntityId="probe";slot.Event="on_hit";slot.RepeatEvery=0;slot.StartTick=2;
-            var crit=new VfxSlotSpec{Id="crit",EntityId="probe",Event="on_crit",RendererKind="spriteElement",Element=slot.Element,Duration=12,Alpha=1, Blend = "alpha", Layer = "BeforeProjectiles", RepeatEvery = 0, StartTick = 0 };data.VfxManifest.Slots=new[]{slot,crit};
+            var crit=new VfxSlotSpec{Id="crit",EntityId="probe",Event="on_crit",RendererKind="spriteElement",Element=slot.Element,Duration=12,Alpha=1, Blend = "alpha", Layer = "BeforeProjectiles", RepeatEvery = 0, StartTick = 0 };
+            var simpleHit=LightManifest("probe", RuntimeEventKind.OnHit).Slots[0]; simpleHit.Anchor="hitPoint";
+            data.VfxManifest.Slots=new[]{slot,crit,simpleHit};
             ((System.Collections.IDictionary)registry.GetType().GetField("_byId",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(registry)!).Add(data.Id,data);
             Terraria.Main.projectile=new Projectile[16];for(int i=0;i<16;i++)Terraria.Main.projectile[i]=new Projectile{whoAmI=i};
             var source=Terraria.Main.projectile[3]=new Projectile{whoAmI=3,owner=0,identity=71,active=true,Center=new Vector2(200,300),velocity=Vector2.UnitX,timeLeft=90};
@@ -274,15 +276,18 @@ internal static partial class EngineRuntimeChecks
             foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),0);Equal(3,outgoing.Count,"same technical occurrence replay suppressed");
             foreach(var bytes in claims)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),1);Equal(3,outgoing.Count,"wrong sender cannot relay owner claim");
             var relays=outgoing.ToArray();outgoing.Clear();serverHost.active=false;Terraria.Main.projectile=Array.Empty<Projectile>();
-            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2;
+            Terraria.Main.netMode=Terraria.ID.NetmodeID.MultiplayerClient;Terraria.Main.myPlayer=2; lights.Clear();
             foreach(var bytes in relays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);
+            Equal(2,lights.Count,"remote receives both simple projectile hit effects without a surviving source");
             Equal(3,OwnedMaterialQueue().Count,"remote has all distinct delayed world emissions without surviving source");
             MaterialClock(tick+2);system.PostUpdateEverything();Equal(3,OwnedMaterialQueue().Count,"remote emission uses captured world pose at due tick");
             foreach(var bytes in relays)mod.HandlePacket(new BinaryReader(new MemoryStream(bytes)),256);Equal(3,OwnedMaterialQueue().Count,"remote same occurrence replay suppressed");
+            Equal(2,lights.Count,"remote same occurrence replay suppresses simple effects too");
             Vector2 EmittedVelocity(object emission) {var parts=(Array)emission.GetType().GetField("Particles",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(emission)!;var part=parts.GetValue(0)!;return (Vector2)part.GetType().GetField("Velocity",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(part)!;}
             AssertVfxNear(new Vector2(1+0.5f,0),EmittedVelocity(OwnedMaterialQueue()[0]!),"real owner/server/remote delayed chain inherits MaxUpdates=1");
             AssertVfxNear(new Vector2(1+3*0.5f,0),EmittedVelocity(OwnedMaterialQueue()[2]!),"real owner/server/remote delayed chain copies MaxUpdates=3 before source removal");
             // Reuse the real owner->server->remote chain with exact live attachment.
+            data.VfxManifest.Slots=new[]{slot,crit};
             system.OnWorldUnload();MaterialClock(tick);outgoing.Clear();Terraria.Main.projectile=new Projectile[16];for(int i=0;i<16;i++)Terraria.Main.projectile[i]=new Projectile{whoAmI=i};
             Terraria.Main.projectile[3]=source;source.active=true;source.Center=new Vector2(200,300);slot.Element!.Attachment="source";
             generated.Configure(data,entity,0,0,Vector2.UnitX);source.extraUpdates=2;slot.Element.Count=1;slot.Element.SpeedMinPxPerTick=slot.Element.SpeedMaxPxPerTick=0;slot.Element.InheritVelocity=1;slot.Element.Drag=1;slot.Element.AccelerationXPxPerTickSquared=slot.Element.AccelerationYPxPerTickSquared=0;
