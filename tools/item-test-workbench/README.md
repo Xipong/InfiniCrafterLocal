@@ -53,6 +53,73 @@ python tools/item-test-workbench/workbench.py build
 
 ## Fast agent workflow
 
+For your own item, start with `probe`. It prepares the scene and suite and invokes
+the existing native runner; no helper Python script or handwritten manifest is needed.
+
+```sh
+# One item, one click, full native Player.Update, compact reports.
+python -m toolbox workbench probe --item /path/item.json
+# Several items × explicit inputs. Shell globs expand into separate inputs.
+python -m toolbox workbench probe --item /path/items/*.json --input primary alt \
+  --out artifacts/my-probes
+# Hold alternate for 90 ticks, release, observe until tick 179.
+python -m toolbox workbench probe --item /path/item.json --input alt --hold 90 \
+  --assert '{"kind":"entity_spawn_count","entityId":"my_projectile","value":1}'
+# Repeated clicks every 30 ticks, with a real release after each press.
+python -m toolbox workbench probe --item /path/item.json --repeat 30 \
+  --assert dummy_damaged --set dummy.x=840 --set tiles.0.tileY=44
+# Inspect the exact matrix/scenarios without an SDK, building, running or writing.
+python -m toolbox workbench probe --item /path/item.json --input primary alt --plan
+# Prepare a portable suite, including byte-identical item copies, entirely offline.
+python -m toolbox workbench probe --item /path/item.json --prepare --out artifacts/prepared
+python -m toolbox workbench suite artifacts/prepared/suite.json --out artifacts/prepared-runs
+```
+
+The default [probe scene](scenarios/probe.json) is a controlled floor and target,
+180 ticks, seed 1, full player loop, one primary press at tick 0 and release at tick 1.
+Its **only default assertion is `no_nonfinite`**. Exit 0 alone does not demonstrate
+damage, successful input, correct mechanics or visuals. Add `--assert KIND` or
+`--assert '{"kind":..., ...}'` for the behavior you intend to verify. Assertions and
+native admission are still owned by C#, including unknown-kind/field refusals.
+
+`--input primary alt idle equip` selects an explicit item × input matrix; an
+unsupported binding remains an error. `--hold N` changes the press-to-release
+interval; `--repeat N` sets the interval between presses. Repeat must exceed hold,
+every release must fit inside `--ticks`, and the native 256-action/128-case limits
+are checked before execution. No per-tick alternate-input script is required.
+Use `--start`, `--ticks` and `--seed` to control timing and reproducibility.
+
+`--set dotted.path=JSON` edits the scene, including array indices, without touching
+the item. For example, supply ammunition explicitly with
+`--set 'inventory=[{"slot":54,"itemId":97,"stack":100}]'`, or use
+`--mode client_hybrid` for admitted client contact. `--mode client_vfx` requires
+explicit `--set 'nativeRender={...}'` settings and the existing graphics/assets
+setup. `--action '{"kind":"aim","tick":0,"x":850,"y":700}'` appends a native
+action; same-tick additions follow generated press/release actions in supplied
+order. Missing intermediate objects must be set as objects first. The item is
+never rewritten to remove VFX or bypass native admission, and ammo, assertions,
+mechanics and retries in another mode are never inferred from item names.
+
+Explicit negative controls use the same exact suite expectation contract, e.g.
+`--assert dummy_damaged --expect '{"status":"failed","failedAssertions":["dummy_damaged"]}'`.
+The expectation applies to every selected case. A crash or an extra failed assertion
+cannot satisfy it. Use separate commands or an explicit suite for differing expectations.
+
+Without `--out`, execution/preparation chooses a fresh timestamped directory under
+`artifacts/workbench`. It contains `suite.json`, `probe-plan.json`, `inputs/` and,
+after execution, `probe-result.json`, `runs/summary.json` and each case's native trace
+and agent report. The probe result includes original item paths and authored display
+names, so a batch of files all named `item.json` remains distinguishable. Case
+`observations` include native spawn/use/ammo event counts, separate projectile and
+item-body hit/damage totals and resource endpoints. Zero recorded shots stay zero
+even when the selected finite-state assertion passes; supply ammo and assert the
+behavior you actually want to check.
+The emitted manifest uses relative paths and survives moving the prepared directory.
+Run all cases with one build; failures do not stop later cases. `--no-build` retains
+the existing stale-build refusal. `--prepare` means **native notRun**, while `--plan`
+is read-only and creates no directory. These conveniences use the existing isolated
+native host; the separate tModLoader-process prototype has its own launcher.
+
 All commands also work through `python -m toolbox workbench`. `catalog`, `report`
 and `suite --plan` are offline/read-only unless an explicit report output
 is requested. They need no game install, SDK or API credentials.

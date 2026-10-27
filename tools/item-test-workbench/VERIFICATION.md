@@ -74,6 +74,34 @@ unconditional installation checks or proof of all-item parity.
 
 ## Evidence reviewed during development
 
+Real-item probe usability verification (2026-10-27): 20 archived IFC items and 8
+vanilla identities were exercised in 55 native process runs. The default primary
+probe admitted 12/20 IFC inputs, but five of those recorded zero shots without
+ammo; seven recorded shots. Explicit ammunition, equip input, client contact and
+world placement settings admitted a scenario for 19/20 definitions. Two archived
+diagnostic JSONs required their existing clean delivery files; neither fresh nor
+local-cache readers accepted the extra `runtimeContract` metadata. Source item
+bytes remained unchanged. One contact weapon remained refused because its VFX
+renderer was outside client admission. Seven vanilla identities recorded hits;
+Wooden Sword remained refused by the native geometry PNG allowlist. A held native
+Daedalus Stormbow control recorded 16 arrows and two hits after a single volley
+missed the narrow target. These are scenario observations, not full-artwork/VFX
+or whole-item certification. Probe results now retain authored names, source paths
+and native activity aggregates, including successful finite-state probes with no shots.
+
+Probe CLI verification (2026-10-27): 101 offline workbench tests, 9 public-entry
+tests and 8 executable CI workflow regression tests passed, along with the
+workbench build against the documented references. The isolated CI fixture copies
+the probe parser's actual frontend dependencies before checking doctor/build status.
+Actual native runs through `probe` exercised primary/alternate held input, charge
+and release, explicit clicks at ticks 0/30/60/90, bullet consumption, vanilla and
+saved-cache inputs. Exact negative assertions stayed failed; unexpected failures
+returned a nonzero matrix result, and a rejected item did not stop the next healthy
+case. Prepared suites also passed relocation and byte-preservation checks. Native
+execution used the container-specific `/proc` workaround described below; no game
+DLL or gameplay code was changed. These checks cover the probe wrapper and its
+selected native scenarios, not a launched Terraria client or additional mod autoload.
+
 Agent-workflow verification before removal of run comparison (2026-10-25): the
 native smoke exercised passing controls and an exact `dummy_damaged` negative
 failure. Two `client-vfx-captured` runs each passed and produced 80 native PNGs.
