@@ -576,6 +576,8 @@ def execute_run(args):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     sub=parser.add_subparsers(dest="command",required=True)
+    from probe import add_parser,execute_probe
+    add_parser(sub)
     sub.add_parser("doctor");sub.add_parser("build");sub.add_parser("test",help="Run offline utility tests; not native gameplay verification")
     sub.add_parser("catalog",help="Read-only inventory of supplied scenarios, actions and assertions")
     r=sub.add_parser("fixtures",help="Write synthetic fixtures through the native owner");r.add_argument("--out",type=Path,required=True);r.add_argument("--no-build",action="store_true")
@@ -598,6 +600,10 @@ def main():
         if args.command=="doctor":
             state=doctor();print(json.dumps(state,indent=2));return 0 if state["ready"] else 2
         if args.command=="build":build();return 0
+        if args.command=="probe":
+            data=execute_probe(args)
+            print(json.dumps(data,indent=2,allow_nan=False))
+            return 0 if args.plan or args.prepare or data["passed"] else 1
         if args.command=="fixtures":print(json.dumps(fixtures(args.out,args.no_build),indent=2));return 0
         if args.command=="catalog":
             rows=[]

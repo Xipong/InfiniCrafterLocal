@@ -74,6 +74,17 @@ unconditional installation checks or proof of all-item parity.
 
 ## Evidence reviewed during development
 
+Probe CLI verification (2026-10-27): 101 offline workbench tests and 9 public-entry
+tests passed, along with the workbench build against the documented references.
+Actual native runs through `probe` exercised primary/alternate held input, charge
+and release, explicit clicks at ticks 0/30/60/90, bullet consumption, vanilla and
+saved-cache inputs. Exact negative assertions stayed failed; unexpected failures
+returned a nonzero matrix result, and a rejected item did not stop the next healthy
+case. Prepared suites also passed relocation and byte-preservation checks. Native
+execution used the container-specific `/proc` workaround described below; no game
+DLL or gameplay code was changed. These checks cover the probe wrapper and its
+selected native scenarios, not a launched Terraria client or additional mod autoload.
+
 Agent-workflow verification before removal of run comparison (2026-10-25): the
 native smoke exercised passing controls and an exact `dummy_damaged` negative
 failure. Two `client-vfx-captured` runs each passed and produced 80 native PNGs.
