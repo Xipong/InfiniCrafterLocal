@@ -372,6 +372,28 @@ public sealed partial class GeneratorClient
             facts["nativeEquipmentReference"] = equipmentReference;
         if (existing is null && CaptureNativeShootReference(item) is JsonObject shootReference)
             facts["nativeShootReference"] = shootReference;
+        if (existing is null)
+        {
+            JsonObject graph = CaptureParentSourceGraph(item, facts);
+            string Coverage(string key, bool applicable, bool certified, bool? catalogRecord = null) => !applicable ? "mod_host; see_source_graph"
+                : !certified ? "native_binary_or_method_certificate_unavailable"
+                : (catalogRecord ?? facts[key] is not null) ? "partial_certified_source_record"
+                : "no_supported_catalog_record; absence_not_proved";
+            bool contactCertificate = ContactHitStatusCertificate.Value is string contactKey
+                && NativeHitStatusCatalog.Sources.TryGetValue(contactKey, out _);
+            bool contactRecord = ContactHitStatusCertificate.Value is string recordKey
+                && NativeHitStatusCatalog.Sources.TryGetValue(recordKey, out var contactRows) && contactRows.ContainsKey(item.type);
+            graph["nativeCatalogCoverage"] = new JsonObject
+            {
+                ["shoot"] = Coverage("nativeShootReference", item.ModItem is null, ShootFactCertificate.Value is not null
+                    && NativeAttackFactsCatalog.Sources.ContainsKey("Player.ItemCheck_Shoot:" + ShootFactCertificate.Value)),
+                ["contactStatus"] = Coverage("nativeContactHitStatusReference", item.ModItem is null, contactCertificate, contactRecord),
+                ["equipment"] = Coverage("nativeEquipmentReference", item.ModItem is null, NativeSourceModuleVerified.Value
+                    && (EquipmentFactRows.Value is not null || ArmorSetFactRows.Value is not null)),
+                ["environment"] = Coverage("nativeEnvironmentReference", item.ModItem is null, NativeSourceModuleVerified.Value),
+            };
+            facts["parentSourceGraph"] = graph;
+        }
         if (NativeTileStateFacts.Capture(facts["createTile"]?.GetValue<int>(), facts["placeStyle"]?.GetValue<int>()) is JsonObject tileState)
             facts["nativeTileState"] = tileState;
         return new(facts, JsonSerializer.SerializeToNode(DirectProjectileRawFromItem(item), WireJsonOptions));

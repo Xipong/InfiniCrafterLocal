@@ -277,11 +277,11 @@ public sealed partial class GeneratorClient
     private static readonly Dictionary<short, OpCode> AmmoOpcodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
         .Where(f => f.FieldType == typeof(OpCode)).Select(f => (OpCode)f.GetValue(null)!).ToDictionary(op => op.Value);
 
-    private static List<AmmoIl> ReadAmmoIl(MethodBase method, bool preserveStructure = false)
+    private static List<AmmoIl> ReadAmmoIl(MethodBase method, bool preserveStructure = false, bool sourceGraph = false)
     {
         var body = method.GetMethodBody();
         byte[] il = body?.GetILAsByteArray() ?? throw new NotSupportedException();
-        if (il.Length > 2048 || body!.ExceptionHandlingClauses.Count != 0) throw new NotSupportedException();
+        if (il.Length > (sourceGraph ? 262144 : 2048) || (!sourceGraph && body!.ExceptionHandlingClauses.Count != 0)) throw new NotSupportedException();
         Type[] methodArguments = method is MethodInfo genericMethod ? genericMethod.GetGenericArguments() : Type.EmptyTypes;
         var result = new List<AmmoIl>();
         for (int p = 0; p < il.Length;)
@@ -306,8 +306,11 @@ public sealed partial class GeneratorClient
                 case OperandType.InlineR: arg = BitConverter.ToDouble(il, p); p += 8; break;
                 case OperandType.InlineI8: arg = BitConverter.ToInt64(il, p); p += 8; break;
                 case OperandType.InlineType:
+                    arg = sourceGraph ? method.Module.ResolveType(BitConverter.ToInt32(il, p), method.DeclaringType?.GetGenericArguments(), methodArguments) : BitConverter.ToInt32(il, p); p += 4; break;
                 case OperandType.InlineTok:
+                    arg = sourceGraph ? method.Module.ResolveMember(BitConverter.ToInt32(il, p), method.DeclaringType?.GetGenericArguments(), methodArguments) : BitConverter.ToInt32(il, p); p += 4; break;
                 case OperandType.InlineString:
+                    arg = sourceGraph ? method.Module.ResolveString(BitConverter.ToInt32(il, p)) : BitConverter.ToInt32(il, p); p += 4; break;
                 case OperandType.InlineSig: arg = BitConverter.ToInt32(il, p); p += 4; break;
                 case OperandType.InlineSwitch:
                     int count = BitConverter.ToInt32(il, p); p += 4;
@@ -326,6 +329,7 @@ public sealed partial class GeneratorClient
                 if (!op.EndsWith(".s")) arg = int.Parse(op.Substring(prefix.Length + 1));
                 op = prefix;
             }
+            else if (sourceGraph && op is "ldarga.s" or "ldloca.s" or "starg.s") op = op[..^2];
             if (preserveStructure || op != "nop") result.Add(new AmmoIl(offset, op, arg));
         }
         if (preserveStructure) return result;

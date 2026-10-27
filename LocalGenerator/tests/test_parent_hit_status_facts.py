@@ -107,3 +107,38 @@ def test_contact_status_certificate_is_not_relabelled_as_projectile_status():
     raw = json.loads(user)["parents"]["A"]["packet"]["raw"]
     assert raw["item"]["nativeContactHitStatusReference"] == contact
     assert "onHitStatusReference" not in raw["item"]
+
+
+@pytest.mark.parametrize("mode", ["json_schema", "json_object"])
+def test_parent_source_graph_is_delivered_literally_with_unknowns_and_references(monkeypatch, mode):
+    from infini_local.core import llm_config
+    from prompt_packet_helpers import request_dossier
+
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    graph = {"source": "parent_reachable_compiled_source_graph", "version": 1,
+             "roots": [{"node": 0, "event": "OnHitPvp", "receiver": "player"}],
+             "nodes": [{"id": 0, "method": 0, "coverage": "source_slice", "values": {
+                 "0": ["const", 0, [], 0], "1": ["ldarg", 2, [], 0],
+                 "3": ["callvirt", {"member": 1}, ["1", "0"], 0]}, "statements": ["3"]}],
+             "members": [{"name": "fixture.OnHitPvp", "module": 0},
+                         {"name": "Terraria.Player.AddBuff", "module": 1}],
+             "modules": [{"mvid": "source-fixture"}, {"mvid": "native-fixture"}],
+             "edges": [{"from": 0, "at": 3, "kind": "buff_request", "unresolved": "runtime_expression"}],
+             "unresolved": ["source_character_bound"], "omittedNodeCount": 2,
+             "scope": "Conditional source statements; no runtime dispatch or final DPS claim."}
+    parent = {"name": "literal source", "parentSourceGraph": graph}
+    before = copy.deepcopy(parent)
+    request, user, _ = author.build_initial_author_request(parent, parent, "source-graph", model_name="offline")
+    sent = expand_native_source_references(request_dossier(request))
+    for side in ("A", "B"):
+        assert sent["parents"][side]["packet"]["raw"]["item"]["parentSourceGraph"] == graph
+    assert len(user) < 225_000
+    assert parent == before
+
+
+def test_generated_parent_does_not_borrow_native_proxy_source_graph():
+    from infini_local.pipelines.parent_context_pipeline import compact_item_raw_for_llm
+
+    parent = {"generatedData": {"runtimeProgram": {"entities": [], "bindings": [], "calls": []}},
+              "parentSourceGraph": {"source": "proxy_native_hooks"}}
+    assert "parentSourceGraph" not in compact_item_raw_for_llm(parent)

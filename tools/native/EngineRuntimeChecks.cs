@@ -44,6 +44,9 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("parent source graph native projectile windows", ParentSourceGraphFollowsNativeProjectileWindows),
+            ("parent source graph conditional native buff consumers", ParentSourceGraphKeepsConditionalNativeBuffConsumers),
+            ("parent source graph conditions events and reachable helpers", ParentSourceGraphKeepsReachabilityConditionsAndEventOwnership),
             ("parent mod hit hook source statements without execution", ParentHitHooksPreserveSourceRequestsWithoutExecution),
             ("parent mod buff source data links without execution", ParentModBuffSourceLinksWithoutExecution),
             ("journal lifecycle without draw", JournalSessionRetiresWithoutDrawing),
