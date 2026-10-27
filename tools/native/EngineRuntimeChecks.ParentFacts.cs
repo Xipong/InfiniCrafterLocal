@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
 using InfiniCrafterLocal.Content.Items;
@@ -53,7 +54,7 @@ internal static partial class EngineRuntimeChecks
             data.ApplyToItem(item);
             return item;
         }
-        int rarityCaptures = 0, directProjectileCaptures = 0;
+        int rarityCaptures = 0, directProjectileCaptures = 0, sourceGraphCaptures = 0;
         Func<Func<Item, object>, Item, object> observeRarity = (original, item) => {
             rarityCaptures++;
             return original(item);
@@ -62,6 +63,12 @@ internal static partial class EngineRuntimeChecks
             directProjectileCaptures++;
             return original(item);
         };
+        Func<Func<Item, JsonObject?, JsonObject>, Item, JsonObject?, JsonObject> observeGraph = (original, item, facts) => {
+            sourceGraphCaptures++;
+            return original(item, facts);
+        };
+        using var graphObserver = new MonoMod.RuntimeDetour.Hook(
+            typeof(GeneratorClient).GetMethod("CaptureParentSourceGraph", BindingFlags.Static | BindingFlags.NonPublic)!, observeGraph);
         using var rarityObserver = new MonoMod.RuntimeDetour.Hook(
             typeof(GeneratorClient).GetMethod("RarityDetailsFromItem", BindingFlags.Static | BindingFlags.NonPublic)!, observeRarity);
         using var projectileObserver = new MonoMod.RuntimeDetour.Hook(
@@ -73,35 +80,48 @@ internal static partial class EngineRuntimeChecks
             ("generated", Generated(false)), ("generated_placement", Generated(true)),
         })
         {
-            rarityCaptures = directProjectileCaptures = 0;
+            rarityCaptures = directProjectileCaptures = sourceGraphCaptures = 0;
             using var request = JsonDocument.Parse(new GeneratorClient().Prepare(item, item, owner).PayloadJson);
             Equal(2, rarityCaptures, label + " one rarity observation per A/B parent");
             Equal(2, directProjectileCaptures, label + " one direct-projectile observation per A/B parent");
+            bool nativeParent = label is not ("generated" or "generated_placement");
+            Equal(nativeParent ? 2 : 0, sourceGraphCaptures, label + " source graph captured once per native A/B parent, never for a generated proxy");
+            string ExpectedKeys(string keys) => string.Join(",", keys.Split(',')
+                .Concat(nativeParent ? new[] { "parentSourceGraph" } : Array.Empty<string>()).OrderBy(key => key, StringComparer.Ordinal));
             JsonElement root = request.RootElement.GetProperty("itemA");
             JsonElement facts = root.GetProperty("runtimeFacts");
             JsonElement fingerprint = root.GetProperty("fingerprint");
-            Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,channel,"
+            Equal(ExpectedKeys("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,channel,"
                 + "consumable,craftInput,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
                 + "effectiveProjectileRaw,fingerprint,fishingPole,fullName,generatedData,hammerPower,headSlot,healLife,healMana,"
                 + "id,internalName,knockback,legSlot,lifeRegen,manaCost,material,maxStack,moddedOrigin,name,nameTokens,noMelee,"
                 + "noUseGraphic,notAmmo,originalPrefix,pickPower,placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,"
                 + "reuseDelay,runtimeFacts,shoot,shootProjectileFullName,shootSpeed,sourceMod,stack,tags,tooltipLines,"
-                + "tooltipSource,useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
+                + "tooltipSource,useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value"),
                 string.Join(",", root.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact root keys");
-            Equal("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,buffTime,buffType,"
+            Equal(ExpectedKeys("accessory,ammo,ammoCategoryName,ammoRaw,autoFeatures,autoReuse,axePower,bait,bodySlot,buffTime,buffType,"
                 + "channel,consumable,createTile,createWall,crit,damage,damageClass,defense,directProjectileRaw,dropSeedsIfInInventory,"
                 + "effectiveProjectileRaw,fishingPole,fullName,hammerPower,headSlot,healLife,healMana,internalName,isVanilla,"
                 + "knockback,legSlot,lifeRegen,manaCost,maxStack,name,nameTokens,noMelee,noUseGraphic,notAmmo,originalPrefix,pickPower,"
                 + "placeStyle,potion,prefix,prefixIgnored,rare,rarityDetails,runtimeFacts,shoot,shootSpeed,sourceMod,type,"
-                + "useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value",
+                + "useAmmo,useAmmoCategoryName,useAnimation,useStyle,useStyleName,useTime,useTurn,value"),
                 string.Join(",", fingerprint.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact fingerprint keys");
-            Equal("accessory,ammo,ammoCategoryName,autoReuse,axePower,bait,bodySlot,buffTime,buffType,channel,consumable,"
+            Equal(ExpectedKeys("accessory,ammo,ammoCategoryName,autoReuse,axePower,bait,bodySlot,buffTime,buffType,channel,consumable,"
                 + "createTile,createWall,crit,damage,damageClass,defense,dropSeedsIfInInventory,fishingPole,hammerPower,headSlot,healLife,healMana,"
                 + "knockback,legSlot,lifeRegen,manaCost,material,maxStack,noMelee,noUseGraphic,notAmmo,pickPower,placeStyle,potion,rare,"
                 + "rarityDetails,reuseDelay,shoot,shootProjectileFullName,shootSpeed,type,useAmmo,useAmmoCategoryName,useAnimation,useStyle,"
-                + "useStyleName,useTime,useTurn,value",
+                + "useStyleName,useTime,useTurn,value"),
                 string.Join(",", facts.EnumerateObject().Select(p => p.Name).OrderBy(n => n, StringComparer.Ordinal)), label + " exact facts keys");
             Equal(CanonicalParentFactJson(facts), CanonicalParentFactJson(fingerprint.GetProperty("runtimeFacts")), label + " same nested native facts");
+            foreach (JsonElement view in new[] { root, facts, fingerprint })
+            {
+                Equal(nativeParent, view.TryGetProperty("parentSourceGraph", out JsonElement graph), label + " explicit graph presence by parent provenance");
+                if (nativeParent)
+                {
+                    Equal("parent_reachable_compiled_source_graph", graph.GetProperty("source").GetString()!, label + " source graph provenance");
+                    Equal(CanonicalParentFactJson(facts.GetProperty("parentSourceGraph")), CanonicalParentFactJson(graph), label + " exact graph across native fact envelopes");
+                }
+            }
             Equal(root.GetProperty("id").GetInt32(), facts.GetProperty("type").GetInt32(), label + " root id retains native type");
             Equal(false, root.TryGetProperty("type", out _), label + " root has no nested type alias");
             Equal(false, root.TryGetProperty("buffType", out _), label + " root excludes native buff type");

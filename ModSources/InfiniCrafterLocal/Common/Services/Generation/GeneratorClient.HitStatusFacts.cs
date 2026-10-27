@@ -25,7 +25,7 @@ public sealed partial class GeneratorClient
 
     // Live parent requests and offline /infinidump share this one fact owner.
     internal static object? CaptureNativeHitStatusReference(Projectile source)
-        => VerifiedSourceHitStatusReference(source, HitStatusSourceCertificate.Value, typeof(Projectile).Module.ModuleVersionId.ToString());
+        => WithProjectileStatusHooks(source, VerifiedSourceHitStatusReference(source, HitStatusSourceCertificate.Value, typeof(Projectile).Module.ModuleVersionId.ToString()));
 
     private static object? VerifiedSourceHitStatusReference(Projectile source, string? certificate, string? moduleVersionId)
         => VerifiedNativeStatusReference(source.type, source.ModProjectile is null, "projectile",
@@ -35,8 +35,9 @@ public sealed partial class GeneratorClient
     internal static object? CaptureNativeContactHitStatusReference(Item item)
     {
         string[]? certificate = ContactHitStatusCertificate.Value?.Split(':');
-        return certificate is { Length: 2 } ? VerifiedNativeStatusReference(item.type, item.ModItem is null, "contact",
+        object? native = certificate is { Length: 2 } ? VerifiedNativeStatusReference(item.type, item.ModItem is null, "contact",
             "", certificate[0], certificate[1]) : null;
+        return WithItemStatusHooks(item, native);
     }
 
     private static object? VerifiedNativeStatusReference(int type, bool vanilla, string sourceKind, string fullName,
