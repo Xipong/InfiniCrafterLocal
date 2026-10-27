@@ -38,7 +38,7 @@ internal static partial class EngineRuntimeChecks
     {
         Directory.CreateDirectory(directory);
         WWriteWorldFixtures(directory);
-        foreach(string category in new[]{"arrow","bullet"}) foreach(string speedBasis in new[]{"authored_spawn","native_shot"}) {
+        foreach(string category in new[]{"arrow","bullet","fallen_star"}) foreach(string speedBasis in new[]{"authored_spawn","native_shot"}) {
             var weaponAmmo=WeaponAmmoFixture(category,speedBasis); weaponAmmo.Id="workbench-synthetic-ammo-"+category+"-"+speedBasis; weaponAmmo.SourceMode="test_fixture";
             weaponAmmo.RuntimeProgram.Bindings=weaponAmmo.RuntimeProgram.Bindings.Where(b=>b.Input==RuntimeInputKind.PrimaryUse).ToArray();
             weaponAmmo.RuntimeProgram.TryGetEntity("root")!.LifetimeTicks=90;
@@ -52,6 +52,9 @@ internal static partial class EngineRuntimeChecks
         root.Collision.Pierce = 1; root.Spawn.SpeedPxPerTick = 8;
         straight.RuntimeProgram.ItemUse.Channel = false;
         File.WriteAllText(Path.Combine(directory,"synthetic-straight.json"),SwarmWire(straight).ToJson());
+        var npcEffect = SwarmWire(straight); npcEffect.Id="workbench-synthetic-npc-effect";
+        npcEffect.RuntimeProgram.TryGetEntity("root")!.Events = new[]{NpcEffectAction(duration:30)};
+        File.WriteAllText(Path.Combine(directory,"synthetic-npc-effect.json"),SwarmWire(npcEffect).ToJson());
         var wall = SwarmWire(straight); wall.Id="workbench-synthetic-wall";
         wall.RuntimeProgram.TryGetEntity("root")!.Collision.TileCollide=true;
         File.WriteAllText(Path.Combine(directory,"synthetic-wall.json"),SwarmWire(wall).ToJson());
@@ -180,8 +183,8 @@ internal static partial class EngineRuntimeChecks
         }
         if(clientPlayer && data?.RuntimeProgram.BindingForInput(RuntimeInputKind.Hold)?.UsePolicy.Action.Kind==RuntimeBindingAction.SpawnEntity) throw new NotSupportedException("Client item contact mode currently refuses held projectile spawning");
         if(data is not null) {
-        if (data.Gameplay.AmmoCategory.Length != 0 || (data.RuntimeProgram.WeaponAmmo is { } ammoSpec && ammoSpec.AmmoCategory is not ("arrow" or "bullet" or "flare")))
-            throw new NotSupportedException("Only generated weapons with vanilla arrow/bullet/flare ammo are admitted; generated ammo items and other categories remain unsupported");
+        if (data.Gameplay.AmmoCategory.Length != 0 || (data.RuntimeProgram.WeaponAmmo is { } ammoSpec && ammoSpec.AmmoCategory is not ("arrow" or "bullet" or "flare" or "fallen_star")))
+            throw new NotSupportedException("Only generated weapons with vanilla arrow/bullet/flare/fallen-star ammo are admitted; generated ammo items and other categories remain unsupported");
         if (!hybridClient && data.RuntimeProgram.TryGetEntity(data.RuntimeProgram.ItemEntityId)?.Events.Length > 0 && !(fullPlayer && WEquipmentBodyEventsSupported(data)))
             throw new NotSupportedException("Item-body events require complete item update hooks; projectile-only scene refuses them");
         if (!fullPlayer && data.RuntimeProgram.HeldEffectGroupId is not null)
@@ -190,7 +193,7 @@ internal static partial class EngineRuntimeChecks
             throw new NotSupportedException("Mining/tool powers require the full player equipment/reset and mining-world lifecycle");
         if(data.RuntimeProgram.Entities.Any(e=>e.Movement.Code==18))
             throw new NotSupportedException("Legacy whip tag gameplay requires registered GeneratedWhipTagGlobalNPC callbacks");
-        if (data.RuntimeProgram.Entities.Any(e=>e.NativeSentry==true))
+        if (!fullPlayer && data.RuntimeProgram.Entities.Any(e=>e.NativeSentry==true))
             throw new NotSupportedException("Native sentry ownership/count maintenance requires the full player update lifecycle");
         if (data.RuntimeProgram.Entities.SelectMany(e=>e.Events).Any(e=>e.ActionCode==RuntimeEventActionCode.MoveOwner
             || e.ActionCode==RuntimeEventActionCode.Pull && e.Mode is "owner_to_target" or "both"))
@@ -207,14 +210,14 @@ internal static partial class EngineRuntimeChecks
             ["timeline"]=new JsonObject { ["requestedTicks"]=ticks,["completedTicks"]=0,["complete"]=false },
             ["coverage"]=new JsonObject { ["wholeItemValidated"]=false,["verdictScope"]="Only the supplied scenario and explicit assertions; untested bindings are not validated",
                 ["testedInputs"]=new JsonArray(testedInputs.Select(x=>(JsonNode?)JsonValue.Create(x)).ToArray()),
-                ["ammoScope"]="Vanilla arrow/bullet/flare inventory and native PickAmmo through ItemCheck; spawn source identifies selected ammo. Consumption callback count is not itself stack debit; pair with inventory_stack. No generated-ammo-as-item or random conservation accessory coverage",
+                ["ammoScope"]="Vanilla arrow/bullet/flare/fallen-star inventory and native PickAmmo through ItemCheck; spawn source identifies selected ammo. Consumption callback count is not itself stack debit; pair with inventory_stack. No generated-ammo-as-item or random conservation accessory coverage",
                 ["equipmentControlScope"]="Single generated accessory or head/body/legs armor; commands move the same instance between inventory0 and its native functional/vanity slot; native Player.Update applies/resets effects. Scripted damage/death stimuli use native Player.Hurt and Player.StrikeNPCDirect; no inventory UI, armor-set or multi-item certification",
                 ["untestedBindings"]=new JsonArray((data?.RuntimeProgram.Bindings ?? Array.Empty<RuntimeBindingSpec>()).Where(b=>!testedInputs.Contains(b.Input)).Select(b=>(JsonNode?)new JsonObject { ["id"]=b.Id,["input"]=b.Input,["action"]=b.UsePolicy.Action.Kind,["status"]=WBindingRefusal(data!,b.Input,fullPlayer,clientPlayer,hybridClient,renderClient) is null?"untested":"unsupported",["reason"]=WBindingRefusal(data!,b.Input,fullPlayer,clientPlayer,hybridClient,renderClient) }).ToArray()) },
             ["execution"] = new JsonObject {
                 ["backend"] = renderClient?"native-client-vfx-update":hybridClient?"native-client-hybrid-update":clientPlayer?"native-client-item-update":fullPlayer?"native-player-update":"native-projectile-update", ["scope"] = renderClient?"Native player/item/projectile updates and explicitly recorded original draw entrypoints; not complete Terraria world/client parity":fullPlayer?"native Player.Update and registered mod-player effects with projectile/NPC update; no rendering or complete game loop":"projectile-world; native item-check and projectile/NPC update; not complete world parity", ["fullGameParity"] = false,
-                ["nativeMethods"] = data is null ? new JsonArray("Item.SetDefaults",fullPlayer?"Player.Update":"Player.ItemCheck","Projectile.Update","NPC.UpdateNPC","Projectile.NewProjectile","CombinedHooks.OnHitNPCWithProj","Projectile.Kill") : new JsonArray(itemBoundary=="local_cache"?"GeneratedItemData.FromLocalCacheJson":"GeneratedItemData.FromJson", fullPlayer?"Player.Update":"Player.ItemCheck", "GeneratedItem.CanUseItem", "GeneratedItem.Shoot", "GeneratedProjectile.SpawnRuntimeEntity", "Projectile.Update", "NPC.UpdateNPC", "RuntimeHitNpcGeneration.OnSpawn (scene creation)", "Projectile.NewProjectile", "RuntimeDelayedActionScheduler.Update"),
+                ["nativeMethods"] = data is null ? new JsonArray("Item.SetDefaults",fullPlayer?"Player.Update":"Player.ItemCheck","Projectile.Update","NPC.UpdateNPC","Projectile.NewProjectile","CombinedHooks.OnHitNPCWithProj","Projectile.Kill") : new JsonArray(itemBoundary=="local_cache"?"GeneratedItemData.FromLocalCacheJson":"GeneratedItemData.FromJson", fullPlayer?"Player.Update":"Player.ItemCheck", "GeneratedItem.CanUseItem", "GeneratedItem.Shoot", "GeneratedProjectile.SpawnRuntimeEntity", "Projectile.Update", "NPC.UpdateNPC", "RuntimeHitNpcGeneration.OnSpawn (scene creation)", "NPCLoader registered RuntimeHitNpcGeneration (update/hit hooks, when invoked by the scene)", "Projectile.NewProjectile", "RuntimeDelayedActionScheduler.Update"),
                 ["interventions"] = new JsonArray(fullPlayer?"Isolated 100x600 native tilemap, surface80/rock200; actual native player physics; NPC AI disabled; no world generation":"Isolated 100x100 native tilemap; fixed player and target dummy; no world generation", data is null?"Vanilla item instantiated with actual Item.SetDefaults; no generated item substituted":"Actual GeneratedItem and GeneratedProjectile registered through native loaders; selected production root-combat bridge loaded, not all mod content", hybridClient?"Client Player.Update and generated Projectile.Update/delayed actions use actual client branches; only stationary TargetDummy maintenance remains dedicated, with explicit phase flags":clientPlayer?"Client Player.Update uses real offscreen proxy texture; dedicated NPC/projectile maintenance remains separate, with explicit per-phase flags":fullPlayer?"Native Player.Update with film-scripted controls (native local keyboard/input polling skipped), registered InfiniCraftPlayer and native accessory-slot context; CPU-only filters/achievement context; no GPU":"Use commands set native controls; actual native ResetProjectileCaches/UpdateProjectileCaches and Player.ItemCheck run every tick, with production GeneratedRootCombatSystem bridge loaded", "Combat text pool is full to suppress font/GPU use; combat remains native"),
-                ["unsupported"] = new JsonArray(drawPlayer?"Terraria tile/NPC/world and native dust sprite rendering; non-default character appearances and vanilla equipment atlases; full Main.Draw":drawArtwork?"Terraria world/player/NPC/dust sprite rendering; full projectile PreDraw unavailable without genuine MagicPixel asset":clientPlayer?"Terraria world rendering and custom per-instance generated art (only actual native proxy texture is loaded)":"GPU rendering and generated assets", "Multiplayer/network timing", fullPlayer?"NPC AI deliberately disabled; terrain/world systems and equipment scenarios are not fully simulated":"Full Player.Update (movement, regen, buff/equipment/environment clocks); NPC AI deliberately disabled for stationary dummy", drawPlayer?"VFX renderer kinds outside the explicit admission list, runtime_geometry/no_asset entity admission, Terraria world/NPCs/dust rendering, sound audibility, complete Main.Draw and networking":drawArtwork?"VFX renderer kinds outside the explicit admission list, runtime_geometry/no_asset entity rendering, Terraria scene, sound audibility, complete Projectile.PreDraw/Main.Draw, networking":renderClient?"VFX renderer kinds outside the explicit admission list, unrendered authored item/projectile art and Terraria scene, sound audibility, complete Main.Draw, networking":hybridClient?"Nonempty VFX manifests, body events outside on_use/on_hit/on_crit spawn and hit healing, projectile event effects outside explicit admission, held spawning, vanilla items and equipment presentation without full native player artwork":clientPlayer?"Projectile hybrids/held spawning, vanilla items, item-body events and equipment presentation without full native player artwork":fullPlayer?"Generated ammo items and non-arrow/bullet/flare ammo, dedicated item-body contact, armor sets, prefixes and multi-accessory combinations":"Generated ammo items and non-arrow/bullet/flare ammo, item-body contact, held/equipped effects, prefixes and equipment bonuses") },
+                ["unsupported"] = new JsonArray(drawPlayer?"Terraria tile/NPC/world and native dust sprite rendering; non-default character appearances and vanilla equipment atlases; full Main.Draw":drawArtwork?"Terraria world/player/NPC/dust sprite rendering; full projectile PreDraw unavailable without genuine MagicPixel asset":clientPlayer?"Terraria world rendering and custom per-instance generated art (only actual native proxy texture is loaded)":"GPU rendering and generated assets", "Multiplayer/network timing", fullPlayer?"NPC AI deliberately disabled; terrain/world systems and equipment scenarios are not fully simulated":"Full Player.Update (movement, regen, buff/equipment/environment clocks); NPC AI deliberately disabled for stationary dummy", drawPlayer?"VFX renderer kinds outside the explicit admission list, runtime_geometry/no_asset entity admission, Terraria world/NPCs/dust rendering, sound audibility, complete Main.Draw and networking":drawArtwork?"VFX renderer kinds outside the explicit admission list, runtime_geometry/no_asset entity rendering, Terraria scene, sound audibility, complete Projectile.PreDraw/Main.Draw, networking":renderClient?"VFX renderer kinds outside the explicit admission list, unrendered authored item/projectile art and Terraria scene, sound audibility, complete Main.Draw, networking":hybridClient?"Nonempty VFX manifests, body events outside on_use/on_hit/on_crit spawn and hit healing/NPC effects, projectile event effects outside explicit admission, held spawning, vanilla items and equipment presentation without full native player artwork":clientPlayer?"Projectile hybrids/held spawning, vanilla items, item-body events and equipment presentation without full native player artwork":fullPlayer?"Generated ammo items and non-arrow/bullet/flare/fallen-star ammo, dedicated item-body contact, armor sets, prefixes and multi-accessory combinations":"Generated ammo items and non-arrow/bullet/flare/fallen-star ammo, item-body contact, held/equipped effects, prefixes and equipment bonuses") },
             ["input"] = new JsonObject { ["boundary"]=data is null?"Item.SetDefaults":itemBoundary=="local_cache"?"GeneratedItemData.FromLocalCacheJson":"GeneratedItemData.FromJson",["localCacheReadReceipt"]=System.Text.Json.JsonSerializer.SerializeToNode(data?.LocalCacheReadReceipt ?? Array.Empty<string>()), ["source"]=data is null?"vanilla":"generated", ["path"] = itemPath is null?null:Path.GetFullPath(itemPath), ["sha256"] = itemPath is null?null:Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(itemPath))).ToLowerInvariant(), ["nativeItemId"]=vanillaItemId, ["nativeItemName"]=vanillaItemId.HasValue?ItemID.Search.GetName(vanillaItemId.Value):null, ["scenario"] = Path.GetFullPath(scenarioPath), ["scenarioSha256"] = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(scenarioPath))).ToLowerInvariant(), ["seed"] = seed, ["itemId"] = data?.Id },
             ["snapshots"] = frames, ["assertions"] = assertions
         };
@@ -284,6 +287,7 @@ internal static partial class EngineRuntimeChecks
                 }
                 WValidateVanillaPerformance(item,data,clientPlayer);
                 owner.inventory[0]=item; owner.selectedItem=0; owner.releaseUseItem=true;
+                using var npcGlobals=new WNpcGlobals();
                 NPC dummy=null!;int initialLife=0;
                 if(!nativeDummy){dummy = Terraria.Main.npc[0]; dummy.SetDefaults(scenario["dummy"]?["nativeType"]?.GetValue<string>()=="zombie"?NPCID.Zombie:NPCID.TargetDummy);
                 dummy.active = true; dummy.dontTakeDamage = false; dummy.immortal = false;
@@ -438,6 +442,10 @@ internal static partial class EngineRuntimeChecks
                     Terraria.Main.rand = new Terraria.Utilities.UnifiedRandom(seed);
                     report["execution"]!["rng"] = new JsonObject{["seed"]=seed,["resetBoundary"]="After all scene/asset/loader initialization, immediately before initial snapshot and gameplay tick0",["scope"]="Same initial native random stream; weapon effects and graphics may consume it differently"};
                     frames.Add(WSnapshot(-1, owner, dummy, new JsonArray()));
+                    // Scripted use commands are held until release or another use command.
+                    // The engine clears altFunctionUse at the end of an animation, so
+                    // reassert the scripted alternate intent on every held tick.
+                    bool alternateHeld = false;
                     for (int tick = 0; tick < ticks; tick++) {
                         MaterialClock((uint)tick);
                         foreach (var action in (scenario["actions"]?.AsArray() ?? new JsonArray()).Where(a => WInt(a, "tick", -1) == tick)) {
@@ -447,16 +455,18 @@ internal static partial class EngineRuntimeChecks
                             else if (kind == "select_slot") { owner.selectedItem=WInt(action,"slot",0); events.Add(new JsonObject { ["kind"]="input",["input"]="select_slot",["slot"]=owner.selectedItem }); }
                             else if (kind is "tile_target" or "break_tile") {worldScene!.Action(kind,action!,events);}
                             else if (kind == "controls") { WApplyControls(owner,action); events.Add(new JsonObject{["kind"]="input",["input"]="controls",["nativeControls"]=WControls(owner)}); }
-                            else if (kind == "release") { owner.channel = false; owner.controlUseItem = false; if(owner.altFunctionUse==1) owner.altFunctionUse=0; events.Add(new JsonObject { ["kind"]="input",["input"]="release" }); }
+                            else if (kind == "release") { alternateHeld = false; owner.channel = false; owner.controlUseItem = false; if(owner.altFunctionUse==1) owner.altFunctionUse=0; events.Add(new JsonObject { ["kind"]="input",["input"]="release" }); }
                             else if (kind == "primary" || kind == "alt") {
                                 if(data is not null) {
                                     WRequireBinding(data,kind=="alt"?RuntimeInputKind.AlternateUse:RuntimeInputKind.PrimaryUse,fullPlayer,clientPlayer,hybridClient,renderClient);
                                 } else if(kind=="alt" && !ItemLoader.AltFunctionUse(item,owner)) throw new NotSupportedException("Selected vanilla item has no alternate use");
-                                owner.altFunctionUse = kind == "alt" ? 1 : 0;
+                                alternateHeld = kind == "alt";
+                                owner.altFunctionUse = alternateHeld ? 1 : 0;
                                 owner.controlUseItem = true; owner.channel = item.channel;
                                 events.Add(new JsonObject { ["kind"]="input", ["input"]=kind });
                             } else if(!WReactionAction(kind)) throw new NotSupportedException("Unknown action: " + kind);
                         }
+                        if (alternateHeld && owner.controlUseItem) owner.altFunctionUse = 1;
                         if (events.Count > 0) { var before = WSnapshot(tick,owner,dummy,events); before["phase"]="after_input_before_update"; frames.Add(before); events = new JsonArray(); }
                         if(ReferenceEquals(owner.HeldItem,item)) heldNativeTicks++;
                         if(fullPlayer) { if(clientPlayer) { Terraria.Main.dedServ=false;events.Add(new JsonObject{["kind"]="native_phase",["phase"]="Player.Update",["dedServ"]=Terraria.Main.dedServ,["netMode"]=Terraria.Main.netMode}); } try {owner.Update(0);} finally {if(clientPlayer) Terraria.Main.dedServ=true;} } else {

@@ -197,7 +197,8 @@ class SuiteTests(unittest.TestCase):
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stderr)
             plan = json.loads(proc.stdout)
-            self.assertEqual(len(plan["cases"]), 5)
+            self.assertEqual(len(plan["cases"]), 8)
+            self.assertIn("npc-effect-lifecycle", [case["name"] for case in plan["cases"]])
             self.assertEqual(list(root.iterdir()), [])
 
     def test_removed_compare_command_is_rejected_without_outputs(self):

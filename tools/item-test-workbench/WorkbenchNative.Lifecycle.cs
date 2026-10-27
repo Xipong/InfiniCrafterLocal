@@ -32,15 +32,26 @@ internal static partial class EngineRuntimeChecks
     // Assertions read observed native state/events. They never drive item/projectile logic.
     private static bool WLifecycleKind(string kind) => kind is "entity_spawn_count" or "entity_hit_count_at_least"
         or "entity_peak_active_at_most" or "entity_inactive" or "entity_natural_expiry"
-        or "generated_stack_at" or "exhaustion_at";
+        or "generated_stack_at" or "exhaustion_at" or "target_effect_at" or "target_hit_damage_at";
 
     private static void WValidateLifecycleAssertion(JsonNode check, GeneratedItemData? data, int ticks)
     {
         string kind=check["kind"]!.GetValue<string>();
+        if(data is null) throw new ArgumentException("Generated lifecycle assertions require a generated item");
+        if(kind is "target_effect_at" or "target_hit_damage_at") {
+            if(kind=="target_hit_damage_at") {
+                WKeys(check,"target hit assertion","kind","tick","value");
+                if(check["value"] is null || WInt(check,"value",-1)<0 || WInt(check,"tick",-1)<0 || WInt(check,"tick",-1)>=ticks)throw new ArgumentException("Target hit assertion requires nonnegative damage and in-range tick");
+                return;
+            }
+            WKeys(check,"target effect assertion","kind","tick","stat","value");
+            if(check["stat"]?.GetValue<string>() is not ("count" or "lifeRegenPenalty" or "defenseDelta" or "contactMultiplier" or "velocityRetentionPerTick" or "lifeRegen" or "vx" or "vy"))throw new ArgumentException("Unsupported target effect stat");
+            if(check["value"] is null || WInt(check,"tick",-1)<0 || WInt(check,"tick",-1)>=ticks)throw new ArgumentException("Target effect assertion requires value and in-range tick");
+            WFloat(check,"value",0); return;
+        }
         bool timed=kind is "generated_stack_at" or "exhaustion_at";
         bool noValue=kind is "entity_inactive" or "entity_natural_expiry";
         WKeys(check,"lifecycle assertion",timed?new[]{"kind","tick","value"}:noValue?new[]{"kind","entityId"}:new[]{"kind","entityId","value"});
-        if(data is null) throw new ArgumentException("Generated lifecycle assertions require a generated item");
         if(!timed && (check["entityId"]?.GetValue<string>() is not string entity || data.RuntimeProgram.TryGetEntity(entity)?.IsProjectileEntity!=true))
             throw new ArgumentException("Lifecycle assertion requires an existing projectile entityId");
         if(!noValue && (check["value"] is null || WInt(check,"value",-1)<0)) throw new ArgumentException("Lifecycle value must be a nonnegative integer");
@@ -51,6 +62,17 @@ internal static partial class EngineRuntimeChecks
     {
         var post=frames.Where(f=>f!["phase"] is null && f["tick"]!.GetValue<int>()>=0).ToArray();
         var events=frames.SelectMany(f=>f!["events"]!.AsArray()).Where(e=>e is not null).ToArray();
+        if(kind=="target_hit_damage_at") {
+            var frame=post.LastOrDefault(f=>f!["tick"]!.GetValue<int>()==WInt(check,"tick",-1));
+            return frame is not null && frame["events"]!.AsArray().Any(e=>e?["kind"]?.GetValue<string>() is "hit" or "item_hit" && e["npcId"]!.GetValue<int>()==frame["dummy"]!["slot"]!.GetValue<int>() && e["damageDone"]!.GetValue<int>()==WInt(check,"value",0));
+        }
+        if(kind=="target_effect_at") {
+            var frame=post.LastOrDefault(f=>f!["tick"]!.GetValue<int>()==WInt(check,"tick",-1));
+            if(frame is null)return false;
+            var state=frame["dummy"]!["targetState"]!; string stat=check["stat"]!.GetValue<string>();
+            var observed=stat is "lifeRegen" or "vx" or "vy"?state[stat]:state["generatedEffects"]![stat];
+            return observed is not null && Math.Abs(WReportNumber(observed)-WFloat(check,"value",0))<0.00001f;
+        }
         int value=WInt(check,"value",0);
         if(kind is "generated_stack_at" or "exhaustion_at") {
             var frame=post.LastOrDefault(f=>f!["tick"]!.GetValue<int>()==WInt(check,"tick",-1));

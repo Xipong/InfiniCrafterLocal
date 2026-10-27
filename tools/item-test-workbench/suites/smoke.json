@@ -2,6 +2,9 @@
   "schemaVersion": 1,
   "cases": [
     {"name": "straight", "fixture": "synthetic-straight.json", "scenario": "../scenarios/primary.json", "expect": {"status": "passed"}},
+    {"name": "npc-effect-lifecycle", "fixture": "synthetic-npc-effect.json", "scenario": "../scenarios/npc-effect.json", "expect": {"status": "passed"}},
+    {"name": "npc-effect-consumers", "fixture": "synthetic-npc-effect.json", "scenario": "../scenarios/npc-effect-consumers.json", "expect": {"status": "passed"}},
+    {"name": "npc-effect-consumers-negative", "fixture": "synthetic-straight.json", "scenario": "../scenarios/npc-effect-consumers.json", "expect": {"status": "failed", "failedAssertions": ["target_effect_at", "target_effect_at", "target_hit_damage_at"]}},
     {"name": "charge-release", "fixture": "synthetic-charge.json", "scenario": "../scenarios/charge-release.json", "expect": {"status": "passed"}},
     {"name": "alternate", "fixture": "synthetic-alt.json", "scenario": "../scenarios/alternate.json", "expect": {"status": "passed"}},
     {"name": "vanilla-control", "vanillaItem": "WoodenBoomerang", "scenario": "../scenarios/primary.json", "expect": {"status": "passed"}},

@@ -384,7 +384,7 @@ map UI and full world ecology are not simulated.
 
 `itemStack` provisions the actual generated item instance (default 1, bounded by
 its native `maxStack`). Native `ItemCheck` owns consumption; the bench does not
-subtract stacks. Arrow, bullet and flare inventory go through native ammo selection.
+subtract stacks. Arrow, bullet, flare and fallen star inventory go through native ammo selection.
 Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded to
 600. This permits full multi-minute field expiry without increasing image budgets.
 
@@ -396,6 +396,15 @@ Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded t
   native activity or observed lifetime-depleted Kill, respectively.
 - `generated_stack_at` and `exhaustion_at` take post-update `tick` and exact `value`.
   Stack assertions sum the single generated identity across inventory/equipment.
+- `target_effect_at` takes `tick`, `stat` and `value`. It samples the dummy's
+  `lifeRegen`, `vx`, `vy` or active generated effect `count`, `lifeRegenPenalty`,
+  `defenseDelta`, `contactMultiplier`, `velocityRetentionPerTick`. The latter are
+  modifier totals, not proof of a particular hit or outgoing contact. Defense is
+  applied by the registered `RuntimeHitNpcGeneration.ModifyIncomingHit` hook and
+  does not change `npc.defense`. `target_hit_damage_at` checks actual item or
+  projectile hit damage to the dummy at the specified tick; RNG and defense affect
+  this value. The smoke controls check regen, expiry, velocity and a second hit,
+  with an otherwise identical item lacking the effect as a negative control.
 - Direct `Player.ApplyDamageToNPC` calls are observed separately from native
   item/projectile hit callbacks, so nearby-event damage is not mistaken for zero
   damage simply because it bypasses projectile contact callbacks.
@@ -468,6 +477,12 @@ python tools/item-test-workbench/quality_review.py report /private/native.json \
 python tools/item-test-workbench/verify_quality.py \
   --native-dll /absolute/ItemTestWorkbench.dll --out /private/quality-controls
 ```
+
+Scripted `primary` and `alt` represent held use intent until `release` or a
+different use command. For held `alt` the harness reasserts alternate intent on
+each update, since the native animation resets `altFunctionUse`; otherwise a
+long hold can silently become primary use. This is an explicit scripted input
+adapter, not a certification of physical right-click polling or repeat rules.
 
 The compact cycle runs both facings, idle and native moving/jumping, with an
 explicit held-input interval and release. It preserves ammo/environment settings
@@ -549,6 +564,15 @@ availability, native consumption callbacks and final stack debits are separate.
 Full CPU scenes refuse native-contact weapons instead of reporting false zero
 melee damage. For such weapons supply a `client_hybrid` scene (no VFX) or a
 `client_vfx` scene with the item's exact admitted publication files.
+
+A Live10 Terra ShadowFrost mechanical probe used the archived `test_fixture`
+item, whose asset PNGs were already synthetic. The only change to its item JSON
+was removing VFX slots, because `client_hybrid` does not execute authored VFX;
+the runtime mechanics remained unchanged. In a close-range interior scene
+(player 800,700; dummy 828,700; floor tileY 47), native contact and projectile
+hits were both observed. This mode uses the repository's 32×32 generated proxy
+texture for contact geometry, so it does not certify contact reach for final
+artwork, VFX appearance, or a complete in-game fight.
 
 In performance `client_vfx` runs, drawing and PNG capture are deliberately disabled
 for **every** candidate; material assets still load where required. Vanilla items

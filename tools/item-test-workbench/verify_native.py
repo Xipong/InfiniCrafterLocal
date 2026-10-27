@@ -45,6 +45,16 @@ def main():
            ('imported-front-hand',str(w.ROOT/'tools/fixtures/front-hand-compiled.json'),modified(assertions=[{'kind':'spawned'},inactive,finite]),0),
            ('captured-pumpkin-wand',str(w.ROOT/'tools/fixtures/video-ui-buffs/g_4efc7c05f7b078e0.json'),modified(player={**base['player'],'life':80,'maxLife':100},dummy={**base['dummy'],'x':750},assertions=[spawned,{'kind':'dummy_damaged'},{'kind':'life_equals','value':81},{'kind':'mana_equals','value':195},inactive,finite]),0),
            ('captured-frog-chest-wand',str(w.ROOT/'tools/fixtures/video-ui-buffs/g_17d5099f992a900b.json'),modified(player={**base['player'],'life':80,'maxLife':100},dummy={**base['dummy'],'x':750},assertions=[spawned,{'kind':'dummy_damaged'},{'kind':'life_equals','value':81},{'kind':'mana_equals','value':190},inactive,finite]),0)]
+    # An interval of held alt must behave like the formerly necessary explicit
+    # per-tick reassertion, and a later primary must switch the binding.
+    alt_base=w.read_json(w.HERE/'scenarios/alternate.json')
+    alt_base['assertions']=[finite]
+    held=json.loads(json.dumps(alt_base)); held['actions']=[{'tick':0,'kind':'alt'},{'tick':80,'kind':'release'},{'tick':100,'kind':'primary'},{'tick':101,'kind':'release'}]
+    explicit=json.loads(json.dumps(held)); explicit['actions']=[{'tick':t,'kind':'alt'} for t in range(80)]+held['actions'][1:]
+    cases.extend([('alt-held-switch','synthetic-alt.json',held,0),('alt-explicit-switch','synthetic-alt.json',explicit,0)])
+    for name,scene in [('alt-held-switch-full',held),('alt-explicit-switch-full',explicit)]:
+        scene=json.loads(json.dumps(scene));scene['playerUpdate']='full';scene['tiles']=[{'tileX':1,'tileY':44,'width':97,'height':1}]
+        cases.append((name,'synthetic-alt.json',scene,0))
     frog=str(w.ROOT/'tools/fixtures/video-ui-buffs/g_17d5099f992a900b.json')
     pumpkin=str(w.ROOT/'tools/fixtures/video-ui-buffs/g_4efc7c05f7b078e0.json')
     cases.extend([
@@ -88,7 +98,7 @@ def main():
             scenario['ticks']=180;scenario['actions']=[{'tick':tick+offset,'kind':kind} for tick in [0,50,100,150] for offset,kind in [(0,'primary'),(1,'release')]]
         scenario['assertions']=[{'kind':'spawn_count','value':spawns},finite,*checks]
         cases.append(('ammo-'+name,'synthetic-ammo-'+category+'-'+speed+'.json',scenario,expected))
-    for category,item_id,wrong in [('arrow',40,97),('bullet',278,40)]:
+    for category,item_id,wrong in [('arrow',40,97),('bullet',278,40),('fallen_star',75,40)]:
         for speed in ['authored_spawn','native_shot']:
             ammo_case(category+'-'+speed,category,speed,[(54,item_id,3)],1,[ammo_check('inventory_stack',item_id,2,54),ammo_check('ammo_source_spawn_count',item_id,1),ammo_check('ammo_consumed_count',item_id,1)])
         ammo_case(category+'-empty',category,'authored_spawn',[],0,[ammo_check('ammo_consumed_count',item_id,0),ammo_check('ammo_source_spawn_count',item_id,0)])
@@ -122,6 +132,11 @@ def main():
     def recorded(name):
         path=out/name/'native.json'
         return w.read_json(path) if path.exists() else {}
+    def binding_spawns(name):
+        return [(f['tick'],e.get('entityId')) for f in recorded(name).get('snapshots',[]) for e in f.get('events',[]) if e.get('kind')=='entity_configured']
+    for suffix in ('','-full'):
+        held_spawns=binding_spawns('alt-held-switch'+suffix); explicit_spawns=binding_spawns('alt-explicit-switch'+suffix)
+        rows.append({'name':'held-alt-does-not-switch-to-primary'+suffix, 'passed':held_spawns==explicit_spawns and sum(t<80 and e=='alt' for t,e in held_spawns)>=2 and not any(t<100 and e=='root' for t,e in held_spawns) and any(t>=100 and e=='root' for t,e in held_spawns), 'spawns':held_spawns})
     first=recorded('straight');second=recorded('straight-repeat')
     deterministic=bool(first and second) and first.get('snapshots')==second.get('snapshots') and first.get('assertions')==second.get('assertions')
     rows.append({'name':'same-seed-determinism','passed':deterministic})
