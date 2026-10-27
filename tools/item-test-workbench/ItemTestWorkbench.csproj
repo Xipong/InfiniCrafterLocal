@@ -8,8 +8,11 @@
   <ItemGroup>
     <Content Include="$(InfiniModSourceRoot)/Assets/GeneratedProjectile.png" Link="native-assets/GeneratedProjectile.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="$(InfiniModSourceRoot)/Assets/GeneratedItem.png" Link="native-assets/GeneratedItem.png" CopyToOutputDirectory="PreserveNewest" />
-    <Compile Include="$(InfiniModSourceRoot)/**/*.cs" Exclude="$(InfiniModSourceRoot)/obj/**;$(InfiniModSourceRoot)/bin/**" />
+    <Content Include="$(InfiniModSourceRoot)/build.txt" Link="native-mod/build.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(InfiniModSourceRoot)/Localization/**/*" Link="native-mod/Localization/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="$(InfiniModSourceRoot)/Assets/**/*" Link="native-mod/asset-content/Assets/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../native/EngineRuntimeChecks*.cs" /><Compile Include="*.cs" />
+    <ProjectReference Include="production-mod/InfiniCrafterWorkbenchMod.csproj" />
     <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/ParticleLibrary/ParticleLibrary.dll" />
     <Reference Include="$(InfiniExternalDepsRoot)/Luminance/bin/Debug/net8.0/Luminance.dll" />

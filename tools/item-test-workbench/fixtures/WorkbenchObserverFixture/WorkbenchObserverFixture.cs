@@ -18,6 +18,8 @@ public sealed class WorkbenchObserverFixture : Mod { }
 internal static class Observation
 {
     internal const string OutputVariable = "IFC_WORKBENCH_OBSERVER_OUTPUT";
+    internal static bool DamageModifiersEnabled => !string.Equals(
+        Environment.GetEnvironmentVariable("IFC_FIXTURE_DISABLE_DAMAGE_MODIFIERS"), "1", StringComparison.Ordinal);
     private static readonly object Gate = new();
     private static readonly Dictionary<string, long> Counts = new(StringComparer.Ordinal);
 
@@ -90,7 +92,7 @@ public sealed class ProbeGlobalItem : GlobalItem
         Observation.Hit("GlobalItem.ModifyWeaponDamage.Any");
         if (item.type != ModContent.ItemType<ProbeItem>()) return;
         Observation.Hit("GlobalItem.ModifyWeaponDamage");
-        damage.Flat += 3;
+        if (Observation.DamageModifiersEnabled) damage.Flat += 3;
     }
 }
 
@@ -164,7 +166,7 @@ public sealed class ProbeGlobalNpc : GlobalNPC
         Observation.Hit("GlobalNPC.ModifyHitByProjectile.Any");
         if (npc.type != ModContent.NPCType<ProbeNpc>() || projectile.type != ModContent.ProjectileType<ProbeProjectile>()) return;
         Observation.Hit("GlobalNPC.ModifyHitByProjectile");
-        modifiers.SourceDamage *= 1.25f;
+        if (Observation.DamageModifiersEnabled) modifiers.SourceDamage *= 1.25f;
     }
 }
 
@@ -175,7 +177,7 @@ public sealed class ProbePlayer : ModPlayer
         Observation.Hit("ModPlayer.ModifyWeaponDamage.Any");
         if (item.type != ModContent.ItemType<ProbeItem>()) return;
         Observation.Hit("ModPlayer.ModifyWeaponDamage");
-        damage.Flat += 5;
+        if (Observation.DamageModifiersEnabled) damage.Flat += 5;
     }
     public override void PostUpdate()
     {
@@ -185,6 +187,7 @@ public sealed class ProbePlayer : ModPlayer
 
 public sealed class ProbeSystem : ModSystem
 {
+    public override void PostSetupContent() => Observation.Hit("ModSystem.PostSetupContent");
     public override void OnWorldLoad() => Observation.Reset();
     public override void PostUpdateEverything()
     {
