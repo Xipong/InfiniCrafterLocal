@@ -198,6 +198,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void ItemOutgoingVfxRejectsNonfinitePoint()
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((config, lights) =>
         {
             var instance = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Instance")!;

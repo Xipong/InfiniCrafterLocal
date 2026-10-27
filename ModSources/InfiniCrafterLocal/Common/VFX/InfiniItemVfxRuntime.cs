@@ -61,6 +61,7 @@ public static partial class InfiniItemVfxRuntime
     public static void ClearUseEventCaches()
     {
         MaterialItemEventStream.Clear();
+        Array.Clear(HeldEventWitnesses);
         Array.Clear(ServerEvents);
         Array.Clear(ClientEvents);
         ParticlesThisTick.Clear();

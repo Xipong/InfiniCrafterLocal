@@ -42,11 +42,40 @@ public static partial class InfiniItemVfxRuntime
             ||ev.Length>24||!RuntimeEventKind.IsKnown(ev)||!Finite(point)||!snapshot.Valid)throw new InvalidDataException("invalid material item snapshot");
         return new(owner,token,occurrence,item,entity,ev,point,snapshot);
     }
+    // One bounded publication witness per player connection. This is presentation
+    // transport state, not gameplay admission; repeated hits never resync inventory.
+    private static readonly (long Token, int Slot, Player? Player, object? Socket)[] HeldEventWitnesses
+        = new (long, int, Player?, object?)[Main.maxPlayers];
+
+    private static bool PublishHeldEventWitness(Player player, GeneratedItem item, long token)
+    {
+        int owner = player.whoAmI, slot = player.selectedItem;
+        if (owner < 0 || owner >= HeldEventWitnesses.Length || slot < 0 || slot >= player.inventory.Length
+            || !ReferenceEquals(player.inventory[slot], item.Item)) return false;
+        object? socket = Netplay.Connection?.Socket;
+        var previous = HeldEventWitnesses[owner];
+        // A -> silent B -> A can leave the server on B while A's item witness
+        // is still cached. Selection is cheap and must precede every held claim.
+        NetMessage.SendData(MessageID.PlayerControls, number: owner);
+        if (previous.Token == token && previous.Slot == slot && ReferenceEquals(previous.Player, player)
+            && ReferenceEquals(previous.Socket, socket)) return true;
+        // Native end-of-frame sync can follow the first use/hit ModPacket. Publish
+        // only its exact item first on the same ordered connection.
+        NetMessage.SendData(MessageID.SyncEquipment, number: owner,
+            number2: PlayerItemSlotID.Inventory0 + slot, number3: item.Item.prefix);
+        HeldEventWitnesses[owner] = (token, slot, player, socket);
+        return true;
+    }
+
     private static void SendItemEvent(Player player,GeneratedItemData data,string entityId,string ev,Vector2 point)
     {
         if(EventSourceItem(player,data.Id,ev) is not GeneratedItem gi)return;
         var payload=new MaterialItemEvent(player.whoAmI,gi.PresentationToken,MaterialItemEventStream.NewOwnerOccurrence(),data.Id,entityId,ev,point,InfiniItemVfxSnapshot.Capture(player));
         if(!payload.Snapshot.Valid||InfiniCrafterLocalMod.Instance is null)return;
+        // Reactive equipment has its own functional/modded-slot registration;
+        // do not invent an inventory slot or relax its existing server token fence.
+        if(ev is not (RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill)
+            && !PublishHeldEventWitness(player,gi,payload.Token))return;
         var packet=InfiniCrafterLocalMod.Instance.GetPacket();packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);WriteMaterialItemEvent(packet,payload);packet.Send();
     }
     private static void EmitMaterialItemSnapshot(GeneratedItemData data,MaterialItemEvent payload,VfxSourceBinding? binding,MaterialEventAllowance allowance)

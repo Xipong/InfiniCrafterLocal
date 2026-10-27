@@ -149,14 +149,14 @@ public static class InfiniVfxRuntime
         }
     }
 
-    public static bool OnEvent(Projectile projectile, GeneratedItemData data, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center,ulong occurrence=0,bool includeMaterialElements=true)
+    public static bool OnEvent(Projectile projectile, GeneratedItemData data, string entityId, string eventName, VfxManifestSpec manifest, ref InfiniVfxState state, Vector2 center,ulong occurrence=0,bool includeEventEmissions=true)
     {
         if (Main.dedServ || manifest is null || !manifest.HasSlots) return false;
         BeginPresentationTick(projectile, data, entityId, ref state);
         InfiniVfxProjectileSnapshot snapshot = InfiniVfxProjectileSnapshot.Capture(projectile, data, entityId);
         if (!snapshot.IsValidFor(data.RuntimeProgram.TryGetEntity(entityId))) return false;
         if(occurrence==0)occurrence=InfiniDetachedVfxSystem.NewMaterialOccurrence();
-        bool admitMaterials=includeMaterialElements&&InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(occurrence,relay:false);
+        bool admitMaterials=includeEventEmissions&&InfiniDetachedVfxSystem.TryAdmitMaterialOccurrence(occurrence,relay:false);
         bool emitted = false;
         foreach (VfxSlotSpec slot in manifest.Slots)
         {
@@ -166,6 +166,9 @@ public static class InfiniVfxRuntime
                 InfiniDetachedVfxSystem.RegisterMaterialPaths(data,entityId,state.SourceKey,VfxSourceBinding.Capture(projectile));
                 continue;
             }
+            // A remote native callback registers live paths, but discrete events
+            // have one producer: the validated relay (regardless of arrival order).
+            if (!includeEventEmissions) continue;
             if (InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!admitMaterials||!snapshot.TryMaterialAnchor(slot.Anchor,center,out anchor))continue;
                 emitted |= InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,state.SourceKey,new(anchor,

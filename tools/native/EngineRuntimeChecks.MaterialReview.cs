@@ -102,7 +102,7 @@ internal static partial class EngineRuntimeChecks
         return ParseMaterialElement(JsonNode.Parse(data.ToJson())!.AsObject());
     }
 
-    private static void MaterialNonownerPathAndLegacyRemainLocal()
+    private static void MaterialNonownerPathRemainsLocalEventsAwaitRelay()
     {
         WithLighting((_, __) => {
             using var peers = new ReviewPeers();
@@ -118,14 +118,17 @@ internal static partial class EngineRuntimeChecks
             var paths = (IList)typeof(InfiniDetachedVfxSystem).GetField("MaterialPaths", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
             var emissions = (IList)typeof(InfiniDetachedVfxSystem).GetField("Emissions", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
             Equal(1, paths.Count, "nonowner actual local spawn event still registers its live path without a relay");
-            Equal(1, emissions.Count, "legacy local presentation remains available");
+            Equal(0, emissions.Count, "remote discrete presentation awaits its validated relay");
             typeof(GeneratedProjectile).GetMethod("EmitAndSyncVfxEvent", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(remote, new object[] { "on_spawn", remote.Projectile.Center });
-            Equal(1, paths.Count, "live path registration deduplicates the same generation"); Equal(1, emissions.Count, "legacy one-per-tick semantics preserved");
+            Equal(1, paths.Count, "live path registration deduplicates the same generation"); Equal(0, emissions.Count, "repeated callback cannot bypass relay ownership");
         });
     }
 
     private static void ItemEventOccurrencesRelaySimpleAndMixed()
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         foreach (bool mixed in new[] { false, true }) WithLighting((_, lights) => {
             using var peers = new ReviewPeers();
             InfiniItemVfxRuntime.ClearUseEventCaches();
@@ -175,6 +178,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void ItemEventNetworkRateLimit()
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((_, lights) => {
             using var peers = new ReviewPeers();
             InfiniItemVfxRuntime.ClearUseEventCaches();
@@ -311,6 +317,9 @@ internal static partial class EngineRuntimeChecks
     }
     private static void MaterialPeerSessionReset(bool item)
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((_, __) => {
             using var peers = new ReviewPeers();
             var data = item ? ReviewContactItemData() : ReviewProjectileData("on_hit"); data.VfxManifest.Slots[0].Duration = 3; peers.Register(data);
@@ -380,6 +389,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void MaterialDeadItemDelayKeepsWorldSnapshotAndFencesSource()
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((config, _) => {
             using var peers = new ReviewPeers(); config.ParticleSpawnMultiplier = 1;
             foreach (int mode in new[] { NetmodeID.SinglePlayer, NetmodeID.MultiplayerClient })

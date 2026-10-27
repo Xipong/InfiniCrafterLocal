@@ -313,6 +313,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void MaterialItemSnapshotRelayPreservesPoseAndInstance()
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((_,__)=> {
             using var peers = new ReviewPeers();
             var system = peers.System; var mod = peers.Mod; var registry = peers.Registry; var outgoing = peers.Sent;
