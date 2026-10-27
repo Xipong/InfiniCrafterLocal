@@ -44,6 +44,7 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("parent source graph unresolved identity alternatives", ParentSourceGraphKeepsUnresolvedIdentityAlternatives),
             ("parent source graph native projectile windows", ParentSourceGraphFollowsNativeProjectileWindows),
             ("parent source graph conditional native buff consumers", ParentSourceGraphKeepsConditionalNativeBuffConsumers),
             ("parent source graph conditions events and reachable helpers", ParentSourceGraphKeepsReachabilityConditionsAndEventOwnership),

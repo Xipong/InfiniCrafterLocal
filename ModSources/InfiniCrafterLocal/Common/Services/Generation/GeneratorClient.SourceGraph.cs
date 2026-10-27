@@ -564,9 +564,13 @@ public sealed partial class GeneratorClient
                 {
                     var contexts = binding is { } bound ? new[] { bound }
                         : callers.TryGetValue(body.Method, out var calls) ? calls.ToArray() : Array.Empty<(ParentSourceMethod Body, ParentSourceMethod.Value Call)>();
+                    // A root hook argument is runtime data, not an absent arm.
+                    // Keep it even when a sibling definition resolves to a literal.
+                    if (contexts.Length == 0) yield return value;
                     foreach (var context in contexts)
                         if (argument < context.Call.Inputs.Count)
                             foreach (var origin in IdentityDefinitions(context.Body, context.Call.Inputs[argument], seen, depth + 1)) yield return origin;
+                        else yield return value;
                 }
                 else if (value.Operand is MethodInfo helper && value.Op == "call" && helper.DeclaringType != typeof(ModContent)
                     && helper.DeclaringType?.Assembly == body.Method.DeclaringType?.Assembly && helper.DeclaringType?.Assembly != typeof(NPC).Assembly

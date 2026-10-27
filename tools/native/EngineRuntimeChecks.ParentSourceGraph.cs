@@ -73,6 +73,51 @@ internal static partial class EngineRuntimeChecks
         }
     }
 
+    private sealed class GraphMixedIdentityItem : ModItem
+    {
+        public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
+            => target.AddBuff(Identity(hit.Crit ? BuffID.Poisoned : damageDone), 120);
+        private static int Identity(int value) => value;
+        public override void OnHitPvp(Player player, Player target, Player.HurtInfo hurtInfo)
+            => target.AddBuff(BuffID.OnFire, 120);
+    }
+
+    private sealed class GraphIdentityDepthItem : ModItem
+    {
+        public override void OnHitNPC(Player player, NPC target, NPC.HitInfo hit, int damageDone)
+            => target.AddBuff(hit.Crit ? BuffID.Poisoned : Chain0(damageDone), 120);
+        private static int Chain0(int value) => Chain1(value);
+        private static int Chain1(int value) => Chain2(value);
+        private static int Chain2(int value) => Chain3(value);
+        private static int Chain3(int value) => Chain4(value);
+        private static int Chain4(int value) => Chain5(value);
+        private static int Chain5(int value) => Chain6(value);
+        private static int Chain6(int value) => Chain7(value);
+        private static int Chain7(int value) => value;
+    }
+
+    private static void ParentSourceGraphKeepsUnresolvedIdentityAlternatives()
+    {
+        Type graphType = typeof(GeneratorClient).GetNestedType("ParentSourceGraph", BindingFlags.NonPublic)!;
+        JsonObject Capture(string hook, Type? owner = null)
+        {
+            object graph = Activator.CreateInstance(graphType, nonPublic: true)!;
+            graphType.GetMethod("Hooks", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(graph, new object[]
+                { owner ?? typeof(GraphMixedIdentityItem), typeof(ModItem), new System.Collections.Generic.HashSet<string>(new[] { hook }), "parent_ModItem", "event_signature" });
+            return (JsonObject)graphType.GetMethod("Finish", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(graph, null)!;
+        }
+        var mixed = Capture("OnHitNPC")["edges"]!.AsArray().OfType<JsonObject>().ToArray();
+        Equal(true, mixed.Any(e => e["kind"]?.GetValue<string>() == "buff_request"
+            && e["context"] is JsonObject context && context["buffId"]?.GetValue<int>() == BuffID.Poisoned), "known identity arm remains a candidate");
+        Equal(true, mixed.Any(e => e["kind"]?.GetValue<string>() == "buff_request"
+            && e["unresolved"]?.GetValue<string>() == "identity_requires_helper_or_runtime_expression; see_source_values"), "runtime identity arm is not erased by a resolved alternative");
+        var bounded = Capture("OnHitNPC", typeof(GraphIdentityDepthItem))["edges"]!.AsArray().OfType<JsonObject>();
+        Equal(true, bounded.Any(e => e["kind"]?.GetValue<string>() == "buff_request"
+            && e["unresolved"]?.GetValue<string>() == "identity_requires_helper_or_runtime_expression; see_source_values"), "helper depth exhaustion preserves unknown identity beside the literal arm");
+        var literal = Capture("OnHitPvp")["edges"]!.AsArray().OfType<JsonObject>();
+        Equal(false, literal.Any(e => e["unresolved"]?.GetValue<string>() == "identity_requires_helper_or_runtime_expression; see_source_values"), "literal-only request has no invented unresolved identity");
+    }
+
     private static void ParentSourceGraphKeepsReachabilityConditionsAndEventOwnership()
     {
         GraphSourceExecutions = 0;
