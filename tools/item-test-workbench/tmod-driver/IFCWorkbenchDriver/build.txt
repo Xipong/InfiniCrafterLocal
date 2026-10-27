@@ -1,0 +1,4 @@
+displayName = IFC Workbench Native Driver
+author = IFC Workbench
+version = 0.1.0
+side = Both

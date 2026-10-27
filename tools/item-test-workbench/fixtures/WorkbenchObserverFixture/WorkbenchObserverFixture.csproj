@@ -1,0 +1,7 @@
+<Project Sdk="Tomat.Terraria.ModLoader.Sdk/2.1.1">
+  <PropertyGroup>
+    <AssemblyName>WorkbenchObserverFixture</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <TmlVersion>stable</TmlVersion>
+  </PropertyGroup>
+</Project>

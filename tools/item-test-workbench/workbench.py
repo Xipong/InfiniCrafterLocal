@@ -594,6 +594,7 @@ def main():
         if args.command=="test":
             import unittest
             suite=unittest.defaultTestLoader.discover(str(HERE),pattern="test_*.py")
+            suite.addTests(unittest.TestLoader().discover(str(HERE/"tmod-driver"),pattern="test_*.py"))
             return 0 if unittest.TextTestRunner(verbosity=1).run(suite).wasSuccessful() else 1
         if args.command=="doctor":
             state=doctor();print(json.dumps(state,indent=2));return 0 if state["ready"] else 2

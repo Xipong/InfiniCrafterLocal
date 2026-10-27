@@ -1,0 +1,13 @@
+{
+  "mode": "projectile",
+  "projectile": "WorkbenchObserverFixture/ProbeProjectile",
+  "npc": "WorkbenchObserverFixture/ProbeNpc",
+  "ticks": 120,
+  "damage": 20,
+  "knockback": 0,
+  "speed": 8,
+  "spawn": {"x": 2000, "y": 1976},
+  "target": {"x": 2100, "y": 2000},
+  "aim": {"x": 2100, "y": 1976},
+  "minHits": 1
+}

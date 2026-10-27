@@ -1,0 +1,12 @@
+{
+  "mode": "item_use",
+  "item": "WorkbenchObserverFixture/ProbeItem",
+  "npc": "WorkbenchObserverFixture/ProbeNpc",
+  "input": "primary",
+  "ticks": 120,
+  "holdTicks": 80,
+  "spawn": {"x": 2000, "y": 1958},
+  "target": {"x": 2100, "y": 2000},
+  "aim": {"x": 2100, "y": 1976},
+  "minHits": 1
+}

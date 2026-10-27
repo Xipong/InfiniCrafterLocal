@@ -1,0 +1,13 @@
+<Project Sdk="Tomat.Terraria.ModLoader.Sdk/2.1.1">
+  <PropertyGroup>
+    <AssemblyName>IFCWorkbenchIFCAdapter</AssemblyName>
+    <LangVersion>latest</LangVersion>
+    <TmlVersion>stable</TmlVersion>
+    <!-- Optional editor/SDK build reference. The tML mod builder resolves the
+         actual loaded dependency using build.txt modReferences. -->
+    <InfiniCrafterDll Condition="'$(InfiniCrafterDll)' == '' and '$(INFINI_IFC_DLL)' != ''">$(INFINI_IFC_DLL)</InfiniCrafterDll>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="InfiniCrafterLocal" HintPath="$(InfiniCrafterDll)" Condition="'$(InfiniCrafterDll)' != '' and Exists('$(InfiniCrafterDll)')" Private="false" />
+  </ItemGroup>
+</Project>
