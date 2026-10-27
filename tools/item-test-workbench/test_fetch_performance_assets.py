@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 import fetch_performance_assets as f
+import index_vanilla_assets as inventory
 from test_fetch_player_assets import png
 
 
@@ -66,6 +67,41 @@ class PerformanceAssetsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             f.provision(self.root, self.manifest, self.fetch, include_projectiles=True)
         self.assertEqual(self.calls, [])
+
+    def test_any_indexed_item_is_verified_by_git_blob_without_control_list(self):
+        digest=hashlib.sha1(b'blob '+str(len(self.raw)).encode()+b'\0'+self.raw).hexdigest()
+        index=dict(schemaVersion=1,communityCommit=f.COMMIT,entryFormat=['gitBlobSha1','bytes'],
+                   items={'24':[digest,len(self.raw)],'3507':[digest,len(self.raw)]})
+        result=f.provision(self.root,self.manifest,self.fetch,items=[24,3507],index=index)
+        self.assertEqual(result['verifiedFiles'],2)
+        self.assertEqual(self.calls,['Images/Item_24.png','Images/Item_3507.png'])
+        path=self.root/'Images/Item_24.png'
+        path.write_bytes(self.raw[:-1]+bytes([self.raw[-1]^1]))
+        self.calls.clear()
+        with self.assertRaisesRegex(ValueError,'Git blob mismatch'):
+            f.provision(self.root,self.manifest,self.fetch,items=[24,3507],index=index)
+        self.assertEqual(self.calls,[])
+
+    def test_missing_ids_duplicates_and_wrong_source_are_not_replaced(self):
+        index=dict(schemaVersion=1,communityCommit=f.COMMIT,entryFormat=['gitBlobSha1','bytes'],items={})
+        for ids in ([24],[24,24],[],[-1],[True]):
+            with self.subTest(ids=ids),self.assertRaises(ValueError):
+                f.provision(self.root,self.manifest,self.fetch,items=ids,index=index)
+        self.assertFalse(self.root.exists())
+        self.assertEqual(self.calls,[])
+
+    def test_index_refresh_requires_complete_matching_git_tree(self):
+        root=dict(truncated=False,tree=[dict(path='source-pngs',type='tree',sha='a'*40)])
+        source=dict(sha='a'*40,truncated=False,tree=[dict(path='Item_24.png',type='blob',mode='100644',sha='b'*40,size=314)])
+        self.assertEqual(inventory.build_index(root,source)['items'],{'24':['b'*40,314]})
+        for mutation in ('truncated','wrong-tree','symlink','duplicate'):
+            changed=copy.deepcopy(source)
+            if mutation=='truncated':changed['truncated']=True
+            elif mutation=='wrong-tree':changed['sha']='c'*40
+            elif mutation=='symlink':changed['tree'][0]['mode']='120000'
+            else:changed['tree'].append(copy.deepcopy(changed['tree'][0]))
+            with self.subTest(mutation=mutation),self.assertRaises(ValueError):
+                inventory.build_index(root,changed)
 
 
 if __name__ == '__main__': unittest.main()

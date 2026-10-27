@@ -73,12 +73,16 @@ class PerformanceTests(unittest.TestCase):
         for target in rows['grouped']['hostiles']:self.assertEqual(target['defense'],12)
         self.assertNotIn('nativeType',base['dummy'])
 
-    def test_pinned_native_geometry_manifest_matches_loader(self):
+    def test_default_geometry_assets_belong_to_complete_pinned_source(self):
         root=Path(__file__).parent
         manifest=json.loads((root/'performance-assets-manifest.json').read_text())
-        loader=(root/'WorkbenchNative.Graphics.cs').read_text()
+        index=json.loads((root/'vanilla-item-assets.json').read_text())
         self.assertEqual(len(manifest['files']),12)
-        for row in manifest['files']:self.assertIn(row['sha256'],loader)
+        self.assertEqual(index['communityCommit'],manifest['commit'])
+        for row in manifest['files']:
+            item_id=Path(row['path']).stem.removeprefix('Item_')
+            self.assertEqual(index['items'][item_id][1],row['bytes'])
+        self.assertIn('24',index['items'])
 
     def test_native_identity_requires_both_name_and_id(self):
         c={'vanillaItem':'BladeofGrass','recordedId':190}

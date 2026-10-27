@@ -74,6 +74,24 @@ unconditional installation checks or proof of all-item parity.
 
 ## Evidence reviewed during development
 
+Native geometry/ribbon extension (2026-10-27): Wooden Sword and a second native
+item outside the previous control set loaded exact pinned PNGs and recorded real
+hits. Missing, wrong-length, byte-tampered and symlinked item PNGs were refused by
+the native loader. The complete source index contains 5414 item PNGs; source facts
+are embedded in the checked executable and included in build freshness checks.
+The unchanged archived contact weapon previously refused for `historyRibbon`
+recorded one item-body and one projectile hit, 1064 original native ribbon segments
+and 90 native PNGs in the explicit procedural VFX-only scene. The original native
+SpriteBatch submissions were observed and a recorded frame visually inspected.
+No authored image was substituted. Reusable history controls cover full native
+PreDraw, stationary samples, capture-disabled GPU execution, repeat gameplay/pixels,
+and missing draw-context/resources. Authored/player artwork remains unrendered in
+procedural-only mode; full-game parity remains unclaimed.
+The final native executable passed 70 existing native regression checks and all
+27 history-ribbon checks, including the unchanged archived item. The affected
+owner checks passed: C# build, 104 offline workbench tests and 8 executable CI
+workflow tests; the 9 public CLI tests and all shared static gates also passed.
+
 Real-item probe usability verification (2026-10-27): 20 archived IFC items and 8
 vanilla identities were exercised in 55 native process runs. The default primary
 probe admitted 12/20 IFC inputs, but five of those recorded zero shots without

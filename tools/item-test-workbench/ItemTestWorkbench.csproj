@@ -6,6 +6,7 @@
     <InfiniModSourceRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../ModSources/InfiniCrafterLocal'))</InfiniModSourceRoot>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="vanilla-item-assets.json" LogicalName="Workbench.VanillaItemAssets.json" />
     <Content Include="$(InfiniModSourceRoot)/Assets/GeneratedProjectile.png" Link="native-assets/GeneratedProjectile.png" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="$(InfiniModSourceRoot)/Assets/GeneratedItem.png" Link="native-assets/GeneratedItem.png" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="$(InfiniModSourceRoot)/**/*.cs" Exclude="$(InfiniModSourceRoot)/obj/**;$(InfiniModSourceRoot)/bin/**" />
