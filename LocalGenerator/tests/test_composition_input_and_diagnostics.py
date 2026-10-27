@@ -8,6 +8,7 @@ from prompt_packet_helpers import request_dossier
 from repair_test_helpers import offline_builder, provider_roundtrip, repair_with_response
 from test_source_unit_guidance import _serialized_chat_request
 from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author_item_contract import AUTHOR_DESIGN_QUALITY_RULE
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -137,12 +138,9 @@ def test_author_prioritizes_playable_composition_without_turning_advisory_into_a
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
     request, _, _ = author.build_initial_author_request({}, {}, 'purposeful-composition', model_name='offline')
     packet = request_dossier(_serialized_chat_request(monkeypatch, request))
-    guidance = ' '.join(packet['priorityHeader'])
-    assert 'isolated target' in guidance
-    assert 'secondary' in guidance and 'reachable' in guidance
-    assert 'risk' in guidance and 'reward' in guidance
-    assert 'player decisions' in guidance and 'call count' in guidance
-    assert 'always-upgrade' in guidance and 'mandatory twist' in guidance
+    # Verify delivery and priority of the owner rule, not incidental prose wording.
+    assert packet['priorityHeader'][0] == AUTHOR_DESIGN_QUALITY_RULE
+    assert packet['priorityHeader'].count(AUTHOR_DESIGN_QUALITY_RULE) == 1
     assert packet['requiredJsonShape']['optionalAdvisory'] == ['concept', 'realization']
     # No concept/report is needed to execute an intentionally simple composition.
     item = build_capability_witness('move_straight')
