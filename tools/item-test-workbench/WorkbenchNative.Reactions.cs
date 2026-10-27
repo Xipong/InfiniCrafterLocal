@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text.Json.Nodes;
 using InfiniCrafterLocal.Common.Players;
+using InfiniCrafterLocal.Common.Runtime;
 using MonoMod.RuntimeDetour;
 using Terraria;
 using Terraria.DataStructures;
@@ -35,8 +36,28 @@ internal static partial class EngineRuntimeChecks
         WKeys(action,"reaction stimulus","kind","tick","damage");
         if(WInt(action,"damage",0) is < 1 or > 10000)throw new ArgumentException("reaction stimulus damage must be 1..10000");
     }
-    // Registers the actual GlobalNPC in native tML dispatch. This scene owns an
-    // isolated loader registry; no manual OnKill call or synthesized death event.
+    // The isolated loader must own both globals for the entire scene, before
+    // NPC defaults are created. Runtime effects use real tML hook dispatch.
+    private sealed class WNpcGlobals : IDisposable
+    {
+        public WNpcGlobals()
+        {
+            if(GlobalList<GlobalNPC>.Globals.Length!=0)throw new NotSupportedException("Workbench requires an isolated empty GlobalNPC registry");
+            Register(new RuntimeHitNpcGeneration());
+            Register(new GeneratedEquipmentKillGlobalNPC());
+            typeof(GlobalList<GlobalNPC>).GetMethod("FinishLoading",PersistenceStatic)!.Invoke(null,new object[]{NPCLoader.NPCCount});
+            typeof(NPCLoader).GetMethod("FinishSetup",PersistenceStatic)!.Invoke(null,null);
+        }
+        private static void Register<T>(T global) where T : GlobalNPC
+        {
+            var indices=((short,short))typeof(GlobalList<GlobalNPC>).GetMethod("Register",PersistenceStatic)!.Invoke(null,new object[]{global})!;
+            typeof(GlobalType<NPC,GlobalNPC>).GetProperty("StaticIndex")!.SetValue(global,indices.Item1);
+            typeof(GlobalType<NPC,GlobalNPC>).GetProperty("PerEntityIndex")!.SetValue(global,indices.Item2);
+            typeof(ContentInstance<T>).GetProperty("Instance")!.SetValue(null,global);
+        }
+        public void Dispose(){typeof(GlobalList<GlobalNPC>).GetMethod("Reset",PersistenceStatic)!.Invoke(null,null);typeof(NPCLoader).GetMethod("UpdateHookLists",PersistenceStatic)!.Invoke(null,null);}
+    }
+    // Native dispatch executes OnKill; this hook observes it without replacing it.
     private sealed class WReactionScene : IDisposable
     {
         private readonly Hook observer;
@@ -51,14 +72,6 @@ internal static partial class EngineRuntimeChecks
             Terraria.Main.ItemDropSolver=new Terraria.GameContent.ItemDropRules.ItemDropResolver(Terraria.Main.ItemDropsDB);
             ContentSamples.NpcBestiaryCreditIdsByNpcNetIds[NPCID.Zombie]=NPCID.Search.GetName(NPCID.Zombie);
             Terraria.Main.gore=Enumerable.Range(0,Terraria.Main.maxGore+1).Select(_=>new Gore()).ToArray();
-            if(GlobalList<GlobalNPC>.Globals.Length!=0)throw new NotSupportedException("Reaction scene requires an isolated empty GlobalNPC registry");
-            var global=new GeneratedEquipmentKillGlobalNPC();
-            var indices=((short,short))typeof(GlobalList<GlobalNPC>).GetMethod("Register",PersistenceStatic)!.Invoke(null,new object[]{global})!;
-            typeof(GlobalType<NPC,GlobalNPC>).GetProperty("StaticIndex")!.SetValue(global,indices.Item1);
-            typeof(GlobalType<NPC,GlobalNPC>).GetProperty("PerEntityIndex")!.SetValue(global,indices.Item2);
-            typeof(ContentInstance<GeneratedEquipmentKillGlobalNPC>).GetProperty("Instance")!.SetValue(null,global);
-            typeof(GlobalList<GlobalNPC>).GetMethod("FinishLoading",PersistenceStatic)!.Invoke(null,new object[]{NPCLoader.NPCCount});
-            typeof(NPCLoader).GetMethod("FinishSetup",PersistenceStatic)!.Invoke(null,null);
             observer=new Hook(typeof(GeneratedEquipmentKillGlobalNPC).GetMethod(nameof(GeneratedEquipmentKillGlobalNPC.OnKill))!,
                 (Action<Action<GeneratedEquipmentKillGlobalNPC,NPC>,GeneratedEquipmentKillGlobalNPC,NPC>)((orig,self,npc)=>{
                     record(new JsonObject{["kind"]="native_equipment_kill_callback",["npcId"]=npc.whoAmI,["npcType"]=npc.type,["life"]=npc.life,["lastInteraction"]=npc.lastInteraction,["entrypoint"]="NPC death -> NPCLoader.OnKill -> GeneratedEquipmentKillGlobalNPC.OnKill"});
@@ -85,6 +98,6 @@ internal static partial class EngineRuntimeChecks
             owner.StrikeNPCDirect(victim,new NPC.HitInfo{Damage=damage,Knockback=0,HitDirection=0});
             record(new JsonObject{["kind"]="native_hostile_strike",["npcId"]=slot,["npcType"]=victim.type,["requestedDamage"]=damage,["lifeAfter"]=victim.life,["activeAfter"]=victim.active,["lastInteraction"]=victim.lastInteraction,["entrypoint"]="Player.StrikeNPCDirect -> NPC.StrikeNPC / checkDead",["lootScope"]="Native resolver with explicitly empty controlled-scene table; vanilla drops not certified"});
         }
-        public void Dispose(){observer.Dispose();typeof(GlobalList<GlobalNPC>).GetMethod("Reset",PersistenceStatic)!.Invoke(null,null);typeof(NPCLoader).GetMethod("UpdateHookLists",PersistenceStatic)!.Invoke(null,null);}
+        public void Dispose()=>observer.Dispose();
     }
 }
