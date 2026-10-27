@@ -46,8 +46,10 @@ def test_event_seventeen_is_rejected_early_and_frozen_repair_owns_only_overflow(
     scope = build_runtime_repair_scope(doc, report["errors"])
     assert scope["deletable"]["callIds"] == ["extra_event_16"]
     assert "witness_call" not in scope["mutable"]["callIds"]
-    patch, audit = filter_repair_patch_scope(doc, {"callIdsDelete": ["extra_event_16", "witness_call"]}, scope)
-    assert audit["ok"] and audit["ignoredChanges"]
+    _, blocked = filter_repair_patch_scope(doc, {"callIdsDelete": ["extra_event_16", "witness_call"]}, scope)
+    assert not blocked["ok"], "removing one of the accepted first 16 calls must be refused"
+    patch, audit = filter_repair_patch_scope(doc, {"callIdsDelete": ["extra_event_16"]}, scope)
+    assert audit["ok"], audit
     assert patch["callIdsDelete"] == ["extra_event_16"]
     fixed = apply_repair_patch(doc, patch)
     assert validate_runtime_program(fixed)["ok"]
