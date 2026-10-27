@@ -384,7 +384,7 @@ public sealed partial class InfiniCraftPlayer
             return;
         a.stack = 1;
         b.stack = 1;
-        pending.Add(new TagCompound
+        var saved = new TagCompound
         {
             ["cancelRequested"] = _remoteCraftCancelRequested[laneIndex],
             ["laneIndex"] = laneIndex,
@@ -393,7 +393,10 @@ public sealed partial class InfiniCraftPlayer
             ["parentB"] = request.ParentB ?? "",
             ["itemA"] = ItemIO.Save(a),
             ["itemB"] = ItemIO.Save(b),
-        });
+        };
+        if (request.ClientTooltipA is not null) saved["clientTooltipA"] = ClientTooltipWire.Save(request.ClientTooltipA);
+        if (request.ClientTooltipB is not null) saved["clientTooltipB"] = ClientTooltipWire.Save(request.ClientTooltipB);
+        pending.Add(saved);
     }
 
     private void RestorePendingRemoteCrafts(IList<TagCompound> pending)
@@ -422,9 +425,19 @@ public sealed partial class InfiniCraftPlayer
                 continue;
             a.stack = 1;
             b.stack = 1;
+            ClientTooltipObservation? tooltipA = null, tooltipB = null;
+            bool invalidTooltip = false;
+            try
+            {
+                if (row.ContainsKey("clientTooltipA")) tooltipA = ClientTooltipWire.Restore(row.GetByteArray("clientTooltipA"));
+                if (row.ContainsKey("clientTooltipB")) tooltipB = ClientTooltipWire.Restore(row.GetByteArray("clientTooltipB"));
+            }
+            catch { invalidTooltip = true; }
             var request = new GeneratorClient.PreparedGenerationRequest
             {
                 PayloadJson = "{}",
+                ClientTooltipA = tooltipA,
+                ClientTooltipB = tooltipB,
                 ParentA = row.GetString("parentA") ?? "",
                 ParentB = row.GetString("parentB") ?? "",
                 RefundA = a.Clone(),
@@ -448,7 +461,10 @@ public sealed partial class InfiniCraftPlayer
             {
                 RestoreMultiDevPendingRemoteCraft(laneIndex, requestId, request);
             }
-            _remoteCraftCancelRequested[laneIndex] = row.ContainsKey("cancelRequested") && row.GetBool("cancelRequested");
+            // Never re-create a changed observation for an existing request.
+            // A damaged saved observation resolves through the server cancellation
+            // journal, preserving ownership of its escrowed ingredients.
+            _remoteCraftCancelRequested[laneIndex] = invalidTooltip || row.ContainsKey("cancelRequested") && row.GetBool("cancelRequested");
             _stationEscrowUsesRemoteAuthority = true;
         }
     }
@@ -584,6 +600,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void PostUpdate()
     {
+        Common.VFX.InfiniItemVfxRuntime.RefreshItemPresentationWitnesses(Player);
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickCraftAudioGuard();

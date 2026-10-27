@@ -371,6 +371,14 @@ public sealed partial class GeneratedProjectile
             if(payload.Origin!=1||whoAmI!=payload.Owner
                 ||Main.player[payload.Owner] is not {active:true})return;
             var source=FindVfxPeerSource(payload,true);
+            // The server may retire the exact projectile before the owner's
+            // ordered hit packet arrives. The gameplay hit bridge already owns
+            // a 60-tick retirement fence, invalidated by slot/instance reuse.
+            // Only hit/crit may use it; no stale parent executes gameplay here.
+            if (source is null && payload.EventName is (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                && RuntimeHitPullBridge.FindProjectile(payload.Owner, payload.Identity) is { active: false, ModProjectile: GeneratedProjectile retired }
+                && retired._vfxSourceToken == payload.SourceToken && retired.Matches(payload.ItemId, payload.EntityId))
+                source = retired;
             if(source is null||source._data is null||source._entity is null||!GeneratedItemRegistryService.IsCurrentWorldData(source._data)
                 ||!IsOwnerProducedVfxEvent(source._entity,payload.EventName)
                 ||!HasExactVfxSlot(source._data,payload.EntityId,payload.EventName)

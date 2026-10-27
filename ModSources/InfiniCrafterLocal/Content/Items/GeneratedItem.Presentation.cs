@@ -10,13 +10,20 @@ public partial class GeneratedItem
     // Retained v6 capability is independent of asynchronously hydrated slots.
     private bool _hasMaterialTransportIdentity;
     private bool HasMaterialTransportIdentity=>HasMaterialVfx||_hasMaterialTransportIdentity
-        ||Array.Exists(Data.VfxManifest.Slots,s=>s.PlacementBindingId is null
-            &&s.EntityId==Data.RuntimeProgram.ItemEntityId&&s.Event!=RuntimeEventKind.Periodic);
+        ||HasItemEventVfx;
+    internal bool HasItemEventVfx=>Array.Exists(Data.VfxManifest.Slots,s=>s.PlacementBindingId is null
+        &&s.EntityId==Data.RuntimeProgram.ItemEntityId&&s.Event!=RuntimeEventKind.Periodic);
     private object _itemPresentationGeneration=new();
     internal object PresentationGeneration=>_itemPresentationGeneration;
     internal long PresentationToken {
         get {
-            if(_itemPresentationToken==0){_nextItemPresentationToken++;if(_nextItemPresentationToken==0)_nextItemPresentationToken++;_itemPresentationToken=_nextItemPresentationToken;}
+            if(_itemPresentationToken==0){
+                _nextItemPresentationToken++;if(_nextItemPresentationToken==0)_nextItemPresentationToken++;_itemPresentationToken=_nextItemPresentationToken;
+                // A freshly minted token changes only ItemIO metadata. Mark the
+                // native item dirty so tML's IsNetStateDifferent sends the v8
+                // identity even when type, stack and prefix are unchanged.
+                if(Terraria.Main.netMode==Terraria.ID.NetmodeID.MultiplayerClient) Item.NetStateChanged();
+            }
             return _itemPresentationToken;
         }
     }

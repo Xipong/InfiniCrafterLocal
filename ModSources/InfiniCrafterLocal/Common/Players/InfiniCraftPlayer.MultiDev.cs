@@ -1,4 +1,5 @@
 #nullable enable
+using InfiniCrafterLocal.Common.Config;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
 using Microsoft.Xna.Framework;
@@ -212,6 +213,7 @@ public sealed partial class InfiniCraftPlayer
             };
             request.RefundA.stack = 1;
             request.RefundB.stack = 1;
+            CaptureClientParentTooltips(request, a, b);
             var job = new MultiDevCraftJob
             {
                 LaneIndex = laneIndex,
@@ -223,7 +225,7 @@ public sealed partial class InfiniCraftPlayer
             SetCraftLaneOutcome(laneIndex, CraftLaneOutcomeKind.None, "");
             _remoteCraftCancelRequested[laneIndex] = false;
             _multiDevJobs[laneIndex - 1] = job;
-            if (!SendServerCraftRequest(requestId, laneIndex, a, b))
+            if (!SendServerCraftRequest(requestId, laneIndex, a, b, request.ClientTooltipA, request.ClientTooltipB))
             {
                 _multiDevJobs[laneIndex - 1] = null;
                 // The server already owns the real station escrow in multiplayer.
@@ -301,7 +303,7 @@ public sealed partial class InfiniCraftPlayer
                 if (job.WaitTicks % StationEscrowRetryIntervalTicks == 0)
                 {
                     if (_remoteCraftCancelRequested[job.LaneIndex]) SendExtraCraftCancel(job, "client deadline/cancel");
-                    else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+                    else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB, job.Request.ClientTooltipA, job.Request.ClientTooltipB);
                 }
                 if (job.WaitTicks == RemoteServerCraftTimeoutTicks)
                     CombatText.NewText(Player.Hitbox, Color.Orange, ForgePresentationText("LaneHost", job.LaneIndex + 1));
@@ -497,7 +499,17 @@ public sealed partial class InfiniCraftPlayer
         catch { }
     }
 
-    private bool SendServerCraftRequest(string requestId, int laneIndex, Item a, Item b)
+    private void CaptureClientParentTooltips(GeneratorClient.PreparedGenerationRequest request, Item a, Item b)
+    {
+        // The synced server policy explicitly opts in to client reports. Capture
+        // once; retries and restored pending crafts replay the same observation.
+        if (!InfiniParentTooltipServerConfig.Enabled) return;
+        request.ClientTooltipA = ClientTooltipWire.Freeze(GeneratorClient.CaptureClientTooltip(a, Player));
+        request.ClientTooltipB = ClientTooltipWire.Freeze(GeneratorClient.CaptureClientTooltip(b, Player));
+    }
+
+    private bool SendServerCraftRequest(string requestId, int laneIndex, Item a, Item b,
+        ClientTooltipObservation? tooltipA, ClientTooltipObservation? tooltipB)
     {
         if (Main.netMode != NetmodeID.MultiplayerClient || !EnsureRemoteStationAuthority()) return false;
         try
@@ -510,6 +522,8 @@ public sealed partial class InfiniCraftPlayer
             packet.Write((byte)Math.Clamp(laneIndex, 0, 2));
             WriteCraftItemRef(packet, a);
             WriteCraftItemRef(packet, b);
+            ClientTooltipWire.Write(packet, tooltipA);
+            ClientTooltipWire.Write(packet, tooltipB);
             packet.Send();
             return true;
         }

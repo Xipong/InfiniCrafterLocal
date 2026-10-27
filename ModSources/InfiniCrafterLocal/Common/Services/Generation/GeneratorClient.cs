@@ -228,6 +228,8 @@ public sealed partial class GeneratorClient
         public string ParentB { get; set; } = "Unknown";
         public Item RefundA { get; set; } = new();
         public Item RefundB { get; set; } = new();
+        internal ClientTooltipObservation? ClientTooltipA { get; set; }
+        internal ClientTooltipObservation? ClientTooltipB { get; set; }
         // Request-local failure state: concurrent multi-dev lanes must never read
         // another lane's shared LastRecipeFailure snapshot.
         public bool FailureIsFatal { get; set; }
@@ -237,6 +239,10 @@ public sealed partial class GeneratorClient
     }
 
     public PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId = "", bool multiDevCraft = false)
+        => Prepare(a, b, player, llmProfileId, multiDevCraft, null, null);
+
+    internal PreparedGenerationRequest Prepare(Item a, Item b, Player player, string llmProfileId, bool multiDevCraft,
+        ClientTooltipObservation? clientTooltipA, ClientTooltipObservation? clientTooltipB)
     {
         var refundA = a.Clone();
         refundA.stack = 1;
@@ -248,8 +254,8 @@ public sealed partial class GeneratorClient
 
         string payload = JsonSerializer.Serialize(new
         {
-            itemA = ToWireItem(a, player),
-            itemB = ToWireItem(b, player),
+            itemA = ToWireItem(a, player, clientTooltipA),
+            itemB = ToWireItem(b, player, clientTooltipB),
             player = player.name,
             worldId = Main.worldID,
             worldName = Main.worldName,

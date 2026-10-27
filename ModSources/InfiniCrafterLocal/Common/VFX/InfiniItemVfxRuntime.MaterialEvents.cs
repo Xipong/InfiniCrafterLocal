@@ -24,6 +24,10 @@ public static partial class InfiniItemVfxRuntime
     private sealed record MaterialItemEvent(int Owner,long Token,ulong Occurrence,string ItemId,string EntityId,string Event,Vector2 Point,InfiniItemVfxSnapshot Snapshot);
     private const byte MaterialItemPacketVersion=5;
     private static readonly VfxOrderedPeerStream MaterialItemEventStream=new();
+    private const ulong PendingItemEventLifetimeTicks = 60;
+    private const int MaxPendingItemEventsPerOwner = 64;
+    private sealed record PendingItemEvent(MaterialItemEvent Event, Player Player, object? Socket, ulong Tick);
+    private static readonly List<PendingItemEvent>?[] PendingItemEvents = new List<PendingItemEvent>?[Main.maxPlayers];
     private static bool AcceptMaterialItemEvent(MaterialItemEvent p)
         =>Main.netMode==NetmodeID.Server?MaterialItemEventStream.AcceptOwner(p.Owner,p.Occurrence):MaterialItemEventStream.AcceptRelay(p.Occurrence);
     private static void WriteMaterialItemEvent(BinaryWriter writer,MaterialItemEvent p)
@@ -70,6 +74,7 @@ public static partial class InfiniItemVfxRuntime
     private static void SendItemEvent(Player player,GeneratedItemData data,string entityId,string ev,Vector2 point)
     {
         if(EventSourceItem(player,data.Id,ev) is not GeneratedItem gi)return;
+        ObserveItemPresentationSlot(player, gi.Item, ev is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill);
         var payload=new MaterialItemEvent(player.whoAmI,gi.PresentationToken,MaterialItemEventStream.NewOwnerOccurrence(),data.Id,entityId,ev,point,InfiniItemVfxSnapshot.Capture(player));
         if(!payload.Snapshot.Valid||InfiniCrafterLocalMod.Instance is null)return;
         // Reactive equipment has its own functional/modded-slot registration;
@@ -83,20 +88,68 @@ public static partial class InfiniItemVfxRuntime
         foreach(var slot in data.VfxManifest.Slots)if(slot.PlacementBindingId is null&&slot.EntityId==payload.EntityId&&slot.Event==payload.Event&&InfiniDetachedVfxSystem.HasSnapshotVfx(slot))
             InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,payload.EntityId,slot,$"item:{payload.Owner}:{data.Id}:{payload.EntityId}",payload.Snapshot.Frame(slot.Anchor,payload.Point),binding,itemBudget:true,allowance:allowance);
     }
+    private static bool HasCurrentItemToken(Player player, MaterialItemEvent p)
+        => EventSourceItem(player,p.ItemId,p.Event) is GeneratedItem gi && gi.PresentationToken == p.Token;
+    private static string ItemEventChannel(MaterialItemEvent p)
+        => p.Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill ? "equipment:"+p.ItemId : "held";
+    // A real ItemIO synchronization can arrive after the first VFX packet. Keep
+    // bounded claims in transport order until the server's existing item token
+    // matches. Never overwrite the authoritative item or accept a client token
+    // as proof by itself.
+    private static void DrainPendingItemEvents(int? owner = null)
+    {
+        if (Main.netMode != NetmodeID.Server) return;
+        int first = owner ?? 0, last = owner.HasValue ? owner.Value + 1 : PendingItemEvents.Length;
+        for (int ownerIndex=first; ownerIndex<last; ownerIndex++)
+        {
+            var queue=PendingItemEvents[ownerIndex]; if(queue is null)continue;
+            var blocked = new HashSet<string>(StringComparer.Ordinal);
+            for (int i=0; i<queue.Count;)
+            {
+                var pending=queue[i]; var p=pending.Event; var player=Main.player[p.Owner];
+                object? socket=Netplay.Clients[p.Owner]?.Socket; ulong now=Main.GameUpdateCount;
+                if (player is not { active: true } || !ReferenceEquals(player,pending.Player)
+                    || !ReferenceEquals(socket,pending.Socket) || now<pending.Tick
+                    || now-pending.Tick>PendingItemEventLifetimeTicks)
+                { queue.RemoveAt(i); continue; }
+                string channel=ItemEventChannel(p);
+                if (blocked.Contains(channel)) { i++; continue; }
+                if (EventSourceItem(player,p.ItemId,p.Event) is not GeneratedItem gi || gi.PresentationToken!=p.Token)
+                { blocked.Add(channel); i++; continue; }
+                queue.RemoveAt(i);
+                if (!HasExactSlot(gi.Data,p.EntityId,p.Event)) continue;
+                var entity=gi.Data.RuntimeProgram.TryGetEntity(p.EntityId);
+                if (entity is null || !GeneratedItemRegistryService.IsCurrentWorldData(gi.Data)) continue;
+                try { RuntimeEventKind.ValidateProducer(entity,p.Event,gi.Data.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.ContactDamage),
+                    gi.Data.RuntimeProgram.Bindings.Any(b=>b.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse&&b.UsePolicy.Action.Kind!=RuntimeBindingAction.PlaceItem),
+                    gi.Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped) is not null); } catch { continue; }
+                var packet=InfiniCrafterLocalMod.Instance?.GetPacket(); if (packet is null) continue;
+                packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);
+                WriteMaterialItemEvent(packet,p with { Occurrence=MaterialItemEventStream.NewRelayOccurrence() });
+                packet.Send(-1,p.Owner);
+            }
+            if(queue.Count==0)PendingItemEvents[ownerIndex]=null;
+        }
+    }
+    internal static void UpdatePendingItemEvents() => DrainPendingItemEvents();
     private static void HandleMaterialItemEvent(BinaryReader reader,int sender)
     {
         MaterialItemEvent p;try{p=ReadMaterialItemEvent(reader);}catch{return;}
         var player=Main.player[p.Owner];
         if(Main.netMode==NetmodeID.Server) {
-            if(sender!=p.Owner||player is not{active:true}||EventSourceItem(player,p.ItemId,p.Event) is not GeneratedItem gi
-                ||gi.PresentationToken!=p.Token||!HasExactSlot(gi.Data,p.EntityId,p.Event))return;
-            var entity=gi.Data.RuntimeProgram.TryGetEntity(p.EntityId);if(entity is null||!GeneratedItemRegistryService.IsCurrentWorldData(gi.Data))return;
-            try{RuntimeEventKind.ValidateProducer(entity,p.Event,gi.Data.RuntimeProgram.Bindings.Any(b=>b.UsePolicy.ContactDamage),
-                gi.Data.RuntimeProgram.Bindings.Any(b=>b.Input is RuntimeInputKind.PrimaryUse or RuntimeInputKind.AlternateUse&&b.UsePolicy.Action.Kind!=RuntimeBindingAction.PlaceItem),
-                gi.Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped) is not null);}catch{return;}
-            if(!AcceptMaterialItemEvent(p)||!AdmitRemoteEvent(p.Owner))return;
-            var packet=InfiniCrafterLocalMod.Instance?.GetPacket();if(packet is null)return;
-            packet.Write(Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);WriteMaterialItemEvent(packet,p with { Occurrence=MaterialItemEventStream.NewRelayOccurrence() });packet.Send(-1,p.Owner);return;
+            if(sender!=p.Owner||player is not{active:true})return;
+            DrainPendingItemEvents(p.Owner);
+            var queue=PendingItemEvents[p.Owner]??=new();
+            if (!AcceptMaterialItemEvent(p) || !AdmitRemoteEvent(p.Owner)) return;
+            // An already authoritative newer source supersedes mismatched older
+            // claims; do not stall its events or revive those stale snapshots if
+            // an old item is later selected again. Matching queued occurrences
+            // have already been drained in order above.
+            if (HasCurrentItemToken(player,p))
+                queue.RemoveAll(x=>ItemEventChannel(x.Event)==ItemEventChannel(p) && !HasCurrentItemToken(player,x.Event));
+            if(queue.Count>=MaxPendingItemEventsPerOwner)return;
+            queue.Add(new(p,player,Netplay.Clients[p.Owner]?.Socket,Main.GameUpdateCount));
+            DrainPendingItemEvents(p.Owner); return;
         }
         if(p.Owner==Main.myPlayer)return;
         GeneratedItemData? data=player is not null&&EventSourceItem(player,p.ItemId,p.Event) is GeneratedItem held?held.Data:null;

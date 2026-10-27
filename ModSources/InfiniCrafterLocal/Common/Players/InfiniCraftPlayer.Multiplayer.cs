@@ -24,8 +24,8 @@ namespace InfiniCrafterLocal.Common.Players;
 // Never add a client-authored GeneratedItemData commit path here.
 public sealed partial class InfiniCraftPlayer
 {
-    // Version 2 adds the stable owner token to cancellation replay after reconnect.
-    private const int RemoteStationProtocolVersion = 2;
+    // Version 3 adds bounded client tooltip observations to craft requests.
+    private const int RemoteStationProtocolVersion = 3;
 
     private void WriteRemoteStationScope(System.IO.BinaryWriter writer)
     {
@@ -74,6 +74,7 @@ public sealed partial class InfiniCraftPlayer
             RefundA = refundA,
             RefundB = refundB
         };
+        CaptureClientParentTooltips(_request, a, b);
         _label = $"{parentA} + {parentB}";
         _ticksLeft = CraftDurationTicks;
         _elapsedTicks = 0;
@@ -89,7 +90,7 @@ public sealed partial class InfiniCraftPlayer
         _serverCraftWaitTicks = 0;
         _task = null;
 
-        if (!SendServerCraftRequest(requestId, 0, a, b))
+        if (!SendServerCraftRequest(requestId, 0, a, b, _request.ClientTooltipA, _request.ClientTooltipB))
         {
             ClearCraft();
             return false;
@@ -133,14 +134,14 @@ public sealed partial class InfiniCraftPlayer
         if (_awaitingServerCommit && _request is not null && HasCraftRequestId(_serverRequestId))
         {
             if (_remoteCraftCancelRequested[0]) SendRemoteServerCraftCancel("client cancel");
-            else SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB);
+            else SendServerCraftRequest(_serverRequestId, 0, _request.RefundA, _request.RefundB, _request.ClientTooltipA, _request.ClientTooltipB);
         }
         foreach (MultiDevCraftJob? job in _multiDevJobs)
         {
             if (job is not null && job.AwaitingServerCommit && HasCraftRequestId(job.RequestId))
             {
                 if (_remoteCraftCancelRequested[job.LaneIndex]) SendExtraCraftCancel(job, "client cancel");
-                else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB);
+                else SendServerCraftRequest(job.RequestId, job.LaneIndex, job.Request.RefundA, job.Request.RefundB, job.Request.ClientTooltipA, job.Request.ClientTooltipB);
             }
         }
     }
@@ -862,6 +863,18 @@ public sealed partial class InfiniCraftPlayer
         int laneIndex = Math.Clamp((int)reader.ReadByte(), 0, 2);
         CraftItemRef aRef = ReadCraftItemRef(reader);
         CraftItemRef bRef = ReadCraftItemRef(reader);
+        ClientTooltipObservation? clientTooltipA;
+        ClientTooltipObservation? clientTooltipB;
+        try
+        {
+            clientTooltipA = ClientTooltipWire.Read(reader);
+            clientTooltipB = ClientTooltipWire.Read(reader);
+        }
+        catch (Exception ex) when (ex is System.IO.InvalidDataException or System.IO.EndOfStreamException or System.Text.DecoderFallbackException)
+        {
+            SendCraftCommitResult(whoAmI, requestId, false, "", "invalid client tooltip observation");
+            return;
+        }
         LogServerCraftTransaction(whoAmI, requestId, "received", $"lane={laneIndex} aType={aRef.Type} bType={bRef.Type}");
         if (string.IsNullOrWhiteSpace(requestId))
         {
@@ -945,7 +958,9 @@ public sealed partial class InfiniCraftPlayer
                 itemB,
                 player,
                 modPlayer.MultiDevCraftEnabled ? $"llm_{laneIndex + 1}" : "",
-                multiDevCraft: modPlayer.MultiDevCraftEnabled);
+                modPlayer.MultiDevCraftEnabled,
+                InfiniParentTooltipServerConfig.Enabled ? clientTooltipA : null,
+                InfiniParentTooltipServerConfig.Enabled ? clientTooltipB : null);
         }
         catch (Exception ex)
         {
