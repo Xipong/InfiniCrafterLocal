@@ -146,7 +146,9 @@ def run_suite(manifest, output, no_build=False):
             row["exitCode"] = proc.returncode
             data = report(output / name)
             row.update(nativeStatus=data["nativeStatus"], integrity=data["integrity"],
-                       failedAssertions=data["summary"]["failedAssertions"], error=data["summary"]["error"])
+                       failedAssertions=data["summary"]["failedAssertions"], error=data["summary"]["error"],
+                       observations={key: data["summary"][key] for key in
+                                     ("eventCounts", "nativeHits", "resources", "activeProjectilesAtEnd")})
             row["expectationMatched"] = matches_expectation(data, case["expect"], proc.returncode)
         except (OSError, ValueError, RuntimeError, KeyError, TypeError, subprocess.SubprocessError) as exc:
             row["runnerError"] = str(exc)

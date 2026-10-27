@@ -107,7 +107,13 @@ cannot satisfy it. Use separate commands or an explicit suite for differing expe
 
 Without `--out`, execution/preparation chooses a fresh timestamped directory under
 `artifacts/workbench`. It contains `suite.json`, `probe-plan.json`, `inputs/` and,
-after execution, `runs/summary.json` plus each case's native trace and agent report.
+after execution, `probe-result.json`, `runs/summary.json` and each case's native trace
+and agent report. The probe result includes original item paths and authored display
+names, so a batch of files all named `item.json` remains distinguishable. Case
+`observations` include native spawn/use/ammo event counts, separate projectile and
+item-body hit/damage totals and resource endpoints. Zero recorded shots stay zero
+even when the selected finite-state assertion passes; supply ammo and assert the
+behavior you actually want to check.
 The emitted manifest uses relative paths and survives moving the prepared directory.
 Run all cases with one build; failures do not stop later cases. `--no-build` retains
 the existing stale-build refusal. `--prepare` means **native notRun**, while `--plan`

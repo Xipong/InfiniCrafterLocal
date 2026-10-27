@@ -257,6 +257,10 @@ class SuiteTests(unittest.TestCase):
             self.assertEqual(result["completedCases"], 3)
             self.assertEqual([r["expectationMatched"] for r in result["cases"]], [False, True, True])
             self.assertEqual(result["cases"][1]["nativeStatus"], "failed")
+            observed = result["cases"][2]["observations"]
+            self.assertEqual(observed["eventCounts"], {})
+            self.assertEqual(observed["nativeHits"]["hit"]["count"], 0)
+            self.assertEqual(observed["nativeHits"]["item_hit"]["count"], 0)
             self.assertTrue((root / "out/summary.json").is_file())
 
 

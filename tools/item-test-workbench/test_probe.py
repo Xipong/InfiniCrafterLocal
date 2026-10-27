@@ -73,7 +73,7 @@ class ProbeTests(unittest.TestCase):
             for folder in ("one", "two"):
                 item = root / folder / "предмет.json"
                 item.parent.mkdir()
-                item.write_bytes(b' { "syntheticTestOnly" : true }\n')
+                item.write_bytes(json.dumps({"syntheticTestOnly": True, "name": "Item from " + folder}).encode() + b"\n")
                 items.append(item)
             args = arguments("--item", *items, "--input", "primary", "alt", "--prepare", "--out", root / "original")
             with patch.object(w, "native_executable", side_effect=AssertionError("must not execute")), \
@@ -94,6 +94,9 @@ class ProbeTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 probe.prepare_probe(probe.plan_probe(arguments("--vanilla-item", "284")), root / "moved")
             self.assertEqual(before, (root / "moved/suite.json").read_bytes())
+            probe_plan = json.loads((root / "moved/probe-plan.json").read_text())
+            self.assertEqual([c["displayName"] for c in probe_plan["cases"]],
+                             ["Item from one", "Item from one", "Item from two", "Item from two"])
 
     def test_invalid_bounds_and_ambiguous_options_fail_before_outputs(self):
         invalid = [(), ("--ticks", "0"), ("--ticks", "14401"), ("--hold", "0"), ("--hold", "180"),
@@ -124,7 +127,7 @@ class ProbeTests(unittest.TestCase):
                              "--expect", '{"status":"failed","failedAssertions":["dummy_damaged"]}',
                              "--out", Path(directory) / "out")
             with patch.object(w, "doctor", return_value={"ready": True}), \
-                 patch.object(probe, "run_suite", return_value={"passed": False, "cases": [{"expectationMatched": False}]}) as run:
+                 patch.object(probe, "run_suite", return_value={"passed": False, "cases": [{"name": "001-item-primary", "expectationMatched": False}]}) as run:
                 data = probe.execute_probe(args)
             self.assertFalse(data["passed"])
             self.assertEqual(run.call_count, 1)
@@ -134,6 +137,9 @@ class ProbeTests(unittest.TestCase):
             plan = campaign.plan_suite(manifest)
             self.assertEqual(plan["cases"][0]["itemBoundary"], "local_cache")
             self.assertEqual(plan["cases"][0]["expect"]["failedAssertions"], ["dummy_damaged"])
+            self.assertEqual(data["cases"][0]["item"], str(item))
+            self.assertEqual(data["cases"][0]["displayName"], "item.json")
+            self.assertEqual(json.loads((args.out / "probe-result.json").read_text()), data)
 
     def test_changed_source_and_missing_dependencies_do_not_leave_partial_preparation(self):
         with tempfile.TemporaryDirectory() as directory:

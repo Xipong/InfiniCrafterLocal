@@ -119,15 +119,18 @@ def plan_probe(args):
     sources = []
     for item in args.item:
         path = item.expanduser().resolve()
-        if not isinstance(w.read_json(path), dict):
+        definition = w.read_json(path)
+        if not isinstance(definition, dict):
             raise ValueError("Item JSON must be an object: " + str(path))
-        sources.append({"item": str(path), "itemSha256": w.digest(path), "label": path.stem})
+        display = definition.get("name")
+        sources.append({"item": str(path), "itemSha256": w.digest(path), "label": path.stem,
+                        "displayName": display if isinstance(display, str) and display.strip() else path.name})
     for name in args.vanilla_item:
         if not name.strip() or (name.lstrip("-").isdigit() and int(name) <= 0):
             raise ValueError("Vanilla item must be a native ItemID name or positive ID")
         if args.item_boundary != "fresh":
             raise ValueError("Vanilla items cannot use the local_cache boundary")
-        sources.append({"vanillaItem": name, "label": name})
+        sources.append({"vanillaItem": name, "label": name, "displayName": name})
     if not sources or len(sources) * len(inputs) > 128:
         raise ValueError("Probe requires items/vanilla items and at most 128 item × input cases")
     scenes = {}
@@ -202,8 +205,16 @@ def execute_probe(args):
     if args.prepare:
         return {**result, "status": "prepared", "nativeStatus": "notRun"}
     data = run_suite(output / "suite.json", output / "runs", args.no_build)
-    return {**result, "status": "completed", "passed": data["passed"],
-            "summary": str(output / "runs/summary.json"), "cases": data["cases"]}
+    by_name = {case["name"]: case for case in plan["cases"]}
+    cases = []
+    for row in data["cases"]:
+        case = by_name[row["name"]]
+        cases.append({**row, "displayName": case["displayName"],
+                      **{key: case[key] for key in ("item", "vanillaItem") if key in case}})
+    result = {**result, "status": "completed", "passed": data["passed"],
+              "summary": str(output / "runs/summary.json"), "cases": cases}
+    write_json(output / "probe-result.json", result)
+    return result
 
 
 def add_parser(subparsers):
