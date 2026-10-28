@@ -11,6 +11,8 @@ import argparse
 import base64
 import hashlib
 import html
+from html.parser import HTMLParser
+import re
 import json
 from pathlib import Path
 import sys
@@ -40,6 +42,118 @@ LABELS = {
     "consumerConstraint": "Ограничение потребителя", "projectionConstraints": "Ограничения преобразования",
     "evidence": "Контекст захвата (не обязательно отправлен модели)",
 }
+
+
+# Reader annotations, not model instructions. Exact source hashes prevent an old
+# explanation from silently attaching to a changed rule. Unknown rules keep only
+# their complete original. This deliberately covers six observed Author rules,
+# rather than building a second, translated capability registry.
+INSTRUCTION_NOTES = {
+    "68965badad7117a9134f770921ab8e6b0ec2d0c645d9b58e1a9165fb8f03a53f": (
+        "Игровая цель и свобода дизайна",
+        "Придумать полезное сочетание двух родителей. Механики, управление, сила и затраты должны работать вместе. "
+        "Простые комбинации, узкая польза, сайдгрейды и бесплатные длительные эффекты допустимы; обязательного твиста нет."),
+    "52e0f0e61654b60c975c42d4024fb12ae9b4db55042dd6d7eb3e1eef7581cdc3": (
+        "Метаданные не создают механику",
+        "Категория, название, теги и описание сами по себе ничего не исполняют. "
+        "Всё поведение предмета модель должна явно записать в runtimeProgram."),
+    "ffca7c3490437a4c8b2ca94f68a7300a3dddac8cd539873ce08de0e82e2208a9": (
+        "Граница возможностей движка",
+        "Разрешены только возможности, перечисленные в переданном каталоге capabilities."),
+    "bff8357e5fdeac71c5ff172f0bf25be782d3181deafe90e99ed76be0d6ce1969": (
+        "Из чего складываются эффекты",
+        "Баффы и дебаффы собираются из явных примитивов: получатель, изменения, активация, длительность и шанс. "
+        "Название знакомого баффа не переносит его скрытое поведение. Неизвестные свойства родителей нельзя выдавать за установленные."),
+    "cfc2a55b82d97c64a97fb8ccc593002ddeeb892d76b38b01a1f455f0954768a1": (
+        "Положение, управление и столкновения независимы",
+        "Привязка к руке, направление, поза, движение, срок жизни и столкновения выбираются отдельно. "
+        "Размер картинки и роль сущности не дописывают эти механики автоматически; отдельные выстрелы и превращения разрешены."),
+    "65703a373ce575ab54dcfc608f175f4fd84cce318f120525b422a443df26ebde": (
+        "Идентификаторы без пересечений",
+        "Все ID должны быть стабильными, в нижнем snake_case и уникальными среди сущностей, связей и вызовов."),
+}
+
+
+class ReadingText(HTMLParser):
+    """Copy all reading content, retaining literal data and source pointers.
+
+    Only inserted layout separators are coalesced; whitespace inside source
+    strings is data and must never be normalized. Closed details are included.
+    """
+    blocks = {"p", "div", "article", "section", "h2", "h3", "h4", "li", "dt", "dd", "summary", "details", "br"}
+
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self.ignored = 0
+        self.link_sources = []
+
+    def boundary(self):
+        if self.parts and self.parts[-1][0] != "layout":
+            self.parts.append(("layout", "\n\n"))
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "button":
+            self.ignored += 1
+        if not self.ignored:
+            if tag in self.blocks:
+                self.boundary()
+            if tag == "a":
+                self.link_sources.append(dict(attrs).get("data-source", ""))
+
+    def handle_endtag(self, tag):
+        if tag == "button":
+            self.ignored -= 1
+        if not self.ignored:
+            if tag == "a" and self.link_sources:
+                source = self.link_sources.pop()
+                if source:
+                    self.parts.append(("data", " [" + source + "]"))
+            if tag in self.blocks:
+                self.boundary()
+
+    def handle_data(self, data):
+        if not self.ignored:
+            self.parts.append(("data", data))
+
+
+def reading_text(markup):
+    reader = ReadingText()
+    reader.feed(markup)
+    if reader.parts and reader.parts[-1][0] == "layout":
+        reader.parts.pop()
+    return "".join(text for _, text in reader.parts) + "\n"
+
+
+def copy_button(markup, caption="Копировать раздел", *, plain=None):
+    encoded = base64.b64encode((reading_text(markup) if plain is None else plain).encode("utf-8")).decode("ascii")
+    return f'<button type="button" class="copy-button" data-copy="{encoded}">{html.escape(caption)}</button>'
+
+
+def instruction_cards(value, path):
+    if not isinstance(value, list):
+        return prose(value)
+    rows = []
+    for index, rule in enumerate(value):
+        number = f"{index + 1}. "
+        rule_path = pointer(path, index)
+        note = INSTRUCTION_NOTES.get(hashlib.sha256(rule.encode()).hexdigest()) if isinstance(rule, str) else None
+        title, explanation = note if note else ("Инструкция из запроса", None)
+        body = '<h4><span class="literal-number">' + number + '</span>' + html.escape(title) + '</h4>'
+        if explanation:
+            body += '<p class="reader-note"><b>Пояснение для аудита, не полный перевод:</b> ' + html.escape(explanation) + '</p>'
+        else:
+            body += '<p class="reader-note">Готового пояснения этой версии нет. Ниже полный исходный текст.</p>'
+        # Split only whitespace after a sentence boundary. Original source bytes
+        # remain downloadable; the source-copy control retains the exact string.
+        chunks = re.split(r"(?<=[.!?])\s+(?=[A-ZА-Я])", rule) if isinstance(rule, str) else [rule]
+        body += '<div class="original-rule"><b>Оригинал, без сокращений</b>'
+        body += ''.join('<p>' + prose(chunk) + '</p>' for chunk in chunks) + '</div>'
+        body += source_link(rule_path, "Исходный пункт " + str(index + 1))
+        source_markup = '<span>' + number + '</span>' + prose(rule)
+        rows.append('<article class="instruction-card">' + body + copy_button(body, "Копировать пункт с пояснением") +
+                    copy_button(source_markup, "Копировать оригинал пункта", plain=number + rule if isinstance(rule, str) else None) + '</article>')
+    return ''.join(rows)
 
 
 def strict_json(text):
@@ -143,7 +257,7 @@ def render_node(key, value, path, depth, markdown, leaves, refs):
 
 
 def source_link(path, caption="Исходные поля"):
-    return f'<a href="#{anchor(path)}">{html.escape(caption)}</a>'
+    return f'<a data-source="{html.escape(path, quote=True)}" href="#{anchor(path)}">{html.escape(caption)}</a>'
 
 
 def prose(value):
@@ -161,8 +275,8 @@ def prose(value):
     if isinstance(value, list):
         if not value:
             return '<span class="empty">Пустой список</span>'
-        return '<ol>' + ''.join('<li>' + prose(child) + '</li>' for child in value) + '</ol>'
-    return html.escape(scalar(value))
+        return '<ol class="literal-list">' + ''.join('<li><span class="literal-number">' + str(index + 1) + '. </span>' + prose(child) + '</li>' for index, child in enumerate(value)) + '</ol>'
+    return '<span class="empty">Пустая строка ("")</span>' if value == "" else html.escape(scalar(value))
 
 
 def compact_words(value):
@@ -170,7 +284,7 @@ def compact_words(value):
         return ', '.join(compact_words(child) for child in value) or 'пустой список'
     if isinstance(value, dict):
         return '; '.join(f'{key}: {compact_words(child)}' for key, child in value.items()) or 'пустой объект'
-    return scalar(value)
+    return 'пустая строка ("")' if value == "" else scalar(value)
 
 
 def documents(value, path=""):
@@ -234,6 +348,7 @@ def capability_cards(catalog, path):
         if not isinstance(card, dict) or not isinstance(card.get("fn"), str):
             continue
         cp = pointer(pointer(path, "capabilities"), index)
+        card_start = len(result)
         result.append(f'<details class="reading-card"><summary>{html.escape(str(card.get("fn", index)))}</summary>'
                       f'<div class="node-body"><div class="value">{prose(card.get("does", "Назначение не описано в does"))}</div>')
         if "targets" in card:
@@ -293,7 +408,9 @@ def capability_cards(catalog, path):
         for key, extra in card.items():
             if key not in {"fn", "does", "targets", "targetsRef", "params", "acceptedEvents", "requires", "constructionMeaning", "exclusiveGroup"}:
                 result.append('<details><summary>' + html.escape(key) + '</summary><div class="value">' + prose(extra) + '</div></details>')
-        result.append(source_link(cp, 'Вся карточка: все условия и исходные поля') + '</div></details>')
+        result.append(source_link(cp, 'Вся карточка: все условия и исходные поля'))
+        result.append(copy_button(''.join(result[card_start:]), 'Копировать всю карточку'))
+        result.append('</div></details>')
     return "".join(result)
 
 
@@ -304,7 +421,7 @@ def reading_layer(value):
     base = "/request" if isinstance(value, dict) and "request" in value else ""
     result = ['<section id="reading"><h2>Прочитать крафт</h2><p>Ниже — детерминированная раскладка известных разделов: '
               'какие исходные вещи переданы, чего требует ответ и какие детали доступны модели. '
-              'Английские формулировки оставлены дословно: пересказ не должен скрыть спорную инструкцию. '
+              'Русские пояснения помечены отдельно и не заменяют оригинал. Все исходные формулировки доступны без сокращений. '
               'Полное дерево ниже содержит также неизвестные поля и все ограничения.</p>']
     found = list(documents(request, base))
     # Show the actual ingredients before reading long instruction/catalog blocks.
@@ -320,7 +437,8 @@ def reading_layer(value):
                 identity = packet.get("name", "Имя не указано") if isinstance(packet, dict) else "Неизвестная форма"
                 result.append(f'<p><b>{html.escape(str(name))}: {html.escape(str(identity))}</b> · ' + source_link(pp, 'Все факты и механики этого родителя') + '</p>')
         if "priorityHeader" in node:
-            result.append('<h3>Как модели велено принимать решения</h3><div class="value">' + prose(node["priorityHeader"]) + '</div>' + source_link(pointer(path, "priorityHeader")))
+            instructions = '<h3>Как модели велено принимать решения</h3>' + instruction_cards(node['priorityHeader'], pointer(path, 'priorityHeader'))
+            result.append('<div class="reading-section">' + copy_button(instructions, 'Копировать все инструкции') + instructions + '</div>')
         shape = node.get("requiredJsonShape")
         if isinstance(shape, dict):
             result.append('<h3>Что требуется вернуть</h3>')
@@ -385,15 +503,17 @@ def build_report(raw: bytes, source_name: str):
     if isinstance(evidence, dict) and isinstance(evidence.get("revision"), str):
         metadata["sourceRevisionDeclaredInEvidence"] = evidence["revision"]
     template = Path(__file__).with_name("prompt_audit_template.html").read_text(encoding="utf-8")
+    reading = reading_layer(value)
+    readable_prose = reading_text(reading)
     substitutions = {
         "TITLE": html.escape(source_name), "REVISION": html.escape(metadata.get("sourceRevisionDeclaredInEvidence", "не указана в исходнике")), "METADATA": html.escape(json.dumps(metadata, ensure_ascii=False, indent=2)),
-        "NAV": "".join(nav), "READING": reading_layer(value), "CONTENT": "".join(sections), "SIZES": size_html,
+        "NAV": "".join(nav), "READING": reading, "CONTENT": "".join(sections), "SIZES": size_html,
         "RAW": base64.b64encode(raw).decode("ascii"),
+        "PROSE": base64.b64encode(readable_prose.encode("utf-8")).decode("ascii"),
         "MARKDOWN": base64.b64encode(("\n".join(markdown) + "\n").encode("utf-8")).decode("ascii"),
     }
     # Single pass: input text containing template tokens must remain literal.
-    import re
-    rendered = re.sub(r"@@(TITLE|REVISION|METADATA|NAV|READING|CONTENT|SIZES|RAW|MARKDOWN)@@", lambda m: substitutions[m[1]], template)
+    rendered = re.sub(r"@@(TITLE|REVISION|METADATA|NAV|READING|CONTENT|SIZES|RAW|MARKDOWN|PROSE)@@", lambda m: substitutions[m[1]], template)
     return rendered, "\n".join(markdown) + "\n", metadata
 
 

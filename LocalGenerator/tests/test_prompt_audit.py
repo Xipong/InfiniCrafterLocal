@@ -200,13 +200,16 @@ function leaf(text,parent){return {textContent:text,parentElement:parent,highlig
  classList:{toggle(_name,value){this.owner.highlight=value;}},scrollIntoView(){this.scrolled=true;}};}
 const a=leaf('Alpha /a',second), b=leaf('Beta alpha /b',first);a.classList.owner=a;b.classList.owner=b;
 const els={search:{value:''},status:{textContent:''},original:{textContent:'77u/eyJ4IjoxfQ0K'},readable:{textContent:'0KLQtdC60YHRgg=='}};
-for(const name of ['search-button','next','expand','collapse','raw-download','text-download'])els[name]={};
+for(const name of ['search-button','next','expand','collapse','raw-download','text-download','copy-reading','prose-download','copy-close','copy-fallback'])els[name]={focus(){this.focused=true;}};
+els['prose-text']={textContent:Buffer.from('1. Текст: 0 мс; false; пустая строка\n2. Ещё').toString('base64')};
+els['copy-value']={value:'',focus(){this.focused=true;},select(){this.selected=true;}};
+const copyButton={dataset:{copy:els['prose-text'].textContent},focus(){this.focused=true;}};
 els.target=second;
 const events={};let blob;
-const context={document:{querySelectorAll:s=>s.startsWith('details')?[first,second]:[a,b],getElementById:id=>els[id],
+const context={document:{querySelectorAll:s=>s.startsWith('details')?[first,second]:s==='[data-copy]'?[copyButton]:[a,b],getElementById:id=>els[id],
  createElement:()=>({click(){}})},window:{addEventListener:(name,fn)=>events[name]=fn},location:{hash:''},
  Blob:class{constructor(parts){blob=parts[0];}},URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},
- Uint8Array,atob:s=>Buffer.from(s,'base64').toString('binary'),setTimeout:fn=>fn()};
+ TextDecoder,Uint8Array,atob:s=>Buffer.from(s,'base64').toString('binary'),setTimeout:fn=>fn()};
 vm.createContext(context);
 '''
     checks = r'''
@@ -220,7 +223,59 @@ els.search.value='';els.search.oninput({target:els.search});assert.equal(els.sta
 els['raw-download'].onclick();assert.equal(Buffer.from(blob).toString('hex'),'efbbbf7b2278223a317d0d0a');
 els.collapse.onclick();context.location.hash='#target';events.hashchange();assert(first.open&&second.open);
 '''
+    checks += r'''
+(async()=>{
+const expected='1. Текст: 0 мс; false; пустая строка\n2. Ещё';
+// file://-style unavailable clipboard: expose full selectable text, never claim success.
+await els['copy-reading'].onclick();assert.equal(els['copy-value'].value,expected);
+assert.equal(els['copy-fallback'].hidden,false);assert(els['copy-value'].focused&&els['copy-value'].selected);
+assert(!els.status.textContent.includes('Текст скопирован'));
+els['copy-close'].onclick();assert(els['copy-fallback'].hidden&&els['copy-reading'].focused);
+context.navigator={clipboard:{writeText:async()=>{throw new Error('NotAllowedError');}}};
+await copyButton.onclick();assert.equal(els['copy-value'].value,expected);assert(!els['copy-fallback'].hidden);
+els['copy-fallback'].onkeydown({key:'Escape'});assert(els['copy-fallback'].hidden&&copyButton.focused);
+let copied;context.navigator.clipboard.writeText=async text=>{copied=text;};
+await copyButton.onclick();assert.equal(copied,expected);assert.equal(els.status.textContent,'Текст скопирован');
+els['prose-download'].onclick();assert.equal(Buffer.from(blob).toString('utf8'),expected);
+})().catch(e=>{console.error(e);process.exitCode=1;});
+'''
     program = harness + '\nvm.runInContext(' + json.dumps(script) + ',context);\n' + checks
     file = tmp_path / 'controls.cjs'
     file.write_text(program)
     subprocess.run([node, str(file)], check=True, capture_output=True, text=True, timeout=15)
+
+
+def test_literal_numbers_and_copy_payload_keep_constraints():
+    rules = ["Keep all effects. Never infer hidden behavior.", "Unknown changed instruction."]
+    data = {"priorityHeader": rules, "requiredJsonShape": {"root": [0, False, "", "5 ms"]}}
+    raw = json.dumps(data).encode()
+    document, _, _ = audit.build_report(raw, "test.json")
+    assert raw_from(document) == raw
+    assert '<span class="literal-number">1. </span>' in document
+    copied = base64.b64decode(re.search(r'<script id="prose-text"[^>]*>([^<]*)', document)[1]).decode()
+    for token in ["1.", "2.", 'Пустая строка ("")', "0", "false", "5 ms", "Never infer hidden behavior.", "Unknown changed instruction."]:
+        assert token in copied
+    assert "Готового пояснения этой версии нет" in copied
+    assert "Копировать пункт" not in copied
+    assert "INSTRUCTION_NOTES" not in copied
+
+
+def test_original_instruction_copy_keeps_whitespace_exactly():
+    rule = "First.  Second.\n\n\nLast. "
+    markup = audit.instruction_cards([rule], "/priorityHeader")
+    encoded = re.findall(r'data-copy="([^"]+)"', markup)[-1]
+    assert base64.b64decode(encoded).decode() == "1. " + rule
+
+
+def test_copy_preserves_literal_whitespace_and_source_mapping():
+    literal = "  opening\n\n\nclosing  "
+    markup = audit.prose({"meaning": literal}) + audit.source_link("/a~1b/0", "Source")
+    plain = audit.reading_text(markup)
+    assert literal in plain
+    assert "Source [/a~1b/0]" in plain
+
+
+def test_empty_default_is_explicit_not_missing():
+    text = audit.param_sentence({"default": "", "minimum": 0, "optional": False, "units": "ms"})
+    assert 'объявленный default: пустая строка ("")' in text
+    assert "Обязателен" in text and "не меньше: 0" in text and "единицы: ms" in text
