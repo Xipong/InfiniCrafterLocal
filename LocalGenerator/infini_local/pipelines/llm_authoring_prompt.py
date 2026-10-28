@@ -86,13 +86,36 @@ def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
     }
 
 
+def source_interpretation_for_llm() -> dict[str, str]:
+    """Source-specific meanings, independent of optional design/report fields."""
+    return {
+        "progression": (
+            "Supplied acquisition/progression facts are evidence; rarity, value or identity alone do not establish a tier. "
+            "Inventory observations show current inputs, not every available progression choice; "
+            "fallback examples do not prove possession or progression."
+        ),
+        "ammunition": (
+            "useAmmoCategoryName is the weapon's required ammo category; ammoCategoryName is the ammo item's own category. "
+            "weapon_item.shoot_field is a native field, not a fired-shot observation, even under effectiveProjectile. "
+            "Ammo damage contributes to a compatible launcher's attack; it is not standalone weapon damage, "
+            "and ammo useTime alone does not establish attack cadence. Projectile replacement does not remove ammunition damage; "
+            "distinguish that contribution from flight, penetration and statuses, without assuming a simple additive damage formula. "
+            "Read supplied weapon-ammo configurations separately, not as an average or automatically the strongest. "
+            "Source-proved conditional weapon abilities are distinct from current ammo availability."
+        ),
+        "inventoryPassives": (
+            "dropSeedsIfInInventory describes a native inventory passive. A generated item gains it only by explicit "
+            "collect_seeds_from_grass selection; ammo selection does not inherit it."
+        ),
+    }
+
+
 def planner_priority_header_for_llm() -> list[str]:
     return [
         AUTHOR_DESIGN_QUALITY_RULE,
         "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; author every mechanic explicitly in runtimeProgram.",
         "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
         AUTHOR_STATUS_COMPOSITION_RULE,
-        "Use source tempo when available and useful to the composition; make deviations intentional.",
         "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. attach_projectile.reachCurve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
         "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
     ]
@@ -286,6 +309,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     # are attached to the relevant presentation card.
     field_guide = runtime_authoring_prompt_field_guide()
     field_guide["descendantSpawnBudget"] = descendant_spawn_budget_for_llm()
+    field_guide["sourceInterpretation"] = source_interpretation_for_llm()
     if include_source_units:
         field_guide.update(runtime_units_for_llm())
 
@@ -466,7 +490,6 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         "runtimeProgramInvariants": runtime_program_invariants_for_llm(),
         "runtimeCapabilityContract": engine_runtime_capability_contract_for_llm(),
         "requiredJsonShape": author_item_prompt_shape_card(),
-        "diagnosticReport": {"selfEvaluation": realization_execution_truth_for_llm()["selfEvaluation"]},
         # Recipe-specific values stay last. JSON object order is not semantic,
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.

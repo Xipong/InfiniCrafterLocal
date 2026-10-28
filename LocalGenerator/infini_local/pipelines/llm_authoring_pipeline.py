@@ -67,20 +67,18 @@ from infini_local.storage.trace_tools import trace_message_summary
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
     "priorityHeader", "runtimeProgramInvariants",
-    "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport",
+    "runtimeCapabilityContract", "requiredJsonShape",
 )
 _REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth")
 _FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "requiredJsonShape")
 
 
 _AUTHOR_SYSTEM = (
-    "You are Gameplay Author for InfiniCrafterLocal. Design a worthwhile fusion of the supplied parents, "
-    "expressed as one immutable JSON object matching requiredJsonShape and the capability catalog. "
-    "runtimeProgram alone defines executable gameplay. Optional concept, realization and selfEvaluation "
-    "may help your design and self-check, but are advisory only: no mandatory report ceremony, "
-    "acceptance evidence or prose-based rejection. Code does not invent missing mechanics. "
-    "Apply the construction contracts beside each JSON fragment. Return strict JSON only: "
-    "double-quoted keys and strings, no trailing commas, JavaScript expressions, markdown or external reasoning."
+    "You are Gameplay Author for InfiniCrafterLocal. Design a worthwhile fusion of the supplied parents. "
+    "Return one JSON object matching requiredJsonShape and the capability catalog. "
+    "runtimeProgram alone defines executable gameplay; code does not invent missing mechanics. "
+    "concept and realization are optional advisory context, not acceptance evidence. "
+    "Return JSON only, without markdown or external reasoning."
 )
 
 

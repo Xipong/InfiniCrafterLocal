@@ -161,9 +161,10 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     assert {"id", "fn", "target", "params"} <= shape["calls"][0].keys()
     assert "not defaults or edit permissions" in catalog["fieldGuide"]["rowShapes"]
     assert "permitted omissions remain valid" in catalog["fieldGuide"]["paramNotation"]
-    rule = packet["requiredJsonShape"]["concept"]["coreMechanic"]
-    assert "duration is not a cooldown" in rule
-    assert "intentional free sustained utility remains a design choice" in rule
+    # Duration/cooldown semantics belong to executable capabilities, not an
+    # optional concept's design checklist. Creative permission stays in the brief.
+    assert "not a reuse cooldown" in json.dumps(cards["apply_generated_buff_on_use"])
+    assert "free sustained benefits are valid" in packet["priorityHeader"][0]
     assert parent == frozen
     assert "Exact source fact" in json.dumps(packet["parents"])
     instructions = " ".join(row["content"] for row in request["messages"][:2]).lower()

@@ -17,17 +17,12 @@ from infini_local.core.schema_validation import strict_schema_errors
 
 
 AUTHOR_DESIGN_QUALITY_RULE = (
-    "Design a fusion worth choosing in play, inspired by both actual parents. "
-    "Prefer a coherent interaction or reinterpretation of their behavior, handling or identity over a renamed parent or unrelated effects. "
-    "Direct combinations and simple results are valid; simple controls need not mean generic mechanics. "
-    "Give the main action a clear payoff in ordinary use (for combat, consider an isolated target); "
-    "make secondary actions or event bonuses reachable and worth their control/cost, or deliberately niche. "
-    "Judge useful decisions, not call count or an unlikely chain hiding a weak main action. "
-    "Weigh recurring economy and risk against reward: a restriction is a tradeoff only if it affects the use gaining that reward. "
-    "Invent purposeful mechanics from catalog primitives; provenance constrains claims about parents, not new designs. "
-    "Do not present invented effects as observed parent abilities. "
-    "Sidegrades and strong earned benefits are valid; no always-upgrade rule, mandatory twist or per-parent effect quota. "
-    "These are design aims, not admission gates or required reports."
+    "Design a useful, distinctive fusion inspired by both parents' identity and affordances. "
+    "Choose mechanics and controls that work together and justify the item's place in play. "
+    "Ground its power and ongoing costs in the supplied source facts and actual executable behavior. "
+    "New mechanics, simple combinations, niche utility, sidegrades and free sustained benefits are valid; "
+    "there is no required twist, upgrade, per-parent effect quota or design report. "
+    "Parent provenance constrains factual claims, not creative invention from supported primitives."
 )
 
 AUTHOR_STATUS_COMPOSITION_RULE = (
@@ -149,43 +144,8 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
                 "inheriting every parent capability."
             ),
             "coreMechanic": (
-                "non-empty string: describe the fusion's practical purpose and recognizable way of playing, with clear controls. "
-                "A clear central purpose can include multiple complementary actions; this is not a single-loop rule "
-                "or a capability restriction. Let complexity serve player value. Ground power in the actual ingredient power, "
-                "rarity, acquisition facts and resource economy together; distinguish source observations from assumptions. "
-                "Use supplied progression facts when present; do not invent an acquisition tier from rarity, value or identity alone. "
-                "Compare the resulting primary action's useful output, control, repeat-hit policy and recurring payment "
-                "with the parent action it replaces; there is no mandatory upgrade or inheritance, but make losses "
-                "and increased costs purposeful rather than accidental. manaCostInput selects primary_use, alternate_use or both "
-                "for native manaCost payment; omitted means both. Scope a costly added utility to its intended input. "
-                "A source dropSeedsIfInInventory flag describes a native inventory passive; a generated definition gains "
-                "that support only by explicit collect_seeds_from_grass selection (no params or use binding). "
-                "Native seed RNG, drop ownership and inventory slots remain unchanged. This is optional, never mandatory "
-                "inheritance; ammo selection alone does not grant it. "
-                "useAmmoCategoryName describes required ammo; ammoCategoryName describes an ammo item's own category. "
-                "A source marked weapon_item.shoot_field is not a fired-shot observation, even under effectiveProjectile; "
-                "do not confuse that native field with the projectile chosen by an actual ammo shot. "
-                "Read damage in its source role: ammunition damage is a contribution to a compatible launcher's attack, "
-                "not proof of a standalone weapon; ammunition useTime alone does not establish attack cadence. "
-                "Projectile replacement does not remove ammunition damage: distinguish this input contribution "
-                "from transferred flight, penetration and statuses; do not assume a simple additive damage formula. "
-                "Evaluate supplied weapon-ammo configurations separately rather than taking an average or automatically "
-                "the strongest: inventory observations show current inputs, not all available progression choices, "
-                "and fallback examples do not prove possession or progression. Keep source-proved conditional weapon "
-                "abilities distinct from current ammo availability; no automatic child rebalancing is implied. "
-                "Turning that contribution into an autonomous attack is a new benefit: account for the removed launcher "
-                "requirement and the new throughput/resource cost rather than treating source damage as free power. "
-                "Do not treat cheap abundant inputs as evidence for exceptional output merely because the new theme sounds powerful. "
-                "Price the reusable benefit when converting a consumable into repeatable utility, not just its one-time craft cost. "
-                "Free reuse can be appropriate when the actual ingredients and resulting benefit justify it; no universal cooldown "
-                "or recurring payment is required. Balance total combat throughput, not only headline damage: include child attacks, "
-                "chains, bounces, target count, hit cadence, lifetime, concurrency, craftYield, stackCost and actual payment frequency. "
-                "Balance repeatable utility by effective uptime and ongoing resource economy, not just "
-                "strength, duration or one-time crafting cost: duration is not a cooldown, and free repeated refresh "
-                "can make a brief effect permanent. Choose a meaningful recurring cost, supported reuse limit "
-                "or deliberately weaker effect; intentional free sustained utility remains a design choice "
-                "but must be valued as sustained, not sold as a limited burst. Use only supported mechanics; "
-                "never invent charges, cooldowns or resource payments that the catalog cannot execute."
+                "non-empty string: the intended gameplay, controls and practical value of the fusion. "
+                "This is advisory design context; runtimeProgram defines what actually executes."
             ),
             "parentAContribution": (
                 "non-empty string: explain this actual parent's appearance/identity and purposeful "
@@ -200,14 +160,7 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
             "playerExperience": "non-empty string: explain practical player value and deliberate costs of the selected mechanics",
             "plannedPlayerActions": [{
                 "input": "primary_use|alternate_use|hold|equipped|passive_or_event",
-                "intent": (
-                    "non-binding initial player-facing intent: include extra control modes only for "
-                    "meaningful utility. A parent createTile fact permits placement; it does not require it. "
-                    "For alternate placement, identify the placed target's meaningful utility worth "
-                    "escrowing the same generated item: accepted placement removes it from inventory "
-                    "and makes it unavailable until the tile breaks and returns it. Explicit useful "
-                    "placement and multiple purposeful actions remain legal."
-                ),
+                "intent": "non-binding player-facing intent for this input or event; no extra control mode is required",
             }],
         },
         "runtimeProgram": {
@@ -220,15 +173,9 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
         },
         "realization": {
             "description": (
-                "optional advisory interpretation of the emitted runtimeProgram, not an observed execution. "
-                "Write a concise item description in clear player language: explain the actual controls "
-                "(use, alternate use, while selected or while equipped), effects, costs, conditions and limits "
-                "that matter in play. Describe only supported behavior of the emitted bindings, calls and events; "
-                "distinguish base values or conditional effects from guaranteed outcomes. Do not invent abilities, "
-                "charges, safety, cooldowns or measured results from names, appearance or intent. "
-                "Use Terraria blocks, blocks/s and seconds for player-facing distance, speed and time; "
-                "gameplay params use their Author cards' human units and lowering produces engine units. Pixel-labelled geometry retains its declared engine units. Prefer readable actions over internal ids, "
-                "capability names or a parameter dump. No extra lore or report is required; "
+                "optional advisory player-facing description of the emitted runtimeProgram: controls, effects and relevant costs/conditions. "
+                "Describe supported behavior and its conditions/limits; do not claim measured execution or additional abilities. "
+                "Use blocks, blocks/s and seconds for world quantities; retain declared units for pixel geometry. "
                 f"string minLength={report_properties['description']['minLength']}, "
                 f"maxLength={report_properties['description']['maxLength']} Unicode code points"
             ),
