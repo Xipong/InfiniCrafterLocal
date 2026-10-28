@@ -195,12 +195,12 @@ def test_reader_controls_execute_with_a_minimal_dom(tmp_path):
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const first = {tagName:'DETAILS',open:false,parentElement:null};
-const second = {tagName:'DETAILS',open:false,parentElement:first,scrollIntoView(){}};
+const second = {tagName:'DETAILS',open:false,parentElement:first,scrollIntoView(options){this.scrollBlock=options.block;}};
 function leaf(text,parent){return {textContent:text,parentElement:parent,highlight:false,
  classList:{toggle(_name,value){this.owner.highlight=value;}},scrollIntoView(){this.scrolled=true;}};}
 const a=leaf('Alpha /a',second), b=leaf('Beta alpha /b',first);a.classList.owner=a;b.classList.owner=b;
 const els={search:{value:''},status:{textContent:''},original:{textContent:'77u/eyJ4IjoxfQ0K'},readable:{textContent:'0KLQtdC60YHRgg=='}};
-for(const name of ['search-button','next','expand','collapse','raw-download','text-download','copy-reading','prose-download','copy-close','copy-fallback'])els[name]={focus(){this.focused=true;}};
+for(const name of ['search-button','next','expand','collapse','raw-download','text-download','copy-reading','select-reading','prose-download','copy-close','copy-fallback'])els[name]={focus(){this.focused=true;}};
 els['prose-text']={textContent:Buffer.from('1. Текст: 0 мс; false; пустая строка\n2. Ещё').toString('base64')};
 els['copy-value']={value:'',focus(){this.focused=true;},select(){this.selected=true;}};
 const copyButton={dataset:{copy:els['prose-text'].textContent},focus(){this.focused=true;}};
@@ -221,11 +221,13 @@ els.search.value='nothing';els['search-button'].onclick();assert(!a.highlight&&!
 assert.equal(els.status.textContent,'0 совпадений в значениях');
 els.search.value='';els.search.oninput({target:els.search});assert.equal(els.status.textContent,'Поиск очищен');
 els['raw-download'].onclick();assert.equal(Buffer.from(blob).toString('hex'),'efbbbf7b2278223a317d0d0a');
-els.collapse.onclick();context.location.hash='#target';events.hashchange();assert(first.open&&second.open);
+els.collapse.onclick();context.location.hash='#target';events.hashchange();assert(first.open&&second.open);assert.equal(second.scrollBlock,'start');
 '''
     checks += r'''
 (async()=>{
 const expected='1. Текст: 0 мс; false; пустая строка\n2. Ещё';
+// Explicit manual copy remains available even if clipboard API lies about success.
+els['select-reading'].onclick();assert.equal(els['copy-value'].value,expected);assert.equal(els['copy-fallback'].hidden,false);els['copy-close'].onclick();
 // file://-style unavailable clipboard: expose full selectable text, never claim success.
 await els['copy-reading'].onclick();assert.equal(els['copy-value'].value,expected);
 assert.equal(els['copy-fallback'].hidden,false);assert(els['copy-value'].focused&&els['copy-value'].selected);
@@ -279,3 +281,158 @@ def test_empty_default_is_explicit_not_missing():
     text = audit.param_sentence({"default": "", "minimum": 0, "optional": False, "units": "ms"})
     assert 'объявленный default: пустая строка ("")' in text
     assert "Обязателен" in text and "не меньше: 0" in text and "единицы: ms" in text
+
+
+class ReadablePaths(HTMLParser):
+    def __init__(self, markup):
+        super().__init__()
+        self.values = []
+        self.containers = []
+        self.feed(markup)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if 'data-reader-path' in attrs:
+            self.values.append(attrs['data-reader-path'])
+        if 'data-reader-container' in attrs:
+            self.containers.append(attrs['data-reader-container'])
+
+
+def test_complete_readable_layer_has_every_literal_not_only_source_links():
+    from collections import Counter
+    payload = {
+        'priorityHeader': ['Keep every instruction.'],
+        'runtimeProgramInvariants': {'ownership': 'exact owner', 'budget': 32},
+        'parents': {'A': {'packet': {'name': 'Door', 'raw': {'damage': 36}}}},
+        'balanceCorridor': {'parentDamage': [0, 0], 'unknown': [None, False, '', {}, []]},
+        'sourceWireUnits': {'rule': 'scope-dependent conversion'},
+        'requiredJsonShape': {'concept': {'coreMechanic': 'full documentation'}, 'runtimeProgram': {'calls': []}},
+        'future': {'unknown': 'must remain readable'},
+    }
+    source = {'request': {'messages': [{'role': 'system', 'content': 'FULL SYSTEM'},
+                                      {'role': 'developer', 'content': json.dumps(payload)}]},
+              'evidence': {'notAnInstruction': 'CAPTURE ONLY'}}
+    markup = audit.reading_layer(source)
+    expected_values, expected_containers = [], []
+
+    def walk(key, value, path):
+        decoded = audit.decode_content(str(key), value)
+        if decoded is not None:
+            walk(key, decoded, path + '::')
+        elif isinstance(value, (dict, list)) and value:
+            expected_containers.append(path)
+            for k, child in audit.iter_children(value):
+                walk(k, child, audit.pointer(path, k))
+        else:
+            expected_values.append(path)
+
+    for key, value in source['request'].items():
+        walk(key, value, audit.pointer('/request', key))
+    rendered = ReadablePaths(markup)
+    assert Counter(rendered.values) == Counter(expected_values)
+    assert Counter(rendered.containers) == Counter(expected_containers)
+    text = audit.reading_text(markup)
+    for literal in ('FULL SYSTEM', 'exact owner', 'full documentation', 'scope-dependent conversion', 'must remain readable'):
+        assert literal in text
+    assert 'CAPTURE ONLY' not in text
+    assert 'Null означает отсутствие значения' in text
+
+
+def test_saved_parent_relationships_are_explicit_facts_not_new_design():
+    program = {'primaryEntityId': 'held', 'entities': [{'id': 'turret', 'kind': 'stationary_projectile',
+                 'targeting': {'shotEntityId': 'bolt'}}],
+               'bindings': [{'id': 'alt', 'role': 'secondary', 'input': 'alternate_use',
+                 'usePolicy': {'action': {'kind': 'spawn_entity', 'targetId': 'turret'}}}]}
+    markup = audit.reading_layer({'parents': {'A': {'packet': {'name': 'Test', 'raw': {'runtimeProgram': program}}}}})
+    text = audit.reading_text(markup)
+    assert 'альтернативное использование (alternate_use) → действие создать сущность (spawn_entity) → сущность turret' in text
+    assert 'turret ссылается на bolt' in text
+    assert 'не предложение механики нового предмета' in text
+    assert 'Роль сообщения' not in text
+
+
+def test_catalog_parameter_rules_do_not_leak_to_arbitrary_params():
+    markup = audit.reading_layer({'response_format': {'properties': {'params': {'type': 'object'}}}})
+    assert 'Параметры capability обязательны' not in audit.reading_text(markup)
+    assert 'наличие поля в properties само по себе не делает его обязательным' in audit.reading_text(markup)
+
+
+@pytest.mark.parametrize('packet', [None, 'unknown', False, [], 0])
+def test_nonobject_parent_packets_are_visible_not_crashes(packet):
+    source = {'parents': {'A': {'packet': packet}}}
+    markup = audit.reading_layer(source)
+    assert '/parents/A/packet' in ReadablePaths(markup).values
+
+
+def test_nested_unknown_instruction_shapes_keep_all_values_and_containers():
+    source = {'priorityHeader': [{'unknownRule': {'x': 0, 'empty': []}}, 'ok']}
+    rendered = ReadablePaths(audit.reading_layer(source))
+    assert rendered.values == ['/priorityHeader/0/unknownRule/x', '/priorityHeader/0/unknownRule/empty', '/priorityHeader/1']
+    assert '/priorityHeader/0/unknownRule' in rendered.containers
+
+
+def test_parent_unit_docs_require_exact_scope_and_selector_and_keep_raw_numbers():
+    source = {'catalog': {'authoringSchema': 'test', 'capabilities': [
+        {'fn': 'motion', 'params': {'velocity': {'type': 'number', 'meaning': 'Declared velocity'}}}]},
+        'parents': {'A': {'packet': {'raw': {'moving': [{'mode': 'per_update', 'speed': 11}, {'mode': 'other', 'speed': 22}], 'elsewhere': {'speed': 33}}}}},
+        'sourceWireUnits': {'scopes': [{'source': 'raw.moving[]', 'fn': 'motion', 'when': {'mode': 'per_update'},
+            'fields': {'speed': ['velocity', 'source * 60 * updatesPerTick / 16', 'blocks/s']}}]}}
+    notes = audit.parent_field_notes(source, '')
+    assert list(notes) == ['/parents/A/packet/raw/moving/0/speed']
+    markup = audit.reading_layer(source)
+    assert 'source * 60 * updatesPerTick / 16' in audit.reading_text(markup)
+    assert 'Смысл и ограничения параметра' in markup
+    assert source['parents']['A']['packet']['raw']['moving'][0]['speed'] == 11
+
+
+def test_default_token_and_source_speed_labels_do_not_invent_semantics():
+    markup = audit.reading_layer({'fieldGuide': {'damageClass': {'meaningByToken': {'default': 'Unclassed'}}},
+                                 'speedPxPerTick': 11})
+    assert 'Значение токена · default' in markup
+    assert 'Скорость в пикселях за тик' not in markup
+
+
+def test_provider_text_input_is_not_labeled_as_game_control():
+    markup = audit.reading_layer({'input': 'Provider prompt'})
+    assert 'Способ активации' not in markup
+    assert 'Входные данные' in markup
+
+
+def test_duplicate_function_names_do_not_choose_arbitrary_parent_doc_link():
+    source = {'catalog': {'authoringSchema': 'test', 'capabilities': [
+        {'fn': 'f', 'params': {'p': {'meaning': 'first'}}},
+        {'fn': 'f', 'params': {'p': {'meaning': 'second'}}}]},
+        'parents': {'A': {'packet': {'raw': {'x': 1}}}},
+        'sourceWireUnits': {'scopes': [{'source': 'raw', 'fn': 'f', 'fields': {'x': ['p', 'source', 'unit']}}]}}
+    notes = audit.parent_field_notes(source, '')
+    assert len(notes) == 1
+    assert 'Смысл и ограничения параметра' not in str(notes)
+
+
+@pytest.mark.parametrize('payload', [None, 'future request', [], {}])
+def test_unrecognised_or_empty_request_payload_is_auditable(payload):
+    source = {'request': payload}
+    document, _, _ = audit.build_report(json.dumps(source).encode(), 'future.json')
+    assert raw_from(document) == json.dumps(source).encode()
+    assert ReadablePaths(audit.reading_layer(source)).values == ['/request']
+
+
+def test_complete_reader_resolves_only_explicit_parameter_documentation():
+    rule = 'configure_armor params without meaning inherit exact meaning from configure_accessory params of the same name; all own bounds and units still apply.'
+    catalog = {'authoringSchema': 'test', 'fieldGuide': {'armorParamInheritance': rule,
+                'types': {'window': {'description': 'Phase conditions.'}}}, 'capabilities': [
+        {'fn': 'configure_accessory', 'params': {'power': {'meaning': 'Exact accessory meaning.', 'max': 99}}},
+        {'fn': 'configure_armor', 'params': {'power': {'max': 3, 'optional': True}}},
+        {'fn': 'move', 'params': {'window': {'typeRef': 'window'}}}]}
+    text = audit.reading_text(audit.reading_layer({'catalog': catalog}))
+    assert text.count('Exact accessory meaning.') == 2
+    assert text.count('Phase conditions.') == 2
+    assert 'Необязателен; не больше: 3.' in text
+    catalog['fieldGuide']['armorParamInheritance'] = 'different future rule'
+    text = audit.reading_text(audit.reading_layer({'catalog': catalog}))
+    assert text.count('Exact accessory meaning.') == 1
+
+
+def test_export_table_of_contents_has_readable_separate_lines():
+    text = audit.reading_text(audit.reading_layer({'model': 'test', 'messages': []}))
+    assert 'Содержание полного аудита\n\nМодель в сохранённом запросе\n\n' in text
