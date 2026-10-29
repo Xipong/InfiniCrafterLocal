@@ -8,6 +8,7 @@ from prompt_packet_helpers import request_dossier
 from repair_test_helpers import offline_builder, provider_roundtrip, repair_with_response
 from test_source_unit_guidance import _serialized_chat_request
 from infini_local.pipelines import llm_authoring_pipeline as author
+from infini_local.pipelines.author_item_contract import AUTHOR_DESIGN_QUALITY_RULE
 
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
@@ -63,7 +64,6 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
     for fn in ('apply_status_on_event', 'apply_vanilla_buff_on_use'):
         meaning = next(row for row in cards if row['fn'] == fn)['params']['buffId']['meaning']
         assert 'statusIdentityChoices' not in meaning
-        assert 'generated' in meaning.lower()
 
     item = build_capability_witness('apply_status_on_event')
     item.pop('concept', None)
@@ -82,7 +82,8 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
         from test_codex_subscription_contract import _encode_nullable_fixture
 
         requests.append(deepcopy(author_request))
-        payload = _encode_nullable_fixture(item, author_item_response_schema()) if mode == 'json_schema' else item
+        local = author_item_response_schema()
+        payload = _encode_nullable_fixture(item, local) if mode == 'json_schema' else item
         if mode == 'json_schema':
             Draft202012Validator(author_request['response_format']['json_schema']['schema']).validate(payload)
         return {'choices': [{'message': {'content': json.dumps(payload)}}],
@@ -117,8 +118,8 @@ def test_native_status_interoperability_and_frozen_repair_survive_registry_retir
     repair_sent = _serialized_chat_request(monkeypatch, repair_request)
     dossier = request_dossier(repair_sent, declaration=repair_request)
     assert 'runtimeCapabilityContract' not in dossier
-    assert 'Compose buffs and debuffs' in dossier['runtimeExecutionTruth'].get('statusEffects', '')
-    assert any('Compose buffs and debuffs' in row for row in packet['priorityHeader'])
+    assert 'status effects' in dossier['runtimeExecutionTruth'].get('statusEffects', '')
+    assert dossier['runtimeExecutionTruth']['statusEffects'] == packet['runtimeCapabilityContract']['catalog']['fieldGuide']['statusEffects']
     assert dossier['repairScope']['fieldPermissions']['calls'] == [
         {'id': status['id'], 'paths': ['params.durationSeconds']}]
     repair_card = next(row for row in dossier['existingBrokenCapabilityCards']
@@ -137,13 +138,15 @@ def test_author_prioritizes_playable_composition_without_turning_advisory_into_a
     offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
     request, _, _ = author.build_initial_author_request({}, {}, 'purposeful-composition', model_name='offline')
     packet = request_dossier(_serialized_chat_request(monkeypatch, request))
-    guidance = ' '.join(packet['priorityHeader'])
-    assert 'isolated target' in guidance
-    assert 'secondary' in guidance and 'reachable' in guidance
-    assert 'risk' in guidance and 'reward' in guidance
-    assert 'player decisions' in guidance and 'call count' in guidance
-    assert 'always-upgrade' in guidance and 'mandatory twist' in guidance
-    assert packet['requiredJsonShape']['optionalAdvisory'] == ['concept', 'realization']
+    # Verify delivery and priority of the owner rule, not incidental prose wording.
+    assert packet['priorityHeader'][0] == AUTHOR_DESIGN_QUALITY_RULE
+    assert packet['priorityHeader'].count(AUTHOR_DESIGN_QUALITY_RULE) == 1
+    system = request['messages'][0]['content']
+    assert 'Terraria (tModLoader)' in system
+    assert 'Art direction' not in system and 'frozen fields' not in system
+    assert 'Preserve literal parent identity' not in system
+    assert isinstance(packet['requiredJsonShape']["concept"], str)
+    assert set(packet['requiredJsonShape']["realization"]) == {"description", "selfEvaluation"}
     # No concept/report is needed to execute an intentionally simple composition.
     item = build_capability_witness('move_straight')
     item.pop('concept', None)
@@ -163,15 +166,34 @@ def test_ammo_balance_guidance_separates_damage_from_projectile_conversion(monke
     before = deepcopy(source)
     request, _, _ = author.build_initial_author_request(source, {}, 'ammo-balance-guidance', model_name='offline')
     packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
-    meaning = packet['requiredJsonShape']['concept']['coreMechanic']
-    assert 'Projectile replacement does not remove ammunition damage' in meaning
-    assert 'weapon-ammo configurations separately' in meaning
-    assert 'fallback examples do not prove possession or progression' in meaning
-    assert 'strongest' in meaning and 'average' in meaning
+    source_guide = packet['runtimeCapabilityContract']['catalog']['fieldGuide']['sourceInterpretation']
+    meaning = source_guide['ammunition']
+    assert 'Ammo damage contributes to a compatible launcher, including when its projectile is replaced' in meaning
+    assert 'Weapon-ammo configurations describe separate cases' in meaning
+    assert 'fallback examples are illustrative' in source_guide['progression']
     ammo = packet['parents']['A']['packet']['raw']['ammo']
     assert ammo['playerInventoryAmmoRaw'][0]['damage'] == 5
     assert 'stack' not in ammo['playerInventoryAmmoRaw'][0]
     assert source == before
+
+
+@pytest.mark.parametrize('mode', ['json_schema', 'json_object'])
+def test_source_reading_guidance_is_delivered_once_outside_optional_concept(monkeypatch, mode):
+    from infini_local.pipelines import llm_authoring_prompt as prompt
+    offline_builder(monkeypatch, mode, lambda *args, **kwargs: pytest.fail('unexpected model call'))
+    guide = prompt.source_interpretation_for_llm()
+    # A source semantics update must reach the actual static request without
+    # becoming a required output field or a second copy in advisory prose.
+    guide['source_probe'] = 'SOURCE_INTERPRETATION_SENTINEL'
+    monkeypatch.setattr(prompt, 'source_interpretation_for_llm', lambda: deepcopy(guide))
+    request, _, _ = author.build_initial_author_request({}, {}, 'source-guide', model_name='offline')
+    sent = _serialized_chat_request(monkeypatch, request)
+    packet = request_dossier(sent)
+    assert packet['runtimeCapabilityContract']['catalog']['fieldGuide']['sourceInterpretation'] == guide
+    assert json.dumps(sent['messages']).count('SOURCE_INTERPRETATION_SENTINEL') == 1
+    assert 'SOURCE_INTERPRETATION_SENTINEL' not in json.dumps(packet['requiredJsonShape'])
+    assert 'sourceInterpretation' not in packet['requiredJsonShape']['root']
+    assert 'diagnosticReport' not in packet
 
 
 def test_target_and_fire_composes_with_explicit_motion_and_speed_modifier():

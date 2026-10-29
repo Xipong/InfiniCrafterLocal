@@ -146,7 +146,7 @@ MALFORMED_BUFF_FIELDS = [
     ("lifeRegen", True),
     ("miningSpeedMultiplier", 0),
     ("oreSenseRadiusTiles", 2),
-    ("durationTicks", 21601),
+    ("durationTicks", 2147483647),
     ("durationTicks", 1.0),
     ("manaRegen", 1.0),
     ("lifeRegen", 1.0),
@@ -261,7 +261,8 @@ def test_generated_buff_dependency_and_legacy_absence(change):
     if change.endswith("color-only"):
         buff.update(emitLightStrength=0, lightColorName=change.split("-")[0])
     elif change == "no-duration":
-        buff.update(durationTicks=0, oreSenseRadiusTiles=1)
+        buff.pop("durationTicks")
+        buff["oreSenseRadiusTiles"] = 1
     elif change == "empty-color":
         buff["lightColorName"] = ""
     elif change == "missing-color":

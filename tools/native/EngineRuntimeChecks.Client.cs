@@ -105,6 +105,8 @@ internal static partial class EngineRuntimeChecks
         original.SourceMode = "test_fixture";
         original.GeneratedParentSummary.Description = "  " + boundary + "overflow  ";
         original.GeneratedParentSummary.PlayerExperience = supplementary;
+        string debug = "Only the contact attack is implemented; intended dash is absent. " + new string('д', 5500);
+        original.Realization = JsonSerializer.SerializeToElement(new { description = boundary, selfEvaluation = debug });
         // Serialize without pre-normalization: exercise actual incoming JSON admission.
         string input = JsonSerializer.Serialize(original, new JsonSerializerOptions {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -129,6 +131,8 @@ internal static partial class EngineRuntimeChecks
             Equal(boundary, summary.GetProperty("description").GetString(), "description clips at 4000 code points without splitting surrogate");
             Equal(supplementary, summary.GetProperty("playerExperience").GetString(), "accepted supplementary advisory prose is retained");
             Equal(false, summary.TryGetProperty("notableEffects", out _), "no retired behavior report projection");
+            Equal(debug, next.RootElement.GetProperty(side).GetProperty("generatedData")
+                .GetProperty("realization").GetProperty("selfEvaluation").GetString(), "full raw debug survives next-craft transport separately");
         }
         Equal("  " + boundary + "overflow  ", original.GeneratedParentSummary.Description, "incoming source unchanged");
     }

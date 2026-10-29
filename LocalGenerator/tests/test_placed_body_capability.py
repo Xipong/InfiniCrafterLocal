@@ -377,10 +377,12 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
             else:
                 row.pop("target", None)
             calls.append(row)
+    doc = {key: value for key, value in doc.items() if key in {"name", "category", "runtimeProgram"}}
     before = json.dumps(doc, sort_keys=True)
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     responses, requests = wire_transport
-    payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
+    local_schema = contract.author_item_response_schema()
+    payload = _encode_nullable_fixture(doc, local_schema) if format_mode == "json_schema" else doc
     responses.append(payload)
     accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, "combined-offline")
     assert accepted is not None and len(requests) == 1 and not responses
@@ -405,7 +407,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
     frozen["params"]["ammoCategory"] = "bullet"
     repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
-        {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
+        {"note": "exact curve correction with hostile frozen companions",
          "callsUpsert": [candidate, frozen]}, format_mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": curve["id"], "paths": ["params.endScale"]}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]

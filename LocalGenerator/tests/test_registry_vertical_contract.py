@@ -141,3 +141,29 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     assert scope["create"]["calls"]["allowedFns"] == ["set_projectile_collision"]
     assert scope["create"]["calls"]["allowedTargetIds"] == ["workbench_blade"]
     assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["set_projectile_collision"]
+
+
+@pytest.mark.parametrize("name", list(EVENT_KIND_REGISTRY))
+def test_author_event_cards_preserve_all_nonempty_producer_conditions(name):
+    from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
+
+    source = EVENT_KIND_REGISTRY[name].prompt_card()
+    rows = [row for row in sharp_engine_fn_catalog_for_llm()["events"] if row["event"] == name]
+    assert len(rows) == 1
+    delivered = rows[0]
+    for key, value in source.items():
+        if value is None or value == [] or value == {}:
+            assert key not in delivered
+        else:
+            assert delivered[key] == value
+
+
+def test_author_event_metadata_omission_does_not_drop_false_or_exact_zero():
+    event = replace(EVENT_KIND_REGISTRY["on_hit"], producer_binding_contact_damage=False,
+                    producer_exact_params={"producer": {"count": 0, "enabled": False}})
+    card = event.author_prompt_card()
+    assert card["producerBindingContactDamage"] is False
+    assert card["producerExactParams"] == {"producer": {"count": 0, "enabled": False}}
+    # The complete registry view is still available for non-prompt consumers.
+    assert "producedByBindingInputs" in replace(event, producer_binding_inputs=()).prompt_card()
+    assert "producedByBindingInputs" not in replace(event, producer_binding_inputs=()).author_prompt_card()

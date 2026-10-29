@@ -509,7 +509,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)6); // includes exact combat bonuses in each active entry
+        writer.Write((byte)7); // includes original duration for death policy in each entry
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -533,7 +533,7 @@ public sealed partial class InfiniCraftPlayer
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 6)
+        if (version != 7)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         // Decode before replacing owner prediction; malformed packets do not
         // erase a valid timer table or leave half-read buff state behind.
@@ -557,13 +557,14 @@ public sealed partial class InfiniCraftPlayer
         _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
         RebuildGeneratedUtilityBuffAggregate();
         _generatedItemExhaustion.Clear(); _generatedItemExhaustion.AddRange(exhaustion);
+        if (Player.dead) RetireGeneratedUtilityOnDeath();
         _generatedBuffSnapshotRevision = unchecked(_generatedBuffSnapshotRevision + 1);
     }
 
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 6)
+        if (version != 7)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
@@ -584,6 +585,7 @@ public sealed partial class InfiniCraftPlayer
     private static void WriteGeneratedUtilityBuffEntry(System.IO.BinaryWriter writer, ActiveGeneratedUtilityBuff buff)
     {
         writer.Write(buff.Ticks);
+        writer.Write(buff.InitialDurationTicks);
         writer.Write(buff.MiningSpeedMultiplier);
         writer.Write(buff.EmitLightStrength);
         writer.Write(buff.LightColorName ?? "");
@@ -599,12 +601,18 @@ public sealed partial class InfiniCraftPlayer
     private static ActiveGeneratedUtilityBuff ReadGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
     {
         int ticks = reader.ReadInt32();
+        int initialDuration = reader.ReadInt32();
+        if (initialDuration is < 0 or > GeneratedBuffSpec.MaxFiniteDurationTicks
+            || (initialDuration == GeneratedBuffSpec.PermanentDurationTicks
+                ? ticks != int.MaxValue : ticks <= 0 || ticks > initialDuration))
+            throw new System.IO.InvalidDataException("invalid generated buff duration state");
         float miningSpeedMultiplier = reader.ReadSingle();
         float lightStrength = reader.ReadSingle();
         string lightColor = ReadGeneratedBuffText(reader, 128).Trim();
         return new ActiveGeneratedUtilityBuff
         {
-            Ticks = Math.Clamp(ticks, 1, 21600),
+            Ticks = ticks,
+            InitialDurationTicks = initialDuration,
             MiningSpeedMultiplier = Math.Clamp(miningSpeedMultiplier, 0.25f, 4f),
             EmitLightStrength = Math.Clamp(lightStrength, 0f, 1.5f),
             LightColorName = lightColor[..Math.Min(lightColor.Length, 32)],
@@ -622,7 +630,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void ClampGeneratedBuffState()
     {
-        _generatedBuffTicks = Math.Clamp(_generatedBuffTicks, 0, 21600);
+        _generatedBuffTicks = Math.Max(_generatedBuffTicks, 0);
         _generatedMiningSpeedMultiplier = Math.Clamp(_generatedMiningSpeedMultiplier <= 0f ? 1f : _generatedMiningSpeedMultiplier, 0.25f, 4f);
         _generatedLightStrength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
         _generatedLightColorName = string.IsNullOrWhiteSpace(_generatedLightColorName) ? "" : _generatedLightColorName.Trim()[..Math.Min(_generatedLightColorName.Trim().Length, 32)];
