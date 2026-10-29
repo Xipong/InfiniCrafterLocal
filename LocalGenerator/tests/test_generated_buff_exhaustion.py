@@ -395,3 +395,75 @@ def test_coherent_inserted_zero_policy_cannot_forge_accepted_source_absence(grou
     assert not report["ok"] and any("absent" in r["reason"] for r in report["violations"])
     report = audit_compiler_receipts(rows, final_document=final)
     assert report["ok"] and not report["authoredSourceChecked"]
+
+
+@pytest.mark.parametrize("group", [None, "survey"])
+@pytest.mark.parametrize("ticks", [0, 162000, 2147483646])
+def test_explicit_generated_buff_lifetime_survives_author_compile_and_wire(group, ticks):
+    document, call = _policy_fixture(group=group)
+    call["params"]["durationSeconds"] = ticks / 60
+    before = deepcopy(document)
+    assert validate_runtime_program(document)["ok"]
+    final = compile_runtime_program(document)
+    assert _buff(final, group)["durationTicks"] == ticks
+    rows = final["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(rows, authored_document=document, final_document=final)["ok"]
+    assert validate_runtime_wire(final)["ok"]
+    final.pop("runtimeContract")
+    assert validate_runtime_wire(json.loads(json.dumps(final)))["ok"]
+    assert document == before
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_permanent_generated_buff_is_an_explicit_provider_choice(monkeypatch, mode):
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    request, _, _ = author.build_initial_author_request({}, {}, "permanent", model_name="offline")
+    document, call = _policy_fixture(group="survey")
+    call["params"]["durationSeconds"] = 0
+    document = {key: document[key] for key in ("name", "category", "runtimeProgram")}
+    restored = provider_roundtrip(document, request["response_format"])
+    assert validate_runtime_program(restored)["ok"]
+    final = compile_runtime_program(restored)
+    assert _buff(final, "survey")["durationTicks"] == 0
+    assert validate_runtime_wire(final)["ok"]
+
+
+@pytest.mark.parametrize("group", [None, "survey"])
+@pytest.mark.parametrize("seconds", [None, True, -1, 0.001, 2147483647 / 60])
+def test_invalid_generated_buff_lifetime_does_not_turn_into_permanence(group, seconds):
+    document, call = _policy_fixture(group=group)
+    call["params"]["durationSeconds"] = seconds
+    report = validate_runtime_program(document)
+    assert not report["ok"]
+    assert any(error["path"].endswith(".durationSeconds") for error in report["errors"])
+    with pytest.raises(ValueError):
+        compile_runtime_program(document)
+
+
+@pytest.mark.parametrize("group", [None, "survey"])
+@pytest.mark.parametrize("value", [OMITTED, None, True, -1, 2147483647])
+def test_nonempty_generated_buff_requires_a_valid_explicit_wire_lifetime(group, value):
+    document, call = _policy_fixture(group=group)
+    call["params"]["durationSeconds"] = 2700
+    final = compile_runtime_program(document)
+    final.pop("runtimeContract")
+    buff = _buff(final, group)
+    if value == OMITTED:
+        buff.pop("durationTicks")
+    else:
+        buff["durationTicks"] = value
+    report = validate_runtime_wire(json.loads(json.dumps(final)))
+    assert not report["ok"]
+    assert any(error["path"].endswith(".durationTicks") for error in report["errors"])
+
+
+@pytest.mark.parametrize("neutral", [{}, {"durationTicks": 0}])
+def test_empty_generated_buff_dto_does_not_create_a_permanent_use_effect(neutral):
+    document, _ = _policy_fixture()
+    final = compile_runtime_program(document)
+    final.pop("runtimeContract")
+    final["gameplay"]["generatedBuff"] = neutral
+    report = validate_runtime_wire(final)
+    assert not report["ok"]
+    assert any(error["code"] == "binding_dependency" for error in report["errors"])
+    assert not any(error["code"] == "missing_generated_buff_duration" for error in report["errors"])

@@ -128,6 +128,10 @@ public sealed class GeneratedParentSummarySpec
 
 public sealed class GeneratedBuffSpec
 {
+    public const int PermanentDurationTicks = 0;
+    public const int MaxFiniteDurationTicks = int.MaxValue - 1;
+    public const int PersistentAfterDeathMaxTicks = 20 * 60 * 60;
+
     private GeneratedCombatBuffSpec? _combat;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public GeneratedCombatBuffSpec? Combat
@@ -139,7 +143,14 @@ public sealed class GeneratedBuffSpec
             value.Validate(); _combat = value;
         }
     }
-    public int DurationTicks { get; set; } = 0;
+    private int? _durationTicks;
+    internal bool HasExplicitDuration => _durationTicks.HasValue;
+    public int DurationTicks
+    {
+        get => _durationTicks ?? 0;
+        set => _durationTicks = value is >= 0 and <= MaxFiniteDurationTicks ? value
+            : throw new InvalidDataException("generated buff durationTicks must be 0 (permanent) or a positive Int32 duration below Int32.MaxValue");
+    }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonConverter(typeof(GeneratedBuffExhaustionTicksConverter))]
     public int? ExhaustionTicks
@@ -162,13 +173,16 @@ public sealed class GeneratedBuffSpec
     public int ManaRegen { get; set; } = 0;
     public int LifeRegen { get; set; } = 0;
 
-    public bool HasAnyEffect => DurationTicks > 0 && (
+    private bool HasEffectStats =>
         MiningSpeedMultiplier != 1f || EmitLightStrength > 0f || OreSenseEnabled ||
-        MovementSpeed != 0f || JumpBoost != 0f || ManaRegen != 0 || LifeRegen != 0 || Combat?.HasEffect == true);
+        MovementSpeed != 0f || JumpBoost != 0f || ManaRegen != 0 || LifeRegen != 0 || Combat?.HasEffect == true;
+
+    public bool HasAnyEffect => _durationTicks.HasValue && HasEffectStats;
 
     public void Normalize()
     {
-        DurationTicks = Math.Min(21600, Math.Max(0, DurationTicks));
+        if (!_durationTicks.HasValue && HasEffectStats)
+            throw new InvalidDataException("nonempty generated buff requires explicit durationTicks; 0 means permanent");
         MiningSpeedMultiplier = MathF.Min(4f, MathF.Max(0.25f, MiningSpeedMultiplier <= 0f ? 1f : MiningSpeedMultiplier));
         EmitLightStrength = MathF.Min(1.5f, MathF.Max(0f, EmitLightStrength));
         LightColorName = RuntimeColorPolicy.NormalizeRequired(LightColorName, allowEmpty: EmitLightStrength <= 0f);

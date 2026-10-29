@@ -635,7 +635,7 @@ def test_buff_capture_keeps_prior_bytes_but_only_current_names_authenticate_fres
 @pytest.mark.parametrize("scope", ["global", "effect_group"])
 def test_frozen_percent_absence_survives_duration_repair_and_requires_exact_zero_provenance(scope):
     document, call = _buff_speed_source(scope)
-    call["params"]['durationSeconds'] = (0) / 60
+    call["params"]['durationSeconds'] = -1
     original = _bytes(document)
     scope_report = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
     assert scope_report["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.durationSeconds']}]

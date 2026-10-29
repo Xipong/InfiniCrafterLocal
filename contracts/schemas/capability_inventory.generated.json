@@ -3064,8 +3064,8 @@
         "durationSeconds": {
           "enum": [],
           "kind": "number",
-          "maximum": 360.0,
-          "minimum": 0.008333333333333333,
+          "maximum": 35791394.1,
+          "minimum": 0,
           "reference": null,
           "required": true,
           "semanticType": "seconds",

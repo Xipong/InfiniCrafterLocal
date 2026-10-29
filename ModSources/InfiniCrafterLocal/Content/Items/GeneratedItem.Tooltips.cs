@@ -264,7 +264,7 @@ public partial class GeneratedItem
     private static void AddRuntimeExhaustion(GeneratedBuffSpec? buff, string suffix, string input,
         Action<string, string, object[]> add)
     {
-        if (buff?.HasAnyEffect == true && buff.DurationTicks is > 0 and <= 21600
+        if (buff?.HasAnyEffect == true
             && buff.ExhaustionTicks is > 0 and <= 21600)
             add("Exhaustion" + suffix, "ExhaustionDeclared",
                 new object[] { input, RuntimeTooltipTime(buff.ExhaustionTicks.Value) });
@@ -296,9 +296,10 @@ public partial class GeneratedItem
         for (int i = 0; i < Math.Min(16, buffs.Length); i++)
             if (buffs[i] is { } buff) Buff("Buff" + suffix + i.ToString(CultureInfo.InvariantCulture), buff.BuffCode, buff.BuffTime);
         GeneratedBuffSpec? generated = gp.GeneratedBuff;
-        if (generated?.HasAnyEffect == true && generated.DurationTicks is > 0 and <= 21600)
+        if (generated?.HasAnyEffect == true)
         {
-            string duration = RuntimeTooltipTime(generated.DurationTicks);
+            string duration = generated.DurationTicks == GeneratedBuffSpec.PermanentDurationTicks
+                ? "∞" : RuntimeTooltipTime(generated.DurationTicks);
             void Effect(string name, string key, object value) => add(name + suffix, key, new object[] { input, value, duration });
             if (RuntimeTooltipFinite(generated.MiningSpeedMultiplier, 0.25f, 4f) && generated.MiningSpeedMultiplier != 1f)
                 Effect("Mining", "Mining", RuntimeTooltipNumber(generated.MiningSpeedMultiplier));
