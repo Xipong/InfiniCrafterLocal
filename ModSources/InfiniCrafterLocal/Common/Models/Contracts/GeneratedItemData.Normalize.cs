@@ -158,6 +158,10 @@ public sealed partial class GeneratedItemData
         Gameplay.HandPose = SafeText(Gameplay.HandPose, 32).ToLowerInvariant();
         Gameplay.HealLife = ClampInt(Gameplay.HealLife, 0, 500);
         Gameplay.HealMana = ClampInt(Gameplay.HealMana, 0, 500);
+        // The compiler and named effect groups admit 48 native buffs. Never
+        // silently discard the tail of a valid authored gameplay payload.
+        if (Gameplay.ExtraBuffs is { Length: > 48 })
+            throw new InvalidDataException("gameplay extraBuffs cannot exceed 48 entries");
         Gameplay.ExtraBuffs = (Gameplay.ExtraBuffs ?? Array.Empty<BuffEntrySpec>())
             .Select(x =>
             {
@@ -173,7 +177,6 @@ public sealed partial class GeneratedItemData
                     BuffTime = ClampInt(x.BuffTime, 1, 21600),
                 };
             })
-            .Take(16)
             .ToArray();
         Gameplay.GeneratedBuff ??= new GeneratedBuffSpec();
         Gameplay.GeneratedBuff.Normalize();

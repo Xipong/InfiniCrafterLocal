@@ -47,6 +47,7 @@ from infini_local.core.runtime_authoring.program_schema import (
 MAX_RUNTIME_ENTITIES = 12
 MAX_RUNTIME_BINDINGS = 8
 MAX_RUNTIME_CALLS = 48
+MAX_RUNTIME_EVENTS_PER_ENTITY = 16  # Matches InfiniRuntimeLimits.MaxRuntimeEventsPerEntity.
 MAX_CHILD_DEPTH = 3
 MAX_EVENT_SPAWNS_PER_ACTIVATION = 32
 
@@ -76,6 +77,7 @@ VALIDATION_ERROR_CODES = frozenset({
     "entity_not_binding_spawnable",
     "event_not_emitted",
     "event_spawn_budget",
+    "entity_event_budget",
     "exclusive_component_conflict",
     "overlapping_motion_windows",
     "retained_motion_stage_conflict",
@@ -885,6 +887,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     event_referenced_entities: set[str] = set()
     event_spawn_budget = 0
     input_spawn_budgets = {"primary_use": 0, "alternate_use": 0}
+    event_action_counts: dict[str, int] = {}
 
     for index, call in enumerate(calls):
         call_id = str(call.get("id") or "")
@@ -984,6 +987,18 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 event_referenced_entities.add(referenced_id)
 
         if cap.category == "event":
+            # One event capability lowers to one native RuntimeEventActionSpec.
+            # Report only overflow calls so frozen-first Repair never thaws the first 16.
+            if entity is not None:
+                event_action_counts[target_id] = event_action_counts.get(target_id, 0) + 1
+                if event_action_counts[target_id] > MAX_RUNTIME_EVENTS_PER_ENTITY:
+                    issues.append(ValidationIssue(
+                        f"$.runtimeProgram.calls[{index}]", "entity_event_budget",
+                        f"Entity '{target_id}' has more than {MAX_RUNTIME_EVENTS_PER_ENTITY} event actions; "
+                        "the native DTO rejects this program.",
+                        (f"at most {MAX_RUNTIME_EVENTS_PER_ENTITY} event calls per entity",),
+                        (call_id, target_id),
+                    ))
             event = authored_event(params)
             if event not in cap.allowed_events:
                 issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].params.when", "capability_event_incompatible", f"{fn} does not accept {event}.", cap.allowed_events, (call_id,)))
@@ -1565,6 +1580,7 @@ __all__ = [
     "MAX_EVENT_SPAWNS_PER_ACTIVATION",
     "MAX_RUNTIME_BINDINGS",
     "MAX_RUNTIME_CALLS",
+    "MAX_RUNTIME_EVENTS_PER_ENTITY",
     "MAX_RUNTIME_ENTITIES",
     "ValidationIssue",
     "assert_valid_runtime_program",

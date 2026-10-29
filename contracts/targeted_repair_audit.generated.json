@@ -151,12 +151,12 @@
   "fullCapabilityCatalogCount": 99,
   "ok": true,
   "policyCoverage": {
-    "declaredCodes": 56,
+    "declaredCodes": 57,
     "declaredEqualsPolicy": true,
-    "emittedCodes": 55,
+    "emittedCodes": 56,
     "nonRepairableRegistryDefect": true,
-    "policyCodes": 56,
-    "runtimeDeclaredCodes": 55,
+    "policyCodes": 57,
+    "runtimeDeclaredCodes": 56,
     "runtimeDeclaredEqualsEmitted": true
   },
   "schema": "infini.targeted-repair-audit.v1"

@@ -51,7 +51,9 @@ public sealed partial class InfiniCraftPlayer
         public bool SameEffect(ActiveGeneratedUtilityBuff other)
             => MiningSpeedMultiplier == other.MiningSpeedMultiplier
             && EmitLightStrength == other.EmitLightStrength
-            && string.Equals(LightColorName, other.LightColorName, StringComparison.OrdinalIgnoreCase)
+            // An unlit buff has no visible color. Do not turn an irrelevant
+            // authored lightColorName into another independently stacking combat buff.
+            && (EmitLightStrength == 0f || string.Equals(LightColorName, other.LightColorName, StringComparison.OrdinalIgnoreCase))
             && OreSenseRadiusTiles == other.OreSenseRadiusTiles
             && MovementSpeed == other.MovementSpeed
             && JumpBoost == other.JumpBoost

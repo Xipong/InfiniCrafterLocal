@@ -47,6 +47,11 @@ public sealed partial class GeneratedProjectile
             Projectile.netUpdate = true;
         }
 
+        // Author events and periodic damage must not run on the update that
+        // cancels held control or fails the next sustained mana payment.
+        if (!AdmitSustainedGameplayBeforeEvents())
+            return;
+
         if (!_spawnEventRan)
         {
             // Waiting suppresses movement, not the authored launch. Replay its
@@ -101,6 +106,34 @@ public sealed partial class GeneratedProjectile
             RunRuntimeEvent(RuntimeEventKind.OnExpire, null, 0);
             EmitAndSyncVfxEvent(RuntimeEventKind.OnExpire, Projectile.Center);
         }
+    }
+
+    private bool AdmitSustainedGameplayBeforeEvents()
+    {
+        if (!InfiniRuntimeAuthority.ShouldRunProjectileGameplay(Projectile))
+            return true; // A peer must never debit mana or authoritatively retire an owner projectile.
+
+        RuntimeEntitySpec entity = _entity!;
+        bool channelBeam = entity.Controller.Code == RuntimeControllerCode.ChannelBeam;
+        var control = entity.OwnerControl;
+        bool sustain = entity.ManaSustain is not null
+            || channelBeam && entity.Controller.Params.ManaPayment == "each_use_time";
+        if (!channelBeam && control is null && !sustain)
+            return true; // Free projectiles never acquire implicit owner cancellation.
+
+        Player owner = Owner();
+        if (!OwnerCanControl(owner)
+            || channelBeam && (!owner.channel || !HoldingGeneratedItem(owner))
+            || control is not null && (control.RequireHeldItem && !HoldingGeneratedItem(owner)
+                || control.RequireChannel && !owner.channel
+                || control.RequireItemAnimation && owner.itemAnimation <= 0)
+            || sustain && !PaySustainedMana(owner))
+        {
+            Projectile.friendly = false;
+            Projectile.Kill();
+            return false;
+        }
+        return true;
     }
 
     private void EmitSpawnEvent()
