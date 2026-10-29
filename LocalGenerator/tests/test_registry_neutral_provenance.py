@@ -71,11 +71,14 @@ def test_declared_defaults_are_neutral_optional_and_reach_serialized_contract():
         for name, value in values.items():
             assert cards[fn]["params"][name]["optional"] is True
             assert cards[fn]["params"][name]["default"] == value
-            assert name not in schemas[fn]["required"]
-            projected = schemas[fn]["properties"][name]
-            assert projected["default"] == value and type(projected["default"]) is type(value)
-            assert projected["x-infini-neutral"] == value
-            assert not strict_schema_errors(value, projected)
+            variants = schemas[fn].get("oneOf", [schemas[fn]])
+            assert any(name not in variant["required"] for variant in variants)
+            projected = [variant["properties"][name] for variant in variants if name in variant["properties"]]
+            assert projected
+            for child in projected:
+                assert child["default"] == value and type(child["default"]) is type(value)
+                assert child["x-infini-neutral"] == value
+                assert not strict_schema_errors(value, child)
 
 
 @pytest.mark.parametrize(
@@ -101,6 +104,12 @@ def test_omission_materializes_only_declared_neutral_with_exact_receipts(fn, omi
         call["params"].update(requireHeldItem=True, animation="keep_alive")
     elif fn == "set_projectile_return_trigger":
         call["params"]["afterSeconds"] = 1
+    for rule in CAPABILITY_REGISTRY[fn].requirements:
+        if rule.kind == "timing_pair_or_window" and rule.allow_absent and any(n in rule.any_of for n in omitted):
+            # This declared default applies only without either scalar sibling;
+            # a valid explicit pair instead preserves its original window absence.
+            call["params"].pop(rule.param, None)
+            call["params"].pop(rule.other_param, None)
     for param in omitted:
         call["params"][param] = CAPABILITY_REGISTRY[fn].params[param].default
     explicit = compile_runtime_program(source)
@@ -114,14 +123,21 @@ def test_omission_materializes_only_declared_neutral_with_exact_receipts(fn, omi
     }
     rows = compiled["runtimeContract"]["finalWireReceipts"]
     for param in omitted:
-        selected = [r for r in rows if r.get("callId") == call["id"] and r.get("authoredPath", "").endswith(".params." + param)]
+        selected = [r for r in rows if r.get("callId") == call["id"]
+                    and (r.get("authoredPath", "").endswith(".params." + param)
+                         or ".params." + param + "." in r.get("authoredPath", ""))]
         assert selected
+        spec = CAPABILITY_REGISTRY[fn].params[param]
         for row in selected:
             delivered = _receipt(explicit["runtimeContract"]["finalWireReceipts"], row["finalPath"])
             assert row == {**delivered, "status": "declared_neutral_omission"}
-            assert delivered["status"] == "delivered" and row["value"] == CAPABILITY_REGISTRY[fn].params[param].to_wire(
-                CAPABILITY_REGISTRY[fn].params[param].default
-            )
+            assert delivered["status"] == "delivered"
+            if spec.structured:
+                projections = [p for p in spec.projected_fields(spec.default, param)
+                               if row["finalPath"].endswith("." + p.wire_path)]
+                assert len(projections) == 1 and row["value"] == projections[0].value
+            else:
+                assert row["value"] == spec.to_wire(spec.default)
     assert _audit(source, compiled, rows)["ok"] and audit_compiler_receipts(rows, final_document=compiled)["ok"]
     assert validate_runtime_wire(compiled)["ok"]
     if fn == "configure_item_stats":

@@ -5884,12 +5884,13 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
           "otherParam": "durationSeconds",
           "param": "startDelaySeconds",
           "target": "same_target"
@@ -6009,12 +6010,13 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
           "otherParam": "durationSeconds",
           "param": "startDelaySeconds",
           "target": "same_target"
@@ -6145,12 +6147,13 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
           "otherParam": "durationSeconds",
           "param": "startDelaySeconds",
           "target": "same_target"
@@ -6295,12 +6298,13 @@
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
+          "allowAbsent": true,
           "anyOf": [
             "window"
           ],
           "equals": null,
           "kind": "timing_pair_or_window",
-          "message": "Window or scalar pair; both intersect.",
+          "message": "Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
           "otherParam": "durationSeconds",
           "param": "startDelaySeconds",
           "target": "same_target"

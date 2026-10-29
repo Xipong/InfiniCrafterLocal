@@ -441,7 +441,7 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
                 destination = call["params"]
                 parts = path.split(".")
                 for part in parts[:-1]:
-                    destination = destination[part]
+                    destination = destination.setdefault(part, {})
                 destination[parts[-1]] = copy.deepcopy(value)
             call["_neutralOmissions"] = frozenset(omitted)
 

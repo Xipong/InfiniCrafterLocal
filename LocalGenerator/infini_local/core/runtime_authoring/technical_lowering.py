@@ -341,8 +341,11 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
         omitted = {}
         for name, spec in specs.items():
             path = prefix + name
-            if name not in values and _declares_neutral_omission(spec):
-                omitted[path] = spec.default
+            if name not in values and _declares_neutral_omission(spec) and (prefix or cap.neutral_omission_allowed(name, params)):
+                if spec.structured:
+                    omitted.update((leaf, value) for leaf, _, value in spec.leaf_values(spec.default, path))
+                else:
+                    omitted[path] = spec.default
             elif (prefix or name in cap.nested_components) and name in values and spec.properties and isinstance(values[name], Mapping):
                 omitted.update(walk(spec.properties, values[name], path + "."))
         return omitted
@@ -350,15 +353,20 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
 
 
 def _completed_params(fn: str, params: Mapping[str, Any]) -> dict[str, Any]:
-    """Private exact-neutral projection view; never completes an absent object."""
+    """Private projection view; create an absent object only from its whole declared neutral."""
     import copy
     completed = copy.deepcopy(dict(params))
+    cap = CAPABILITY_REGISTRY.get(fn)
+    if cap is not None:
+        for name, spec in cap.params.items():
+            if name not in params and spec.structured and cap.neutral_omission_allowed(name, params):
+                completed[name] = copy.deepcopy(spec.default)
     for path, value in declared_neutral_omissions(fn, params).items():
         parts = path.split(".")
         target = completed
         for part in parts[:-1]:
             target = target[part]
-        target[parts[-1]] = value
+        target[parts[-1]] = copy.deepcopy(value)
     return completed
 
 
@@ -379,6 +387,30 @@ def _omission_context_allows(
     if spec is None:
         return False
     condition = spec.omission_condition
+    if condition is None and not spec.structured:
+        return True
+    # Conditional root neutrals must be checked against the source params or
+    # the actual sibling wire fields, never merely against receipt assertions.
+    if authored_document is not None:
+        calls = _final_value(authored_document, "runtimeProgram.calls")
+        sources = [row for row in calls if isinstance(row, Mapping)
+                   and row.get("id") == receipt.get("callId") and row.get("fn") == cap.name] if isinstance(calls, list) else []
+        if len(sources) != 1 or not isinstance(sources[0].get("params"), Mapping):
+            return False
+        scope_params = sources[0]["params"]
+    elif final_document is not None:
+        root_fields = spec.wire_field_names(name)
+        path = str(receipt.get("finalPath") or "")
+        fields = [field for field in root_fields if path.endswith("." + field)]
+        if len(fields) != 1:
+            return False
+        component_path = path[:-(len(fields[0]) + 1)]
+        scope_params = {key: value for key, child in cap.params.items()
+                        if (value := _final_value(final_document, component_path + "." + (child.wire_name or key))) is not _MISSING}
+    else:
+        return False
+    if not cap.neutral_omission_allowed(name, scope_params):
+        return False
     if condition is None:
         return True
     if authored_document is not None:
@@ -424,13 +456,61 @@ def _omission_context_allows(
     return False
 
 
+def _root_neutral_omission_matches(
+    cap: Any, source_name: str, receipt: Mapping[str, Any], *,
+    authored_document: Mapping[str, Any] | None, final_document: Mapping[str, Any] | None,
+) -> bool:
+    """A leaf receipt may prove only an exact projection of the declared whole default."""
+    root = source_name.split(".", 1)[0]
+    spec = cap.params.get(root)
+    if spec is None or not spec.structured or not cap.neutral_omission_allowed(root, {}):
+        return False
+    if not _omission_context_allows(cap, root, receipt,
+            authored_document=authored_document, final_document=final_document):
+        return False
+    updates = None
+    if spec.requires_update_context:
+        if authored_document is not None:
+            calls = _final_value(authored_document, "runtimeProgram.calls")
+            source = next((row for row in calls if isinstance(row, Mapping)
+                           and row.get("id") == receipt.get("callId") and row.get("fn") == cap.name), None) if isinstance(calls, list) else None
+            if isinstance(source, Mapping):
+                updates = _source_updates(spec, source, calls)
+        elif final_document is not None:
+            entity = re.match(r"runtimeProgram\.entities\[\d+\]", str(receipt.get("finalPath") or ""))
+            extra = _final_value(final_document, entity.group() + ".collision.extraUpdates") if entity else None
+            if type(extra) is int and 0 <= extra <= 5:
+                updates = extra + 1
+    try:
+        projections = spec.projected_fields(spec.default, root, updates_per_tick=updates)
+    except (ValueError, TypeError, OverflowError):
+        return False
+    matches = [row for row in projections if row.authored_path == source_name and not row.literal
+               and str(receipt.get("finalPath") or "").endswith("." + row.wire_path)
+               and _same_receipt_value(row.value, receipt.get("value"))]
+    if len(matches) != 1:
+        return False
+    if final_document is not None:
+        prefix = receipt["finalPath"][:-(len(matches[0].wire_path) + 1)]
+        delivered = _wire_projection_witness(spec, root, prefix, final_document)
+        expected_records = [(row.authored_path, row.wire_path, row.literal, row.value) for row in projections]
+        delivered_records = [(row.authored_path, row.wire_path, row.literal, row.value) for row in delivered]
+        if not _same_receipt_value(delivered_records, expected_records):
+            return False
+    return True
+
+
 def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None) -> tuple[str, ...]:
     cap = CAPABILITY_REGISTRY[fn]
     root = name.split(".", 1)[0]
     spec = _param_leaf(cap, name)
     if spec is None:
-        return ()
-    names = (name, *spec.wire_field_names(name))
+        root_spec = cap.params.get(root)
+        if root_spec is None or not root_spec.structured:
+            return ()
+        names = tuple(destination for source, destination, _ in root_spec.projection_paths(root) if source == name)
+    else:
+        names = (name, *spec.wire_field_names(name))
     return tuple(dict.fromkeys(
         candidate for candidate in cap.final_wire_paths
         if any(candidate.endswith("." + name) for name in names)
@@ -652,6 +732,14 @@ def _global_receipt_wire_error(receipt: Mapping[str, Any], final_document: Mappi
 def _wire_projection_witness(spec: ParamSpec, name: str, prefix: str, final: Mapping[str, Any]) -> tuple[Any, ...]:
     """Prove one complete typed projection without inventing inverse Author values."""
     from infini_local.core.runtime_authoring.capability_registry import ParamProjection
+    from infini_local.core.schema_validation import strict_schema_errors
+
+    # A nested DTO object is a closed wire variant, not just a bag of known
+    # leaves. Do not let unknown siblings disappear from its presence proof.
+    fields = spec.wire_field_names(name)
+    if spec.structured and fields and all(field.startswith(name + ".") for field in fields):
+        if strict_schema_errors(_final_value(final, prefix + "." + name), spec.wire_schema()):
+            return ()
 
     def rows_for(node: ParamSpec, source: str) -> tuple[Any, ...] | None:
         if node.alternatives:
@@ -750,8 +838,10 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
                     if receipt.get("fn") == cap.name and receipt.get("finalPath") == path
                     and (receipt.get("status") == ("alias_lowering" if projection.literal else "delivered")
                          or (not projection.literal and receipt.get("status") == "declared_neutral_omission"
-                             and (omitted_spec := _param_leaf(cap, projection.authored_path)) is not None
-                             and _declares_neutral_omission(omitted_spec)))
+                             and (((omitted_spec := _param_leaf(cap, projection.authored_path)) is not None
+                                   and _declares_neutral_omission(omitted_spec))
+                                  or _root_neutral_omission_matches(cap, projection.authored_path, receipt,
+                                      authored_document=authored, final_document=final))))
                     and not receipt.get("authoredPaths") and _same_receipt_value(receipt.get("value"), projection.value)
                     and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.params\." + re.escape(projection.authored_path),
                                      str(receipt.get("authoredPath") or ""))]
@@ -1156,6 +1246,10 @@ def audit_compiler_receipts(
                      if source == source_name and path.endswith("." + destination)]
             expected_statuses = {"alias_lowering" if literal else "delivered" for _, _, literal in pairs}
             leaf_spec = _param_leaf(cap, source_name)
+            root_omission = _root_neutral_omission_matches(cap, source_name, receipt,
+                authored_document=authored_document, final_document=final_document)
+            if root_omission:
+                expected_statuses.add("declared_neutral_omission")
             if leaf_spec is not None and _declares_neutral_omission(leaf_spec):
                 expected_statuses.add("declared_neutral_omission")
                 if receipt.get("status") == "declared_neutral_omission" and not _same_receipt_value(
@@ -1170,7 +1264,8 @@ def audit_compiler_receipts(
                 expected_rows = ()
                 if (isinstance(source_call, Mapping) and source_call.get("fn") == fn
                     and source_call.get("id") == receipt.get("callId")
-                    and isinstance(source_params, Mapping) and root_name in source_params):
+                    and isinstance(source_params, Mapping)
+                    and (root_name in source_params or cap.neutral_omission_allowed(root_name, source_params))):
                     try:
                         expected_rows = spec.projected_fields(_completed_params(fn, source_params)[root_name], root_name, updates_per_tick=_source_updates(spec, source_call, source_calls))
                     except (ValueError, TypeError, KeyError):
@@ -1388,8 +1483,10 @@ def audit_compiler_receipts(
                      if source == source_name and row["finalPath"].endswith("." + destination)
                      and (row["status"] == ("alias_lowering" if literal else "delivered")
                           or not literal and row["status"] == "declared_neutral_omission"
-                          and (leaf_spec := _param_leaf(CAPABILITY_REGISTRY[fn], source_name)) is not None
-                          and _declares_neutral_omission(leaf_spec))]
+                          and (((leaf_spec := _param_leaf(CAPABILITY_REGISTRY[fn], source_name)) is not None
+                                and _declares_neutral_omission(leaf_spec))
+                               or _root_neutral_omission_matches(CAPABILITY_REGISTRY[fn], source_name, row,
+                                   authored_document=authored_document, final_document=final_document)))]
             if len(pairs) != 1:
                 break
             destination, literal = pairs[0]

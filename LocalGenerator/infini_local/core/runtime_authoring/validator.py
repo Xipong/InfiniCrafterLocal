@@ -573,7 +573,8 @@ def _validate_requirement(
         missing = next((name for name in pair if name not in params), None)
         if missing and any(name in params for name in pair):
             return ValidationIssue(f"{path}.params.{missing}", "missing_dependency_param", requirement.message, (missing,))
-        if missing and requirement.any_of[0] not in params:
+        if (missing and requirement.any_of[0] not in params
+                and not cap.neutral_omission_allowed(requirement.any_of[0], params)):
             return ValidationIssue(f"{path}.params.{requirement.any_of[0]}", "missing_dependency_param", requirement.message, requirement.any_of)
         return None
     if requirement.kind == "conditional_param":
