@@ -332,6 +332,9 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
             errors.append({"path": f"{path}.{key}",
                            "code": "invalid_generated_buff_field",
                            "message": "Value must match the declared generated-buff wire type and domain without coercion."})
+            if key == "durationTicks" and (type(value) is not int or value < 0):
+                errors.append({"path": f"{path}.{key}", "code": "invalid_integer",
+                               "message": "Generated buff duration must be a nonnegative integer; zero means permanent."})
     if "durationTicks" not in wire and _generated_buff_has_effect(wire):
         errors.append({"path": f"{path}.durationTicks", "code": "missing_generated_buff_duration",
                        "message": "A nonneutral generated buff requires explicit durationTicks; zero selects permanent duration."})

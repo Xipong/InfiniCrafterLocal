@@ -289,6 +289,10 @@ internal static partial class EngineRuntimeChecks
             Equal(3, (int)ticks.GetValue(mirror)!, "current mirror contains positive aggregate without entries");
             tick.Invoke(mirror, null);
             Equal(2, (int)ticks.GetValue(mirror)!, "retained aggregate fallback supports current copied remote mirror");
+            receiver.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 0, MovementSpeed = .5f });
+            receiver.CopyClientState(mirror);
+            tick.Invoke(mirror, null);
+            Equal(int.MaxValue, (int)ticks.GetValue(mirror)!, "permanent copied remote mirror does not count down");
         });
     }
 }

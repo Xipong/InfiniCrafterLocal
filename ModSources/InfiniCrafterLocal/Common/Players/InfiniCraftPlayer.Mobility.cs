@@ -365,6 +365,12 @@ public sealed partial class InfiniCraftPlayer
             }
             RebuildGeneratedUtilityBuffAggregate();
         }
+        else if (!InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player)
+            && _generatedBuffTicks is > 0 and < int.MaxValue)
+        {
+            // Current CopyClientState mirrors carry only the aggregate timer.
+            _generatedBuffTicks--;
+        }
 
         if (_generatedBuffTicks <= 0)
         {
