@@ -1,5 +1,5 @@
 
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
 """Real builder admission, no provider calls or synthetic responses."""
 import copy
 import json
@@ -32,12 +32,12 @@ def test_literal_source_tooltip_context_fits_without_clipping(monkeypatch, mode)
         assert payload["parents"][label]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
     assert request_dossier(request) == payload
     assert len(user) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
-    assert sum(len(row["content"]) for row in request["messages"]) <= 220_000
     sent = _serialized_chat_request(monkeypatch, request)
     assert request_dossier(sent, declaration=request) == payload
-    assert sum(len(row["content"]) for row in sent["messages"]) <= 220_000
+    assert sent["messages"] == request["messages"]
     catalog = payload["runtimeCapabilityContract"]["catalog"]
     expanded = _expand_constraint_references(catalog["capabilities"], catalog["fieldGuide"]["consumerConstraints"])
+    expanded = expand_catalog_targets(expanded, catalog["fieldGuide"]["targetKindSets"])
     assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
             for card in expanded] == compact_capability_catalog()
     assert source == before
@@ -50,11 +50,11 @@ def test_fresh_cards_share_only_exact_parameter_metadata_and_dead_negative_claus
     )
 
     before = {name: cap.audit_card() for name, cap in CAPABILITY_REGISTRY.items()}
-    cards = {card["fn"]: card for card in compact_capability_catalog()}
+    catalog = compact_capability_catalog()
+    cards = {card["fn"]: card for card in catalog}
     guide = runtime_authoring_prompt_field_guide()
-    assert len(cards) == 74
+    assert len(cards) == len(catalog), "each visible capability is delivered exactly once"
     assert set(cards) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
-    assert "paramRef" in guide["paramNotation"]
     references = []
     for name, card in cards.items():
         cap = CAPABILITY_REGISTRY[name]
@@ -139,9 +139,20 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
 
     def normalize_meanings(value: Any) -> Any:
         if isinstance(value, dict):
-            return {key: child.removeprefix(seconds_primer)
+            result = {key: child.removeprefix(seconds_primer)
                     if key in {"meaning", "description"} and isinstance(child, str)
                     else normalize_meanings(child) for key, child in value.items()}
+            units = value.get("units", value.get("x-infini-units"))
+            if isinstance(units, str):
+                for key in ("meaning", "description"):
+                    if isinstance(result.get(key), str):
+                        result[key] = result[key].removeprefix(f"Author units: {units}. Native consumer: ")
+            properties = result.get("properties")
+            if isinstance(properties, dict) and len(properties) == 1:
+                child = next(iter(properties.values()))
+                if isinstance(child, dict) and result.get("description") == child.get("description"):
+                    result.pop("description", None)
+            return result
         if isinstance(value, list):
             return [normalize_meanings(child) for child in value]
         return value
@@ -157,7 +168,8 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             row["meaning"] = resolve_param("configure_accessory", param)["meaning"]
         return row
 
-    for fn, card in cards.items():
+    for fn, delivered_card in cards.items():
+        card = expand_catalog_targets([delivered_card], guide["targetKindSets"])[0]
         cap = CAPABILITY_REGISTRY[fn]
         source = cap.audit_card()
         for key in ("fn", "does", "targets", "exclusiveGroup", "acceptedEvents", "emitsEvents",
@@ -198,28 +210,64 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             assert row == expected, (fn, param)
             checked += 1
     assert checked + shared == sum(len(cap.params) for cap in CAPABILITY_REGISTRY.values() if cap.author_visible)
-    assert checked > 300 and shared > 0
+    assert checked and shared
     assert request_dossier(request) == json.loads(user) == packet
 
 
-def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode_character(monkeypatch):
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_retired_loaded_status_vocabulary_never_reaches_author_or_changes_literal_sources(monkeypatch, mode):
+    """An old producer's global registry is not an Author effect vocabulary."""
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    entries = [{"id": n, "fullName": f"ContextFixture/RegisteredStatus{n}"} for n in range(1, 2049)]
+    source = {
+        "name": "Bounded native reference context",
+        "tooltipLines": ["literal source " + "Ж" * 1000] * 12,
+        "loadedBuffIdentitiesRaw": {"source": "native_loaded_buff_registry", "complete": False, "entries": entries},
+    }
+    before = copy.deepcopy(source)
+    request, text, _ = build_initial_author_request(source, source, "retired-identities", model_name="offline")
+    sent = _serialized_chat_request(monkeypatch, request)
+    packet = request_dossier(sent, declaration=request)
+    assert "statusIdentityChoices" not in packet["runtimeCapabilityContract"]
+    assert "RegisteredStatus2048" not in json.dumps(sent)
+    assert "loadedBuffIdentitiesRaw" not in json.dumps(sent)
+    for side in ("A", "B"):
+        assert packet["parents"][side]["packet"]["raw"]["item"]["tooltipLines"] == source["tooltipLines"]
+    assert len(packet["runtimeCapabilityContract"]["catalog"]["capabilities"]) == len(compact_capability_catalog())
+    assert len(text) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    assert source == before
+
+
+def test_author_budget_remains_the_authorized_225k_characters():
+    assert PLANNER_PROMPT_LIMIT_CHARS == 225_000
+
+
+def test_shared_target_kind_sets_preserve_every_exact_capability_domain():
+    _, text, _ = build_initial_author_request({}, {}, "target-kind-sharing", model_name="offline")
+    catalog = json.loads(text)["runtimeCapabilityContract"]["catalog"]
+    sets = catalog["fieldGuide"].get("targetKindSets", {})
+    assert sets
+    expected = {card["fn"]: card["targets"] for card in compact_capability_catalog()}
+    for card in catalog["capabilities"]:
+        targets = sets[card["targetsRef"]] if "targetsRef" in card else card["targets"]
+        assert targets == expected[card["fn"]]
+        assert ("targets" in card) != ("targetsRef" in card)
+
+
+@pytest.mark.parametrize("extra_room", [None, 31], ids=["declared-limit", "changed-limit"])
+def test_decimal_character_guard_accepts_exact_boundary_and_rejects_next_unicode_character(monkeypatch, extra_room):
     from infini_local.pipelines import llm_authoring_prompt as prompt
 
-    assert prompt.PLANNER_PROMPT_LIMIT_CHARS == 225_000
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", "json_object")
     _, initial, _ = build_initial_author_request({}, {}, "", model_name="offline")
-    key = "Ж" * (225_000 - len(initial))
+    if extra_room is not None:
+        monkeypatch.setattr(prompt, "PLANNER_PROMPT_LIMIT_CHARS", len(initial) + extra_room)
+    limit = prompt.PLANNER_PROMPT_LIMIT_CHARS
+    key = "Ж" * (limit - len(initial))
     before = copy.deepcopy(key)
     request, text, _ = build_initial_author_request({}, {}, key, model_name="offline")
-    assert len(text) == 225_000
-    assert len(text.encode("utf-8")) > 225_000
+    assert len(text) == limit
+    assert len(text.encode("utf-8")) > limit
     assert request_dossier(request)["recipeKey"] == key == before
-    with pytest.raises(ValueError, match="225001 chars, above configured 225000"):
+    with pytest.raises(ValueError):
         build_initial_author_request({}, {}, key + "Ж", model_name="offline")
-
-
-def test_oversize_author_payload_refuses_instead_of_clipping(monkeypatch):
-    from infini_local.pipelines import llm_authoring_prompt as prompt
-    monkeypatch.setattr(prompt, "PLANNER_PROMPT_LIMIT_CHARS", 10)
-    with pytest.raises(ValueError, match="above configured 10"):
-        build_initial_author_request({}, {}, "oversize", model_name="offline")

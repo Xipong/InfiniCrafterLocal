@@ -30,19 +30,18 @@ def _accepted_main_combat_composition(damage_basis="live_parent", knockback_basi
     calls = document["runtimeProgram"]["calls"]
     # Author a sustained beam explicitly, retaining the fixture's aim/attachment
     # and non-motion combat lanes. A reach curve is not a beam controller.
-    reach = _call(document, "set_projectile_reach_curve")
+    reach = _call(document, "attach_projectile")
     assert reach["target"] == "held_lantern_pike"
-    calls.remove(reach)
+    del reach["params"]["reachCurve"]
     _call(document, "set_projectile_rotation")["params"] = {"mode": "axis", "offsetRadians": 0}
     _call(document, "set_projectile_owner_control")["params"].update(
         requireHeldItem=True, requireChannel=True, animation="keep_alive", lifetime="keep_alive",
     )
     calls.extend([
         {"id": "held_beam_geometry", "fn": "set_projectile_beam_geometry", "target": "held_lantern_pike",
-         "params": {"lengthBlocks": 20, "widthBlocks": 0.75, "raycastTiles": True}},
-        {"id": "held_beam_ramp", "fn": "set_projectile_beam_ramp", "target": "held_lantern_pike",
-         "params": {"warmupSeconds": 0.2, "initialDamageMultiplier": 0.35,
-                    "initialWidthMultiplier": 0.22, "damageStartProgress": 0.08}},
+         "params": {"lengthBlocks": 20, "widthBlocks": 0.75, "raycastTiles": True,
+                    "ramp": {"warmupSeconds": 0.2, "initialDamageMultiplier": 0.35,
+                    "initialWidthMultiplier": 0.22, "damageStartProgress": 0.08}}},
         {"id": "held_beam_mana", "fn": "sustain_projectile_mana", "target": "held_lantern_pike"},
     ])
     _call(document, "configure_item_use")["params"]["channel"] = True
@@ -79,8 +78,9 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
     packet = json.loads(user)
     names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     source = _accepted_main_combat_composition(damage_basis, knockback_basis, multiplier)
+    source = {key: source[key] for key in ("name", "category", "runtimeProgram")}
     assert {"target_and_fire", "configure_weapon_ammo", "set_projectile_sentry", "set_descendant_concurrency",
-            "set_projectile_beam_geometry", "set_projectile_beam_ramp", "sustain_projectile_mana"} <= names
+            "set_projectile_beam_geometry", "sustain_projectile_mana"} <= names
     assert "channel_beam" not in names
     before = deepcopy(source)
     restored = provider_roundtrip(source, request["response_format"])

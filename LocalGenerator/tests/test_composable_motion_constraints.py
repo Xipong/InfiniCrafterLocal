@@ -309,7 +309,7 @@ def test_line_geometry_refuses_dynamic_body_owners_in_author_and_stripped_wire(g
 
 def test_nonzero_retention_must_not_collapse_to_zero():
     doc = base_document()
-    add(doc, "multiply_projectile_velocity", {"multiplierPerUpdate": 1e-60})
+    add(doc, "scale_projectile_velocity", {"multiplierPerUpdate": 1e-60})
     assert not validate_runtime_program(doc)["ok"]
 
 

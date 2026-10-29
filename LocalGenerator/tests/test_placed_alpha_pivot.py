@@ -70,10 +70,11 @@ def test_real_provider_and_visual_repair_describe_selected_basis_readonly(wire_t
     from jsonschema import Draft202012Validator
 
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    document = placed()
+    document = {key: value for key, value in placed().items() if key in {"name", "category", "runtimeProgram"}}
     document["runtimeProgram"]["calls"][-1]["params"]["pivotSpace"] = "alpha_bounds"
     responses, requests = wire_transport
-    payload = _encode_nullable_fixture(document, contract.author_item_response_schema()) if mode == "json_schema" else document
+    local_schema = contract.author_item_response_schema()
+    payload = _encode_nullable_fixture(document, local_schema) if mode == "json_schema" else document
     responses.append(payload)
     accepted = author.try_llm_plan({"name":"A"}, {"name":"B"}, "offline-alpha-pivot")
     assert accepted is not None
@@ -132,9 +133,10 @@ def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(w
     assert "inventory" in summary and "return" in summary
     assert "unsupported" in summary and "callback" in summary
     for fn in (FN, "add_placed_light", "enable_placed_vfx"):
-        summary = next(c for c in cards if c["fn"] == fn)["does"].lower()
-        assert "footprint" in summary and "bounded" in summary
-        assert "configure_tile_placement" in summary
+        card = next(c for c in cards if c["fn"] == fn)
+        summary = card["does"].lower()
+        assert "footprint" in summary and "16x16/256 cells" in summary
+        assert "configure_tile_placement" in card["params"]["placementCallId"]["meaning"]
         assert "waterchest" not in summary and "tile 21/style 17" not in summary
     wire = compile_runtime_program(accepted)
     assert {"placedBody", "placedLight"} <= placement(wire).keys()

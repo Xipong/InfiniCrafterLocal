@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -34,6 +35,59 @@ internal readonly record struct SpritePresentationSelection(string Path, int? Re
 
 internal static class SpritePresentation
 {
+    // Exact opaque pixel-edge support geometry, measured once with the selected
+    // texture generation. This is presentation normalization, not an inferred
+    // material/decoration classification or a change to the native item collider.
+    internal static Vector2[] MeasureAlphaHull(Color[] pixels, int width, int height)
+    {
+        var points = new List<Vector2>();
+        for (int y = 0; y < height; y++)
+        {
+            int left = width, right = -1;
+            for (int x = 0; x < width; x++)
+                if (pixels[y * width + x].A > 0) { left = Math.Min(left, x); right = x; }
+            if (right < left) continue;
+            points.Add(new(left, y)); points.Add(new(right + 1, y));
+            points.Add(new(left, y + 1)); points.Add(new(right + 1, y + 1));
+        }
+        points.Sort((a, b) => a.X != b.X ? a.X.CompareTo(b.X) : a.Y.CompareTo(b.Y));
+        if (points.Count == 0) return Array.Empty<Vector2>();
+        var hull = new List<Vector2>();
+        static float Cross(Vector2 a, Vector2 b, Vector2 c)
+            => (b.X-a.X)*(c.Y-a.Y) - (b.Y-a.Y)*(c.X-a.X);
+        foreach (Vector2 p in points)
+        {
+            while (hull.Count >= 2 && Cross(hull[^2], hull[^1], p) <= 0) hull.RemoveAt(hull.Count-1);
+            hull.Add(p);
+        }
+        int lowerCount = hull.Count;
+        for (int i = points.Count - 2; i >= 0; i--)
+        {
+            Vector2 p = points[i];
+            while (hull.Count > lowerCount && Cross(hull[^2], hull[^1], p) <= 0) hull.RemoveAt(hull.Count-1);
+            hull.Add(p);
+        }
+        hull.RemoveAt(hull.Count-1);
+        return hull.ToArray();
+    }
+
+    internal static Vector2 DroppedBodyPosition(Vector2 bottom, Vector2 origin, float rotation,
+        float scale, Vector2[]? alphaHull)
+    {
+        // Unknown geometry is possible only for borrowed/headless cache fixtures;
+        // retain their old frame placement. A measured alpha-empty image stays empty.
+        if (alphaHull is null || alphaHull.Length == 0) return bottom - new Vector2(0, origin.Y * scale);
+        float cosine = MathF.Cos(rotation), sine = MathF.Sin(rotation);
+        float minX = float.PositiveInfinity, maxX = float.NegativeInfinity, maxY = float.NegativeInfinity;
+        foreach (Vector2 point in alphaHull)
+        {
+            Vector2 p = (point - origin) * scale;
+            float x = p.X * cosine - p.Y * sine, y = p.X * sine + p.Y * cosine;
+            minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); maxY = Math.Max(maxY, y);
+        }
+        return bottom - new Vector2((minX + maxX) * .5f, maxY);
+    }
+
     // Property-local admission: keep nullable-float storage and direct setter
     // guards, but reject out-of-domain JSON before GetSingle can round it in.
     public sealed class ForwardAngleJsonConverter : JsonConverter<float?>

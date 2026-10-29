@@ -20,10 +20,15 @@
       "authoredDecisionsPreserved": true,
       "capability": "accumulate_projectile_charge",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::ApplyMotionCharge/ReleaseCharge",
       "outputs": [
         "runtimeProgram.entities[].charge.durationTicks",
-        "runtimeProgram.entities[].charge.autoReleaseAfterActiveTicks"
+        "runtimeProgram.entities[].charge.autoReleaseAfterActiveTicks",
+        "runtimeProgram.entities[].chargeRelease.damageMultiplier",
+        "runtimeProgram.entities[].chargeRelease.knockbackMultiplier",
+        "runtimeProgram.entities[].chargeRelease.speedMultiplier",
+        "runtimeProgram.entities[].chargeRelease.launchSpeed",
+        "runtimeProgram.entities[].chargeRelease.pauseLifetimeWhileCharging"
       ]
     },
     {
@@ -59,11 +64,15 @@
       "authoredDecisionsPreserved": true,
       "capability": "set_projectile_beam_geometry",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
-      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry|Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC",
       "outputs": [
         "runtimeProgram.entities[].beamGeometry.lengthPx",
         "runtimeProgram.entities[].beamGeometry.widthPx",
-        "runtimeProgram.entities[].beamGeometry.raycastTiles"
+        "runtimeProgram.entities[].beamGeometry.raycastTiles",
+        "runtimeProgram.entities[].beamRamp.warmupTicks",
+        "runtimeProgram.entities[].beamRamp.initialWidthMultiplier",
+        "runtimeProgram.entities[].beamRamp.initialDamageMultiplier",
+        "runtimeProgram.entities[].beamRamp.damageStartProgress"
       ]
     },
     {
@@ -135,7 +144,16 @@
         "runtimeProgram.entities[].attachment.window.phase",
         "runtimeProgram.entities[].attachment.window.clock",
         "runtimeProgram.entities[].attachment.window.startDelayTicks",
-        "runtimeProgram.entities[].attachment.window.durationTicks"
+        "runtimeProgram.entities[].attachment.window.durationTicks",
+        "runtimeProgram.entities[].reach.durationTicks",
+        "runtimeProgram.entities[].reach.startOffsetPx",
+        "runtimeProgram.entities[].reach.peakOffsetPx",
+        "runtimeProgram.entities[].reach.endOffsetPx",
+        "runtimeProgram.entities[].reach.peakProgress",
+        "runtimeProgram.entities[].reach.window.phase",
+        "runtimeProgram.entities[].reach.window.clock",
+        "runtimeProgram.entities[].reach.window.startDelayTicks",
+        "runtimeProgram.entities[].reach.window.durationTicks"
       ]
     },
     {
@@ -289,6 +307,21 @@
         "runtimeProgram.entities[].velocityRetention.window.clock",
         "runtimeProgram.entities[].velocityRetention.window.startDelayTicks",
         "runtimeProgram.entities[].velocityRetention.window.durationTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "scale_projectile_velocity",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers",
+      "outputs": [
+        "runtimeProgram.entities[].velocityScale[].multiplierPerUpdate",
+        "runtimeProgram.entities[].velocityScale[].maxSpeed",
+        "runtimeProgram.entities[].velocityScale[].window.phase",
+        "runtimeProgram.entities[].velocityScale[].window.clock",
+        "runtimeProgram.entities[].velocityScale[].window.startDelayTicks",
+        "runtimeProgram.entities[].velocityScale[].window.durationTicks"
       ]
     },
     {
@@ -1441,6 +1474,25 @@
     {
       "addsDesignChoice": false,
       "authoredDecisionsPreserved": true,
+      "capability": "apply_npc_effect_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].durationTicks",
+        "runtimeProgram.entities[].events[].npcEffect.lifeRegenPenalty",
+        "runtimeProgram.entities[].events[].npcEffect.defenseDelta",
+        "runtimeProgram.entities[].events[].npcEffect.contactDamageMultiplier",
+        "runtimeProgram.entities[].events[].npcEffect.velocityRetentionPerTick",
+        "runtimeProgram.entities[].events[].npcEffect.chance",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
       "capability": "apply_status_on_event",
       "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
@@ -1450,6 +1502,23 @@
         "runtimeProgram.entities[].events[].actionCode",
         "runtimeProgram.entities[].events[].buffId",
         "runtimeProgram.entities[].events[].durationTicks",
+        "runtimeProgram.entities[].events[].delayTicks"
+      ]
+    },
+    {
+      "addsDesignChoice": false,
+      "authoredDecisionsPreserved": true,
+      "capability": "damage_nearby_on_event",
+      "compilerOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
+      "csharpOwner": "Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+      "outputs": [
+        "runtimeProgram.entities[].events[].event",
+        "runtimeProgram.entities[].events[].action",
+        "runtimeProgram.entities[].events[].actionCode",
+        "runtimeProgram.entities[].events[].reactionCooldownTicks",
+        "runtimeProgram.entities[].events[].radiusPx",
+        "runtimeProgram.entities[].events[].maxTargets",
+        "runtimeProgram.entities[].events[].damageMultiplier",
         "runtimeProgram.entities[].events[].delayTicks"
       ]
     },
@@ -1499,6 +1568,8 @@
         "runtimeProgram.entities[].events[].mode",
         "runtimeProgram.entities[].events[].strength",
         "runtimeProgram.entities[].events[].radiusTiles",
+        "runtimeProgram.entities[].events[].ownerStrength",
+        "runtimeProgram.entities[].events[].targetStrength",
         "runtimeProgram.entities[].events[].delayTicks"
       ]
     },

@@ -118,10 +118,11 @@ internal static partial class EngineRuntimeChecks
                 } else Equal(true,pixels.All(pixel=>pixel == Color.Transparent),"second alpha-empty image stays transparent");
             },_=>throw new InvalidOperationException("CPU shell must not dispose"));
             var prepare=typeof(RuntimeSpriteCache).GetMethods(PersistenceStatic).Single(m=>m.Name=="PrepareTextureAndMeasureLocalForwardRadians");
-            object?[] args=prepare.GetParameters().Length==2?new object?[]{texture,null}:new object?[]{texture};
+            object?[] args={texture,null,null};
             float axis=(float)prepare.Invoke(null,args)!;
             Equal(1,reads,"one existing GetData"); Equal(1,uploads,"one existing SetData");
-            Rectangle? measured=args.Length==2?args[1] as Rectangle?:null;
+            Rectangle? measured=args[1] as Rectangle?;
+            Equal(true,args[2] is Vector2[] hull && hull.Length > 0,"same one-read pixel pass measures dropped support hull");
             Equal((Rectangle?)new Rectangle(2,1,5,4),measured,"alpha>0 pixel EDGES from same premultiplication pass");
             var principal=typeof(RuntimeSpriteCache).GetMethod("MeasureLocalForwardRadians",PersistenceStatic)!;
             Equal((float)principal.Invoke(null,new object[]{source,8,6})!,axis,"PCA threshold/axis unchanged");

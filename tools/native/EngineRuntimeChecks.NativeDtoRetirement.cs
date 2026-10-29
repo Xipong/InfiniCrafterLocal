@@ -277,7 +277,7 @@ internal static partial class EngineRuntimeChecks
             using (var binary = new BinaryReader(stream, System.Text.Encoding.UTF8, true)) {
                 Equal((byte)player.whoAmI, binary.ReadByte(), "current snapshot exact owner");
                 reader.Invoke(receiver, new object[] { binary });
-                Equal(stream.Length, stream.Position, "current v5 entries and exhaustion fully consumed");
+                Equal(stream.Length, stream.Position, "current entries, initial durations and exhaustion fully consumed");
             }
             Equal(1, ((System.Collections.ICollection)entries.GetValue(receiver)!).Count, "current snapshot has exact entries");
             Terraria.Main.netMode = NetmodeID.MultiplayerClient; Terraria.Main.myPlayer = 0;

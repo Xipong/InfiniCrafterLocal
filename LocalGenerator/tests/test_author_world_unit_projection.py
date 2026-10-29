@@ -140,8 +140,8 @@ def test_full_predecessor_speed_and_acceleration_range_remains_reachable(updates
 @pytest.mark.parametrize("fn,params,member,expected", [
     ("set_projectile_turn_modifier", {"turnRadiansPerSecond": 12, "startDelaySeconds": 0.025, "durationSeconds": 0.5},
         "turnModifier", {"turnRadiansPerUpdate": 0.1, "startDelayTicks": 2, "durationTicks": 30}),
-    ("set_projectile_speed_modifier", {"speedMultiplierPerUpdate": 1.1, "maxSpeedBlocksPerSecond": 120,
-        "startDelaySeconds": 0, "durationSeconds": 0.5}, "speedModifier", {"maxSpeed": 16, "durationTicks": 30}),
+    ("scale_projectile_velocity", {"multiplierPerUpdate": 1.1, "maxSpeedBlocksPerSecond": 120},
+        "velocityScale", {"maxSpeed": 16}),
     ("set_projectile_hitbox_curve", {"startScale": 1, "endScale": 2, "startDelaySeconds": 0.025,
         "durationSeconds": 0.5, "mirrorToSprite": False, "curve": "linear"}, "hitboxCurve", {"startDelayTicks": 2, "durationTicks": 30}),
 ])
@@ -153,7 +153,7 @@ def test_modifier_wire_stays_in_engine_domains(fn, params, member, expected):
     wire = compile_runtime_program(source)
     shot = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == "shot")
     for key, value in expected.items():
-        assert shot[member][key] == pytest.approx(value)
+        assert (shot[member][0] if member == "velocityScale" else shot[member])[key] == pytest.approx(value)
     report = validate_runtime_wire(wire)
     assert report["ok"], report
     stripped = deepcopy(wire)
@@ -404,7 +404,7 @@ def test_angular_oscillation_underflow_is_refused_at_author_leaf_without_mutatio
     ("set_projectile_homing_modifier", "maxTurnRadiansPerSecond", "minimum", False),
     ("set_projectile_homing_modifier", "maxTurnRadiansPerSecond", "maximum", False),
     ("pull_on_event", "impulseBlocksPerSecond", "minimum", True),
-    ("pull_owner_to_event_target", "impulseBlocksPerSecond", "minimum", True),
+    ("pull_on_event", "ownerImpulseBlocksPerSecond", "minimum", False),
 ])
 def test_native_float32_engine_endpoints_survive_without_accepting_outside_single(fn, param, bound_name, bare_outside_accepted):
     import struct
@@ -425,6 +425,8 @@ def test_native_float32_engine_endpoints_survive_without_accepting_outside_singl
     from infini_local.qa.capability_witnesses import build_capability_witness
     source = build_capability_witness(fn)
     authored_call = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == fn)
+    if param == "ownerImpulseBlocksPerSecond":
+        authored_call["params"] = {"mode": "both", "when": "on_hit", "ownerImpulseBlocksPerSecond": 8, "targetImpulseBlocksPerSecond": 14}
     authored_call["params"][param] = spec.from_wire(
         original_bound, updates_per_tick=1 if spec.requires_update_context else None)
     wire = compile_runtime_program(source)

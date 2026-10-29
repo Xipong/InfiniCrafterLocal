@@ -293,7 +293,7 @@ internal static partial class EngineRuntimeChecks
         {
             var reader = new BinaryReader(wire); reader.ReadByte();
             typeof(InfiniCraftPlayer).GetMethod("DiscardGeneratedBuffState", MobilityConsumptionFlags)!.Invoke(null, new object[] { reader });
-            Equal(wire.Length, wire.Position, "discard consumes exact v5 payload including timer rows");
+            Equal(wire.Length, wire.Position, "discard consumes exact current payload including initial durations and timer rows");
         }
         byte[] packet = new byte[bytes.Length + 1]; packet[0] = InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedUtilityBuff;
         bytes.CopyTo(packet, 1);
@@ -310,7 +310,7 @@ internal static partial class EngineRuntimeChecks
         // Reader guard must reject length BEFORE ReadBytes allocates (all state
         // strings use the existing BinaryWriter 7-bit UTF8 string convention).
         using var malformed = new MemoryStream(); using var writer = new BinaryWriter(malformed);
-        writer.Write((byte)6); writer.Write(0); writer.Write(1f); writer.Write(0f);
+        writer.Write((byte)7); writer.Write(0); writer.Write(1f); writer.Write(0f);
         writer.Write7BitEncodedInt(1000000); malformed.Position = 0;
         bool rejected = false;
         try { typeof(InfiniCraftPlayer).GetMethod("ReadGeneratedBuffState", MobilityConsumptionFlags)!.Invoke(f.RemoteBuff, new object[] { new BinaryReader(malformed) }); }

@@ -8,11 +8,11 @@ from __future__ import annotations
 import io
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import subprocess
 import sys
 import threading
-import time
 from types import SimpleNamespace
 from urllib.error import HTTPError
 
@@ -184,10 +184,8 @@ def test_sdcpp_cleanup_is_lazy_worker_safe_and_registered_once(monkeypatch, serv
     monkeypatch.setattr(sdcpp_service.signal, "signal", lambda sig, handler: signal_calls.append((sig, handler)))
     state = service_options["state"]
     cleanup = lambda _reason: None
-    worker = threading.Thread(target=sdcpp_service.install_cleanup_handlers, args=(state, cleanup))
-    worker.start()
-    worker.join(timeout=3)
-    assert not worker.is_alive()
+    with ThreadPoolExecutor(max_workers=1) as workers:
+        workers.submit(sdcpp_service.install_cleanup_handlers, state, cleanup).result(timeout=5)
     assert state.cleanup_registered is True and state.signal_handlers_registered is False
     assert len(atexit_calls) == 1 and signal_calls == []
     sdcpp_service.install_cleanup_handlers(state, cleanup)
@@ -209,30 +207,42 @@ def test_sdcpp_spawn_failure_closes_unowned_log_handle(monkeypatch, service_opti
 def test_parallel_sdcpp_ensure_has_one_process_owner(monkeypatch, service_options):
     monkeypatch.setattr(sdcpp_service.atexit, "register", lambda _callback: None)
     monkeypatch.setattr(sdcpp_service.signal, "signal", lambda *_args: None)
-    spawn_ids, results = [], []
-    lock, start = threading.Lock(), threading.Barrier(2)
+    spawned, release, queued = (threading.Event() for _ in range(3))
+    processes = []
+
     def spawn(*args, **kwargs):
-        with lock:
-            spawn_ids.append(len(spawn_ids) + 1)
-        return SimpleNamespace(returncode=None, poll=lambda: None)
-    def alive():
-        with lock:
-            spawned = bool(spawn_ids)
-        if not spawned:
-            time.sleep(0.05)
-        return spawned
-    def worker():
-        start.wait(timeout=3)
-        results.append(sdcpp_service.ensure_server(**service_options))
+        process = SimpleNamespace(returncode=None, poll=lambda: None)
+        processes.append(process)
+        spawned.set()
+        assert release.wait(5), "test did not release process creation"
+        return process
+
+    def follower():
+        queued.set()
+        return sdcpp_service.ensure_server(**service_options)
+
     monkeypatch.setattr(sdcpp_service.subprocess, "Popen", spawn)
-    service_options["server_is_alive"] = alive
-    threads = [threading.Thread(target=worker) for _ in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join(timeout=3)
-    assert all(not thread.is_alive() for thread in threads)
-    assert results == [True, True] and spawn_ids == [1]
+    service_options["server_is_alive"] = lambda: service_options["state"].process is not None
+    service_options["diagnostics_enabled"] = False
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        first = workers.submit(sdcpp_service.ensure_server, **service_options)
+        try:
+            assert spawned.wait(5), "first request never reached process creation"
+            state_lock = service_options["state"].lock
+            acquired = state_lock.acquire(blocking=False)
+            if acquired:
+                state_lock.release()
+            assert not acquired, "process creation escaped lifecycle ownership"
+            second = workers.submit(follower)
+            assert queued.wait(5), "second request never started"
+            assert not second.done(), "follower escaped the in-flight startup transaction"
+            release.set()
+            assert first.result(timeout=5) is True
+            assert second.result(timeout=5) is True
+        finally:
+            release.set()
+    assert len(processes) == 1
+    assert service_options["state"].process is processes[0]
 
 
 def test_failure_record_keeps_each_exception_snapshot_isolated(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -249,11 +259,9 @@ def test_failure_record_keeps_each_exception_snapshot_isolated(monkeypatch: pyte
 
     barrier = threading.Barrier(2)
     errors = [RuntimeError("request-a"), RuntimeError("request-b")]
-    snapshots: list[dict] = [{}, {}]
-
-    def worker(index: int) -> None:
-        barrier.wait()
-        snapshots[index] = generation_debug.record_combine_failure(
+    def worker(index: int) -> dict:
+        barrier.wait(timeout=5)
+        return generation_debug.record_combine_failure(
             f"stage-{index}",
             errors[index],
             {"request": index},
@@ -261,13 +269,9 @@ def test_failure_record_keeps_each_exception_snapshot_isolated(monkeypatch: pyte
             [],
         )
 
-    threads = [threading.Thread(target=worker, args=(index,)) for index in range(2)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join(timeout=3)
-
-    assert all(not thread.is_alive() for thread in threads)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        futures = [workers.submit(worker, index) for index in range(2)]
+        snapshots = [future.result(timeout=5) for future in futures]
     for index, error in enumerate(errors):
         expected = {"stage": f"stage-{index}", "payload": {"request": index}, "error": f"request-{chr(97 + index)}"}
         assert snapshots[index] == expected

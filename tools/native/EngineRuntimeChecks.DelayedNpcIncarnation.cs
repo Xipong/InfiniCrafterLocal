@@ -58,7 +58,8 @@ internal static partial class EngineRuntimeChecks
     {
         using var stream = new MemoryStream();
         using var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true);
-        writer.Write(token); writer.Flush(); stream.Position = 0;
+        writer.Write(token); writer.Write((byte)0); // no active generated NPC-effect records
+        writer.Flush(); stream.Position = 0;
         using var reader = new BinaryReader(stream);
         new RuntimeHitNpcGeneration().ReceiveExtraAI(npc, null!, reader);
         Equal(token, RuntimeHitNpcGeneration.Get(npc), "actual NPC ExtraAI decoder installed token");

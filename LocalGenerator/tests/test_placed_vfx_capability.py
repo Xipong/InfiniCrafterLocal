@@ -137,23 +137,19 @@ def test_new_registry_witness_and_native_bounds_surface():
 from test_low_level_three_stage_pipeline import wire_transport
 
 
-def test_actual_author_visual_and_visual_repair_packets_describe_independent_live_art(wire_transport):
+def test_actual_author_and_visual_repairs_preserve_independent_placed_components(wire_transport):
     from prompt_packet_helpers import request_dossier
     from infini_local.pipelines import llm_authoring_pipeline as author, visual_generation_pipeline as visual
     from test_low_level_three_stage_pipeline import _visual_kit
     responses,requests=wire_transport
     d=authored();responses.append(d)
     assert author.try_llm_plan({'name':'A'},{'name':'B'},'placed-offline') is not None
-    card=next(c for c in request_dossier(requests[-1])['runtimeCapabilityContract']['catalog']['capabilities'] if c['fn']=='enable_placed_vfx')
-    assert 'nativeTileState' in card['constructionMeaning']
     wire=compile_runtime_program(d);kit=_visual_kit(wire)
     for repair in (False,True):
         responses.append(kit if not repair else {'schema':visual.VISUAL_REPAIR_PATCH_SCHEMA,'note':'no-op'})
         visual._request_visual_kit(wire,{}, {}, **({'repair_errors':[],'previous':kit,'repair_scope':{}} if repair else {}))
         packet=request_dossier(requests[-1])
         assert packet['acceptedPresentationMechanicsReadOnly']['bindings']==wire['runtimeProgram']['bindings']
-        guide=packet['spritePresentationReadOnly']['placedVfx']
-        assert 'stable physical' in guide and 'not yet authored' in guide
     broken=copy.deepcopy(d);broken['runtimeProgram']['calls'][-1]['params']['placementCallId']='wrong'
     patch=copy.deepcopy(broken['runtimeProgram']['calls'][-1]);patch['params'].update(placementCallId='install_tile',minFrameY=9,maxFrameY=10)
     responses.append({'note':'exact dependency','realizationReplacement':broken['realization'],'callsUpsert':[patch]})

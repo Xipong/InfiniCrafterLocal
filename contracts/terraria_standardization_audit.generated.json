@@ -4,7 +4,7 @@
   "score": 88,
   "scoreMax": 88,
   "metrics": {
-    "capabilities": 96,
+    "capabilities": 99,
     "canonicalDamageClasses": 10,
     "canonicalUseStyles": 13,
     "canonicalAmmoCategories": 15,
@@ -319,12 +319,12 @@
     {
       "name": "generated_buff_regen_half_hp_parity",
       "ok": true,
-      "detail": "generated buff HP/s must map exactly by half-HP steps to Terraria lifeRegen units"
+      "detail": "signed generated buff HP/s must map exactly by half-HP steps to Terraria lifeRegen units"
     },
     {
       "name": "item_value_semantics",
       "ok": true,
-      "detail": "valueCopper must describe the exact Item.value field rather than pretending to be direct player resale value"
+      "detail": "valueCopper must preserve copper amounts in gameplay.value"
     },
     {
       "name": "explicit_projectile_collision",

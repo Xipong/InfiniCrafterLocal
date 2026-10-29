@@ -50,6 +50,8 @@ from infini_local.pipelines.image_backend_pipeline import (
 from infini_local.pipelines.sprite_postprocess import (
     build_retry_prompt_from_validation,
     cleanup_alpha,
+    bake_sprite_from_master,
+    resize_rgba_premultiplied,
     pick_best_sprite,
     postprocess_sprite,
     sprite_validation_fatal,
@@ -194,12 +196,14 @@ def _validation_reasons(validation: dict[str, Any] | None) -> list[str]:
         return []
     return [str(x) for x in (validation.get("reasons") or [])]
 
-def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, role: str, validation: dict[str, Any] | None, *, output_dir: Path | None = None) -> str:
+def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, role: str, validation: dict[str, Any] | None, *, output_dir: Path | None = None, master_path: Path | None = None) -> str:
     """Local no-regeneration salvage for fit-only sprite failures.
 
     If image generation produced a good subject but the final fit made the core silhouette
     a few pixels too small, crop the transparent bbox, scale it with the production BOX
-    filter, and center it back on the target canvas. Fatal alpha/key failures are not
+    filter, and center it back on the target canvas. When a retained master is
+    supplied, map the same crop back to that pre-bake image, rather than enlarging
+    pixels that have already lost detail. Fatal alpha/key failures are not
     repaired here.
     """
     if role == "vfx_strip":
@@ -222,6 +226,14 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
         left = max(0, min(img.width - 1, left)); top = max(0, min(img.height - 1, top))
         right = max(left + 1, min(img.width, right)); bottom = max(top + 1, min(img.height, bottom))
         crop = img.crop((left, top, right, bottom))
+        source_crop = crop
+        if master_path is not None:
+            master = load_image_input(str(master_path), Image)
+            # The master and final share the same frame. Preserve the existing
+            # fit geometry; only the sampling source changes (lossy normalization).
+            source_crop = master.crop((round(left * master.width / img.width),
+                round(top * master.height / img.height), round(right * master.width / img.width),
+                round(bottom * master.height / img.height)))
         spec = bbox_stats.get("spec") if isinstance(bbox_stats.get("spec"), dict) else {}
         margin = int(spec.get("marginPx") or (2 if canvas >= 48 else 1))
         target = int(spec.get("targetLongAxisPx") or round(canvas * (0.84 if role == "projectile" else 0.88)))
@@ -237,10 +249,10 @@ def refit_processed_sprite_to_contract(path: str, asset_id: str, canvas: int, ro
         new_w = max(1, min(canvas - 2 * margin, int(round(crop.width * scale))))
         new_h = max(1, min(canvas - 2 * margin, int(round(crop.height * scale))))
         resampling = getattr(getattr(Image, "Resampling", Image), "BOX", 4)
-        resized = crop.resize((new_w, new_h), resampling)
+        resized = resize_rgba_premultiplied(source_crop, (new_w, new_h), resampling)
         out = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
         out.alpha_composite(resized, ((canvas - new_w) // 2, (canvas - new_h) // 2))
-        out = cleanup_alpha(out, role)
+        out = bake_sprite_from_master(out, canvas, role) if master_path is not None else cleanup_alpha(out, role)
         out_path = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(asset_id, 'sprite')}_refit.png"
         save_image_output(out, out_path)
         return str(out_path)
@@ -462,19 +474,25 @@ def _execute_image_request(data: dict[str, Any], request: _ImageRequest) -> _Ima
             phase = "selection"
             best, score = pick_best_sprite(variants, request.processing_role, request.canvas)
             phase = "processing"
-            final = postprocess_sprite(best, attempt_id, request.canvas, request.processing_role, output_dir=output_dir, **process_kwargs)
+            # Keep retained sampling inputs outside the logical filename
+            # namespace: an asset named "refit-master" must not overwrite its
+            # own high-resolution source when postprocess saves the final bake.
+            master_path = output_dir / "refit-source" / "master.png" if request.processing_role != "vfx_strip" else None
+            final = postprocess_sprite(best, attempt_id, request.canvas, request.processing_role,
+                output_dir=output_dir, master_output=master_path, **process_kwargs)
             phase = "validation"
             validation = validate_processed_sprite(final, request.processing_role, **validation_kwargs)
             refit_path = ""
             refit_validation = None
             if request.processing_role != "vfx_strip" and not validation.get("ok") and not sprite_validation_fatal(validation):
                 phase = "processing"
-                refit_path = refit_processed_sprite_to_contract(final, attempt_id, request.canvas, request.processing_role, validation, output_dir=output_dir)
+                refit_path = refit_processed_sprite_to_contract(final, attempt_id, request.canvas, request.processing_role, validation, output_dir=output_dir,
+                    master_path=master_path if master_path is not None and master_path.exists() else None)
                 if refit_path:
                     phase = "validation"
                     refit_validation = validate_processed_sprite(refit_path, request.processing_role, **validation_kwargs)
                     if refit_validation.get("ok"):
-                        result = replace(result, refit={"from": str(Path(final).resolve()), "to": str(Path(refit_path).resolve()), "before": validation, "after": refit_validation})
+                        result = replace(result, refit={"samplingSource": "pre_bake_master" if master_path is not None and master_path.exists() else "processed_sprite", "from": str(Path(final).resolve()), "to": str(Path(refit_path).resolve()), "before": validation, "after": refit_validation})
                         final, validation = refit_path, refit_validation
             row = {"attempt": attempt, "raw": best, "final": final, "score": technical_validation_score(validation),
                    "candidateScore": round(float(score), 3), "validation": validation}

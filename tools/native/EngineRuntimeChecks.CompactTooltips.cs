@@ -5,6 +5,7 @@ using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework.Input;
 using Terraria;
 using Terraria.ModLoader;
+using Terraria.Localization;
 
 internal static partial class EngineRuntimeChecks
 {
@@ -64,6 +65,21 @@ internal static partial class EngineRuntimeChecks
                     Equal(true, compact.Any(l => l.Name == "InfiniCondition" + suffix), "compact keeps each input's use conditions");
                     Equal(true, compact.Any(l => l.Name == "InfiniMobility" + suffix && l.Text.Contains("30")), "compact keeps each input's cooldown");
                 }
+                // UI cost disclosure follows each executable input, without advertising
+                // routine zero costs or inventing an alternate-use payment.
+                data.Gameplay.ManaCostInput = RuntimeInputKind.PrimaryUse;
+                compact = Lines();
+                string mana17 = Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ManaCost", "17");
+                string stack1 = Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ItemCost", "1");
+                Equal(true, compact.Single(l => l.Name == "InfiniInputPrimary").Text.Contains(mana17), "primary retains its authored mana cost");
+                Equal(false, compact.Single(l => l.Name == "InfiniInputAlternate").Text.Contains(mana17), "free alternate does not borrow primary mana cost");
+                Equal(true, compact.Single(l => l.Name == "InfiniInputPrimary").Text.Contains(stack1), "nonzero item consumption stays visible");
+                data.Gameplay.ManaCost = 0;
+                data.RuntimeProgram.Bindings[0].UsePolicy.StackCost = 0;
+                compact = Lines();
+                string input = compact.Single(l => l.Name == "InfiniInputPrimary").Text;
+                Equal(false, input.Contains(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ManaCost", "0")), "zero mana is not tooltip boilerplate");
+                Equal(false, input.Contains(Language.GetTextValue("Mods.InfiniCrafterLocal.RuntimeTooltip.ItemCost", "0")), "zero item consumption is not tooltip boilerplate");
             });
         }
         finally { Terraria.Main.keyState = previous; }

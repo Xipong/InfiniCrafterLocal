@@ -1,0 +1,285 @@
+{
+  "name": "Synthetic hybrid: body17 root43 child4",
+  "category": "hybrid",
+  "concept": {
+    "literalSynthesis": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity.",
+    "coreMechanic": "Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "parentAContribution": "workbench body",
+    "parentBContribution": "blade and nails",
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Execute the authored spawn_entity action."
+      }
+    ]
+  },
+  "realization": {
+    "description": "A literal workbench is bolted behind a primary contact blade and also participates as a secondary held entity. Thrusts a literal workbench-backed blade and knocks loose nails into targets.",
+    "playerExperience": "The player directly experiences the explicitly authored entities, inputs and events.",
+    "selfEvaluation": "Optional fixture self-check; not observed execution."
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.wire.v3",
+    "itemEntityId": "item",
+    "primaryEntityId": "item",
+    "primaryOwner": "item_body",
+    "limits": {
+      "maxEntityCount": 12,
+      "maxChildDepth": 3,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "entities": [
+      {
+        "id": "item",
+        "kind": "item_body",
+        "visualRole": "inventory_item",
+        "events": [],
+        "visual": {
+          "role": "inventory_item",
+          "assetMode": "baked_sprite",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "https://offline.invalid/sprites/docx-image-ready.png?revision=2#cached",
+          "spriteUrl": "/sprite/infini_asset_png_fb6a5162a1462e76c8550836eb114fa6ab6229dae755e574793cd4609016a2a3.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.97
+        }
+      },
+      {
+        "id": "workbench_blade",
+        "kind": "owner_attached_projectile",
+        "visualRole": "held_body",
+        "events": [
+          {
+            "id": "shed_nails",
+            "action": "spawn_entity_on_event",
+            "actionCode": 1,
+            "event": "on_hit",
+            "entityId": "nail",
+            "count": 5,
+            "spreadRadians": 0.55,
+            "damageMultiplier": 0.35,
+            "delayTicks": 0,
+            "damageBasis": "authored_child",
+            "knockbackBasis": "authored_child"
+          }
+        ],
+        "visual": {
+          "role": "held_body",
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "https://offline.invalid/sprites/docx-image-ready.png?revision=2#cached",
+          "spriteUrl": "/sprite/infini_asset_png_fb6a5162a1462e76c8550836eb114fa6ab6229dae755e574793cd4609016a2a3.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.97
+        },
+        "spawn": {
+          "speedPxPerTick": 0,
+          "count": 1,
+          "spreadRadians": 0.0,
+          "offsetPx": 0,
+          "aim": "cursor",
+          "overTarget": {
+            "heightTiles": 0,
+            "delayTicks": 0
+          },
+          "placement": "item_use_origin",
+          "enabled": true
+        },
+        "damage": {
+          "damageClass": "melee",
+          "damage": 43,
+          "knockback": 6,
+          "ownerHitCheck": true,
+          "enabled": true
+        },
+        "lifetimeTicks": 28,
+        "hitbox": {
+          "widthPx": 64,
+          "heightPx": 34,
+          "drawScale": 1.0,
+          "hitboxScale": 1.0
+        },
+        "collision": {
+          "tileCollide": false,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": -1,
+          "extraUpdates": 0,
+          "npcImmunityMode": "local",
+          "localNpcHitCooldownTicks": 10,
+          "bounceSpeedRetention": 1
+        },
+        "movement": {
+          "name": "move_forward_then_retract",
+          "code": 19,
+          "params": {
+            "rangeTiles": 6,
+            "durationTicks": 24
+          }
+        }
+      },
+      {
+        "id": "nail",
+        "kind": "child_projectile",
+        "visualRole": "child_projectile",
+        "events": [],
+        "visual": {
+          "role": "child_projectile",
+          "assetMode": "reuse_item_icon",
+          "prompt": "literal Terraria item",
+          "silhouette": "readable",
+          "visualIdentity": "literal composition",
+          "scale": 1.0,
+          "spritePath": "https://offline.invalid/sprites/docx-image-ready.png?revision=2#cached",
+          "spriteUrl": "/sprite/infini_asset_png_fb6a5162a1462e76c8550836eb114fa6ab6229dae755e574793cd4609016a2a3.png",
+          "spriteStatus": "generated",
+          "spriteTechnicalScore": 0.97
+        },
+        "spawn": {
+          "speedPxPerTick": 13,
+          "count": 1,
+          "spreadRadians": 0.0,
+          "offsetPx": 0,
+          "aim": "cursor",
+          "overTarget": {
+            "heightTiles": 0,
+            "delayTicks": 0
+          },
+          "placement": "item_use_origin",
+          "enabled": true
+        },
+        "damage": {
+          "damageClass": "ranged",
+          "damage": 12,
+          "knockback": 4.0,
+          "ownerHitCheck": false,
+          "enabled": true
+        },
+        "lifetimeTicks": 120,
+        "hitbox": {
+          "widthPx": 8,
+          "heightPx": 8,
+          "drawScale": 1.0,
+          "hitboxScale": 1.0
+        },
+        "collision": {
+          "tileCollide": true,
+          "ignoreWater": false,
+          "bounceCount": 0,
+          "pierce": 1,
+          "extraUpdates": 0,
+          "npcImmunityMode": "local",
+          "localNpcHitCooldownTicks": 10,
+          "bounceSpeedRetention": 1
+        },
+        "movement": {
+          "name": "move_straight",
+          "code": 0,
+          "params": {}
+        }
+      }
+    ],
+    "bindings": [
+      {
+        "id": "primary_workbench",
+        "input": "primary_use",
+        "usePolicy": {
+          "action": {
+            "kind": "spawn_entity",
+            "targetId": "workbench_blade"
+          },
+          "stackCost": 0,
+          "contactDamage": true
+        },
+        "role": "secondary"
+      }
+    ],
+    "itemUse": {
+      "configured": true,
+      "useStyle": "shoot",
+      "hideUseGraphic": false,
+      "disableMeleeHitbox": false,
+      "channel": false,
+      "handPose": "one_handed",
+      "releaseTiming": "immediate",
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0
+    },
+    "itemContact": {
+      "hitboxScale": 1.0,
+      "contactForgivenessPx": 4
+    }
+  },
+  "gameplay": {
+    "kind": "hybrid",
+    "damageClass": "generic",
+    "damage": 17,
+    "knockback": 1,
+    "useTime": 24,
+    "useAnimation": 24,
+    "manaCost": 7,
+    "rarity": 2,
+    "value": 7500,
+    "maxStack": 1,
+    "craftYield": 1,
+    "width": 32,
+    "height": 32,
+    "itemScale": 1.0,
+    "useStyleName": "shoot",
+    "autoReuse": true,
+    "useTurn": true,
+    "holdoutOffsetX": 0,
+    "holdoutOffsetY": 0,
+    "handPose": "one_handed",
+    "releaseTiming": "immediate"
+  },
+  "accessory": {
+    "enabled": false
+  },
+  "armor": {
+    "enabled": false
+  },
+  "visual": {
+    "imagePrompt": "literal Terraria item. single centered inventory sprite, 32x32 pixel-art canvas, crisp hard pixels, solid rgb(255,0,255) key background, no scene, no text, no extra entities. Read-only final-frame facts: {\"canvasSizePx\":32,\"renderSizePx\":40,\"forwardAngleDegrees\":45,\"silhouette\":\"readable\",\"visualIdentity\":\"literal composition\",\"sharedEntityMultipliers\":[{\"entityId\":\"workbench_blade\",\"hitbox.drawScale\":1.0,\"visual.scale\":1.0},{\"entityId\":\"nail\",\"hitbox.drawScale\":1.0,\"visual.scale\":1.0}],\"multipliers\":{\"gameplay.itemScale\":1.0,\"visual.inventoryScale\":1.0,\"visual.worldScale\":1.0}}. C=canvasSizePx is the final baked frame side; R=renderSizePx is its base world-pixel max-side, not hitbox or visible shaft length. When R is declared, base pixel scale is R/C; visible alpha extent uses that scale and independent draw multipliers. Keep major pixel clusters readable at this selected display budget; a larger bake canvas alone does not enlarge the world body. Item inventory is caller-fit times inventoryScale, without R/C; dropped world uses R/C times caller scale times worldScale; held item uses R/C times adjusted item scale (gameplay.itemScale included once). Entity body uses R/C times current Projectile.scale without a clamp when accepted hitboxCurve.mirrorToSprite=true or visualScaleCurve is present: the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. Do not omit or merge authored parts to simplify the sprite.. Terraria (tModLoader) game asset.",
+    "negativePrompt": "placeholder",
+    "palette": [
+      "brown",
+      "steel"
+    ],
+    "preferredCanvasSize": 32,
+    "inventoryScale": 1.0,
+    "worldScale": 1.0,
+    "renderSizePx": 40,
+    "forwardAngleDegrees": 45,
+    "spriteStatus": "generated",
+    "spritePath": "https://offline.invalid/sprites/docx-image-ready.png?revision=2#cached",
+    "spriteUrl": "/sprite/infini_asset_png_fb6a5162a1462e76c8550836eb114fa6ab6229dae755e574793cd4609016a2a3.png",
+    "spriteRawPath": "",
+    "spriteTechnicalScore": 0.97,
+    "assetManifestPath": ""
+  },
+  "id": "workbench-synthetic-client-hybrid-contrasting",
+  "sourceMode": "test_fixture",
+  "schemaVersion": 5,
+  "runtimeApiVersion": "infini.runtime-program.v5",
+  "recipeKey": "docx_readiness_offline",
+  "vfxManifest": {
+    "schema": "infini.vfx.runtime-events.v16",
+    "recipeId": "offline_recipe",
+    "budget": {
+      "maxParticlesPerTick": 32,
+      "maxParticlesTotal": 1000,
+      "maxDrawCalls": 64
+    },
+    "slots": []
+  },
+  "debug": {}
+}

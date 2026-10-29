@@ -67,6 +67,7 @@ public partial class GeneratedItem
         Vector2 direction = new(player.direction, 0f);
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(eventName))
         {
+            if (action.ActionCode == RuntimeEventActionCode.ApplyNpcEffect) continue; // hit bridge owns admission/RNG
             // Select from the originating accepted use before queue admission. The
             // delayed action retains this decision, never a later mouse-button state.
             if (eventName == RuntimeEventKind.OnUse && !RuntimeUseInputScope.Matches(action.UseInput, useInput)) continue;

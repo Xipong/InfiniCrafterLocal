@@ -1,0 +1,4 @@
+displayName = Workbench Observer Fixture
+version = 0.1.0
+author = InfiniCrafterLocal test fixture
+side = Both

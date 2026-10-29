@@ -59,6 +59,9 @@ KNOWN_REQUIREMENT_KINDS = frozenset({
     "executed_tile_placement_reference",
     "unique_call_reference",
     "conditional_param",
+    "param_branch_fields",
+    "conditional_param_values",
+    "timing_pair_or_window",
     "param_only_when",
     "conditional_omission",
     "non_neutral_param",
@@ -196,8 +199,8 @@ def _numeric_parameter_leaves(spec: ParamSpec, name: str) -> list[tuple[str, Par
 
 def _runtime_param_bound_rows() -> list[dict[str, Any]]:
     root = _repo_root()
-    dto_path = root / "ModSources" / "InfiniCrafterLocal" / "Common" / "Models" / "Contracts" / "RuntimeProgramSpec.cs"
-    text = dto_path.read_text("utf-8", errors="ignore")
+    from infini_local.qa.primitive_loss_audit import _runtime_dto_source
+    text = _runtime_dto_source().decode("utf-8")
     constants = _csharp_constants(root)
     class_bounds = {
         name: _clamp_bounds(text, name, constants)
@@ -208,6 +211,9 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             "RuntimeEventActionSpec", "RuntimeItemContactSpec", "RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec",
         )
     }
+    for cap in CAPABILITY_REGISTRY.values():
+        for cls in cap.wire_components.values():
+            class_bounds.setdefault(cls, _clamp_bounds(text, cls, constants))
     property_map: dict[str, tuple[str, str]] = {
         "configure_spawn": ("RuntimeSpawnSpec", ""),
         "set_projectile_lifetime": ("RuntimeEntitySpec", ""),
@@ -247,12 +253,20 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             wire_name = spec.wire_name or param_name.rsplit(".", 1)[-1]
             field = wire_name
             class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
-                           "overTarget": "RuntimeOverTargetSpec"}.get(field.split(".", 1)[0], default_class))
+                           "overTarget": "RuntimeOverTargetSpec", **cap.wire_components}.get(field.split(".", 1)[0], default_class))
             field = field.rsplit(".", 1)[-1]
             csharp_name = "DescendantMaxActive" if cap.name == "set_descendant_concurrency" else field[:1].upper() + field[1:]
             bounds = class_bounds[class_name]
             csharp = bounds.get(csharp_name)
-            if (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
+            if class_name in cap.wire_components.values():
+                from infini_local.qa.primitive_loss_audit import number_rejection_bounds
+                reject_bounds = number_rejection_bounds(text.encode(), class_name, csharp_name)
+                rows.append({"capability": cap.name, "param": param_name,
+                             "csharpClass": class_name, "authorBounds": [spec.minimum, spec.maximum],
+                             "csharpBounds": reject_bounds, "admission": "reject_without_clamp",
+                             "wireBounds": wire_bounds, "preserved": reject_bounds == wire_bounds})
+                continue
+            if (cap.name == "pull_on_event" and field in {"ownerStrength", "targetStrength"}) or (cap.name == "damage_nearby_on_event" and field == "maxTargets") or (cap.name == "target_and_fire" and param_name == "damageMultiplier") or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}:
                 from infini_local.qa.primitive_loss_audit import nullable_number_rejection_bounds
                 reject_bounds = nullable_number_rejection_bounds(text.encode(), class_name, csharp_name)
             elif cap.name == "target_and_fire" and param_name in {"count", "spreadRadians"}:
@@ -263,7 +277,9 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                     r"throw new InvalidDataException\(", _class_block(text, class_name),
                 )
                 reject_bounds = [_number(raw.strip(), constants) for raw in declaration.groups()] if declaration else None
-            if ((cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"})
+            if ((cap.name == "pull_on_event" and field in {"ownerStrength", "targetStrength"})
+                    or (cap.name == "damage_nearby_on_event" and field == "maxTargets")
+                    or (cap.name == "target_and_fire" and param_name in {"damageMultiplier", "count", "spreadRadians"})
                     or class_name in {"RuntimeSpawnVelocitySpec", "RuntimeHitTargetSpawnSpec"}):
                 authored_bounds = [spec.minimum, spec.maximum]
                 rows.append({"capability": cap.name, "param": param_name,
@@ -405,6 +421,10 @@ def capability_library_audit() -> dict[str, Any]:
                 error("unknown_requirement_kind", f"{base}.requirements", requirement.kind)
             if requirement.capability and requirement.capability not in capability_names:
                 error("unknown_requirement_capability", f"{base}.requirements", requirement.capability)
+            if requirement.kind == "timing_pair_or_window":
+                names = (requirement.param, requirement.other_param, *requirement.any_of)
+                if len(names) != 3 or len(set(names)) != 3 or any(name not in cap.params for name in names):
+                    error("invalid_timing_requirement", f"{base}.requirements", str(names))
             if requirement.kind == "enabled_trigger":
                 if not requirement.any_of:
                     error("empty_enabled_trigger", f"{base}.requirements", requirement.kind)

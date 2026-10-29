@@ -17,7 +17,7 @@ namespace InfiniCrafterLocal.Common.Runtime;
 // NPC velocity has no owner-side vanilla sync equivalent to AddBuff/ApplyDamageToNPC.
 internal static class RuntimeHitPullBridge
 {
-    private const byte Version = 3;
+    private const byte Version = 4;
     private const byte ProjectileSource = 1;
     private const byte ItemSource = 2;
     private const int MaxClaimsPerTick = 32;
@@ -42,7 +42,7 @@ internal static class RuntimeHitPullBridge
             || owner.selectedItem < 0 || owner.selectedItem >= owner.inventory.Length
             || owner.inventory[owner.selectedItem]?.ModItem is not GeneratedItem item
             || item.Data.RuntimeProgram.TryGetEntity(item.Data.RuntimeProgram.ItemEntityId) is not { } entity
-            || !HasNpcPull(entity, true)
+            || !HasServerHitActions(entity, true)
             || (item.Data.RuntimeProgram.BindingForInput(RuntimeInputKind.PrimaryUse)?.UsePolicy.ContactDamage != true
                 && item.Data.RuntimeProgram.BindingForInput(RuntimeInputKind.AlternateUse)?.UsePolicy.ContactDamage != true)
             || !GeneratedItemRegistryService.IsCurrentWorldData(item.Data)) return;
@@ -111,14 +111,48 @@ internal static class RuntimeHitPullBridge
         return match;
     }
 
-    private static bool HasNpcPull(RuntimeEntitySpec entity, bool crit)
+    private static bool HasServerHitActions(RuntimeEntitySpec entity, bool crit)
     {
         foreach (RuntimeEventActionSpec action in entity.ActionsFor(RuntimeEventKind.OnHit))
-            if (action.ActionCode == RuntimeEventActionCode.Pull && action.Mode != "owner_to_target") return true;
+            if (IsServerHitAction(action)) return true;
         if (crit)
             foreach (RuntimeEventActionSpec action in entity.ActionsFor(RuntimeEventKind.OnCrit))
-                if (action.ActionCode == RuntimeEventActionCode.Pull && action.Mode != "owner_to_target") return true;
+                if (IsServerHitAction(action)) return true;
         return false;
+    }
+
+    private static bool IsServerHitAction(RuntimeEventActionSpec action)
+        => action.ActionCode == RuntimeEventActionCode.ApplyNpcEffect
+            || action.ActionCode == RuntimeEventActionCode.Pull && action.Mode != "owner_to_target";
+
+    // The owner rolls once at hit admission, BEFORE queuing or sending. The
+    // receiver validates selected indices against its exact definition and never
+    // rolls again. This is the existing bounded owner-hit claim, not collision proof.
+    internal static ushort SelectNpcEffectMask(RuntimeEntitySpec entity, bool crit, Func<double>? random = null)
+    {
+        ushort mask = 0;
+        for (int i = 0; i < Math.Min(entity.Events.Length, 16); i++)
+        {
+            RuntimeEventActionSpec action = entity.Events[i];
+            if (action.ActionCode != RuntimeEventActionCode.ApplyNpcEffect || action.NpcEffect is not { HasEffect: true } effect
+                || !(action.Event == RuntimeEventKind.OnHit || crit && action.Event == RuntimeEventKind.OnCrit)) continue;
+            if (effect.Chance >= 1f || effect.Chance > 0f && (random?.Invoke() ?? Main.rand.NextDouble()) < effect.Chance)
+                mask |= (ushort)(1 << i);
+        }
+        return mask;
+    }
+
+    private static bool ValidNpcEffectMask(RuntimeEntitySpec entity, bool crit, ushort mask)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            if ((mask & (1 << i)) == 0) continue;
+            if (i >= entity.Events.Length) return false;
+            RuntimeEventActionSpec action = entity.Events[i];
+            if (action.ActionCode != RuntimeEventActionCode.ApplyNpcEffect || action.NpcEffect is not { HasEffect: true, Chance: > 0f }
+                || !(action.Event == RuntimeEventKind.OnHit || crit && action.Event == RuntimeEventKind.OnCrit)) return false;
+        }
+        return true;
     }
 
     internal static bool TryWriteProjectileReceipt(BinaryWriter writer, Projectile source, NPC target, bool crit)
@@ -129,9 +163,9 @@ internal static class RuntimeHitPullBridge
             || source.ModProjectile is not GeneratedProjectile generated
             || !generated.TryGetHitSource(out GeneratedItemData data, out RuntimeEntitySpec entity)
             || !ValidIdentity(data.Id, entity.Id)
-            || !HasNpcPull(entity, crit)) return false;
+            || !HasServerHitActions(entity, crit)) return false;
         Write(writer, ProjectileSource, source.identity, target.whoAmI,
-            RuntimeHitNpcGeneration.Get(target), 0, 0, crit, data.Id, entity.Id);
+            RuntimeHitNpcGeneration.Get(target), 0, 0, crit, data.Id, entity.Id, SelectNpcEffectMask(entity, crit));
         return true;
     }
 
@@ -145,10 +179,10 @@ internal static class RuntimeHitPullBridge
                 ? RuntimeInputKind.AlternateUse : RuntimeInputKind.PrimaryUse)?.UsePolicy.ContactDamage != true
             || item.Data.RuntimeProgram.TryGetEntity(item.Data.RuntimeProgram.ItemEntityId) is not { } entity
             || !ValidIdentity(item.Data.Id, entity.Id)
-            || !HasNpcPull(entity, crit)) return false;
+            || !HasServerHitActions(entity, crit)) return false;
         Write(writer, ItemSource, 0, target.whoAmI, RuntimeHitNpcGeneration.Get(target),
             (byte)owner.selectedItem, (byte)(owner.altFunctionUse == 2 ? 2 : 1), crit,
-            item.Data.Id, entity.Id);
+            item.Data.Id, entity.Id, SelectNpcEffectMask(entity, crit));
         return true;
     }
 
@@ -173,7 +207,7 @@ internal static class RuntimeHitPullBridge
     }
 
     private static void Write(BinaryWriter writer, byte kind, int identity, int npc, uint npcGeneration,
-        byte itemSlot, byte input, bool crit, string itemId, string entityId)
+        byte itemSlot, byte input, bool crit, string itemId, string entityId, ushort npcEffects)
     {
         writer.Write(Version);
         writer.Write(kind);
@@ -186,14 +220,22 @@ internal static class RuntimeHitPullBridge
         writer.Write(++_nextSequence);
         WriteIdentity(writer, itemId);
         WriteIdentity(writer, entityId);
+        writer.Write(npcEffects);
     }
 
     internal static void SendProjectileHit(Projectile source, NPC target, bool crit)
     {
+        if (Main.netMode == NetmodeID.SinglePlayer && source.ModProjectile is GeneratedProjectile local
+            && source.owner >= 0 && source.owner < Main.maxPlayers
+            && local.TryGetHitSource(out GeneratedItemData localData, out RuntimeEntitySpec localEntity))
+        {
+            ApplyLocalEffects(localEntity, localData, Main.player[source.owner], source.GetSource_FromThis(), source.Center, target, crit);
+            return;
+        }
         if (Main.netMode != NetmodeID.MultiplayerClient || source.owner != Main.myPlayer
             || source.ModProjectile is not GeneratedProjectile generated
             || !generated.TryGetHitSource(out _, out RuntimeEntitySpec entity)
-            || !HasNpcPull(entity, crit)
+            || !HasServerHitActions(entity, crit)
             || global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance is null) return;
         ModPacket packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(global::InfiniCrafterLocal.Common.InfiniNetPacketIds.GeneratedHitNpcPull);
@@ -202,9 +244,15 @@ internal static class RuntimeHitPullBridge
 
     internal static void SendItemHit(Player owner, GeneratedItem item, NPC target, bool crit)
     {
+        if (Main.netMode == NetmodeID.SinglePlayer
+            && item.Data.RuntimeProgram.TryGetEntity(item.Data.RuntimeProgram.ItemEntityId) is { } localEntity)
+        {
+            ApplyLocalEffects(localEntity, item.Data, owner, owner.GetSource_ItemUse(item.Item), target.Center, target, crit);
+            return;
+        }
         if (Main.netMode != NetmodeID.MultiplayerClient || owner.whoAmI != Main.myPlayer
             || item.Data.RuntimeProgram.TryGetEntity(item.Data.RuntimeProgram.ItemEntityId) is not { } entity
-            || !HasNpcPull(entity, crit)
+            || !HasServerHitActions(entity, crit)
             || global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance is null) return;
         ModPacket packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
         packet.Write(global::InfiniCrafterLocal.Common.InfiniNetPacketIds.GeneratedHitNpcPull);
@@ -216,7 +264,7 @@ internal static class RuntimeHitPullBridge
         if (reader is null || Main.netMode != NetmodeID.Server || whoAmI < 0 || whoAmI >= Main.maxPlayers)
             return;
         byte version, kind, itemSlot, input; short npcSlot; int identity; uint npcGeneration; bool crit; uint sequence;
-        string itemId, entityId;
+        string itemId, entityId; ushort npcEffects;
         try
         {
             version = reader.ReadByte(); kind = reader.ReadByte();
@@ -224,6 +272,7 @@ internal static class RuntimeHitPullBridge
             npcGeneration = reader.ReadUInt32(); itemSlot = reader.ReadByte(); input = reader.ReadByte();
             crit = reader.ReadBoolean(); sequence = reader.ReadUInt32();
             itemId = ReadIdentity(reader, 96); entityId = ReadIdentity(reader, 48);
+            npcEffects = reader.ReadUInt16();
         }
         catch (Exception error) when (error is EndOfStreamException or InvalidDataException or DecoderFallbackException) { return; }
         if (version != Version || (kind != ProjectileSource && kind != ItemSource)
@@ -271,20 +320,35 @@ internal static class RuntimeHitPullBridge
         if (!string.Equals(data.Id, itemId, StringComparison.Ordinal)
             || !string.Equals(entity.Id, entityId, StringComparison.Ordinal)
             || !GeneratedItemRegistryService.IsCurrentWorldData(data)
-            || !HasNpcPull(entity, crit)) return;
+            || !HasServerHitActions(entity, crit) || !ValidNpcEffectMask(entity, crit, npcEffects)) return;
         if (ReferenceEquals(LastOwner[whoAmI], owner) && sequence <= LastSequence[whoAmI]) return;
         LastOwner[whoAmI] = owner;
         LastSequence[whoAmI] = sequence;
-        Apply(entity, data, owner, source, sourceCenter, target, RuntimeEventKind.OnHit);
-        if (crit) Apply(entity, data, owner, source, sourceCenter, target, RuntimeEventKind.OnCrit);
+        Apply(entity, data, owner, source, sourceCenter, target, RuntimeEventKind.OnHit, npcEffects);
+        if (crit) Apply(entity, data, owner, source, sourceCenter, target, RuntimeEventKind.OnCrit, npcEffects);
+    }
+
+    private static void ApplyLocalEffects(RuntimeEntitySpec entity, GeneratedItemData data, Player owner,
+        Terraria.DataStructures.IEntitySource source, Microsoft.Xna.Framework.Vector2 center, NPC target, bool crit)
+    {
+        if (owner is not { active: true } || target is not { active: true }) return;
+        ushort mask = SelectNpcEffectMask(entity, crit);
+        Apply(entity, data, owner, source, center, target, RuntimeEventKind.OnHit, mask, effectsOnly: true);
+        if (crit) Apply(entity, data, owner, source, center, target, RuntimeEventKind.OnCrit, mask, effectsOnly: true);
     }
 
     private static void Apply(RuntimeEntitySpec entity, GeneratedItemData data, Player owner,
-        Terraria.DataStructures.IEntitySource source, Microsoft.Xna.Framework.Vector2 sourceCenter, NPC target, string eventName)
+        Terraria.DataStructures.IEntitySource source, Microsoft.Xna.Framework.Vector2 sourceCenter, NPC target, string eventName, ushort npcEffects, bool effectsOnly = false)
     {
-        foreach (RuntimeEventActionSpec action in entity.ActionsFor(eventName))
+        for (int i = 0; i < entity.Events.Length; i++)
         {
-            if (action.ActionCode != RuntimeEventActionCode.Pull || action.Mode == "owner_to_target") continue;
+            RuntimeEventActionSpec action = entity.Events[i];
+            if (action.Event != eventName) continue;
+            if (action.ActionCode == RuntimeEventActionCode.ApplyNpcEffect)
+            {
+                if (i >= 16 || (npcEffects & (1 << i)) == 0) continue;
+            }
+            else if (effectsOnly || action.ActionCode != RuntimeEventActionCode.Pull || action.Mode == "owner_to_target") continue;
             var budget = new RuntimeSpawnBudget(0);
             var eventPosition = RuntimeProgramExecutor.ProjectileEventPosition(action, sourceCenter, target);
             if (action.DelayTicks > 0)

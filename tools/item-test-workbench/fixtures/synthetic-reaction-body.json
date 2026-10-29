@@ -1,0 +1,119 @@
+{
+  "name": "Synthetic body reaction control",
+  "category": "generic",
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.wire.v3",
+    "itemEntityId": "item",
+    "primaryEntityId": "item",
+    "primaryOwner": "item_body",
+    "limits": {
+      "maxEntityCount": 12,
+      "maxChildDepth": 3,
+      "maxEventSpawnsPerActivation": 32
+    },
+    "entities": [
+      {
+        "id": "item",
+        "kind": "item_body",
+        "visualRole": "inventory_item",
+        "events": [
+          {
+            "id": "reaction",
+            "event": "on_enemy_kill",
+            "action": "apply_generated_buff_on_event",
+            "actionCode": 9,
+            "effectGroupId": "recovery",
+            "reactionCooldownTicks": 120,
+            "delayTicks": 0
+          }
+        ],
+        "visual": {
+          "role": "inventory_item",
+          "assetMode": "reuse_item_icon"
+        }
+      }
+    ],
+    "bindings": [
+      {
+        "id": "witness_binding",
+        "input": "equipped",
+        "usePolicy": {
+          "action": {
+            "kind": "equip_passive",
+            "targetId": "item"
+          },
+          "stackCost": 0,
+          "contactDamage": false
+        },
+        "role": "primary"
+      }
+    ],
+    "itemUse": {
+      "configured": true,
+      "useStyle": "shoot",
+      "hideUseGraphic": false,
+      "disableMeleeHitbox": true,
+      "channel": false,
+      "handPose": "one_handed",
+      "releaseTiming": "immediate",
+      "holdoutOffsetX": 0,
+      "holdoutOffsetY": 0
+    },
+    "effectGroups": [
+      {
+        "id": "recovery",
+        "generatedBuff": {
+          "durationTicks": 60,
+          "lifeRegen": 2,
+          "movementSpeed": 0.25,
+          "jumpBoost": 1
+        }
+      }
+    ]
+  },
+  "gameplay": {
+    "kind": "generic",
+    "damageClass": "generic",
+    "damage": 20,
+    "knockback": 3.0,
+    "useTime": 20,
+    "useAnimation": 20,
+    "manaCost": 0,
+    "rarity": 1,
+    "value": 1000,
+    "maxStack": 1,
+    "craftYield": 1,
+    "width": 24,
+    "height": 24,
+    "itemScale": 1.0,
+    "useStyleName": "shoot",
+    "autoReuse": false,
+    "useTurn": true,
+    "holdoutOffsetX": 0,
+    "holdoutOffsetY": 0,
+    "handPose": "one_handed",
+    "releaseTiming": "immediate"
+  },
+  "accessory": {
+    "enabled": false,
+    "defense": 0
+  },
+  "armor": {
+    "enabled": true,
+    "slot": "body",
+    "defense": 3,
+    "genericCrit": 5
+  },
+  "sourceMode": "test_fixture",
+  "id": "workbench-synthetic-reaction-body",
+  "visual": {
+    "spritePath": "equipment_periodic.png",
+    "equipOverlayPath": "equipment_periodic_overlay.png",
+    "equipOverlayStatus": "generated"
+  },
+  "recipeMeta": {
+    "worldId": "0",
+    "worldScoped": true
+  }
+}

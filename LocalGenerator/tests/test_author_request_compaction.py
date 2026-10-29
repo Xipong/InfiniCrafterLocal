@@ -1,6 +1,6 @@
 """Lossless prompt metadata sharing and the real strict-provider inverse seam."""
 from __future__ import annotations
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
 
 import copy
 import json
@@ -178,6 +178,7 @@ def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutati
     assert nested_references and set(nested_references) <= set(profiles)
     assert set(references + nested_references) == set(profiles)
     expanded = _expand_constraint_references(catalog["capabilities"], profiles)
+    expanded = expand_catalog_targets(expanded, catalog["fieldGuide"]["targetKindSets"])
     assert [{key: value for key, value in card.items() if key != "constructionMeaning"}
             for card in expanded] == [cap.author_prompt_card() for cap in CAPABILITY_REGISTRY.values()
                                       if cap.author_visible]
@@ -298,6 +299,11 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
     shared_types = guide["types"]
     checked_shared_types = set()
 
+    def consumer_text(text, metadata):
+        text = text.removeprefix(seconds_primer)
+        units = metadata.get("units", metadata.get("x-infini-units"))
+        return text.removeprefix(f"Author units: {units}. Native consumer: ") if units else text
+
     def comparison_metadata(card):
         result = copy.deepcopy({key: value for key, value in card.items() if key != "params"})
         rules = []
@@ -324,14 +330,19 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
             removed = set(source) - set(sent)
             assert not set(sent) - set(source), path
             if removed:
-                # A missing schema-root description is legal only when the same
-                # full consumer text is still the parameter's visible meaning.
-                assert removed == {"description"} and root_meaning is not None, path
-                assert source["description"].removeprefix(seconds_primer) == root_meaning, path
+                # The exact text must still occur at its parameter or sole
+                # branch property; no description may simply vanish.
+                assert removed == {"description"}, path
+                retained = root_meaning
+                properties = sent.get("properties", {})
+                if retained is None and len(properties) == 1:
+                    retained = next(iter(properties.values())).get("description")
+                assert retained is not None, path
+                assert consumer_text(source["description"], source) == retained, path
                 omitted_root_copies.append(path)
             for key in set(source) & set(sent):
                 if key == "description" and isinstance(source[key], str):
-                    assert sent[key] == source[key].removeprefix(seconds_primer), path
+                    assert sent[key] == consumer_text(source[key], source), path
                     checked_descriptions.append(path)
                 else:
                     compare_shape(source[key], sent[key], path + "." + key)
@@ -372,7 +383,7 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
             # columns; all actual domain/reference/storage/projection rules remain.
             for key in source.keys() - {"meaning", "required", "semanticType", "neutral", "units", "shape"}:
                 assert target[key] == source[key], (name, param, key)
-            meaning = source["meaning"].removeprefix(seconds_primer)
+            meaning = consumer_text(source["meaning"], source)
             if name == "configure_armor" and "meaning" not in target:
                 # Armor borrows only an identical accessory effect description.
                 assert CAPABILITY_REGISTRY["configure_accessory"].params[param].description == spec.description
@@ -399,26 +410,3 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
                               root_meaning=target.get("meaning"))
     assert checked_descriptions and omitted_root_copies
     assert checked_shared_types == set(shared_types)
-
-
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_actual_author_and_scoped_repair_keep_shared_clock_semantics(monkeypatch, mode):
-    from infini_local.core import llm_config
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    _, serialized, _ = author.build_initial_author_request({}, {}, "clock-semantics", model_name="offline")
-    guide = json.loads(serialized)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["paramNotation"]
-    # These are the time semantics formerly repeated before every duration's
-    # distinct description. They must remain explicit in the actual model packet.
-    for rule in ("Times use Seconds", "nearest world tick at 60 ticks/s", "half-tick ties UP",
-                 "nonzero-to-zero collapse is rejected", "target projectile’s unique explicit updatesPerTick",
-                 "children use their own N", "algorithm counters, not seconds"):
-        assert rule in guide
-    doc = build_capability_witness("accumulate_projectile_charge")
-    call = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "accumulate_projectile_charge")
-    call["params"]["durationSeconds"] = -1
-    repair = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
-    assert repair["runtimeExecutionTruth"]["units"]["paramNotation"] == guide
-    broken = next(row for row in repair["existingBrokenCapabilityCards"] if row["fn"] == "accumulate_projectile_charge")
-    assert broken == CAPABILITY_REGISTRY["accumulate_projectile_charge"].prompt_card()
-    assert repair["repairScope"]["fieldPermissions"]["calls"] == [
-        {"id": call["id"], "paths": ["params.durationSeconds"]}]

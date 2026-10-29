@@ -1239,7 +1239,40 @@ public static class RuntimeModifierClock
     }
 }
 
-public sealed class RuntimeTurnModifierSpec : RuntimeWindowedMotionSpec
+// A selected motion window can own all timing. Retained scalar pairs still
+// intersect that window exactly; absent scalars never invent a finite cutoff.
+public abstract class RuntimeTimedModifierSpec : RuntimeWindowedMotionSpec
+{
+    private int? _startDelayTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? StartDelayTicks
+    {
+        get => _startDelayTicks;
+        set => _startDelayTicks = value ?? throw new InvalidDataException("present modifier delay cannot be null");
+    }
+    private int? _durationTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? DurationTicks
+    {
+        get => _durationTicks;
+        set => _durationTicks = value ?? throw new InvalidDataException("present modifier duration cannot be null");
+    }
+    public override void Validate()
+    {
+        base.Validate();
+        if (StartDelayTicks.HasValue != DurationTicks.HasValue)
+            throw new InvalidDataException("modifier scalar timing requires both delay and duration");
+        if (!StartDelayTicks.HasValue) {
+            if (Window is null)
+                throw new InvalidDataException("modifier requires an explicit window or scalar timing pair");
+            return;
+        }
+        RuntimeModifierClock.RequireRange(StartDelayTicks.Value, 0, 21600);
+        RuntimeModifierClock.RequireRange(DurationTicks!.Value, 1, 21600);
+    }
+}
+
+public sealed class RuntimeTurnModifierSpec : RuntimeTimedModifierSpec
 {
     public sealed class TurnRadiansPerUpdateJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1247,18 +1280,14 @@ public sealed class RuntimeTurnModifierSpec : RuntimeWindowedMotionSpec
     }
     [JsonConverter(typeof(TurnRadiansPerUpdateJsonConverter))]
     [JsonRequired] public float TurnRadiansPerUpdate { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(TurnRadiansPerUpdate, -0.5f, 0.5f);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }
 
-public sealed class RuntimeSpeedModifierSpec : RuntimeWindowedMotionSpec
+public sealed class RuntimeSpeedModifierSpec : RuntimeTimedModifierSpec
 {
     public sealed class SpeedMultiplierPerUpdateJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1272,19 +1301,15 @@ public sealed class RuntimeSpeedModifierSpec : RuntimeWindowedMotionSpec
     }
     [JsonConverter(typeof(MaxSpeedJsonConverter))]
     [JsonRequired] public float MaxSpeed { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(SpeedMultiplierPerUpdate, 0.8f, 1.2f);
         RuntimeModifierClock.RequireRange(MaxSpeed, 0.1f, 80f);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }
 
-public sealed class RuntimeHomingModifierSpec : RuntimeWindowedMotionSpec
+public sealed class RuntimeHomingModifierSpec : RuntimeTimedModifierSpec
 {
     public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1299,19 +1324,15 @@ public sealed class RuntimeHomingModifierSpec : RuntimeWindowedMotionSpec
     [JsonConverter(typeof(MaxTurnRadiansPerUpdateJsonConverter))]
     [JsonRequired] public float MaxTurnRadiansPerUpdate { get; set; }
     [JsonRequired] public bool RequireLineOfSight { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(RangeTiles, 1f, 120f);
         RuntimeModifierClock.RequireRange(MaxTurnRadiansPerUpdate, 0.0001f, 3.2f);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
     }
 }
 
-public sealed class RuntimeNpcAttractionSpec : RuntimeWindowedMotionSpec
+public sealed class RuntimeNpcAttractionSpec : RuntimeTimedModifierSpec
 {
     public sealed class RangeTilesJsonConverter : RawJsonFloatDomainConverter
     {
@@ -1327,16 +1348,12 @@ public sealed class RuntimeNpcAttractionSpec : RuntimeWindowedMotionSpec
     [JsonRequired] public float StrengthPerUpdate { get; set; }
     [JsonRequired] public string Falloff { get; set; } = "";
     [JsonRequired] public int MaxTargets { get; set; }
-    [JsonRequired] public int StartDelayTicks { get; set; }
-    [JsonRequired] public int DurationTicks { get; set; }
     public override void Validate()
     {
         base.Validate();
         RuntimeModifierClock.RequireRange(RangeTiles, 1f, 80f);
         RuntimeModifierClock.RequireRange(StrengthPerUpdate, 0.001f, 4f);
         RuntimeModifierClock.RequireRange(MaxTargets, 1, 16);
-        RuntimeModifierClock.RequireRange(StartDelayTicks, 0, 21600);
-        RuntimeModifierClock.RequireRange(DurationTicks, 1, 21600);
         if (Falloff is not ("constant" or "linear")) throw new InvalidDataException("unknown NPC attraction falloff");
     }
 }
@@ -1832,6 +1849,8 @@ public static class RuntimeEventActionCode
     public const int MoveOwner = 7;
     public const int SelectTargetsAndEmit = 8;
     public const int ApplyGeneratedBuff = 9;
+    public const int DamageNearby = 10;
+    public const int ApplyNpcEffect = 11;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -1937,6 +1956,13 @@ public sealed class RuntimeHitTargetSpawnSpec
 
 public sealed class RuntimeEventActionSpec
 {
+    private RuntimeNpcEffectSpec? _npcEffect;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeNpcEffectSpec? NpcEffect
+    {
+        get => _npcEffect;
+        set => _npcEffect = value ?? throw new InvalidDataException("present npcEffect cannot be null");
+    }
     public string Id { get; set; } = "";
     public string Event { get; set; } = "";
     private string? _useInput;
@@ -1978,6 +2004,43 @@ public sealed class RuntimeEventActionSpec
     public float RangeTiles { get; set; }
     public string Mode { get; set; } = "";
     public float Strength { get; set; }
+    private int? _maxTargets;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MaxTargets
+    {
+        get => _maxTargets;
+        set
+        {
+            if (value is not int number || number < 1 || number > 16)
+                throw new InvalidDataException("maxTargets must be an integer in 1..16");
+            _maxTargets = number;
+        }
+    }
+    private float? _ownerStrength;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? OwnerStrength
+    {
+        get => _ownerStrength;
+        set
+        {
+            if (value is not float number || !float.IsFinite(number) || number < 0.01f || number > 4f)
+                throw new InvalidDataException("ownerStrength must be a finite impulse in 0.01..4");
+            _ownerStrength = number;
+        }
+    }
+    private float? _targetStrength;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? TargetStrength
+    {
+        get => _targetStrength;
+        set
+        {
+            if (value is not float number || !float.IsFinite(number) || number < 0.01f || number > 4f)
+                throw new InvalidDataException("targetStrength must be a finite impulse in 0.01..4");
+            _targetStrength = number;
+        }
+    }
+
     public float RadiusTiles { get; set; }
     public float DamageFraction { get; set; }
     public int MaxHeal { get; set; }
@@ -2071,6 +2134,18 @@ public sealed class RuntimeEventActionSpec
 
     public void NormalizeAndValidate()
     {
+        if (ActionCode == RuntimeEventActionCode.ApplyNpcEffect)
+        {
+            if (Action != "apply_npc_effect_on_event" || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit)
+                || NpcEffect is null || DurationTicks is < 1 or > 3600 || DelayTicks is < 0 or > 600
+                || EntityId != "" || Count != 1 || SpreadRadians != 0f || DamageMultiplier != 1f || PeriodTicks != 0
+                || BuffId != -1 || RadiusPx != 0 || RangeTiles != 0f || Mode != "" || Strength != 0f
+                || RadiusTiles != 0f || DamageFraction != 0f || MaxHeal != 0 || CooldownTicks != 0 || !SafeTileOnly)
+                throw new InvalidDataException("NPC effect requires exact direct-hit action, effect, duration and neutral foreign fields");
+            NpcEffect.Validate();
+        }
+        else if (NpcEffect is not null)
+            throw new InvalidDataException("npcEffect requires apply_npc_effect_on_event");
         if (HitTargetSpawn is not null)
         {
             HitTargetSpawn.Validate();
@@ -2092,7 +2167,7 @@ public sealed class RuntimeEventActionSpec
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyGeneratedBuff)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyNpcEffect)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
@@ -2130,6 +2205,34 @@ public sealed class RuntimeEventActionSpec
         if (ActionCode != RuntimeEventActionCode.SpawnEntity
             && (DamageBasis is not null || KnockbackBasis is not null))
             throw new InvalidDataException($"event '{Id}' child combat fields require spawn_entity_on_event");
+        if (ActionCode == RuntimeEventActionCode.Pull && Mode == "both")
+        {
+            if (OwnerStrength is null || TargetStrength is null || Strength != 0f || RadiusTiles != 0f
+                || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit))
+                throw new InvalidDataException("both pull requires only two explicit impulses and the same direct target");
+            if (EntityId != "" || Count != 1 || SpreadRadians != 0f || DamageMultiplier != 1f
+                || PeriodTicks != 0 || BuffId != -1 || DurationTicks != 0 || RadiusPx != 0 || RangeTiles != 0f
+                || DamageFraction != 0f || MaxHeal != 0 || CooldownTicks != 0 || !SafeTileOnly
+                || DelayTicks is < 0 or > 600)
+                throw new InvalidDataException("both pull cannot consume other action fields");
+        }
+        else if (OwnerStrength is not null || TargetStrength is not null)
+            throw new InvalidDataException("two-body impulses require pull mode both");
+        if (ActionCode == RuntimeEventActionCode.DamageNearby)
+        {
+            if (MaxTargets is null || !_damageMultiplierPresent
+                || RadiusPx is < 8 or > 960 || !float.IsFinite(DamageMultiplier) || DamageMultiplier is < 0.05f or > 4f
+                || DelayTicks is < 0 or > 600
+                || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit or RuntimeEventKind.OnTileCollision
+                    or RuntimeEventKind.OnExpire or RuntimeEventKind.OnKill or RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill))
+                throw new InvalidDataException("nearby damage requires exact bounded damage, radius, count and event");
+            if (EntityId != "" || Count != 1 || SpreadRadians != 0f || PeriodTicks != 0 || BuffId != -1 || DurationTicks != 0
+                || RangeTiles != 0f || Mode != "" || Strength != 0f || RadiusTiles != 0f || DamageFraction != 0f
+                || MaxHeal != 0 || CooldownTicks != 0 || !SafeTileOnly)
+                throw new InvalidDataException("nearby damage cannot consume other action fields");
+        }
+        else if (MaxTargets is not null)
+            throw new InvalidDataException("maxTargets requires nearby damage");
         Count = Math.Clamp(Count, 1, InfiniRuntimeLimits.MaxRuntimeSpawnCount);
         SpreadRadians = Math.Clamp(SpreadRadians, 0f, MathF.Tau);
         DamageMultiplier = Math.Clamp(DamageMultiplier, 0f, 10f);
@@ -2148,7 +2251,7 @@ public sealed class RuntimeEventActionSpec
         CooldownTicks = Math.Clamp(CooldownTicks, 0, 36000);
         bool reactive = Event is RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill;
         if (reactive && (ReactionCooldownTicks is < 6 or > 3600
-            || ActionCode is not (RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.ApplyGeneratedBuff))
+            || ActionCode is not (RuntimeEventActionCode.SpawnEntity or RuntimeEventActionCode.DamageArea or RuntimeEventActionCode.DamageNearby or RuntimeEventActionCode.ApplyGeneratedBuff))
             || !reactive && ReactionCooldownTicks != 0)
             throw new InvalidDataException("Reactive equipment requires an explicit 6..3600 tick cooldown and supported action");
         if (Event == RuntimeEventKind.Periodic && PeriodTicks < 6)
@@ -2157,7 +2260,7 @@ public sealed class RuntimeEventActionSpec
             throw new InvalidDataException($"spawn event action '{Id}' has no entityId");
         if (ActionCode == RuntimeEventActionCode.ApplyStatus && (BuffId <= 0 || DurationTicks <= 0))
             throw new InvalidDataException($"status event action '{Id}' requires buffId and durationTicks");
-        if (ActionCode == RuntimeEventActionCode.Pull && Mode is not ("target_to_owner" or "target_to_entity" or "owner_to_target"))
+        if (ActionCode == RuntimeEventActionCode.Pull && Mode is not ("target_to_owner" or "target_to_entity" or "owner_to_target" or "both"))
             throw new InvalidDataException($"pull event action '{Id}' has unsupported mode '{Mode}'");
         if (ActionCode == RuntimeEventActionCode.MoveOwner && Mode is not ("blink_to_entity" or "blink_to_event_position"))
             throw new InvalidDataException($"move-owner event action '{Id}' has unsupported mode '{Mode}'");
@@ -2212,7 +2315,7 @@ internal static class RuntimeOpcodeNames
     {
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
-        "select_targets_and_emit_on_event", "apply_generated_buff_on_event",
+        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";

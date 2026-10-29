@@ -33,6 +33,12 @@ internal static partial class EngineRuntimeChecks
             var copper = new Item { type = ItemID.CopperPickaxe, stack = 1, damage = 17 };
             ContentSamples.ItemsByType[ItemID.CopperPickaxe] = copper;
             Item? found = RecipeNativeItemResolver.Resolve("item:Terraria/CopperPickaxe:" + ItemID.CopperPickaxe);
+            var detail = InfiniCrafterLocal.Common.Models.GeneratedItemData.Placeholder();
+            detail.RecipeMeta.ParentIdentities = new[] { "item:Terraria/CopperPickaxe:999999", "generated:unavailable" };
+            Equal(ItemID.CopperPickaxe, RecipeNativeItemResolver.ResolveParent(detail, 0)?.type ?? 0,
+                "recipe detail renders native ingredient using the same stable identity as lineage");
+            Equal(true, RecipeNativeItemResolver.ResolveParent(detail, 1) is null, "generated ingredient does not masquerade as native");
+            Equal(true, RecipeNativeItemResolver.ResolveParent(detail, 2) is null, "missing ingredient index is safe");
             Equal(ItemID.CopperPickaxe, found?.type ?? 0, "vanilla canonical identity");
             Equal(17, found?.damage ?? 0, "native sample fields preserved");
             Equal(false, ReferenceEquals(copper, found), "hover item cannot mutate shared sample");

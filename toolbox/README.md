@@ -8,6 +8,8 @@ python -m toolbox panels
 python -m toolbox doctor
 python -m toolbox live10
 python -m toolbox live20
+python -m toolbox workbench --help
+python -m toolbox workbench doctor
 ```
 
 **`live10` / `live20` без `--run` — только read-only preflight:** выбор родителей из
@@ -25,6 +27,7 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 | Узнать prerequisites | `python -m toolbox doctor` | Пути, доступность Python-модулей/команд, native-команда из manifest; без чтения credentials |
 | Разобрать сохранённую кампанию | `python -m toolbox summary /path/to/campaign` | Results + logical/HTTP/retry/image ledgers, пропуски, дубликаты и незавершённые запросы |
 | Проверить сохранённый предмет | `python -m toolbox replay /path/to/case --compare` | Настоящие strict wire / delivery projection и сравнение `compiled_runtime.json`; без inference |
+| Исполнить предмет и посмотреть записанный цикл | `python -m toolbox workbench --help` | [Native Item Test Workbench](../tools/item-test-workbench/README.md): настоящий C# runtime, телеметрия и поддерживаемые native render passes; без LLM |
 | Проверить затронутый код | `python -m toolbox verify --path LocalGenerator/infini_local/pipelines/llm_transport.py` | Делегирует существующему `tools/agentctl.py verify`, сохраняет аргументы и exit code |
 | Показать owner-проверки без запуска | `python -m toolbox verify --area csharp --plan` | Только план; это не PASS и не native execution |
 
@@ -38,6 +41,24 @@ LLM/image-запросов, импорта runtime, создания cache/PNG/�
 Exit 0 означает согласованный завершённый учёт, 1 — incomplete/failed, 2 — неверный
 вход. Это не повторная semantic/art/game приёмка. Raw provider traces остаются
 приватными: не прикладывайте их автоматически к PR.
+
+## Стенд предметов рядом с Live10
+
+`workbench` — тонкий вход в существующий `tools/item-test-workbench/workbench.py`,
+не второй движок. Аргументы, код возврата и рабочий каталог вызывающего процесса
+сохраняются; относительные пути не переносятся в корень checkout.
+
+```bash
+python -m toolbox workbench doctor
+python -m toolbox workbench run --item /path/item.json --scenario /path/scenario.json --out /path/new-run
+python -m toolbox workbench native-review /path/new-run/native.json --out /path/new-review --gif
+```
+
+`workbench --help` и `workbench doctor` только читают: не собирают C#, не запускают
+игру/модель и не создают результаты. `doctor` возвращает 2 при отсутствии зависимостей,
+а не успешное native-тестирование. `build` и `run` запускаются явно, без Live10-флага
+`--run`; команды экспорта записывают указанный output. Зависимости, границы исполнения,
+сценарии и реальный пример Lunar Harpoon описаны в [руководстве стенда](../tools/item-test-workbench/README.md).
 
 ## Где лежит код
 

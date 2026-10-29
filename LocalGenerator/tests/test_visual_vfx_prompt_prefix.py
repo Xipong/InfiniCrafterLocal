@@ -59,6 +59,7 @@ def test_provider_instructions_stay_static_while_recipe_and_parent_facts_change(
             assert request["response_format"]["json_schema"]["strict"] is True
             assert request["response_format"]["json_schema"]["schema"] == schema
         if director == "visual":
+            assert packet["itemReadOnly" if repair else "item"]["literalSynthesis"] == data["concept"]["literalSynthesis"]
             parent_reference = (packet["parentSizeReferencesReadOnly"]["parentA"]["spriteReference"] if repair
                                 else packet["parents"]["parentA"]["packet"]["raw"]["spriteReference"])
             assert parent_reference == {
@@ -104,6 +105,48 @@ def test_catalog_revision_reaches_outgoing_instruction_not_recipe_tail(wire_tran
     assert sent[0]["messages"][1]["content"] != sent[1]["messages"][1]["content"]
     assert sent[0]["messages"][2]["content"] == sent[1]["messages"][2]["content"]
     assert request_dossier(sent[1])["assetModeCatalog"] == catalog
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+def test_visual_preserves_literal_synthesis_without_promoting_gameplay_intent(wire_transport, monkeypatch, mode):
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    responses, sent = wire_transport
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data.pop("realization", None)
+    packets = []
+    for synthesis in (" A glass door hangs from a copper chain.\n", "The copper chain forms a handle around the glass door."):
+        data["concept"] = {
+            "literalSynthesis": synthesis,
+            "coreMechanic": "UNREALIZED_GAMEPLAY_INTENT",
+            "plannedPlayerActions": [{"input": "alternate_use", "intent": "UNREALIZED_GAMEPLAY_INTENT"}],
+        }
+        before = copy.deepcopy(data)
+        responses.append({})
+        visual._request_visual_kit(data, {}, {})
+        packet = request_dossier(sent[-1])
+        assert packet["item"] == {"name": data["name"], "realization": {}, "literalSynthesis": synthesis}
+        assert "UNREALIZED_GAMEPLAY_INTENT" not in str(sent[-1]["messages"])
+        assert data == before
+        packets.append(packet)
+    assert sent[0]["messages"][:2] == sent[1]["messages"][:2]
+    assert sent[0]["messages"][2]["content"] != sent[1]["messages"][2]["content"]
+    assert sent[0]["response_format"] == sent[1]["response_format"]
+    assert packets[0]["runtimeEntities"] == packets[1]["runtimeEntities"]
+    assert packets[0]["acceptedPresentationMechanicsReadOnly"] == packets[1]["acceptedPresentationMechanicsReadOnly"]
+    assert len(sent) == 2 and not responses
+
+
+@pytest.mark.parametrize("concept", [None, {}, "informal concept", {"literalSynthesis": None},
+                                    {"literalSynthesis": 42}, {"literalSynthesis": " \n"}])
+def test_visual_does_not_invent_literal_synthesis_from_missing_or_malformed_advisory(wire_transport, concept):
+    responses, sent = wire_transport
+    data = compile_runtime_program(build_runtime_fixture("door_on_chain"))
+    data["concept"] = concept
+    before = copy.deepcopy(data)
+    responses.append({})
+    visual._request_visual_kit(data, {}, {})
+    assert "literalSynthesis" not in request_dossier(sent[0])["item"]
+    assert data == before and not responses
 
 
 @pytest.mark.parametrize("mirror", [pytest.param(False, id="independent-hitbox"), pytest.param(True, id="explicit-mirroring")])
@@ -183,10 +226,11 @@ def test_visual_style_changes_advisory_system_only(wire_transport, monkeypatch):
     assert sent[0]["response_format"] == sent[1]["response_format"]
 
 
-def test_invalid_prompt_style_is_not_silently_defaulted(monkeypatch):
+def test_invalid_visual_style_is_rejected_by_its_visual_consumer(wire_transport, monkeypatch):
     monkeypatch.setattr(llm_config, "PROMPT_STYLE", "Unknown", raising=False)
     with pytest.raises(ValueError, match="INFINI_PROMPT_STYLE"):
-        build_initial_author_request({}, {}, "invalid-style", model_name="test-model")
+        visual._request_visual_kit(_accepted_visual_data("door_on_chain"), {}, {})
+    assert wire_transport[1] == [], "invalid style must fail before provider transport"
 
 
 def test_generated_parent_visual_calibration_stays_in_visual_tail_not_gameplay(wire_transport):
@@ -245,3 +289,71 @@ def test_public_visual_schemas_share_owner_catalogs_without_per_token_cases():
     assert director["equipOverlay"]["properties"]["accessoryMount"]["enum"] == repair["equipOverlayPatch"]["anyOf"][0]["properties"]["accessoryMount"]["enum"]
     modes = {branch["properties"]["assetMode"]["const"] for branch in director["entities"]["items"]["oneOf"]}
     assert modes == {row["mode"] for row in visual.visual_asset_mode_catalog()}
+
+
+@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
+@pytest.mark.parametrize("fixture_name", ["door_on_chain", "workbench_blade"])
+def test_minimal_author_result_preserves_visual_mechanics_and_parent_facts(wire_transport, monkeypatch, mode, fixture_name):
+    """Advisory omission changes only optional appearance hints, not Visual's facts."""
+    from infini_local.core.runtime_authoring.validator import validate_runtime_program
+
+    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
+    source = build_runtime_fixture(fixture_name)
+    minimal = {key: copy.deepcopy(source[key]) for key in ("name", "category", "runtimeProgram")}
+    assert validate_runtime_program(minimal)["ok"]
+    if mode == "json_schema":
+        from jsonschema import Draft202012Validator
+        from infini_local.pipelines import author_item_contract as contract
+        from test_codex_subscription_contract import _encode_nullable_fixture
+
+        request, _, _ = build_initial_author_request({}, {}, "minimal-visual", model_name="offline")
+        local = contract.author_item_response_schema()
+        encoded = _encode_nullable_fixture(minimal, local)
+        Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(encoded)
+        restored = contract.project_provider_author_item_to_local(encoded, response_format=request["response_format"])
+        assert restored == minimal
+        minimal = restored
+    data = compile_runtime_program(minimal)
+    assert "concept" not in data and "realization" not in data
+    parents = (
+        {"id": 1, "name": "Glass Door", "internalName": "GlassDoor", "sourceMod": "Terraria",
+         "fullName": "Terraria/GlassDoor", "width": 16, "height": 32,
+         "spriteReferenceRaw": {"source": "TextureAssets.Item", "textureWidthPx": 16, "textureHeightPx": 32}},
+        {"id": 2, "name": "Chain", "internalName": "Chain", "sourceMod": "Terraria",
+         "fullName": "Terraria/Chain", "width": 12, "height": 18,
+         "spriteReferenceRaw": {"source": "TextureAssets.Item", "textureWidthPx": 12, "textureHeightPx": 18}},
+    )
+    frozen = copy.deepcopy((data, parents))
+    responses, sent = wire_transport
+    responses.extend([{}, {}])
+    visual._request_visual_kit(data, *parents)
+    visual._request_visual_kit(compile_runtime_program(source), *parents)
+    packet, advisory_packet = (request_dossier(request) for request in sent)
+    assert packet["item"] == {"name": source["name"], "realization": {}}
+    assert packet["requiredEntityIds"] == [entity["id"] for entity in data["runtimeProgram"]["entities"]]
+    for label, parent in zip(("parentA", "parentB"), parents):
+        delivered = packet["parents"][label]["packet"]
+        assert delivered["name"] == parent["name"]
+        assert delivered["internalName"] == parent["internalName"]
+        assert delivered["sourceMod"] == parent["sourceMod"]
+        assert delivered["raw"]["crossModIdentity"]["fullName"] == parent["fullName"]
+        assert delivered["raw"]["spriteReference"] == parent["spriteReferenceRaw"]
+    context = packet["acceptedPresentationMechanicsReadOnly"]
+    for field in ("itemEntityId", "primaryEntityId", "primaryOwner", "itemUse", "itemContact", "bindings"):
+        if field in data["runtimeProgram"]:
+            assert context[field] == data["runtimeProgram"][field]
+    assert context["gameplay"]["useTime"] == data["gameplay"]["useTime"]
+    for delivered, accepted in zip(packet["runtimeEntities"], data["runtimeProgram"]["entities"]):
+        assert delivered["id"] == accepted["id"] and delivered["kind"] == accepted["kind"]
+        for field in ("spawn", "lifetimeTicks", "hitbox", "collision", "movement", "controller",
+                      "aim", "attachment", "reach", "rotation", "seek", "returnTrigger", "arrival", "ownerControl"):
+            if field in accepted:
+                assert delivered[field] == accepted[field]
+    # Compare the entire delivered dossiers, not just a few selected facts.
+    # Only the optional item hints may differ from the advisory-bearing control.
+    assert {k: v for k, v in packet.items() if k != "item"} == {
+        k: v for k, v in advisory_packet.items() if k != "item"}
+    assert sent[0]["messages"][:2] == sent[1]["messages"][:2]
+    assert sent[0]["response_format"] == sent[1]["response_format"]
+    assert len(sent) == 2 and not responses
+    assert (data, parents) == frozen

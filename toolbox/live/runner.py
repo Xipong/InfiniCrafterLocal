@@ -381,7 +381,9 @@ def capture_image_boundary(data: dict[str, Any], pending: Any = None) -> dict[st
         mode = str(slot.get('assetMode') or '')
         should_call = role == 'item' or (mode == 'baked_sprite' and not status.startswith('skipped_'))
         raw_prompt = str(slot.get('prompt') or '')
-        final_prompt = item_prompt if role == 'item' else normalize_asset_prompt(probe, role, raw_prompt, canvas)
+        final_prompt = raw_prompt
+        if should_call:
+            final_prompt = item_prompt if role == 'item' else normalize_asset_prompt(probe, role, raw_prompt, canvas)
         negative = item_negative if role == 'item' else (director_negative or asset_negative_prompt(role))
         backend_rows.append({
             'role': role,

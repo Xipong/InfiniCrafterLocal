@@ -859,6 +859,7 @@ def postprocess_sprite(
     part_count_min: int = 0,
     part_count_max: int = 0,
     output_dir: Path | None = None,
+    master_output: Path | None = None,
 ) -> str:
     """Process an authored image through the selected technical role contract.
 
@@ -909,6 +910,8 @@ def postprocess_sprite(
                 save_stage(bg_removed, sprite_id, "15_projectile_forward_axis", output_dir=output_dir)
             master = prepare_sprite_master(bg_removed, sprite_id, target_size, role)
         save_stage(master, sprite_id, "20_master_norm", output_dir=output_dir)
+        if master_output is not None:
+            save_image_output(master, master_output)
         final = bake_sprite_from_master(master, target_size, role)
         save_stage(final, sprite_id, "30_baked_final", output_dir=output_dir)
 

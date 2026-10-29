@@ -36,13 +36,13 @@ LLM_ITEM_RAW_KEYS = [
     "rare", "rarityDetails", "value", "maxStack", "consumable", "material", "accessory", "defense",
     "headSlot", "bodySlot", "legSlot", "createTile", "createWall", "placeStyle", "nativeTileState",
     "pickPower", "axePower", "hammerPower", "pick", "axe", "hammer",
-    "healLife", "healMana", "potion", "manaCost", "buffType", "buffTime",
+    "healLife", "healMana", "lifeRegen", "potion", "manaCost", "buffType", "buffTime",
     "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "useAmmoCategoryName", "dropSeedsIfInInventory",
     "shoot", "shootSpeed", "fishingPole", "bait",
 ]
 LLM_PROJECTILE_RAW_KEYS = [
     "source", "inventorySlot", "type", "internalName", "sourceMod", "fullName",
-    "itemShootSpeed", "width", "height", "scale", "penetrate", "maxPenetrate", "timeLeft", "extraUpdates",
+    "armorPenetration", "itemShootSpeed", "width", "height", "scale", "penetrate", "maxPenetrate", "timeLeft", "extraUpdates",
     "tileCollide", "ignoreWater", "friendly", "hostile", "arrow", "minion", "sentry", "minionSlots",
     "ownerHitCheck", "usesLocalNPCImmunity", "localNPCHitCooldown", "usesIDStaticNPCImmunity", "idStaticNPCHitCooldown",
     "stopsDealingDamageAfterPenetrateHits", "light", "alpha", "netImportant", "damageClass",

@@ -19,6 +19,7 @@ from infini_local.core.runtime_authoring.binding_use_policy import (
     target_id as binding_target_id,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
+    PROJECTILE_MODIFIER_COMPONENTS,
     authored_event,
     BINDING_ACTION_REGISTRY,
     CAPABILITY_REGISTRY,
@@ -76,6 +77,8 @@ VALIDATION_ERROR_CODES = frozenset({
     "event_not_emitted",
     "event_spawn_budget",
     "exclusive_component_conflict",
+    "overlapping_motion_windows",
+    "retained_motion_stage_conflict",
     "hidden_item_primary_requires_spawn_target",
     "illegal_event_cycle",
     "inert_component",
@@ -550,6 +553,29 @@ def _validate_requirement(
         if not any(_numeric_param(params, name, -1) >= 0 for name in names):
             return ValidationIssue(f"{path}.params", "empty_component", requirement.message, tuple(f"{name} >= 0" for name in names))
         return None
+    if requirement.kind == "conditional_param_values":
+        if params.get(requirement.param) == requirement.equals and params.get(requirement.other_param) not in requirement.any_of:
+            return ValidationIssue(f"{path}.params.{requirement.other_param}", "incompatible_param_variant", requirement.message, requirement.any_of)
+        return None
+    if requirement.kind == "param_branch_fields":
+        if params.get(requirement.param) != requirement.equals:
+            return None
+        missing = next((name for name in requirement.any_of if name not in params), None)
+        if missing:
+            return ValidationIssue(f"{path}.params.{missing}", "missing_dependency_param", requirement.message, (missing,))
+        fields = {name for r in cap.requirements if r.kind == "param_branch_fields" for name in r.any_of}
+        forbidden = next((name for name in fields if name in params and name not in requirement.any_of), None)
+        if forbidden:
+            return ValidationIssue(f"{path}.params.{forbidden}", "incompatible_param_variant", requirement.message)
+        return None
+    if requirement.kind == "timing_pair_or_window":
+        pair = (requirement.param, requirement.other_param)
+        missing = next((name for name in pair if name not in params), None)
+        if missing and any(name in params for name in pair):
+            return ValidationIssue(f"{path}.params.{missing}", "missing_dependency_param", requirement.message, (missing,))
+        if missing and requirement.any_of[0] not in params:
+            return ValidationIssue(f"{path}.params.{requirement.any_of[0]}", "missing_dependency_param", requirement.message, requirement.any_of)
+        return None
     if requirement.kind == "conditional_param":
         raw_mode = params.get(requirement.param)
         mode = raw_mode if isinstance(raw_mode, str) else ""
@@ -872,6 +898,18 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             registered_names = tuple(name for name, spec in CAPABILITY_REGISTRY.items() if spec.author_visible)
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].fn", "unknown_capability", f"Unknown capability '{fn}'.", registered_names, (call_id,)))
             continue
+        # A closed params union can hide its undecided selector behind a
+        # generic oneOf error. Report the exact leaf so Repair never thaws
+        # valid siblings while choosing the branch.
+        branch_selectors = {r.param for r in cap.requirements if r.kind == "param_branch_fields"}
+        for selector in sorted(branch_selectors):
+            spec = cap.params[selector]
+            if params.get(selector) not in spec.enum:
+                issues.append(ValidationIssue(
+                    f"$.runtimeProgram.calls[{index}].params.{selector}",
+                    "incompatible_param_variant", "Choose an explicit registered parameter branch.", spec.enum,
+                    (call_id,),
+                ))
         if not body_resolved and cap.target_kinds == ("item_body",):
             continue  # no writable synthetic target for an implied body reference
         if entity is None:
@@ -1073,7 +1111,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 allowed = tuple(sorted(
                     cap.name
                     for cap in CAPABILITY_REGISTRY.values()
-                    if kind in cap.target_kinds and cap.meaningful_for_stationary
+                    if cap.author_visible and kind in cap.target_kinds and cap.meaningful_for_stationary
                 ))
                 issues.append(ValidationIssue(
                     "$.runtimeProgram.calls",
@@ -1310,6 +1348,19 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
                                hand_pose: Any = None, item_owner_id: str = "") -> list[ValidationIssue]:
     """Shared mechanical refusal for Author and stripped wire; never writes values."""
     issues: list[ValidationIssue] = []
+    if not wire:
+        # Only explicitly present packaged components participate. Paths remain
+        # rooted in the real Author call for leaf-local Repair.
+        nested_rows = []
+        for row in rows:
+            cap = CAPABILITY_REGISTRY[row["fn"]]
+            values = row.get("params", {})
+            for parameter, member in cap.nested_components.items():
+                if isinstance(values, Mapping) and isinstance(values.get(parameter), Mapping):
+                    child = next(fn for fn, component in PROJECTILE_MODIFIER_COMPONENTS.items() if component == member)
+                    nested_rows.append({**row, "fn": child, "params": values[parameter],
+                                        "_path": row["_path"] + "." + parameter})
+        rows = [*rows, *nested_rows]
     fns = {row["fn"] for row in rows}
 
     def params(row: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -1451,14 +1502,18 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
             scale_conflict = (left["fn"] in scale_fns and right["fn"] in scale_fns
                 or left["fn"] == "add_projectile_visual_scale" and right["fn"] == "set_projectile_hitbox_curve" and params(right).get("mirrorToSprite") is True
                 or right["fn"] == "add_projectile_visual_scale" and left["fn"] == "set_projectile_hitbox_curve" and params(left).get("mirrorToSprite") is True)
-            if (absolute_conflict or scale_conflict) and _motion_windows_overlap(params(left), params(right), wire=wire):
+            velocity_scale_conflict = left["fn"] == right["fn"] == "scale_projectile_velocity"
+            if (absolute_conflict or scale_conflict or velocity_scale_conflict) and _motion_windows_overlap(params(left), params(right), wire=wire):
                 mirror = next((row for row in (left, right)
                     if row["fn"] == "set_projectile_hitbox_curve" and params(row).get("mirrorToSprite") is True), None)
-                if scale_conflict and mirror is not None:
+                if velocity_scale_conflict:
+                    reject(right, "window", "overlapping_motion_windows",
+                           "Velocity-scale instances require provably disjoint windows; adjust this window or delete this call.")
+                elif scale_conflict and mirror is not None:
                     reject(mirror, "mirrorToSprite", "exclusive_component_conflict",
                            "The explicit sprite mirror conflicts with an independent visual-scale owner.")
                 else:
-                    reject(right, "", "exclusive_component_conflict", "Overlapping absolute-position/velocity or visual-scale owners are not composable.")
+                    reject(right, "", "exclusive_component_conflict", "Overlapping position, velocity-scale or visual-scale owners are not composable.")
     return issues
 
 

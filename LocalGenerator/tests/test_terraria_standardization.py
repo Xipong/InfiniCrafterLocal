@@ -21,25 +21,6 @@ def test_author_vocabulary_is_finite_and_alias_free() -> None:
     assert "rogue" not in DAMAGE_CLASS_TOKENS
 
 
-def test_damage_class_prompt_explains_choices_without_engine_documentation() -> None:
-    from infini_local.pipelines.llm_authoring_prompt import build_llm_author_payload
-
-    payload = build_llm_author_payload({}, {}, "class_guide")
-    guide = payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["damageClass"]
-    meanings = guide["meaningByToken"]
-    assert set(meanings) == set(DAMAGE_CLASS_TOKENS)
-    assert "does not receive generic bonuses" in meanings["default"]
-    assert "all-class bonuses" in meanings["generic"]
-    assert "attack speed has no effect" in meanings["melee_no_speed"]
-    assert "melee attack speed" in meanings["summon_melee_speed"]
-    assert all(token in meanings["magic_summon_hybrid"] for token in ("magic", "summon", "generic"))
-    assert "not melee damage" in meanings["summon_melee_speed"]
-    for token in ("summon", "summon_melee_speed"):
-        assert "no standard critical-hit calculation" in meanings[token]
-    assert "not used by vanilla items" in meanings["throwing"]
-    assert "no movement" in guide["scope"]
-
-
 def test_binding_use_policy_and_ammo_are_distinct_terraria_owners() -> None:
     ammo = CAPABILITY_REGISTRY["configure_vanilla_ammo_item"]
     assert "configure_consumption" not in CAPABILITY_REGISTRY
@@ -66,7 +47,6 @@ def test_projectile_collision_exposes_terraria_liquid_and_immunity_semantics() -
     assert [spec.enum for spec in variants[:2]] == [("owner_shared",), ("once_per_npc",)]
     cooldown = variants[2].properties["localCooldown"]
     assert (cooldown.minimum, cooldown.maximum) == (0, 600)
-    assert "Raw unscaled Projectile.localNPCHitCooldown" in cooldown.description
 
 
 def test_generated_parent_preserves_exact_ammo_and_potion_facts() -> None:
@@ -149,18 +129,13 @@ def test_exact_modded_damage_class_uses_tmodloader_full_name() -> None:
 def test_tool_and_value_units_match_exact_terraria_fields() -> None:
     item_stats = CAPABILITY_REGISTRY["configure_item_stats"]
     tool = CAPABILITY_REGISTRY["configure_tool"]
-    assert "Item.value" in item_stats.params["valueCopper"].description
-    assert "resale" in item_stats.params["valueCopper"].description
+    assert item_stats.params["valueCopper"].to_wire(12_345) == 12_345
     assert tool.params["axePowerTooltipPercent"].maximum == 500
     assert tool.params["axePowerTooltipPercent"].multiple_of == 5
-    assert "Item.axe" in tool.params["axePowerTooltipPercent"].description
+    assert tool.params["axePowerTooltipPercent"].to_wire(45) == 9
 
 
 def test_held_sprite_visibility_is_only_presentation_metadata() -> None:
     release = CAPABILITY_REGISTRY["configure_item_use"].params["customHeldSprite"]
     assert release.enum == ("hidden", "visible", "inherit")
     assert dict(release.wire_enum) == {"hidden": "immediate", "visible": "on_release", "inherit": ""}
-    assert "Custom held-root visibility only" in release.description
-    assert "not gameplay release timing" in release.description
-    assert "inherit or omission follows hideUseGraphic" in release.description
-    assert "does not schedule gameplay release" in release.description

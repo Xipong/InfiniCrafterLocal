@@ -66,6 +66,17 @@ public static class RuntimeMotionNumbers
     { public OptionalAcceleration() : base("-2", "2") { } }
     public sealed class Retention : RawJsonFloatDomainConverter
     { public Retention() : base("0", "1.2") { } }
+    public sealed class VelocityScaleMultiplier : RawJsonFloatDomainConverter
+    {
+        private static readonly RawJsonFloatDomain StopBoundary = new("0", "1.2", "0");
+        public VelocityScaleMultiplier() : base("0", "1.2", "1") { }
+        public override float Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+        {
+            var copy = reader;
+            StopBoundary.Read(ref copy);
+            return base.Read(ref reader, type, options);
+        }
+    }
     public sealed class OptionalRetention : RawJsonNullableFloatDomainConverter
     { public OptionalRetention() : base("0", "1.2") { } }
     public sealed class Amplitude : RawJsonFloatDomainConverter
@@ -461,6 +472,27 @@ public sealed class RuntimeVelocityRetentionSpec : RuntimeWindowedMotionSpec
 }
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed class RuntimeVelocityScaleSpec : RuntimeWindowedMotionSpec
+{
+    [JsonConverter(typeof(RuntimeMotionNumbers.VelocityScaleMultiplier))]
+    [JsonRequired] public float MultiplierPerUpdate { get; set; }
+    private float? _maxSpeed;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonConverter(typeof(RuntimeMotionNumbers.OptionalSpeed))]
+    public float? MaxSpeed
+    {
+        get => _maxSpeed;
+        set => _maxSpeed = value ?? throw new InvalidDataException("present velocity scale cap cannot be null");
+    }
+    public override void Validate()
+    {
+        base.Validate();
+        RuntimeMotionAdmission.Range(MultiplierPerUpdate, 0d, 1.2d);
+        if (MaxSpeed.HasValue) RuntimeMotionAdmission.Range(MaxSpeed.Value, 0.001d, 80d);
+    }
+}
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed class RuntimeOscillationSpec : RuntimeWindowedMotionSpec
 {
     [JsonRequired] public string Law { get; set; } = null!;
@@ -728,6 +760,13 @@ public sealed partial class RuntimeEntitySpec
         get => _verticalAcceleration;
         set => _verticalAcceleration = value ?? throw new InvalidDataException("present VerticalAcceleration cannot be null");
     }
+    private RuntimeVelocityScaleSpec[]? _velocityScale;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RuntimeVelocityScaleSpec[]? VelocityScale
+    {
+        get => _velocityScale;
+        set => _velocityScale = value ?? throw new InvalidDataException("present velocityScale cannot be null");
+    }
     private RuntimeVelocityRetentionSpec? _velocityRetention;
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public RuntimeVelocityRetentionSpec? VelocityRetention
@@ -824,7 +863,7 @@ public sealed partial class RuntimeEntitySpec
         || Proximity is not null
         || Rotation is not null
         || VerticalAcceleration is not null
-        || VelocityRetention is not null
+        || VelocityRetention is not null || VelocityScale is not null
         || Oscillation is not null
         || Opacity is not null
         || VisualScaleRate is not null
@@ -838,7 +877,7 @@ public sealed partial class RuntimeEntitySpec
         || LashGeometry is not null;
     [JsonIgnore] internal bool HasMotionPositionDriver => Attachment is not null || Orbit is not null
         || Seek is not null || LashGeometry is not null || VerticalAcceleration is not null
-        || VelocityRetention is not null || Oscillation is not null;
+        || VelocityRetention is not null || VelocityScale is not null || Oscillation is not null;
 
     internal IEnumerable<RuntimeMotionWindowSpec?> MotionWindows()
     {
@@ -851,6 +890,7 @@ public sealed partial class RuntimeEntitySpec
         if (Rotation is not null) yield return Rotation.Window;
         if (VerticalAcceleration is not null) yield return VerticalAcceleration.Window;
         if (VelocityRetention is not null) yield return VelocityRetention.Window;
+        foreach (var scale in VelocityScale ?? Array.Empty<RuntimeVelocityScaleSpec>()) if (scale is not null) yield return scale.Window;
         if (Oscillation is not null) yield return Oscillation.Window;
         if (Opacity is not null) yield return Opacity.Window;
         if (VisualScaleRate is not null) yield return VisualScaleRate.Window;
@@ -878,6 +918,15 @@ public sealed partial class RuntimeEntitySpec
         Rotation?.Validate();
         VerticalAcceleration?.Validate();
         VelocityRetention?.Validate();
+        if (VelocityScale is not null) {
+            if (VelocityScale.Length is < 1 or > 2 || VelocityScale.Any(x => x is null))
+                throw new InvalidDataException("velocityScale requires 1..2 non-null typed instances");
+            foreach (var scale in VelocityScale) scale.Validate();
+            if (VelocityRetention is not null || SpeedModifier is not null)
+                throw new InvalidDataException("new late scaling cannot coexist with historical velocity scalers");
+            if (VelocityScale.Length == 2)
+                RuntimeMotionAdmission.RequireDisjoint(VelocityScale[0].Window, VelocityScale[1].Window);
+        }
         Oscillation?.Validate();
         Opacity?.Validate();
         VisualScaleRate?.Validate();
@@ -951,6 +1000,7 @@ public sealed partial class RuntimeEntitySpec
         foreach (var seek in Seek ?? Array.Empty<RuntimeSeekSpec>()) velocity.Add(seek.Window);
         if (VerticalAcceleration is not null) velocity.Add(VerticalAcceleration.Window);
         if (VelocityRetention is not null) velocity.Add(VelocityRetention.Window);
+        foreach (var scale in VelocityScale ?? Array.Empty<RuntimeVelocityScaleSpec>()) velocity.Add(scale.Window);
         if (Oscillation is not null) velocity.Add(Oscillation.Window);
         if (TurnModifier is not null) velocity.Add(TurnModifier.Window);
         if (SpeedModifier is not null) velocity.Add(SpeedModifier.Window);

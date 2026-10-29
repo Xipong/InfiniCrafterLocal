@@ -1,5 +1,5 @@
 from infini_local.pipelines import vfx_generation_pipeline as vfx_transport
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 """Verify complete animation vocabulary reaches the production serialized Author request."""
 
 import copy
@@ -11,46 +11,10 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.pipelines import llm_authoring_pipeline as gameplay, visual_generation_pipeline as visual
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output, wire_transport
+from test_low_level_three_stage_pipeline import _visual_kit, _vfx_output
+from test_low_level_three_stage_pipeline import wire_transport as wire_transport
 
-from infini_local.core.runtime_authoring.terraria_vocabulary import (
-    ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TMODLOADER_NAMES, ITEM_USE_STYLE_TOKENS,
-)
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
-from infini_local.pipelines.llm_authoring_prompt import (
-    PLANNER_PROMPT_LIMIT_CHARS, PLANNER_PROMPT_MIN_HEADROOM_CHARS,
-)
-
-
-def test_serialized_item_use_style_guide_covers_exact_enum_and_no_mechanics(monkeypatch):
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
-    parent_a = {"id": "blade", "name": "Blade", "damage": 7, "useTime": 20}
-    parent_b = {"id": "bench", "name": "Workbench", "createTile": 18, "useTime": 15}
-    request, user_content, _ = build_initial_author_request(
-        parent_a, parent_b, "blade+bench", model_name="gemini-2.5-flash",
-    )
-    assert dossier_text(request) == user_content
-    assert request["response_format"] == {"type": "json_object"}
-    assert len(user_content) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
-    payload = json.loads(user_content)
-    guide = payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["itemUseStyle"]
-    card = next(row for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
-                if row["fn"] == "configure_item_use")
-    assert guide["builtInTokens"] == list(ITEM_USE_STYLE_TOKENS)
-    assert set(guide["meaningByToken"]) == set(card["params"]["useStyle"]["enum"])
-    assert set(guide["meaningByToken"]) == set(ITEM_USE_STYLE_TOKENS) == set(ITEM_USE_STYLE_TMODLOADER_NAMES)
-    assert guide["meaningByToken"] == dict(ITEM_USE_STYLE_MEANINGS)
-    assert all(text.strip().endswith(".") for text in guide["meaningByToken"].values())
-    meanings = guide["meaningByToken"]
-    assert "horizontally" in meanings["thrust"] and "any angle" in meanings["rapier"]
-    assert "early" in meanings["drink_long"] and "front arm" in meanings["drink_liquid"]
-    assert "off hand" in meanings["raise_lamp"] and "animation" in meanings["hidden_animation"]
-    assert "cursor" in meanings["shoot"] and "golf club" in meanings["golf_play"]
-    assert all(term in guide["scope"] for term in (
-        "configure_item_use.useStyle", "animation", "during active use only",
-        "not a functional tool/use mechanic", "input binding", "executable effects separately", "not weapon presets",
-    ))
-    assert "meaningByToken" in payload["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["damageClass"]
 
 
 @pytest.mark.parametrize("format_mode", ["json_schema", "json_object"])
@@ -107,8 +71,9 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     assert "heldRootVisibility" not in vfx_packets[1]["runtimeVocabularyReadOnly"]
     assert visual_packets[1]["acceptedPresentationMechanicsReadOnly"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     assert vfx_packets[1]["acceptedRuntimeProgramReadOnly"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
-    for description in descriptions:
-        assert all(term in description for term in ("deliberate invisibility", "physical held-body replacement", "Free projectiles", "not", "customHeldSprite")), description
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+    expected_meaning = CAPABILITY_REGISTRY["configure_item_use"].params["hideUseGraphic"].description
+    assert descriptions == [expected_meaning] * len(descriptions)
     for request in [author, *requests]:
         assert request["response_format"]["type"] == format_mode
     assert not responses

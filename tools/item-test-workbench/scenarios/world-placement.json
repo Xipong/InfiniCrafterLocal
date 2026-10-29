@@ -1,0 +1,109 @@
+{
+  "playerUpdate": "full",
+  "ticks": 100,
+  "seed": 1,
+  "player": {
+    "x": 800,
+    "y": 700,
+    "life": 100,
+    "mana": 200
+  },
+  "dummy": {
+    "x": 1200,
+    "y": 700,
+    "life": 10000
+  },
+  "tiles": [
+    {
+      "tileX": 1,
+      "tileY": 47,
+      "width": 97,
+      "height": 1
+    }
+  ],
+  "world": {
+    "trackTiles": [
+      {
+        "tileX": 54,
+        "tileY": 46
+      },
+      {
+        "tileX": 54,
+        "tileY": 45
+      }
+    ]
+  },
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "tile_target",
+      "tileX": 54,
+      "tileY": 46
+    },
+    {
+      "tick": 0,
+      "kind": "primary"
+    },
+    {
+      "tick": 1,
+      "kind": "release"
+    },
+    {
+      "tick": 60,
+      "kind": "break_tile",
+      "tileX": 54,
+      "tileY": 46
+    },
+    {
+      "tick": 80,
+      "kind": "break_tile",
+      "tileX": 54,
+      "tileY": 46
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "placement_groups_at",
+      "tick": 30,
+      "value": 1
+    },
+    {
+      "kind": "tile_at",
+      "tick": 30,
+      "tileX": 54,
+      "tileY": 46,
+      "hasTile": true,
+      "tileId": 215
+    },
+    {
+      "kind": "placement_groups_at",
+      "tick": 99,
+      "value": 0
+    },
+    {
+      "kind": "tile_at",
+      "tick": 99,
+      "tileX": 54,
+      "tileY": 45,
+      "hasTile": false
+    },
+    {
+      "kind": "generated_world_items_at",
+      "tick": 99,
+      "value": 1
+    },
+    {
+      "kind": "no_nonfinite"
+    },
+    {
+      "kind": "generated_stack_at",
+      "tick": 30,
+      "value": 0
+    },
+    {
+      "kind": "generated_stack_at",
+      "tick": 99,
+      "value": 0
+    }
+  ]
+}

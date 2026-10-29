@@ -158,6 +158,19 @@ def _emitted_validator_codes() -> set[str]:
     path = ROOT / "LocalGenerator/infini_local/core/runtime_authoring/validator.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     out: set[str] = set()
+    # Small local diagnostic helpers may forward a code parameter unchanged.
+    # Follow that explicit argument, not arbitrary string literals or a manual
+    # exception list of codes that the inventory would then fail to verify.
+    forwarded: dict[str, int] = {}
+    for function in ast.walk(tree):
+        if not isinstance(function, ast.FunctionDef):
+            continue
+        parameters = [argument.arg for argument in function.args.args]
+        for call in ast.walk(function):
+            if (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                    and call.func.id == "ValidationIssue" and len(call.args) >= 2
+                    and isinstance(call.args[1], ast.Name) and call.args[1].id in parameters):
+                forwarded[function.name] = parameters.index(call.args[1].id)
     def literal_codes(expression: ast.expr) -> set[str]:
         if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
             return {expression.value}
@@ -167,10 +180,11 @@ def _emitted_validator_codes() -> set[str]:
             return literal_codes(expression.body) | literal_codes(expression.orelse)
         return set()
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name) or node.func.id != "ValidationIssue":
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
             continue
-        if len(node.args) >= 2:
-            out.update(literal_codes(node.args[1]))
+        position = 1 if node.func.id == "ValidationIssue" else forwarded.get(node.func.id)
+        if position is not None and len(node.args) > position:
+            out.update(literal_codes(node.args[position]))
     return out
 
 

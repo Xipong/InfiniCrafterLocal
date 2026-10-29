@@ -635,7 +635,7 @@ def test_buff_capture_keeps_prior_bytes_but_only_current_names_authenticate_fres
 @pytest.mark.parametrize("scope", ["global", "effect_group"])
 def test_frozen_percent_absence_survives_duration_repair_and_requires_exact_zero_provenance(scope):
     document, call = _buff_speed_source(scope)
-    call["params"]['durationSeconds'] = (0) / 60
+    call["params"]['durationSeconds'] = -1
     original = _bytes(document)
     scope_report = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
     assert scope_report["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.durationSeconds']}]
@@ -686,9 +686,9 @@ WIRE_VALUES = (
     ("current", "delivered", -1e-50, False, "negative-storage-collapse"),
     ("current", "delivered", 0.0, True, "positive-zero"),
     ("current", "delivered", -0.0, True, "negative-zero"),
-    ("current", "delivered", -.5, True, "minimum"),
+    ("current", "delivered", -.8, True, "minimum"),
     ("current", "delivered", 2.0, True, "maximum"),
-    ("current", "delivered", math.nextafter(-.5, -math.inf), False, "below-minimum"),
+    ("current", "delivered", math.nextafter(-.8, -math.inf), False, "below-minimum"),
     ("current", "delivered", math.nextafter(2.0, math.inf), False, "above-maximum"),
     ("current", "delivered", .007 / 100, True, "decimal-collision"),
     ("current", "delivered", 2**-149, True, "float32-subnormal"),

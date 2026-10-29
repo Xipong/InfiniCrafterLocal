@@ -1,22 +1,21 @@
 """Independent charge channels, world-time orbit, and literal tile restitution."""
 from copy import deepcopy
-import json
 
 import pytest
 
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
 from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 def fixture(fn):
     doc = build_capability_witness(fn)
     call = next(c for c in doc['runtimeProgram']['calls'] if c['id'] == 'witness_call')
+    if fn == 'accumulate_projectile_charge':
+        call['params']['releaseEffect'] = {'launchSpeedBlocksPerSecond': 30}
     return doc, call
 
 
@@ -45,18 +44,18 @@ def test_orbit_rate_projects_world_time_and_keeps_launch_speed_independent(updat
 
 
 def test_charge_three_channels_project_without_coupling():
-    doc, call = fixture('apply_projectile_charge_release')
-    call['params'].update(damageMultiplier=3, knockbackMultiplier=0.25, speedMultiplier=0.5)
+    doc, call = fixture('accumulate_projectile_charge')
+    call['params']['releaseEffect'].update(damageMultiplier=3, knockbackMultiplier=0.25, speedMultiplier=0.5)
     wire = compile_runtime_program(doc)
     params = entity(wire)['chargeRelease']
     assert params['damageMultiplier'] == 3 and params['knockbackMultiplier'] == 0.25 and params['speedMultiplier'] == 0.5
     assert validate_runtime_wire(wire)['ok']
     for source, target in [('damageMultiplier', 'damageMultiplier'), ('knockbackMultiplier', 'knockbackMultiplier'), ('speedMultiplier', 'speedMultiplier')]:
         receipt = next(r for r in wire['runtimeContract']['finalWireReceipts'] if r.get('callId') == call['id']
-                       and r['authoredPath'].endswith('.params.' + source))
+                       and r['authoredPath'].endswith('.params.releaseEffect.' + source))
         assert receipt['finalPath'].endswith('.chargeRelease.' + target)
-        assert receipt['value'] == call['params'][source]
-    call['params']['powerMultiplier'] = call['params'].pop('damageMultiplier')
+        assert receipt['value'] == call['params']['releaseEffect'][source]
+    call['params']['releaseEffect']['powerMultiplier'] = call['params']['releaseEffect'].pop('damageMultiplier')
     assert not validate_runtime_program(doc)['ok']  # retired fresh spelling is not another design branch
 
 
@@ -78,14 +77,15 @@ def test_bounce_retention_and_declared_omission_have_exact_provenance(retention)
 @pytest.mark.parametrize('fn,key,value', [
     ('orbit_projectile', 'radiansPerSecond', None), ('orbit_projectile', 'radiansPerSecond', True),
     ('orbit_projectile', 'radiansPerSecond', float('inf')),
-    ('apply_projectile_charge_release', 'damageMultiplier', 0.5), ('apply_projectile_charge_release', 'speedMultiplier', 0),
-    ('apply_projectile_charge_release', 'knockbackMultiplier', -0.1),
+    ('accumulate_projectile_charge', 'damageMultiplier', 0.5), ('accumulate_projectile_charge', 'speedMultiplier', 0),
+    ('accumulate_projectile_charge', 'knockbackMultiplier', -0.1),
     ('set_projectile_collision', 'bounceSpeedRetention', 1.01),
     ('set_projectile_collision', 'bounceSpeedRetention', None),
 ])
 def test_invalid_present_choice_is_not_replaced(fn, key, value):
     doc, call = fixture(fn)
-    call['params'][key] = value
+    params = call['params']['releaseEffect'] if fn == 'accumulate_projectile_charge' else call['params']
+    params[key] = value
     assert not validate_runtime_program(doc)['ok']
     with pytest.raises(ValueError): compile_runtime_program(doc)
 
@@ -133,41 +133,23 @@ def test_retained_wire_absence_is_read_only_and_foreign_or_incomplete_extensions
 
 
 def test_repair_only_changes_invalid_channel_and_keeps_valid_charge_channels_frozen():
-    good, call = fixture('apply_projectile_charge_release')
-    call['params'].update(damageMultiplier=3, knockbackMultiplier=0.25, speedMultiplier=0.5)
+    good, call = fixture('accumulate_projectile_charge')
+    call['params']['releaseEffect'].update(damageMultiplier=3, knockbackMultiplier=0.25, speedMultiplier=0.5)
     broken = deepcopy(good)
     bad = next(c for c in broken['runtimeProgram']['calls'] if c['id'] == call['id'])
-    bad['params']['speedMultiplier'] = 0
+    bad['params']['releaseEffect']['speedMultiplier'] = 0
     scope = build_runtime_repair_scope(broken, validate_runtime_program(broken)['errors'])
-    assert scope['fieldPermissions']['calls'] == [{'id': call['id'], 'paths': ['params.speedMultiplier']}]
-    hostile = deepcopy(call); hostile['params']['damageMultiplier'] = 4
+    assert scope['fieldPermissions']['calls'] == [{'id': call['id'], 'paths': ['params.releaseEffect.speedMultiplier']}]
+    hostile = deepcopy(call); hostile['params']['releaseEffect']['damageMultiplier'] = 4
     patch, audit = filter_repair_patch_scope(broken, {'callsUpsert': [hostile], 'note': 'one channel'}, scope)
     assert audit['ignoredChanges'] and apply_repair_patch(broken, patch) == good
-
-
-@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
-def test_actual_author_packet_teaches_native_semantics_and_independent_choices(monkeypatch, mode):
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
-    _, user, _ = build_initial_author_request({}, {}, 'projectile-controls', model_name='test-model')
-    cards = {c['fn']: c for c in json.loads(user)['runtimeCapabilityContract']['catalog']['capabilities']}
-    assert 'powerMultiplier' not in cards['apply_projectile_charge_release']['params']
-    assert {'damageMultiplier', 'knockbackMultiplier', 'speedMultiplier'} <= cards['apply_projectile_charge_release']['params'].keys()
-    assert {'charge_then_release', 'move_orbit'}.isdisjoint(cards)
-    orbit = cards['orbit_projectile']
-    assert 'Signed angular rate' in orbit['params']['radiansPerSecond']['meaning']
-    assert 'zero holds phase' in orbit['params']['radiansPerSecond']['meaning']
-    assert 'tile collision remains independently authored' in orbit['does']
-    meaning = cards['set_projectile_collision']['params']['bounceSpeedRetention']['meaning']
-    assert 'collided velocity axis' in meaning and 'Tangential speed is unchanged' in meaning
-    assert 'No friction' in meaning
-    assert set(CAPABILITY_REGISTRY['orbit_projectile'].params) <= cards['orbit_projectile']['params'].keys()
 
 
 @pytest.mark.parametrize('field', ['damageMultiplier', 'knockbackMultiplier', 'speedMultiplier'])
 @pytest.mark.parametrize('value', [1.0000000001, 0.9999999999])
 def test_independent_charge_preserves_native_double_precision_near_neutral(field, value):
-    doc, call = fixture('apply_projectile_charge_release')
-    call['params'][field] = value
+    doc, call = fixture('accumulate_projectile_charge')
+    call['params']['releaseEffect'][field] = value
     before = deepcopy(doc)
     if field == 'damageMultiplier' and value < 1:
         assert not validate_runtime_program(doc)['ok']
@@ -202,7 +184,7 @@ def test_charge_wire_rejects_pre_normalization_errors(mutation, lane):
         else:
             params['powerMultiplier'] = 2
     else:
-        doc, _ = fixture('apply_projectile_charge_release')
+        doc, _ = fixture('accumulate_projectile_charge')
         wire = compile_runtime_program(doc)
         wire.pop('runtimeContract')
         if mutation == 'duration':

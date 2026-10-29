@@ -1,0 +1,114 @@
+{
+  "playerUpdate": "full",
+  "ticks": 120,
+  "seed": 1,
+  "player": {
+    "x": 800,
+    "y": 700,
+    "mana": 200,
+    "life": 100,
+    "maxLife": 100,
+    "manaCrystals": 9
+  },
+  "dummy": {
+    "x": 920,
+    "y": 700,
+    "life": 10000
+  },
+  "tiles": [
+    {
+      "tileX": 1,
+      "tileY": 47,
+      "width": 97,
+      "height": 1
+    }
+  ],
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "equip"
+    },
+    {
+      "tick": 30,
+      "kind": "equip"
+    },
+    {
+      "tick": 60,
+      "kind": "unequip"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "no_nonfinite"
+    },
+    {
+      "kind": "spawn_count",
+      "value": 0
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 0,
+      "stat": "maxMana",
+      "value": 240
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 0,
+      "stat": "manaCost",
+      "value": 0.95
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 30,
+      "stat": "maxMana",
+      "value": 240
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 30,
+      "stat": "manaCost",
+      "value": 0.95
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 59,
+      "stat": "maxMana",
+      "value": 240
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 59,
+      "stat": "manaCost",
+      "value": 0.95
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 60,
+      "stat": "maxMana",
+      "value": 200
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 60,
+      "stat": "manaCost",
+      "value": 1
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 119,
+      "stat": "maxMana",
+      "value": 200
+    },
+    {
+      "kind": "player_stat_at",
+      "tick": 119,
+      "stat": "manaCost",
+      "value": 1
+    },
+    {
+      "kind": "player_stat_never_above",
+      "stat": "maxMana",
+      "value": 240
+    }
+  ]
+}

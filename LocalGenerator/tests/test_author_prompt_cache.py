@@ -101,7 +101,7 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch, mode):
     assert static == other_static
     assert prefix == other_prefix
     assert len(prefix) > 65000
-    assert set(static) == {"priorityHeader", "runtimeProgramInvariants", "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport"}
+    assert set(static) == {"priorityHeader", "runtimeProgramInvariants", "runtimeCapabilityContract", "requiredJsonShape"}
     assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
     assert full["recipeKey"] != other_full["recipeKey"]
     capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]

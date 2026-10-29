@@ -71,7 +71,10 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
             // Count in the complete visible accessory set before splitting layers.
             // Moving a chest badge to the front must not move the other orbit badges.
             int ordinal = entry.Slot == "accessory" ? accessoryOrdinal++ : 0;
-            bool frontMount = entry.Data.Visual?.AccessoryMount is "chest" or "waist" or "shoulder";
+            // An explicit orbit badge must survive the native body pass: its
+            // first ring position is over the legs, so rear submission can hide
+            // the entire PNG. Keep absent legacy mounts and explicit back rear.
+            bool frontMount = entry.Data.Visual?.AccessoryMount is "chest" or "waist" or "shoulder" or "orbit";
             if (entry.Slot == "accessory" && frontMount != FrontAccessoryLayer)
                 continue;
             string path = entry.Data.Visual?.EquipOverlayPath ?? "";
@@ -124,7 +127,8 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                     offset.Y *= grav;
                     // One explicit token selects one body-local badge offset. No name,
                     // category or image analysis chooses an anchor. Missing/orbit keeps
-                    // the historical ring placement and visibility/dye behavior.
+                    // the historical ring placement and dye behavior; explicit orbit
+                    // uses the front depth while an absent mount stays rear.
                     offset = entry.Data.Visual?.AccessoryMount switch
                     {
                         "chest" => new Vector2(0f, -2f * grav),

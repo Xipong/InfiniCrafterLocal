@@ -57,6 +57,20 @@ def run_check(name: str, command: list[str], *, root: Path = ROOT, env: dict[str
         if not report or not (root / report).is_file():
             return result('notRun', 'Real tModLoader runtime self-test report unavailable; run tML with INFINI_AGENT_SELFTEST=1')
         command = [sys.executable, 'tools/checks/check_tml_selftest_report.py', report]
+    if name == 'item_workbench_build':
+        # The workbench owns readiness and compilation; missing references are not a PASS.
+        for variable in ('INFINI_TML_REFERENCE_DIR', 'INFINI_TML_DEPS_SRC'):
+            if environment.get(variable):
+                environment[variable] = str((root / Path(environment[variable]).expanduser()).resolve())
+        readiness = _execute([sys.executable, 'tools/item-test-workbench/workbench.py', 'doctor'], root, environment)
+        try:
+            state = json.loads(readiness.stdout)
+        except (ValueError, TypeError):
+            return result('failed', readiness.stdout, readiness.returncode or 2)
+        if readiness.returncode == 2 and state.get('ready') is False:
+            return result('notRun', readiness.stdout)
+        if readiness.returncode != 0 or state.get('ready') is not True:
+            return result('failed', readiness.stdout, readiness.returncode or 2)
     if name in {'tml_build', 'native_checks'}:
         dotnet = shutil.which('dotnet') or shutil.which('dotnet.exe')
         if not dotnet:
@@ -195,7 +209,7 @@ def main() -> int:
                 stream.write('TML_BUILD_' + ('FAILED' if row['status'] == 'failed' else 'SKIPPED') + '=true\n')
     optional = {'native_checks', 'tml_ci_regression'}
     if not args.require_build:
-        optional.add('tml_build')
+        optional.update({'tml_build', 'item_workbench_build'})
     if not args.require_runtime_selftest:
         optional.add('tml_runtime_selftest')
     failed = [row['name'] for row in checks if row['status'] == 'failed']

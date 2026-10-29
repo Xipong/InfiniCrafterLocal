@@ -132,7 +132,8 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     packet = request_dossier(request)
     catalog = packet["runtimeCapabilityContract"]["catalog"]
     assert catalog == sharp_engine_fn_catalog_for_llm(include_source_units=False)
-    cards = {card["fn"]: card for card in catalog["capabilities"]}
+    from prompt_packet_helpers import expand_catalog_targets
+    cards = {card["fn"]: card for card in expand_catalog_targets(catalog["capabilities"], catalog["fieldGuide"]["targetKindSets"])}
     visible = {cap.name: cap for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
     assert set(cards) == set(visible)
     assert not set(cards).intersection(cap.name for cap in CAPABILITY_REGISTRY.values() if not cap.author_visible)
@@ -158,11 +159,11 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     shape = packet["requiredJsonShape"]["runtimeProgram"]
     assert shape["bindings"] and shape["calls"]
     assert {"id", "fn", "target", "params"} <= shape["calls"][0].keys()
-    assert "not defaults or edit permissions" in catalog["fieldGuide"]["rowShapes"]
-    assert "permitted omissions remain valid" in catalog["fieldGuide"]["paramNotation"]
-    rule = packet["requiredJsonShape"]["concept"]["coreMechanic"]
-    assert "duration is not a cooldown" in rule
-    assert "intentional free sustained utility remains a design choice" in rule
+    # Duration/cooldown semantics belong to executable capabilities, not an
+    # optional concept's design checklist. The brief requests a playable item.
+    assert "not a reuse cooldown" in json.dumps(cards["apply_generated_buff_on_use"])
+    assert "useful new Terraria item" in packet["priorityHeader"][0]
+    assert isinstance(packet["requiredJsonShape"]["concept"], str)
     assert parent == frozen
     assert "Exact source fact" in json.dumps(packet["parents"])
     instructions = " ".join(row["content"] for row in request["messages"][:2]).lower()

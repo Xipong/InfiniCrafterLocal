@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "package": "ParticleLibrary",
+  "version": "3.2.1.0",
+  "commit": "7b945efa780a4376ce5abaa8a284c06f159074f6",
+  "repository": "https://github.com/SnowyStarfall/ParticleLibrary",
+  "license": "GPL-3.0",
+  "scope": "Original third-party VFX resources downloaded locally; no Terraria game assets bundled",
+  "installedDll": {
+    "relativePath": "ParticleLibrary/ParticleLibrary.dll",
+    "sha256": "22c5774e90ddde7c2730c7c71c07deea3cb4a43c45f6f9f29091622056773e7f",
+    "bytes": 164352,
+    "policy": "Verify existing DLL only; this utility never downloads or replaces it"
+  },
+  "files": [
+    {
+      "path": "Assets/Effects/InstancedParticle.fx",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Effects/InstancedParticle.fx",
+      "sha256": "02562c9f3994b80020d27d856e81c3b0b28ff6c717f89288d1ef77b49de1786e",
+      "bytes": 1935
+    },
+    {
+      "path": "Assets/Effects/InstancedParticle.xnb",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Effects/InstancedParticle.xnb",
+      "sha256": "3634b60379eb94f950922a92cfdbea537ca16f3ce676ba41b42cc71fbc3386c3",
+      "bytes": 1644
+    },
+    {
+      "path": "Assets/Effects/Particle.fx",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Effects/Particle.fx",
+      "sha256": "107167fe19c17233c000c5e857872d301e9bf9e1bfb8a61645352b728df22573",
+      "bytes": 7348
+    },
+    {
+      "path": "Assets/Effects/Particle.xnb",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Effects/Particle.xnb",
+      "sha256": "76d5e9d2eddeeef92e897e77c8d1b81cb7c510b6b94910bae807c6d7eee9c87f",
+      "bytes": 5600
+    },
+    {
+      "path": "Assets/Effects/Shape.fx",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Effects/Shape.fx",
+      "sha256": "7cdb4606993e476071861f8f01dfe5a6a5c690d66efc04b19c0cd28efdf97f2a",
+      "bytes": 1923
+    },
+    {
+      "path": "Assets/Effects/Shape.xnb",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Effects/Shape.xnb",
+      "sha256": "910dcc3a6ea60f616773b3a42b91e90f5f32ec762fe44683b0dd5fdb31b48a5a",
+      "bytes": 2116
+    },
+    {
+      "path": "Assets/Textures/EmptyPixel.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/EmptyPixel.png",
+      "sha256": "98e76a0dc4c1570a127248d4c4b53c67d707a5aaec265860ab982b95b277186b",
+      "bytes": 81
+    },
+    {
+      "path": "Assets/Textures/ExponentCurve.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/ExponentCurve.png",
+      "sha256": "8a0b99da5b0de2f494818303271a8730ee06228fe63ac1006ba222cc1ceb0c78",
+      "bytes": 2905
+    },
+    {
+      "path": "Assets/Textures/Interface/BlackPanel.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/BlackPanel.png",
+      "sha256": "ba4e13fd0fca2cf5889dfc69c207ef32532df08deb78b5486d0897d7550f81d6",
+      "bytes": 99
+    },
+    {
+      "path": "Assets/Textures/Interface/BlackPanelBackground.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/BlackPanelBackground.png",
+      "sha256": "8c6055338925d7295e30ff4efb0ec767d088cfc5b9b89d6ef9694b5306016f3f",
+      "bytes": 90
+    },
+    {
+      "path": "Assets/Textures/Interface/Box.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/Box.png",
+      "sha256": "f73c50cf52f7b464a61b1130a61248b9c18e7fc18e71b5ab442a72cfcc5f2a11",
+      "bytes": 165
+    },
+    {
+      "path": "Assets/Textures/Interface/BoxBackground.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/BoxBackground.png",
+      "sha256": "c6f55ff01f9bb3b1edcc41af1ec89d6eed3b77e5ed41573f557bb308ccd587b9",
+      "bytes": 90
+    },
+    {
+      "path": "Assets/Textures/Interface/BoxHighlight.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/BoxHighlight.png",
+      "sha256": "76ea5a569c05330a5f896436b05d4fd7a4baefb33e706fcd8ee69da1ca1581cc",
+      "bytes": 127
+    },
+    {
+      "path": "Assets/Textures/Interface/Circle.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/Circle.png",
+      "sha256": "9302dc89acfd204fb14574295460b636a9e6603f553ebee1a3a7e8b0865c83cc",
+      "bytes": 133
+    },
+    {
+      "path": "Assets/Textures/Interface/CircleTarget.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/CircleTarget.png",
+      "sha256": "2915dc36fdb265dfd007daf07ceedc703f33dfd580668073615765d919595cb8",
+      "bytes": 173
+    },
+    {
+      "path": "Assets/Textures/Interface/Minus.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/Minus.png",
+      "sha256": "fe7a684bbf8ce39f73199c268a1174790f25760f2d168be6e41e3851a1ade7e4",
+      "bytes": 109
+    },
+    {
+      "path": "Assets/Textures/Interface/PanelBackground.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/PanelBackground.png",
+      "sha256": "6317b94e053c3bc17a5c1e5af1d8344447d4a02d3ac4e798b2573927d3e11de5",
+      "bytes": 90
+    },
+    {
+      "path": "Assets/Textures/Interface/PanelFrame.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/PanelFrame.png",
+      "sha256": "26543f3def06ac665c765526ddbab7fdae5042dc40f4c96f83548fab7a27a3cd",
+      "bytes": 333
+    },
+    {
+      "path": "Assets/Textures/Interface/Plus.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/Plus.png",
+      "sha256": "22e00ca9af89bda0f3d8ece67ab20156c440241e7232ad2ebabbc40107a25d7f",
+      "bytes": 121
+    },
+    {
+      "path": "Assets/Textures/Interface/PointTarget.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/PointTarget.png",
+      "sha256": "71b5d6373887323da6688a9574012a84f75b02a7209e0c8fda112eabe1dde5ba",
+      "bytes": 131
+    },
+    {
+      "path": "Assets/Textures/Interface/Scrollbar.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/Scrollbar.png",
+      "sha256": "4ae01d8c79305206016e756a1551e818cb9a577a1b78efbd27557410871df4e4",
+      "bytes": 321
+    },
+    {
+      "path": "Assets/Textures/Interface/Scrollbutton.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/Scrollbutton.png",
+      "sha256": "b2280e39ed43c461d71236bd64e75e7d217066dc0339b2b9140e44fcff00e307",
+      "bytes": 183
+    },
+    {
+      "path": "Assets/Textures/Interface/Square.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/Square.png",
+      "sha256": "65872f36057c56585e04ad6e8c6e8ea3920f076388b3ac5dda5162f11f4fee33",
+      "bytes": 108
+    },
+    {
+      "path": "Assets/Textures/Interface/SquareTarget.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/SquareTarget.png",
+      "sha256": "370702f90a98f6a00140c22ad4986dde2f0c2520cfa09fceb86691355d969d18",
+      "bytes": 162
+    },
+    {
+      "path": "Assets/Textures/Interface/WhitePixel.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/WhitePixel.png",
+      "sha256": "63cb99ad2b5ddbd6044f1df437cdb5be8eed70e85358b540750937f31cc01f87",
+      "bytes": 81
+    },
+    {
+      "path": "Assets/Textures/Interface/X.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Interface/X.png",
+      "sha256": "0a813c9c9505f241a0843244734b600b2f0504a36de6af376c6abe5c44ed7122",
+      "bytes": 113
+    },
+    {
+      "path": "Assets/Textures/Star.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/Star.png",
+      "sha256": "edd88a02fe82e8dc740248ba45add74ef0b4e9fdcf2e8c3fe12acfdc1d996939",
+      "bytes": 5562
+    },
+    {
+      "path": "Assets/Textures/WhitePixel.png",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/Assets/Textures/WhitePixel.png",
+      "sha256": "794460e227c6cc4a6dea190f9e425a7a0d6328e86325e60a6a6d8a0f73b780a4",
+      "bytes": 2815
+    },
+    {
+      "path": "LICENSE",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "bytes": 35149
+    },
+    {
+      "path": "build.txt",
+      "sourceURL": "https://raw.githubusercontent.com/SnowyStarfall/ParticleLibrary/7b945efa780a4376ce5abaa8a284c06f159074f6/build.txt",
+      "sha256": "48a2644421e4d1f78496e677715a8a575617cf99fd65be3cd9af0c588e527102",
+      "bytes": 409
+    }
+  ]
+}

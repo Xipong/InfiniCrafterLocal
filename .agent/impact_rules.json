@@ -182,6 +182,15 @@
       ]
     },
     {
+      "id": "offline-craft-audit",
+      "area": "tooling",
+      "patterns": ["tools/craft-audit/**", "toolbox/tests/test_craft_audit.py"],
+      "checks": ["project_hygiene", "schema_check"],
+      "tests": ["toolbox/tests/test_craft_audit.py"],
+      "entrypoints": ["tools/craft-audit/audit.py", "tools/craft-audit/README_RU.md"],
+      "context": []
+    },
+    {
       "id": "development-workflow",
       "area": "tooling",
       "patterns": [
@@ -246,6 +255,24 @@
       ],
       "context": [
         "docs/development/BUILD_RU.md"
+      ]
+    },
+    {
+      "id": "item-test-workbench",
+      "area": "tooling",
+      "patterns": [
+        "tools/item-test-workbench/**"
+      ],
+      "checks": [
+        "item_workbench_python",
+        "item_workbench_build"
+      ],
+      "entrypoints": [
+        "tools/item-test-workbench/README.md",
+        "tools/item-test-workbench/workbench.py"
+      ],
+      "context": [
+        "tools/item-test-workbench/SUPPORT_MATRIX.md"
       ]
     }
   ]

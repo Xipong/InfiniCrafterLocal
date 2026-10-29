@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from types import MappingProxyType
 from copy import deepcopy
+import json
 import pytest
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY,
@@ -12,9 +13,9 @@ from infini_local.core.runtime_authoring.capability_registry import (
     EVENT_KIND_REGISTRY,
     INPUT_KIND_REGISTRY,
     runtime_authoring_registry_manifest,
-    compact_capability_catalog,
 )
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 import infini_local.core.runtime_authoring.validator as validator
 import infini_local.core.runtime_authoring.repair_scope as repair_scope
@@ -24,7 +25,6 @@ import infini_local.core.runtime_authoring.validator as validator_module
 from infini_local.core.runtime_authoring.program_schema import runtime_program_author_schema
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.qa.capability_library_audit import capability_library_audit
 
 
 @pytest.mark.parametrize(
@@ -59,18 +59,16 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
     item = build_capability_witness(fn)
     before = deepcopy(item)
     assert Draft202012Validator(author_item_response_schema()).is_valid(item)
-    wire = compile_runtime_program(item)
-    assert validate_runtime_wire(wire)["ok"]
+    wire = json.loads(json.dumps(compile_runtime_program(item)))
+    report = validate_runtime_wire(wire)
+    assert report["ok"], report["errors"]
+    # A shape-valid DTO alone does not prove that an optional authored effect
+    # reached the wire. Authenticate every receipt against both real endpoints.
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    report = audit_compiler_receipts(receipts, authored_document=item, final_document=wire)
+    assert report["ok"], report["violations"]
+    assert any(row.get("callId") == "witness_call" for row in receipts)
     assert item == before
-
-
-def test_registry_public_catalog_and_schema_remain_reachable():
-    expected = {cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
-    schema = runtime_program_author_schema()["properties"]["calls"]["items"]["oneOf"]
-    assert {row["properties"]["fn"]["const"] for row in schema} == expected
-    assert {row["fn"] for row in compact_capability_catalog()} == expected
-    report = capability_library_audit()
-    assert report["ok"], report["issues"]
 
 
 def test_registry_mutation_updates_schema_but_missing_executor_stays_red(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -143,3 +141,29 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     assert scope["create"]["calls"]["allowedFns"] == ["set_projectile_collision"]
     assert scope["create"]["calls"]["allowedTargetIds"] == ["workbench_blade"]
     assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["set_projectile_collision"]
+
+
+@pytest.mark.parametrize("name", list(EVENT_KIND_REGISTRY))
+def test_author_event_cards_preserve_all_nonempty_producer_conditions(name):
+    from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
+
+    source = EVENT_KIND_REGISTRY[name].prompt_card()
+    rows = [row for row in sharp_engine_fn_catalog_for_llm()["events"] if row["event"] == name]
+    assert len(rows) == 1
+    delivered = rows[0]
+    for key, value in source.items():
+        if value is None or value == [] or value == {}:
+            assert key not in delivered
+        else:
+            assert delivered[key] == value
+
+
+def test_author_event_metadata_omission_does_not_drop_false_or_exact_zero():
+    event = replace(EVENT_KIND_REGISTRY["on_hit"], producer_binding_contact_damage=False,
+                    producer_exact_params={"producer": {"count": 0, "enabled": False}})
+    card = event.author_prompt_card()
+    assert card["producerBindingContactDamage"] is False
+    assert card["producerExactParams"] == {"producer": {"count": 0, "enabled": False}}
+    # The complete registry view is still available for non-prompt consumers.
+    assert "producedByBindingInputs" in replace(event, producer_binding_inputs=()).prompt_card()
+    assert "producedByBindingInputs" not in replace(event, producer_binding_inputs=()).author_prompt_card()

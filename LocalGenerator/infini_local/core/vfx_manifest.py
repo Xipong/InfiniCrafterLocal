@@ -896,7 +896,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
 
 def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, parent_b: Mapping[str, Any] | None) -> dict[str, Any]:
     realization_raw = data.get("realization")
-    realization: Mapping[str, Any] = realization_raw if isinstance(realization_raw, Mapping) else {}
+    realization: Mapping[str, Any] = {"description": realization_raw} if isinstance(realization_raw, str) else realization_raw if isinstance(realization_raw, Mapping) else {}
 
     def parent_packet(parent: Mapping[str, Any] | None) -> dict[str, Any]:
         source: Mapping[str, Any] = parent if isinstance(parent, Mapping) else {}

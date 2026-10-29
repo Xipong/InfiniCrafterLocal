@@ -118,7 +118,18 @@ public sealed partial class InfiniCraftPlayer
     {
         // Keep the last dead tick: queued activations from this life must not revive buffs.
         _generatedUtilityDeathTick = Main.GameUpdateCount;
-        ClearGeneratedUtilityState(syncNetwork: true);
+        RetireGeneratedUtilityOnDeath(syncNetwork: true);
+    }
+
+    private void RetireGeneratedUtilityOnDeath(bool syncNetwork = false)
+    {
+        bool changed = _generatedItemExhaustion.Count > 0;
+        ClearGeneratedItemExhaustion();
+        changed |= _activeGeneratedUtilityBuffs.RemoveAll(buff =>
+            buff.InitialDurationTicks == GeneratedBuffSpec.PermanentDurationTicks
+            || buff.InitialDurationTicks > GeneratedBuffSpec.PersistentAfterDeathMaxTicks) > 0;
+        RebuildGeneratedUtilityBuffAggregate();
+        if (changed && syncNetwork) CorrectGeneratedBuffPrediction();
     }
 
     // Existing utility snapshot, no second protocol. BinaryWriter strings use

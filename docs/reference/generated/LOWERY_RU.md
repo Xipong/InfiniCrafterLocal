@@ -11,7 +11,7 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v6` / `
 
 ## READ THIS FIRST — замороженная граница
 
-1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и optional advisory realization/selfEvaluation. Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.
+1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references и metadata. Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.
 2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.
 3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology, hitbox topology, root executor или fallback mechanic. Он может скрывать неудобство API, но не сжимать пространство дизайна.
 4. Сжатие буквально повторённых low-level параметров допускается от **5** одинаковых placements и сохраняет literal equality. Этот threshold не запрещает точный выбранный alias или one-to-one technical projection; ни один из них не добавляет design choice.
@@ -159,8 +159,12 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | select_targets_and_emit_on_event | runtimeProgram.entities[].events[].actionCode | 8 |
 | apply_generated_buff_on_event | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
 | apply_generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
+| apply_npc_effect_on_event | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
+| apply_npc_effect_on_event | runtimeProgram.entities[].events[].actionCode | 11 |
 | apply_status_on_event | runtimeProgram.entities[].events[].action | 'apply_status_on_event' |
 | apply_status_on_event | runtimeProgram.entities[].events[].actionCode | 2 |
+| damage_nearby_on_event | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
+| damage_nearby_on_event | runtimeProgram.entities[].events[].actionCode | 10 |
 | damage_area_on_event | runtimeProgram.entities[].events[].action | 'damage_area_on_event' |
 | damage_area_on_event | runtimeProgram.entities[].events[].actionCode | 3 |
 | damage_nearest_on_event | runtimeProgram.entities[].events[].action | 'chain_damage_on_event' |
@@ -193,8 +197,11 @@ Typed structured choices и конечные enum-отображения так�
 
 | capability.param | declared projection |
 |---|---|
+| accumulate_projectile_charge.releaseEffect | (('releaseEffect.damageMultiplier', 'damageMultiplier', False), ('releaseEffect.knockbackMultiplier', 'knockbackMultiplier', False), ('releaseEffect.speedMultiplier', 'speedMultiplier', False), ('releaseEffect.launchSpeedBlocksPerSecond', 'launchSpeed', False), ('releaseEffect.pauseLifetimeWhileCharging', 'pauseLifetimeWhileCharging', False)) |
 | gate_projectile_contact.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_beam_geometry.ramp | (('ramp.warmupSeconds', 'warmupTicks', False), ('ramp.initialWidthMultiplier', 'initialWidthMultiplier', False), ('ramp.initialDamageMultiplier', 'initialDamageMultiplier', False), ('ramp.damageStartProgress', 'damageStartProgress', False)) |
 | attach_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| attach_projectile.reachCurve | (('reachCurve.durationSeconds', 'durationTicks', False), ('reachCurve.startOffsetBlocks', 'startOffsetPx', False), ('reachCurve.peakOffsetBlocks', 'peakOffsetPx', False), ('reachCurve.endOffsetBlocks', 'endOffsetPx', False), ('reachCurve.peakProgress', 'peakProgress', False), ('reachCurve.window.phase', 'window.phase', False), ('reachCurve.window.clock', 'window.clock', False), ('reachCurve.window.startDelaySeconds', 'window.startDelayTicks', False), ('reachCurve.window.durationSeconds', 'window.durationTicks', False)) |
 | set_front_arm_pose.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | set_projectile_reach_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | orbit_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
@@ -203,6 +210,7 @@ Typed structured choices и конечные enum-отображения так�
 | set_projectile_proximity_action.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | accelerate_projectile_vertical.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | multiply_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| scale_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | set_projectile_rotation.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
 | oscillate_projectile_velocity.law | (('law', 'law', True), ('law.angular_sine.amplitudeRadiansPerSecond', 'amplitude', False), ('law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'amplitude', False)) |
 | oscillate_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
@@ -223,6 +231,7 @@ Typed structured choices и конечные enum-отображения так�
 | spawn_entity_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
 | spawn_entity_from_hit_target.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforePositionJitterRadiusBlocks', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeDirectionJitterRadians', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpreadRadians', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.initialIgnoreCountdownUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
 | apply_generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
+| damage_nearby_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
 | damage_area_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
 | pull_on_event.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
 | pull_owner_to_event_target.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
@@ -239,6 +248,13 @@ Typed structured choices и конечные enum-отображения так�
 | set_projectile_owner_control.claimHeldProjectile | False | unconditional declared neutral |
 | set_projectile_owner_control.animation | 'none' | unconditional declared neutral |
 | set_projectile_owner_control.lifetime | 'authored' | unconditional declared neutral |
+| apply_projectile_charge_release.damageMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.knockbackMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.speedMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.pauseLifetimeWhileCharging | False | unconditional declared neutral |
+| set_projectile_beam_ramp.initialWidthMultiplier | 1 | unconditional declared neutral |
+| set_projectile_beam_ramp.initialDamageMultiplier | 1 | unconditional declared neutral |
+| set_projectile_beam_ramp.damageStartProgress | 0 | unconditional declared neutral |
 | set_projectile_aim.turnOwner | False | unconditional declared neutral |
 | attach_projectile.axisOffsetBlocks | 0 | unconditional declared neutral |
 | attach_projectile.normalOffsetBlocks | 0 | unconditional declared neutral |
@@ -273,6 +289,12 @@ Typed structured choices и конечные enum-отображения так�
 | target_and_fire.requireLineOfSight | False | unconditional declared neutral |
 | target_and_fire.hardRange | False | unconditional declared neutral |
 | spawn_entity_on_event.spreadRadians | 0 | {'targetKinds': (), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| apply_npc_effect_on_event.damagePerSecond | 0 | unconditional declared neutral |
+| apply_npc_effect_on_event.defenseDelta | 0 | unconditional declared neutral |
+| apply_npc_effect_on_event.contactDamageMultiplier | 1 | unconditional declared neutral |
+| apply_npc_effect_on_event.velocityRetentionPerTick | 1 | unconditional declared neutral |
+| apply_npc_effect_on_event.chancePercent | 100 | unconditional declared neutral |
+| damage_nearby_on_event.maxTargets | 16 | unconditional declared neutral |
 
 ## Каноническая vocabulary
 
@@ -355,20 +377,21 @@ Typed structured choices и конечные enum-отображения так�
 
 Lowery — технический lowering, не lore и не автор дополнительной механики. Author задаёт игровые расстояния в блоках, длительности в секундах, скорости в блоках/с. Меняется schema авторинга; сохранённый engine wire остаётся в прежних единицах. Canonical lowering выполняет объявленные проекции с учётом updatesPerTick именно затронутой сущности. Секунды разрешаются до ближайшего целого world tick, половина тика округляется вверх; неположенное обнуление ненулевого эффекта отклоняется, а не скрыто меняет механику. Pixel-labelled collision/sprite geometry и texture/UV units сохраняют своё объявленное пространство. Описание остаётся optional advisory: оно не требует нового отчёта и не запускает validator/Repair. Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.
 
-Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. Author получает его в `requiredJsonShape.realization` и `runtimeCapabilityContract.technicalNotes`; Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.
+Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с кратким concept и разделёнными realization.description (применение) / selfEvaluation (отладка). Legacy acceptance и Repair сохраняют эти optional advisory поля; Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.
 
 | optional prose | shared guidance |
 |---|---|
-| realization.description | optional advisory interpretation of the emitted runtimeProgram, not an observed execution. Write a concise item description in clear player language: explain the actual controls (use, alternate use, while selected or while equipped), effects, costs, conditions and limits that matter in play. Describe only supported behavior of the emitted bindings, calls and events; distinguish base values or conditional effects from guaranteed outcomes. Do not invent abilities, charges, safety, cooldowns or measured results from names, appearance or intent. Use Terraria blocks, blocks/s and seconds for player-facing distance, speed and time; gameplay params use their Author cards' human units and lowering produces engine units. Pixel-labelled geometry retains its declared engine units. Prefer readable actions over internal ids, capability names or a parameter dump. No extra lore or report is required; string minLength=0, maxLength=4000 Unicode code points |
-| realization.playerExperience | optional advisory notes on practical use and trade-offs of the same emitted mechanics, not additional mechanics or promises; avoid repeating the description; string minLength=0, maxLength=3000 Unicode code points |
+| realization.description | Brief player-facing description of actual use, effects and conditions. String minLength=0, maxLength=4000 Unicode characters. |
+| realization.playerExperience | Optional practical-use notes for the player. String minLength=0, maxLength=3000 Unicode characters. |
 
 | единицы / scope | shared model-facing guide |
 |---|---|
-| time | Write world durations/intervals in decimal seconds. The engine has 60 world ticks = 1 second; lowering resolves seconds to the nearest world tick, half-tick ties upward. Explicit zero stays zero; a positive effect may not round to disabled zero. Raw immunity.localCooldown and explicitly named projectile-update counters are counts, not seconds. |
-| distance | Write gameplay world distances in blocks. 1 Terraria block (tile) = 16 world pixels. rangeTiles/radiusTiles already mean blocks, including blink rangeTiles: do not divide again. Read whether each card means radius, diameter, origin offset or distance to a target center. |
-| speed | Write gameplay speeds in blocks/s, physical accelerations in blocks/s^2 and declared angular rates in radians/s. The canonical lowering accounts for the affected target's updatesPerTick; do not manually rescale Author values. Initial speed, flat bonuses, sprint floors and event impulses are distinct, not guaranteed final movement or jump height. Ammo speed is a base native launch contribution; the eventual projectile can have its own update rate. Dimensionless retention/lerp/multiplier controls retain their declared per-update meaning. |
-| scope | Use each Author card's declared units; the compiled wire and raw parent facts keep engine units. Pixel-labelled collision and local sprite geometry remain pixels; 16 world pixels = 1 block. Texture texels/canvas dimensions remain texture pixels; normalized UV/grip coordinates remain normalized: do not divide by 16. Texture resolution alone is not rendered world size, collision size or reach. |
-| vanillaScaleReference | Vanilla scale reference, not a balance ceiling: an ordinary standing unmounted player's collision box is 20x42 world pixels (1.25x2.625 blocks). Without gear/buffs or special terrain, nominal base run speed is 11.25 blocks/s; a normal jump assigns about 18.79 blocks/s upward velocity. The 15-update held-jump counter is not a distance. Jump height/range depend on hold, gravity and horizontal motion; these are not a measured height/range or a limit on authored mechanics. |
+| nativeSourceReferences | Read-only native source values may be shared as {sourceSameAs:N}: read the complete value at nativeSourceFacts[N] in this same dossier, expanding recursively. These are exact repetitions, not inferred mechanics or Author values. Literal tooltips and accepted generatedParent packets stay inline. |
+| time | Seconds resolve to the nearest world tick (60/s), half-tick ties upward. Positive effects that round to zero are rejected. immunity.localCooldown and projectile-update counters remain counts. |
+| distance | World distances use blocks; Tiles also means blocks. 1 block = 16 world pixels. |
+| speed | Physical speed/acceleration use blocks/s and blocks/s^2; angular rates use radians/s. The engine applies the target's updatesPerTick conversion. Retention/lerp/multiplier controls keep their declared per-update meaning. |
+| scope | Author cards use player-facing units; raw parent facts and compiled wire retain engine units. Pixel geometry and normalized UV/grip coordinates retain their own units. Texture resolution is independent of rendered size and collision geometry. |
+| vanillaScaleReference | Ordinary unmounted player: 20x42-pixel collision box; base run speed 11.25 blocks/s; normal jump initial upward velocity about 18.79 blocks/s. |
 | spread | radians; total span |
 
 ### Runtime opcodes
@@ -420,6 +443,8 @@ Event actions:
 | move_owner_on_event | 7 |
 | select_targets_and_emit_on_event | 8 |
 | apply_generated_buff_on_event | 9 |
+| damage_nearby_on_event | 10 |
+| apply_npc_effect_on_event | 11 |
 
 ### Entity kind → visual role
 

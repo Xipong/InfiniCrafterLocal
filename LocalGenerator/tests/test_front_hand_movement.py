@@ -243,7 +243,7 @@ def test_real_author_packet_offers_separate_hand_choices_not_retired_profiles(mo
     catalog = dossier["runtimeCapabilityContract"]["catalog"]["capabilities"]
     assert {c["fn"] for c in catalog} == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
     packet = json.dumps(request, ensure_ascii=False)
-    for fn in ("set_projectile_aim", "attach_projectile", "set_front_arm_pose", "set_projectile_reach_curve"):
+    for fn in ("set_projectile_aim", "attach_projectile", "set_front_arm_pose", "reachCurve"):
         assert fn in packet
     offered = {c["fn"] for c in catalog}
     assert not offered.intersection({"move_front_hand", "move_forward_then_retract", "charge_then_release"})
