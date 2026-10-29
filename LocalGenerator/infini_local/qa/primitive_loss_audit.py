@@ -207,10 +207,10 @@ def equipment_surface_audit(dto: bytes | None = None, executor: bytes | None = N
     accessory = _class_properties(dto, "AccessorySpec")
     armor = _class_properties(dto, "ArmorSpec")
     access_bounds = _method_bounds(executor,
-        b"private static void ApplyEquipmentEffects(Player player, AccessorySpec a)",
-        b"private static void ApplyEquipmentEffects(Player player, ArmorSpec a)")
+        b"private static void ApplyEquipmentEffects(Player player, AccessorySpec a, GeneratedItemData source, long generation)",
+        b"private static void ApplyEquipmentEffects(Player player, ArmorSpec a, GeneratedItemData source, long generation)")
     armor_bounds = _method_bounds(executor,
-        b"private static void ApplyEquipmentEffects(Player player, ArmorSpec a)",
+        b"private static void ApplyEquipmentEffects(Player player, ArmorSpec a, GeneratedItemData source, long generation)",
         b"private static void AddEquipmentLight(Player player")
     set_bounds = _method_bounds(executor, b"public override void UpdateArmorSet(Player player)")
     consumed = {
@@ -489,6 +489,7 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/GeneratedItemData.Model.cs").read_bytes()
     dto += b"\n" + (_MODEL_ROOT / "Common/Models/Contracts/GeneratedCombatBuffSpec.cs").read_bytes()
     dto += b"\n" + (_MODEL_ROOT / "Common/Models/Contracts/PlayerEffectSpec.cs").read_bytes()
+    dto += b"\n" + (_MODEL_ROOT / "Common/Models/Contracts/PlayerAirJumpSpec.cs").read_bytes()
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     groups = {
         "GameplaySpec": "gameplay.",
@@ -496,9 +497,11 @@ def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         "GeneratedBuffSpec": "gameplay.generatedBuff.",
         "GeneratedCombatBuffSpec": "gameplay.generatedBuff.combat.",
         "PlayerEffectSpec": "gameplay.generatedBuff.playerEffect.",
+        "PlayerAirJumpSpec": "gameplay.generatedBuff.playerEffect.airJump.",
         "BuffEntrySpec": "gameplay.extraBuffs[].",
     }
     hidden = {
+        "PlayerEffectSpec": {"AirJump": "Nested authored native extra-jump mechanics; audited individually below."},
         "GeneratedBuffSpec": {"PlayerEffect": "Nested authored player mechanics; audited individually below.", "Combat": "Nested authored GeneratedCombatBuffSpec fields; audited individually below."},
         "GameplaySpec": {
             "Kind": "Display-only category; never a gameplay router.",
