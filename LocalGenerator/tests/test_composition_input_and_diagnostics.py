@@ -145,7 +145,8 @@ def test_author_prioritizes_playable_composition_without_turning_advisory_into_a
     assert 'Terraria (tModLoader)' in system
     assert 'Art direction' not in system and 'frozen fields' not in system
     assert 'Preserve literal parent identity' not in system
-    assert all(isinstance(packet['requiredJsonShape'][field], str) for field in ('concept', 'realization'))
+    assert isinstance(packet['requiredJsonShape']["concept"], str)
+    assert set(packet['requiredJsonShape']["realization"]) == {"description", "selfEvaluation"}
     # No concept/report is needed to execute an intentionally simple composition.
     item = build_capability_witness('move_straight')
     item.pop('concept', None)

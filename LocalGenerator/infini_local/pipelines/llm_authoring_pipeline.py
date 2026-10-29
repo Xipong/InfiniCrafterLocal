@@ -180,6 +180,11 @@ def _repair_malformed_author_json(
     )
     functions = sorted({row["fn"] for row in calls}) if known_calls and isinstance(calls, list) else sorted(CAPABILITY_REGISTRY)
     local_schema = author_item_response_schema()
+    # Generation length guidance must not force syntax-only Repair to clip raw
+    # advisory text. The exact-source comparison below still freezes every value.
+    for report_field in local_schema["properties"]["realization"]["properties"].values():
+        report_field.pop("minLength", None)
+        report_field.pop("maxLength", None)
     # Syntax-only recovery must preserve current plain debug notes as well as
     # historical structured reports; neither selects executable behavior.
     for field in ("concept", "realization"):

@@ -168,7 +168,7 @@ def test_string_report_reaches_generated_parent_summary_and_vfx_description():
     before = deepcopy(compiled)
     summary = generated_parent_summary_from_data(compiled)
     packet = _prompt_packet(compiled, {}, {})
-    assert summary['description'] == source['realization']
+    assert summary['description'] == source['realization'].strip()
     assert packet['item']['description'] == source['realization']
     assert compiled == before
     assert compiled['concept'] == source['concept']
@@ -184,7 +184,7 @@ def test_initial_report_null_inversion_requires_exact_sent_transport(monkeypatch
     request, _, _ = author.build_initial_author_request({}, {}, 'report-null', model_name='offline')
     response_format = deepcopy(request['response_format'])
     schema = response_format['json_schema']['schema']
-    assert schema['properties'][field] == {'anyOf': [{'type': 'string'}, {'type': 'null'}]}
+    assert schema['properties'][field]['anyOf'][1] == {'type': 'null'}
     assert field in schema['required']
     if transport == 'json_object':
         response_format = {'type': 'json_object'}
@@ -193,7 +193,11 @@ def test_initial_report_null_inversion_requires_exact_sent_transport(monkeypatch
     elif transport == 'reversed-wrapper':
         schema['properties'][field]['anyOf'].reverse()
     elif transport == 'altered-string':
-        schema['properties'][field]['anyOf'][0]['maxLength'] = 100
+        child = schema['properties'][field]['anyOf'][0]
+        if field == 'concept':
+            child['maxLength'] = 100
+        else:
+            child['properties']['description']['anyOf'][0]['maxLength'] = 100
     source = build_runtime_fixture('workbench_blade')
     source[field] = None
     before = deepcopy(source)
@@ -236,3 +240,130 @@ def test_plain_design_notes_reach_actual_visual_packet_without_mechanical_change
     assert {key: value for key, value in packet.items() if key != 'item'} == {
         key: value for key, value in baseline.items() if key != 'item'}
     assert compiled == before
+
+
+@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
+def test_separate_player_description_and_full_debug_through_real_handoffs(monkeypatch, mode):
+    from infini_local.core.vfx_manifest import _prompt_packet
+    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+
+    source = build_runtime_fixture('workbench_blade')
+    source['id'] = 'separate_advisory_fixture'
+    source['concept'] = 'Throw a blade, with an intended dash.'
+    source['realization'] = {
+        'description': 'Use: throw the blade; it returns after hitting.',
+        'selfEvaluation': ('DEBUG: intended dash is absent. 🌟\r\n' * 3000),
+    }
+    before = deepcopy(source)
+    requests = []
+
+    def respond(request, **_kwargs):
+        requests.append(request)
+        assert len(requests) == 1, 'Long debug is not a gameplay defect'
+        return {'choices': [{'message': {'content': json.dumps(source)}}],
+                '_debug': {'responseFormatType': mode}}
+
+    offline_builder(monkeypatch, mode, respond)
+    accepted = author.try_llm_plan({}, {}, 'separate-advisory')
+    delivered = compile_and_validate_authored_runtime(accepted, {}, {}, 'separate-advisory', run_stage=_run_stage)
+    delivered['generatedParentSummary'] = generated_parent_summary_from_data(delivered)
+    summary = delivered['generatedParentSummary']
+    vfx = _prompt_packet(delivered, {}, {})
+    parent = raw_parent_card_for_llm({'generatedData': delivered})
+    assert summary['description'] == before['realization']['description']
+    assert summary['playerExperience'] == ''  # Notes falls back to description.
+    assert vfx['item']['description'] == summary['description']
+    assert parent['raw']['generatedParent']['summary']['description'] == summary['description']
+    assert 'DEBUG:' not in json.dumps(summary)
+    assert 'DEBUG:' not in json.dumps(vfx)
+    assert 'DEBUG:' not in json.dumps(parent)
+    assert delivered['realization'] == before['realization']
+    assert delivered['concept'] == before['concept']
+    assert source == before
+
+
+@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
+@pytest.mark.parametrize('length', [0, 4001, 5500, 100000])
+def test_format_repair_preserves_separated_notes_without_promoting_debug(monkeypatch, mode, length):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from test_codex_subscription_contract import _encode_nullable_fixture
+
+    source = build_runtime_fixture('workbench_blade')
+    source['concept'] = '  A brief idea 🌟  '
+    source['realization'] = {'description': '  Use the blade.\r\n', 'selfEvaluation': '  Dash is not implemented.  ' + 'д' * length}
+    before = deepcopy(source)
+    responses = []
+
+    def respond(request, **_kwargs):
+        responses.append(request)
+        assert len(responses) <= 2
+        if len(responses) == 1:
+            content = json.dumps(source)[:-1] + ',}'
+        else:
+            encoded = _encode_nullable_fixture(source, author_item_response_schema()) if mode == 'json_schema' else source
+            if mode == 'json_schema':
+                Draft202012Validator(request['response_format']['json_schema']['schema']).validate(encoded)
+            content = json.dumps(encoded)
+        return {'choices': [{'message': {'content': content}}], '_debug': {'responseFormatType': mode}}
+
+    offline_builder(monkeypatch, mode, respond)
+    accepted = author.try_llm_plan({}, {}, 'separate-syntax-repair')
+    delivered = compile_and_validate_authored_runtime(accepted, {}, {}, 'separate-syntax-repair', run_stage=_run_stage)
+    assert len(responses) == 2
+    assert delivered['realization'] == before['realization']
+    assert delivered['concept'] == before['concept']
+    assert delivered['runtimeProgram'] == compile_runtime_program(before)['runtimeProgram']
+
+
+@pytest.mark.parametrize('field,maximum', [('description', 4000), ('playerExperience', 3000)])
+@pytest.mark.parametrize('extra', [0, 1, 1500, 96000])
+def test_summary_matches_native_unicode_bound_without_touching_raw(field, maximum, extra):
+    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+
+    text = 'ж' * (maximum - 1) + '🌟' + 'TAIL' * extra
+    source = compile_runtime_program(build_runtime_fixture('workbench_blade'))
+    source['id'] = 'unicode_summary'
+    source['realization'] = {field: '\u0085\u00a0  ' + text + ' \r\n', 'selfEvaluation': 'Full debug is separate.'}
+    before = deepcopy(source)
+    summary = generated_parent_summary_from_data(source)
+    assert summary[field] == text[:maximum]
+    assert len(summary[field]) == maximum
+    source['generatedParentSummary'] = summary
+    parent = raw_parent_card_for_llm({'generatedData': source})
+    assert parent['raw']['generatedParent']['summary'][field] == text[:maximum]
+    assert source['realization'] == before['realization']
+
+
+def test_summary_unicode_scalars_and_dotnet_trim_edge_cases():
+    from infini_local.pipelines.generated_parent_summary import generated_parent_summary_from_data
+
+    source = {'id': 'unicode_edges', 'realization': {'description': '\x1c\ud83c\udf1f\ud800\x1c'}}
+    before = deepcopy(source)
+    assert generated_parent_summary_from_data(source)['description'] == '\x1c🌟\ufffd\x1c'
+    assert source == before
+
+
+def test_fresh_strict_transport_decodes_only_declared_optional_report_fields(monkeypatch):
+    from jsonschema import Draft202012Validator
+    from infini_local.pipelines.author_item_contract import author_item_response_schema
+    from test_codex_subscription_contract import _encode_nullable_fixture
+
+    source = build_runtime_fixture('workbench_blade')
+    source['concept'] = 'A short idea.'
+    source['realization'] = {'selfEvaluation': 'No player description was supplied.'}
+
+    def respond(request, **_kwargs):
+        encoded = _encode_nullable_fixture(source, author_item_response_schema())
+        encoded['realization'].pop('playerExperience')
+        assert encoded['realization']['description'] is None
+        Draft202012Validator(request['response_format']['json_schema']['schema']).validate(encoded)
+        return {'choices': [{'message': {'content': json.dumps(encoded)}}],
+                '_debug': {'responseFormatType': 'json_schema'}}
+
+    offline_builder(monkeypatch, 'json_schema', respond)
+    accepted = author.try_llm_plan({}, {}, 'fresh-report-nullable')
+    assert accepted['realization'] == source['realization']
+    assert accepted['concept'] == source['concept']

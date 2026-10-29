@@ -100,14 +100,14 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
     stored = json.loads(path.read_text(encoding="utf-8"))
     assert stored["realization"] == before["realization"]
     summary = stored["generatedParentSummary"]
-    assert summary[field] == before["realization"][field]
+    assert summary[field] == before["realization"][field].strip()
     recursive = raw_parent_card_for_llm({"generatedData": stored})
     assert recursive["raw"]["generatedParent"]["summary"][field] == summary[field]
     assert item == before and patch == patch_before
 
 
 @pytest.mark.parametrize("mode", ["json_object", "off"])
-def test_author_does_not_solicit_reports_and_repair_discloses_schema_owned_bounds(monkeypatch, mode):
+def test_author_and_repair_disclose_schema_owned_description_bounds(monkeypatch, mode):
     import infini_local.core.runtime_authoring.program_schema as program_schema
 
     canonical = program_schema.realization_schema
@@ -143,7 +143,8 @@ def test_author_does_not_solicit_reports_and_repair_discloses_schema_owned_bound
     result = pipeline.repair_author_item_after_failure(item, {}, {}, "report-card", failure_report={"errors": []})
     repair = requests[0]
     expected_format = {"type": "json_object"} if mode == "json_object" else None
-    assert isinstance(request_dossier(author)["requiredJsonShape"]["realization"], str)
+    assert set(request_dossier(author)["requiredJsonShape"]["realization"]) == {"description", "selfEvaluation"}
+    assert "4017" in request_dossier(author)["requiredJsonShape"]["realization"]["description"]
     assert author.get("response_format") == expected_format
     for request, root in ((repair, "realizationReplacement"),):
         assert request.get("response_format") == expected_format
@@ -154,8 +155,7 @@ def test_author_does_not_solicit_reports_and_repair_discloses_schema_owned_bound
             text = card[field]
             assert f"minLength={schema['minLength']}" in text, (root, field, text)
             assert f"maxLength={schema['maxLength']}" in text, (root, field, text)
-            assert "Unicode code points" in text
-            assert "optional advisory" in text
+            assert "Unicode" in text
     assert result["runtimeProgram"] == before["runtimeProgram"]
     assert result["realization"] == before["realization"] and item == before
 

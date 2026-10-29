@@ -123,7 +123,8 @@ def test_serialized_author_requests_notes_and_repair_retains_advisory_replacemen
     source, item = _source(), _broken_item()
     author_request, author_packet = _author_request(monkeypatch, mode, source)
     repair_request, repair_packet = _repair_request(monkeypatch, mode, source, item)
-    assert all(isinstance(author_packet["requiredJsonShape"][field], str) for field in ("concept", "realization"))
+    assert isinstance(author_packet["requiredJsonShape"]["concept"], str)
+    assert set(author_packet["requiredJsonShape"]["realization"]) == {"description", "selfEvaluation"}
     advisory = repair_packet["requiredJsonShape"]["realizationReplacement"]
     from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card
     assert advisory == author_item_repair_prompt_shape_card()["realizationReplacement"]

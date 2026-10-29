@@ -161,7 +161,8 @@ def test_author_shape_card_and_schema_share_public_members():
     schema = author_item_response_schema()
     assert set(card["root"]) == set(schema["properties"])
     assert set(card["root"]) - set(schema["required"]) == {"concept", "realization"}
-    assert all(isinstance(card[field], str) for field in ("concept", "realization"))
+    assert isinstance(card["concept"], str)
+    assert set(card["realization"]) == {"description", "selfEvaluation"}
     assert set(schema["required"]) == {"name", "category", "runtimeProgram"}
     assert {row["input"] for row in card["runtimeProgram"]["bindings"]} == set(INPUT_KIND_REGISTRY)
     assert all(not strict_schema_errors(row, binding_schema()) for row in card["runtimeProgram"]["bindings"])

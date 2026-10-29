@@ -22,7 +22,8 @@ def test_rendered_author_requests_concise_notes_but_preserves_legacy_bounds(monk
     assert "concept" not in schema["required"]
     assert {"concept", "realization"} <= shape.keys()
     assert {"concept", "realization"} <= set(shape["root"])
-    assert isinstance(shape["concept"], str) and isinstance(shape["realization"], str)
+    assert isinstance(shape["concept"], str)
+    assert set(shape["realization"]) == {"description", "selfEvaluation"}
     # Inspect serialized messages, not only schema annotations/merged helpers.
     sent_shapes = [json.loads(message["content"])["requiredJsonShape"]
                    for message in request["messages"][1:]
@@ -32,8 +33,10 @@ def test_rendered_author_requests_concise_notes_but_preserves_legacy_bounds(monk
         delivered = request["response_format"]["json_schema"]["schema"]
         legacy = contract.author_item_provider_response_schema()
         expected = copy.deepcopy(legacy)
-        for field in ("concept", "realization"):
-            expected["properties"][field] = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+        expected["properties"]["concept"] = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+        report = expected["properties"]["realization"]["anyOf"][0]
+        report["properties"].pop("playerExperience")
+        report["required"].remove("playerExperience")
         assert delivered == expected, "only advisory roots may differ from the full provider grammar"
         assert set(delivered["properties"]) == set(delivered["required"]) == {"name", "category", "concept", "runtimeProgram", "realization"}
         assert delivered["$defs"] == legacy["$defs"]
@@ -107,4 +110,4 @@ def test_legacy_advisory_record_still_passes_full_provider_inverse_and_compiler(
     assert compiled["gameplay"] == expected["gameplay"]
     assert compiled["concept"] == expected["concept"] and compiled["realization"] == expected["realization"]
     generation = contract.author_item_generation_provider_schema()
-    assert not Draft202012Validator(generation).is_valid(encoded), "fresh generation requests plain notes, not legacy structured essays"
+    assert not Draft202012Validator(generation).is_valid(encoded), "fresh generation keeps a plain concept and separates player description from debug"

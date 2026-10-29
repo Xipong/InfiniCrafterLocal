@@ -377,12 +377,12 @@ Typed structured choices и конечные enum-отображения так�
 
 Lowery — технический lowering, не lore и не автор дополнительной механики. Author задаёт игровые расстояния в блоках, длительности в секундах, скорости в блоках/с. Меняется schema авторинга; сохранённый engine wire остаётся в прежних единицах. Canonical lowering выполняет объявленные проекции с учётом updatesPerTick именно затронутой сущности. Секунды разрешаются до ближайшего целого world tick, половина тика округляется вверх; неположенное обнуление ненулевого эффекта отклоняется, а не скрыто меняет механику. Pixel-labelled collision/sprite geometry и texture/UV units сохраняют своё объявленное пространство. Описание остаётся optional advisory: оно не требует нового отчёта и не запускает validator/Repair. Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.
 
-Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с краткими строками concept/realization для замысла и отладки реализации. Legacy acceptance и Repair сохраняют эти optional advisory поля; Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.
+Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с кратким concept и разделёнными realization.description (применение) / selfEvaluation (отладка). Legacy acceptance и Repair сохраняют эти optional advisory поля; Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.
 
 | optional prose | shared guidance |
 |---|---|
-| realization.description | optional advisory text about the emitted mechanics; string minLength=0, maxLength=4000 Unicode code points |
-| realization.playerExperience | optional advisory text about the emitted mechanics; string minLength=0, maxLength=3000 Unicode code points |
+| realization.description | Brief player-facing description of actual use, effects and conditions. String minLength=0, maxLength=4000 Unicode characters. |
+| realization.playerExperience | Optional practical-use notes for the player. String minLength=0, maxLength=3000 Unicode characters. |
 
 | единицы / scope | shared model-facing guide |
 |---|---|

@@ -106,15 +106,15 @@ def _call_prompt_shape_cards(variants: Iterable[Mapping[str, Any]]) -> list[dict
 
 
 def _realization_prompt_shape_card() -> dict[str, str]:
-    """Legacy advisory replacement remains available to scoped Repair."""
+    """Separate optional player-facing prose from implementation debug."""
     properties = _author_schema()["properties"]["realization"]["properties"]
-    return {
-        name: (
-            "optional advisory text about the emitted mechanics; "
-            f"string minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode code points"
-        )
-        for name, spec in properties.items()
+    roles = {
+        "description": "Brief player-facing description of actual use, effects and conditions.",
+        "playerExperience": "Optional practical-use notes for the player.",
+        "selfEvaluation": "Optional implementation/debug notes, including any mismatch with the idea. Not player text or an observed test result.",
     }
+    return {name: f"{roles[name]} String minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode characters."
+            for name, spec in properties.items()}
 
 
 def author_item_prompt_shape_card() -> dict[str, Any]:
@@ -124,7 +124,8 @@ def author_item_prompt_shape_card() -> dict[str, Any]:
     return {
         "root": ["name", "category", "concept", "runtimeProgram", "realization"],
         "concept": "Brief design intent: the item you want to create.",
-        "realization": "Brief implementation/debug account: how runtimeProgram realizes the idea, including any mismatch you notice. Advisory, not an observed test result.",
+        "realization": {key: value for key, value in _realization_prompt_shape_card().items()
+                        if key in {"description", "selfEvaluation"}},
         "name": "non-empty item name",
         "category": "UI/equipment classification: combat|tool|equipment|placeable|consumable|material|hybrid|generic",
         "runtimeProgram": {
@@ -423,16 +424,18 @@ def author_item_provider_response_schema(*, local_schema: Mapping[str, Any] | No
     )
 
 
-def author_item_generation_provider_schema() -> dict[str, Any]:
-    """Solicit concise debug notes without imposing legacy structured reports.
-
-    Only provider guidance changes; local advisory acceptance preserves both
-    plain notes and historical objects without certifying their accuracy.
-    """
+def _generation_author_schema() -> dict[str, Any]:
+    """Separate player text from debug without restoring structured concept essays."""
     schema = author_item_response_schema()
-    for field in ("concept", "realization"):
-        schema["properties"][field] = {"type": "string"}
-    return author_item_provider_response_schema(local_schema=schema)
+    schema["properties"]["concept"] = {"type": "string"}
+    report = schema["properties"]["realization"]
+    report["properties"] = {key: value for key, value in report["properties"].items()
+                            if key in {"description", "selfEvaluation"}}
+    return schema
+
+
+def author_item_generation_provider_schema() -> dict[str, Any]:
+    return author_item_provider_response_schema(local_schema=_generation_author_schema())
 
 
 def author_item_repair_response_schema(
@@ -573,11 +576,14 @@ def project_provider_author_item_to_local(
     envelope = response_format.get("json_schema")
     provider = envelope.get("schema") if isinstance(envelope, Mapping) else None
     if isinstance(provider, Mapping):
-        # Initial generation advertises plain advisory notes, unlike legacy
-        # structured reports. Decode only its exact declared null transport.
+        # Decode only the exact fresh-generation advisory projection. Historical
+        # string reports and other shapes remain raw advisory data.
+        generation = _generation_author_schema()
         for field in ("concept", "realization"):
-            if (provider.get("properties") or {}).get(field) == {"anyOf": [{"type": "string"}, {"type": "null"}]}:
-                local["properties"][field] = {"type": "string"}
+            child = generation["properties"][field]
+            expected = {"anyOf": [_provider_strict_projection(child, omit_annotations=True), {"type": "null"}]}
+            if (provider.get("properties") or {}).get(field) == expected:
+                local["properties"][field] = child
     return project_provider_nullable_optionals_to_local(
         value, local, response_format=response_format,
     )

@@ -250,7 +250,7 @@ def render() -> str:
         "Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.",
         "",
         "Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. "
-        "Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с краткими строками concept/realization для замысла и отладки реализации. "
+        "Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с кратким concept и разделёнными realization.description (применение) / selfEvaluation (отладка). "
         "Legacy acceptance и Repair сохраняют эти optional advisory поля; "
         "Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. "
         "Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. "
