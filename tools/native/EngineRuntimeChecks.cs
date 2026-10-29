@@ -46,6 +46,7 @@ internal static partial class EngineRuntimeChecks
         (string Name, Action Check)[] checks = {
             ("air jump VFX producer and bounded snapshot wire", AirJumpVfxProducerAndPacketContract),
             ("air jump VFX exact live-source admission", AirJumpVfxLiveSourceAdmission),
+            ("air jump VFX native owner callback and relay once", AirJumpVfxNativeStartAndRelayHaveOneOwnerOccurrence),
             ("player effect timed buff actual cooldown hit", PlayerEffectBuffReducesActualCooldownOnHit),
             ("player effect weapon event actual cooldown", PlayerEffectWeaponActionMutatesNativeTimer),
             ("player effect equipment pickup and potion hooks", PlayerEffectNativeEquipmentAndPickup),
