@@ -138,7 +138,14 @@ def report() -> dict[str, Any]:
         and regen.to_wire(-50) == -100 and regen.to_wire(-0.5) == -1
         and regen.to_wire(0) == 0 and regen.to_wire(0.5) == 1 and regen.to_wire(60) == 120
     ), "signed generated buff HP/s must map exactly by half-HP steps to Terraria lifeRegen units")
-    check("item_value_semantics", bool(stats and "Item.value" in stats.params["valueCopper"].description and "resale" in stats.params["valueCopper"].description), "valueCopper must describe the exact Item.value field rather than pretending to be direct player resale value")
+    value = stats.params.get("valueCopper") if stats else None
+    try:
+        value_identity = bool(value and all(value.to_wire(amount) == amount for amount in (0, 1, 12345, 100000000)))
+    except (TypeError, ValueError):
+        value_identity = False
+    check("item_value_semantics", bool(
+        value and value.wire_name == "value" and value.units == "copper" and value_identity
+    ), "valueCopper must preserve copper amounts in gameplay.value")
 
     collision = CAPABILITY_REGISTRY.get("set_projectile_collision")
     expected_collision = ("tileCollide", "ignoreWater", "bounceCount", "bounceSpeedRetention", "pierce", "updatesPerTick", "immunity")

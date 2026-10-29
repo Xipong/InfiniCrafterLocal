@@ -1064,6 +1064,15 @@ def _request_visual_kit(
     item_body_id = next((row["id"] for row in runtime_rows if row["kind"] == "item_body"), "")
     equipment_overlay = equipment_overlay_requirement(data)
     equipment_overlay_required = bool(equipment_overlay["required"])
+    item_context = {"name": data.get("name"), "realization": copy.deepcopy(data.get("realization") or {})}
+    concept = data.get("concept")
+    synthesis = concept.get("literalSynthesis") if isinstance(concept, Mapping) else None
+    if isinstance(concept, str):
+        item_context["concept"] = concept
+    if isinstance(synthesis, str) and synthesis.strip():
+        # Carry appearance intent literally, without importing planned mechanics
+        # or turning optional prose into an authority over accepted runtime.
+        item_context["literalSynthesis"] = synthesis
     repair = repair_errors is not None
     scoped_repair = (repair and isinstance(repair_scope, Mapping) and "fieldPermissions" in repair_scope
                      and not any(error.get("path") == "$" for error in repair_errors or []))
@@ -1106,10 +1115,7 @@ def _request_visual_kit(
                 "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
             },
             "runtimeEntitiesReadOnly": runtime_rows,
-            "itemReadOnly": {
-                "name": data.get("name"),
-                "realization": copy.deepcopy(data.get("realization") or {}),
-            },
+            "itemReadOnly": item_context,
             "equipmentOverlayReadOnly": copy.deepcopy(equipment_overlay),
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
@@ -1136,10 +1142,7 @@ def _request_visual_kit(
         )
         payload = {
             "task": "Author one visualKit for the accepted runtime program.",
-            "item": {
-                "name": data.get("name"),
-                "realization": copy.deepcopy(data.get("realization") or {}),
-            },
+            "item": item_context,
             "parents": {
                 "parentA": {"packet": raw_parent_card_for_llm(a, include_visual_reference=True)},
                 "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
@@ -1150,6 +1153,7 @@ def _request_visual_kit(
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "appearance only; runtime program is immutable",
+                "item.literalSynthesis, when present, is advisory appearance intent from Gameplay Author. Carry that physical composition into the visual design where compatible with the accepted runtime; it does not establish mechanics or require new entities. Visual Director owns the detailed appearance and asset choices; accepted runtime remains authoritative.",
                 "For a newly designed held item choose item.grip explicitly at its actual handle/contact point on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. Both normalized coordinates are required together. Describe that same contact point in item.prompt; do not infer coordinates from an entityId or request image analysis.",
                 "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission selects the existing orbit presentation; never fill optional metadata during Repair unless its exact path is permitted.",
                 "literal furniture, tools and materials may remain literal",
@@ -1389,11 +1393,13 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             raise PlannerUnavailable("Visual Director is required for LLM-authored craft")
         if equipment_overlay_required:
             raise PlannerUnavailable("Equipment overlay requires a model-authored Visual Director response")
+        realization = data.get("realization")
+        description = realization.get("description") if isinstance(realization, Mapping) else realization if isinstance(realization, str) else None
         dev_item = {
             "prompt": f"Terraria pixel-art inventory sprite of {data.get('name')}; literal combined parent object, transparent background",
             "negativePrompt": "placeholder, text, watermark",
             "silhouette": "compact readable combined object",
-            "visualIdentity": str((data.get("realization") or {}).get("description") or data.get("name") or "generated item"),
+            "visualIdentity": str(description or data.get("name") or "generated item"),
             "palette": ["neutral", "accent"],
             "preferredCanvasSize": 32,
             "inventoryScale": 1.0,

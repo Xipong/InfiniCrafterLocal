@@ -45,9 +45,9 @@ def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monk
     request, user, _ = build_initial_author_request({}, {}, "call-envelope", model_name="offline")
     packet = json.loads(user)
     assert [set(row) for row in packet["requiredJsonShape"]["runtimeProgram"]["calls"]] == [{"id", "fn", "target", "params"}]
-    assert "one explicit id/fn/target/params envelope" in packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["rowShapes"]
     schema = author_item_response_schema()
     for source in (build_capability_witness(fn), _explicit_calls(build_capability_witness(fn))):
+        source = {key: value for key, value in source.items() if key in schema["required"]}
         encoded = _encode_nullable_fixture(source, schema) if mode == "json_schema" else deepcopy(source)
         if mode == "json_schema":
             Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(encoded)

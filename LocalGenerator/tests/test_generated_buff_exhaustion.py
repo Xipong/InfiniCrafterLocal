@@ -82,6 +82,7 @@ def test_serialized_author_presence_policy_and_registered_card(monkeypatch, mode
     assert param["type"] == "number" and param["min"] == 0 and param["max"] == 360
     assert "default" not in param and "neutral" not in param
     doc, _ = _policy_fixture(value, group)
+    doc = {key: doc[key] for key in ("name", "category", "runtimeProgram")}
     restored = provider_roundtrip(doc, request["response_format"])
     assert validate_runtime_program(restored)["ok"]
     final = json.loads(json.dumps(compile_runtime_program(restored)))
@@ -294,6 +295,7 @@ def test_default_and_named_policies_are_independently_authored_not_inferred(monk
     doc["runtimeProgram"]["bindings"][0]["action"].pop("effectGroupId")
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, _, _ = author.build_initial_author_request({}, {}, "mixed-policy", model_name="offline")
+    doc = {key: doc[key] for key in ("name", "category", "runtimeProgram")}
     doc = provider_roundtrip(doc, request["response_format"])
     final = compile_runtime_program(doc)
     for group, value in [(None, first), ("second", second)]:
@@ -316,7 +318,9 @@ def test_provider_null_scaffolding_is_only_optional_omission_not_authored_null(m
     assert not validate_runtime_program(doc)["ok"]
     if mode == "json_schema":
         good, _ = _policy_fixture()
-        payload = _encode_nullable_fixture(good, author_item_response_schema())
+        good = {key: good[key] for key in ("name", "category", "runtimeProgram")}
+        local = author_item_response_schema()
+        payload = _encode_nullable_fixture(good, local)
         assert next(c for c in payload["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['exhaustionSeconds'] is None
         Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(payload)
         restored = author._prepare_parsed_author_item(json.loads(json.dumps(payload)), response_format=request["response_format"])

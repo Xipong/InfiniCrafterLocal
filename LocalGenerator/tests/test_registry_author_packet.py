@@ -47,7 +47,7 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
         ("entityKinds", "kind", [row.prompt_card() for row in ENTITY_KIND_REGISTRY.values()]),
         ("inputs", "input", [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()]),
         ("bindingActions", "action", [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()]),
-        ("events", "event", [row.prompt_card() for row in EVENT_KIND_REGISTRY.values()]),
+        ("events", "event", [row.author_prompt_card() for row in EVENT_KIND_REGISTRY.values()]),
     )
     for group, identity, expected in inventories:
         actual = _expand_constraint_references(catalog[group], catalog["fieldGuide"]["consumerConstraints"])
@@ -159,8 +159,10 @@ def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(m
 def test_author_shape_card_and_schema_share_public_members():
     card = author_item_prompt_shape_card()
     schema = author_item_response_schema()
-    assert set(card["root"]) == set(schema["required"])
-    assert set(card["root"]) | set(card["optionalAdvisory"]) == set(schema["properties"])
+    assert set(card["root"]) == set(schema["properties"])
+    assert set(card["root"]) - set(schema["required"]) == {"concept", "realization"}
+    assert all(isinstance(card[field], str) for field in ("concept", "realization"))
+    assert set(schema["required"]) == {"name", "category", "runtimeProgram"}
     assert {row["input"] for row in card["runtimeProgram"]["bindings"]} == set(INPUT_KIND_REGISTRY)
     assert all(not strict_schema_errors(row, binding_schema()) for row in card["runtimeProgram"]["bindings"])
     repair_card = author_item_repair_prompt_shape_card()

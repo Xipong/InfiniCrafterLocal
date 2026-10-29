@@ -38,7 +38,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E
     ITEM_USE_STYLE_TMODLOADER_NAMES,
 )
 
-from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card  # noqa: E402
+from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card  # noqa: E402
 from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
 
 OUTPUT = ROOT / "docs/reference/generated/LOWERY_RU.md"
@@ -76,7 +76,7 @@ def render() -> str:
         "",
         "## READ THIS FIRST — замороженная граница",
         "",
-        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и optional advisory realization/selfEvaluation. "
+        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references и metadata. "
         "Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.",
         "2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.",
         "3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology, hitbox topology, root executor или fallback mechanic. Он может скрывать неудобство API, но не сжимать пространство дизайна.",
@@ -250,13 +250,14 @@ def render() -> str:
         "Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.",
         "",
         "Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. "
-        "Author получает его в `requiredJsonShape.realization` и `runtimeCapabilityContract.technicalNotes`; "
+        "Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с краткими строками concept/realization для замысла и отладки реализации. "
+        "Legacy acceptance и Repair сохраняют эти optional advisory поля; "
         "Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. "
         "Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. "
         "Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.",
         "",
     ]
-    realization = author_item_prompt_shape_card()["realization"]
+    realization = author_item_repair_prompt_shape_card()["realizationReplacement"]
     lines += table(("optional prose", "shared guidance"), [
         (f"realization.{name}", realization[name]) for name in ("description", "playerExperience")
     ])

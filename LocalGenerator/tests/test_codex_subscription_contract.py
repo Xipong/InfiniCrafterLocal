@@ -74,26 +74,31 @@ def test_subscription_sends_supported_schema_without_mutating_authored_packet(mo
     assert request == before
 
 
-def _encode_nullable_fixture(value: Any, local: dict[str, Any]) -> Any:
+def _encode_nullable_fixture(value: Any, local: dict[str, Any], *, definitions=None) -> Any:
     """Independent test encoder for valid sparse fixtures; never a production fallback."""
     from jsonschema import Draft202012Validator
 
+    definitions = local.get("$defs", {}) if definitions is None else definitions
+    if "$ref" in local:
+        assert local["$ref"].startswith("#/$defs/")
+        return _encode_nullable_fixture(value, definitions[local["$ref"].removeprefix("#/$defs/")], definitions=definitions)
     for union in ("oneOf", "anyOf"):
         if union in local:
-            matches = [branch for branch in local[union] if Draft202012Validator(branch).is_valid(value)]
+            matches = [branch for branch in local[union]
+                       if Draft202012Validator({"$defs": definitions, **branch}).is_valid(value)]
             assert len(matches) == 1
-            return _encode_nullable_fixture(value, matches[0])
+            return _encode_nullable_fixture(value, matches[0], definitions=definitions)
     if isinstance(value, dict):
         required = list(local.get("required", []))
-        if "if" in local and Draft202012Validator(local["if"]).is_valid(value):
+        if "if" in local and Draft202012Validator({"$defs": definitions, **local["if"]}).is_valid(value):
             required += local["then"]["required"]
         return {
-            key: (_encode_nullable_fixture(value[key], child) if key in value else None)
+            key: (_encode_nullable_fixture(value[key], child, definitions=definitions) if key in value else None)
             for key, child in local["properties"].items()
             if key in value or key not in required
         }
     if isinstance(value, list):
-        return [_encode_nullable_fixture(child, local["items"]) for child in value]
+        return [_encode_nullable_fixture(child, local["items"], definitions=definitions) for child in value]
     return copy.deepcopy(value)
 
 

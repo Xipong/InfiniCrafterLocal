@@ -130,8 +130,12 @@ def provider_roundtrip(doc, response_format):
     before = json.dumps(doc, sort_keys=True)
     payload = deepcopy(doc)
     if response_format["type"] == "json_schema":
-        payload = _encode_nullable_fixture(payload, contract.author_item_response_schema())
-        Draft202012Validator(response_format["json_schema"]["schema"]).validate(payload)
+        provider = response_format["json_schema"]["schema"]
+        assert payload.keys() <= provider["properties"].keys()
+        local = contract.author_item_response_schema()
+        local["properties"] = {key: value for key, value in local["properties"].items() if key in provider["properties"]}
+        payload = _encode_nullable_fixture(payload, local)
+        Draft202012Validator(provider).validate(payload)
     restored = author._prepare_parsed_author_item(
         json.loads(json.dumps(payload)), response_format=response_format)
     assert json.dumps(restored, sort_keys=True) == before
