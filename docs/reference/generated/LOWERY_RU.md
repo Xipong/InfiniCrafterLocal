@@ -240,7 +240,7 @@ Typed structured choices и конечные enum-отображения так�
 
 Это только объявленные default=neutral, не универсальное правило для нуля. При условии вне указанной ветви leaf остаётся обязательным; contradictory-present не исправляется. Compiler выдаёт declared_neutral_omission receipt, а Repair отсутствие сохраняет.
 
-| capability.param | exact neutral | inactive branch (OR) |
+| capability.param | exact neutral | omission condition |
 |---|---|---|
 | set_projectile_owner_control.requireHeldItem | False | unconditional declared neutral |
 | set_projectile_owner_control.requireChannel | False | unconditional declared neutral |
@@ -276,6 +276,10 @@ Typed structured choices и конечные enum-отображения так�
 | present_placed_item_sprite.pivotSpace | 'frame' | unconditional declared neutral |
 | configure_spawn.count | 1 | {'targetKinds': ('child_projectile',), 'paramEquals': (), 'targetCapabilities': ()} |
 | configure_spawn.spreadRadians | 0 | {'targetKinds': ('child_projectile',), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| set_projectile_turn_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
+| set_projectile_speed_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
+| set_projectile_homing_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
+| attract_npcs_while_active.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
 | set_projectile_collision.bounceCount | 0 | {'targetKinds': (), 'paramEquals': (('tileCollide', False),), 'targetCapabilities': ('move_boomerang', 'move_returning_glaive', 'move_flail_tether')} |
 | set_projectile_collision.bounceSpeedRetention | 1 | unconditional declared neutral |
 | channel_beam.manaPayment | 'initial_use_only' | unconditional declared neutral |

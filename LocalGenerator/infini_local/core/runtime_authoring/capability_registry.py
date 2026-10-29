@@ -969,6 +969,18 @@ class CapabilitySpec:
                    for properties, required in variants]
         return schemas[0] if len(schemas) == 1 else {"oneOf": schemas}
 
+    def neutral_omission_allowed(self, name: str, params: Mapping[str, Any]) -> bool:
+        """Only declared neutrals; a timing pair keeps its original window absence."""
+        spec = self.params.get(name)
+        if (spec is None or spec.required or spec.default is None
+                or type(spec.default) is not type(spec.neutral)
+                or not json_values_equal(spec.default, spec.neutral)):
+            return False
+        for rule in self.requirements:
+            if rule.kind == "timing_pair_or_window" and name in rule.any_of:
+                return rule.allow_absent and not any(key in params for key in (rule.param, rule.other_param))
+        return True
+
     def timing_params_schema(self, properties: dict[str, Any], required: list[str], *, wire: bool = False) -> dict[str, Any]:
         """Closed, disjoint timing shapes supported by both provider and local validation."""
         schema = {"type": "object", "additionalProperties": False, "properties": properties, "required": required}
@@ -987,11 +999,15 @@ class CapabilitySpec:
         def field(name: str) -> str:
             return (self.params[name].wire_name or name) if wire else name
         first, second, window = map(field, (rule.param, rule.other_param, rule.any_of[0]))
-        return {"oneOf": [
+        variants = [
             {**schema, "required": [*required, first, second]},
             {**schema, "properties": {name: spec for name, spec in properties.items() if name not in (first, second)},
              "required": [*required, window]},
-        ]}
+        ]
+        if not wire and self.neutral_omission_allowed(rule.any_of[0], {}):
+            variants.append({**schema, "properties": {name: spec for name, spec in properties.items()
+                                                      if name not in (first, second, window)}})
+        return {"oneOf": variants}
 
     def provider_variant_schema(self, *, shared_refs: bool = False) -> dict[str, Any]:
         properties = {name: ({"$ref": "#/$defs/" + spec.shared_type} if shared_refs and spec.shared_type else spec.schema()) for name, spec in self.params.items()}
@@ -1111,7 +1127,8 @@ class CapabilitySpec:
         specs = {name: spec for name, spec in self.params.items() if not effect_names or name in effect_names}
         if any(nested_effect(spec, params.get(name)) for name, spec in specs.items() if spec.kind == "object"):
             return True
-        effect_params = {name: spec for name, spec in specs.items() if spec.neutral is not None}
+        effect_params = {name: spec for name, spec in specs.items()
+                         if spec.neutral is not None and spec.kind in {"number", "integer", "boolean", "string"}}
         if not effect_params:
             return True
         for name, spec in effect_params.items():
@@ -1165,8 +1182,10 @@ class CapabilitySpec:
         compact_meanings(card)
         for name, row in card["params"].items():
             if self.params[name].shared_type:
+                annotations = {key: row[key] for key in ("default", "neutral", "omissionAllowedOnlyWhen") if key in row}
                 row.clear()
                 row["typeRef"] = self.params[name].shared_type
+                row.update(annotations)
             # Structured params already carry the identical root description as
             # their meaning. Nested branch/leaf descriptions remain complete.
             shape = row.get("shape")
@@ -3784,11 +3803,13 @@ def _enrich_capability(cap: CapabilitySpec) -> CapabilitySpec:
     if cap.category == "motion_modifier" or cap.name == "attract_npcs_while_active":
         cap = replace(cap, params=MappingProxyType({
             **cap.params,
+            "window": replace(cap.params["window"], default={"phase": "always"}, neutral={"phase": "always"}),
             **{name: replace(cap.params[name], required=False)
                for name in ("startDelaySeconds", "durationSeconds")},
         }), requirements=(*cap.requirements, RequirementSpec(
             "timing_pair_or_window", param="startDelaySeconds", other_param="durationSeconds", any_of=("window",),
-            message="Window or scalar pair; both intersect.",
+            allow_absent=True,
+            message="Omit all timing for the whole active lifetime; otherwise use window or both scalar times. Both forms intersect.",
         )))
     if cap.effect_groupable:
         cap = replace(cap, params=MappingProxyType({
@@ -3952,7 +3973,10 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
 
 
 def shared_parameter_schemas() -> dict[str, Any]:
-    return {spec.shared_type: spec.schema() for cap in CAPABILITY_REGISTRY.values()
+    # Defaults describe a capability's use, not every use of the shared grammar.
+    return {spec.shared_type: {key: value for key, value in spec.schema().items()
+                              if key not in {"default", "x-infini-neutral"}}
+            for cap in CAPABILITY_REGISTRY.values()
             for spec in cap.params.values() if cap.author_visible and spec.shared_type}
 
 

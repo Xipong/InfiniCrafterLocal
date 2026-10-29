@@ -1,4 +1,4 @@
-"""One explicit window replaces, but never silently rewrites, retained timing gates."""
+"""Unrestricted omission and explicit retained timing gates preserve authored choices."""
 from copy import deepcopy
 
 import pytest
@@ -29,7 +29,35 @@ def document(fn, form="window"):
         call["params"]["window"] = {"phase": "always", "clock": "active", "startDelaySeconds": 0.25, "durationSeconds": 2}
     if form == "window":
         del call["params"]["startDelaySeconds"], call["params"]["durationSeconds"]
+    if form == "omitted":
+        for key in ("startDelaySeconds", "durationSeconds", "window"):
+            call["params"].pop(key, None)
     return source, call
+
+
+@pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
+def test_unrestricted_author_omission_compiles_default_but_raw_wire_requires_timing(fn, member, author_leaf, wire_leaf, value):
+    source, call = document(fn, "omitted")
+    before = deepcopy(source)
+    assert not strict_schema_errors(call, CAPABILITY_REGISTRY[fn].provider_variant_schema())
+    wire, component = delivered(source, call, member)
+    assert source == before
+    assert component["window"] == {"phase": "always"}
+    assert "startDelayTicks" not in component and "durationTicks" not in component
+    receipts = wire["runtimeContract"]["finalWireReceipts"]
+    rows = [row for row in receipts if row.get("callId") == call["id"]
+            and row["finalPath"].endswith("." + member + ".window.phase")]
+    assert len(rows) == 1
+    assert rows[0]["status"] == "declared_neutral_omission"
+    for authored in (source, None):
+        audit = audit_compiler_receipts(receipts, authored_document=authored, final_document=wire)
+        assert audit["ok"], audit["violations"]
+    wire.pop("runtimeContract")
+    assert validate_runtime_wire(wire)["ok"]
+    del component["window"]
+    malformed = deepcopy(wire)
+    assert not validate_runtime_wire(wire)["ok"]
+    assert wire == malformed and source == before
 
 
 def delivered(source, call, member):
@@ -77,8 +105,8 @@ def test_exact_forms_roundtrip_receipts_and_preserve_source(fn, member, author_l
         # Other fields leave all three distinct timing representations intact.
         ("bad_numeric", ("pair", "window", "intersection")),
         ("unknown", ("pair", "window", "intersection")),
-        # Erasing every timing field erases the original representation too.
-        ("missing_all", ("pair",)),
+        ("null_window", ("pair", "window", "intersection")),
+        ("malformed_window", ("pair", "window", "intersection")),
     )
     for form in forms
 ])
@@ -106,11 +134,8 @@ def test_author_provider_and_stripped_wire_refuse_invalid_fields(fn, member, aut
         p[author_leaf] = component[wire_leaf] = 999999
     elif mutation == "unknown":
         p["unregistered"] = component["unregistered"] = 7
-    else:
-        for key in ("startDelaySeconds", "durationSeconds", "window"):
-            p.pop(key, None)
-        for key in ("startDelayTicks", "durationTicks", "window"):
-            component.pop(key, None)
+    elif mutation in ("null_window", "malformed_window"):
+        p["window"] = component["window"] = None if mutation == "null_window" else {"phase": "unknown"}
     before_source, before_wire = deepcopy(source), deepcopy(wire)
     assert strict_schema_errors(call, CAPABILITY_REGISTRY[fn].provider_variant_schema())
     assert not validate_runtime_program(source)["ok"]
@@ -185,7 +210,7 @@ def test_incomplete_pair_repair_opens_only_missing_half(fn, member, author_leaf,
 
 
 @pytest.mark.parametrize("fn,member,author_leaf,wire_leaf,value", CASES)
-@pytest.mark.parametrize("form", ["pair", "window", "intersection"])
+@pytest.mark.parametrize("form", ["omitted", "pair", "window", "intersection"])
 def test_strict_provider_nullable_transport_preserves_selected_timing_shape(fn, member, author_leaf, wire_leaf, value, form):
     from jsonschema import Draft202012Validator
     from infini_local.pipelines import author_item_contract as contract

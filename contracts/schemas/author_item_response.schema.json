@@ -7947,6 +7947,60 @@
                           "turnRadiansPerSecond",
                           "window"
                         ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "turnRadiansPerSecond": {
+                            "type": "number",
+                            "minimum": -180.0,
+                            "maximum": 180.0,
+                            "description": "Author units: radians/s. Native consumer: Signed world-time velocity rotation rate",
+                            "x-infini-units": "radians/s",
+                            "x-infini-semanticType": "radians/s",
+                            "x-infini-neutral": 0.0,
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": 0.0,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                            },
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "boundsAtUpdatesPerTick1To6": [
+                                [
+                                  -30.0,
+                                  30.0
+                                ],
+                                [
+                                  -60.0,
+                                  60.0
+                                ],
+                                [
+                                  -90.0,
+                                  90.0
+                                ],
+                                [
+                                  -120.0,
+                                  120.0
+                                ],
+                                [
+                                  -150.0,
+                                  150.0
+                                ],
+                                [
+                                  -180.0,
+                                  180.0
+                                ]
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "turnRadiansPerSecond"
+                        ]
                       }
                     ]
                   }
@@ -8169,6 +8223,80 @@
                           "maxTurnRadiansPerSecond",
                           "requireLineOfSight",
                           "window"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "rangeTiles": {
+                            "type": "number",
+                            "minimum": 1,
+                            "maximum": 120,
+                            "description": "Hard target radius from this projectile center",
+                            "x-infini-units": "blocks (tiles)",
+                            "x-infini-semanticType": "tiles",
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": null,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "maxTurnRadiansPerSecond": {
+                            "type": "number",
+                            "minimum": 0.006,
+                            "maximum": 1152.0,
+                            "description": "Author units: radians/s. Native consumer: Maximum target turn rate, integrated over elapsed world time; stops at alignment",
+                            "x-infini-units": "radians/s",
+                            "x-infini-semanticType": "radians/s",
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": null,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                            },
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "boundsAtUpdatesPerTick1To6": [
+                                [
+                                  0.006,
+                                  192.0
+                                ],
+                                [
+                                  0.012,
+                                  384.0
+                                ],
+                                [
+                                  0.018000000000000002,
+                                  576.0
+                                ],
+                                [
+                                  0.024,
+                                  768.0
+                                ],
+                                [
+                                  0.03,
+                                  960.0
+                                ],
+                                [
+                                  0.036000000000000004,
+                                  1152.0
+                                ]
+                              ]
+                            }
+                          },
+                          "requireLineOfSight": {
+                            "type": "boolean",
+                            "description": "Require native line-of-sight check between projectile/NPC boxes before selection",
+                            "x-infini-semanticType": "bounded_text"
+                          }
+                        },
+                        "required": [
+                          "rangeTiles",
+                          "maxTurnRadiansPerSecond",
+                          "requireLineOfSight"
                         ]
                       }
                     ]
@@ -8416,6 +8544,92 @@
                           "falloff",
                           "maxTargets",
                           "window"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "rangeTiles": {
+                            "type": "number",
+                            "minimum": 1,
+                            "maximum": 80,
+                            "description": "Hard pull radius from projectile center",
+                            "x-infini-units": "blocks (tiles)",
+                            "x-infini-semanticType": "tiles",
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": null,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+                            }
+                          },
+                          "accelerationBlocksPerSecondSquared": {
+                            "type": "number",
+                            "minimum": 0.225,
+                            "maximum": 5400.0,
+                            "description": "Author units: blocks/s² (NPC world-tick velocity). Native consumer: NPC world acceleration before falloff/resistance, integrated over active projectile time",
+                            "x-infini-units": "blocks/s² (NPC world-tick velocity)",
+                            "x-infini-semanticType": "blocks/s² (NPC world-tick velocity)",
+                            "x-infini-consumerConstraint": {
+                              "storage": "float32",
+                              "neutral": null,
+                              "rule": "nonneutral_must_remain_nonneutral",
+                              "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+                            },
+                            "x-infini-authorProjection": {
+                              "nonzeroMustRemainNonzero": true,
+                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "boundsAtUpdatesPerTick1To6": [
+                                [
+                                  0.225,
+                                  900.0
+                                ],
+                                [
+                                  0.45,
+                                  1800.0
+                                ],
+                                [
+                                  0.675,
+                                  2700.0
+                                ],
+                                [
+                                  0.9,
+                                  3600.0
+                                ],
+                                [
+                                  1.125,
+                                  4500.0
+                                ],
+                                [
+                                  1.35,
+                                  5400.0
+                                ]
+                              ]
+                            }
+                          },
+                          "falloff": {
+                            "type": "string",
+                            "enum": [
+                              "constant",
+                              "linear"
+                            ],
+                            "description": "constant=1; linear=max(0,1-distance/radius), including zero at radius",
+                            "x-infini-semanticType": "bounded_text"
+                          },
+                          "maxTargets": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 16,
+                            "description": "Maximum accepted NPC slots per projectile update",
+                            "x-infini-semanticType": "unitless_scalar"
+                          }
+                        },
+                        "required": [
+                          "rangeTiles",
+                          "accelerationBlocksPerSecondSquared",
+                          "falloff",
+                          "maxTargets"
                         ]
                       }
                     ]

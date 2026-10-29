@@ -183,8 +183,14 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             row = resolve_param(fn, param)
             spec = cap.params[param]
             if spec.shared_type:
-                assert row == {"typeRef": spec.shared_type, **({"optional": True} if not spec.required else {})}
-                assert guide["types"][spec.shared_type] == original["shape"] == spec.schema()
+                annotations = {key: original[key] for key in ("default", "neutral", "omissionAllowedOnlyWhen") if key in original}
+                assert row == {"typeRef": spec.shared_type, **({"optional": True} if not spec.required else {}), **annotations}
+                expanded_shape = copy.deepcopy(guide["types"][spec.shared_type])
+                if "default" in row:
+                    expanded_shape["default"] = row["default"]
+                if "neutral" in row:
+                    expanded_shape["x-infini-neutral"] = row["neutral"]
+                assert expanded_shape == original["shape"] == spec.schema()
                 assert original["meaning"] == guide["types"][spec.shared_type]["description"]
                 shared += 1
                 continue

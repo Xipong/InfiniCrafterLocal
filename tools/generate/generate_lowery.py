@@ -191,14 +191,17 @@ def render() -> str:
               "Это только объявленные default=neutral, не универсальное правило для нуля. "
               "При условии вне указанной ветви leaf остаётся обязательным; contradictory-present не исправляется. "
               "Compiler выдаёт declared_neutral_omission receipt, а Repair отсутствие сохраняет.", ""]
-    lines += table(("capability.param", "exact neutral", "inactive branch (OR)"), [
+    lines += table(("capability.param", "exact neutral", "omission condition"), [
         (f"{fn}.{name}", repr(value),
          repr({"targetKinds": spec.omission_condition.target_kinds,
                "paramEquals": spec.omission_condition.param_equals,
-               "targetCapabilities": spec.omission_condition.target_capabilities}) if spec.omission_condition else "unconditional declared neutral")
+               "targetCapabilities": spec.omission_condition.target_capabilities}) if spec.omission_condition else
+         next(("all timing absent: " + ", ".join((rule.param, rule.other_param, *rule.any_of))
+               for rule in cap.requirements if rule.kind == "timing_pair_or_window" and rule.allow_absent
+               and name.split(".", 1)[0] in rule.any_of), "unconditional declared neutral"))
         for fn, cap in CAPABILITY_REGISTRY.items()
         for name, value in declared_neutral_omissions(fn, {}).items()
-        for spec in (cap.params[name],)
+        for spec in (cap.params[name.split(".", 1)[0]],)
     ])
     lines += [
         "",
