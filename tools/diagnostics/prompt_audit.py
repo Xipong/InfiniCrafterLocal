@@ -179,8 +179,22 @@ def anchor(path):
     return "p-" + hashlib.sha256(path.encode("utf-8")).hexdigest()[:20]
 
 
-def label(key, value):
-    title = LABELS.get(str(key), str(key))
+def field_title(key, path=""):
+    """Structural labels are scoped: a filename manifest is not a binding input."""
+    key = str(key)
+    if path == '/evidence' or path.startswith('/evidence/'):
+        return {'evidence': 'Происхождение захвата — не запрос модели',
+                'inputs': 'Файлы-источники офлайн-сборки', 'file': 'Имя исходного файла',
+                'bytes': 'Размер исходного файла в байтах', 'sha256': 'SHA-256 исходного файла'}.get(key, key)
+    if key == 'inputs':
+        return 'Допустимые входы управления' if re.search(r'/(?:catalog|runtimeCapabilityContract)/(?:bindingActions/[0-9]+/)?inputs$', path) else key
+    if key == 'input':
+        return 'Способ активации' if re.search(r'/bindings/[0-9]+/input$', path) else 'Входные данные'
+    return LABELS.get(key, key)
+
+
+def label(key, value, path=""):
+    title = field_title(key, path)
     if title != str(key):
         title += f" · {key}"
     if isinstance(value, dict):
@@ -222,7 +236,7 @@ def iter_children(value):
 
 
 def render_node(key, value, path, depth, markdown, leaves, refs):
-    title = label(key, value)
+    title = label(key, value, path)
     escaped_title, escaped_path = html.escape(title), html.escape(path or "/")
     node_id = anchor(path)
     decoded = decode_content(str(key), value)
@@ -474,6 +488,90 @@ SECTION_HELP = {
 }
 
 
+
+def source_origin(path):
+    """Classify provenance, not whether a captured request was actually sent."""
+    if path == '/evidence' or path.startswith('/evidence/'):
+        return 'evidence', 'Не отправляется · происхождение'
+    relative = path.removeprefix('/request') if path == '/request' or path.startswith('/request/') else path
+    root_key = relative.lstrip('/').split('/', 1)[0].removesuffix('::')
+    if root_key in {'_infini_reasoning_intent', '_infini_prompt_cache'}:
+        return 'local', 'Локальные управляющие метаданные · не текст модели'
+    if root_key in {'messages', 'instructions', 'input'}:
+        return 'prompt', 'Содержимое сообщения модели · сохранённый источник'
+    if root_key in {'model', 'temperature', 'response_format', 'max_tokens', 'max_output_tokens', 'reasoning', 'stream'}:
+        return 'provider', 'Параметр API / контракт ответа · не текст сообщения'
+    return 'request', 'Поле сохранённого источника · отправка не подтверждена'
+
+
+def provenance_badge(path):
+    kind, title = source_origin(path)
+    return '<span class="origin-badge origin-' + kind + '" data-origin="' + kind + '">' + title + '</span>'
+
+
+def evidence_layer(value):
+    if not isinstance(value, dict) or 'request' not in value or 'evidence' not in value:
+        return ''
+    return ('<section id="capture-evidence" data-origin="evidence"><h2>Происхождение захвата — не отправляется модели</h2>'
+            '<p>Это соседний с request раздел evidence, а не содержимое сообщений. Имена дампов, размеры и контрольные суммы позволяют проверить входы офлайн-сборки. Они не означают, что целые дампы включены в запрос.</p>' +
+            readable_value('evidence', value['evidence'], '/evidence') + '</section>')
+
+
+def catalog_field_notes(request, base):
+    """Notes on explicit registry projections, never mechanics guessed by bare key.
+
+    Owner: core/runtime_authoring/capability_registry.py, EntityKindSpec,
+    EventKindSpec and BindingActionSpec.prompt_card. No runtime imports or defaults.
+    """
+    notes = {}
+    groups = {
+        'entityKinds': ('EntityKindSpec.prompt_card', {
+            'baseEvents': 'Базовые события этого типа сущности. Это список точек исполнения, не список создаваемых существ. Описание каждого события — в events этого же каталога.',
+            'requiresPositionDriver': 'Признак требования к управлению положением в карточке типа; конкретную композицию выбирает Author по документации каталога.'}),
+        'events': ('EventKindSpec.prompt_card', {
+            'producedBy': 'Capabilities, обеспечивающие это событие; это метаданные каталога, а не выбранные вызовы будущего предмета.',
+            'producedByBindingInputs': 'Входы привязок, указанные реестром как источники события.',
+            'producedByBindingActions': 'Действия привязок, указанные реестром как источники события.',
+            'producedByBindingKinds': 'Типы сущностей, для которых событие обеспечивается подходящей привязкой. Источник события не обязательно совпадает с целью действия привязки.',
+            'producerBindingContactDamage': 'Условие контактного урона для источника события через привязку.',
+            'producerFreeKinds': 'Типы сущностей, у которых это событие входит в baseEvents; список автоматически проецируется из реестра.',
+            'producerExactParams': 'Точные параметры capability, указанные реестром для обеспечения события.'}),
+        'bindingActions': ('BindingActionSpec.prompt_card', {
+            'inputs': 'Допустимые входы управления для этого действия; не файлы-источники аудита.'}),
+    }
+    for path, catalog in documents(request, base):
+        if not isinstance(catalog, dict) or 'authoringSchema' not in catalog or not isinstance(catalog.get('capabilities'), list):
+            continue
+        limits = catalog.get('limits')
+        if isinstance(limits, dict):
+            limit_notes = {
+                'entities': 'Лимит именованных определений сущностей в программе, а не одновременно созданных игровых экземпляров. Одно определение может использоваться для создания нескольких экземпляров.',
+                'bindings': 'Лимит правил «вход управления → действие», а не дополнительных клавиш на клавиатуре. Несколько правил не означают появление новых кнопок управления.',
+            }
+            for key, explanation in limit_notes.items():
+                if key in limits:
+                    notes[pointer(pointer(path, 'limits'), key)] = [
+                        'Пояснение читателя — не отправляется: ' + explanation +
+                        ' Превышение лимита отклоняется при проверке, а не молча обрезается. Основание: contracts/schemas/runtime_program_author.schema.json (maxItems).']
+        for group, (owner, descriptions) in groups.items():
+            rows = catalog.get(group)
+            if not isinstance(rows, list):
+                continue
+            gp = pointer(path, group)
+            notes[gp] = ['Пояснение читателя — не отправляется: карточки автоматически собраны из реестра (' + owner + '). Их значения уже входят в сохранённый запрос; модель не должна заполнять эти карточки в своём ответе.']
+            for i, row in enumerate(rows):
+                if not isinstance(row, dict):
+                    continue
+                for key, explanation in descriptions.items():
+                    if key not in row:
+                        continue
+                    value = row[key]
+                    absence = (' [] — в этой карточке такой список пуст; это не пропущенный ответ Author.' if value == [] else
+                               ' null — это условие не задано; не ноль и не пропущенный ответ Author.' if value is None else '')
+                    notes[pointer(pointer(gp, i), key)] = ['Пояснение читателя — не отправляется: ' + explanation + absence + ' Основание: ' + owner + '.']
+    return notes
+
+
 def reading_id(path):
     return "read-" + anchor(path)
 
@@ -586,7 +684,7 @@ def readable_value(key, value, path, depth=0, catalog=None, catalog_path="", fn=
     decoded = decode_content(str(key), value)
     if decoded is not None:
         return readable_value(key, decoded, path + "::", depth, catalog, catalog_path, fn, field_notes)
-    title = LABELS.get(str(key), str(key))
+    title = field_title(key, path)
     if '/meaningByToken/' in path:
         title = 'Значение токена · ' + str(key)
     if str(key) == 'input':
@@ -609,20 +707,22 @@ def readable_value(key, value, path, depth=0, catalog=None, catalog_path="", fn=
     heading = html.escape(title)
     if title != str(key) and not isinstance(key, int):
         heading += ' <small class="wire-key">' + html.escape(str(key)) + '</small>'
-    source = source_link(path, "Источник")
+    source = source_link(path, "Источник") + provenance_badge(path)
     if not isinstance(value, (dict, list)) or not value:
         data = prose(value)
         if field_notes and path in field_notes:
-            data += '<div class="field-explanation">' + '<br>'.join(field_notes[path]) + '</div>'
+            data += '<div class="field-explanation" data-origin="reader">' + '<br>'.join(field_notes[path]) + '</div>'
         kind = scalar_type(value) if not isinstance(value, (dict, list)) else ("object" if isinstance(value, dict) else "array")
         return ('<div class="read-field" id="' + reading_id(path) + '" data-reader-path="' + html.escape(path, quote=True) + '">'
                 '<div class="read-label">' + heading + ' <small>' + html.escape(kind) + '</small></div>'
                 '<div class="read-value">' + data + '</div><div class="read-origin">' + source + '</div></div>')
     parts = []
+    if field_notes and path in field_notes:
+        parts.append('<div class="field-explanation" data-origin="reader">' + '<br>'.join(field_notes[path]) + '</div>')
     if isinstance(value, dict) and str(key) == 'runtimeProgram' and '/parents/' in path:
         parts.append(parent_relationships(value))
     if str(key) in SECTION_HELP and (str(key) != 'params' or (catalog is not None and '/capabilities/' in path)):
-        parts.append('<p class="section-help">' + html.escape(SECTION_HELP[str(key)]) + '</p>')
+        parts.append('<p class="section-help" data-origin="reader"><b>Пояснение читателя — не отправляется:</b> ' + html.escape(SECTION_HELP[str(key)]) + '</p>')
     # Resolve only explicit documentation references. Original cards remain below.
     if isinstance(value, dict) and '/params/' in path and '/' not in path.rsplit('/params/', 1)[1] and catalog and fn:
         cards = catalog.get('capabilities', [])
@@ -659,9 +759,10 @@ def readable_value(key, value, path, depth=0, catalog=None, catalog_path="", fn=
 def reading_layer(value):
     request = value.get("request", value) if isinstance(value, dict) else value
     base = "/request" if isinstance(value, dict) and "request" in value else ""
-    result = ['<section id="reading"><h2>Полный читаемый аудит</h2><p>Это весь сохранённый запрос, а не сокращённая выжимка. '
+    result = ['<section id="reading" data-origin="request"><h2>Полный читаемый аудит</h2><p>Это весь сохранённый запрос, а не сокращённая выжимка. '
               'Сообщения идут в исходном порядке; каждая инструкция, факт, параметр и ограничение раскрыты ниже. '
               'Русские подписи объясняют структуру. Исходные формулировки сохранены на языке оригинала; пояснения не подменяют их.</p>']
+    result.append('<div class="reader-note" data-origin="reader"><b>Пояснения читателя — не отправляются модели</b><p>Ниже отдельно показано содержимое сохранённого запроса. Description, meaning и handRelativeMovement внутри него — исходная документация для модели, а не добавленный комментарий читателя. Каталог описывает разрешённые варианты; форму будущего ответа задаёт контракт ответа. Настройки API и контракт ответа отмечены отдельно от текста сообщений. _infini_reasoning_intent и _infini_prompt_cache — локальные управляющие метаданные builder: provider wire удаляет эти служебные ключи, хотя использует их при подготовке запроса (llm_provider_wire.py). Это не доказательство вызова API: офлайн-сборка и сохранённая трасса не подтверждают отправку.</p><p>Цветные пояснения, русские заголовки и значки происхождения добавляет этот отчёт. Они не входят в исходный запрос. Файлы-источники, их размеры и SHA находятся отдельно в разделе «Происхождение захвата».</p></div>')
     if not isinstance(request, (dict, list)) or not request:
         return ''.join(result) + readable_value('request', request, base) + '</section>'
     # Brief factual entry point; complete parent packets remain in their chapters.
@@ -713,6 +814,8 @@ def reading_layer(value):
     nav = re.sub(r'(<a\b[^>]*>.*?</a>)', r'<div>\1</div>', nav, flags=re.S)
     result.append(nav + '</div>')
     field_notes = parent_field_notes(request, base)
+    for note_path, notes in catalog_field_notes(request, base).items():
+        field_notes.setdefault(note_path, []).extend(notes)
     result.extend(readable_value(key, child, path, field_notes=field_notes) for key, child, path in chapters)
     result.append('</section>')
     return ''.join(result)
@@ -738,8 +841,8 @@ def build_report(raw: bytes, source_name: str):
     for key, child in iter_children(value):
         path = pointer("", key)
         sections.append(render_node(str(key), child, path, 0, markdown, leaves, refs))
-        nav.append(f'<a href="#{reading_id(path)}">{html.escape(label(key, child))}</a>' if key != 'evidence' and not (key == 'request') else '')
-        sizes.append((label(key, child), serialized_chars(child)))
+        nav.append(f'<a href="#{reading_id(path)}">{html.escape(label(key, child, path))}</a>' if key != 'evidence' and not (key == 'request') else '')
+        sizes.append((label(key, child, path), serialized_chars(child)))
     # Message content is a more useful non-overlapping reading budget than an
     # enclosing wrapper. All other input fields still appear below, unchanged.
     request = value.get("request", value) if isinstance(value, dict) else value
@@ -763,16 +866,21 @@ def build_report(raw: bytes, source_name: str):
                         f'<li>{html.escape(title)}: 0</li>' for title, size in budget)
     metadata = {"source": source_name, "sourceSha256": sha, "sourceBytes": len(raw),
                 "sourceCharacters": len(raw.decode("utf-8-sig")), "visibleLeafCount": len(leaves),
+                "requestLeafCount": sum(not (p == '/evidence' or p.startswith('/evidence/')) and
+                                        (not isinstance(value, dict) or 'request' not in value or p.startswith('/request/')) for p, _ in leaves),
+                "evidenceLeafCount": sum(p.startswith('/evidence/') for p, _ in leaves),
+                "leafCountsByOrigin": {kind: sum(source_origin(p)[0] == kind for p, _ in leaves)
+                                       for kind in ('prompt', 'provider', 'local', 'request', 'evidence')},
                 "sizeBasis": "literal message content, or compact JSON top-level values; not token counts"}
     evidence = value.get("evidence") if isinstance(value, dict) else None
     if isinstance(evidence, dict) and isinstance(evidence.get("revision"), str):
         metadata["sourceRevisionDeclaredInEvidence"] = evidence["revision"]
     template = Path(__file__).with_name("prompt_audit_template.html").read_text(encoding="utf-8")
-    reading = reading_layer(value)
+    reading = reading_layer(value) + evidence_layer(value)
     readable_prose = reading_text(reading)
     substitutions = {
         "TITLE": html.escape(source_name), "REVISION": html.escape(metadata.get("sourceRevisionDeclaredInEvidence", "не указана в исходнике")), "METADATA": html.escape(json.dumps(metadata, ensure_ascii=False, indent=2)),
-        "NAV": "".join(nav), "READING": reading, "CONTENT": "".join(sections), "SIZES": size_html,
+        "NAV": "".join(nav) + ('<a href="#capture-evidence">Происхождение захвата — не отправляется</a>' if isinstance(value, dict) and 'request' in value and 'evidence' in value else ''), "READING": reading, "CONTENT": "".join(sections), "SIZES": size_html,
         "RAW": base64.b64encode(raw).decode("ascii"),
         "PROSE": base64.b64encode(readable_prose.encode("utf-8")).decode("ascii"),
         "MARKDOWN": base64.b64encode(("\n".join(markdown) + "\n").encode("utf-8")).decode("ascii"),

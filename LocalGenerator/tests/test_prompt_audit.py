@@ -200,9 +200,9 @@ function leaf(text,parent){return {textContent:text,parentElement:parent,highlig
  classList:{toggle(_name,value){this.owner.highlight=value;}},scrollIntoView(){this.scrolled=true;}};}
 const a=leaf('Alpha /a',second), b=leaf('Beta alpha /b',first);a.classList.owner=a;b.classList.owner=b;
 const els={search:{value:''},status:{textContent:''},original:{textContent:'77u/eyJ4IjoxfQ0K'},readable:{textContent:'0KLQtdC60YHRgg=='}};
-for(const name of ['search-button','next','expand','collapse','raw-download','text-download','copy-reading','select-reading','prose-download','copy-close','copy-fallback'])els[name]={focus(){this.focused=true;}};
+for(const name of ['search-button','next','expand','collapse','raw-download','text-download','copy-reading','select-reading','prose-download','copy-close','copy-fallback','copy-download','copy-help','manual-export'])els[name]={focus(){this.focused=true;}};
 els['prose-text']={textContent:Buffer.from('1. Текст: 0 мс; false; пустая строка\n2. Ещё').toString('base64')};
-els['copy-value']={value:'',focus(){this.focused=true;},select(){this.selected=true;}};
+els['copy-value']={value:'',focus(){this.focused=true;},setSelectionRange(start,end,direction){this.selected=start===0&&end===this.value.length;this.direction=direction;}};
 const copyButton={dataset:{copy:els['prose-text'].textContent},focus(){this.focused=true;}};
 els.target=second;
 const events={};let blob;
@@ -237,8 +237,17 @@ context.navigator={clipboard:{writeText:async()=>{throw new Error('NotAllowedErr
 await copyButton.onclick();assert.equal(els['copy-value'].value,expected);assert(!els['copy-fallback'].hidden);
 els['copy-fallback'].onkeydown({key:'Escape'});assert(els['copy-fallback'].hidden&&copyButton.focused);
 let copied;context.navigator.clipboard.writeText=async text=>{copied=text;};
-await copyButton.onclick();assert.equal(copied,expected);assert.equal(els.status.textContent,'Текст скопирован');
+await copyButton.onclick();assert.equal(copied,expected);assert(els['copy-fallback'].hidden);assert(!els.status.textContent.includes('Текст скопирован'));
+els['select-reading'].onclick();assert(!els['copy-fallback'].hidden);assert.equal(els['copy-value'].value,expected);assert(els['copy-value'].selected);assert.equal(els['copy-value'].direction,'backward');
+els['copy-close'].onclick();assert(els['copy-fallback'].hidden&&els['select-reading'].focused);
 els['prose-download'].onclick();assert.equal(Buffer.from(blob).toString('utf8'),expected);
+const large='Полный русский текст. '.repeat(20000);els['prose-text'].textContent=Buffer.from(large).toString('base64');
+els['select-reading'].onclick();assert(!els['copy-fallback'].hidden);assert(els['copy-value'].hidden);assert.equal(els['copy-value'].value,'');assert(!els['copy-download'].hidden);assert(els['copy-download'].focused);
+els['copy-download'].onclick();assert.equal(Buffer.from(blob).toString('utf8'),large);
+els['copy-fallback'].onkeydown({key:'Escape'});assert(els['copy-fallback'].hidden&&els['select-reading'].focused);
+els['select-reading'].onclick();assert(!els['copy-fallback'].hidden);els['copy-close'].onclick();assert(els['copy-fallback'].hidden);
+// Reopening a small section restores full selection rather than stale large-copy state.
+context.navigator.clipboard.writeText=async()=>{throw new Error('NotAllowedError');};await copyButton.onclick();assert(!els['copy-value'].hidden);assert(els['copy-download'].hidden);assert.equal(els['copy-value'].value,expected);
 })().catch(e=>{console.error(e);process.exitCode=1;});
 '''
     program = harness + '\nvm.runInContext(' + json.dumps(script) + ',context);\n' + checks
@@ -436,3 +445,91 @@ def test_complete_reader_resolves_only_explicit_parameter_documentation():
 def test_export_table_of_contents_has_readable_separate_lines():
     text = audit.reading_text(audit.reading_layer({'model': 'test', 'messages': []}))
     assert 'Содержание полного аудита\n\nМодель в сохранённом запросе\n\n' in text
+
+
+def test_provenance_manifest_is_not_a_binding_input_or_model_message():
+    source = {'request': {'messages': [{'role': 'user', 'content': json.dumps({
+        'catalog': {'authoringSchema': 'test', 'capabilities': [], 'inputs': ['hold'],
+                    'bindingActions': [{'action': 'spawn_entity', 'inputs': ['hold']}]},
+        'unrelated': {'inputs': ['not controls']}})}],
+        'response_format': {'type': 'json_object'}, 'model': 'offline',
+        '_infini_reasoning_intent': {'effort': 'medium'}, '_infini_prompt_cache': {'key': 'local'}},
+        'evidence': {'inputs': [{'file': 'items_runtime_dump.jsonl', 'bytes': 99, 'sha256': 'abc'}]}}
+    raw = json.dumps(source).encode()
+    document, markdown, metadata = audit.build_report(raw, 'builder.json')
+    assert raw_from(document) == raw
+    evidence = audit.evidence_layer(source)
+    assert 'Файлы-источники офлайн-сборки' in visible(evidence)
+    assert 'Допустимые входы управления' not in visible(evidence)
+    assert 'items_runtime_dump.jsonl' not in visible(audit.reading_layer(source))
+    assert 'Файлы-источники офлайн-сборки · inputs [/evidence/inputs]' in markdown
+    assert audit.field_title('inputs', '/request/messages/0/content::/unrelated/inputs') == 'inputs'
+    assert audit.field_title('inputs', '/request/messages/0/content::/catalog/bindingActions/0/inputs') == 'Допустимые входы управления'
+    assert metadata['evidenceLeafCount'] == 3
+    assert metadata['leafCountsByOrigin'] == {'prompt': 6, 'provider': 2, 'local': 2, 'request': 0, 'evidence': 3}
+    assert sum(metadata['leafCountsByOrigin'].values()) == metadata['visibleLeafCount']
+    assert metadata['requestLeafCount'] + metadata['evidenceLeafCount'] == metadata['visibleLeafCount']
+
+
+def test_catalog_annotations_are_path_scoped_and_not_authored_missing_fields():
+    row = {'event': 'on_expire', 'producedBy': ['set_projectile_lifetime'],
+           'producedByBindingInputs': [], 'producerBindingContactDamage': None}
+    source = {'catalog': {'authoringSchema': 'test', 'capabilities': [], 'events': [row]},
+              'unrelated': {'events': [row]}}
+    notes = audit.catalog_field_notes(source, '')
+    assert '/catalog/events/0/producedByBindingInputs' in notes
+    assert not any(path.startswith('/unrelated') for path in notes)
+    markup = audit.reading_layer(source)
+    text = visible(markup)
+    assert 'это не пропущенный ответ Author' in text
+    assert 'null — это условие не задано' in text
+    assert 'EventKindSpec.prompt_card' in text
+    assert 'Пояснение читателя — не отправляется' in text
+    assert 'data-origin="reader"' in markup
+    # No projected metadata or annotation was inserted into the source.
+    document, _, _ = audit.build_report(json.dumps(source).encode(), 'catalog.json')
+    assert json.loads(raw_from(document)) == source
+    assert 'не отправляется' not in json.dumps(json.loads(raw_from(document)))
+
+
+def test_description_and_guide_text_share_message_origin_not_reader_annotation():
+    for path in ('/request/messages/1/content::/catalog/fieldGuide/handRelativeMovement',
+                 '/request/messages/1/content::/schemaDefinitions/Thing/description'):
+        assert audit.source_origin(path)[0] == 'prompt'
+        rendered = audit.readable_value(path.rsplit('/', 1)[1], 'Exact original documentation.', path)
+        assert 'data-origin="prompt"' in rendered
+        assert 'data-origin="reader"' not in rendered
+    assert audit.source_origin('/request/response_format/json_schema/schema/description')[0] == 'provider'
+    assert audit.source_origin('/request/_infini_prompt_cache/key')[0] == 'local'
+    assert audit.source_origin('/evidence/inputs/0/file')[0] == 'evidence'
+
+
+def test_origin_classification_uses_exact_transport_keys_not_prefixes():
+    assert audit.source_origin('/input')[0] == 'prompt'
+    assert audit.source_origin('/instructions')[0] == 'prompt'
+    assert audit.source_origin('/instructionsForReader')[0] == 'request'
+    assert audit.source_origin('/request/_infini_prompt_cache_extra')[0] == 'request'
+    assert audit.source_origin('/request/messages/0/content::/evidence/inputs/0')[0] == 'prompt'
+
+
+def test_catalog_limit_notes_count_definitions_and_rules_without_changing_source():
+    source = {'catalog': {'authoringSchema': 'test', 'capabilities': [],
+                          'limits': {'entities': 7, 'bindings': 5}},
+              'unrelated': {'limits': {'entities': 7, 'bindings': 5}}}
+    notes = audit.catalog_field_notes(source, '')
+    assert set(notes) == {'/catalog/limits/entities', '/catalog/limits/bindings'}
+    entity_note = notes['/catalog/limits/entities'][0]
+    binding_note = notes['/catalog/limits/bindings'][0]
+    assert 'именованных определений' in entity_note
+    assert 'а не одновременно созданных' in entity_note
+    assert 'вход управления → действие' in binding_note
+    assert 'а не дополнительных клавиш' in binding_note
+    for note in (entity_note, binding_note):
+        assert 'Пояснение читателя — не отправляется' in note
+        assert 'отклоняется' in note and 'не молча обрезается' in note
+        assert not re.search(r'\d', note)
+    raw = json.dumps(source, ensure_ascii=False).encode()
+    document, _, _ = audit.build_report(raw, 'limits.json')
+    assert raw_from(document) == raw
+    assert 'data-origin="reader"' in document
+    assert 'именованных определений' in visible(audit.reading_layer(source))
