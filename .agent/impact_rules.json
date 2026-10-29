@@ -182,6 +182,15 @@
       ]
     },
     {
+      "id": "offline-craft-audit",
+      "area": "tooling",
+      "patterns": ["tools/craft-audit/**", "toolbox/tests/test_craft_audit.py"],
+      "checks": ["project_hygiene", "schema_check"],
+      "tests": ["toolbox/tests/test_craft_audit.py"],
+      "entrypoints": ["tools/craft-audit/audit.py", "tools/craft-audit/README_RU.md"],
+      "context": []
+    },
+    {
       "id": "development-workflow",
       "area": "tooling",
       "patterns": [
