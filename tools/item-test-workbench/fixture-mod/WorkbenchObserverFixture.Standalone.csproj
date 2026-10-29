@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework><LangVersion>latest</LangVersion>
+    <AssemblyName>WorkbenchObserverFixture</AssemblyName>
+    <Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- An unrelated mod assembly; no linked IFC, host or native test code. -->
+    <Compile Include="../fixtures/WorkbenchObserverFixture/*.cs" />
+    <Content Include="../fixtures/WorkbenchObserverFixture/build.txt" Link="build.txt" CopyToOutputDirectory="PreserveNewest" />
+    <Reference Include="$(InfiniTmlReferenceDir)/*.dll" />
+  </ItemGroup>
+  <Target Name="ValidateReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(InfiniTmlReferenceDir)/tModLoader.dll')" Text="Set InfiniTmlReferenceDir to an existing tModLoader reference directory." />
+  </Target>
+</Project>

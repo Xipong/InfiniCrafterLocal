@@ -38,25 +38,25 @@ Author schema ограничивает значения всех примити�
 | defensePoints | Add native item defense | defense_points | 0 | -50…200<br>runtime clamp: -100…500 | accessory.defense | ModItem.UpdateAccessory |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxLife | ModItem.UpdateAccessory |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxMana | ModItem.UpdateAccessory |
-| lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100<br>runtime clamp: -120…200 | accessory.lifeRegen = Author ×2 | ModItem.UpdateAccessory |
-| manaRegenBonusPoints | Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | engine units: manaRegenBonus points | 0 | -100…200<br>runtime clamp: -120…200 | accessory.manaRegen | ModItem.UpdateAccessory |
-| moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300<br>runtime clamp: -0.9…3 | accessory.movementSpeed = Author /100 | ModItem.UpdateAccessory |
+| lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration | HP/s | 0 | -50…100<br>runtime clamp: -120…200 | accessory.lifeRegen = Author ×2 | ModItem.UpdateAccessory |
+| manaRegenBonusPoints | Add Player.manaRegenBonus points. | engine units: manaRegenBonus points | 0 | -100…200<br>runtime clamp: -120…200 | accessory.manaRegen | ModItem.UpdateAccessory |
+| moveSpeedBonusPercent | Add a movement-speed percentage bonus | additive_percent | 0 | -90…300<br>runtime clamp: -0.9…3 | accessory.movementSpeed = Author /100 | ModItem.UpdateAccessory |
 | maxRunSpeedBonusBlocksPerSecond | Author units: blocks/s. Native consumer: Add to Player.maxRunSpeed, subject to other Terraria movement limits | blocks/s | 0.0 | -18.75…75.0 | accessory.maxRunSpeed = Author ×16 /60 | ModItem.UpdateAccessory |
 | jumpSpeedBonusBlocksPerSecond | Author units: blocks/s. Native consumer: Add to Player.jumpSpeedBoost (positive raises jump speed) | blocks/s | 0.0 | -18.75…75.0 | accessory.jumpSpeed = Author ×16 /60 | ModItem.UpdateAccessory |
 | genericCritChancePercentagePoints | Add percentage points to generic critical chance | percentage_points | 0 | -100…100<br>runtime clamp: -100…100 | accessory.genericCrit | ModItem.UpdateAccessory |
-| genericAttackSpeedBonusPercent | Add percent/100 to generic attack speed | additive_percent | 0 | -90…300 | accessory.attackSpeed = Author /100 | ModItem.UpdateAccessory |
-| genericKnockbackBonusPercent | Add percent/100 to generic StatModifier knockback; not flat points | additive_percent | 0 | -90…300 | accessory.knockback = Author /100 | ModItem.UpdateAccessory |
+| genericAttackSpeedBonusPercent | Add a generic attack-speed percentage bonus | additive_percent | 0 | -90…300 | accessory.attackSpeed = Author /100 | ModItem.UpdateAccessory |
+| genericKnockbackBonusPercent | Add a generic knockback percentage bonus; not flat knockback points | additive_percent | 0 | -90…300 | accessory.knockback = Author /100 | ModItem.UpdateAccessory |
 | minionSlotsBonus | Add minion slots | slots | 0 | 0…20<br>runtime clamp: 0…20 | accessory.minionSlots | ModItem.UpdateAccessory |
 | sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20<br>runtime clamp: 0…20 | accessory.sentrySlots | ModItem.UpdateAccessory |
-| manaCostReductionPercentagePoints | Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | accessory.manaCostReduction = Author /100 | ModItem.UpdateAccessory |
+| manaCostReductionPercentagePoints | Reduce the mana-cost percentage by this many percentage points, with a 10% cost-factor floor per application | percentage_points | 0 | 0…90 | accessory.manaCostReduction = Author /100 | ModItem.UpdateAccessory |
 | ammoSaveChancePercent | Equipped owner's ammo saving chance for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | accessory.ammoSaveChance = Author /100 | ModItem.UpdateAccessory |
-| aggroPoints | Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | engine units: aggro points | 0 | -1000…1000 | accessory.aggro | ModItem.UpdateAccessory |
-| damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75<br>runtime clamp: 0…0.75 | accessory.endurance = Author /100 | ModItem.UpdateAccessory |
+| aggroPoints | Add Player.aggro points; negative values reduce targeting. | engine units: aggro points | 0 | -1000…1000 | accessory.aggro | ModItem.UpdateAccessory |
+| damageReductionPercentagePoints | Add percentage points of damage reduction | percentage_points | 0 | 0…75<br>runtime clamp: 0…0.75 | accessory.endurance = Author /100 | ModItem.UpdateAccessory |
 | genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | accessory.armorPenetration | ModItem.UpdateAccessory |
-| whipRangeBonusPercent | Add percent/100 to Player.whipRangeMultiplier | additive_percent | 0 | -90…300 | accessory.whipRange = Author /100 | ModItem.UpdateAccessory |
-| taggedSummonSourceDamageBonusPercent | Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip | source_damage_percent | 0 | 0…300 | accessory.summonTagDamage = Author /100 | ModItem.UpdateAccessory |
+| whipRangeBonusPercent | Add a whip-range percentage bonus | additive_percent | 0 | -90…300 | accessory.whipRange = Author /100 | ModItem.UpdateAccessory |
+| taggedSummonSourceDamageBonusPercent | Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip | source_damage_percent | 0 | 0…300 | accessory.summonTagDamage = Author /100 | ModItem.UpdateAccessory |
 | lightStrength | Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive | engine units: RGB coefficient | 0 | 0…1.5<br>runtime clamp: 0…1.5 | accessory.lightStrength | ModItem.UpdateAccessory |
-| lightColor | Explicit equipped light color | runtime_color |  | white/red/orange/yellow/green/cyan/blue/purple/pink/gray/black | accessory.lightColorName | ModItem.UpdateAccessory |
+| lightColor | Equipped light color. | runtime_color |  | white/red/orange/yellow/green/cyan/blue/purple/pink/gray/black | accessory.lightColorName | ModItem.UpdateAccessory |
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | accessory.waterWalk | ModItem.UpdateAccessory |
@@ -78,25 +78,25 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 | defensePoints | Add native item defense | defense_points | 0 | 0…200<br>runtime clamp: 0…500 | armor.defense | ModItem.UpdateEquip |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxLife | ModItem.UpdateEquip |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxMana | ModItem.UpdateEquip |
-| lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing | HP/s | 0 | -50…100 | armor.lifeRegen = Author ×2 | ModItem.UpdateEquip |
-| manaRegenBonusPoints | Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s | engine units: manaRegenBonus points | 0 | -100…200 | armor.manaRegen | ModItem.UpdateEquip |
-| moveSpeedBonusPercent | Add percent/100 to Player.moveSpeed | additive_percent | 0 | -90…300<br>runtime clamp: -0.9…3 | armor.movementSpeed = Author /100 | ModItem.UpdateEquip |
+| lifeRegenHpPerSecond | Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration | HP/s | 0 | -50…100 | armor.lifeRegen = Author ×2 | ModItem.UpdateEquip |
+| manaRegenBonusPoints | Add Player.manaRegenBonus points. | engine units: manaRegenBonus points | 0 | -100…200 | armor.manaRegen | ModItem.UpdateEquip |
+| moveSpeedBonusPercent | Add a movement-speed percentage bonus | additive_percent | 0 | -90…300<br>runtime clamp: -0.9…3 | armor.movementSpeed = Author /100 | ModItem.UpdateEquip |
 | maxRunSpeedBonusBlocksPerSecond | Author units: blocks/s. Native consumer: Add to Player.maxRunSpeed, subject to other Terraria movement limits | blocks/s | 0.0 | -18.75…75.0 | armor.maxRunSpeed = Author ×16 /60 | ModItem.UpdateEquip |
 | jumpSpeedBonusBlocksPerSecond | Author units: blocks/s. Native consumer: Add to Player.jumpSpeedBoost (positive raises jump speed) | blocks/s | 0.0 | -18.75…75.0 | armor.jumpSpeed = Author ×16 /60 | ModItem.UpdateEquip |
 | genericCritChancePercentagePoints | Add percentage points to generic critical chance | percentage_points | 0 | -100…100<br>runtime clamp: -100…100 | armor.genericCrit | ModItem.UpdateEquip |
-| genericAttackSpeedBonusPercent | Add percent/100 to generic attack speed | additive_percent | 0 | -90…300 | armor.attackSpeed = Author /100 | ModItem.UpdateEquip |
-| genericKnockbackBonusPercent | Add percent/100 to generic StatModifier knockback; not flat points | additive_percent | 0 | -90…300 | armor.knockback = Author /100 | ModItem.UpdateEquip |
+| genericAttackSpeedBonusPercent | Add a generic attack-speed percentage bonus | additive_percent | 0 | -90…300 | armor.attackSpeed = Author /100 | ModItem.UpdateEquip |
+| genericKnockbackBonusPercent | Add a generic knockback percentage bonus; not flat knockback points | additive_percent | 0 | -90…300 | armor.knockback = Author /100 | ModItem.UpdateEquip |
 | minionSlotsBonus | Add minion slots | slots | 0 | 0…20 | armor.minionSlots | ModItem.UpdateEquip |
 | sentrySlotsBonus | Add sentry slots | slots | 0 | 0…20 | armor.sentrySlots | ModItem.UpdateEquip |
-| manaCostReductionPercentagePoints | Subtract percent/100 from Player.manaCost factor, floored at 0.1 | percentage_points | 0 | 0…90 | armor.manaCostReduction = Author /100 | ModItem.UpdateEquip |
+| manaCostReductionPercentagePoints | Reduce the mana-cost percentage by this many percentage points, with a 10% cost-factor floor per application | percentage_points | 0 | 0…90 | armor.manaCostReduction = Author /100 | ModItem.UpdateEquip |
 | ammoSaveChancePercent | Equipped owner's ammo saving chance for any weapon; equipped item chances combine as 1−product(1−p) | probability_percent | 0 | 0…99 | armor.ammoSaveChance = Author /100 | ModItem.UpdateEquip |
-| aggroPoints | Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius | engine units: aggro points | 0 | -1000…1000 | armor.aggro | ModItem.UpdateEquip |
-| damageReductionPercentagePoints | Add percent/100 to Player.endurance damage reduction | percentage_points | 0 | 0…75 | armor.endurance = Author /100 | ModItem.UpdateEquip |
+| aggroPoints | Add Player.aggro points; negative values reduce targeting. | engine units: aggro points | 0 | -1000…1000 | armor.aggro | ModItem.UpdateEquip |
+| damageReductionPercentagePoints | Add percentage points of damage reduction | percentage_points | 0 | 0…75 | armor.endurance = Author /100 | ModItem.UpdateEquip |
 | genericArmorPenetrationPoints | Add flat armor penetration points to DamageClass.Generic; not damage percent | armor_points | 0 | 0…100 | armor.armorPenetration | ModItem.UpdateEquip |
-| whipRangeBonusPercent | Add percent/100 to Player.whipRangeMultiplier | additive_percent | 0 | -90…300 | armor.whipRange = Author /100 | ModItem.UpdateEquip |
-| taggedSummonSourceDamageBonusPercent | Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip | source_damage_percent | 0 | 0…300 | armor.summonTagDamage = Author /100 | ModItem.UpdateEquip |
+| whipRangeBonusPercent | Add a whip-range percentage bonus | additive_percent | 0 | -90…300 | armor.whipRange = Author /100 | ModItem.UpdateEquip |
+| taggedSummonSourceDamageBonusPercent | Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip | source_damage_percent | 0 | 0…300 | armor.summonTagDamage = Author /100 | ModItem.UpdateEquip |
 | lightStrength | Client-only RGB light coefficient multiplying lightColor; not tile radius; requires lightColor when positive | engine units: RGB coefficient | 0 | 0…1.5 | armor.lightStrength | ModItem.UpdateEquip |
-| lightColor | Explicit equipped light color | runtime_color |  | white/red/orange/yellow/green/cyan/blue/purple/pink/gray/black | armor.lightColorName | ModItem.UpdateEquip |
+| lightColor | Equipped light color. | runtime_color |  | white/red/orange/yellow/green/cyan/blue/purple/pink/gray/black | armor.lightColorName | ModItem.UpdateEquip |
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | armor.fallDamageImmune | ModItem.UpdateEquip |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | armor.lavaImmune | ModItem.UpdateEquip |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | armor.waterWalk | ModItem.UpdateEquip |

@@ -60,7 +60,7 @@ public sealed partial class GeneratorClient
         var nameTokens = NameTokens(craftItem).ToArray();
         string sourceMod = SourceModName(craftItem);
         string internalName = InternalName(craftItem);
-        var tooltip = CaptureLiteralParentTooltip(craftItem, existing, sourceMod + "/" + internalName);
+        var tooltip = CaptureLiteralParentTooltip(item, existing, sourceMod + "/" + internalName, player);
         ParentNativeFacts native = CaptureParentNativeFacts(craftItem, existing);
         // The three historical envelopes share one observed native snapshot. Only
         // these explicit shape differences belong here; no native field is read
@@ -111,32 +111,90 @@ public sealed partial class GeneratorClient
         return snapshot;
     }
 
-    private static (string[] Lines, object? Source) CaptureLiteralParentTooltip(Item item, GeneratedItemData? existing, string fullName)
+    internal static (string[] Lines, object? Source) CaptureLiteralParentTooltip(
+        Item item, GeneratedItemData? existing, string fullName, Player? player)
     {
-        // Request-only source text, never semantic parsing or a native-AI certificate.
-        // A generated proxy's static tooltip describes the host, not its accepted definition.
+        // Request-only source text, never semantic parsing or an AI certificate.
+        // Generated proxy text describes the host rather than its accepted definition.
         if (existing is not null || item.IsAir)
             return (Array.Empty<string>(), null);
+
+        string language = "unknown";
+        string stage = "literal";
+        string[]? literal = null;
         try
         {
+            language = Language.ActiveCulture?.Name ?? "unknown";
             var tooltip = Lang.GetTooltip(item.type);
-            if (tooltip is null || tooltip.Lines == 0)
-                return (Array.Empty<string>(), null);
-            // Preserve literal lines and whitespace. Refuse the optional whole source
-            // observation on a bound, never publish a clipped sentence as verbatim.
-            if (tooltip.Lines > 64)
-                return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName,
-                    language = Language.ActiveCulture.Name, status = "refused_line_bound" });
-            var lines = Enumerable.Range(0, tooltip.Lines).Select(tooltip.GetLine).ToArray();
-            if (lines.Sum(line => line.Length) > 16_384)
-                return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName,
-                    language = Language.ActiveCulture.Name, status = "refused_character_bound" });
-            return (lines, new { source = "Lang.GetTooltip", fullName,
-                language = Language.ActiveCulture.Name, status = "observed_literal" });
+            int literalCount = tooltip?.Lines ?? 0;
+            if (literalCount > 64)
+                return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName, language, status = "refused_line_bound" });
+            literal = tooltip is null ? Array.Empty<string>() :
+                Enumerable.Range(0, literalCount).Select(tooltip.GetLine).ToArray();
+            if (literal.Sum(line => (long)(line?.Length ?? 0)) > 16_384)
+                return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName, language, status = "refused_character_bound" });
+
+            // tML documents ModifyTooltips as local-client-only. The server's
+            // requester and the local player are not interchangeable: hooks may
+            // read Main.LocalPlayer or graphics. Never switch global player state
+            // or present the server's values as the requesting client's tooltip.
+            if (Main.dedServ || Main.netMode == NetmodeID.Server || player is null
+                || Main.myPlayer < 0 || Main.myPlayer >= Main.player.Length
+                || !ReferenceEquals(Main.player[Main.myPlayer], player) || !player.active)
+                return (literal, new { source = "Lang.GetTooltip", fullName, language,
+                    status = "observed_literal", hookContext = "unavailable" });
+
+            // Build the same native line names/stats seen by tML hooks, then use
+            // its actual dispatcher so both ModItem and all applicable GlobalItems
+            // run in the normal order. CloneDefaults resets native prefixed fields
+            // while preserving the cloned ModItem and GlobalItem instance state.
+            // Hooks receive the standard tML clone, not the consumed item.
+            // Custom clone implementations and shared/global state are not isolated.
+            stage = "item_clone";
+            Item tooltipItem = item.Clone();
+            tooltipItem.CloneDefaults(item.type);
+            tooltipItem.stack = item.stack;
+            stage = "native_line_build";
+            int capacity = 128 + literalCount;
+            var names = new string[capacity];
+            var text = new string[capacity];
+            var modifiers = new bool[capacity];
+            var badModifiers = new bool[capacity];
+            int count = 1, yoyoLogo = -1, researchLine = -1;
+            Main.MouseText_DrawItemTooltip_GetLinesInfo(tooltipItem, ref yoyoLogo, ref researchLine,
+                tooltipItem.knockBack, ref count, text, modifiers, badModifiers, names, out int prefixLine);
+            // Preserve the original native text to retain changed stat/name lines
+            // while avoiding repeats of unchanged stats already present in facts.
+            var original = new Dictionary<string, string>(StringComparer.Ordinal);
+            for (int i = 0; i < count; i++)
+                if (names[i] is { } name && !original.ContainsKey(name)) original.Add(name, text[i]);
+            stage = "hook_dispatch";
+            var lines = ItemLoader.ModifyTooltips(tooltipItem, ref count, names, ref text,
+                ref modifiers, ref badModifiers, ref yoyoLogo, out _, prefixLine);
+            var selected = lines.Where(line => line.Mod != "Terraria"
+                || line.Name.StartsWith("Tooltip", StringComparison.Ordinal)
+                || !original.TryGetValue(line.Name, out string? value)
+                || !string.Equals(value, line.Text, StringComparison.Ordinal))
+                .Select(line => line.Text).ToArray();
+            if (selected.Length > 64)
+                return (Array.Empty<string>(), new { source = "ItemLoader.ModifyTooltips", fullName, language, status = "refused_line_bound" });
+            if (selected.Sum(line => (long)(line?.Length ?? 0)) > 16_384)
+                return (Array.Empty<string>(), new { source = "ItemLoader.ModifyTooltips", fullName, language, status = "refused_character_bound" });
+            if (selected.Any(line => line is null))
+                return (Array.Empty<string>(), new { source = "ItemLoader.ModifyTooltips", fullName, language, status = "refused_invalid_line" });
+            return (selected, new { source = "ItemLoader.ModifyTooltips", fullName, language,
+                status = "observed_local_hooks", scope = "native_description_and_hook_changes_on_base_defaults_clone_with_mod_instance_state",
+                modifiedNativeLines = "player_adjusted_display_text_not_base_item_stats" });
         }
-        catch
+        catch (Exception ex)
         {
-            return (Array.Empty<string>(), null);
+            // Keep only the independent literal snapshot: a hook may have changed
+            // its own list before throwing, and that partial output is not trusted.
+            if (literal is not null && stage != "literal")
+                return (literal, new { source = "Lang.GetTooltip", fullName, language,
+                    status = "observed_literal_hook_failed", stage, errorType = ex.GetType().Name });
+            return (Array.Empty<string>(), new { source = "Lang.GetTooltip", fullName, language,
+                status = "unavailable_or_hook_failed", stage, errorType = ex.GetType().Name });
         }
     }
 
@@ -304,12 +362,15 @@ public sealed partial class GeneratorClient
             // Base Item.crit only: CraftIdentityItem already removed the reforge.
             // Player/equipment-effective crit remains a separate observation.
             ["crit"] = item.crit,
+            ["armorPenetration"] = item.ArmorPenetration,
+            ["itemScale"] = item.scale,
             ["damageClass"] = DamageClassName(item),
             ["shootProjectileFullName"] = ProjectileFullName(item.shoot),
             ["useStyle"] = item.useStyle,
             ["useStyleName"] = TerrariaRuntimeVocabulary.CanonicalItemUseStyleToken(item.useStyle),
             ["useTime"] = item.useTime,
             ["useAnimation"] = item.useAnimation,
+            ["useLimitPerAnimation"] = item.useLimitPerAnimation,
             ["reuseDelay"] = item.reuseDelay,
             ["channel"] = item.channel,
             ["noMelee"] = item.noMelee,
@@ -358,7 +419,7 @@ public sealed partial class GeneratorClient
         {
             // Item buff fields are on-use PLAYER requests, never NPC-hit facts.
             // Keep observed duration distinct from source-certified update effects.
-            JsonObject buffReference = CaptureNativeBuffEffectReference(item.buffType, "player", item.ModItem is null);
+            JsonObject buffReference = CaptureNativeBuffEffectReference(item.buffType, "player");
             buffReference["applicationSource"] = "Item.buffType_and_buffTime_on_use_request";
             buffReference["requestedDurationTicks"] = item.buffTime;
             buffReference["applicationScope"] = "Native item field request only; item-use admission, refresh rules and loaded hooks were not executed.";
@@ -372,6 +433,28 @@ public sealed partial class GeneratorClient
             facts["nativeEquipmentReference"] = equipmentReference;
         if (existing is null && CaptureNativeShootReference(item) is JsonObject shootReference)
             facts["nativeShootReference"] = shootReference;
+        if (existing is null)
+        {
+            JsonObject graph = CaptureParentSourceGraph(item, facts);
+            string Coverage(string key, bool applicable, bool certified, bool? catalogRecord = null) => !applicable ? "mod_host; see_source_graph"
+                : !certified ? "native_binary_or_method_certificate_unavailable"
+                : (catalogRecord ?? facts[key] is not null) ? "partial_certified_source_record"
+                : "no_supported_catalog_record; absence_not_proved";
+            bool contactCertificate = ContactHitStatusCertificate.Value is string contactKey
+                && NativeHitStatusCatalog.Sources.TryGetValue(contactKey, out _);
+            bool contactRecord = ContactHitStatusCertificate.Value is string recordKey
+                && NativeHitStatusCatalog.Sources.TryGetValue(recordKey, out var contactRows) && contactRows.ContainsKey(item.type);
+            graph["nativeCatalogCoverage"] = new JsonObject
+            {
+                ["shoot"] = Coverage("nativeShootReference", item.ModItem is null, ShootFactCertificate.Value is not null
+                    && NativeAttackFactsCatalog.Sources.ContainsKey("Player.ItemCheck_Shoot:" + ShootFactCertificate.Value)),
+                ["contactStatus"] = Coverage("nativeContactHitStatusReference", item.ModItem is null, contactCertificate, contactRecord),
+                ["equipment"] = Coverage("nativeEquipmentReference", item.ModItem is null, NativeSourceModuleVerified.Value
+                    && (EquipmentFactRows.Value is not null || ArmorSetFactRows.Value is not null)),
+                ["environment"] = Coverage("nativeEnvironmentReference", item.ModItem is null, NativeSourceModuleVerified.Value),
+            };
+            facts["parentSourceGraph"] = graph;
+        }
         if (NativeTileStateFacts.Capture(facts["createTile"]?.GetValue<int>(), facts["placeStyle"]?.GetValue<int>()) is JsonObject tileState)
             facts["nativeTileState"] = tileState;
         return new(facts, JsonSerializer.SerializeToNode(DirectProjectileRawFromItem(item), WireJsonOptions));

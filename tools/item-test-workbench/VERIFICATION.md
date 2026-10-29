@@ -42,8 +42,9 @@ failures, and matrix continuation. Synthetic boundary tests are labelled as such
 they do not stand in for running the native smoke matrix.
 
 The shared manifest includes `item_workbench_python` in the Python CI group and
-`item_workbench_build` in the build group. The latter compiles this linked-source
-project; it does not run Linux graphics on the Windows build worker. Missing
+`item_workbench_build` in the build group. The latter compiles the host and its
+separate production-mod project, including the host's embedded vanilla PNG index;
+it does not run Linux graphics on the Windows build worker. Missing
 prerequisites are reported as `notRun`, not a passing native build.
 
 After the native prerequisites in [README.md](README.md) are configured, run the

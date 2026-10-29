@@ -6,6 +6,22 @@ import workbench as w
 from native_review import native_frames
 
 
+def gameplay_snapshots_equal(first, second):
+    """Compare every recorded field except camera-culled native dust counts."""
+    if not isinstance(first, list) or not isinstance(second, list) or not first or len(first) != len(second):
+        return False
+    for left, right in zip(first, second):
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            return False
+        if 'nativeActiveDust' not in left or 'nativeActiveDust' not in right:
+            return False
+        # Only the snapshot's top-level dust telemetry is camera-dependent.
+        # Never mutate raw traces or ignore similarly named gameplay fields.
+        if {k: v for k, v in left.items() if k != 'nativeActiveDust'} != {k: v for k, v in right.items() if k != 'nativeActiveDust'}:
+            return False
+    return True
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--out',type=Path,required=True);p.add_argument('--no-build',action='store_true');args=p.parse_args();out=args.out.resolve()
     if out.exists() and any(out.iterdir()):raise SystemExit('Use a fresh evidence directory')
@@ -48,7 +64,7 @@ def main():
     check('capturefalse-has-no-fabricated-frames',nodraw.get('nativeRender',{}).get('capture') is False and nodraw.get('nativeRender',{}).get('frames')==[])
     check('camera-does-not-change-gameplay-or-particles',main.get('snapshots')==traces['native-camera-1x'].get('snapshots') and render.get('snapshots')==traces['native-camera-1x'].get('nativeRender',{}).get('snapshots'))
     camera_frames=traces['off-camera-telemetry'].get('nativeRender',{}).get('frames',[])
-    check('off-camera-keeps-native-gameplay',main.get('snapshots')==traces['off-camera-telemetry'].get('snapshots') and bool(main.get('snapshots')))
+    check('off-camera-keeps-native-gameplay',gameplay_snapshots_equal(main.get('snapshots'),traces['off-camera-telemetry'].get('snapshots')))
     check('off-camera-records-bounds-not-visible-sprite-claims',bool(camera_frames) and all(f.get('scene',{}).get('cameraX')==1400 and f.get('scene',{}).get('player',{}).get('hitboxIntersectsViewport') is False for f in camera_frames) and any(f.get('scene',{}).get('projectiles') for f in camera_frames))
     check('captured-camera-has-native-scene-telemetry',bool(render.get('frames')) and all(f.get('scene',{}).get('player',{}).get('centerLightRgb') is not None and 'not sprite bounds' in f.get('scene',{}).get('scope','') for f in render['frames']))
     hits=[s['tick'] for s in main.get('snapshots',[]) for e in s.get('events',[]) if e['kind']=='hit']

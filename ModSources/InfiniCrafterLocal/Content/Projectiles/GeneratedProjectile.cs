@@ -139,6 +139,9 @@ public sealed partial class GeneratedProjectile : ModProjectile
         int syncedActivationDelay = _activationDelayTicks;
         _data = data;
         _entity = entity;
+        if (preserveSyncedState && _preserveSyncedStateOnHydrate
+            && HasStatefulVisualScale != _receivedVisualScale.HasValue)
+            throw new System.IO.InvalidDataException("visual scale snapshot does not match this entity's exact scale owner");
         _runtimePayloadRejected = false;
         _generatedItemId = data.Id;
         _entityId = entity.Id;
@@ -224,9 +227,10 @@ public sealed partial class GeneratedProjectile : ModProjectile
             bool waitingForActivation = _activationDelayTicks > 0 || entity.Spawn.OverTarget.DelayTicks > 0 && _age == 0;
             Projectile.friendly = !waitingForActivation && entity.Damage.Enabled && Projectile.damage > 0;
             Projectile.alpha = waitingForActivation ? 220 : HasComposableMotion ? syncedAlpha : 0;
-            if (entity.VisualScaleRate is not null) Projectile.scale = syncedScale;
+            if (HasStatefulVisualScale) Projectile.scale = _receivedVisualScale ?? syncedScale;
         }
         _preserveSyncedStateOnHydrate = false;
+        _receivedVisualScale = null;
         // Only fully configured native results convert a reservation to live
         // occupancy. A configuration exception leaves it available for refund.
         if (!preserveSyncedState && localAuthority && ownsSpawnReservation && activationBudget is not null)

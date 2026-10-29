@@ -13,7 +13,7 @@ using Terraria.ModLoader;
 using Terraria.ModLoader.IO;
 internal static partial class EngineRuntimeChecks
 {
- private static void WithNativeChestRegisteredItem(Action<int> check)
+ private static void WithNativeChestRegisteredItem(Action<int> check, ModItem? fixture = null)
  {
   var saved=new Dictionary<FieldInfo,object?>();
   void Capture(Type type,bool recursive=false){if(type.ContainsGenericParameters)return;foreach(var f in type.GetFields(PersistenceStatic).Where(f=>!f.IsInitOnly&&!f.IsLiteral))saved[f]=f.GetValue(null);if(recursive)foreach(var n in type.GetNestedTypes(BindingFlags.Public|BindingFlags.NonPublic))Capture(n,true);}
@@ -24,14 +24,14 @@ internal static partial class EngineRuntimeChecks
   var lookup=typeof(ModTypeLookup<ModItem>);var maps=lookup.GetFields(PersistenceStatic).Where(f=>f.GetValue(null) is IDictionary).Select(f=>(Map:(IDictionary)f.GetValue(null)!,Rows:((IDictionary)f.GetValue(null)!).Cast<DictionaryEntry>().ToArray())).ToArray();
   var factories=(IList)typeof(SetFactory).GetField("SetFactories",PersistenceStatic)!.GetValue(null)!;object[] factoryRows=factories.Cast<object>().ToArray();
   try{
-   var template=new GeneratedItem();var shell=new Item();
+   var template=fixture ?? new GeneratedItem();var shell=new Item();
    typeof(ModType<Item>).GetProperty("Entity",PersistenceInstance)!.SetValue(template,shell);
    var mod=new global::InfiniCrafterLocal.InfiniCrafterLocalMod();
    typeof(Mod).GetProperty("File",PersistenceInstance)!.SetValue(mod,Activator.CreateInstance(typeof(Terraria.ModLoader.Core.TmodFile),PersistenceInstance,null,new object[]{"", "InfiniCrafterLocal",new Version(1,0)},null));
    typeof(ModType).GetProperty("Mod")!.SetValue(template,mod);
    typeof(ModType<Item,ModItem>).GetField("_isCloneable",PersistenceInstance)!.SetValue(template,true);
    int type=(int)typeof(ItemLoader).GetMethod("Register",PersistenceStatic)!.Invoke(null,new object[]{template})!;shell.type=type;
-   typeof(Item).GetProperty("ModItem")!.SetValue(shell,template);singleton.SetValue(null,template);
+   typeof(Item).GetProperty("ModItem")!.SetValue(shell,template);if(template is GeneratedItem)singleton.SetValue(null,template);
    typeof(ModTypeLookup<ModItem>).GetMethod("Register",PersistenceStatic)!.Invoke(null,new object[]{template});
    factories.Clear();typeof(ItemLoader).GetMethod("ResizeArrays",PersistenceStatic)!.Invoke(null,new object[]{true});
    typeof(PrefixLoader).GetMethod("ResizeArrays",PersistenceStatic)!.Invoke(null,null);

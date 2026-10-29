@@ -1,5 +1,51 @@
 # Item Test Workbench
 
+## Standalone native loader
+
+`loader-run` is the new CPU path for native tModLoader autoload from separate
+DLLs. It needs no `.tmod` packaging, installation, game client or saved world:
+
+```bash
+python tools/item-test-workbench/workbench.py loader-run \
+  --item /path/to/item.json --scenario /path/to/scenario.json --out /path/to/run
+```
+
+The first invocation builds the host and a separate production
+`InfiniCrafterLocal.dll` from the real mod sources. Later invocations can use
+`--no-build` while their build receipt remains valid. The usual reference DLL
+environment described below is required. Native metadata is held in memory;
+no archive is written. The process autoloads tML's built-in content and IFC,
+builds native hook tables and uses actual Player/NPC/Projectile updates with
+SystemLoader phases. It does not enumerate IFC gameplay handlers by name.
+The wrapper records the effective production metadata/assets in `receipt.json`,
+including an `INFINI_MOD_SOURCE_ROOT` override, and refuses evidence if those
+inputs change during the run.
+
+For a registered item use `--native-item WoodenBoomerang`, a native ID, or
+`--native-item ModName/ItemName` instead of generated JSON. An additional mod
+can be autoloaded from its separately built DLL using `--probe-dll PATH` and
+`--probe-mod-root PATH` (directory containing its build.txt, localization and
+assets). Its declared dependencies, including weak references, must be loaded;
+unavailable ones are refused because this host does not emulate tML's separate
+mod assembly contexts and weak-dependency type filtering.
+For a native mod NPC set `dummy.nativeType` to its exact `ModName/NpcName`.
+
+This path currently supports CPU scenes with aim/primary/alt/release, a bounded
+tile layout, a controlled vanilla target or a mod NPC with its native defaults
+and AI, plus the explicitly admitted assertions. Generated JSON must match the
+scenario `worldId`; it is not rewritten. Reports disclose skipped world,
+dust, gore, dropped-item and time phases and missing IFC mod dependencies.
+ParticleLibrary/Luminance DLL references are present, but their complete mod
+content and VFX lifecycle are not loaded by this path. This is not complete
+game/client, arbitrary dependency graph, melee geometry or visual parity.
+Unsupported scenario features fail explicitly; they do not fall back to the
+older runner. The existing `run` and rendering tools retain their earlier scope.
+
+`verify_native_loader.py` checks autoload and a missing-dependency control.
+`verify_loader_scene.py` checks real combat and effects plus independent hooks
+from `fixture-mod/WorkbenchObserverFixture.Standalone.csproj`. These are
+standalone child processes, without launching `Terraria.Main` or a server.
+
 A separate local utility for exercising an **already generated InfiniCrafterLocal
 item JSON**, then inspecting its behavior with code and vision. Runs do not call an
 LLM or image API. The C# project links the mod sources from this checkout and uses

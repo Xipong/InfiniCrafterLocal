@@ -55,6 +55,19 @@ internal static class RuntimeProgramExecutor
         => action.ActionCode == RuntimeEventActionCode.Pull && action.Mode == "target_to_entity"
             ? projectileCenter : target?.Center ?? projectileCenter;
 
+    // These two actions only consume the captured definition and target. In
+    // particular they must not consult an EntitySource_Parent after its native
+    // projectile slot has been recycled for a different projectile.
+    internal static void ExecuteNpcStatusAction(GeneratedItemData data, RuntimeEntitySpec sourceEntity,
+        RuntimeEventActionSpec action, Player owner, NPC? target)
+    {
+        if (!HasActionAuthority(action, owner) || target is not { active: true }) return;
+        if (action.ActionCode == RuntimeEventActionCode.ApplyNpcEffect)
+            RuntimeNpcEffects.Apply(data, sourceEntity, action, owner, target);
+        else if (action.ActionCode == RuntimeEventActionCode.ApplyStatus)
+            target.AddBuff(action.BuffId, action.DurationTicks);
+    }
+
     public static void ExecuteAction(
         GeneratedItemData data,
         RuntimeEntitySpec sourceEntity,
@@ -111,11 +124,8 @@ internal static class RuntimeProgramExecutor
                 SelectTargetsAndEmit(data, action, owner, source, directTarget, childDepth, budget, reservedSpawnBudget);
                 break;
             case RuntimeEventActionCode.ApplyNpcEffect:
-                RuntimeNpcEffects.Apply(data, sourceEntity, action, owner, directTarget);
-                break;
             case RuntimeEventActionCode.ApplyStatus:
-                if (directTarget is { active: true })
-                    directTarget.AddBuff(action.BuffId, action.DurationTicks);
+                ExecuteNpcStatusAction(data, sourceEntity, action, owner, directTarget);
                 break;
             case RuntimeEventActionCode.DamageArea:
                 // A real contact hit has already damaged this NPC. Proximity

@@ -374,8 +374,14 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
                 expected: dict[str, object] = {"typeRef": spec.shared_type}
                 if not spec.required:
                     expected["optional"] = True
+                expected.update({key: source[key] for key in ("default", "neutral", "omissionAllowedOnlyWhen") if key in source})
                 assert target == expected, (name, param)
-                assert shared_types[spec.shared_type] == source["shape"] == spec.schema()
+                expanded_shape = copy.deepcopy(shared_types[spec.shared_type])
+                if "default" in target:
+                    expanded_shape["default"] = target["default"]
+                if "neutral" in target:
+                    expanded_shape["x-infini-neutral"] = target["neutral"]
+                assert expanded_shape == source["shape"] == spec.schema()
                 assert source["meaning"] == shared_types[spec.shared_type]["description"]
                 checked_shared_types.add(spec.shared_type)
                 continue

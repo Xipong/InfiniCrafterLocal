@@ -57,10 +57,10 @@ public sealed partial class GeneratedProjectile
             BroadcastAuthoritativeVfxEvent(eventName, center);
             return;
         }
-        // Nonowner element events have one producer: the validated server relay.
-        // Keep local simple-renderer callbacks and live path registration independent.
+        // Nonowner discrete events have one producer: the validated server relay.
+        // Local callbacks still register live paths, never a second simple emission.
         InfiniVfxRuntime.OnEvent(Projectile, _data, _entity.Id, eventName, _data.VfxManifest, ref _vfxState, center,
-            includeMaterialElements: Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient || Projectile.owner == Main.myPlayer);
+            includeEventEmissions: Main.netMode != Terraria.ID.NetmodeID.MultiplayerClient || Projectile.owner == Main.myPlayer);
         SendOwnerProducedVfxEvent(eventName,center);
     }
 

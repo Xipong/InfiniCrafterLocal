@@ -30,7 +30,7 @@ internal sealed record GeneratedUtilityBuffStatus(
     int RemainingTicks, string Tooltip);
 
 /// <summary>
-/// Finite direct-field UI mapping only. Buff IDs are texture references, never
+/// Direct-field UI mapping only. Buff IDs are texture references, never
 /// Player.buffType entries. Current values come from the canonical aggregate;
 /// presentation must not recalculate its clamp/product/sum rules.
 /// </summary>
@@ -119,6 +119,7 @@ internal static class GeneratedUtilityBuffStatusView
 
     private static string Duration(int ticks, CultureInfo culture)
     {
+        if (ticks == int.MaxValue) return "∞";
         return GeneratedStatusTooltipView.CountdownSeconds(ticks, culture)
             + (culture.TwoLetterISOLanguageName == "ru" ? " с" : " s");
     }

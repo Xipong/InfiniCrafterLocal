@@ -17,6 +17,87 @@ def trace():
             'snapshots':[{'tick':i,'player':actor,'dummy':dict(actor,x=80),'projectiles':[dict(actor,id=7,entityId='<unsafe>',vx=2,vy=0,active=True,x=20+i*2)]} for i in range(3)]}
 
 class WorkbenchTests(unittest.TestCase):
+    def test_loader_run_requires_completed_assertions_and_agrees_with_exit(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);item=root/'item.json';scene=root/'scene.json';dll=root/'ItemTestWorkbench.dll'
+            item.write_text('{}');scene.write_text('{"ticks":2}');dll.write_bytes(b'host')
+            complete={'status':'passed','snapshots':[{'tick':0},{'tick':1}],'assertions':[{'status':'passed'}]}
+            for i,(report,exit_code,valid) in enumerate([(complete,0,True),({'status':'passed'},0,False),(complete,1,False)]):
+                args=SimpleNamespace(timeout=10,item=item,scenario=scene,out=root/str(i),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None)
+                def run(command,**kwargs):
+                    self.assertIn('--native-loader-scene',command)
+                    Path(command[command.index('--output')+1]).write_text(json.dumps(report))
+                    return subprocess.CompletedProcess(command,exit_code,'','')
+                with patch.object(w,'native_executable',return_value=(dll,{})),patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                    if valid:self.assertEqual(w.execute_loader_run(args),0)
+                    else:
+                        with self.assertRaises(RuntimeError):w.execute_loader_run(args)
+
+    def test_loader_receipt_tracks_effective_production_content_override(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);dll=root/'ItemTestWorkbench.dll';dll.write_bytes(b'host')
+            scene=root/'scene.json';scene.write_text('{"ticks":1}')
+            content=root/'custom-mod';content.mkdir();metadata=content/'build.txt'
+            report={'status':'passed','snapshots':[{'tick':0}],'assertions':[{'status':'passed'}]}
+            for mutate in (False,True):
+                metadata.write_text('version=1')
+                args=SimpleNamespace(timeout=10,item=None,native_item='WoodenBoomerang',scenario=scene,
+                    out=root/str(mutate),no_build=True,item_boundary='fresh',probe_dll=None,probe_mod_root=None)
+                def run(command,**kwargs):
+                    Path(command[command.index('--output')+1]).write_text(json.dumps(report))
+                    if mutate:metadata.write_text('version=2')
+                    return subprocess.CompletedProcess(command,0,'','')
+                with patch.dict(w.os.environ,{'INFINI_MOD_SOURCE_ROOT':str(content)}), \
+                     patch.object(w,'native_executable',return_value=(dll,{})), \
+                     patch.object(w,'build_state',return_value={}),patch.object(w.subprocess,'run',side_effect=run):
+                    if mutate:
+                        with self.assertRaisesRegex(RuntimeError,'changed during execution'):w.execute_loader_run(args)
+                    else:self.assertEqual(w.execute_loader_run(args),0)
+                receipt=json.loads((args.out/'receipt.json').read_text())
+                self.assertEqual(receipt['productionContent']['root'],str(content))
+                self.assertEqual(receipt['productionContent']['files']['build.txt'],w.hashlib.sha256(b'version=1').hexdigest())
+                self.assertEqual(receipt['binariesUnchanged'],not mutate)
+
+    def test_direct_native_receipt_tracks_host_and_separate_mod(self):
+        with tempfile.TemporaryDirectory() as d:
+            host=Path(d)/'ItemTestWorkbench.dll';mod=Path(d)/'InfiniCrafterLocal.dll'
+            host.write_bytes(b'host')
+            with self.assertRaises(FileNotFoundError):w.native_binaries_state(host)
+            mod.write_bytes(b'mod');before=w.native_binaries_state(host)
+            mod.write_bytes(b'changed mod');self.assertNotEqual(before,w.native_binaries_state(host))
+            mod.write_bytes(b'mod');host.write_bytes(b'changed host');self.assertNotEqual(before,w.native_binaries_state(host))
+
+    def test_no_build_refuses_changed_index_or_separate_mod_build_inputs(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);here=root/'tools/item-test-workbench'
+            sources={
+                here/'vanilla-item-assets.json':b'{"items":{}}',
+                here/'production-mod/InfiniCrafterWorkbenchMod.csproj':b'<Project />',
+                root/'ModSources/InfiniCrafterLocal/Assets/item.png':b'asset',
+                root/'ModSources/InfiniCrafterLocal/Localization/en-US.hjson':b'Name: item',
+                root/'ModSources/InfiniCrafterLocal/build.txt':b'version=1',
+            }
+            for path,raw in sources.items():
+                path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+            dll=here/'bin/Release/net8.0/ItemTestWorkbench.dll'
+            dll.parent.mkdir(parents=True);dll.write_bytes(b'host')
+            (dll.parent/'InfiniCrafterLocal.dll').write_bytes(b'production mod')
+            with patch.object(w,'ROOT',root),patch.object(w,'HERE',here),patch.object(w,'doctor',return_value={'ready':True}):
+                (dll.parent/'build-provenance.json').write_text(json.dumps(w.build_state(dll)))
+                self.assertEqual(w.native_executable(no_build=True)[0],dll)
+                for path,raw in sources.items():
+                    with self.subTest(source=str(path.relative_to(root))):
+                        path.write_bytes(raw+b' changed')
+                        with self.assertRaisesRegex(RuntimeError,'stale or modified'):
+                            w.native_executable(no_build=True)
+                        path.write_bytes(raw)
+                        self.assertEqual(w.native_executable(no_build=True)[0],dll)
+
     def test_shared_build_gate_refuses_missing_or_malformed_readiness(self):
         from unittest.mock import patch
         spec=importlib.util.spec_from_file_location('workbench_release_gate',w.ROOT/'tools/validate_release.py')
@@ -44,6 +125,8 @@ class WorkbenchTests(unittest.TestCase):
             dep.write_bytes(b'copied runtime fixture');manifest.write_text('{"changed":true}')
             self.assertNotEqual(before,w.build_state(dll))
             manifest.write_text('{}');dep.unlink();self.assertNotEqual(before,w.build_state(dll))
+            content=root/'native-mod';content.mkdir();metadata=content/'build.txt';metadata.write_text('version=1')
+            before=w.build_state(dll);metadata.write_text('version=2');self.assertNotEqual(before,w.build_state(dll))
 
     def test_build_receipt_distinguishes_configured_reference_from_runtime(self):
         from unittest.mock import patch

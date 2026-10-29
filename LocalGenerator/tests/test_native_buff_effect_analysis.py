@@ -184,3 +184,51 @@ def test_catalog_render_is_reproducible_from_committed_source_report():
     from generate_native_buff_effects import render, OUTPUT, REPORT
     report = json.loads(REPORT.read_text())
     assert OUTPUT.read_text() == render(report["sources"])
+
+
+def test_typed_array_write_keeps_index_without_inventing_buff_semantics():
+    from native_buff_effect_analysis import buff_type_branches
+    body = [("ldarg", 0), ("const", 1), ("stfld", "Terraria.Player.testFlag"),
+            ("ldarg", 0), ("ldfld", "Terraria.Player.testArray"), ("const", 812),
+            ("const", 0), ("stelem.i1",)]
+    types = {"Terraria.Player.testFlag": "boolean", "Terraria.Player.testArray": "boolean_array"}
+    rows = buff_type_branches(buff_clause(body), "Player", types)
+    ops = rows[0]["operations"]
+    assert len(ops) == 2 and ops[0]["value"] is True
+    assert ops[1]["arrayIndex"] == 812 and ops[1]["value"] is False
+    assert ops[1]["storageType"] == "boolean_array_element"
+    # Same storage opcode may write signed bytes; only metadata proves bool[].
+    assert buff_type_branches(buff_clause(body), "Player", {**types, "Terraria.Player.testArray": "int8_array"})[0]["operations"] == []
+    dynamic = [*body[:5], ("ldloc", 7), *body[6:]]
+    assert buff_type_branches(buff_clause(dynamic), "Player", types)[0]["operations"] == []
+
+
+def test_struct_operator_is_preserved_as_a_call_not_guessed_final_stats():
+    from native_buff_effect_analysis import buff_type_branches
+    body = [("ldarg", 0), ("ldarg", 0), ("ldfld", "Terraria.Player.testStruct"),
+            ("const", 8), ("call", ("Example.Counter.op_Addition", 2, False, True)),
+            ("stfld", "Terraria.Player.testStruct")]
+    types = {"Terraria.Player.testStruct": "value_type"}
+    row = buff_type_branches(buff_clause(body), "Player", types)[0]
+    op = row["operations"][0]
+    assert op["operation"] == "operator_call_and_assign" and op["value"] == 8
+    assert op["nativeOperator"] == "Example.Counter.op_Addition"
+    assert op["units"] == "native_operator_argument"
+    assert buff_type_branches(buff_clause(body), "Player", {})[0]["operations"] == []
+    other_target = [*body[:-1], ("stfld", "Terraria.Player.other")]
+    assert buff_type_branches(buff_clause(other_target), "Player", types)[0]["operations"] == []
+
+
+def test_ref_getter_requires_matching_read_write_storage_and_operator_shape():
+    from native_buff_effect_analysis import buff_type_branches
+    body = [("ldarg", 0), ("call", ("Terraria.Player.get_example", 0, True, True)),
+            ("dup",), ("ldobj", 1234), ("const", 0.2),
+            ("call", ("Terraria.ModLoader.StatModifier.op_Addition", 2, False, True)), ("stobj", 1234)]
+    ops = buff_type_branches(buff_clause(body), "Player", {})[0]["operations"]
+    assert ops[0]["nativeMember"] == "Terraria.Player.get_example"
+    assert ops[0]["operation"] == "operator_call_and_assign"
+    assert buff_type_branches(buff_clause([*body[:-1], ("stobj", 5678)]), "Player", {})[0]["operations"] == []
+    numeric = [*body[:3], ("ldind.r4",), ("const", 10.0), ("add",), ("stind.r4",)]
+    op = buff_type_branches(buff_clause(numeric), "Player", {})[0]["operations"][0]
+    assert op["operation"] == "add" and op["storageType"] == "ref_float32"
+    assert buff_type_branches(buff_clause([*numeric[:-1], ("stind.i4",)]), "Player", {})[0]["operations"] == []

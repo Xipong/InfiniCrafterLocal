@@ -1325,6 +1325,66 @@
         },
         {
           "receiver": "player",
+          "buffId": 1,
+          "buffFullName": "Terraria/ObsidianSkin",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 1,
+              "condition": {
+                "buffTypeEquals": 1,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 145,
+                "testBranchIlOffset": 154,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.lavaImmune",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 158
+                },
+                {
+                  "nativeMember": "Terraria.Player.fireWalk",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 165
+                },
+                {
+                  "nativeMember": "Terraria.Player.buffImmune",
+                  "arrayIndex": 24,
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean_array_element",
+                  "sourceIlOffset": 179
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
           "buffId": 2,
           "buffFullName": "Terraria/Regeneration",
           "completeness": "partial_native_statement_fragments",
@@ -1454,6 +1514,50 @@
         },
         {
           "receiver": "player",
+          "buffId": 5,
+          "buffFullName": "Terraria/Ironskin",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 5,
+              "condition": {
+                "buffTypeEquals": 5,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 556,
+                "testBranchIlOffset": 565,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Addition",
+                  "value": 8,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 580
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
+          }
+        },
+        {
+          "receiver": "player",
           "buffId": 6,
           "buffFullName": "Terraria/ManaRegeneration",
           "completeness": "partial_native_statement_fragments",
@@ -1493,6 +1597,50 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 7,
+          "buffFullName": "Terraria/MagicPower",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 7,
+              "condition": {
+                "buffTypeEquals": 7,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 613,
+                "testBranchIlOffset": 622,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Addition",
+                  "value": 0.20000000298023224,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 646
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
           }
         },
         {
@@ -1751,6 +1899,59 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 16,
+          "buffFullName": "Terraria/Archery",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 16,
+              "condition": {
+                "buffTypeEquals": 16,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 957,
+                "testBranchIlOffset": 967,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.archery",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 971
+                },
+                {
+                  "nativeMember": "Terraria.Player.arrowDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Multiply",
+                  "value": 1.100000023841858,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 993
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
           }
         },
         {
@@ -2021,6 +2222,188 @@
         },
         {
           "receiver": "player",
+          "buffId": 25,
+          "buffFullName": "Terraria/Tipsy",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 25,
+              "condition": {
+                "buffTypeEquals": 25,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 17969,
+                "testBranchIlOffset": 17979,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.tipsy",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 17983
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Subtraction",
+                  "value": 4,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 18001
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 2.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18020
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Addition",
+                  "value": 0.10000000149011612,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 18043
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.10000000149011612,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18062
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 26,
+          "buffFullName": "Terraria/WellFed",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 26,
+              "condition": {
+                "buffTypeEquals": 26,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 18068,
+                "testBranchIlOffset": 18078,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.wellFed",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 18085
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Addition",
+                  "value": 2,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 18103
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 2.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18122
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Addition",
+                  "value": 0.05000000074505806,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 18145
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.05000000074505806,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18164
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_minionKB",
+                  "operation": "add",
+                  "value": 0.5,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18179
+                },
+                {
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.20000000298023224,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18193
+                },
+                {
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.05000000074505806,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18211
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
+          }
+        },
+        {
+          "receiver": "player",
           "buffId": 27,
           "buffFullName": "Terraria/FairyBlue",
           "completeness": "partial_native_statement_fragments",
@@ -2060,6 +2443,75 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 29,
+          "buffFullName": "Terraria/Clairvoyance",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 29,
+              "condition": {
+                "buffTypeEquals": 29,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 17606,
+                "testBranchIlOffset": 17616,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 2.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 17632
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Addition",
+                  "value": 0.05000000074505806,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 17655
+                },
+                {
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 20,
+                  "units": "native_member_units",
+                  "storageType": "int32",
+                  "sourceIlOffset": 17670
+                },
+                {
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.019999999552965164,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 17688
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
           }
         },
         {
@@ -2189,6 +2641,76 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 33,
+          "buffFullName": "Terraria/Weak",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 33,
+              "condition": {
+                "buffTypeEquals": 33,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 17874,
+                "testBranchIlOffset": 17884,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Subtraction",
+                  "value": 0.050999999046325684,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 17908
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": -0.050999999046325684,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 17927
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Subtraction",
+                  "value": 4,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 17941
+                },
+                {
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": -0.10000000149011612,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 17959
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
           }
         },
         {
@@ -2748,6 +3270,59 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 69,
+          "buffFullName": "Terraria/Ichor",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 69,
+              "condition": {
+                "buffTypeEquals": 69,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 1249,
+                "testBranchIlOffset": 1259,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.ichor",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 1263
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Subtraction",
+                  "value": 15,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 1282
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
           }
         },
         {
@@ -3366,6 +3941,93 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 115,
+          "buffFullName": "Terraria/Rage",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 115,
+              "condition": {
+                "buffTypeEquals": 115,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 2186,
+                "testBranchIlOffset": 2196,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 10.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 2212
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 117,
+          "buffFullName": "Terraria/Wrath",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 117,
+              "condition": {
+                "buffTypeEquals": 117,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 2766,
+                "testBranchIlOffset": 2776,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Addition",
+                  "value": 0.10000000149011612,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 2800
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
           }
         },
         {
@@ -4358,6 +5020,256 @@
         },
         {
           "receiver": "player",
+          "buffId": 206,
+          "buffFullName": "Terraria/WellFed2",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 206,
+              "condition": {
+                "buffTypeEquals": 206,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 18221,
+                "testBranchIlOffset": 18234,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.wellFed",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 18241
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Addition",
+                  "value": 3,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 18259
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 3.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18278
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Addition",
+                  "value": 0.07500000298023224,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 18301
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.07500000298023224,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18320
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_minionKB",
+                  "operation": "add",
+                  "value": 0.75,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18335
+                },
+                {
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.30000001192092896,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18349
+                },
+                {
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.10000000149011612,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18367
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 207,
+          "buffFullName": "Terraria/WellFed3",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 207,
+              "condition": {
+                "buffTypeEquals": 207,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 18377,
+                "testBranchIlOffset": 18390,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.wellFed",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 18397
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Addition",
+                  "value": 4,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 18415
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 4.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18434
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Addition",
+                  "value": 0.10000000149011612,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 18457
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.10000000149011612,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18476
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_minionKB",
+                  "operation": "add",
+                  "value": 1.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18491
+                },
+                {
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.4000000059604645,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18505
+                },
+                {
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.15000000596046448,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18523
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 215,
+          "buffFullName": "Terraria/CatBast",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 215,
+              "condition": {
+                "buffTypeEquals": 215,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 1463,
+                "testBranchIlOffset": 1476,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Addition",
+                  "value": 5,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 1491
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
+          }
+        },
+        {
+          "receiver": "player",
           "buffId": 306,
           "buffFullName": "Terraria/TitaniumStorm",
           "completeness": "partial_native_statement_fragments",
@@ -4401,6 +5313,92 @@
         },
         {
           "receiver": "player",
+          "buffId": 308,
+          "buffFullName": "Terraria/SwordWhipPlayerBuff",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 308,
+              "condition": {
+                "buffTypeEquals": 308,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 1536,
+                "testBranchIlOffset": 1549,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_summonerWeaponSpeedBonus",
+                  "operation": "add",
+                  "value": 0.25,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 1565
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 311,
+          "buffFullName": "Terraria/ScytheWhipPlayerBuff",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 311,
+              "condition": {
+                "buffTypeEquals": 311,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 1501,
+                "testBranchIlOffset": 1514,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_summonerWeaponSpeedBonus",
+                  "operation": "add",
+                  "value": 0.3499999940395355,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 1530
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred."
+          }
+        },
+        {
+          "receiver": "player",
           "buffId": 312,
           "buffFullName": "Terraria/CoolWhipPlayerBuff",
           "completeness": "partial_native_statement_fragments",
@@ -4440,6 +5438,49 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 314,
+          "buffFullName": "Terraria/ThornWhipPlayerBuff",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 314,
+              "condition": {
+                "buffTypeEquals": 314,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 1571,
+                "testBranchIlOffset": 1584,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.get_summonerWeaponSpeedBonus",
+                  "operation": "add",
+                  "value": 0.11999999731779099,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 1600
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred."
           }
         },
         {
@@ -4569,6 +5610,196 @@
           "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
           "sourceUnitDescriptors": {
             "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 333,
+          "buffFullName": "Terraria/Hunger",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 333,
+              "condition": {
+                "buffTypeEquals": 333,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 18533,
+                "testBranchIlOffset": 18546,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.hungry",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 18550
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Subtraction",
+                  "value": 2,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 18568
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": -2.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18587
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Subtraction",
+                  "value": 0.05000000074505806,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 18610
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": -0.05000000074505806,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18629
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_minionKB",
+                  "operation": "add",
+                  "value": -0.5,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18644
+                },
+                {
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": 0.05000000074505806,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18658
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
+          }
+        },
+        {
+          "receiver": "player",
+          "buffId": 334,
+          "buffFullName": "Terraria/Starving",
+          "completeness": "partial_native_statement_fragments",
+          "fragments": [
+            {
+              "buffId": 334,
+              "condition": {
+                "buffTypeEquals": 334,
+                "slotLocal": 0,
+                "nativeControlFlowMustReachTest": 18668,
+                "testBranchIlOffset": 18681,
+                "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+              },
+              "operations": [
+                {
+                  "nativeMember": "Terraria.Player.starving",
+                  "operation": "assign",
+                  "value": true,
+                  "units": "boolean_flag_only",
+                  "storageType": "boolean",
+                  "sourceIlOffset": 18685
+                },
+                {
+                  "nativeMember": "Terraria.Player.statDefense",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": ".DefenseStat.op_Subtraction",
+                  "value": 4,
+                  "units": "native_operator_argument",
+                  "storageType": "value_type",
+                  "sourceIlOffset": 18703
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": -4.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18722
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "operator_call_and_assign",
+                  "nativeOperator": "Terraria.ModLoader.StatModifier.op_Subtraction",
+                  "value": 0.10000000149011612,
+                  "units": "native_operator_argument",
+                  "storageType": "ref_value_type",
+                  "sourceIlOffset": 18745
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": -0.10000000149011612,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18764
+                },
+                {
+                  "nativeMember": "Terraria.Player.get_minionKB",
+                  "operation": "add",
+                  "value": -1.0,
+                  "units": "native_member_units",
+                  "storageType": "ref_float32",
+                  "sourceIlOffset": 18779
+                },
+                {
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": 0.15000000596046448,
+                  "units": "native_member_units",
+                  "storageType": "float32",
+                  "sourceIlOffset": 18793
+                }
+              ],
+              "completeness": "partial_native_statement_fragment",
+              "unsupported": [
+                "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+                "other_native_and_mod_effects_unknown"
+              ],
+              "sourceMethod": "Player.UpdateBuffs"
+            }
+          ],
+          "sourceFlags": [],
+          "unsupported": [
+            "other_native_paths_and_mod_hooks_not_decoded",
+            "not_a_final_effect_or_immunity_guarantee"
+          ],
+          "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+          "sourceUnitDescriptors": {
+            "boolean_flag_only": "Literal native flag assignment; downstream behavior is not implied.",
+            "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred.",
+            "native_operator_argument": "Literal second argument of the named binary operator; first argument is the current named member value, and the result is stored back. Operator implementation/components are not expanded. Do not interpret Additive as final multiplicative damage or infer final stat/damage from the operator name."
           }
         },
         {
@@ -4708,21 +5939,6 @@
         "recognizedDefenseFlagConsumers": 2,
         "unsupportedPlayerBranches": [
           {
-            "buffId": 1,
-            "condition": {
-              "buffTypeEquals": 1,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 145,
-              "testBranchIlOffset": 154,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
             "buffId": 159,
             "condition": {
               "buffTypeEquals": 159,
@@ -4744,36 +5960,6 @@
               "slotLocal": 0,
               "nativeControlFlowMustReachTest": 404,
               "testBranchIlOffset": 417,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 5,
-            "condition": {
-              "buffTypeEquals": 5,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 556,
-              "testBranchIlOffset": 565,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 7,
-            "condition": {
-              "buffTypeEquals": 7,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 613,
-              "testBranchIlOffset": 622,
               "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
             },
             "operations": [],
@@ -4813,96 +5999,6 @@
             ]
           },
           {
-            "buffId": 16,
-            "condition": {
-              "buffTypeEquals": 16,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 957,
-              "testBranchIlOffset": 967,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 69,
-            "condition": {
-              "buffTypeEquals": 69,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 1249,
-              "testBranchIlOffset": 1259,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 215,
-            "condition": {
-              "buffTypeEquals": 215,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 1463,
-              "testBranchIlOffset": 1476,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 311,
-            "condition": {
-              "buffTypeEquals": 311,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 1501,
-              "testBranchIlOffset": 1514,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 308,
-            "condition": {
-              "buffTypeEquals": 308,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 1536,
-              "testBranchIlOffset": 1549,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 314,
-            "condition": {
-              "buffTypeEquals": 314,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 1571,
-              "testBranchIlOffset": 1584,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
             "buffId": 109,
             "condition": {
               "buffTypeEquals": 109,
@@ -4933,42 +6029,12 @@
             ]
           },
           {
-            "buffId": 115,
-            "condition": {
-              "buffTypeEquals": 115,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 2186,
-              "testBranchIlOffset": 2196,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
             "buffId": 116,
             "condition": {
               "buffTypeEquals": 116,
               "slotLocal": 0,
               "nativeControlFlowMustReachTest": 2218,
               "testBranchIlOffset": 2228,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 117,
-            "condition": {
-              "buffTypeEquals": 117,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 2766,
-              "testBranchIlOffset": 2776,
               "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
             },
             "operations": [],
@@ -7108,132 +8174,12 @@
             ]
           },
           {
-            "buffId": 29,
-            "condition": {
-              "buffTypeEquals": 29,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 17606,
-              "testBranchIlOffset": 17616,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
             "buffId": 28,
             "condition": {
               "buffTypeEquals": 28,
               "slotLocal": 0,
               "nativeControlFlowMustReachTest": 17698,
               "testBranchIlOffset": 17708,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 33,
-            "condition": {
-              "buffTypeEquals": 33,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 17874,
-              "testBranchIlOffset": 17884,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 25,
-            "condition": {
-              "buffTypeEquals": 25,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 17969,
-              "testBranchIlOffset": 17979,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 26,
-            "condition": {
-              "buffTypeEquals": 26,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 18068,
-              "testBranchIlOffset": 18078,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 206,
-            "condition": {
-              "buffTypeEquals": 206,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 18221,
-              "testBranchIlOffset": 18234,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 207,
-            "condition": {
-              "buffTypeEquals": 207,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 18377,
-              "testBranchIlOffset": 18390,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 333,
-            "condition": {
-              "buffTypeEquals": 333,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 18533,
-              "testBranchIlOffset": 18546,
-              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
-            },
-            "operations": [],
-            "completeness": "unsupported",
-            "unsupported": [
-              "body_outside_scalar_write_subset"
-            ]
-          },
-          {
-            "buffId": 334,
-            "condition": {
-              "buffTypeEquals": 334,
-              "slotLocal": 0,
-              "nativeControlFlowMustReachTest": 18668,
-              "testBranchIlOffset": 18681,
               "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
             },
             "operations": [],

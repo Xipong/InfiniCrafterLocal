@@ -155,7 +155,7 @@ internal static partial class EngineRuntimeChecks
                 int ticks = (int)typeof(InfiniCrafterLocal.Common.Players.InfiniCraftPlayer)
                     .GetField("_generatedBuffTicks", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                     .GetValue(generated)!;
-                Equal(active is null ? 0 : 60, ticks, label + " admitted active entries only");
+                Equal(active is null ? 0 : 59, ticks, label + " admitted active entries after one stat sample");
             });
         }
     }

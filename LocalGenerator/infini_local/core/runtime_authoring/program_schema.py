@@ -483,7 +483,7 @@ def _repair_structure_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
 
 def is_advisory_path(path: str, *, repair: bool = False) -> bool:
     """Intent and reports are non-executable context, never Repair blockers."""
-    roots = ("realizationReplacement",) if repair else ("concept", "realization")
+    roots = ("realizationReplacement", "metadataPatch.concept") if repair else ("concept", "realization")
     return any(path == f"$.{root}" or path.startswith((f"$.{root}.", f"$.{root}[")) for root in roots)
 
 

@@ -17,6 +17,9 @@ public sealed partial class GeneratedProjectile
     private const byte RuntimeNetVersion = 4;
     private const byte NativeShotRuntimeNetVersion = 5;
     private const byte ComposableMotionRuntimeNetVersion = 6;
+    private const byte VisualScaleRuntimeNetVersion = 7;
+    private float? _receivedVisualScale;
+    private bool HasStatefulVisualScale => _entity?.VisualScaleRate is not null || _entity?.VisualScaleCurve?.Window is not null;
     private const byte VfxEventNetVersion = 5;
     private static long _nextVfxSourceToken;
     private long _vfxSourceToken;
@@ -39,8 +42,12 @@ public sealed partial class GeneratedProjectile
 
     public override void SendExtraAI(BinaryWriter writer)
     {
-        bool composable = HasComposableMotion;
-        writer.Write(composable ? ComposableMotionRuntimeNetVersion : _nativeShotInitialVelocity.HasValue ? NativeShotRuntimeNetVersion : RuntimeNetVersion);
+        // Native SyncProjectile does not serialize scale. Rate accumulation and
+        // the last value of a closed curve window cannot be derived from age.
+        // A pending definition must relay the received value, not proxy defaults.
+        bool statefulScale = _configured && HasStatefulVisualScale || _receivedVisualScale.HasValue;
+        bool composable = HasComposableMotion || statefulScale;
+        writer.Write(statefulScale ? VisualScaleRuntimeNetVersion : composable ? ComposableMotionRuntimeNetVersion : _nativeShotInitialVelocity.HasValue ? NativeShotRuntimeNetVersion : RuntimeNetVersion);
         writer.Write(_generatedItemId ?? "");
         writer.Write(_entityId ?? "");
         writer.Write((byte)Math.Clamp(_childDepth, 0, 255));
@@ -79,6 +86,7 @@ public sealed partial class GeneratedProjectile
             writer.Write(_motionAxis.X); writer.Write(_motionAxis.Y);
             writer.Write(_beamManaClockStarted); writer.Write(_beamLastManaTick);
         }
+        if (statefulScale) writer.Write(_receivedVisualScale ?? Projectile.scale);
     }
 
     public override void ReceiveExtraAI(BinaryReader reader)
@@ -90,7 +98,8 @@ public sealed partial class GeneratedProjectile
             bool priorReleased = _released, priorReturning = _returning;
             string priorItemId = _generatedItemId, priorEntityId = _entityId;
             byte runtimeVersion = reader.ReadByte();
-            bool composable = runtimeVersion == ComposableMotionRuntimeNetVersion;
+            bool statefulScale = runtimeVersion == VisualScaleRuntimeNetVersion;
+            bool composable = runtimeVersion == ComposableMotionRuntimeNetVersion || statefulScale;
             if (runtimeVersion != RuntimeNetVersion && runtimeVersion != NativeShotRuntimeNetVersion && !composable)
                 throw new InvalidDataException("unsupported generated runtime projectile payload");
             _generatedItemId = (reader.ReadString() ?? "").Trim();
@@ -143,6 +152,9 @@ public sealed partial class GeneratedProjectile
             if (receivedNativeLaunch is { } nativeLaunch
                 && (!float.IsFinite(nativeLaunch.X) || !float.IsFinite(nativeLaunch.Y)))
                 throw new InvalidDataException("non-finite native shot launch velocity");
+            float? receivedScale = statefulScale ? reader.ReadSingle() : null;
+            if (receivedScale is { } scale && (!float.IsFinite(scale) || scale is < .01f or > 128f))
+                throw new InvalidDataException("invalid stateful visual scale snapshot");
             // An owner already executing this exact physical source retains its
             // local counter. Relayed observations cannot extend or clear immunity.
             bool retainOwnerExclusion = _activationSpawnBudget is not null
@@ -152,6 +164,11 @@ public sealed partial class GeneratedProjectile
                 && InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(owner);
             bool sameGeneration = _vfxSourceToken == sourceToken && _data?.Id == _generatedItemId && _entity?.Id == _entityId;
             bool sameSnapshotIdentity = _vfxSourceToken == sourceToken && priorItemId == _generatedItemId && priorEntityId == _entityId;
+            bool sameScaleSource = statefulScale && sameSnapshotIdentity;
+            bool retainNewerScale = sameScaleSource && (_age < priorAge || _age == priorAge
+                && (priorReleased && !_released || priorReturning && !_returning));
+            if (sameScaleSource && (retainOwnerExclusion || retainNewerScale))
+                receivedScale = _receivedVisualScale ?? Projectile.scale;
             var expiryObservation = (_age, _released, _returning, releaseAge, returnAge, Projectile.position);
             if (!composable || !sameSnapshotIdentity) { _motionExpiryObserved = false; _pendingMotionExpiry = null; }
             if (composable && retainOwnerExclusion) {
@@ -162,7 +179,9 @@ public sealed partial class GeneratedProjectile
                 _remainingBounces = priorBounces; _activationDelayTicks = priorDelay; _lastTarget = priorTarget;
             }
             else if (composable) {
-                if (sameGeneration) {
+                // Tile return can latch after AI at the same age. Pending v7
+                // metadata must preserve that phase as well as the sampled scale.
+                if (sameGeneration || sameScaleSource) {
                     bool stale = _age < priorAge;
                     _age = Math.Max(_age, priorAge); _chargeTicks = Math.Max(_chargeTicks, priorCharge);
                     _released |= priorReleased; _returning |= priorReturning;
@@ -199,6 +218,7 @@ public sealed partial class GeneratedProjectile
                 _vfxState=new InfiniVfxState {SourceKey=$"net:{Projectile.owner}:{sourceToken}:{_generatedItemId}:{_entityId}"};
             }
             _vfxSourceToken=sourceToken;
+            _receivedVisualScale = receivedScale;
             _runtimePayloadRejected = false;
             _preserveSyncedStateOnHydrate = true;
             _configured = false;
@@ -217,6 +237,7 @@ public sealed partial class GeneratedProjectile
         _entity = null;
         _configured = false;
         _preserveSyncedStateOnHydrate = false;
+        _receivedVisualScale = null;
         _pendingMotionExpiry = null;
         Projectile.friendly = false;
         Projectile.velocity = Vector2.Zero;

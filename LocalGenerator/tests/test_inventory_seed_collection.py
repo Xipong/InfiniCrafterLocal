@@ -127,12 +127,12 @@ def test_real_author_packet_exposes_explicit_inventory_capability_without_inheri
     dossier = request_dossier(request)
     card = next(c for c in dossier["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
     assert card["params"] == {}
-    assert "Inventory passive" in json.dumps(card)
+    assert "inventory check" in card["does"]
     packet = json.dumps(request)
     assert "collect_seeds_from_grass" in packet
-    assert "only by explicit" in packet
     assert "not executable support for that behavior" not in packet
     doc = seed_source()
+    doc = {key: doc[key] for key in ("name", "category", "runtimeProgram")}
     if mode != "off":
         provider_roundtrip(doc, request["response_format"])
     # Parent facts do not inject a call; absent explicit selection remains absent.

@@ -131,10 +131,13 @@ def test_author_and_format_provider_shape_matches_actual_author_consumer(capture
         packet, evidence = capture.builder(stage, COHORT[0], "json_schema")
         schema = schema_from_wire(capture.wire(packet, "responses")["packet"])
         source = copy.deepcopy(evidence["inputs"]["authored"])
-        # QA fixtures retain historical rich advisory reports. The current
-        # provider grammar advertises optional prose; no report is required.
+        # Initial generation omits advisory roots; format Repair retains the
+        # legacy optional-report grammar and its nullable provider wrappers.
         source.pop("realization", None)
-        valid = _encode_nullable_fixture(source, author_item_response_schema())
+        local_schema = author_item_response_schema()
+        if stage == "author":
+            source.pop("concept", None)
+        valid = _encode_nullable_fixture(source, local_schema)
         invalid = copy.deepcopy(valid)
         invalid["runtimeProgram"]["calls"][0]["fn"] = "unknown_operation"
         for wire_value, expected in ((valid, True), (invalid, False)):

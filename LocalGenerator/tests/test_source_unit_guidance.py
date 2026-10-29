@@ -119,18 +119,18 @@ def test_author_explains_scoped_wire_units_without_converting_source(monkeypatch
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_serialized_author_and_repair_share_player_description_guidance(monkeypatch, mode):
+def test_serialized_author_requests_notes_and_repair_retains_advisory_replacement(monkeypatch, mode):
     source, item = _source(), _broken_item()
     author_request, author_packet = _author_request(monkeypatch, mode, source)
     repair_request, repair_packet = _repair_request(monkeypatch, mode, source, item)
-    advisory = author_packet["requiredJsonShape"]["realization"]
-    assert repair_packet["requiredJsonShape"]["realizationReplacement"] == advisory
-    from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
-    assert advisory == author_item_prompt_shape_card()["realization"]
-    assert author_packet["requiredJsonShape"]["optionalAdvisory"] == ["concept", "realization"]
+    assert isinstance(author_packet["requiredJsonShape"]["concept"], str)
+    assert set(author_packet["requiredJsonShape"]["realization"]) == {"description", "selfEvaluation"}
+    advisory = repair_packet["requiredJsonShape"]["realizationReplacement"]
+    from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card
+    assert advisory == author_item_repair_prompt_shape_card()["realizationReplacement"]
     # Inspect the literal serialized message rows, not just local schema annotations
     # or the helper's merged view. Strict provider projection removes annotations.
-    for request, shape_key in ((author_request, "realization"), (repair_request, "realizationReplacement")):
+    for request, shape_key in ((repair_request, "realizationReplacement"),):
         sent = _serialized_chat_request(monkeypatch, request)
         message_shapes = [json.loads(row["content"])["requiredJsonShape"]
                           for row in sent["messages"][1:]
@@ -146,14 +146,14 @@ def test_serialized_author_and_repair_share_player_description_guidance(monkeypa
 def test_lowery_renderer_projects_shared_player_description_and_unit_guidance():
     import runpy
     from pathlib import Path
-    from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card
+    from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card
     from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm
 
     root = Path(__file__).resolve().parents[2]
     generator = runpy.run_path(str(root / "tools" / "generate" / "generate_lowery.py"))
     rendered = generator["render"]()  # Pure renderer: do not refresh parent-owned docs here.
     assert '<a id="player-text"></a>' in rendered
-    advisory = author_item_prompt_shape_card()["realization"]
+    advisory = author_item_repair_prompt_shape_card()["realizationReplacement"]
     for name in ("description", "playerExperience"):
         assert advisory[name] in rendered
     for rule in concise_terraria_tick_guide_for_llm().values():

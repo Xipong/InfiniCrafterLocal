@@ -22,6 +22,7 @@ public sealed partial class InfiniCraftPlayer
     private sealed class ActiveGeneratedUtilityBuff
     {
         public int Ticks;
+        public int InitialDurationTicks;
         public float MiningSpeedMultiplier = 1f;
         public float EmitLightStrength;
         public string LightColorName = "";
@@ -34,7 +35,8 @@ public sealed partial class InfiniCraftPlayer
 
         public static ActiveGeneratedUtilityBuff From(GeneratedBuffSpec buff) => new()
         {
-            Ticks = Math.Clamp(buff.DurationTicks, 1, 21600),
+            Ticks = buff.DurationTicks == GeneratedBuffSpec.PermanentDurationTicks ? int.MaxValue : buff.DurationTicks,
+            InitialDurationTicks = buff.DurationTicks,
             MiningSpeedMultiplier = Math.Clamp(buff.MiningSpeedMultiplier, 0.25f, 4f),
             EmitLightStrength = Math.Clamp(buff.EmitLightStrength, 0f, 1.5f),
             LightColorName = buff.LightColorName ?? "",
@@ -79,6 +81,11 @@ public sealed partial class InfiniCraftPlayer
         GeneratedItemData? source = null, uint? activationTick = null)
     {
         if (buff is null) return false;
+        if (Player.dead || !IsGeneratedUtilityActivationCurrent(activationTick))
+        {
+            if (syncNetwork) CorrectGeneratedBuffPrediction();
+            return false;
+        }
         buff.Normalize();
         if (!buff.HasAnyEffect) return false;
         uint elapsed = activationTick.HasValue
@@ -96,14 +103,21 @@ public sealed partial class InfiniCraftPlayer
         // A confirmed delayed occurrence can have no buff time left while its
         // independent exhaustion is still live. Do not replay even one buff tick
         // or remove another active contribution merely to retain that lockout.
-        int remaining = buff.DurationTicks - (int)elapsed;
+        int remaining = buff.DurationTicks == GeneratedBuffSpec.PermanentDurationTicks
+            ? int.MaxValue : buff.DurationTicks - (int)elapsed;
         if (remaining > 0)
         {
             var incoming = ActiveGeneratedUtilityBuff.From(buff);
             incoming.Ticks = remaining;
             var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
             if (existing is not null)
-                existing.Ticks = Math.Max(existing.Ticks, incoming.Ticks);
+            {
+                if (incoming.Ticks > existing.Ticks)
+                {
+                    existing.Ticks = incoming.Ticks;
+                    existing.InitialDurationTicks = incoming.InitialDurationTicks;
+                }
+            }
             else
             {
                 // Bound pathological repeated authoring while preserving independent
@@ -334,34 +348,43 @@ public sealed partial class InfiniCraftPlayer
 
     private void TickGeneratedUtilityBuff()
     {
-        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
-        if (_generatedMobilityCooldownTicks > 0)
-            _generatedMobilityCooldownTicks--;
-
         if (_activeGeneratedUtilityBuffs.Count > 0)
         {
             for (int index = _activeGeneratedUtilityBuffs.Count - 1; index >= 0; index--)
             {
                 var active = _activeGeneratedUtilityBuffs[index];
+                if (active.InitialDurationTicks == GeneratedBuffSpec.PermanentDurationTicks)
+                    continue;
                 active.Ticks--;
                 if (active.Ticks <= 0)
                     _activeGeneratedUtilityBuffs.RemoveAt(index);
             }
             RebuildGeneratedUtilityBuffAggregate();
         }
-        else if (!InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player) && _generatedBuffTicks > 0)
+        else if (!InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player)
+            && _generatedBuffTicks is > 0 and < int.MaxValue)
         {
-            // Version-mismatch fallback only; v2 snapshots carry exact entries.
+            // Client comparison mirrors can carry only an aggregate duration;
+            // active network snapshots carry independently expiring entries.
             _generatedBuffTicks--;
         }
 
-        if (_generatedBuffTicks <= 0)
-        {
-            if (_activeGeneratedUtilityBuffs.Count == 0)
-                ResetGeneratedUtilityBuffAggregate();
-            return;
-        }
-        if (_generatedLightStrength > 0f && Main.netMode != NetmodeID.Server)
+        if (_generatedBuffTicks <= 0 && _activeGeneratedUtilityBuffs.Count == 0)
+            ResetGeneratedUtilityBuffAggregate();
+    }
+
+    private void TickGeneratedUtilityCooldowns()
+    {
+        // These clocks keep their existing end-of-update phase. Buff durations
+        // advance after PostUpdateEquips has sampled their stats and light.
+        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
+        if (_generatedMobilityCooldownTicks > 0)
+            _generatedMobilityCooldownTicks--;
+    }
+
+    private void EmitGeneratedUtilityBuffLight()
+    {
+        if (_generatedBuffTicks > 0 && _generatedLightStrength > 0f && Main.netMode != NetmodeID.Server)
         {
             Color c = RuntimeColorPolicy.Resolve(_generatedLightColorName, Color.White);
             float strength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);
@@ -371,7 +394,7 @@ public sealed partial class InfiniCraftPlayer
 
     private void ApplyGeneratedUtilityBuffEffects()
     {
-        if (_generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
+        if (Player.dead || _generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
             return;
         if (_generatedMiningSpeedMultiplier != 1f)
             Player.pickSpeed /= Math.Clamp(_generatedMiningSpeedMultiplier, 0.25f, 4f);
