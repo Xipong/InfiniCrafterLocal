@@ -348,10 +348,6 @@ public sealed partial class InfiniCraftPlayer
 
     private void TickGeneratedUtilityBuff()
     {
-        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
-        if (_generatedMobilityCooldownTicks > 0)
-            _generatedMobilityCooldownTicks--;
-
         if (_activeGeneratedUtilityBuffs.Count > 0)
         {
             for (int index = _activeGeneratedUtilityBuffs.Count - 1; index >= 0; index--)
@@ -368,17 +364,27 @@ public sealed partial class InfiniCraftPlayer
         else if (!InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player)
             && _generatedBuffTicks is > 0 and < int.MaxValue)
         {
-            // Current CopyClientState mirrors carry only the aggregate timer.
+            // Client comparison mirrors can carry only an aggregate duration;
+            // active network snapshots carry independently expiring entries.
             _generatedBuffTicks--;
         }
 
-        if (_generatedBuffTicks <= 0)
-        {
-            if (_activeGeneratedUtilityBuffs.Count == 0)
-                ResetGeneratedUtilityBuffAggregate();
-            return;
-        }
-        if (_generatedLightStrength > 0f && Main.netMode != NetmodeID.Server)
+        if (_generatedBuffTicks <= 0 && _activeGeneratedUtilityBuffs.Count == 0)
+            ResetGeneratedUtilityBuffAggregate();
+    }
+
+    private void TickGeneratedUtilityCooldowns()
+    {
+        // These clocks keep their existing end-of-update phase. Buff durations
+        // advance after PostUpdateEquips has sampled their stats and light.
+        if (PruneGeneratedItemExhaustion()) CorrectGeneratedBuffPrediction();
+        if (_generatedMobilityCooldownTicks > 0)
+            _generatedMobilityCooldownTicks--;
+    }
+
+    private void EmitGeneratedUtilityBuffLight()
+    {
+        if (_generatedBuffTicks > 0 && _generatedLightStrength > 0f && Main.netMode != NetmodeID.Server)
         {
             Color c = RuntimeColorPolicy.Resolve(_generatedLightColorName, Color.White);
             float strength = Math.Clamp(_generatedLightStrength, 0f, 1.5f);

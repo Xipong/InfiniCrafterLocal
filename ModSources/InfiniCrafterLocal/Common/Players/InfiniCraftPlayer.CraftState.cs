@@ -576,6 +576,11 @@ public sealed partial class InfiniCraftPlayer
         if (_generatedAccRunSpeedFloor > 0f)
             Player.accRunSpeed = Math.Max(Player.accRunSpeed, _generatedAccRunSpeedFloor);
         ApplyGeneratedUtilityBuffEffects();
+        EmitGeneratedUtilityBuffLight();
+        // ItemCheck/HoldItem follows this hook. Consume an effect tick only
+        // after its stat/light samples, so a new one-tick application survives until
+        // the next equipment phase instead of expiring unused in PostUpdate.
+        TickGeneratedUtilityBuff();
     }
 
     public override bool PreItemCheck()
@@ -589,7 +594,7 @@ public sealed partial class InfiniCraftPlayer
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickCraftAudioGuard();
-        TickGeneratedUtilityBuff();
+        TickGeneratedUtilityCooldowns();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
         TickPendingStationEscrow();

@@ -124,7 +124,7 @@ internal static partial class EngineRuntimeChecks
             }
             Equal(true, slots.SequenceEqual(player.buffType), "HUD does not populate native buff slots or impose debuffs");
             for (int tick = 0; tick < 1800; tick++)
-                typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityBuff", TestInstance)!.Invoke(owner, null);
+                typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityCooldowns", TestInstance)!.Invoke(owner, null);
             Equal(true, Row() is null, "expired mobility status disappears without fatigue dependency");
             player.SpawnX = player.SpawnY = Terraria.Main.spawnTileX = Terraria.Main.spawnTileY = 0;
             Equal(false, owner.TryRunGeneratedMobility(new GameplaySpec { MobilityMode = "recall_home", MobilityCooldownTicks = 1800 }), "invalid spawn refuses real recall");

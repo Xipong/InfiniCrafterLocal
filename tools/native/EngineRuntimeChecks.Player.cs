@@ -226,14 +226,12 @@ internal static partial class EngineRuntimeChecks
             generated.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 2, MovementSpeed = 0.5f });
             generated.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 4, MovementSpeed = 0.5f });
             generated.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 1, MiningSpeedMultiplier = 2f });
-            var tick = typeof(InfiniCraftPlayer).GetMethod("TickGeneratedUtilityBuff", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            for (int elapsed = 1; elapsed <= 4; elapsed++)
+            for (int sample = 1; sample <= 5; sample++)
             {
-                tick.Invoke(generated, null);
                 player.moveSpeed = player.pickSpeed = 1f;
                 generated.PostUpdateEquips();
-                Equal(elapsed < 4 ? 1.5f : 1f, player.moveSpeed, "equal-effect refresh does not double stack");
-                Equal(1f, player.pickSpeed, "distinct short effect expires independently");
+                Equal(sample <= 4 ? 1.5f : 1f, player.moveSpeed, "equal-effect refresh does not double stack");
+                Equal(sample == 1 ? .5f : 1f, player.pickSpeed, "distinct short effect applies once then expires independently");
             }
         });
     }

@@ -47,6 +47,14 @@ internal static partial class EngineRuntimeChecks
             if (duration > 0) expectedTicks -= 2;
             Equal(expectedTicks, owner.CaptureGeneratedUtilityBuffPresentation().Entries.Single().RemainingTicks,
                 "finite timer counts down and permanent timer never counts down");
+            for (int frame = 0; frame < 3; frame++)
+            {
+                owner.ResetEffects();
+                owner.PostUpdateEquips();
+                if (duration > 0) expectedTicks--;
+                Equal(expectedTicks, owner.CaptureGeneratedUtilityBuffPresentation().Entries.Single().RemainingTicks,
+                    "equipment hook ordering preserves finite and permanent lifetimes");
+            }
             Float32BuffActivate(player, Float32BuffData("lifeRegen", 4f, 60));
             Equal(1, owner.CaptureGeneratedUtilityBuffPresentation().Entries.Count, "short refresh does not stack the same effect");
             Equal(expectedTicks, owner.CaptureGeneratedUtilityBuffPresentation().Entries.Single().RemainingTicks,
