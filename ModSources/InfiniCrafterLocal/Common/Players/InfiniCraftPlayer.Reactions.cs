@@ -31,7 +31,10 @@ public sealed partial class InfiniCraftPlayer
     public override void PostHurt(Player.HurtInfo info)
     {
         if (info.Damage > 0 && Player.statLife > 0)
+        {
+            ExtendHurtImmunity(info);
             RunEquipmentReaction(RuntimeEventKind.OnHurt, Player.Center);
+        }
     }
 
     internal void RunEquipmentReaction(string eventName, Vector2 position)

@@ -44,6 +44,10 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("player effect timed buff actual cooldown hit", PlayerEffectBuffReducesActualCooldownOnHit),
+            ("player effect weapon event actual cooldown", PlayerEffectWeaponActionMutatesNativeTimer),
+            ("player effect equipment pickup and potion hooks", PlayerEffectNativeEquipmentAndPickup),
+            ("player effect typed snapshot roundtrip", PlayerEffectSnapshotRetainsNumericMechanics),
             ("parent source graph unresolved identity alternatives", ParentSourceGraphKeepsUnresolvedIdentityAlternatives),
             ("parent source graph native projectile windows", ParentSourceGraphFollowsNativeProjectileWindows),
             ("parent source graph conditional native buff consumers", ParentSourceGraphKeepsConditionalNativeBuffConsumers),
@@ -111,12 +115,6 @@ internal static partial class EngineRuntimeChecks
             ("composable motion scale-rate snapshot preserves explicit scale", ComposableMotionScaleRateSnapshotPreservesSmallExplicitScale),
             ("free projectile sprite trail preserves explicit body scale", FreeProjectileSpriteTrailPreservesExplicitBodyScale),
             ("composable motion absolute tile policy requires reachable consumer", ComposableMotionAbsoluteTilePolicyRequiresReachableConsumer),
-            ("Native equipment ExplorationFishing", ExplorationFishing),
-            ("Native equipment ExplorationPickup", ExplorationPickup),
-            ("Native equipment ExplorationVision", ExplorationVision),
-            ("Native equipment ExplorationInstruments", ExplorationInstruments),
-            ("Native equipment ExplorationSurvival", ExplorationSurvival),
-
             ("generated use refusal admission and localization", GeneratedUseRefusalsKeepExactAdmissionAndLocalization),
             ("generated use refusal owner throttle and authority", GeneratedUseNoticesThrottlePerOwnerAndRespectAuthority),
             ("UI QoL hotkey input focus and compact journal controls", JournalHotkeyAndCompactControlsStayScoped),

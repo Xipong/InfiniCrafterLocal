@@ -83,6 +83,193 @@
         }
       ],
       "x-infini-semanticType": "bounded_text"
+    },
+    "player_effect": {
+      "additionalProperties": false,
+      "description": "Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff.",
+      "minProperties": 1,
+      "properties": {
+        "allowLavaFishing": {
+          "description": "Allow catches in lava with otherwise suitable fishing gear.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "autoManaPotionBelowPercent": {
+          "description": "Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "coinPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for coins.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "condition": {
+          "default": "always",
+          "description": "When to apply this component: stationary requires zero velocity and no active item animation.",
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "type": "string",
+          "x-infini-neutral": "always"
+        },
+        "extraCrateChancePercent": {
+          "description": "Additional independent percent chance to turn a non-crate fishing attempt into a crate attempt; ordinary catch eligibility remains native.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "fishingPowerPoints": {
+          "description": "Add fishing-power points before native rod/bait/environment multipliers.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "healingPotionCooldownOnHitReductionSeconds": {
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.",
+          "maximum": 60.0,
+          "minimum": 0,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "seconds",
+          "x-infini-units": "seconds"
+        },
+        "healingPotionCooldownReductionPercent": {
+          "description": "Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.",
+          "maximum": 90,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "healingPotionCooldownReductionSeconds": {
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.",
+          "maximum": 60.0,
+          "minimum": 0,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "seconds",
+          "x-infini-units": "seconds"
+        },
+        "heartPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for heart pickups.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "highlightCreatures": {
+          "description": "Enable native creature highlighting.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "highlightDanger": {
+          "description": "Enable native hazardous-tile highlighting.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "highlightTreasure": {
+          "description": "Enable native treasure highlighting.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "hurtInvulnerabilityBonusSeconds": {
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Add immunity time after a surviving hurt to that hit's actual immunity slot.",
+          "maximum": 5.0,
+          "minimum": 0,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "seconds",
+          "x-infini-units": "seconds"
+        },
+        "itemPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for every item; combines with specialized ranges.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "lifeRegenHpPerSecond": {
+          "description": "Author units: HP/s. Native consumer: Signed life-regeneration contribution; condition controls when this component is active.",
+          "maximum": 100.0,
+          "minimum": -50.0,
+          "multipleOf": 0.5,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "HP/s",
+          "x-infini-units": "HP/s"
+        },
+        "manaPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for mana-star pickups.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "nightVision": {
+          "description": "Improve dark visibility without emitting world light.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "preventLineBreak": {
+          "description": "Prevent fishing-line breakage.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "revealHookedCatch": {
+          "description": "Reveal the hooked catch before reeling it in.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        }
+      },
+      "required": [],
+      "type": "object",
+      "x-infini-semanticType": "bounded_text"
     }
   },
   "$id": "https://infinicrafter.local/contracts/author_item_repair.schema.json",
@@ -4637,6 +4824,9 @@
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "boolean_capability"
+                  },
+                  "playerEffect": {
+                    "$ref": "#/$defs/player_effect"
                   }
                 },
                 "required": [
@@ -5606,24 +5796,6 @@
                     "x-infini-semanticType": "probability_percent",
                     "x-infini-units": "probability_percent"
                   },
-                  "autoManaPotion": {
-                    "description": "Automatically consume available mana potions when mana is insufficient.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "coinPickup": {
-                    "description": "Increase pickup range for coins.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "creatureVision": {
-                    "description": "Highlight creatures using Hunter visibility.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "damageReductionPercentagePoints": {
                     "description": "Add percentage points of damage reduction",
                     "maximum": 75,
@@ -5643,12 +5815,6 @@
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
                   },
-                  "dangerVision": {
-                    "description": "Highlight dangerous tiles using Dangersense visibility.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "defensePoints": {
                     "description": "Add native item defense",
                     "maximum": 200,
@@ -5658,18 +5824,6 @@
                     "x-infini-semanticType": "defense_points",
                     "x-infini-units": "defense_points"
                   },
-                  "enemyInfo": {
-                    "description": "Show the nearby enemy count.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "extendedInvulnerability": {
-                    "description": "Extend immunity after taking damage, as Cross Necklace.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "fallDamageImmune": {
                     "description": "Prevent fall damage while equipped",
                     "type": "boolean",
@@ -5678,39 +5832,6 @@
                   },
                   "fireWalk": {
                     "description": "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "fishingCrates": {
-                    "description": "Increase crate chance using Terraria's crate-potion effect.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "fishingInfo": {
-                    "description": "Show fishing power.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "fishingLine": {
-                    "description": "Prevent fishing-line breaks.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "fishingPower": {
-                    "description": "Add fishing-power points before rod, bait and environment modifiers.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
-                    "x-infini-units": "fishing power points"
-                  },
-                  "fishingSonar": {
-                    "description": "Show the currently hooked catch.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -5795,26 +5916,8 @@
                     "x-infini-semanticType": "blocks/s",
                     "x-infini-units": "blocks/s"
                   },
-                  "killCountInfo": {
-                    "description": "Show the kill tally.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "lavaFishing": {
-                    "description": "Allow fishing in lava with suitable fishing equipment.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "lavaImmune": {
                     "description": "Grant lava immunity while equipped",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "lifePickup": {
-                    "description": "Increase pickup range for health hearts.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -5876,12 +5979,6 @@
                     "x-infini-semanticType": "percentage_points",
                     "x-infini-units": "percentage_points"
                   },
-                  "manaPickup": {
-                    "description": "Increase pickup range for mana stars.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "manaRegenBonusPoints": {
                     "description": "Add Player.manaRegenBonus points.",
                     "maximum": 200,
@@ -5936,12 +6033,6 @@
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
                   },
-                  "moonInfo": {
-                    "description": "Show the moon phase.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "moveSpeedBonusPercent": {
                     "description": "Add a movement-speed percentage bonus",
                     "maximum": 300,
@@ -5961,41 +6052,14 @@
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
                   },
-                  "nightVision": {
-                    "description": "Improve visibility in darkness without emitting light.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "noKnockback": {
                     "description": "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "oreInfo": {
-                    "description": "Show the nearby valuable material detected by the Metal Detector.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "potionCooldown": {
-                    "description": "Reduce healing-potion cooldown using the Philosopher's Stone effect.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "rareCreatureInfo": {
-                    "description": "Show rare-creature information.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "restingRecovery": {
-                    "description": "Boost natural life regeneration while resting, using Shiny Stone conditions.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
+                  "playerEffect": {
+                    "$ref": "#/$defs/player_effect"
                   },
                   "rocketBoots": {
                     "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing, sliding or movement-ability refresh refill, wings may convert charges to wingTime; mounts suppress flight",
@@ -6014,12 +6078,6 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
-                  },
-                  "speedInfo": {
-                    "description": "Show movement speed.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
                   },
                   "taggedSummonSourceDamageBonusPercent": {
                     "description": "Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip",
@@ -6040,26 +6098,8 @@
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
                   },
-                  "treasurePickup": {
-                    "description": "Increase general item pickup range; combines with specialized magnets.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "treasureVision": {
-                    "description": "Highlight treasure tiles using Spelunker visibility.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "waterWalk": {
                     "description": "Walk on water while equipped",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "weatherInfo": {
-                    "description": "Show weather information.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -6399,6 +6439,9 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
+                  },
+                  "playerEffect": {
+                    "$ref": "#/$defs/player_effect"
                   },
                   "sentrySlotsBonus": {
                     "description": "Add sentry slots",
@@ -10604,6 +10647,89 @@
                   "graphEdge": false,
                   "namespace": "entity",
                   "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "reduce_healing_potion_cooldown_on_event"
+              },
+              "id": {
+                "description": "Stable unique call id.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "seconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Amount removed per admitted event; 0.5 seconds removes 30 ticks. No active cooldown means no change.",
+                    "maximum": 60.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "when": {
+                    "description": "Exact emitted event",
+                    "enum": [
+                      "on_hit",
+                      "on_crit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_trigger"
+                  }
+                },
+                "required": [
+                  "when",
+                  "seconds"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body",
                     "owner_attached_projectile",
                     "free_projectile",
                     "stationary_projectile",

@@ -1524,6 +1524,31 @@ _MOVEMENT_OWNER = "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::
 _COMPILER_OWNER = "infini_local.core.runtime_authoring.compiler::compile_runtime_program"
 
 
+def _player_effect_param() -> ParamSpec:
+    """Shared mechanical vocabulary for equipment and timed generated buffs."""
+    return _p("object", "Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff.", required=False, shared_type="player_effect", min_properties=1, properties={
+        "condition": _p("string", "When to apply this component: stationary requires zero velocity and no active item animation.", required=False, enum=("always", "stationary"), default="always", neutral="always", wire_name="playerEffect.condition"),
+        "fishingPowerPoints": _p("integer", 'Add fishing-power points before native rod/bait/environment multipliers.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.fishingPowerPoints", wire_presence_requires_receipt=True),
+        "preventLineBreak": _p("boolean", 'Prevent fishing-line breakage.', required=False, neutral=False, wire_name="playerEffect.preventLineBreak", wire_presence_requires_receipt=True),
+        "allowLavaFishing": _p("boolean", 'Allow catches in lava with otherwise suitable fishing gear.', required=False, neutral=False, wire_name="playerEffect.allowLavaFishing", wire_presence_requires_receipt=True),
+        "revealHookedCatch": _p("boolean", 'Reveal the hooked catch before reeling it in.', required=False, neutral=False, wire_name="playerEffect.revealHookedCatch", wire_presence_requires_receipt=True),
+        "extraCrateChancePercent": _p("integer", "Additional independent percent chance to turn a non-crate fishing attempt into a crate attempt; ordinary catch eligibility remains native.", required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.extraCrateChancePercent", wire_presence_requires_receipt=True),
+        "itemPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for every item; combines with specialized ranges.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.itemPickupRangePx", wire_presence_requires_receipt=True), "itemPickupRangePx", multiplier=16, units='blocks'),
+        "heartPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for heart pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.heartPickupRangePx", wire_presence_requires_receipt=True), "heartPickupRangePx", multiplier=16, units='blocks'),
+        "manaPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for mana-star pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.manaPickupRangePx", wire_presence_requires_receipt=True), "manaPickupRangePx", multiplier=16, units='blocks'),
+        "coinPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for coins.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.coinPickupRangePx", wire_presence_requires_receipt=True), "coinPickupRangePx", multiplier=16, units='blocks'),
+        "highlightTreasure": _p("boolean", 'Enable native treasure highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightTreasure", wire_presence_requires_receipt=True),
+        "highlightDanger": _p("boolean", 'Enable native hazardous-tile highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightDanger", wire_presence_requires_receipt=True),
+        "highlightCreatures": _p("boolean", 'Enable native creature highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightCreatures", wire_presence_requires_receipt=True),
+        "nightVision": _p("boolean", 'Improve dark visibility without emitting world light.', required=False, neutral=False, wire_name="playerEffect.nightVision", wire_presence_requires_receipt=True),
+        "healingPotionCooldownReductionPercent": _p("integer", 'Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.', required=False, minimum=0, maximum=90, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionPercent", wire_presence_requires_receipt=True),
+        "healingPotionCooldownReductionSeconds": _seconds(_p("integer", 'Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.', required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownReductionTicks"),
+        "autoManaPotionBelowPercent": _p("integer", 'Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.autoManaPotionBelowPercent", wire_presence_requires_receipt=True),
+        "lifeRegenHpPerSecond": _world_units(_p("integer", 'Signed life-regeneration contribution; condition controls when this component is active.', required=False, minimum=-100, maximum=200, neutral=0, wire_name="playerEffect.lifeRegenUnits", wire_presence_requires_receipt=True), "lifeRegenUnits", multiplier=2, units='HP/s'),
+        "healingPotionCooldownOnHitReductionSeconds": _seconds(_p("integer", "Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.", required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownOnHitReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownOnHitReductionTicks"),
+        "hurtInvulnerabilityBonusSeconds": _seconds(_p("integer", "Add immunity time after a surviving hurt to that hit's actual immunity slot.", required=False, minimum=0, maximum=300, neutral=0, wire_name="playerEffect.hurtInvulnerabilityBonusTicks", wire_presence_requires_receipt=True), "hurtInvulnerabilityBonusTicks"),
+    })
+
 def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
     """One Author vocabulary for equipped effects and their exact DTO projection."""
     phase = "ModItem.UpdateEquip" if armor else "ModItem.UpdateAccessory"
@@ -1558,6 +1583,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                   consumer_storage="float32" if percent else "")
 
     p: dict[str, ParamSpec] = {
+        "playerEffect": _player_effect_param(),
         "defensePoints": stat("defense", "Add native item defense", 0 if armor else -50, 200, "defense_points", integer=True),
         "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
         "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
@@ -1591,30 +1617,6 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                      neutral=False, execution_phase=phase)
     if not armor:
         for name, meaning in (
-            ("fishingLine", "Prevent fishing-line breaks."),
-            ("lavaFishing", "Allow fishing in lava with suitable fishing equipment."),
-            ("fishingSonar", "Show the currently hooked catch."),
-            ("fishingCrates", "Increase crate chance using Terraria's crate-potion effect."),
-            ("lifePickup", "Increase pickup range for health hearts."),
-            ("manaPickup", "Increase pickup range for mana stars."),
-            ("coinPickup", "Increase pickup range for coins."),
-            ("treasurePickup", "Increase general item pickup range; combines with specialized magnets."),
-            ("treasureVision", "Highlight treasure tiles using Spelunker visibility."),
-            ("dangerVision", "Highlight dangerous tiles using Dangersense visibility."),
-            ("creatureVision", "Highlight creatures using Hunter visibility."),
-            ("nightVision", "Improve visibility in darkness without emitting light."),
-            ("fishingInfo", "Show fishing power."),
-            ("weatherInfo", "Show weather information."),
-            ("moonInfo", "Show the moon phase."),
-            ("enemyInfo", "Show the nearby enemy count."),
-            ("speedInfo", "Show movement speed."),
-            ("oreInfo", "Show the nearby valuable material detected by the Metal Detector."),
-            ("rareCreatureInfo", "Show rare-creature information."),
-            ("killCountInfo", "Show the kill tally."),
-            ("potionCooldown", "Reduce healing-potion cooldown using the Philosopher's Stone effect."),
-            ("autoManaPotion", "Automatically consume available mana potions when mana is insufficient."),
-            ("restingRecovery", "Boost natural life regeneration while resting, using Shiny Stone conditions."),
-            ("extendedInvulnerability", "Extend immunity after taking damage, as Cross Necklace."),
             ("iceSkate", "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed"),
             ("noKnockback", "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate"),
             ("fireWalk", "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles"),
@@ -1623,7 +1625,6 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                          execution_phase=phase, wire_presence_requires_receipt=True)
         p["accRunSpeedBlocksPerSecond"] = _world_units(_p("number", "Native sprint-speed floor: max(Player.accRunSpeed, lowered value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus", required=False, minimum=0, maximum=20, units="pixels_per_tick", wire_name="accRunSpeed", neutral=0, consumer_storage="float32", execution_phase=phase, wire_presence_requires_receipt=True), "accRunSpeedPxPerTick", multiplier=16, divisor=60, updates_power=0, units='blocks/s')
         p["rocketBoots"] = _p("integer", "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing, sliding or movement-ability refresh refill, wings may convert charges to wingTime; mounts suppress flight", required=False, minimum=0, maximum=5, units="native rocket flight mode", wire_name="rocketBoots", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["fishingPower"] = _p("integer", "Add fishing-power points before rod, bait and environment modifiers.", required=False, minimum=0, maximum=100, units="fishing power points", wire_name="fishingPower", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
         p["wireVision"] = _p("boolean", "Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation", required=False, wire_name="wireVision", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
     if armor:
         set_phase = "ModItem.UpdateArmorSet; exact setKey on head, body and legs"
@@ -2166,6 +2167,7 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
+            "playerEffect": _player_effect_param(),
             "combat": _p("object", "Optional signed temporary combat modifiers; all fields explicit when selected. Negative values penalize their selected stat; zero has no effect. Same-effect refresh does not stack. No automatic active binding.", required=False, properties={
                 "defensePoints": _p("integer", "Signed Player.statDefense points; negative weakens defense; aggregate generated-buff range -100..100", minimum=-100, maximum=100, neutral=0, wire_name="combat.defensePoints"),
                 "attackSpeedPercent": _p("number", "Signed additive generic attack speed percent; negative slows attacks; aggregate range -80..100", minimum=-80, maximum=100, neutral=0, wire_name="combat.attackSpeedPercent", consumer_storage="float32"),
@@ -2188,6 +2190,7 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER,
         cs="Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
         wire=(
+            *("gameplay.generatedBuff." + path for path in _player_effect_param().wire_field_names("playerEffect")),
             "gameplay.generatedBuff.durationTicks",
             "gameplay.generatedBuff.exhaustionTicks",
             "gameplay.generatedBuff.miningSpeedMultiplier",
@@ -3170,6 +3173,17 @@ _CAPS.extend([
         fixed_wire_literals={"mode": "owner_to_target", "radiusTiles": 1},
     ),
     _cap(
+        "reduce_healing_potion_cooldown_on_event",
+        "Subtract authored seconds from the owner's already running healing-potion cooldown. Both native potionDelay and Potion Sickness remaining time decrease, floored at zero.",
+        "event", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
+        {"when": _event_when_param(("on_hit", "on_crit")),
+         "seconds": _seconds(_p("integer", "Amount removed per admitted event; 0.5 seconds removes 30 ticks. No active cooldown means no change.", minimum=1, maximum=3600, wire_name="cooldownReductionTicks", wire_presence_requires_receipt=True), "cooldownReductionTicks")},
+        component_slot="event_action", authority="owner_execute_sync", meaningful_for_stationary=True,
+        multiplicity="many_per_target", py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        events=("on_hit", "on_crit"),
+    ),
+    _cap(
         "heal_owner_on_event",
         "Heal the owning player from dealt damage on hit/crit.",
         "event",
@@ -3818,6 +3832,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "apply_generated_buff_on_event": 9,
     "damage_nearby_on_event": 10,
     "apply_npc_effect_on_event": 11,
+    "reduce_healing_potion_cooldown_on_event": 12,
 })
 
 

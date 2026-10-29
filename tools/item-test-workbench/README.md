@@ -366,6 +366,35 @@ loads genuine MagicPixel/PixelShader resources, and enables full projectile hook
 Without that mode, the authored projectile draw-core path remains explicitly partial.
 The inventory preview is a separate thumbnail, not a second world item.
 
+`historyRibbon` uses the original `InfiniVfxRuntime.Draw` with the live generated
+projectile's native center history and shared draw budget. Full artwork/player
+mode executes it through original `GeneratedProjectile.PreDraw`. For a mechanical
+or no-image item, explicitly select the procedural VFX-only path instead:
+
+```sh
+python -m toolbox workbench probe --item /path/item.json --mode client_vfx \
+  --set dummy.x=840 \
+  --set 'nativeRender={"drawProjectileVfx":true,"drawNativeDust":true,"cameraX":650,"cameraY":550}' \
+  --assert dummy_damaged
+```
+
+This loads verified native MagicPixel/Dust/shader resources via the existing
+`INFINI_PLAYER_ASSET_DIR` / `INFINI_TML_CONTENT_DIR` setup. It calls the original
+under/over projectile VFX passes and detached wrapper without drawing or inventing
+missing authored sprites. `drawProjectileVfx` and `drawArtwork` are separate explicit
+choices; artwork mode already owns its full PreDraw. `impactRing` also requires
+`drawNativeDust:true`. Active draw runs with `capture:false` too; capture selects PNG
+export only. Recorded `activeProjectileVfx.historyRibbonDraws` contain actual native
+history samples, submitted SpriteBatch segments and geometry. A stationary history
+can correctly submit zero segments. These observations are not whole-artwork approval.
+
+Reusable native controls, optionally including an unchanged authored item:
+
+```sh
+python tools/item-test-workbench/verify_history_ribbon.py --no-build \
+  --out artifacts/history-controls --item /path/item.json
+```
+
 `drawNativeDust: true` runs original `Main.DrawDust` after the player pass. Because
 that method can retire dust, **`capture: false` still executes the GPU draw lifecycle
 in dust mode and skips only PNG export**. In earlier modes without native dust,
@@ -709,8 +738,27 @@ targets have an initial 0.5 px/tick velocity integrated by original `NPC.UpdateN
 not a separate physics model. Zero-defense and configured-defense results are not
 interchangeable. None of these measurements emits a balance/quality PASS.
 
-The twelve optional vanilla geometry textures are source PNGs from the pinned
-community 1.4.4.9 extraction, **not official-byte-certified**, and are not bundled.
+Vanilla geometry loading uses the complete pinned source index of 5414 item PNGs,
+embedded in the native executable. There is no per-item ID allowlist in the loader.
+Fetch any needed native item IDs explicitly; the original twelve-item control set
+remains the downloader's default:
+
+```sh
+python tools/item-test-workbench/fetch_performance_assets.py \
+  --items 24 3507 --out artifacts/dependencies/vanilla-assets
+python -m toolbox workbench probe --vanilla-item WoodenSword \
+  --mode client_hybrid --set dummy.x=840 \
+  --set 'vanillaAssetRoot="artifacts/dependencies/vanilla-assets"' \
+  --assert dummy_damaged
+```
+
+The downloader and native loader verify exact Git blob SHA-1 and byte length against
+the pinned commit's source tree, bounded PNG dimensions, and symlink/reparse refusal.
+The native receipt adds SHA-256 and actual loaded dimensions. Missing or changed
+PNGs refuse; they are not substituted. The index contains source availability facts,
+not gameplay support guarantees. It is reproducible with
+`index_vanilla_assets.py --out /path/vanilla-item-assets.json`. The PNGs are community
+1.4.4.9 extractions, **not official-byte-certified**, and are not bundled.
 Private definitions, authored art, logs and rendered evidence stay outside git.
 
 For a sustained **repeated-press** view, choose an explicit schedule rather than

@@ -313,6 +313,9 @@ public partial class GeneratedItem
                 Effect("Light", "Light", RuntimeTooltipNumber(generated.EmitLightStrength));
             // The executable effect sets findTreasure, not a radius-limited scan.
             if (generated.OreSenseEnabled) add("OreSense" + suffix, "OreSense", new object[] { input, duration });
+            if (generated.PlayerEffect is { HasEffect: true } effect)
+                add("PlayerEffectBuff" + suffix, "PlayerEffectBuff", new object[] { input,
+                    PlayerEffectDescription.Build(effect, RuntimeTooltipCulture), duration });
             if (generated.Combat is { HasEffect: true } combat)
             {
                 if (combat.DefensePoints != 0) Effect("CombatDefense", "CombatDefense", (combat.DefensePoints >= 0 ? "+" : "") + combat.DefensePoints.ToString(CultureInfo.InvariantCulture));

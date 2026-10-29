@@ -1,5 +1,5 @@
 {
-  "authorVisibleCapabilityCount": 69,
+  "authorVisibleCapabilityCount": 70,
   "cases": [
     {
       "brokenCounts": {
@@ -147,8 +147,8 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 161925,
-  "fullCapabilityCatalogCount": 99,
+  "fullAuthorPayloadChars": 165351,
+  "fullCapabilityCatalogCount": 100,
   "ok": true,
   "policyCoverage": {
     "declaredCodes": 56,

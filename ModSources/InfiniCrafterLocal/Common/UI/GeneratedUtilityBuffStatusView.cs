@@ -14,7 +14,7 @@ internal readonly record struct GeneratedUtilityBuffValues(
     int RemainingTicks, float MiningSpeedMultiplier, float EmitLightStrength,
     string LightColorName, int OreSenseRadiusTiles, float MovementSpeed,
     float JumpBoost, int ManaRegen, int LifeRegen, int Defense = 0, float AttackSpeed = 0,
-    float CritChance = 0, IReadOnlyDictionary<string, float>? DamageBonuses = null);
+    float CritChance = 0, IReadOnlyDictionary<string, float>? DamageBonuses = null, global::InfiniCrafterLocal.Common.Models.PlayerEffectSpec? PlayerEffect = null);
 
 internal sealed record GeneratedUtilityBuffPresentation(
     GeneratedUtilityBuffValues Current, IReadOnlyList<GeneratedUtilityBuffValues> Entries);
@@ -22,7 +22,7 @@ internal sealed record GeneratedUtilityBuffPresentation(
 internal enum GeneratedUtilityBuffField
 {
     MiningSpeedMultiplier, EmitLightStrength, OreSenseRadiusTiles,
-    MovementSpeed, JumpBoost, ManaRegen, LifeRegen, Defense, AttackSpeed, CritChance, Damage,
+    MovementSpeed, JumpBoost, ManaRegen, LifeRegen, Defense, AttackSpeed, CritChance, Damage, PlayerEffect,
 }
 
 internal sealed record GeneratedUtilityBuffStatus(
@@ -73,6 +73,11 @@ internal static class GeneratedUtilityBuffStatusView
                 + contributions;
             statuses.Add(new(mapping.Field, mapping.Icon, russian ? mapping.RussianLabel : mapping.Label, remaining, tooltip));
         }
+        foreach (var entry in snapshot.Entries)
+            if (entry.RemainingTicks > 0 && entry.PlayerEffect is { HasEffect: true } effect)
+                statuses.Add(new(GeneratedUtilityBuffField.PlayerEffect, BuffID.WellFed,
+                    russian ? "Модификатор игрока" : "Player modifier", entry.RemainingTicks,
+                    PlayerEffectDescription.Build(effect, culture) + " — " + Duration(entry.RemainingTicks, culture)));
         return statuses.AsReadOnly();
     }
 

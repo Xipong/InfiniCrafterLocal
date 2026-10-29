@@ -32,6 +32,7 @@ public sealed partial class InfiniCraftPlayer
         public int ManaRegen;
         public int LifeRegen;
         public GeneratedCombatBuffSpec? Combat;
+        public PlayerEffectSpec? PlayerEffect;
 
         public static ActiveGeneratedUtilityBuff From(GeneratedBuffSpec buff) => new()
         {
@@ -46,6 +47,7 @@ public sealed partial class InfiniCraftPlayer
             ManaRegen = Math.Clamp(buff.ManaRegen, -100, 120),
             LifeRegen = Math.Clamp(buff.LifeRegen, -100, 120),
             Combat = buff.Combat,
+            PlayerEffect = buff.PlayerEffect,
         };
 
         public bool SameEffect(ActiveGeneratedUtilityBuff other)
@@ -57,7 +59,8 @@ public sealed partial class InfiniCraftPlayer
             && JumpBoost == other.JumpBoost
             && ManaRegen == other.ManaRegen
             && LifeRegen == other.LifeRegen
-            && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat);
+            && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat)
+            && PlayerEffectSpec.SameEffect(PlayerEffect, other.PlayerEffect);
     }
 
     public bool TryReserveGeneratedMobilityCooldown(int cooldownTicks)
@@ -394,6 +397,8 @@ public sealed partial class InfiniCraftPlayer
 
     private void ApplyGeneratedUtilityBuffEffects()
     {
+        foreach (var active in _activeGeneratedUtilityBuffs)
+            if (active.Ticks > 0 && active.PlayerEffect is { } effect) ApplyPlayerEffect(effect);
         if (Player.dead || _generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
             return;
         if (_generatedMiningSpeedMultiplier != 1f)

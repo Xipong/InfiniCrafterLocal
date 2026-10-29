@@ -346,7 +346,7 @@ def declared_neutral_omissions(fn: str, params: Mapping[str, Any]) -> dict[str, 
                     omitted.update((leaf, value) for leaf, _, value in spec.leaf_values(spec.default, path))
                 else:
                     omitted[path] = spec.default
-            elif (prefix or name in cap.nested_components) and name in values and spec.properties and isinstance(values[name], Mapping):
+            elif name in values and spec.properties and isinstance(values[name], Mapping):
                 omitted.update(walk(spec.properties, values[name], path + "."))
         return omitted
     return walk(cap.params, params)

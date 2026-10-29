@@ -2367,6 +2367,7 @@
                           "damage_nearest_on_event",
                           "pull_on_event",
                           "pull_owner_to_event_target",
+                          "reduce_healing_potion_cooldown_on_event",
                           "heal_owner_on_event",
                           "move_owner_on_event",
                           "emit_light_while_active"

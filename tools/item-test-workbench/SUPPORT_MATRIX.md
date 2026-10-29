@@ -17,6 +17,8 @@ false: the utility initializes a controlled scene instead of running all of Main
 | Placement/mining | Native ItemCheck placement/mining, ledger commit/retirement and canonical-definition-preserving material return | Explicit tile scenarios only; break_tile is external native stimulus; no world save/ecology parity |
 | Item-body contact | Original client use-style/contact and supported use/hit/crit events | Requires explicit client modes; unsupported effect combinations refuse |
 | Authored VFX | Original supported ParticleLibrary resources, updates and draw wrapper | Not all visual-slot kinds, shaders, sound output or mod content |
+| History ribbon | Original InfiniVfxRuntime.Draw/DrawTrail with live native projectile history; full PreDraw or explicit procedural-only pass; recorded segment submissions | Native MagicPixel assets required; procedural-only mode does not draw missing authored/player artwork; zero-motion histories need not emit geometry |
+| Vanilla item geometry | Exact PNG lookup from complete pinned source inventory; Git blob/size/IHDR checks and original native PngReader | Assets must be supplied explicitly; source availability is not all-weapon gameplay certification or official-byte identity |
 | Authored PNGs | Original sprite resolver and item/projectile drawing paths; publication identity checks | Baked/reused PNG subset; no silent geometry/asset fallback |
 | Player artwork | Original player renderer/layer ordering, starter skin/hair, generated held layer once | No arbitrary armor, appearance variants, mounts, world background or complete Main.Draw |
 | Training dummy | Original tile378 placement, tile entity, linked NPC488, native AI/frame and tile renderer | Native immortal target differs from damageable fixture; reactivation/respawn not certified |
@@ -71,8 +73,9 @@ loaded-world appearance. Fixed camera framing remains an explicit scenario input
 
 Authored material paths/elements and impact sprites use the original detached
 renderer with exact selected publication assets. Their native state is recorded
-separately from particle state. `impactRing` requires the original full projectile
-and dust paths. Source-only admission or a successful scenario with no matching
+separately from particle state. `impactRing` requires the original active projectile
+and dust paths, through full artwork or explicit `drawProjectileVfx` mode.
+`historyRibbon` requires the active native history/draw context. Source-only admission or a successful scenario with no matching
 emission does not certify that visual lane. Full-player held-projectile rendering
 must be checked separately from the partial authored-art lane.
 

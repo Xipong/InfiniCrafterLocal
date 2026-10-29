@@ -34,6 +34,9 @@ public partial class GeneratedItem
         {
             if (enabled) detail("Equipment" + name, "Equipment" + name, new object[] { input });
         }
+        if ((a?.PlayerEffect ?? armor?.PlayerEffect) is { HasEffect: true } effect)
+            detail("PlayerEffectEquipment", "PlayerEffectEquipment", new object[] { input,
+                global::InfiniCrafterLocal.Common.UI.PlayerEffectDescription.Build(effect, RuntimeTooltipCulture) });
         Stat("MaxLife", "EquipmentMaxLife", a?.MaxLife ?? armor!.MaxLife);
         Stat("MaxMana", "EquipmentMaxMana", a?.MaxMana ?? armor!.MaxMana);
         // Native lifeRegen is half-HP/s points; manaRegenBonus is NOT mana/s.
@@ -70,31 +73,6 @@ public partial class GeneratedItem
         if (light > 0f) Stat("Light", "EquipmentLight", Math.Clamp(light, 0f, 1.5f));
         if (a is not null)
         {
-            Flag("FishingLine", a.FishingLine == true);
-            Flag("LavaFishing", a.LavaFishing == true);
-            Flag("FishingSonar", a.FishingSonar == true);
-            Flag("FishingCrates", a.FishingCrates == true);
-            Stat("FishingPower", "EquipmentFishingPower", a.FishingPower ?? 0);
-            Flag("LifePickup", a.LifePickup == true);
-            Flag("ManaPickup", a.ManaPickup == true);
-            Flag("CoinPickup", a.CoinPickup == true);
-            Flag("TreasurePickup", a.TreasurePickup == true);
-            Flag("TreasureVision", a.TreasureVision == true);
-            Flag("DangerVision", a.DangerVision == true);
-            Flag("CreatureVision", a.CreatureVision == true);
-            Flag("NightVision", a.NightVision == true);
-            Flag("FishingInfo", a.FishingInfo == true);
-            Flag("WeatherInfo", a.WeatherInfo == true);
-            Flag("MoonInfo", a.MoonInfo == true);
-            Flag("EnemyInfo", a.EnemyInfo == true);
-            Flag("SpeedInfo", a.SpeedInfo == true);
-            Flag("OreInfo", a.OreInfo == true);
-            Flag("RareCreatureInfo", a.RareCreatureInfo == true);
-            Flag("KillCountInfo", a.KillCountInfo == true);
-            Flag("PotionCooldown", a.PotionCooldown == true);
-            Flag("AutoManaPotion", a.AutoManaPotion == true);
-            Flag("RestingRecovery", a.RestingRecovery == true);
-            Flag("ExtendedInvulnerability", a.ExtendedInvulnerability == true);
             Flag("WireVision", a.WireVision); Flag("IceSkate", a.IceSkate);
             Flag("NoKnockback", a.NoKnockback); Flag("FireWalk", a.FireWalk);
             Stat("RocketBoots", "EquipmentRocketBoots", a.RocketBoots);

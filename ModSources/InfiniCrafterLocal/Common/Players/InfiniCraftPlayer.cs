@@ -118,6 +118,7 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
 
     public override void ResetEffects()
     {
+        ResetPlayerEffects();
         _reactiveEquipment.Clear();
         // Rebuild generated grants from currently equipped items every tick.
         // Keep the exact ammo chance instead of Terraria's coarse 20%/25% flags.

@@ -497,14 +497,42 @@ def author_item_provider_repair_response_schema(
         omit_annotations=True)
 
 
-def _project_nullable_transport(value: Any, local: Mapping[str, Any], provider: Mapping[str, Any]) -> Any:
+def _project_nullable_transport(
+    value: Any, local: Mapping[str, Any], provider: Mapping[str, Any], *,
+    local_root: Mapping[str, Any] | None = None, provider_root: Mapping[str, Any] | None = None,
+) -> Any:
     """Invert only declared optional-property wrappers, never authored containers.
 
     Union selection uses the schema owner's literal discriminators, not validation
     success: an unrelated invalid value must remain available to Repair unchanged.
     Ambiguous/unknown variants are copied intact for the canonical validator.
     """
-    local = _provider_subset_shape(local)
+    local_root = local if local_root is None else local_root
+    provider_root = provider if provider_root is None else provider_root
+
+    def resolve(schema: Mapping[str, Any], root: Mapping[str, Any]) -> Mapping[str, Any] | None:
+        seen: set[str] = set()
+        while "$ref" in schema:
+            reference = schema["$ref"]
+            # Only an exact local schema reference; never follow remote URLs,
+            # discard sibling constraints or loop through a recursive reference.
+            if (set(schema) != {"$ref"} or not isinstance(reference, str)
+                or not reference.startswith("#/") or reference in seen):
+                return None
+            seen.add(reference)
+            target: Any = root
+            for part in reference[2:].split("/"):
+                target = target.get(part.replace("~1", "/").replace("~0", "~")) if isinstance(target, Mapping) else None
+            if not isinstance(target, Mapping):
+                return None
+            schema = target
+        return schema
+
+    resolved_local, resolved_provider = resolve(local, local_root), resolve(provider, provider_root)
+    if resolved_local is None or resolved_provider is None:
+        return copy.deepcopy(value)
+    local = _provider_subset_shape(resolved_local)
+    provider = resolved_provider
     branches, sent_branches = local.get("anyOf"), provider.get("anyOf")
     if isinstance(branches, list):
         if not isinstance(sent_branches, list) or not all(isinstance(branch, Mapping) for branch in sent_branches):
@@ -514,7 +542,8 @@ def _project_nullable_transport(value: Any, local: Mapping[str, Any], provider: 
         sent_index = _union_branch_index(value, sent_branches, paths)
         if index is None or sent_index is None:
             return copy.deepcopy(value)
-        return _project_nullable_transport(value, branches[index], sent_branches[sent_index])
+        return _project_nullable_transport(value, branches[index], sent_branches[sent_index],
+                                           local_root=local_root, provider_root=provider_root)
     if isinstance(value, dict):
         local_props = local.get("properties") or {}
         sent_props = provider.get("properties") or {}
@@ -541,12 +570,14 @@ def _project_nullable_transport(value: Any, local: Mapping[str, Any], provider: 
                 if child is None:
                     continue
                 child_sent = wrapper[0]
-            out[key] = _project_nullable_transport(child, child_local, child_sent)
+            out[key] = _project_nullable_transport(child, child_local, child_sent,
+                                                  local_root=local_root, provider_root=provider_root)
         return out
     if isinstance(value, list):
         local_items, sent_items = local.get("items"), provider.get("items")
         if isinstance(local_items, Mapping) and isinstance(sent_items, Mapping):
-            return [_project_nullable_transport(child, local_items, sent_items) for child in value]
+            return [_project_nullable_transport(child, local_items, sent_items,
+                                                local_root=local_root, provider_root=provider_root) for child in value]
     return copy.deepcopy(value)
 
 

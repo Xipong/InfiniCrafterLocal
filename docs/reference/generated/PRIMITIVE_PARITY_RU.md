@@ -35,6 +35,7 @@ Author schema ограничивает значения всех примити�
 
 | Author | Действие / engine semantics | Единица | Neutral | Author range | Wire DTO | Фаза |
 |---|---|---|---|---|---|---|
+| playerEffect | Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff. | bounded_text | None | object | accessory.playerEffect | C# normalized item projection |
 | defensePoints | Add native item defense | defense_points | 0 | -50…200<br>runtime clamp: -100…500 | accessory.defense | ModItem.UpdateAccessory |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxLife | ModItem.UpdateAccessory |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxMana | ModItem.UpdateAccessory |
@@ -60,36 +61,11 @@ Author schema ограничивает значения всех примити�
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | accessory.waterWalk | ModItem.UpdateAccessory |
-| fishingLine | Prevent fishing-line breaks. | bounded_text | False | boolean | accessory.fishingLine | ModItem.UpdateAccessory |
-| lavaFishing | Allow fishing in lava with suitable fishing equipment. | bounded_text | False | boolean | accessory.lavaFishing | ModItem.UpdateAccessory |
-| fishingSonar | Show the currently hooked catch. | bounded_text | False | boolean | accessory.fishingSonar | ModItem.UpdateAccessory |
-| fishingCrates | Increase crate chance using Terraria's crate-potion effect. | bounded_text | False | boolean | accessory.fishingCrates | ModItem.UpdateAccessory |
-| lifePickup | Increase pickup range for health hearts. | bounded_text | False | boolean | accessory.lifePickup | ModItem.UpdateAccessory |
-| manaPickup | Increase pickup range for mana stars. | bounded_text | False | boolean | accessory.manaPickup | ModItem.UpdateAccessory |
-| coinPickup | Increase pickup range for coins. | bounded_text | False | boolean | accessory.coinPickup | ModItem.UpdateAccessory |
-| treasurePickup | Increase general item pickup range; combines with specialized magnets. | bounded_text | False | boolean | accessory.treasurePickup | ModItem.UpdateAccessory |
-| treasureVision | Highlight treasure tiles using Spelunker visibility. | bounded_text | False | boolean | accessory.treasureVision | ModItem.UpdateAccessory |
-| dangerVision | Highlight dangerous tiles using Dangersense visibility. | bounded_text | False | boolean | accessory.dangerVision | ModItem.UpdateAccessory |
-| creatureVision | Highlight creatures using Hunter visibility. | bounded_text | False | boolean | accessory.creatureVision | ModItem.UpdateAccessory |
-| nightVision | Improve visibility in darkness without emitting light. | bounded_text | False | boolean | accessory.nightVision | ModItem.UpdateAccessory |
-| fishingInfo | Show fishing power. | bounded_text | False | boolean | accessory.fishingInfo | ModItem.UpdateAccessory |
-| weatherInfo | Show weather information. | bounded_text | False | boolean | accessory.weatherInfo | ModItem.UpdateAccessory |
-| moonInfo | Show the moon phase. | bounded_text | False | boolean | accessory.moonInfo | ModItem.UpdateAccessory |
-| enemyInfo | Show the nearby enemy count. | bounded_text | False | boolean | accessory.enemyInfo | ModItem.UpdateAccessory |
-| speedInfo | Show movement speed. | bounded_text | False | boolean | accessory.speedInfo | ModItem.UpdateAccessory |
-| oreInfo | Show the nearby valuable material detected by the Metal Detector. | bounded_text | False | boolean | accessory.oreInfo | ModItem.UpdateAccessory |
-| rareCreatureInfo | Show rare-creature information. | bounded_text | False | boolean | accessory.rareCreatureInfo | ModItem.UpdateAccessory |
-| killCountInfo | Show the kill tally. | bounded_text | False | boolean | accessory.killCountInfo | ModItem.UpdateAccessory |
-| potionCooldown | Reduce healing-potion cooldown using the Philosopher's Stone effect. | bounded_text | False | boolean | accessory.potionCooldown | ModItem.UpdateAccessory |
-| autoManaPotion | Automatically consume available mana potions when mana is insufficient. | bounded_text | False | boolean | accessory.autoManaPotion | ModItem.UpdateAccessory |
-| restingRecovery | Boost natural life regeneration while resting, using Shiny Stone conditions. | bounded_text | False | boolean | accessory.restingRecovery | ModItem.UpdateAccessory |
-| extendedInvulnerability | Extend immunity after taking damage, as Cross Necklace. | bounded_text | False | boolean | accessory.extendedInvulnerability | ModItem.UpdateAccessory |
 | iceSkate | Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed | bounded_text | False | boolean | accessory.iceSkate | ModItem.UpdateAccessory |
 | noKnockback | Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate | bounded_text | False | boolean | accessory.noKnockback | ModItem.UpdateAccessory |
 | fireWalk | Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles | bounded_text | False | boolean | accessory.fireWalk | ModItem.UpdateAccessory |
 | accRunSpeedBlocksPerSecond | Author units: blocks/s. Native consumer: Native sprint-speed floor: max(Player.accRunSpeed, lowered value) in equip phase; 0 grants nothing. Later native terrain/mount/wing/chilled rules still apply; distinct from moveSpeed percent and the post-vanilla maxRunSpeed flat bonus | blocks/s | 0.0 | 0.0…75.0 | accessory.accRunSpeed = Author ×16 /60 | ModItem.UpdateAccessory |
 | rocketBoots | Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing, sliding or movement-ability refresh refill, wings may convert charges to wingTime; mounts suppress flight | native rocket flight mode | 0 | 0…5 | accessory.rocketBoots | ModItem.UpdateAccessory |
-| fishingPower | Add fishing-power points before rod, bait and environment modifiers. | fishing power points | 0 | 0…100 | accessory.fishingPower | ModItem.UpdateAccessory |
 | wireVision | Enable Player.InfoAccMechShowWires while equipped; native builder toggles choose wire colors and actuators; not ruler, placement or inventory activation | bounded_text | False | boolean | accessory.wireVision | ModItem.UpdateAccessory |
 
 Authority: `owner_execute_sync`; техническая фаза/сетевая роль выбираются runtime, не LLM.
@@ -100,6 +76,7 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 |---|---|---|---|---|---|---|
 | slot | Armor equip slot | bounded_text | None | head/body/legs | armor.slot | C# normalized item projection |
 | setKey | Exact authored set key (empty when no matching set is intended) | bounded_text |  | ^[a-z0-9_]{0,48}$ | armor.setKey | C# normalized item projection |
+| playerEffect | Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff. | bounded_text | None | object | armor.playerEffect | C# normalized item projection |
 | defensePoints | Add native item defense | defense_points | 0 | 0…200<br>runtime clamp: 0…500 | armor.defense | ModItem.UpdateEquip |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxLife | ModItem.UpdateEquip |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxMana | ModItem.UpdateEquip |
