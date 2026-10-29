@@ -22,7 +22,7 @@ public static partial class InfiniItemVfxRuntime
 
     public static void EmitAndSyncJump(Player player,GeneratedItemData source,Vector2 point,long sourceGeneration)
     {
-        if(player is null||!player.active||player.dead||!Finite(point)
+        if(player is null||!player.active||player.dead||!InfiniRuntimeAuthority.ShouldRunLocalPlayerAction(player)||!Finite(point)
             ||!player.GetModPlayer<InfiniCraftPlayer>().TryGetLiveAirJumpSource(source.Id,out var live,out long generation,
                 sourceGeneration)
             ||!live.HasAirJumpProducer||!HasExactSlot(live,live.RuntimeProgram.ItemEntityId,RuntimeEventKind.OnJump)
