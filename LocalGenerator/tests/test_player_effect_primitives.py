@@ -75,6 +75,19 @@ def test_information_progression_is_not_exposed(field):
     call['params'][field]=True
     assert not validate_runtime_program(doc)['ok']
 
+@pytest.mark.parametrize('effect', [
+    {'condition':'always'}, {'condition':'stationary'},
+    {'condition':'stationary','fishingPowerPoints':0,'preventLineBreak':False},
+])
+def test_accessory_requires_a_real_leaf_effect_beyond_component_condition(effect):
+    doc, _ = source('configure_accessory', effect)
+    report = validate_runtime_program(doc)
+    assert not report['ok']
+    assert any(row['code']=='inert_component' for row in report['errors'])
+    effect = {**effect, 'fishingPowerPoints':1}
+    doc, _ = source('configure_accessory', effect)
+    assert validate_runtime_wire(compile_runtime_program(doc))['ok']
+
 @pytest.mark.parametrize('fn', ['configure_accessory', 'configure_armor', 'apply_generated_buff_on_use'])
 def test_omitted_condition_has_exact_neutral_receipt_without_mutating_author(fn):
     doc, call = source(fn, {'heartPickupRangeBlocks': 3})

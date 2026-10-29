@@ -690,7 +690,10 @@ def _validate_requirement(
     if requirement.kind == "at_least_one_param_nonzero":
         declared_cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
         if declared_cap is None or not (
-            any(name in params and params[name] != declared_cap.params[name].neutral
+            any(name in params and any(
+                    leaf.neutral is not None and leaf.kind in {"number", "integer", "boolean"}
+                    and value != leaf.neutral
+                    for _, leaf, value in declared_cap.params[name].leaf_values(params[name], name))
                 for name in requirement.nonzero_params)
             or any(
                 row.get("fn") in requirement.any_of
