@@ -24,9 +24,9 @@ public sealed record GeneratedCombatBuffSpec
 
     public void Validate()
     {
-        if (DefensePoints is < 0 or > 100 || !float.IsFinite(AttackSpeedPercent) || AttackSpeedPercent is < 0 or > 100
-            || !float.IsFinite(CritChancePoints) || CritChancePoints is < 0 or > 100
-            || !float.IsFinite(DamagePercent) || DamagePercent is < 0 or > 200
+        if (DefensePoints is < -100 or > 100 || !float.IsFinite(AttackSpeedPercent) || AttackSpeedPercent is < -80 or > 100
+            || !float.IsFinite(CritChancePoints) || CritChancePoints is < -100 or > 100
+            || !float.IsFinite(DamagePercent) || DamagePercent is < -90 or > 200
             || DamageClass is not ("generic" or "melee" or "ranged" or "magic" or "summon" or "throwing"))
             throw new InvalidDataException("combat buff fields must match the registered finite domains");
     }

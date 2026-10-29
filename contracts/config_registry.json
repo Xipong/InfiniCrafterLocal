@@ -4638,7 +4638,25 @@
       "minimum": null,
       "name": "INFINI_TML_DEPS_SRC",
       "owners": [
-        "tools/agentctl.py"
+        "tools/agentctl.py",
+        "tools/item-test-workbench/fetch_vfx_assets.py",
+        "tools/item-test-workbench/workbench.py"
+      ],
+      "secret": false,
+      "type": "unknown",
+      "visibility": "internal"
+    },
+    {
+      "declarations": [],
+      "default": [],
+      "documented": false,
+      "example": null,
+      "gui": false,
+      "maximum": null,
+      "minimum": null,
+      "name": "INFINI_TML_REFERENCE_DIR",
+      "owners": [
+        "tools/item-test-workbench/workbench.py"
       ],
       "secret": false,
       "type": "unknown",
@@ -5393,8 +5411,8 @@
     }
   ],
   "errors": [],
-  "fieldCount": 219,
-  "fingerprint": "72e4af710da1f903fa0a5af019d6004e8a9afaa39ae2d90085f50066b62d9b96",
+  "fieldCount": 220,
+  "fingerprint": "7a919768edd0aa684d25279c76e58e70a4869ad50aa540178128df2b7062f25d",
   "generatedFrom": [
     "env_* calls in LocalGenerator/infini_local and tools",
     "LocalGenerator/infini_local/desktop/settings_schema.py",

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import json
 from io import BytesIO
 from pathlib import Path
 
@@ -20,6 +21,73 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_low_level_three_stage_pipeline import _vfx_output
 from pipeline_test_support import isolated_serving_roots, install_campaign_fault
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
+
+
+def test_campaign_placed_body_uses_authenticated_qa_root_png(tmp_path):
+    authored = build_runtime_fixture("fishing_platform_tool")
+    authored["runtimeProgram"]["calls"].append({
+        "id": "placed_body", "fn": "present_placed_item_sprite", "target": "item",
+        "params": {"placementCallId": "platform_result", "renderSizePx": 32,
+                   "footprintAnchorX": 0.5, "footprintAnchorY": 1,
+                   "pivotSpace": "alpha_bounds", "imagePivotX": 0.5, "imagePivotY": 1,
+                   "offsetXPx": 0, "offsetYPx": 0, "rotationDegrees": 0,
+                   "flipX": False, "flipY": False},
+    })
+    data = compile_runtime_program(authored)
+    data.update(id="qa-placed-body", visual={"preferredCanvasSize": 32,
+                "renderSizePx": 32, "forwardAngleDegrees": 0})
+    data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "qa-placed-body")
+    fixture = write_no_image_fixture_png(tmp_path / "qa-no-image-fixture.png")
+    data = sanitize_recipe_for_delivery(hydrate_no_image_fixture_assets(data, fixture))
+    before = copy.deepcopy(data)
+    assert "required_placed_body_sprite_missing" in {
+        row["code"] for row in visual_delivery_report(data, check_backend_config=False)["problems"]
+    }
+    observer = _campaign_observers(fixture)
+    assert observer.assert_visual_delivery_ready(data) is data
+    assert data == before
+    for status in ("pending", "failed", "unknown"):
+        refused = copy.deepcopy(data)
+        refused["visual"]["spriteStatus"] = status
+        with pytest.raises(visual_delivery_gate.VisualDeliveryBlocked):
+            observer.assert_visual_delivery_ready(refused)
+
+
+@pytest.mark.parametrize("mode", ["runtime_geometry", "no_asset", "baked_sprite"])
+def test_campaign_normalizes_prompts_only_for_image_jobs(tmp_path, mode):
+    from typing import Any, cast
+    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    from infini_local.pipelines.visual_prompt_contracts import asset_negative_prompt, normalize_asset_prompt
+
+    data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
+    data.update(id="qa-prompt-boundary", visual={
+        "preferredCanvasSize": 32, "renderSizePx": 32, "forwardAngleDegrees": 0,
+        "imagePrompt": "One explicit pixel-art fixture item on a magenta key background.",
+    })
+    data["vfxManifest"] = _compile_manifest(data, {"slots": []}, "qa-prompt-boundary")
+    entity = next(row for row in data["runtimeProgram"]["entities"] if row["kind"] != "item_body")
+    entity["visual"] = {"assetMode": mode, "prompt": "", "preferredCanvasSize": 32}
+    harness = Path(__file__).resolve().parents[2] / "toolbox/live/runner.py"
+    node = next(node for node in ast.parse(harness.read_text(encoding="utf-8")).body
+                if isinstance(node, ast.FunctionDef) and node.name == "capture_image_boundary")
+    captured = []
+    namespace = {"Any": Any, "cast": cast, "copy": copy, "json": json,
+                 "normalize_asset_prompt": normalize_asset_prompt, "asset_negative_prompt": asset_negative_prompt,
+                 "build_visual_asset_plan": build_visual_asset_plan,
+                 "hydrate_no_image_fixture_assets": hydrate_no_image_fixture_assets,
+                 "NO_IMAGE_FIXTURE": write_no_image_fixture_png(tmp_path / "qa-no-image-fixture.png"),
+                 "IMAGES": None, "case_trace_fields": lambda: {}, "append": lambda _path, row: captured.append(row)}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), str(harness), "exec"), namespace)
+    if mode == "baked_sprite":
+        with pytest.raises(ValueError, match="explicit non-empty authored image prompt required"):
+            namespace["capture_image_boundary"](data)
+    else:
+        namespace["capture_image_boundary"](data)
+        slot = next(row for row in captured[0]["backendCallsThatWouldOccur"]
+                    if row["role"] == "entity:" + entity["id"])
+        assert not slot["shouldCallBackend"]
+        assert slot["finalPrompt"] == ""
+        assert entity["visual"]["assetMode"] == mode
 
 
 def _campaign_observers(fixture):

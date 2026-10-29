@@ -387,10 +387,14 @@ def test_light_theme_and_accent_follow_current_navigation(browser_studio, viewpo
     def expect_route_highlight():
         # The active link is intentionally transparent: the separate accent
         # marker supplies its background, including after keyboard navigation.
+        # Marker geometry can settle before the link's background/color
+        # transitions finish; inspect the settled colors below, not a frame.
         page.wait_for_function('''() => {
             const marker = document.querySelector('.nav-active-marker').getBoundingClientRect();
-            const active = document.querySelector('.nav-link.active').getBoundingClientRect();
-            return ['top', 'left', 'width', 'height'].every(key => Math.abs(marker[key] - active[key]) <= 1);
+            const activeLink = document.querySelector('.nav-link.active');
+            const active = activeLink.getBoundingClientRect();
+            return ['top', 'left', 'width', 'height'].every(key => Math.abs(marker[key] - active[key]) <= 1)
+                && activeLink.getAnimations().every(animation => animation.playState === 'finished');
         }''')
 
     expect_route_highlight()

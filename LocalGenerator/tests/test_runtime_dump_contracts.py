@@ -38,6 +38,16 @@ def test_jsonl_index_tolerates_missing_and_malformed_records(tmp_path):
     assert by_type[42] == by_type["42"] == row
 
 
+def test_jsonl_bad_rows_do_not_hide_later_native_facts(tmp_path):
+    path = tmp_path / "dump.jsonl"
+    good = {"type": 42, "name": "Later projectile"}
+    invalid = [{"type": []}, {"type": {}}, {"type": True}, {"type": 42.5},
+               {"type": -1}, {"type": "invalid"}]
+    path.write_bytes(b'\xff\n' + b'{"type":2,"damage":NaN}\n'
+                     + b'\n'.join(json.dumps(row).encode() for row in [*invalid, good]) + b'\n')
+    assert dumps.load_jsonl_index(path) == ([good], {42: good})
+
+
 def test_startup_dump_snapshot_feeds_parent_context(tmp_path):
     items = tmp_path / "items.jsonl"
     projectiles = tmp_path / "projectiles.jsonl"

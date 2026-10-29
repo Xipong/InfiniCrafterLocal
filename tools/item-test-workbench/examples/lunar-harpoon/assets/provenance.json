@@ -1,0 +1,26 @@
+{
+  "authorship": "Original assistant-generated artwork for the user-requested native testbench exercise; not Terraria source art",
+  "tool": "image_gen.imagegen",
+  "prompt": "Use case: stylized-concept. Asset type: original Terraria-like pixel-art game weapon sprite for a real item test bench. Create ONE isolated lunar harpoon weapon on a genuinely transparent background. Straight vertical orientation, spear point UP, butt DOWN. Long slim dark navy shaft, a clearly readable wrapped leather grip in the lower third, silver crescent-shaped hooked spearhead, small cyan moon crystal inside the head. Crisp chunky low-resolution pixel art, limited 12-color palette, dark 1-pixel-style outline, sharp square pixel clusters, no painted gradients, no soft glow, no antialiasing. Icon designed as a 32-pixel-wide by 96-pixel-tall silhouette enlarged cleanly, centered in canvas with generous transparency. Weapon only, no hand, no character, no chain, no scenery, no text, no label, no shadow. Shaft must be straight with simple grip location, crescent blade decorative but functional. Keep the whole weapon visible and unclipped. We will use this exact art for both held weapon and flying projectile.",
+  "transparent_background": true,
+  "originalSha256": "2f8b2dcdff1f0515136a07ed0461b55eb7d6e97db39d149d83c49e4c39a34c76",
+  "publishedFile": "infini_asset_png_4a753935d470fa15fe74d5b8b4e87f63a8ef56060e8844a89b30e766fa0c8c2e.png",
+  "publishedSha256": "8e9bd54774fc16081d709d82c37cabd9c5b994c2d02dad0e3cf5ca5dd9018463",
+  "canonicalProcessing": "Original LocalGenerator postprocess_sprite(role=item,target_size=96), then _publish_image_png; no hand painting or gameplay geometry mutation",
+  "dimensions": [
+    96,
+    96
+  ],
+  "visibleBounds": [
+    39,
+    4,
+    57,
+    92
+  ],
+  "measuredGripPixels": [
+    48,
+    70
+  ],
+  "forwardAngleDegrees": -90,
+  "note": "Historical item ID says harpoon; behavior is a returning trident, without anchor or pull mechanics. Image generation is not deterministic reproduction; the supplied immutable PNG is the replay input."
+}

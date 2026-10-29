@@ -307,13 +307,13 @@ public partial class GeneratedItem : ModItem
     {
         EnsureRuntimeHydration();
         GeneratedItemData data = PresentationData();
-        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath);
+        Texture2D? texture = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Sprites.TryGet(data.Visual.SpritePath, out _, out _, out Vector2[]? alphaHull);
         if (texture is null) return AllowsDiagnosticProxy(data);
         Rectangle source = texture.Bounds;
         Vector2 origin = source.Size() / 2f;
         if (!data.Visual.RenderSizePx.HasValue || !data.Visual.ForwardAngleDegrees.HasValue) return AllowsDiagnosticProxy(data);
         float finalScale = scale * data.Visual.WorldScale * SpritePresentation.FrameScale(data.Visual.RenderSizePx, source.Width, source.Height);
-        Vector2 drawPosition = Item.Bottom - Main.screenPosition - new Vector2(0f, origin.Y * finalScale) + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
+        Vector2 drawPosition = SpritePresentation.DroppedBodyPosition(Item.Bottom - Main.screenPosition, origin, rotation, finalScale, alphaHull) + new Vector2(data.Visual.DrawOffsetX, data.Visual.DrawOffsetY);
         spriteBatch.Draw(texture, drawPosition, source, alphaColor, rotation, origin, finalScale, SpriteEffects.None, 0f);
         // Match Main.DrawItem's separate Item.color pass; alphaColor already includes
         // the caller's alpha/shimmer treatment and must not be multiplied again.

@@ -22,6 +22,49 @@ def _codes(report):
     return {str(e.get("code")) for e in report.get("errors") or []}
 
 
+@pytest.mark.parametrize("fixture", NON_ARCHETYPAL_FIXTURES)
+def test_canonical_synthetic_fixtures_validate_compile_and_deliver_current_wire(fixture):
+    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
+
+    authored = build_runtime_fixture(fixture)
+    canonical = deepcopy(authored)
+    # Independent rows resolve by identity. Exercise non-builder order while
+    # preserving authored call arrays whose order can carry semantic meaning.
+    authored["runtimeProgram"]["entities"].reverse()
+    authored["runtimeProgram"]["bindings"].reverse()
+    before = deepcopy(authored)
+    report = validate_runtime_program(authored)
+    assert report["ok"], report["errors"]
+    assert all(CAPABILITY_REGISTRY[c["fn"]].author_visible for c in authored["runtimeProgram"]["calls"])
+    compiled = compile_runtime_program(authored)
+    frozen_wire = deepcopy(compiled)
+    assert validate_runtime_wire(compiled)["ok"]
+    receipts = compiled["runtimeContract"]["finalWireReceipts"]
+    assert audit_compiler_receipts(receipts, authored_document=authored, final_document=compiled)["ok"]
+    assert audit_compiler_receipts(receipts, authored_document=authored)["ok"]
+    wire_only = audit_compiler_receipts(receipts, final_document=compiled)
+    assert wire_only["ok"] and wire_only["authoredSourceChecked"] is False
+    stripped = deepcopy(compiled)
+    stripped.pop("runtimeContract")
+    assert validate_runtime_wire(stripped)["ok"]
+    delivered = sanitize_recipe_for_delivery(compiled)
+    assert validate_runtime_wire(delivered)["ok"]
+    assert authored == before and compiled == frozen_wire
+    assert build_runtime_fixture(fixture) == canonical
+
+
+def test_current_schema_export_renders_accepted_fixture_without_writing_artifacts():
+    from pathlib import Path
+    import runpy
+
+    exporter = Path(__file__).resolve().parents[2] / "tools/generate/export_contract_schemas.py"
+    rows = runpy.run_path(str(exporter))["render"]()
+    payloads = {path.name: json.loads(text) for path, text in rows.items()}
+    assert "author_item_response.schema.json" in payloads
+    assert "vfx_runtime_events.schema.json" in payloads
+    assert all(isinstance(payload, dict) for payload in payloads.values())
+
+
 def test_generated_parent_retains_complete_graph_instead_of_fabricating_primary_projectile() -> None:
     generated = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     parent = {"name": generated["name"], "generatedData": generated,
@@ -370,7 +413,7 @@ def test_invalid_composition_is_rejected_without_synthesis(mutation, code):
     else:
         assert any(c.startswith("shape_") or c == "unknown_capability" for c in _codes(report))
     if mutation == "missing-movement":
-        assert all(c.get("fn") != "move_forward_then_retract" for c in program["calls"])
+        assert all(c.get("fn") != "attach_projectile" or c.get("target") != "workbench_blade" for c in program["calls"])
 
 
 @pytest.mark.parametrize(

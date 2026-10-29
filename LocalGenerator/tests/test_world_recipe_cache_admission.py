@@ -15,6 +15,21 @@ from infini_local.storage import world_recipe_runtime, world_storage
 from infini_local.web.vfx_debug_routes import _sample_data
 
 
+@pytest.mark.parametrize("world_id", [True, False, [], {}, 1.5, "world\x00id", "world\nother", "\ud800"])
+def test_invalid_world_identity_is_refused_before_cache_or_generation(world_id, tmp_path, monkeypatch):
+    monkeypatch.setattr(world_recipe_runtime, "WORLD_RECIPES_DIR", tmp_path / "worlds")
+    request = {"worldId": world_id, "itemA": {"id": 1, "name": "A"}, "itemB": {"id": 2, "name": "B"}}
+    with pytest.raises(world_recipe_runtime.WorldScopeMissing):
+        combine_pipeline.combine_cache_lookup(request)
+    assert not (tmp_path / "worlds").exists()
+
+
+@pytest.mark.parametrize("raw,expected", [(0, "0"), (123, "123"), ("  world-a  ", "world-a"),
+    ("11111111-1111-1111-1111-111111111111", "11111111-1111-1111-1111-111111111111")])
+def test_world_identity_keeps_native_and_existing_string_forms(raw, expected):
+    assert world_recipe_runtime.normalize_world_id_from_payload({"worldId": raw}) == expected
+
+
 @pytest.fixture
 def cache_record(tmp_path, monkeypatch):
     root = tmp_path / "worlds"
@@ -69,6 +84,14 @@ def _assert_whole_record_quarantine(path: Path, raw: bytes, reason: str):
     assert (invalid / receipt["payloadFile"]).read_bytes() == raw
     assert originals[0].read_bytes() == raw
     return receipt
+
+
+def test_excessively_nested_cache_is_quarantined_instead_of_crashing_lookup(cache_record):
+    _, request, key, path, _ = cache_record
+    raw = b'{"value":' + b'[' * 10000 + b'0' + b']' * 10000 + b'}'
+    path.write_bytes(raw)
+    assert world_recipe_runtime.read_world_recipe_cache(key, request["worldId"]) is None
+    _assert_whole_record_quarantine(path, raw, "json_unreadable_or_empty")
 
 
 @pytest.mark.parametrize("identity", ["world", "recipe", "world-and-recipe"])

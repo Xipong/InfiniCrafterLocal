@@ -108,6 +108,31 @@ def _vfx_packets(data, captured):
     return [request_dossier(row) for row in captured[start:]]
 
 
+@pytest.mark.parametrize("envelope", ["root", "fingerprint"])
+@pytest.mark.parametrize("facts", [
+    {"itemScale": 0.7, "armorPenetration": 13, "useLimitPerAnimation": 4},
+    {"itemScale": 1.0, "armorPenetration": 0, "useLimitPerAnimation": None},
+    {"itemScale": 0.0, "armorPenetration": 0, "useLimitPerAnimation": 0},
+    {},
+], ids=["native-nondefault", "native-neutral-and-unlimited", "explicit-zero", "unobserved"])
+def test_native_item_stats_preserve_presence_and_nullable_use_limit_in_stage_packets(offline_packets, envelope, facts):
+    captured, _ = offline_packets
+    parent = {"name": "literal source", **(facts if envelope == "root" else {"fingerprint": facts})}
+    # A present null explicitly owns the current observation; older fingerprint
+    # data cannot turn the native no-limit value into a cap.
+    if envelope == "root" and "useLimitPerAnimation" in facts and facts["useLimitPerAnimation"] is None:
+        parent["fingerprint"] = {"useLimitPerAnimation": 8}
+    before = copy.deepcopy(parent)
+    for raw in _source_packets(parent, captured):
+        item = raw["item"]
+        for field in ("itemScale", "armorPenetration", "useLimitPerAnimation"):
+            assert (field in item) == (field in facts)
+            if field in facts:
+                assert json.dumps(item[field]) == json.dumps(facts[field])
+        assert all(field not in raw.get("vanillaFlags", {}) for field in facts)
+    assert parent == before
+
+
 @pytest.mark.parametrize("author_field,wire_field,value", [
     ("useTimeSeconds", "useTime", 47), ("useAnimationSeconds", "useAnimation", 53), ("scale", "itemScale", 2.75),
 ])
@@ -231,7 +256,7 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
         "playerInventoryAmmoRaw": [{"type": 97, "damage": 5}], "playerInventoryProjectileRaw": [{"type": 1}],
         "fallbackAmmoRaw": [{"type": 97}], "fallbackProjectileRaw": [{"type": 1}]}}
     compact = parents.compact_ammo_profile(item)
-    assert compact == {"mode": "weapon_uses_ammo", "ammoId": 97}
+    assert compact == item["ammoRaw"]
     assert parents.effective_projectile_profile_of(item) == {}
     looked_up = []
     def lookup(projectile_id):
@@ -255,12 +280,32 @@ def test_current_live_and_dump_ammo_packets_remain_available(monkeypatch):
     assert parents.compact_ammo_profile(live) == {
         "mode": "weapon_uses_ammo", "ammoId": 97, "ammoItemRaw": {"type": 97, "damage": 5},
         "projectileRaw": {"type": 42}, "weaponShootFieldProjectileRaw": {"type": 42},
+        **{key: compact[key] for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw",
+                                       "fallbackAmmoRaw", "fallbackProjectileRaw")},
     }
     assert parents.effective_projectile_profile_of(live) == live["effectiveProjectileRaw"]
     raw = raw_parent_card_for_llm(live)["raw"]
     assert raw["effectiveProjectile"] == {"type": 43, "source": "literal native observation"}
     assert raw["directProjectile"]["type"] == 42
     assert raw["ammo"]["ammoItemRaw"]["type"] == 97
-    assert all(key not in raw["ammo"] for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw",
-                                                  "fallbackAmmoRaw", "fallbackProjectileRaw", "exampleAmmo", "exampleProjectile"))
+    for key in ("playerInventoryAmmoRaw", "playerInventoryProjectileRaw", "fallbackAmmoRaw", "fallbackProjectileRaw"):
+        assert raw["ammo"][key] == compact[key]
+    assert "exampleAmmo" not in raw["ammo"] and "exampleProjectile" not in raw["ammo"]
     assert live == before
+
+
+def test_equipment_environment_conditions_survive_every_serialized_stage(offline_packets):
+    captured, _ = offline_packets
+    equipment = {"source": "certified", "equipmentSourceCertificate": "exact:module",
+                 "equippedContributions": {"branches": [{"effects": [{"value": 5, "units": "percentage_points"}]}]},
+                 "conditionalArmorSets": [{"condition": {"functionalEquipSlots": {"head": [5, 74], "body": [5, 48], "legs": [5, 44]},
+                                                                      "allSlotsRequired": True, "vanitySatisfies": False}, "effects": []}]}
+    environment = {"source": "certified", "bannerRegistry": {"enabled": False, "normalDamageDealtMultiplier": 0,
+                                                              "nativeBannerIdentities": [87], "condition": "matching active opponent banner"},
+                   "unsupported": [], "scope": "not active-world observation"}
+    parent = {"name": "source conditions", "nativeEquipmentReference": equipment, "nativeEnvironmentReference": environment}
+    before = copy.deepcopy(parent)
+    for raw in _source_packets(parent, captured):
+        assert raw["item"]["nativeEquipmentReference"] == equipment
+        assert raw["item"]["nativeEnvironmentReference"] == environment
+    assert parent == before

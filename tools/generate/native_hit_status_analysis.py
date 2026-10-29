@@ -1,7 +1,8 @@
 """Bounded, fail-closed analysis of native NPC-hit source facts, never game execution.
 
 Only acyclic IL in the explicitly listed subset is accepted. Unknown state is
-merged, not sampled. A fact must occur on every reachable return path. This is
+merged, not sampled. A fact must occur on every reachable return path, optionally
+under one explicitly fixed RNG choice whose alternatives are retained. This is
 not an arbitrary IL VM: it cannot call methods, access game state or run loops.
 """
 from __future__ import annotations
@@ -40,7 +41,7 @@ def merge(a, b):
     return State(tuple(map(same, a.stack, b.stack)), tuple(map(same, a.locals, b.locals)), a.must & b.must)
 
 
-def analyze(instructions, projectile_type):
+def _analyze(instructions, projectile_type, choices=None, source_kind="projectile"):
     """Return only proved unconditional target-NPC requests and exclusion reasons."""
     if not instructions or len(instructions) > 8192:
         raise ValueError("empty/oversized native method")
@@ -50,6 +51,9 @@ def analyze(instructions, projectile_type):
     states = {instructions[0].offset: State()}
     exits = []
     calls = {}
+    random_branches = {}
+    random_calls = {}
+    duration_sources = {}
     reasons = {}
     all_sites = {i.offset for i in instructions if i.op == "call" and i.arg[0] == "Terraria.NPC.AddBuff"}
     for index, ins in enumerate(instructions):
@@ -62,7 +66,10 @@ def analyze(instructions, projectile_type):
         successors = [next_offset]
         pop = stack.pop
         if op == "ldarg":
-            stack.append(THIS if arg == 0 else TARGET_INDEX if arg == 1 else UNKNOWN)
+            if source_kind == "contact":
+                stack.append(THIS if arg == 0 else ("int", projectile_type) if arg == 1 else TARGET_INDEX if arg == 2 else UNKNOWN)
+            else:
+                stack.append(THIS if arg == 0 else TARGET_INDEX if arg == 1 else UNKNOWN)
         elif op == "const":
             stack.append(("int", arg) if isinstance(arg, int) else UNKNOWN)
         elif op == "ldloc":
@@ -75,7 +82,7 @@ def analyze(instructions, projectile_type):
             stack.append(("npc_array",) if arg == "Terraria.Main.npc" else UNKNOWN)
         elif op == "ldfld":
             receiver = pop()
-            stack.append(("int", projectile_type) if receiver == THIS and arg == "Terraria.Projectile.type" else UNKNOWN)
+            stack.append(("int", projectile_type) if source_kind == "projectile" and receiver == THIS and arg == "Terraria.Projectile.type" else UNKNOWN)
         elif op == "ldelem":
             subscript, receiver = pop(), pop()
             stack.append(TARGET if receiver == ("npc_array",) and subscript == TARGET_INDEX else UNKNOWN)
@@ -94,7 +101,7 @@ def analyze(instructions, projectile_type):
                 if factor <= 0 or distribution[2] * factor > 2147483647:
                     stack.append(UNKNOWN)
                 else:
-                    stack.append(("range", distribution[1] * factor, distribution[2] * factor, distribution[3] * factor))
+                    stack.append(("range", distribution[1] * factor, distribution[2] * factor, distribution[3] * factor, *distribution[4:]))
             else:
                 stack.append(UNKNOWN)
         elif op == "call":
@@ -109,7 +116,9 @@ def analyze(instructions, projectile_type):
                 if all(v is not None for v in values):
                     low, high = (0, values[0]) if count == 1 else values
                     if 0 <= low < high:
-                        result = ("range", low, high - 1, 1)
+                        random_calls[ins.offset] = (low, high - 1, 1)
+                        result = (("int", choices[ins.offset]) if choices and ins.offset in choices
+                                  else ("range", low, high - 1, 1, ins.offset))
             elif name == "Terraria.NPC.AddBuff" and receiver == TARGET and count == 3:
                 buff, duration, quiet = arguments
                 buff_id = integer(buff)
@@ -117,6 +126,8 @@ def analyze(instructions, projectile_type):
                 if duration_value is not None:
                     duration = ("range", duration_value, duration_value, 1)
                 if buff_id is not None and buff_id > 0 and duration[0] == "range" and duration[1] > 0 and integer(quiet) == 0:
+                    if len(duration) == 5:
+                        duration_sources[ins.offset] = duration[4]
                     calls[ins.offset] = (buff_id, duration[1], duration[2], duration[3])
                     must = must | {ins.offset}
                 else:
@@ -129,20 +140,30 @@ def analyze(instructions, projectile_type):
         elif op == "br":
             successors = [arg]
         elif op in ("brtrue", "brfalse"):
-            value = integer(pop())
+            operand = pop()
+            if operand[0] == "range" and len(operand) == 5:
+                random_branches[operand[4]] = (operand[1], operand[2], operand[3])
+            value = integer(operand)
             condition = None if value is None else bool(value)
             if condition is not None and op == "brfalse":
                 condition = not condition
             successors = [arg, next_offset] if condition is None else [arg if condition else next_offset]
         elif op in ("beq", "bne", "bgt", "blt", "ble", "bge"):
-            b, a = integer(pop()), integer(pop())
+            right, left = pop(), pop()
+            for operand in (left, right):
+                if operand[0] == "range" and len(operand) == 5:
+                    random_branches[operand[4]] = (operand[1], operand[2], operand[3])
+            b, a = integer(right), integer(left)
             condition = None if a is None or b is None else {
                 "beq": a == b, "bne": a != b, "bgt": a > b,
                 "blt": a < b, "ble": a <= b, "bge": a >= b,
             }[op]
             successors = [arg, next_offset] if condition is None else [arg if condition else next_offset]
         elif op == "switch":
-            value = integer(pop())
+            operand = pop()
+            if operand[0] == "range" and len(operand) == 5:
+                random_branches[operand[4]] = (operand[1], operand[2], operand[3])
+            value = integer(operand)
             successors = [*arg, next_offset] if value is None else [arg[value] if 0 <= value < len(arg) else next_offset]
         elif op == "ret":
             if stack:
@@ -167,4 +188,77 @@ def analyze(instructions, projectile_type):
                     for offset in sorted(guaranteed)],
         "excludedSites": [{"ilOffset": offset, "reason": reason} for offset, reason in sorted(reasons.items())],
         "totalMethodAddBuffSites": len(all_sites),
+        "randomBranches": random_branches,
+        "randomCalls": random_calls,
+        "durationSources": duration_sources,
     }
+
+
+def analyze(instructions, projectile_type, source_kind="projectile"):
+    """Keep the existing unconditional proof and one bounded random choice.
+
+    This is deliberately not general path enumeration: each additional request
+    must be proved by fixing only one small RNG call; all other conditions stay
+    unknown. Requests depending on multiple calls or player state are declined.
+    Alternatives are mutually exclusive and exhaustive for this single call;
+    an empty alternative means no additional AddBuff request, not a missing row.
+    """
+    if source_kind not in ("projectile", "contact"):
+        raise ValueError("unsupported native status signature")
+    baseline = _analyze(instructions, projectile_type, source_kind=source_kind)
+    branches = baseline.pop("randomBranches")
+    random_calls = baseline.pop("randomCalls")
+    duration_sources = baseline.pop("durationSources")
+    # A single roll can drive a proc and a duration, or several durations. Do
+    # not publish independent-looking ranges that erase that correlation.
+    for source in duration_sources.values():
+        if list(duration_sources.values()).count(source) > 1:
+            branches[source] = random_calls[source]
+    baseline["randomOutcomes"] = []
+    correlated_sites = {site for site, source in duration_sources.items() if source in branches}
+    # If joint alternatives exceed the proof budget, decline those ranges,
+    # rather than silently converting correlated requests into marginal facts.
+    baseline["effects"] = [e for e in baseline["effects"] if e["ilOffset"] not in correlated_sites]
+    baseline["excludedSites"] += [{"ilOffset": site, "reason": "correlated_duration_requires_bounded_joint_choice"}
+                                  for site in sorted(correlated_sites)
+                                  if not any(s["ilOffset"] == site for s in baseline["excludedSites"])]
+    # Bound offline work even for an unexpected new native method.
+    if len(branches) > 32:
+        return baseline
+    for offset in branches:
+        low, high, step = random_calls[offset]
+        correlated = {site for site, source in duration_sources.items() if source == offset}
+        _capture_single_choice(instructions, projectile_type, baseline, offset, low, high, step, source_kind, correlated)
+    return baseline
+
+
+def _capture_single_choice(instructions, projectile_type, baseline, offset, low, high, step, source_kind, correlated=frozenset()):
+    if step != 1 or not 0 < high - low + 1 <= 16:
+        return baseline
+    trials = [_analyze(instructions, projectile_type, {offset: value}, source_kind)
+              for value in range(low, high + 1)]
+    unconditional = {effect["ilOffset"] for effect in baseline["effects"]} - correlated
+    candidate_sites = {effect["ilOffset"] for trial in trials for effect in trial["effects"]} - unconditional
+    # A missing site may be unreachable under an RNG outcome, but must never be
+    # a possible unproved request hidden behind player/world/AI state.
+    uncertain = {site["ilOffset"] for trial in trials for site in trial["excludedSites"]}
+    already_proved = {e["ilOffset"] for choice in baseline["randomOutcomes"]
+                      for a in choice["alternatives"] for e in a["effects"]}
+    candidate_sites -= uncertain | already_proved
+    if not candidate_sites:
+        return baseline
+    alternatives = []
+    for value, trial in zip(range(low, high + 1), trials):
+        effects = [e for e in trial["effects"] if e["ilOffset"] in candidate_sites]
+        found = next((a for a in alternatives if a["effects"] == effects), None)
+        if found is None:
+            found = {"randomValues": [], "effects": effects}
+            alternatives.append(found)
+        found["randomValues"].append(value)
+    baseline["randomOutcomes"].append({"sourceRandomCallIlOffset": offset,
+        "randomMinimumInclusive": low, "randomMaximumExclusive": high + 1,
+        "alternatives": [{**a, "probabilityNumerator": len(a["randomValues"]),
+                           "probabilityDenominator": high - low + 1} for a in alternatives]})
+    baseline["effects"] = [e for e in baseline["effects"] if e["ilOffset"] not in candidate_sites]
+    baseline["excludedSites"] = [s for s in baseline["excludedSites"] if s["ilOffset"] not in candidate_sites]
+    return baseline

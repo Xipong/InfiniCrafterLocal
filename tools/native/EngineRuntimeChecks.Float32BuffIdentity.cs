@@ -80,8 +80,8 @@ internal static partial class EngineRuntimeChecks
                     // shorter duration; it neither stacks nor borrows +short.
                     Float32BuffActivate(player, Float32BuffData("movementSpeed", longValue, 120));
                     Equal(2, generated.CaptureGeneratedUtilityBuffPresentation().Entries.Count, "strict same tiny effect refreshes, never stacks");
-                    Equal(600, generated.CaptureGeneratedUtilityBuffPresentation().Entries.Single(e => e.MovementSpeed == longValue).RemainingTicks, "shorter strict repeat never shortens exact long entry");
-                    for (int tick = 0; tick < 60; tick++) Float32BuffTick.Invoke(generated, null);
+                    Equal(599, generated.CaptureGeneratedUtilityBuffPresentation().Entries.Single(e => e.MovementSpeed == longValue).RemainingTicks, "shorter strict repeat retains long entry after one applied player tick");
+                    for (int tick = 0; tick < 59; tick++) Float32BuffTick.Invoke(generated, null);
                     var afterShort = generated.CaptureGeneratedUtilityBuffPresentation();
                     Equal(1, afterShort.Entries.Count, "short contribution expires independently");
                     Equal(540, afterShort.Entries[0].RemainingTicks, "long lifetime is not borrowed from the short one");
@@ -89,7 +89,7 @@ internal static partial class EngineRuntimeChecks
                     player.moveSpeed = 0f; player.pickSpeed = 1f;
                     generated.PostUpdateEquips();
                     Equal(longValue, player.moveSpeed, "real player hook preserves tiny signed survivor");
-                    for (int tick = 0; tick < 540; tick++) Float32BuffTick.Invoke(generated, null);
+                    for (int tick = 0; tick < 539; tick++) Float32BuffTick.Invoke(generated, null);
                     Equal(0, generated.CaptureGeneratedUtilityBuffPresentation().Entries.Count, "last contribution expires exactly");
                     player.moveSpeed = 0f; player.pickSpeed = 1f; player.findTreasure = false;
                     generated.PostUpdateEquips();

@@ -1,5 +1,6 @@
 #nullable enable
 using InfiniCrafterLocal.Common.Config;
+using InfiniCrafterLocal.Common.Models;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
@@ -50,6 +51,7 @@ public sealed class RuntimeSpriteCache : IDisposable
         // Null is unknown (e.g. a borrowed headless fixture); Empty is measured
         // alpha-empty. Neither may masquerade as a full-frame alpha basis.
         public readonly Rectangle? AlphaBounds;
+        public readonly Vector2[]? AlphaHull;
         public long LastAccessTick;
 
         public CachedTexture(Texture2D texture, float localForwardRadians, long lastAccessTick)
@@ -60,9 +62,13 @@ public sealed class RuntimeSpriteCache : IDisposable
         }
 
         public CachedTexture(Texture2D texture, float localForwardRadians, long lastAccessTick, Rectangle alphaBounds)
+            : this(texture, localForwardRadians, lastAccessTick, alphaBounds, null) { }
+
+        public CachedTexture(Texture2D texture, float localForwardRadians, long lastAccessTick, Rectangle alphaBounds, Vector2[]? alphaHull)
             : this(texture, localForwardRadians, lastAccessTick)
         {
             AlphaBounds = alphaBounds;
+            AlphaHull = alphaHull;
         }
     }
 
@@ -122,9 +128,13 @@ public sealed class RuntimeSpriteCache : IDisposable
     // All facts belong to this exact selected CachedTexture generation. No
     // second key lookup, image read or per-draw metadata reconstruction.
     public Texture2D? TryGet(string path, out float localForwardRadians, out Rectangle? alphaBounds)
+        => TryGet(path, out localForwardRadians, out alphaBounds, out _);
+
+    internal Texture2D? TryGet(string path, out float localForwardRadians, out Rectangle? alphaBounds, out Vector2[]? alphaHull)
     {
         localForwardRadians = 0f;
         alphaBounds = null;
+        alphaHull = null;
         if (string.IsNullOrWhiteSpace(path) || Main.dedServ) return null;
         lock (_lock)
         {
@@ -147,6 +157,7 @@ public sealed class RuntimeSpriteCache : IDisposable
                     cached.LastAccessTick = ++_accessCounter;
                     localForwardRadians = cached.LocalForwardRadians;
                     alphaBounds = cached.AlphaBounds;
+                    alphaHull = cached.AlphaHull;
                     return cached.Texture;
                 }
                 if (_missingOrBad.TryGetValue(key, out DateTime lastBad))
@@ -196,9 +207,10 @@ public sealed class RuntimeSpriteCache : IDisposable
                 }
 
                 Rectangle loadedAlphaBounds;
+                Vector2[] loadedAlphaHull;
                 try
                 {
-                    localForwardRadians = PrepareTextureAndMeasureLocalForwardRadians(tex, out loadedAlphaBounds);
+                    localForwardRadians = PrepareTextureAndMeasureLocalForwardRadians(tex, out loadedAlphaBounds, out loadedAlphaHull);
                 }
                 catch
                 {
@@ -207,8 +219,9 @@ public sealed class RuntimeSpriteCache : IDisposable
                     try { tex.Dispose(); } catch { }
                     throw;
                 }
-                _textures[key] = new CachedTexture(tex, localForwardRadians, ++_accessCounter, loadedAlphaBounds);
+                _textures[key] = new CachedTexture(tex, localForwardRadians, ++_accessCounter, loadedAlphaBounds, loadedAlphaHull);
                 alphaBounds = loadedAlphaBounds;
+                alphaHull = loadedAlphaHull;
                 _loadSuccessCount++;
                 TrimTextureCacheIfNeeded(limits.MaxCachedTextures);
                 return tex;
@@ -240,7 +253,7 @@ public sealed class RuntimeSpriteCache : IDisposable
         return Path.GetFullPath(!string.IsNullOrWhiteSpace(synced) && File.Exists(synced) ? synced : path);
     }
 
-    private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture, out Rectangle alphaBounds)
+    private static float PrepareTextureAndMeasureLocalForwardRadians(Texture2D texture, out Rectangle alphaBounds, out Vector2[] alphaHull)
     {
         int width = texture.Width;
         int height = texture.Height;
@@ -263,6 +276,7 @@ public sealed class RuntimeSpriteCache : IDisposable
             pixels[i] = new Color(color.R * color.A / 255, color.G * color.A / 255, color.B * color.A / 255, color.A);
         }
         alphaBounds = right > left && bottom > top ? new Rectangle(left, top, right - left, bottom - top) : Rectangle.Empty;
+        alphaHull = SpritePresentation.MeasureAlphaHull(pixels, width, height);
         texture.SetData(pixels);
         return MeasureLocalForwardRadians(pixels, width, height);
     }

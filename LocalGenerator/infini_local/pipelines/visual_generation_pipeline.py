@@ -457,8 +457,9 @@ def _presentation_packet_context(data: Mapping[str, Any], runtime_rows: list[dic
                 "visibleAlphaExtent": "alpha-bbox pixels * q_selected * independent draw multipliers",
                 "equalHeldBody": "Shared root guarantees equal base frame size, not final size: with neutral caller modifiers equality requires G == clamp(D*E, .1, 8), or G == D*E*curveScale(active age) for an accepted explicit mirror or visualScaleCurve. An independent hitbox curve does not multiply visual scale. Never change accepted gameplay to force equality.",
             },
-            "frontHand": "Only explicit move_front_hand (opcode 20) attaches to the native front hand H. Author owns collision center C = H + aimedAxis * hitboxOffsetPx, aimMode, durationTicks and stretch; never derive mechanics from PNG size/axis/grip. For sprite modes require selected R, forwardAngleDegrees and final-canvas atomic grip: reuse_item_icon selects item.grip with no duplicate entity metadata; a distinct baked_sprite owns its entity grip. no_asset/runtime_geometry require no PNG grip; geometry stays at the authored collision center. Describe the actual hand-contact region in that owner's art prompt. Repair only the diagnosed owner leaf, never accepted gameplay, mode or valid coordinates.",
-            "handContactGeometry": "For explicit move_front_hand, native none-to-full stretch moves the hand only 6px (lengths 4..10px), not a long thrust. The sprite grip stays on H; hitboxOffsetPx does not extend the visible body. Compare the signed distance from grip to the authored contact region, projected along the final PNG forward axis using the effective multiplier from formulas.body: R/C * clamp(P, .1, 8), or its explicit curve/mirror exception, with the immutable hitbox center offset and rectangle. Choose art framing, grip and size coherently in that fixed geometry; never move only the picture to pretend to extend collision reach. A mismatch needing different motion/collision is not repairable by Visual. Native parent texture size is read-only calibration, not automatic reach inheritance or a mandatory size floor. In Repair preserve valid art and mechanics outside exact permissions.",
+            "frontHand": "attachment.anchor=front_hand reads the shared native hand H, with or without its own armPose; armPose alone does not attach a body or require PNG metadata. Read aim, attachment offsets and reach as fixed mechanics, never derive them from art. Sprite modes require selected renderSizePx, forwardAngleDegrees and atomic final-canvas grip: reuse_item_icon selects item.grip with no duplicate entity metadata; distinct baked_sprite selects entity grip. no_asset/runtime_geometry require no PNG grip. Describe the actual contact region; Repair changes only diagnosed owner leaves.",
+            "motionWindows": "Read exact component windows: absent means all active updates; phase-only gates are valid. Optional clock/startDelayTicks/durationTicks occur together. active is start-of-step; since_release/since_return are inactive before their latch. released can overlap returning. Preserve seek array order and native counts, not Author seconds.",
+            "handContactGeometry": "Native arm stretch changes hand length only from 4 to 10px, not arbitrary reach. Read the accepted attachment/reach displacement and hitbox literally; the grip remains the hand-contact point. Compare projected art contact with collision using formulas.body, never extend mechanics by enlarging the PNG. Parent texture dimensions calibrate art only. Preserve all accepted offsets, pose, motion and unreported art during Repair.",
             "ownership": "Root item owns R/canvas/axis for item_body and reuse_item_icon. A distinct baked entity owns R/canvas/axis. no_asset/runtime_geometry own none. Dedicated impact, overlay, material world widths, textured paths and collision/movement are outside this main-PNG conversion.",
             "fill": "Canonical bake fill/padding below describes artwork span inside the requested frame, not world size. Baked final frame and alpha extent may differ; no post-image axis/bbox inference. Runtime tip anchors remain existing gameplay geometry, not measured PNG tips.",
             "geometryCoverage": "Match the intended physical body to the accepted driverMeaningReadOnly and exact movement/controller params. A single center/tip PNG does not follow a curved collision path. runtime_geometry can draw the implemented beam/whip collision geometry directly; baked_sprite/reuse_item_icon draw a single PNG rather than the full collision path. texturedPath is an independent VFX renderer for compatible accepted path sources. Its explicit source=ownerLink draws a cosmetic straight connector from an explicitly chosen path.ownerAnchor to projectile.Center, not collision or a weapon preset. ownerAnchor=mountedCenter reads native owner.MountedCenter (not a hand); ownerAnchor=frontHand requires compositeFrontArm.enabled and otherwise refuses/retires, with no guessed body-frame hand or fallback. Other path sources forbid ownerAnchor. A full inventory PNG, a hidden root body or a head-only projectile does not itself draw a chain/rope between them; when that connector is intended, describe it for VFX to author separately with ownerLink and an explicit texture/width/UV choice. This selection is optional, never automatic from movement or names. Optionally describe intended composition in advisory animationPlan, but later VFX is not yet authored: do not claim a slot already exists. no_asset leaves the entity body undrawn; choose it for deliberate invisibility or an explicitly intended alternate presentation. There is no automatic mode conversion, sprite stretching, path or VFX-slot insertion. Do not alter accepted mechanics or visibility to fit the art.",
@@ -1063,6 +1064,15 @@ def _request_visual_kit(
     item_body_id = next((row["id"] for row in runtime_rows if row["kind"] == "item_body"), "")
     equipment_overlay = equipment_overlay_requirement(data)
     equipment_overlay_required = bool(equipment_overlay["required"])
+    item_context = {"name": data.get("name"), "realization": copy.deepcopy(data.get("realization") or {})}
+    concept = data.get("concept")
+    synthesis = concept.get("literalSynthesis") if isinstance(concept, Mapping) else None
+    if isinstance(concept, str):
+        item_context["concept"] = concept
+    if isinstance(synthesis, str) and synthesis.strip():
+        # Carry appearance intent literally, without importing planned mechanics
+        # or turning optional prose into an authority over accepted runtime.
+        item_context["literalSynthesis"] = synthesis
     repair = repair_errors is not None
     scoped_repair = (repair and isinstance(repair_scope, Mapping) and "fieldPermissions" in repair_scope
                      and not any(error.get("path") == "$" for error in repair_errors or []))
@@ -1105,10 +1115,7 @@ def _request_visual_kit(
                 "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
             },
             "runtimeEntitiesReadOnly": runtime_rows,
-            "itemReadOnly": {
-                "name": data.get("name"),
-                "realization": copy.deepcopy(data.get("realization") or {}),
-            },
+            "itemReadOnly": item_context,
             "equipmentOverlayReadOnly": copy.deepcopy(equipment_overlay),
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
@@ -1135,10 +1142,7 @@ def _request_visual_kit(
         )
         payload = {
             "task": "Author one visualKit for the accepted runtime program.",
-            "item": {
-                "name": data.get("name"),
-                "realization": copy.deepcopy(data.get("realization") or {}),
-            },
+            "item": item_context,
             "parents": {
                 "parentA": {"packet": raw_parent_card_for_llm(a, include_visual_reference=True)},
                 "parentB": {"packet": raw_parent_card_for_llm(b, include_visual_reference=True)},
@@ -1149,6 +1153,7 @@ def _request_visual_kit(
             "assetModeCatalog": visual_asset_mode_catalog(),
             "rules": [
                 "appearance only; runtime program is immutable",
+                "item.literalSynthesis, when present, is advisory appearance intent from Gameplay Author. Carry that physical composition into the visual design where compatible with the accepted runtime; it does not establish mechanics or require new entities. Visual Director owns the detailed appearance and asset choices; accepted runtime remains authoritative.",
                 "For a newly designed held item choose item.grip explicitly at its actual handle/contact point on the final item PNG canvas after crop/fit/padding, before facing/gravity flips. Both normalized coordinates are required together. Describe that same contact point in item.prompt; do not infer coordinates from an entityId or request image analysis.",
                 "For a newly designed accessory choose equipOverlay.accessoryMount explicitly from chest/back/waist/shoulder/orbit to suit its authored appearance. It attaches the existing single PNG badge to the body pivot; it is not a full armor sheet or a behind-body occlusion guarantee. Optional omission selects the existing orbit presentation; never fill optional metadata during Repair unless its exact path is permitted.",
                 "literal furniture, tools and materials may remain literal",
@@ -1203,7 +1208,7 @@ def _request_visual_kit(
         if roots & {"", "preferredCanvasSize", "renderSizePx", "grip", "assetMode", "visualProjectRef"}:
             selected.add("fill")
         if roots & {"", "grip", "renderSizePx", "forwardAngleDegrees", "assetMode", "visualProjectRef"} and any("spriteDependenciesReadOnly" in row for row in runtime_rows):
-            selected.update({"frontHand", "handContactGeometry", "axis"})
+            selected.update({"frontHand", "handContactGeometry", "axis", "motionWindows"})
         presentation["spritePresentationReadOnly"] = {key: value for key, value in guidance.items() if key in selected}
         if not sizing:
             presentation.pop("bakeFillByProcessingRole")
@@ -1388,11 +1393,13 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             raise PlannerUnavailable("Visual Director is required for LLM-authored craft")
         if equipment_overlay_required:
             raise PlannerUnavailable("Equipment overlay requires a model-authored Visual Director response")
+        realization = data.get("realization")
+        description = realization.get("description") if isinstance(realization, Mapping) else realization if isinstance(realization, str) else None
         dev_item = {
             "prompt": f"Terraria pixel-art inventory sprite of {data.get('name')}; literal combined parent object, transparent background",
             "negativePrompt": "placeholder, text, watermark",
             "silhouette": "compact readable combined object",
-            "visualIdentity": str((data.get("realization") or {}).get("description") or data.get("name") or "generated item"),
+            "visualIdentity": str(description or data.get("name") or "generated item"),
             "palette": ["neutral", "accent"],
             "preferredCanvasSize": 32,
             "inventoryScale": 1.0,

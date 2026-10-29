@@ -1,0 +1,277 @@
+{
+  "name": "Lunar Harpoon",
+  "category": "combat",
+  "concept": {
+    "literalSynthesis": "A moonlit harpoon with a curved crescent head and a gripped shaft.",
+    "coreMechanic": "Hold primary to charge, release to throw; the same physical harpoon returns and is caught.",
+    "parentAContribution": "Assistant-authored crescent harpoon design.",
+    "parentBContribution": "Explicit charge/release and return motion composition.",
+    "playerExperience": "Visible charge hold, thrown strike and safe owner catch; short charges remain weaker.",
+    "plannedPlayerActions": [
+      {
+        "input": "primary_use",
+        "intent": "Hold to charge then release to throw and recover the harpoon."
+      }
+    ]
+  },
+  "realization": {
+    "description": "A reusable lunar harpoon: charge for half a second, launch, then return to the owner.",
+    "playerExperience": "Charge, release, hit and catch the same visible harpoon.",
+    "selfEvaluation": "Authored intent only; native playtest results are separate."
+  },
+  "runtimeProgram": {
+    "apiVersion": "infini.runtime-program.v5",
+    "schema": "infini.runtime-program.authoring.v6",
+    "primaryEntityId": "harpoon",
+    "entities": [
+      {
+        "id": "item",
+        "kind": "item_body"
+      },
+      {
+        "id": "harpoon",
+        "kind": "owner_attached_projectile"
+      }
+    ],
+    "bindings": [
+      {
+        "id": "throw",
+        "input": "primary_use",
+        "action": {
+          "kind": "spawn_entity",
+          "targetId": "harpoon"
+        },
+        "stackCost": 0,
+        "contactDamage": false
+      }
+    ],
+    "calls": [
+      {
+        "id": "item_stats",
+        "fn": "configure_item_stats",
+        "params": {
+          "damageClass": "magic",
+          "damage": 24,
+          "knockback": 3,
+          "useTimeSeconds": 0.5,
+          "useAnimationSeconds": 0.5,
+          "manaCost": 8,
+          "rarity": 2,
+          "valueCopper": 2500,
+          "maxStack": 1,
+          "craftYield": 1,
+          "widthPx": 32,
+          "heightPx": 64,
+          "scale": 1.0
+        }
+      },
+      {
+        "id": "item_use",
+        "fn": "configure_item_use",
+        "params": {
+          "useStyle": "shoot",
+          "autoReuse": false,
+          "useTurn": true,
+          "hideUseGraphic": true,
+          "disableMeleeHitbox": true,
+          "channel": true,
+          "holdoutOffsetX": 0,
+          "holdoutOffsetY": 0,
+          "handPose": "",
+          "customHeldSprite": "hidden"
+        }
+      },
+      {
+        "id": "base_configure_spawn",
+        "fn": "configure_spawn",
+        "target": "harpoon",
+        "params": {
+          "velocity": {
+            "constantSpeedBlocksPerSecond": 0
+          },
+          "count": 1,
+          "spreadRadians": 0.0,
+          "offsetBlocks": 0,
+          "aim": "cursor",
+          "position": {
+            "at": "activation_origin"
+          }
+        }
+      },
+      {
+        "id": "base_set_projectile_damage",
+        "fn": "set_projectile_damage",
+        "target": "harpoon",
+        "params": {
+          "damageClass": "magic",
+          "damage": 24,
+          "knockback": 3,
+          "ownerHitCheck": false
+        }
+      },
+      {
+        "id": "base_set_projectile_lifetime",
+        "fn": "set_projectile_lifetime",
+        "target": "harpoon",
+        "params": {
+          "lifetimeSeconds": 4
+        }
+      },
+      {
+        "id": "base_set_projectile_hitbox",
+        "fn": "set_projectile_hitbox",
+        "target": "harpoon",
+        "params": {
+          "widthPx": 16,
+          "heightPx": 16,
+          "drawScale": 1,
+          "hitboxScale": 1
+        }
+      },
+      {
+        "id": "base_set_projectile_collision",
+        "fn": "set_projectile_collision",
+        "target": "harpoon",
+        "params": {
+          "tileCollide": true,
+          "ignoreWater": true,
+          "bounceCount": 0,
+          "pierce": -1,
+          "updatesPerTick": 1,
+          "immunity": {
+            "localCooldown": 30
+          }
+        }
+      },
+      {
+        "id": "set_projectile_aim",
+        "fn": "set_projectile_aim",
+        "target": "harpoon",
+        "params": {
+          "source": "cursor",
+          "turnOwner": true
+        }
+      },
+      {
+        "id": "attach_projectile",
+        "fn": "attach_projectile",
+        "target": "harpoon",
+        "params": {
+          "anchor": "front_hand",
+          "axisOffsetBlocks": 3,
+          "normalOffsetBlocks": 0,
+          "window": {
+            "phase": "charging",
+            "clock": "active",
+            "startDelaySeconds": 0,
+            "durationSeconds": 1
+          }
+        }
+      },
+      {
+        "id": "set_front_arm_pose",
+        "fn": "set_front_arm_pose",
+        "target": "harpoon",
+        "params": {
+          "durationSeconds": 0.5,
+          "startStretch": "full",
+          "peakStretch": "full",
+          "endStretch": "full",
+          "peakProgress": 0.5,
+          "window": {
+            "phase": "charging"
+          }
+        }
+      },
+      {
+        "id": "set_projectile_owner_control",
+        "fn": "set_projectile_owner_control",
+        "target": "harpoon",
+        "params": {
+          "requireHeldItem": true,
+          "animation": "keep_alive"
+        }
+      },
+      {
+        "id": "gate_projectile_contact",
+        "fn": "gate_projectile_contact",
+        "target": "harpoon",
+        "params": {
+          "enabled": false,
+          "window": {
+            "phase": "charging"
+          }
+        }
+      },
+      {
+        "id": "accumulate_projectile_charge",
+        "fn": "accumulate_projectile_charge",
+        "target": "harpoon",
+        "params": {
+          "durationSeconds": 0.5,
+          "autoReleaseAfterActiveSeconds": 1,
+          "releaseEffect": {
+            "damageMultiplier": 2,
+            "knockbackMultiplier": 1.5,
+            "speedMultiplier": 1,
+            "launchSpeedBlocksPerSecond": 30,
+            "pauseLifetimeWhileCharging": true
+          }
+        }
+      },
+      {
+        "id": "set_projectile_rotation",
+        "fn": "set_projectile_rotation",
+        "target": "harpoon",
+        "params": {
+          "mode": "velocity",
+          "offsetRadians": 0,
+          "window": {
+            "phase": "released"
+          }
+        }
+      },
+      {
+        "id": "set_projectile_return_trigger",
+        "fn": "set_projectile_return_trigger",
+        "target": "harpoon",
+        "params": {
+          "afterSeconds": 1.2,
+          "onTileCollision": true,
+          "disableTileCollisionOnReturn": true
+        }
+      },
+      {
+        "id": "seek_projectile",
+        "fn": "seek_projectile",
+        "target": "harpoon",
+        "params": {
+          "target": "owner_mounted",
+          "maxSpeedBlocksPerSecond": 37.5,
+          "velocityLerpPerUpdate": 0.3,
+          "limitSpeedToDistance": true,
+          "window": {
+            "phase": "released",
+            "clock": "since_return",
+            "startDelaySeconds": 0,
+            "durationSeconds": 3
+          }
+        }
+      },
+      {
+        "id": "set_projectile_arrival",
+        "fn": "set_projectile_arrival",
+        "target": "harpoon",
+        "params": {
+          "target": "owner_mounted",
+          "radiusBlocks": 1.25,
+          "window": {
+            "phase": "returning"
+          }
+        }
+      }
+    ]
+  },
+  "id": "assistant_lunar_harpoon",
+  "sourceMode": "assistant_authored"
+}

@@ -86,49 +86,32 @@ Player.Update/world collision loop, GPU wires/flames/shoe visuals, multiplayer m
 inventory/void-bag activation, полный slot UI/content registration или измеренную
 продолжительность полёта. Game/network/model/install не запускались.
 
-## Jumps: независимая авторская композиция
+## Перемещение и строительство
 
-- `jumpCloud`: Дополнительный прыжок облака.
-- `jumpBlizzard`: Дополнительный прыжок метели.
-- `jumpSandstorm`: Дополнительный прыжок песчаной бури.
-- `jumpFart`: Дополнительный прыжок газа.
-- `jumpTsunami`: Дополнительный прыжок цунами.
+Эти поля `configure_accessory` выбираются независимо. Они действуют при функциональном
+ношении аксессуара, через native Player/ExtraJump; inventory и vanity их не включают.
 
+| Author | Native consumer и значение |
+|---|---|
+| `jumpCloud`, `jumpBlizzard`, `jumpSandstorm`, `jumpFart`, `jumpTsunami` | Соответствующий `ExtraJump.Enable()`. Нативные порядок прыжков, ограничения движения и восстановление после приземления сохраняются; equip не восстанавливает потраченные прыжки. |
+| `swimFlipper` | `ExtraJump.Flipper`: повторяемые плавательные прыжки в воде. |
+| `divingHelm` | `Player.accDivingHelm`: замедленный расход воздуха. |
+| `underwaterBreathing` | `Player.gills`: дыхание в воде и на суше; в For the Worthy требуется вода. |
+| `waterFloat` | `Player.canFloatInWater`: плавучесть, кнопка вниз разрешает погружение. |
+| `autoJump` | `Player.autoJump`: повтор прыжков при удержании кнопки. |
+| `frogJump` | `Player.frogLegJumpBoost`: нативные бонусы высоты прыжка и безопасного падения Frog Leg. |
+| `wallGrip` | Максимум с `Player.spikedBoots`: 0 — нет, 1 — скольжение/прыжок от стены, 2 — удержание на стене. |
+| `autoPaint` | `Player.autoPaint`: автоматическая покраска при строительстве с расходом краски. |
+| `rulerGrid` | `Player.rulerGrid`: сетка размещения через строительный переключатель. |
+| `buildRangeTiles` | Добавляет 0..20 клеток к `Player.blockRange`. |
+| `tileSpeedBonusPercent` | Добавляет 0..100 / 100 к `Player.tileSpeed`. |
+| `wallSpeedBonusPercent` | Добавляет 0..100 / 100 к `Player.wallSpeed`. |
+| `gravityControl` | `Player.gravControl`: управление гравитацией кнопкой вверх. |
+| `featherFall` | `Player.slowFall`: плавное падение с управлением вверх/вниз. |
+| `extraFallTiles` | Добавляет 0..100 клеток к порогу урона от падения; это не иммунитет. |
 
-Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.
-
-## Aquatic: независимая авторская композиция
-
-- `swimFlipper`: Плавательные прыжки в воде.
-- `divingHelm`: Замедленный расход воздуха.
-- `underwaterBreathing`: Жабры: дыхание в воде и на суше; getGoodWorld требует воду.
-- `waterFloat`: Всплытие в воде, спуск кнопкой вниз.
-
-
-Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.
-
-## Climbing: независимая авторская композиция
-
-- `autoJump`: Автопрыжок при удержании кнопки.
-- `frogJump`: Высота прыжка и безопасное падение лягушки.
-- `wallGrip`: Уровень сцепления со стеной, целое 0..2.
-
-Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.
-
-## Building: независимая авторская композиция
-
-- `autoPaint`: Автопокраска расходует краску при строительстве.
-- `rulerGrid`: Сетка линейки с переключателем строителя.
-- `buildRangeTiles`: Дальность строительства в клетках, целое 0..20.
-- `tileSpeedBonusPercent`: Бонус скорости установки блоков (%), целое 0..100.
-- `wallSpeedBonusPercent`: Бонус скорости установки стен (%), целое 0..100.
-
-Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.
-
-## Gravity: независимая авторская композиция
-
-- `gravityControl`: Управление гравитацией кнопкой вверх.
-- `featherFall`: Плавное падение с управлением вверх/вниз.
-- `extraFallTiles`: Дополнительная безопасная высота падения, целое 0..100.
-
-Поля optional: отсутствие сохраняется через DTO/network, явный null запрещён. Каждый выбор получает собственный receipt; названия предметов не включают соседние эффекты. Исполнение — native Player/ExtraJump в UpdateAccessory, сброс — native ResetEffects. Нативные ограничения движения и строительные переключатели сохраняются.
+Пропуск остаётся отсутствием в wire/DTO/network; явные `false`/`0` не дают способность
+и не отменяют вклад других предметов. `null`, неверные типы и значения вне границ
+отвергаются. Каждый присутствующий выбор получает собственный compiler receipt.
+Нативный ResetEffects снимает grants при снятии аксессуара; для ExtraJump бюджетом
+и перезарядкой управляет сам движок.

@@ -1,0 +1,47 @@
+{
+  "ticks": 120,
+  "seed": 1,
+  "player": {
+    "x": 640,
+    "y": 640,
+    "life": 100,
+    "mana": 200
+  },
+  "dummy": {
+    "x": 850,
+    "y": 640,
+    "width": 32,
+    "height": 48,
+    "life": 10000
+  },
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "aim",
+      "x": 850,
+      "y": 661
+    },
+    {
+      "tick": 0,
+      "kind": "primary"
+    },
+    {
+      "tick": 20,
+      "kind": "release"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "spawned"
+    },
+    {
+      "kind": "dummy_damaged"
+    },
+    {
+      "kind": "all_inactive"
+    },
+    {
+      "kind": "no_nonfinite"
+    }
+  ]
+}

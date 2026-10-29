@@ -16,7 +16,7 @@ from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 @pytest.mark.parametrize("capability", [
     "apply_generated_buff_on_use", "apply_vanilla_buff_on_use", "move_player_on_use",
     "add_hold_light", "configure_tool", "configure_item_contact_hitbox",
-    "configure_accessory", "configure_armor", "damage_area_on_event", "spawn_entity_on_event",
+    "configure_accessory", "configure_armor", "damage_nearby_on_event", "spawn_entity_on_event",
 ])
 def test_card_preserves_complete_accepted_mechanics(capability):
     data = sanitize_recipe_for_delivery(compile_runtime_program(build_capability_witness(capability)))
@@ -213,6 +213,10 @@ def test_real_author_builder_preserves_present_accepted_parent_without_visuals(m
 
 @pytest.mark.parametrize("status,lines", [
     ("observed_literal", ["  Телепортирует вас домой  ", "", "\tДословная строка\n"]),
+    ("observed_local_hooks", ["Модовая строка", "добавлено хуком"]),
+    ("observed_local_hooks", []),
+    ("unavailable_or_hook_failed", []),
+    ("observed_literal_hook_failed", ["[DYNAMIC]"]),
     ("refused_line_bound", []),
     ("refused_character_bound", []),
 ])
@@ -234,8 +238,9 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
     parent = {
         "name": "literal source", "fullName": "Terraria/RecallPotion",
         "tooltipLines": lines, "tooltipSource": {
-            "source": "Lang.GetTooltip", "fullName": "Terraria/RecallPotion",
-            "language": "ru-RU", "status": status,
+            "source": "ItemLoader.ModifyTooltips" if status in {"observed_local_hooks", "unavailable_or_hook_failed"} else "Lang.GetTooltip",
+            "fullName": "Terraria/RecallPotion", "language": "ru-RU", "status": status,
+            "scope": "native_description_and_hook_changes_on_base_defaults_clone_with_mod_instance_state",
         },
     }
     before = copy.deepcopy(parent)

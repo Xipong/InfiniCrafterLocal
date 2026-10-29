@@ -19,6 +19,9 @@ from urllib.parse import parse_qs, urlsplit
 import webbrowser
 
 from infini_local.desktop.settings_interactions import saved_config_revision
+from infini_local.core import strict_json
+
+ACTION_BODY_TIMEOUT_SECONDS = 10
 
 ACTIONS = frozenset({
     'save', 'start', 'stop', 'health', 'validate', 'trace', 'applyPreset', 'savePreset',
@@ -75,7 +78,7 @@ class StudioServer:
                 supplied = self.headers.get('X-Infini-Token', '')
                 if bootstrap:
                     supplied = parse_qs(urlsplit(self.path).query).get('token', [''])[0]
-                return secrets.compare_digest(supplied, owner.token)
+                return secrets.compare_digest(supplied.encode('utf-8'), owner.token.encode('utf-8'))
 
             def do_GET(self):
                 path = urlsplit(self.path).path
@@ -144,11 +147,32 @@ class StudioServer:
                     self.reply(403, {'error': 'Session access required'})
                     return
                 try:
-                    size = int(self.headers.get('Content-Length', '0'))
+                    lengths = self.headers.get_all('Content-Length', [])
+                    if self.headers.get('Transfer-Encoding') is not None or len(lengths) != 1:
+                        raise ValueError('Unsupported request framing')
+                    length = lengths[0].strip()
+                    if not length.isascii() or not length.isdecimal():
+                        raise ValueError('Invalid Content-Length')
+                    size = int(length)
                     if not 0 < size <= 2 * 1024 * 1024:
                         self.reply(413, {'error': 'Request size limit exceeded'})
                         return
-                    payload = json.loads(self.rfile.read(size))
+                    previous_timeout = self.connection.gettimeout()
+                    deadline = time.monotonic() + ACTION_BODY_TIMEOUT_SECONDS
+                    body = bytearray()
+                    try:
+                        while len(body) < size:
+                            remaining = deadline - time.monotonic()
+                            if remaining <= 0:
+                                raise TimeoutError('Action body deadline exceeded')
+                            self.connection.settimeout(remaining)
+                            chunk = self.rfile.read1(size - len(body))
+                            if not chunk:
+                                raise ValueError('Incomplete action body')
+                            body.extend(chunk)
+                    finally:
+                        self.connection.settimeout(previous_timeout)
+                    payload = strict_json.loads_object(body)
                     action = payload.get('action') if isinstance(payload, dict) else None
                     values, extra = payload.get('values', {}), payload.get('extra', {})
                     if action not in ACTIONS or not isinstance(values, dict) or not isinstance(extra, dict):
@@ -167,6 +191,8 @@ class StudioServer:
                     self.reply(202, {'ok': True, 'id': identifier})
                 except queue.Full:
                     self.reply(429, {'error': 'Studio is busy; retry after the current operation'})
+                except TimeoutError:
+                    self.reply(408, {'error': 'Action request timed out'})
                 except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
                     self.reply(400, {'error': 'Invalid action request'})
 

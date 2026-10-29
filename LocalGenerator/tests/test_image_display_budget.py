@@ -218,7 +218,11 @@ def test_real_image_jobs_forward_exact_selected_frame_owner_and_multipliers(monk
     assert root["forwardAngleDegrees"] == 45
     assert root["grip"] == {"normalizedX": 0.3, "normalizedY": 0.72}
     assert root["multipliers"] == {"gameplay.itemScale": 1.25, "visual.inventoryScale": 0.9, "visual.worldScale": 1.1}
-    assert root["sharedEntityMultipliers"] == [{"entityId": "workbench_blade", "hitbox.drawScale": 1.5, "visual.scale": 0.75}]
+    shared_body = frozen["runtimeProgram"]["entities"][1]
+    assert root["sharedEntityMultipliers"] == [{
+        "entityId": "workbench_blade", "hitbox.drawScale": 1.5, "visual.scale": 0.75,
+        **{member: shared_body[member] for member in ("rotation", "aim", "attachment", "reach")},
+    }]
     assert arrow["canvasSizePx"] == 32 and arrow["renderSizePx"] == 22
     assert arrow["entityId"] == "nail" and arrow["forwardAngleDegrees"] == 0
     assert arrow["multipliers"] == {"hitbox.drawScale": 1.75, "visual.scale": 0.8}

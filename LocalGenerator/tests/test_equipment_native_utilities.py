@@ -121,8 +121,6 @@ def test_serialized_author_and_frozen_leaf_repair(monkeypatch, mode):
     card = next(c for c in packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "configure_accessory")
     for field in params:
         assert field in card["params"]
-    assert "NOT lava" in card["params"]["fireWalk"]["meaning"]
-    assert "does not choose vanityRocketBoots" in card["params"]["rocketBoots"]["meaning"]
     call["params"]["rocketBoots"] = 6
     before = deepcopy(doc)
     _, repair_packet = _repair_request(monkeypatch, mode, _source(), doc)

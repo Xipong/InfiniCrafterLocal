@@ -43,16 +43,21 @@ def loads(
     object_hook: Callable[[dict[str, Any]], Any] | None = None,
 ) -> Any:
     """Parse strict RFC-style JSON with finite numbers and unique keys."""
-    return json.loads(
-        value,
-        parse_constant=_reject_constant,
-        parse_float=_finite_float,
-        object_pairs_hook=(
-            (lambda pairs: object_hook(_unique_object(pairs)))
-            if object_hook is not None
-            else _unique_object
-        ),
-    )
+    try:
+        return json.loads(
+            value,
+            parse_constant=_reject_constant,
+            parse_float=_finite_float,
+            object_pairs_hook=(
+                (lambda pairs: object_hook(_unique_object(pairs)))
+                if object_hook is not None
+                else _unique_object
+            ),
+        )
+    except RecursionError as error:
+        # Treat an input beyond the decoder's depth capacity like other invalid
+        # JSON. HTTP and durable-cache callers already handle ValueError.
+        raise StrictJsonError("JSON nesting exceeds parser capacity") from error
 
 
 def loads_object(value: str | bytes | bytearray) -> dict[str, Any]:

@@ -192,7 +192,8 @@ public sealed partial class InfiniCraftPlayer
 
     public override void Initialize()
     {
-        ClearGeneratedItemExhaustion();
+        _generatedUtilityDeathTick = null;
+        ClearGeneratedUtilityState();
         Array.Clear(_craftLaneOutcomes);
         Array.Clear(_craftLaneOutcomeTicks);
         Array.Clear(_remoteCraftCancelRequested);
@@ -210,7 +211,8 @@ public sealed partial class InfiniCraftPlayer
 
     public override void OnEnterWorld()
     {
-        ClearGeneratedItemExhaustion();
+        _generatedUtilityDeathTick = null;
+        ClearGeneratedUtilityState();
         if (InputA is null) InputA = NewAirItem();
         if (InputB is null) InputB = NewAirItem();
         // A half-open remote escrow operation is durable and must resend the same
@@ -303,8 +305,13 @@ public sealed partial class InfiniCraftPlayer
         {
             foreach (TagCompound row in tag.GetList<TagCompound>("infiniDeferredCraftRefundsV1"))
             {
-                Item item = ItemIO.Load(row);
-                if (item is not null && !item.IsAir && item.stack > 0) _deferredExitRefunds.Add(item);
+                // One malformed saved item must not discard later refunds or escrow metadata.
+                try
+                {
+                    Item item = ItemIO.Load(row);
+                    if (item is not null && !item.IsAir && item.stack > 0) _deferredExitRefunds.Add(item);
+                }
+                catch (Exception) { }
             }
             string clientId = tag.ContainsKey("infiniStationEscrowClientId")
                 ? tag.GetString("infiniStationEscrowClientId")
@@ -569,6 +576,11 @@ public sealed partial class InfiniCraftPlayer
         if (_generatedAccRunSpeedFloor > 0f)
             Player.accRunSpeed = Math.Max(Player.accRunSpeed, _generatedAccRunSpeedFloor);
         ApplyGeneratedUtilityBuffEffects();
+        EmitGeneratedUtilityBuffLight();
+        // ItemCheck/HoldItem follows this hook. Consume an effect tick only
+        // after its stat/light samples, so a new one-tick application survives until
+        // the next equipment phase instead of expiring unused in PostUpdate.
+        TickGeneratedUtilityBuff();
     }
 
     public override bool PreItemCheck()
@@ -582,7 +594,7 @@ public sealed partial class InfiniCraftPlayer
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickCraftAudioGuard();
-        TickGeneratedUtilityBuff();
+        TickGeneratedUtilityCooldowns();
         TickGeneratedRegistryCatchup();
         TickGeneratedInventoryAssetPrefetch();
         TickPendingStationEscrow();

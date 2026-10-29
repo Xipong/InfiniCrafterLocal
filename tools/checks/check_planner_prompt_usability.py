@@ -13,9 +13,11 @@ PARENT_B = {"id":"blade","name":"Blade","damage":18,"useTime":24,"tags":["metal"
 
 def build_report() -> dict:
     report = planner_prompt_usability_report(PARENT_A, PARENT_B, "workbench+blade")
-    report["expectedCapabilities"] = len(CAPABILITY_REGISTRY)
+    expected = sum(cap.author_visible for cap in CAPABILITY_REGISTRY.values())
+    report["expectedCapabilities"] = expected
+    report["registeredCapabilities"] = len(CAPABILITY_REGISTRY)
     report["checks"] = {
-        "singleSelfContainedCatalog": report.get("visibleCapabilities") == len(CAPABILITY_REGISTRY),
+        "singleSelfContainedCatalog": report.get("visibleCapabilities") == expected,
         "noMissing": not report.get("missingCapabilities"),
         "noExtra": not report.get("extraCapabilities"),
         "noWeaponMacro": not report.get("containsWeaponMacro"),

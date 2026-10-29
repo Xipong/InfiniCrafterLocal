@@ -33,6 +33,8 @@ _CURRENT_LLM_DEADLINE: ContextVar[float | None] = ContextVar("infini_llm_deadlin
 _CURRENT_LLM_DIAGNOSTICS: ContextVar[dict[str, Any] | None] = ContextVar("infini_llm_diagnostics", default=None)
 _CURRENT_LLM_ATTEMPT: ContextVar[dict[str, Any] | None] = ContextVar("infini_llm_attempt", default=None)
 _LLM_MAX_DIAGNOSTIC_ATTEMPTS = 16
+# Bound complete successful JSON bodies as well as provider error evidence.
+MAX_PROVIDER_JSON_BYTES = 16 * 1024 * 1024
 _LLM_CALL_SEQUENCE = 0
 _LLM_CALL_LOCK = threading.Lock()
 
@@ -349,7 +351,7 @@ def http_get_json(url: str, timeout: float = 5, headers: dict[str, str] | None =
     deadline = _request_deadline(timeout)
     try:
         with urlopen_no_redirect(req, deadline=deadline) as resp:
-            return json.loads(read_with_deadline(resp, deadline=deadline).decode("utf-8"))
+            return json.loads(read_with_deadline(resp, deadline=deadline, max_bytes=MAX_PROVIDER_JSON_BYTES).decode("utf-8"))
     except urlerror.HTTPError as error:
         error.close()
         raise
@@ -377,16 +379,16 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
         models = http_get_json(profiles.llm_models_url(ctx), timeout=6, headers=profiles.llm_headers({"Accept": "application/json"}, context=ctx))
         data = models.get("data") if isinstance(models, dict) else None
         if isinstance(data, list) and data:
-            preferred = None
-            if provider == "openrouter":
-                for item in data:
-                    mid = str((item or {}).get("id") or (item or {}).get("name") or "").strip()
-                    if mid.endswith(":free"):
-                        preferred = mid
-                        break
-            first = data[0] or {}
-            mid = preferred or str(first.get("id") or first.get("name") or "").strip()
-            if mid:
+            model_ids = []
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                mid = item.get("id") or item.get("name")
+                if isinstance(mid, str) and mid.strip():
+                    model_ids.append(mid.strip())
+            if model_ids:
+                mid = (next((name for name in model_ids if name.endswith(":free")), model_ids[0])
+                       if provider == "openrouter" else model_ids[0])
                 _RESOLVED_LLM_MODELS[cache_key] = mid
                 log_event("info", "resolved LLM model", {"provider": provider, "model": mid, "label": ctx.get("label")})
                 return mid
@@ -403,7 +405,7 @@ def resolve_llm_model(context: dict[str, Any] | None = None) -> str:
     return configured or "local-model"
 
 
-def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: dict[str, str] | None = None) -> dict[str, Any]:
+def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: dict[str, str] | None = None, *, max_response_bytes: int | None = MAX_PROVIDER_JSON_BYTES) -> dict[str, Any]:
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     deadline = _request_deadline(timeout)
     row = _CURRENT_LLM_ATTEMPT.get()
@@ -437,7 +439,7 @@ def http_json(url: str, payload: dict[str, Any], timeout: float = 10, headers: d
                 row["httpStatus"] = resp.status
             read_started = time.monotonic()
             try:
-                raw = read_with_deadline(resp, deadline=deadline)
+                raw = read_with_deadline(resp, deadline=deadline, max_bytes=max_response_bytes)
             finally:
                 if row is not None:
                     row["readMs"] = round((time.monotonic() - read_started) * 1000, 3)

@@ -82,10 +82,19 @@ def test_child_neutral_omissions_preserve_explicit_wire_and_source_receipts(velo
     (VELOCITIES[2], ("spreadRadians",)),
     (VELOCITIES[3], ("count", "spreadRadians")),
 ])
-def test_root_distribution_still_requires_explicit_count_and_spread(velocity, omitted):
+def test_root_distribution_count_required_and_count_one_spread_is_exact_neutral(velocity, omitted):
     document, call = fixture(velocity)
     for name in omitted:
         call["params"].pop(name)
+    if omitted == ("spreadRadians",):
+        wire = compile_runtime_program(document)
+        assert component(wire, call)["spreadRadians"] == 0
+        rows = wire["runtimeContract"]["finalWireReceipts"]
+        assert any(r.get("callId") == call["id"] and r["status"] == "declared_neutral_omission"
+            and r["authoredPath"].endswith(".params.spreadRadians") for r in rows)
+        for source in (None, document):
+            assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+        return
     errors = validate_runtime_program(document)["errors"]
     assert {row["path"].rsplit(".", 1)[-1] for row in errors
             if row["code"] == "missing_dependency_param"} == set(omitted)
@@ -268,13 +277,47 @@ def test_sampled_velocity_cannot_be_authored_for_a_stationary_kind(kind):
     assert any(row["code"] == "unsupported_param_variant_target_kind" for row in report["errors"])
 
 
-@pytest.mark.parametrize("capability", ["charge_then_release", "channel_beam"])
-def test_launch_owning_controller_does_not_accept_an_ignored_random_velocity(capability):
+@pytest.mark.parametrize("capability", ["accumulate_projectile_charge", "set_projectile_beam_geometry"])
+def test_independent_charge_release_and_beam_geometry_keep_initial_sampled_flight(capability):
     document = build_capability_witness(capability)
     controller = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == capability)
+    if capability == "accumulate_projectile_charge":
+        controller["params"]["releaseEffect"] = {"launchSpeedBlocksPerSecond": 30}
     spawn = next(row for row in document["runtimeProgram"]["calls"] if row["fn"] == "configure_spawn" and row["target"] == controller["target"])
     spawn["params"].update(velocity=deepcopy(VELOCITIES[2]), spreadRadians=0)
-    assert any(row["code"] == "incompatible_param_variant" for row in validate_runtime_program(document)["errors"])
+    before = deepcopy(document)
+    wire = compile_runtime_program(document)
+    assert document == before
+    assert component(wire, spawn)["velocityDistribution"] == {
+        "kind": "radial", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}
+    assert validate_runtime_wire(wire)["ok"]
+    rows = wire["runtimeContract"]["finalWireReceipts"]
+    for source in (None, document):
+        assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
+    wire.pop("runtimeContract")
+    assert validate_runtime_wire(wire)["ok"]
+
+
+@pytest.mark.parametrize("driver,code,params", [
+    ("charge_then_release", 2, {"chargeTicks": 30, "chargeDamageMultiplier": 2,
+        "knockbackMultiplier": 1, "speedMultiplier": 1}),
+    ("channel_beam", 1, {"rangeTiles": 20, "widthPx": 8, "warmupTicks": 0}),
+])
+def test_explicit_synthetic_saved_position_controller_refuses_ignored_sampled_launch(driver, code, params):
+    # Synthetic *persisted wire*, not a current Author compilation of a retired Fn.
+    document, spawn = fixture(VELOCITIES[0])
+    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")["params"]["channel"] = True
+    wire = compile_runtime_program(document)
+    wire.pop("runtimeContract")
+    target = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == spawn["target"])
+    target["kind"] = "owner_attached_projectile"
+    target["controller"] = {"name": driver, "code": code, "params": params}
+    before = deepcopy(wire)
+    assert validate_runtime_wire(wire)["ok"]
+    assert wire == before
+    target["spawn"]["speedPxPerTick"] = 0
+    target["spawn"]["velocityDistribution"] = {"kind": "radial", "minSpeedPxPerUpdate": 4, "maxSpeedPxPerUpdate": 7}
+    assert not validate_runtime_wire(wire)["ok"]
 
 
 @pytest.mark.parametrize("velocity,leaf,value", [(VELOCITIES[1], "aim", "none"), (VELOCITIES[4], "aim", "none"),
@@ -339,8 +382,8 @@ def test_raw_event_spread_for_independent_direction_requires_actual_numeric_zero
 @pytest.mark.parametrize("format_mode,capability,velocity", [
     ("json_object", "target_and_fire", VELOCITIES[1]),
     ("json_schema", "target_and_fire", VELOCITIES[2]),
-    ("json_object", "charge_then_release", VELOCITIES[3]),
-    ("json_schema", "charge_then_release", VELOCITIES[4]),
+    ("json_object", "target_and_fire", VELOCITIES[3]),
+    ("json_schema", "target_and_fire", VELOCITIES[4]),
 ])
 def test_explicit_invalid_velocity_variant_replacement_retires_old_branch(monkeypatch, format_mode, capability, velocity):
     doc = build_capability_witness(capability)

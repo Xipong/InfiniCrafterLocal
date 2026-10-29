@@ -37,10 +37,12 @@ and the existing asset catch-up path runs; no invented armor artwork is drawn.
 
 ## Accessory depth
 
-- `back`, `orbit` and absent mount: existing rear layer after `Wings`, before
+- `back` and absent mount: existing rear layer after `Wings`, before
   native skin/leggings/torso
-- `chest`, `waist`, `shoulder`: front layer immediately before `OffhandAcc`,
+- `chest`, `waist`, `shoulder`, explicit `orbit`: front layer immediately before `OffhandAcc`,
   after the torso and its generated armor badge, before hands/held items
+
+Explicit `orbit` intentionally moves forward: its unchanged first 16px-ring position can be completely occluded by the native legs when submitted behind the body. Existing records with an explicit orbit token receive this visibility correction; absent mount and explicit back retain their old depth. Ring offsets, sizing and artwork are not rewritten. Hands/held items can still occlude front badges; this is not an always-visible HUD.
 
 The explicit mount token determines this finite rendering route. No name,
 category or image analysis selects placement. The full visible accessory set
@@ -51,6 +53,14 @@ do; only the functional slot obeys its `hideVisibleAccessory[3..9]` flag. A soci
 item without a generated overlay cannot erase a functional badge. Each source
 also obeys native visual-incompatibility checks and uses its paired slot dye.
 Armor retains its matching-slot vanity replacement policy.
+
+Native `ModAccessorySlot` functional and vanity items also contribute overlays
+and source-attached VFX. Slot properties are read under the drawn player's
+`Main.CurrentPlayerOverride`, with separate native usability/shared-loadout gates,
+functional `HideVisuals`, visual-incompatibility checks and paired `DyeItem`.
+VFX bindings retain the exact owner, item instance, slot side and generation;
+replacement, movement out of the slot or loss of native eligibility retires that
+source instead of attaching it to another item.
 
 Rear badges apply native `TorsoGroup` once (their `Wings` parent has no such
 transform); front badges inherit it from `OffhandAcc`. Both follow seated/mounted
@@ -65,6 +75,8 @@ native player-part `DrawData` production and native child-layer traversal using
 known-size synthetic CPU textures. It covers functional/vanity priority, a
 second player, changed equipment, inventory/stat/dye invariants, base clothes,
 hair, hands, front/back order, orbit stability, flips and native full rotation.
+Modded-slot checks cover functional/vanity dye, hide/disable/loadout conflicts,
+remote-player ownership and source-attached VFX retirement.
 The PNG test checks real file dimensions and every alpha value.
 
 These are headless native-consumer checks. They do not start a graphics device,

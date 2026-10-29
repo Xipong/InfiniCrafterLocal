@@ -10,7 +10,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from infini_local.core.schema_validation import strict_schema_errors
-from infini_local.core.runtime_authoring.capability_registry import MOVEMENT_OPCODE
+from infini_local.core.runtime_authoring.capability_registry import MOVEMENT_OPCODE, PROJECTILE_ENTITY_KINDS
 
 
 SPRITE_CANVAS_SIZES = (24, 32, 48, 64, 96, 128)
@@ -33,7 +33,7 @@ def sprite_presentation_properties() -> dict[str, Any]:
 def grip_schema() -> dict[str, Any]:
     return {
         "type": "object", "additionalProperties": False,
-        "description": "Atomic hand pivot on the selected final PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units or gameplay geometry. Optional except for a sprite-consuming move_front_hand. Root/reuse select the single item grip; only distinct baked entities own an entity grip. Not authored HoldoutOffset.",
+        "description": "Atomic hand pivot on the selected final PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units or gameplay geometry. Optional except for sprite-consuming attachment.anchor=front_hand or retained move_front_hand; armPose alone does not require it. Root/reuse select the single item grip; only distinct baked entities own an entity grip. Not authored HoldoutOffset.",
         "properties": {
             "normalizedX": {"type": "number", "minimum": 0.0, "maximum": 1.0},
             "normalizedY": {"type": "number", "minimum": 0.0, "maximum": 1.0},
@@ -44,9 +44,16 @@ def grip_schema() -> dict[str, Any]:
 
 def front_hand_sprite_requirement(entity: Mapping[str, Any]) -> dict[str, Any] | None:
     movement = entity.get("movement")
-    if (entity.get("kind") != "owner_attached_projectile" or not isinstance(movement, Mapping)
-            or movement.get("name") != "move_front_hand"
-            or type(movement.get("code")) is not int or movement["code"] != MOVEMENT_OPCODE.get("move_front_hand")):
+    attachment = entity.get("attachment")
+    hand_attachment = (entity.get("kind") in PROJECTILE_ENTITY_KINDS
+                       and isinstance(attachment, Mapping) and attachment.get("anchor") == "front_hand")
+    historical_hand_driver = (entity.get("kind") == "owner_attached_projectile" and isinstance(movement, Mapping)
+                              and movement.get("name") == "move_front_hand"
+                              and type(movement.get("code")) is int
+                              and movement["code"] == MOVEMENT_OPCODE.get("move_front_hand"))
+    # Reading the hand anchor is independent of writing the arm pose. Neither
+    # armPose alone nor a non-hand anchor consumes the hand-gripped PNG lane.
+    if not hand_attachment and not historical_hand_driver:
         return None
     return {"requiredFields": ["renderSizePx", "forwardAngleDegrees", "grip"],
             "selectedOwnerByAssetMode": {"reuse_item_icon": "item", "baked_sprite": "entity",
@@ -117,9 +124,9 @@ def front_hand_sprite_errors(data: Mapping[str, Any], *, kit: Mapping[str, Any] 
             path = dependency["ownerPath"] + "." + field
             if field not in owner:
                 errors.append({"path": path, "code": "front_hand_sprite_metadata_required",
-                               "message": f"move_front_hand sprite for {dependency['entityId']!r} requires its selected texture owner's {field}."})
+                               "message": f"Front-hand-attached sprite for {dependency['entityId']!r} requires its selected texture owner's {field}."})
             else:
                 for error in strict_schema_errors(owner[field], properties[field], path=path):
                     errors.append({"path": error["path"], "code": "front_hand_sprite_metadata_invalid",
-                                   "message": "Selected move_front_hand sprite metadata must match the exact Visual shape."})
+                                   "message": "Selected front-hand-attached sprite metadata must match the exact Visual shape."})
     return errors

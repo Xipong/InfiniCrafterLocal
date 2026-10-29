@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Players;
+using InfiniCrafterLocal.Common.VFX;
 using InfiniCrafterLocal.Content.Items;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -14,9 +15,139 @@ using Terraria.DataStructures;
 using Terraria.GameContent;
 using Terraria.ID;
 using Terraria.ModLoader;
+using Terraria.ModLoader.Default;
 
 internal static partial class EngineRuntimeChecks
 {
+    private sealed class ModdedEquipmentPresentationScope : IDisposable
+    {
+        internal readonly AccessoryIdentityScope Native = new(2);
+        private readonly IDictionary content = (IDictionary)typeof(ModContent).Assembly.GetType("Terraria.ModLoader.ContentCache")!
+            .GetField("_cachedContentForAllMods", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+        private readonly bool hadContent;
+        private readonly object? previousContent;
+        internal readonly Item[] Dyes = { new Item { dye = 35 }, new Item { dye = 42 } };
+        internal readonly bool[] Hidden = new bool[2];
+
+        internal ModdedEquipmentPresentationScope()
+        {
+            hadContent = content.Contains(typeof(ModAccessorySlot));
+            previousContent = content[typeof(ModAccessorySlot)];
+            var loader = LoaderManager.Get<AccessorySlotLoader>();
+            typeof(Loader).GetField("<TotalCount>k__BackingField", TestInstance)!.SetValue(loader, 2);
+            for (int i = 0; i < Native.SlotRules.Length; i++)
+                typeof(ModAccessorySlot).GetProperty("Type", TestInstance)!.SetValue(Native.SlotRules[i], i);
+            content[typeof(ModAccessorySlot)] = Array.AsReadOnly<ModAccessorySlot>(Native.SlotRules);
+            typeof(ModAccessorySlotPlayer).GetField("exDyesAccessory", TestInstance)!.SetValue(Native.Slots, Dyes);
+            typeof(ModAccessorySlotPlayer).GetField("exHideAccessory", TestInstance)!.SetValue(Native.Slots, Hidden);
+            Native.Player.active = true; Native.Player.whoAmI = 0;
+        }
+
+        public void Dispose()
+        {
+            if (hadContent) content[typeof(ModAccessorySlot)] = previousContent;
+            else content.Remove(typeof(ModAccessorySlot));
+            Native.Dispose();
+        }
+    }
+
+    private static void EquipmentModdedAccessoryOverlayPreservesNativeSlots()
+    {
+        using var scope = new ModdedEquipmentPresentationScope(); using var cache = new BorrowedSpriteCache();
+        Terraria.Main.dedServ = false;
+        var player = scope.Native.Player;
+        var textures = new Texture2D[3];
+        for (int i = 0; i < 3; i++)
+        {
+            string path = System.IO.Path.Combine(Terraria.Program.SavePath, "modded_overlay_" + i + ".png");
+            textures[i] = CpuTexture(48, 32);
+            cache.Textures.Add(path, Activator.CreateInstance(cache.Record, textures[i], 0f, 0L)!);
+            var data = GeneratedItemData.Placeholder(); data.Id = "modded_overlay_" + i;
+            data.Accessory.Enabled = true; data.Visual.AccessoryMount = "chest"; data.Visual.EquipOverlayPath = path;
+            scope.Native.Extra[i] = AttachItem(new GeneratedItem(), new Item { type = i + 1, netID = i + 1, stack = 1, accessory = true }, data).Item;
+        }
+        var layer = new GeneratedEquipOverlayFrontAccessoryDrawLayer();
+        var draw = typeof(GeneratedEquipOverlayDrawLayerBase).GetMethod("Draw", TestInstance)!;
+        DrawData[] Render()
+        {
+            var info = new PlayerDrawSet { drawPlayer = player, Position = player.position,
+                DrawDataCache = new List<DrawData>(), colorArmorBody = Color.White, bodyVect = new Vector2(20, 28) };
+            object[] args = { info }; draw.Invoke(layer, args);
+            return ((PlayerDrawSet)args[0]).DrawDataCache.ToArray();
+        }
+        var outerPlayer = new Player();
+        using (new Terraria.Main.CurrentPlayerOverride(outerPlayer))
+        {
+            DrawData[] all = Render();
+            Equal(3, all.Length, "modded functional and vanity badges reach the real draw layer");
+            Equal(35, all.Single(d => ReferenceEquals(d.texture, textures[0])).shader, "functional native mod-slot dye");
+            Equal(35, all.Single(d => ReferenceEquals(d.texture, textures[2])).shader, "vanity uses the paired mod-slot dye");
+            Equal(42, all.Single(d => ReferenceEquals(d.texture, textures[1])).shader, "second native slot keeps its own dye");
+            Equal(true, ReferenceEquals(outerPlayer, Terraria.Main.CurrentPlayer), "draw restores outer native player context");
+            var shared = (bool[])typeof(ModAccessorySlotPlayer).GetField("sharedLoadoutSlotTypes", TestInstance)!.GetValue(scope.Native.Slots)!;
+            shared[0] = true;
+            player.armor[3] = new Item { type = 1, netID = 1, stack = 1, accessory = true };
+            Equal(false, Render().Any(d => ReferenceEquals(d.texture, textures[0])), "shared loadout conflict disables only the functional slot");
+            Equal(true, Render().Any(d => ReferenceEquals(d.texture, textures[2])), "unconflicted vanity slot keeps its native overlay");
+            player.armor[3] = new Item(); shared[0] = false;
+            scope.Hidden[0] = true;
+            Equal(false, Render().Any(d => ReferenceEquals(d.texture, textures[0])), "native hide toggle suppresses functional overlay");
+            Equal(true, Render().Any(d => ReferenceEquals(d.texture, textures[2])), "functional hide does not suppress vanity overlay");
+            scope.Native.SlotRules[1].Enabled = false;
+            Equal(1, Render().Length, "disabled slot contributes no overlay");
+            scope.Native.Extra[2].shieldSlot = 1; player.compositeBackArm.enabled = true;
+            Equal(0, Render().Length, "native vanity incompatibility is preserved");
+            player.compositeBackArm.enabled = false; scope.Native.Extra[2].shieldSlot = -1;
+            scope.Native.SlotRules[0].Enabled = false;
+            Equal(0, Render().Length, "disabled vanity slot also remains invisible");
+            Equal(true, ReferenceEquals(outerPlayer, Terraria.Main.CurrentPlayer), "refusal paths restore native player context");
+        }
+    }
+
+    private static void MaterialModdedAccessoryBindingUsesExactLiveSlot()
+    {
+        WithLighting((config, _) =>
+        {
+            using var scope = new ModdedEquipmentPresentationScope();
+            var system = new InfiniDetachedVfxSystem(); uint tick = Terraria.Main.GameUpdateCount;
+            try
+            {
+                system.OnWorldUnload(); config.ParticleSpawnMultiplier = 1;
+                var player = scope.Native.Player; player.Center = new Vector2(160, 200); player.direction = 1;
+                var data = ParseMaterialElement(MaterialElementWire("source")); data.Accessory.Enabled = true;
+                data.VfxManifest.Slots[0].Element!.Count = 1;
+                data.VfxManifest.Slots[0].RepeatEvery = 3;
+                var a = AttachItem(new GeneratedItem(), new Item { type = 1, stack = 1, accessory = true }, data);
+                var b = AttachItem(new GeneratedItem(), new Item { type = 1, stack = 1, accessory = true }, data);
+                scope.Native.Extra[0] = a.Item;
+                var outerPlayer = new Player();
+                using (new Terraria.Main.CurrentPlayerOverride(outerPlayer))
+                {
+                    MaterialClock(600);
+                    for (int i = 0; i < 2; i++) InfiniItemVfxRuntime.OnPeriodic(player, data, data.RuntimeProgram.ItemEntityId, a.Item);
+                    system.PostUpdateEverything();
+                    Equal(1, OwnedMaterialQueue().Count, "functional mod slot emits one source-attached group");
+                    Equal(true, ReferenceEquals(outerPlayer, Terraria.Main.CurrentPlayer), "capture and live sampling restore player override");
+                    scope.Native.Extra[0] = b.Item; MaterialClock(601); system.PostUpdateEverything();
+                    Equal(0, OwnedMaterialQueue().Count, "equal-definition replacement retires original instance binding");
+                    MaterialClock(603); InfiniItemVfxRuntime.OnPeriodic(player, data, data.RuntimeProgram.ItemEntityId, b.Item); system.PostUpdateEverything();
+                    Equal(1, OwnedMaterialQueue().Count, "replacement owns its own periodic group");
+                    scope.Native.SlotRules[0].Enabled = false; MaterialClock(604); system.PostUpdateEverything();
+                    Equal(0, OwnedMaterialQueue().Count, "disabled mod slot retires source-attached particles without Draw");
+                    scope.Native.SlotRules[0].Enabled = true;
+                    scope.Native.Extra[0] = new Item(); scope.Native.Extra[2] = b.Item;
+                    MaterialClock(606); GeneratedEquipOverlayDrawLayerBase.EmitVisibleEquipmentVfx(player); system.PostUpdateEverything();
+                    Equal(1, OwnedMaterialQueue().Count, "modded vanity path registers source-bound periodic VFX");
+                    scope.Native.Extra[2] = new Item(); player.inventory[1] = b.Item;
+                    MaterialClock(607); system.PostUpdateEverything();
+                    Equal(0, OwnedMaterialQueue().Count, "inventory move cannot keep the old mod-slot attachment alive");
+                    Equal(true, ReferenceEquals(outerPlayer, Terraria.Main.CurrentPlayer), "all retirement paths restore player override");
+                }
+            }
+            finally { system.OnWorldUnload(); MaterialClock(tick); }
+        });
+    }
+
     // Real tML PlayerFrame/EquipLoader/EquipTexture dispatch. Use in-range fixture
     // slots and restore the registry; no registered mod or loaded graphics device.
     private sealed class BorrowedEquipmentSlots : IDisposable
@@ -146,11 +277,11 @@ internal static partial class EngineRuntimeChecks
             }
             Equal(true, ReferenceEquals(PlayerDrawLayers.Wings, ((PlayerDrawLayer.AfterParent)children[0].GetDefaultPosition()).Parent), "back mounts remain behind native skin/torso");
             Equal(true, ReferenceEquals(PlayerDrawLayers.OffhandAcc, ((PlayerDrawLayer.BeforeParent)children[1].GetDefaultPosition()).Parent), "front mounts follow torso subtree before hands");
-            PlayerDrawSet Render(float shadow = 0f, bool hideEntire = false)
+            PlayerDrawSet Render(float shadow = 0f, bool hideEntire = false, float torsoOffset = 0f)
             {
                 var info = new PlayerDrawSet { drawPlayer = player, Position = player.position, DrawDataCache = new List<DrawData>(),
                     DustCache = new List<int>(), GoreCache = new List<int>(), bodyVect = new Vector2(20, 28), colorArmorBody = Color.White, bodyGlowMask = -1, armGlowMask = -1, armorHidesHands = true,
-                    playerEffect = (player.direction < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None) | (player.gravDir < 0 ? SpriteEffects.FlipVertically : SpriteEffects.None), shadow = shadow, hideEntirePlayer = hideEntire };
+                    playerEffect = (player.direction < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None) | (player.gravDir < 0 ? SpriteEffects.FlipVertically : SpriteEffects.None), shadow = shadow, hideEntirePlayer = hideEntire, torsoOffset = torsoOffset };
                 foreach (var parent in parents)
                 {
                     reset.Invoke(parent, new object[] { info }); object[] args = { info }; drawTree.Invoke(parent, args); info = (PlayerDrawSet)args[0];
@@ -163,7 +294,7 @@ internal static partial class EngineRuntimeChecks
                 player.direction = direction; player.gravDir = gravity; player.bodyRotation = .25f;
                 var info = Render();
                 Equal(6, info.DrawDataCache.Count, "five badges and native torso exactly once");
-                Texture2D[] expected = { textures[0], textures[2], torsoTexture, textures[1], textures[3], textures[4] };
+                Texture2D[] expected = { textures[0], torsoTexture, textures[1], textures[2], textures[3], textures[4] };
                 for (int i = 0; i < expected.Length; i++) Equal(true, ReferenceEquals(expected[i], info.DrawDataCache[i].texture), "native layer submission order " + i);
                 foreach (DrawData badge in info.DrawDataCache.Where(d => !ReferenceEquals(d.texture, torsoTexture)))
                 {
@@ -172,7 +303,7 @@ internal static partial class EngineRuntimeChecks
                     Near(.25f, badge.rotation, "local torso rotation retained"); Near(18f / 64f, badge.scale.X, "whole-texture pixel fit retained");
                 }
                 // Orbit occupies index 2 of the whole set, not index 1 of the rear subset.
-                DrawData orbit = info.DrawDataCache[1];
+                DrawData orbit = info.DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2]));
                 float angle = MathHelper.PiOver2 + 2 * MathHelper.TwoPi / 5;
                 Vector2 expectedOffset = new Vector2(16, 0).RotatedBy(angle); expectedOffset.Y *= gravity;
                 Vector2 frameTop = new((int)(player.position.X - Terraria.Main.screenPosition.X - 20 + player.width / 2), (int)(player.position.Y - Terraria.Main.screenPosition.Y + player.height - 56 + 4));
@@ -184,26 +315,35 @@ internal static partial class EngineRuntimeChecks
                 for (int i = 0; i < info.DrawDataCache.Count; i++)
                     Near(untransformed[i].rotation + .4f, info.DrawDataCache[i].rotation, "native final full rotation exactly once");
             }
-            // A seated/mounted torso applies this native transform before its
-            // child layers. Rear badges must follow the same body displacement.
+            // Explicit orbit is the only changed depth policy. Old definitions
+            // with absent mount retain their rear route and identical ring offset.
+            var orbitData = ((GeneratedItem)player.armor[5].ModItem!).Data;
+            var orbitVisual = orbitData.Visual;
+            Vector2 explicitOrbit = Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position;
+            {
+                // Omission is not an explicit null/empty token (both are invalid wire).
+                orbitData.Visual = new VisualSpec { EquipOverlayPath = orbitVisual.EquipOverlayPath };
+                var legacy = Render();
+                Equal(true, ReferenceEquals(textures[0], legacy.DrawDataCache[0].texture), "explicit back remains rear");
+                Equal(true, ReferenceEquals(textures[2], legacy.DrawDataCache[1].texture), "absent orbit stays before torso");
+                Equal(true, ReferenceEquals(torsoTexture, legacy.DrawDataCache[2].texture), "legacy depth not silently migrated");
+                Equal(explicitOrbit, legacy.DrawDataCache[1].position, "depth does not change ring geometry");
+            }
+            orbitData.Visual = orbitVisual;
+            // Native torso displacement applies exactly once to both depths.
             player.bodyRotation = 0f;
             var neutral = Render();
-            // Render() sets zero offset; exercise the actual native subtree with
-            // a nonzero offset instead of only comparing local geometry.
-            var shifted = new PlayerDrawSet { drawPlayer = player, Position = player.position, DrawDataCache = new List<DrawData>(),
-                bodyVect = new Vector2(20, 28), colorArmorBody = Color.White, torsoOffset = 7f };
-            reset.Invoke(parents[0], new object[] { shifted });
-            object[] shiftedArgs = { shifted }; drawTree.Invoke(parents[0], shiftedArgs); shifted = (PlayerDrawSet)shiftedArgs[0];
-            foreach (var texture in new[] { textures[0], textures[2] })
+            var shifted = Render(torsoOffset: 7f);
+            foreach (var texture in textures)
             {
                 Vector2 oldPosition = neutral.DrawDataCache.Single(d => ReferenceEquals(d.texture, texture)).position;
                 Vector2 newPosition = shifted.DrawDataCache.Single(d => ReferenceEquals(d.texture, texture)).position;
-                Near(oldPosition.Y + 7f, newPosition.Y, "rear accessory follows native torso offset");
+                Near(oldPosition.Y + 7f, newPosition.Y, "front/rear accessory follows native torso offset once");
             }
             Vector2 readyOrbit = Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position;
             string chestPath = ((GeneratedItem)player.armor[4].ModItem!).Data.Visual.EquipOverlayPath;
             object chestTexture = cache.Textures[chestPath]!; cache.Textures.Remove(chestPath);
-            Equal(readyOrbit, Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position, "missing front asset does not reflow rear orbit");
+            Equal(readyOrbit, Render().DrawDataCache.Single(d => ReferenceEquals(d.texture, textures[2])).position, "missing front asset does not reflow orbit");
             cache.Textures[chestPath] = chestTexture;
             player.armor[14] = new Item { type = ItemID.AvengerEmblem, stack = 1, accessory = true };
             Equal(true, Render().DrawDataCache.Any(d => ReferenceEquals(d.texture, textures[1])), "nonvisual social item cannot erase functional badge");

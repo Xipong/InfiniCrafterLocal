@@ -7,7 +7,9 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY, ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY, PROJECTILE_MODIFIER_COMPONENTS,
+)
 from infini_local.core.runtime_authoring.event_producer_validation import item_body_producer_bindings
 
 
@@ -49,6 +51,10 @@ def runtime_event_inventory(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         kind_spec = ENTITY_KIND_REGISTRY.get(entity_kind)
         for event_name in (kind_spec.base_events if kind_spec is not None else ()):
             rows.append({"entityId": entity_id, "event": event_name})
+        for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
+            if member in entity:
+                rows.extend({"entityId": entity_id, "event": event_name}
+                            for event_name in CAPABILITY_REGISTRY[fn].emitted_events)
         if entity_kind == "item_body":
             for event_name, producers in item_producers.items():
                 if producers and EVENT_KIND_REGISTRY[event_name].producer_binding_contact_damage is True:

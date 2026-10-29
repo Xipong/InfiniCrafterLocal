@@ -650,7 +650,9 @@ def generate_a1111(prompt: str, negative: str, sprite_id: str, preferred_canvas:
             "do_not_save_samples": True,
             "do_not_save_grid": True,
         }
-        raw = http_json(f"{A1111_URL}/sdapi/v1/txt2img", payload, timeout=VISUAL_GENERATION_TIMEOUT)
+        # Image batches are not text-model JSON; preserve their existing size policy.
+        raw = http_json(f"{A1111_URL}/sdapi/v1/txt2img", payload, timeout=VISUAL_GENERATION_TIMEOUT,
+                        max_response_bytes=None)
         for j, b64 in enumerate(raw.get("images", [])):
             data = base64.b64decode(b64.split(",")[-1])
             p = (output_dir if output_dir is not None else SPRITE_DIR) / f"{safe_file_part(sprite_id, 'sprite')}_raw_a1111_{request_i}_{j}.png"

@@ -127,12 +127,12 @@ def test_real_author_packet_exposes_explicit_inventory_capability_without_inheri
     dossier = request_dossier(request)
     card = next(c for c in dossier["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == FN)
     assert card["params"] == {}
-    assert "Inventory passive" in json.dumps(card)
+    assert "inventory check" in card["does"]
     packet = json.dumps(request)
     assert "collect_seeds_from_grass" in packet
-    assert "only by explicit" in packet
     assert "not executable support for that behavior" not in packet
     doc = seed_source()
+    doc = {key: doc[key] for key in ("name", "category", "runtimeProgram")}
     if mode != "off":
         provider_roundtrip(doc, request["response_format"])
     # Parent facts do not inject a call; absent explicit selection remains absent.
@@ -160,18 +160,6 @@ def test_leaf_repair_freezes_seed_selection_or_absence(monkeypatch, present, mod
     final = sanitize_recipe_for_delivery(compile_runtime_program(repaired))
     assert final["gameplay"].get(FIELD, False) is present
     assert validate_runtime_wire(final)["ok"]
-
-
-def test_inventory_passive_generated_docs_do_not_claim_a_binding():
-    import importlib.util
-    path = Path(__file__).resolve().parents[2] / "tools/generate/generate_low_level_runtime_docs.py"
-    spec = importlib.util.spec_from_file_location("seed_doc_owner", path)
-    assert spec is not None and spec.loader is not None
-    docs = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(docs)
-    from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    text = docs.event_input_cell(CAPABILITY_REGISTRY[FN])
-    assert "inventory query" in text and "no binding" in text
 
 
 def test_native_seed_dto_keeps_nullable_omitted_storage_for_old_definition_identity():

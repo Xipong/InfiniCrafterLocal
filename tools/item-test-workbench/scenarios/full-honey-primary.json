@@ -1,0 +1,129 @@
+{
+  "playerUpdate": "full",
+  "worldId": 853355558,
+  "ticks": 1850,
+  "seed": 1,
+  "player": {
+    "x": 800,
+    "y": 700,
+    "life": 90,
+    "maxLife": 100,
+    "mana": 200
+  },
+  "dummy": {
+    "x": 1200,
+    "y": 700,
+    "life": 10000
+  },
+  "tiles": [
+    {
+      "tileX": 1,
+      "tileY": 47,
+      "width": 97,
+      "height": 1
+    }
+  ],
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "primary"
+    },
+    {
+      "tick": 1,
+      "kind": "release"
+    },
+    {
+      "tick": 60,
+      "kind": "primary"
+    },
+    {
+      "tick": 61,
+      "kind": "release"
+    },
+    {
+      "tick": 601,
+      "kind": "primary"
+    },
+    {
+      "tick": 602,
+      "kind": "release"
+    },
+    {
+      "tick": 1801,
+      "kind": "primary"
+    },
+    {
+      "tick": 1802,
+      "kind": "release"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "spawn_count",
+      "value": 0
+    },
+    {
+      "kind": "item_hit_count",
+      "value": 0
+    },
+    {
+      "kind": "dummy_undamaged"
+    },
+    {
+      "kind": "mana_debited",
+      "value": 0
+    },
+    {
+      "kind": "direct_healing",
+      "value": 0
+    },
+    {
+      "kind": "generated_buff_seen"
+    },
+    {
+      "kind": "no_nonfinite"
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "generatedBuffTicks",
+      "tick": 0,
+      "value": 600
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "generatedBuffTicks",
+      "tick": 60,
+      "value": 540
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "generatedBuffTicks",
+      "tick": 601,
+      "value": 0
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "generatedBuffTicks",
+      "tick": 1801,
+      "value": 600
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "moveSpeed",
+      "tick": 1,
+      "value": 1.1
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "moveSpeed",
+      "tick": 600,
+      "value": 1.1
+    },
+    {
+      "kind": "player_stat_at",
+      "stat": "moveSpeed",
+      "tick": 601,
+      "value": 1
+    }
+  ]
+}

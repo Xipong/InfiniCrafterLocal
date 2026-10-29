@@ -66,7 +66,7 @@ def offline_builder(monkeypatch, format_mode, respond):
 
 
 def repair_with_response(monkeypatch, doc, incoming, format_mode, *, out_of_scope_response=False,
-                         invalid_report=False):
+                         invalid_report=False, parents=None):
     """Only provider I/O is replaced: request, parser, scope, merge and admission are real."""
     requests = []
 
@@ -97,9 +97,10 @@ def repair_with_response(monkeypatch, doc, incoming, format_mode, *, out_of_scop
                 "_debug": {"responseFormatType": format_mode}}
 
     offline_builder(monkeypatch, format_mode, respond)
+    parent_a, parent_b = parents if parents is not None else ({}, {})
     try:
         result = author.repair_author_item_after_failure(
-            doc, {}, {}, "offline-only", failure_report=validate_runtime_program(doc))
+            doc, parent_a, parent_b, "offline-only", failure_report=validate_runtime_program(doc))
     finally:
         if invalid_report:
             assert len(requests) == 1
@@ -129,8 +130,12 @@ def provider_roundtrip(doc, response_format):
     before = json.dumps(doc, sort_keys=True)
     payload = deepcopy(doc)
     if response_format["type"] == "json_schema":
-        payload = _encode_nullable_fixture(payload, contract.author_item_response_schema())
-        Draft202012Validator(response_format["json_schema"]["schema"]).validate(payload)
+        provider = response_format["json_schema"]["schema"]
+        assert payload.keys() <= provider["properties"].keys()
+        local = contract.author_item_response_schema()
+        local["properties"] = {key: value for key, value in local["properties"].items() if key in provider["properties"]}
+        payload = _encode_nullable_fixture(payload, local)
+        Draft202012Validator(provider).validate(payload)
     restored = author._prepare_parsed_author_item(
         json.loads(json.dumps(payload)), response_format=response_format)
     assert json.dumps(restored, sort_keys=True) == before

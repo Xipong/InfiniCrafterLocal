@@ -11,8 +11,8 @@ namespace InfiniCrafterLocal.Content.Projectiles;
 
 public sealed partial class GeneratedProjectile
 {
-    private bool PreservesExplicitBodyScale()
-        => _entity?.HitboxCurve?.MirrorToSprite == true || _entity?.VisualScaleCurve is not null;
+    internal static bool PreservesExplicitBodyScale(RuntimeEntitySpec? entity)
+        => entity?.HitboxCurve?.MirrorToSprite == true || entity?.VisualScaleCurve is not null || entity?.VisualScaleRate is not null;
 
     public override bool PreDraw(ref Color lightColor)
     {
@@ -45,24 +45,26 @@ public sealed partial class GeneratedProjectile
         Rectangle source = texture.Bounds;
         // An explicit mirror or visual curve owns the complete bounded product.
         // Ordinary drivers retain the native bounded scale without either curve owner.
-        float scale = (PreservesExplicitBodyScale() ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
+        float scale = (PreservesExplicitBodyScale(_entity) ? Projectile.scale : Math.Clamp(Projectile.scale, 0.1f, 8f))
             * selected.FrameScale(source.Width, source.Height);
         SpriteEffects effects = Projectile.spriteDirection < 0 ? SpriteEffects.FlipHorizontally : SpriteEffects.None;
-        Vector2 origin = selected.ProjectileOrigin(_entity, source.Width, source.Height, scale, effects);
-        Main.spriteBatch.Draw(texture, Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY), source, Projectile.GetAlpha(lightColor), selected.ProjectileRotation(_entity, Projectile.rotation, effects), origin, scale, effects, 0f);
+        float rotation = MotionSpriteRotation(_entity, selected, Projectile.rotation, effects);
+        Vector2 origin = MotionSpriteOrigin(_entity, selected, source.Width, source.Height, scale, effects,
+            rotation, _entity.Aim is not null ? MotionAxis(Owner(), publish: false) : _initialDirection);
+        Main.spriteBatch.Draw(texture, Projectile.Center - Main.screenPosition + new Vector2(0f, Projectile.gfxOffY), source, Projectile.GetAlpha(lightColor), rotation, origin, scale, effects, 0f);
     }
 
     private void DrawRuntimeGeometry(Color lightColor)
     {
         Texture2D pixel = TextureAssets.MagicPixel.Value;
         Color color = RuntimeColorPolicy.Resolve(_entity!.Light.Color, Projectile.GetAlpha(lightColor));
-        if (_entity.Controller.Code == RuntimeControllerCode.ChannelBeam)
+        if (HasBeamGeometry)
         {
             GetChannelBeamGeometry(out Vector2 start, out Vector2 end, out float beamWidth);
             InfiniVfxRuntime.DrawLine(pixel, start - Main.screenPosition, end - Main.screenPosition, color, beamWidth, preserveWidth: true);
             return;
         }
-        if (_entity.Movement.Code == 18)
+        if (HasLashGeometry)
         {
             float whipWidth = WhipCollisionWidth();
             for (int i = 1; i < _whipPoints.Count; i++)
@@ -73,11 +75,13 @@ public sealed partial class GeneratedProjectile
         // AI adds a quarter-turn for native vertical sprites. A horizontal
         // primitive uses the motion axis directly; retain explicit rotating
         // movement's pose rather than re-aiming a spinning body by velocity.
-        Vector2 direction = _entity.Movement.Code is 14 or 16 or 17
+        Vector2 direction = _entity.Rotation is not null ? Projectile.rotation.ToRotationVector2()
+            : _entity.Aim is not null ? MotionAxis(Owner(), publish: false)
+            : _entity.Movement.Code is 14 or 16 or 17
             ? Projectile.rotation.ToRotationVector2()
             : _entity.Movement.Code == 20 ? (Projectile.rotation - MathHelper.PiOver2).ToRotationVector2()
             : Projectile.velocity.SafeNormalize(_initialDirection);
-        bool exactScale = PreservesExplicitBodyScale();
+        bool exactScale = PreservesExplicitBodyScale(_entity);
         float length = exactScale ? _entity.Hitbox.WidthPx * Projectile.scale : Math.Max(8f, _entity.Hitbox.WidthPx * Projectile.scale);
         float width = exactScale ? _entity.Hitbox.HeightPx * Projectile.scale * 0.35f : Math.Max(2f, _entity.Hitbox.HeightPx * Projectile.scale * 0.35f);
         Vector2 delta = direction.SafeNormalize(Vector2.UnitX) * length;

@@ -31,18 +31,18 @@ LLM_INCLUDE_AISTYLE_RAW = env_bool("INFINI_LLM_INCLUDE_AISTYLE", False)
 # sourceItem echo that is already present in itemRaw.
 LLM_ITEM_RAW_KEYS = [
     "type", "name", "internalName", "sourceMod", "fullName", "tooltipLines",
-    "damage", "damageClass", "knockback", "crit",
-    "useStyle", "useStyleName", "useTime", "useAnimation", "reuseDelay", "autoReuse", "channel", "noMelee", "noUseGraphic", "useTurn",
+    "damage", "damageClass", "knockback", "crit", "armorPenetration", "itemScale",
+    "useStyle", "useStyleName", "useTime", "useAnimation", "useLimitPerAnimation", "reuseDelay", "autoReuse", "channel", "noMelee", "noUseGraphic", "useTurn",
     "rare", "rarityDetails", "value", "maxStack", "consumable", "material", "accessory", "defense",
     "headSlot", "bodySlot", "legSlot", "createTile", "createWall", "placeStyle", "nativeTileState",
     "pickPower", "axePower", "hammerPower", "pick", "axe", "hammer",
-    "healLife", "healMana", "potion", "manaCost", "buffType", "buffTime",
+    "healLife", "healMana", "lifeRegen", "potion", "manaCost", "buffType", "buffTime",
     "ammo", "ammoCategoryName", "notAmmo", "useAmmo", "useAmmoCategoryName", "dropSeedsIfInInventory",
     "shoot", "shootSpeed", "fishingPole", "bait",
 ]
 LLM_PROJECTILE_RAW_KEYS = [
     "source", "inventorySlot", "type", "internalName", "sourceMod", "fullName",
-    "itemShootSpeed", "width", "height", "scale", "penetrate", "maxPenetrate", "timeLeft", "extraUpdates",
+    "armorPenetration", "itemShootSpeed", "width", "height", "scale", "penetrate", "maxPenetrate", "timeLeft", "extraUpdates",
     "tileCollide", "ignoreWater", "friendly", "hostile", "arrow", "minion", "sentry", "minionSlots",
     "ownerHitCheck", "usesLocalNPCImmunity", "localNPCHitCooldown", "usesIDStaticNPCImmunity", "idStaticNPCHitCooldown",
     "stopsDealingDamageAfterPenetrateHits", "light", "alpha", "netImportant", "damageClass",

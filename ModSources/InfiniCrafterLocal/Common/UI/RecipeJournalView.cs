@@ -80,6 +80,21 @@ internal static class RecipeJournalView
             new Rectangle(area.Right - 12 - saveWidth, area.Y + 10, saveWidth, height));
     }
 
+    internal readonly record struct Controls(Rectangle Search, Rectangle Favorites, Rectangle Filter,
+        Rectangle ClearIngredient, Rectangle Previous, Rectangle Page, Rectangle Next, Rectangle Close);
+    internal static Controls BookControls(Layout layout)
+    {
+        var book = layout.Book; var list = layout.List;
+        int searchWidth = Math.Max(0, list.Width - 110);
+        var search = new Rectangle(list.X, book.Y + 64, searchWidth, 30);
+        var filter = new Rectangle(list.X, book.Y + 100, Math.Min(182, Math.Max(0, (book.Width - 70) / 2)), 26);
+        int bottom = book.Bottom - 70;
+        return new(search, new Rectangle(search.Right + 6, search.Y, Math.Min(104, list.Width), 30), filter,
+            new Rectangle(filter.Right + 6, filter.Y, Math.Max(0, book.Right - filter.Right - 38), 26),
+            new Rectangle(list.X, bottom, 30, 24), new Rectangle(list.X + 34, bottom + 3, Math.Max(0, list.Width - 68), 20),
+            new Rectangle(list.Right - 30, bottom, 30, 24), new Rectangle(book.Right - 62, book.Y + 14, 30, 28));
+    }
+
     internal readonly record struct Layout(Rectangle Book, Rectangle List, Rectangle Detail, int Rows, int Columns);
     internal static Layout Bounds(int width, int height)
     {
@@ -88,20 +103,20 @@ internal static class RecipeJournalView
         width = Math.Max(0, width);
         height = Math.Max(0, height);
         int margin = Math.Min(16, Math.Min(width, height) / 16);
-        int w = Math.Min(920, width - margin * 2);
-        int h = Math.Min(560, height - margin * 2);
+        int w = Math.Min(1040, width - margin * 2);
+        int h = Math.Min(640, height - margin * 2);
         var book = new Rectangle((width - w) / 2, (height - h) / 2, w, h);
-        int inset = Math.Min(12, w / 8);
+        int inset = Math.Min(32, w / 8);
         int pageWidth = Math.Max(0, w - inset * 2);
-        int footer = Math.Min(32, h / 6);
-        int top = Math.Min(120, Math.Max(0, h - footer));
+        int footer = Math.Min(78, h);
+        int top = Math.Min(140, Math.Max(0, h - footer));
         int contentHeight = Math.Max(0, h - top - footer);
         bool narrow = w < 700;
         int gutter = Math.Min(12, narrow ? contentHeight : pageWidth);
         int listWidth = narrow ? pageWidth : pageWidth * 42 / 100 / 52 * 52;
         // A short viewport must not paint a partial row over the detail page.
         int listHeight = narrow
-            ? Math.Min(104, Math.Max(contentHeight >= 116 ? 52 : 0, contentHeight / 3 / 52 * 52))
+            ? Math.Min(104, Math.Max(contentHeight >= 104 ? 52 : 0, contentHeight / 3 / 52 * 52))
             : contentHeight;
         var list = new Rectangle(book.X + inset, book.Y + top, listWidth, listHeight);
         var detail = narrow

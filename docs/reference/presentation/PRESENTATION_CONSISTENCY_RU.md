@@ -11,11 +11,11 @@
 | Held scale/coordinates | `GetAdjustedItemScale` без художественного cap; registry-only scale совпадает с `ModifyItemScale`. World/screen `(0,0)` допустим; invalid/nonfinite packet coordinates отделены от нуля. |
 | Inventory/world | Custom drawing исполняет caller color и `Item.color` tint-pass без повторного alpha; full UV, non-square/odd canvases, rotation/scale и существующий ground-anchor сохраняются. Центр inventory не переопределяется без доказанного дефекта. |
 | Equipment transforms | Single PNG использует head/body/leg pivots, local rotations/offsets, prepared armor colors/dye. Downstream renderer применяет FullRotation один раз; minimum texture scale не раздувает PNG сверх target fit. |
-| Visibility | Unlocked slots и social visibility отдельны; vanity replacement проверяет matching armor slot. Functional hide не скрывает social overlay; отсутствующий dye storage не заимствует chest dye. |
+| Visibility | Unlocked slots и social visibility отдельны; vanity replacement проверяет matching armor slot. Native `ModAccessorySlot` сохраняет functional/vanity gates, shared-loadout conflicts и paired dye владельца. Functional hide не скрывает social overlay; отсутствующий dye storage не заимствует chest dye. |
 | Authored placement | Grip, mounts, optional-null/Repair и HoldoutOffset semantics определены **только** в [Visual metadata](VISUAL_PRESENTATION_METADATA.md). `back` mount не гарантирует occlusion/layer. |
 | Pixel processing | 128 px item canvas проходит actual bake без cap 96; rectangular normalized raw centers используют x/width,y/height. Image contracts — [Visual guide](VISUAL_PRESENTATION_METADATA.md#image-contract); upload/retirement — [lifecycle](../../development/pipeline/IMAGE_ASSET_LIFECYCLE_RU.md#bytes). |
 
-Броня остаётся single-PNG overlay, не tML armor atlas. Accessory orbit не заменяется guessed shoulder/back/belt attachment. Полные head/body/legs atlases, animation/frame layout, coverage flags, sitting segmentation, modded accessory slots и head-only portraits не заявлены как поддержанные. Пока нет такого отдельного контракта, нельзя скрывать vanilla кожу/руки ради воображаемого atlas.
+Броня остаётся single-PNG overlay, не tML armor atlas. Accessory orbit не заменяется guessed shoulder/back/belt attachment. Полные head/body/legs atlases, animation/frame layout, coverage flags, sitting segmentation и head-only portraits не заявлены как поддержанные. Пока нет такого отдельного контракта, нельзя скрывать vanilla кожу/руки ради воображаемого atlas.
 
 <a id="legacy-vfx"></a>
 ## Реальные VFX формы и companion requirements

@@ -7,11 +7,11 @@ They belong outside server.py because they are pure data-discovery/indexing logi
 HTTP/combine orchestration.
 """
 
-import json
 from pathlib import Path
 from typing import Any
 
 from infini_local.core.config_bootstrap import DATA_DIR
+from infini_local.core import strict_json
 from infini_local.core.env_utils import env_first, env_str
 
 
@@ -61,24 +61,29 @@ def load_jsonl_index(path: Path) -> tuple[list[dict[str, Any]], dict[Any, dict[s
     try:
         if not path.exists():
             return rows, by_type
-        with path.open("r", encoding="utf-8-sig") as f:
+        with path.open("rb") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    row = json.loads(line)
+                    row = strict_json.loads(line.decode("utf-8-sig"))
                 except Exception:
                     continue
                 if not isinstance(row, dict):
                     continue
-                rows.append(row)
                 if "type" in row:
-                    by_type[row.get("type")] = row
+                    raw_type = row["type"]
+                    if type(raw_type) not in (int, str):
+                        continue
                     try:
-                        by_type[int(row.get("type"))] = row
-                    except Exception:
-                        pass
+                        type_id = int(raw_type)
+                    except (ValueError, OverflowError):
+                        continue
+                    if type_id < 0:
+                        continue
+                    by_type[raw_type] = by_type[type_id] = row
+                rows.append(row)
     except Exception as e:
         print(f"[InfiniCrafterLocal] runtime dump load failed for {path}: {e!r}")
     return rows, by_type

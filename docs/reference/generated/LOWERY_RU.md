@@ -11,10 +11,10 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v6` / `
 
 ## READ THIS FIRST — замороженная граница
 
-1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и optional advisory realization/selfEvaluation. Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.
+1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references и metadata. Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.
 2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.
 3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology, hitbox topology, root executor или fallback mechanic. Он может скрывать неудобство API, но не сжимать пространство дизайна.
-4. Authoring compression допустима только для буквально одинакового low-level значения, повторённого минимум **5** раз. Она обязана сохранять literal equality и не может добавлять design choice.
+4. Сжатие буквально повторённых low-level параметров допускается от **5** одинаковых placements и сохраняет literal equality. Этот threshold не запрещает точный выбранный alias или one-to-one technical projection; ни один из них не добавляет design choice.
 5. Обязательная wire projection из уже authored identity (например, exact entity kind → renderer role или exact primary id/target equality → binding role) не считается authoring compression: она сериализует одно решение, а не заменяет несколько решений модели.
 6. Repair получает конечные registry-derived alternatives и exact permissions. Модель выбирает и явно пишет полный вариант; patch не заполняет пропуски и после frozen-first merge повторно запускается canonical validator.
 7. Только optional params с явно объявленным registry default=neutral допускают пропуск в полном Author как точный выбор этой нейтрали. При omission_condition должна выполняться точная объявленная неисполняемая ветвь; вне её поле обязательно. Compiler материализует нейтраль после validation с отдельным receipt declared_neutral_omission. Это явное изменение контракта, не fallback невалидного значения и не правило для всех нулей. Связанные эффекты/обязательные группы проверяются совместно; omission в Repair означает не менять. Если разрешённый Repair меняет ветвь на исполняемую, он должен явно добавить ставший обязательным leaf.
@@ -60,8 +60,8 @@ Schemas: `infini.runtime-program.v5` / `infini.runtime-program.authoring.v6` / `
 | on_expire | set_projectile_lifetime | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
 | on_kill | — | — | owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
 | periodic | — | — | item_body, owner_attached_projectile, free_projectile, stationary_projectile, temporary_helper, field, child_projectile | — |
-| on_release | charge_then_release | — | — | — |
-| channel_complete | charge_then_release | — | — | — |
+| on_release | charge_then_release, accumulate_projectile_charge | — | — | — |
+| channel_complete | charge_then_release, accumulate_projectile_charge | — | — | — |
 | on_hurt | — | equipped | — | — |
 | on_enemy_kill | — | equipped | — | — |
 
@@ -82,9 +82,227 @@ Exact-repetition policy: `{'kind': 'exact_repetition', 'minimumRepeatedPlacement
 | capability_name_to_opcode | runtimeProgram.calls[].fn | runtimeProgram.entities[].movement.code, runtimeProgram.entities[].controller.code, runtimeProgram.entities[].events[].actionCode | false |
 | item_fields_to_tml_projection | item_body capability params | gameplay.damageClass, gameplay.damage, gameplay.knockback, gameplay.useTime, gameplay.useAnimation, gameplay.manaCost, gameplay.manaCostInput, gameplay.rarity, gameplay.value, gameplay.maxStack, gameplay.craftYield, gameplay.width, gameplay.height, gameplay.itemScale, gameplay.useStyleName, gameplay.autoReuse, gameplay.useTurn, gameplay.holdoutOffsetX, gameplay.holdoutOffsetY, gameplay.handPose, gameplay.releaseTiming, runtimeProgram.itemUse.configured, runtimeProgram.itemUse.useStyle, runtimeProgram.itemUse.hideUseGraphic, runtimeProgram.itemUse.disableMeleeHitbox, runtimeProgram.itemUse.channel, runtimeProgram.itemUse.handPose, runtimeProgram.itemUse.releaseTiming, runtimeProgram.itemUse.holdoutOffsetX, runtimeProgram.itemUse.holdoutOffsetY, gameplay.collectSeedsFromGrass, runtimeProgram.itemContact.hitboxScale, runtimeProgram.itemContact.contactForgivenessPx, gameplay.ammoCategory, gameplay.ammoProjectileId, gameplay.ammoShootSpeedPxPerTick, gameplay.notAmmo, gameplay.healLife, gameplay.healMana, gameplay.potion, gameplay.extraBuffs[].buffCode, gameplay.extraBuffs[].buffTime, gameplay.generatedBuff.durationTicks, gameplay.generatedBuff.exhaustionTicks, gameplay.generatedBuff.miningSpeedMultiplier, gameplay.generatedBuff.emitLightStrength, gameplay.generatedBuff.lightColorName, gameplay.generatedBuff.oreSenseRadiusTiles, gameplay.generatedBuff.movementSpeed, gameplay.generatedBuff.jumpBoost, gameplay.generatedBuff.manaRegen, gameplay.generatedBuff.lifeRegen, gameplay.generatedBuff.combat.defensePoints, gameplay.generatedBuff.combat.attackSpeedPercent, gameplay.generatedBuff.combat.critChancePoints, gameplay.generatedBuff.combat.damagePercent, gameplay.generatedBuff.combat.damageClass, gameplay.pickPower, gameplay.axePower, gameplay.hammerPower, gameplay.miningSpeedScale, gameplay.useConditions[].input, gameplay.useConditions[].useConditionMode, gameplay.useConditions[].useConditionMinLife, gameplay.useConditions[].useConditionMinMana, gameplay.holdLightStrength, gameplay.holdLightColorName, gameplay.mobilityMode, gameplay.mobilityRangeTiles, gameplay.mobilityCooldownTicks, gameplay.mobilitySafeTileOnly, accessory.enabled, accessory.defense, accessory.maxLife, accessory.maxMana, accessory.lifeRegen, accessory.manaRegen, accessory.movementSpeed, accessory.maxRunSpeed, accessory.jumpSpeed, accessory.genericCrit, accessory.attackSpeed, accessory.knockback, accessory.minionSlots, accessory.sentrySlots, accessory.manaCostReduction, accessory.ammoSaveChance, accessory.aggro, accessory.endurance, accessory.armorPenetration, accessory.whipRange, accessory.summonTagDamage, accessory.lightStrength, accessory.lightColorName, accessory.fallDamageImmune, accessory.lavaImmune, accessory.waterWalk, accessory.gravityControl, accessory.featherFall, accessory.extraFallTiles, accessory.autoPaint, accessory.rulerGrid, accessory.buildRangeTiles, accessory.tileSpeedBonusPercent, accessory.wallSpeedBonusPercent, accessory.autoJump, accessory.frogJump, accessory.wallGrip, accessory.swimFlipper, accessory.divingHelm, accessory.underwaterBreathing, accessory.waterFloat, accessory.jumpCloud, accessory.jumpBlizzard, accessory.jumpSandstorm, accessory.jumpFart, accessory.jumpTsunami, accessory.iceSkate, accessory.noKnockback, accessory.fireWalk, accessory.accRunSpeed, accessory.rocketBoots, accessory.wireVision, armor.enabled, armor.slot, armor.setKey, armor.defense, armor.maxLife, armor.maxMana, armor.lifeRegen, armor.manaRegen, armor.movementSpeed, armor.maxRunSpeed, armor.jumpSpeed, armor.genericCrit, armor.attackSpeed, armor.knockback, armor.minionSlots, armor.sentrySlots, armor.manaCostReduction, armor.ammoSaveChance, armor.aggro, armor.endurance, armor.armorPenetration, armor.whipRange, armor.summonTagDamage, armor.lightStrength, armor.lightColorName, armor.fallDamageImmune, armor.lavaImmune, armor.waterWalk, armor.setBonusGenericCrit, armor.setBonusMovementSpeed, armor.setBonusLifeRegen, armor.setBonusManaRegen, armor.setBonusMinionSlots, armor.setBonusSentrySlots, armor.setBonusManaCostReduction, armor.setBonusAmmoSaveChance, armor.setBonusAggro, armor.setBonusEndurance, armor.setBonusArmorPenetration, accessory.genericDamage, accessory.meleeDamage, accessory.rangedDamage, accessory.magicDamage, accessory.summonDamage, armor.genericDamage, armor.meleeDamage, armor.rangedDamage, armor.magicDamage, armor.summonDamage, armor.setBonusGenericDamage, armor.setBonusMeleeDamage, armor.setBonusRangedDamage, armor.setBonusMagicDamage, armor.setBonusSummonDamage | false |
 
+### Точные выбранные проекции capabilities
+
+Это не второй список политик: значения ниже получены из registry fixed_wire_literals, MOVEMENT_OPCODE/CONTROLLER_OPCODE/EVENT_ACTION_OPCODE и cap.wire_action через canonical lowerer. Каждый fn-selected выход требует ровно один technical_projection receipt с exact source .fn, callId, finalPath и типизированным значением. Source-aware audit связывает его с реально выбранным executor и authored target; согласованно изменить wire и receipt недостаточно. Без Author `authoredSourceChecked=false`: это только проверка согласованности сохранённых утверждений, не восстановление неизвестного намерения. Старые wire/opcodes/отсутствия не переписываются на чтении.
+
+| capability | fn-selected wire output | exact value |
+|---|---|---|
+| sustain_projectile_mana | runtimeProgram.entities[].manaSustain.cadence | 'held_item_use_time' |
+| set_projectile_arrival | runtimeProgram.entities[].arrival.action | 'kill' |
+| configure_item_use | runtimeProgram.itemUse.configured | True |
+| collect_seeds_from_grass | gameplay.collectSeedsFromGrass | True |
+| configure_tile_placement | runtimeProgram.bindings[].usePolicy.action.placement.wallId | -1 |
+| configure_wall_placement | runtimeProgram.bindings[].usePolicy.action.placement.tileId | -1 |
+| recall_home_on_use | gameplay.mobilityMode | 'recall_home' |
+| recall_home_on_use | runtimeProgram.effectGroups[].mobilityMode | 'recall_home' |
+| recall_home_on_use | gameplay.mobilityRangeTiles | 0 |
+| recall_home_on_use | runtimeProgram.effectGroups[].mobilityRangeTiles | 0 |
+| recall_home_on_use | gameplay.mobilitySafeTileOnly | False |
+| recall_home_on_use | runtimeProgram.effectGroups[].mobilitySafeTileOnly | False |
+| configure_accessory | accessory.enabled | True |
+| configure_armor | armor.enabled | True |
+| configure_spawn | runtimeProgram.entities[].spawn.enabled | True |
+| set_projectile_damage | runtimeProgram.entities[].damage.enabled | True |
+| orient_whip_to_owner_gravity | runtimeProgram.entities[].whipUsesOwnerGravity | True |
+| move_straight | runtimeProgram.entities[].movement.name | 'move_straight' |
+| move_straight | runtimeProgram.entities[].movement.code | 0 |
+| move_slow_homing | runtimeProgram.entities[].movement.name | 'move_slow_homing' |
+| move_slow_homing | runtimeProgram.entities[].movement.code | 1 |
+| move_gravity_arc | runtimeProgram.entities[].movement.name | 'move_gravity_arc' |
+| move_gravity_arc | runtimeProgram.entities[].movement.code | 2 |
+| move_drift | runtimeProgram.entities[].movement.name | 'move_drift' |
+| move_drift | runtimeProgram.entities[].movement.code | 3 |
+| move_orbit | runtimeProgram.entities[].movement.name | 'move_orbit' |
+| move_orbit | runtimeProgram.entities[].movement.code | 4 |
+| move_boomerang | runtimeProgram.entities[].movement.name | 'move_boomerang' |
+| move_boomerang | runtimeProgram.entities[].movement.code | 5 |
+| move_sine_homing | runtimeProgram.entities[].movement.name | 'move_sine_homing' |
+| move_sine_homing | runtimeProgram.entities[].movement.code | 7 |
+| move_phase | runtimeProgram.entities[].movement.name | 'move_phase' |
+| move_phase | runtimeProgram.entities[].movement.code | 8 |
+| move_accelerate | runtimeProgram.entities[].movement.name | 'move_accelerate' |
+| move_accelerate | runtimeProgram.entities[].movement.code | 9 |
+| move_spiral | runtimeProgram.entities[].movement.name | 'move_spiral' |
+| move_spiral | runtimeProgram.entities[].movement.code | 10 |
+| move_vortex_orb | runtimeProgram.entities[].movement.name | 'move_vortex_orb' |
+| move_vortex_orb | runtimeProgram.entities[].movement.code | 11 |
+| move_blackhole_pull | runtimeProgram.entities[].movement.name | 'move_blackhole_pull' |
+| move_blackhole_pull | runtimeProgram.entities[].movement.code | 12 |
+| move_proximity_missile | runtimeProgram.entities[].movement.name | 'move_proximity_missile' |
+| move_proximity_missile | runtimeProgram.entities[].movement.code | 13 |
+| move_returning_glaive | runtimeProgram.entities[].movement.name | 'move_returning_glaive' |
+| move_returning_glaive | runtimeProgram.entities[].movement.code | 14 |
+| move_expanding_wave | runtimeProgram.entities[].movement.name | 'move_expanding_wave' |
+| move_expanding_wave | runtimeProgram.entities[].movement.code | 15 |
+| move_flail_tether | runtimeProgram.entities[].movement.name | 'move_flail_tether' |
+| move_flail_tether | runtimeProgram.entities[].movement.code | 16 |
+| move_yoyo_hover | runtimeProgram.entities[].movement.name | 'move_yoyo_hover' |
+| move_yoyo_hover | runtimeProgram.entities[].movement.code | 17 |
+| move_whip_lash | runtimeProgram.entities[].movement.name | 'move_whip_lash' |
+| move_whip_lash | runtimeProgram.entities[].movement.code | 18 |
+| move_forward_then_retract | runtimeProgram.entities[].movement.name | 'move_forward_then_retract' |
+| move_forward_then_retract | runtimeProgram.entities[].movement.code | 19 |
+| move_front_hand | runtimeProgram.entities[].movement.name | 'move_front_hand' |
+| move_front_hand | runtimeProgram.entities[].movement.code | 20 |
+| channel_beam | runtimeProgram.entities[].controller.name | 'channel_beam' |
+| channel_beam | runtimeProgram.entities[].controller.code | 1 |
+| charge_then_release | runtimeProgram.entities[].controller.name | 'charge_then_release' |
+| charge_then_release | runtimeProgram.entities[].controller.code | 2 |
+| target_and_fire | runtimeProgram.entities[].controller.name | 'target_and_fire' |
+| target_and_fire | runtimeProgram.entities[].controller.code | 3 |
+| spawn_entity_on_event | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
+| spawn_entity_on_event | runtimeProgram.entities[].events[].actionCode | 1 |
+| spawn_entity_from_hit_target | runtimeProgram.entities[].events[].action | 'spawn_entity_on_event' |
+| spawn_entity_from_hit_target | runtimeProgram.entities[].events[].actionCode | 1 |
+| select_targets_and_emit_on_event | runtimeProgram.entities[].events[].action | 'select_targets_and_emit_on_event' |
+| select_targets_and_emit_on_event | runtimeProgram.entities[].events[].actionCode | 8 |
+| apply_generated_buff_on_event | runtimeProgram.entities[].events[].action | 'apply_generated_buff_on_event' |
+| apply_generated_buff_on_event | runtimeProgram.entities[].events[].actionCode | 9 |
+| apply_npc_effect_on_event | runtimeProgram.entities[].events[].action | 'apply_npc_effect_on_event' |
+| apply_npc_effect_on_event | runtimeProgram.entities[].events[].actionCode | 11 |
+| apply_status_on_event | runtimeProgram.entities[].events[].action | 'apply_status_on_event' |
+| apply_status_on_event | runtimeProgram.entities[].events[].actionCode | 2 |
+| damage_nearby_on_event | runtimeProgram.entities[].events[].action | 'damage_nearby_on_event' |
+| damage_nearby_on_event | runtimeProgram.entities[].events[].actionCode | 10 |
+| damage_area_on_event | runtimeProgram.entities[].events[].action | 'damage_area_on_event' |
+| damage_area_on_event | runtimeProgram.entities[].events[].actionCode | 3 |
+| damage_nearest_on_event | runtimeProgram.entities[].events[].action | 'chain_damage_on_event' |
+| damage_nearest_on_event | runtimeProgram.entities[].events[].actionCode | 4 |
+| pull_on_event | runtimeProgram.entities[].events[].action | 'pull_on_event' |
+| pull_on_event | runtimeProgram.entities[].events[].actionCode | 5 |
+| pull_owner_to_event_target | runtimeProgram.entities[].events[].mode | 'owner_to_target' |
+| pull_owner_to_event_target | runtimeProgram.entities[].events[].radiusTiles | 1 |
+| pull_owner_to_event_target | runtimeProgram.entities[].events[].action | 'pull_on_event' |
+| pull_owner_to_event_target | runtimeProgram.entities[].events[].actionCode | 5 |
+| heal_owner_on_event | runtimeProgram.entities[].events[].action | 'heal_owner_on_event' |
+| heal_owner_on_event | runtimeProgram.entities[].events[].actionCode | 6 |
+| move_owner_on_event | runtimeProgram.entities[].events[].mode | 'blink_to_event_position' |
+| move_owner_on_event | runtimeProgram.entities[].events[].action | 'move_owner_on_event' |
+| move_owner_on_event | runtimeProgram.entities[].events[].actionCode | 7 |
+
+### Явные event-проекции
+
+Разное authored имя может выбирать точную зарегистрированную проекцию существующего event executor. Это полезный отдельный выбор, не разрешение угадывать действие из prose и не whole-weapon macro.
+
+| authored capability | wire action | fixed outputs |
+|---|---|---|
+| spawn_entity_from_hit_target | spawn_entity_on_event | {'action': 'spawn_entity_on_event', 'actionCode': 1} |
+| damage_nearest_on_event | chain_damage_on_event | {'action': 'chain_damage_on_event', 'actionCode': 4} |
+| pull_owner_to_event_target | pull_on_event | {'mode': 'owner_to_target', 'radiusTiles': 1, 'action': 'pull_on_event', 'actionCode': 5} |
+
+### Structured и enum projections
+
+Typed structured choices и конечные enum-отображения также принадлежат ParamSpec; они сохраняют явно выбранную ветвь и полезные независимые параметры.
+
+| capability.param | declared projection |
+|---|---|
+| accumulate_projectile_charge.releaseEffect | (('releaseEffect.damageMultiplier', 'damageMultiplier', False), ('releaseEffect.knockbackMultiplier', 'knockbackMultiplier', False), ('releaseEffect.speedMultiplier', 'speedMultiplier', False), ('releaseEffect.launchSpeedBlocksPerSecond', 'launchSpeed', False), ('releaseEffect.pauseLifetimeWhileCharging', 'pauseLifetimeWhileCharging', False)) |
+| gate_projectile_contact.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_beam_geometry.ramp | (('ramp.warmupSeconds', 'warmupTicks', False), ('ramp.initialWidthMultiplier', 'initialWidthMultiplier', False), ('ramp.initialDamageMultiplier', 'initialDamageMultiplier', False), ('ramp.damageStartProgress', 'damageStartProgress', False)) |
+| attach_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| attach_projectile.reachCurve | (('reachCurve.durationSeconds', 'durationTicks', False), ('reachCurve.startOffsetBlocks', 'startOffsetPx', False), ('reachCurve.peakOffsetBlocks', 'peakOffsetPx', False), ('reachCurve.endOffsetBlocks', 'endOffsetPx', False), ('reachCurve.peakProgress', 'peakProgress', False), ('reachCurve.window.phase', 'window.phase', False), ('reachCurve.window.clock', 'window.clock', False), ('reachCurve.window.startDelaySeconds', 'window.startDelayTicks', False), ('reachCurve.window.durationSeconds', 'window.durationTicks', False)) |
+| set_front_arm_pose.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_reach_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| orbit_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| seek_projectile.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_arrival.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_proximity_action.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| accelerate_projectile_vertical.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| multiply_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| scale_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_rotation.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| oscillate_projectile_velocity.law | (('law', 'law', True), ('law.angular_sine.amplitudeRadiansPerSecond', 'amplitude', False), ('law.lateral_velocity_sine.amplitudeBlocksPerSecond', 'amplitude', False)) |
+| oscillate_projectile_velocity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| add_projectile_visual_scale.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_opacity.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| configure_item_use.customHeldSprite | {'hidden': 'immediate', 'visible': 'on_release', 'inherit': ''} |
+| apply_generated_buff_on_use.combat | (('combat.defensePoints', 'combat.defensePoints', False), ('combat.attackSpeedPercent', 'combat.attackSpeedPercent', False), ('combat.critChancePoints', 'combat.critChancePoints', False), ('combat.damagePercent', 'combat.damagePercent', False), ('combat.damageClass', 'combat.damageClass', False)) |
+| require_use_condition.condition | (('condition', 'useConditionMode', True), ('condition.lifeAtLeast', 'useConditionMinLife', False), ('condition.manaAtLeast', 'useConditionMinMana', False)) |
+| configure_armor.setBonuses | (('setBonuses.genericCritChancePercentagePoints', 'setBonusGenericCrit', False), ('setBonuses.moveSpeedBonusPercent', 'setBonusMovementSpeed', False), ('setBonuses.lifeRegenHpPerSecond', 'setBonusLifeRegen', False), ('setBonuses.manaRegenBonusPoints', 'setBonusManaRegen', False), ('setBonuses.minionSlotsBonus', 'setBonusMinionSlots', False), ('setBonuses.sentrySlotsBonus', 'setBonusSentrySlots', False), ('setBonuses.manaCostReductionPercentagePoints', 'setBonusManaCostReduction', False), ('setBonuses.ammoSaveChancePercent', 'setBonusAmmoSaveChance', False), ('setBonuses.aggroPoints', 'setBonusAggro', False), ('setBonuses.damageReductionPercentagePoints', 'setBonusEndurance', False), ('setBonuses.genericArmorPenetrationPoints', 'setBonusArmorPenetration', False)) |
+| configure_spawn.velocity | (('velocity.constantSpeedBlocksPerSecond', 'speedPxPerTick', False), ('velocity.fanSpeed', 'velocityDistribution.kind', True), ('velocity.fanSpeed', 'speedPxPerTick', True), ('velocity.fanSpeed.minSpeedBlocksPerSecond', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.fanSpeed.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.radial', 'velocityDistribution.kind', True), ('velocity.radial', 'speedPxPerTick', True), ('velocity.radial.minSpeedBlocksPerSecond', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.radial.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.disk', 'velocityDistribution.kind', True), ('velocity.disk', 'speedPxPerTick', True), ('velocity.disk.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone', 'velocityDistribution.kind', True), ('velocity.cone', 'speedPxPerTick', True), ('velocity.cone.minSpeedBlocksPerSecond', 'velocityDistribution.minSpeedPxPerUpdate', False), ('velocity.cone.maxSpeedBlocksPerSecond', 'velocityDistribution.maxSpeedPxPerUpdate', False), ('velocity.cone.halfAngleRadians', 'velocityDistribution.halfAngleRadians', False)) |
+| configure_spawn.position | (('position', 'overTarget.heightTiles', True), ('position', 'overTarget.delayTicks', True), ('position.at', 'placement', False), ('position.above', 'placement', False), ('position.heightTiles', 'overTarget.heightTiles', False), ('position.activationDelaySeconds', 'overTarget.delayTicks', False)) |
+| set_projectile_turn_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_speed_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_homing_modifier.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| attract_npcs_while_active.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_visual_scale_curve.window | (('window.phase', 'window.phase', False), ('window.clock', 'window.clock', False), ('window.startDelaySeconds', 'window.startDelayTicks', False), ('window.durationSeconds', 'window.durationTicks', False)) |
+| set_projectile_collision.immunity | (('immunity', 'npcImmunityMode', True), ('immunity', 'localNpcHitCooldownTicks', True), ('immunity.localCooldown', 'localNpcHitCooldownTicks', False)) |
+| spawn_entity_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.useInput', 'useInput', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
+| spawn_entity_from_hit_target.geometry | (('geometry', 'spreadRadians', True), ('geometry.beforeProbability', 'hitTargetSpawn.beforeProbability', False), ('geometry.hitboxMaxSideFactor', 'hitTargetSpawn.hitboxMaxSideFactor', False), ('geometry.clearanceBlocks', 'hitTargetSpawn.clearancePx', False), ('geometry.beforePositionJitterRadiusBlocks', 'hitTargetSpawn.beforePositionJitterRadiusPx', False), ('geometry.beforeDirectionJitterRadians', 'hitTargetSpawn.beforeDirectionJitterRadians', False), ('geometry.afterFanSpreadRadians', 'hitTargetSpawn.afterFanSpreadRadians', False), ('geometry.initialIgnoreCountdownUpdates', 'hitTargetSpawn.initialIgnoreCountdownUpdates', False)) |
+| apply_generated_buff_on_event.when | (('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
+| damage_nearby_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
+| damage_area_on_event.when | (('when', 'event', False), ('when.on', 'event', False), ('when.cooldownSeconds', 'reactionCooldownTicks', False)) |
+| pull_on_event.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
+| pull_owner_to_event_target.when | (('when', 'event', False), ('when', 'event', True), ('when.everySeconds', 'periodTicks', False)) |
+
+### Разрешённые neutral omissions
+
+Это только объявленные default=neutral, не универсальное правило для нуля. При условии вне указанной ветви leaf остаётся обязательным; contradictory-present не исправляется. Compiler выдаёт declared_neutral_omission receipt, а Repair отсутствие сохраняет.
+
+| capability.param | exact neutral | omission condition |
+|---|---|---|
+| set_projectile_owner_control.requireHeldItem | False | unconditional declared neutral |
+| set_projectile_owner_control.requireChannel | False | unconditional declared neutral |
+| set_projectile_owner_control.requireItemAnimation | False | unconditional declared neutral |
+| set_projectile_owner_control.claimHeldProjectile | False | unconditional declared neutral |
+| set_projectile_owner_control.animation | 'none' | unconditional declared neutral |
+| set_projectile_owner_control.lifetime | 'authored' | unconditional declared neutral |
+| apply_projectile_charge_release.damageMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.knockbackMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.speedMultiplier | 1 | unconditional declared neutral |
+| apply_projectile_charge_release.pauseLifetimeWhileCharging | False | unconditional declared neutral |
+| set_projectile_beam_ramp.initialWidthMultiplier | 1 | unconditional declared neutral |
+| set_projectile_beam_ramp.initialDamageMultiplier | 1 | unconditional declared neutral |
+| set_projectile_beam_ramp.damageStartProgress | 0 | unconditional declared neutral |
+| set_projectile_aim.turnOwner | False | unconditional declared neutral |
+| attach_projectile.axisOffsetBlocks | 0 | unconditional declared neutral |
+| attach_projectile.normalOffsetBlocks | 0 | unconditional declared neutral |
+| set_projectile_return_trigger.onOwnerRelease | False | unconditional declared neutral |
+| set_projectile_return_trigger.onTileCollision | False | unconditional declared neutral |
+| set_projectile_return_trigger.disableTileCollisionOnReturn | False | unconditional declared neutral |
+| set_projectile_rotation.offsetRadians | 0 | unconditional declared neutral |
+| set_projectile_rotation.radiansPerSecond | 0 | {'targetKinds': (), 'paramEquals': (('mode', 'axis'), ('mode', 'velocity')), 'targetCapabilities': ()} |
+| configure_item_stats.manaCost | 0 | unconditional declared neutral |
+| configure_item_stats.manaCostInput | 'both' | unconditional declared neutral |
+| configure_item_use.holdoutOffsetX | 0 | unconditional declared neutral |
+| configure_item_use.holdoutOffsetY | 0 | unconditional declared neutral |
+| apply_generated_buff_on_use.miningSpeedMultiplier | 1 | unconditional declared neutral |
+| apply_generated_buff_on_use.oreSenseEnabled | False | unconditional declared neutral |
+| apply_generated_buff_on_use.moveSpeedBonusPercent | 0 | unconditional declared neutral |
+| apply_generated_buff_on_use.jumpSpeedBonusBlocksPerSecond | 0.0 | unconditional declared neutral |
+| apply_generated_buff_on_use.manaRegenBonusPoints | 0 | unconditional declared neutral |
+| apply_generated_buff_on_use.lifeRegenHpPerSecond | 0 | unconditional declared neutral |
+| present_placed_item_sprite.pivotSpace | 'frame' | unconditional declared neutral |
+| configure_spawn.count | 1 | {'targetKinds': ('child_projectile',), 'paramEquals': (), 'targetCapabilities': ()} |
+| configure_spawn.spreadRadians | 0 | {'targetKinds': ('child_projectile',), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| set_projectile_turn_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
+| set_projectile_speed_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
+| set_projectile_homing_modifier.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
+| attract_npcs_while_active.window.phase | 'always' | all timing absent: startDelaySeconds, durationSeconds, window |
+| set_projectile_collision.bounceCount | 0 | {'targetKinds': (), 'paramEquals': (('tileCollide', False),), 'targetCapabilities': ('move_boomerang', 'move_returning_glaive', 'move_flail_tether')} |
+| set_projectile_collision.bounceSpeedRetention | 1 | unconditional declared neutral |
+| channel_beam.manaPayment | 'initial_use_only' | unconditional declared neutral |
+| channel_beam.initialDamageMultiplier | 1.0 | unconditional declared neutral |
+| channel_beam.initialWidthMultiplier | 1.0 | unconditional declared neutral |
+| channel_beam.damageStartProgress | 1.0 | unconditional declared neutral |
+| channel_beam.raycastTiles | False | unconditional declared neutral |
+| target_and_fire.count | 1 | unconditional declared neutral |
+| target_and_fire.spreadRadians | 0.0 | unconditional declared neutral |
+| target_and_fire.targetPolicy | 'distance_score' | unconditional declared neutral |
+| target_and_fire.requireLineOfSight | False | unconditional declared neutral |
+| target_and_fire.hardRange | False | unconditional declared neutral |
+| spawn_entity_on_event.spreadRadians | 0 | {'targetKinds': (), 'paramEquals': (('count', 1),), 'targetCapabilities': ()} |
+| apply_npc_effect_on_event.damagePerSecond | 0 | unconditional declared neutral |
+| apply_npc_effect_on_event.defenseDelta | 0 | unconditional declared neutral |
+| apply_npc_effect_on_event.contactDamageMultiplier | 1 | unconditional declared neutral |
+| apply_npc_effect_on_event.velocityRetentionPerTick | 1 | unconditional declared neutral |
+| apply_npc_effect_on_event.chancePercent | 100 | unconditional declared neutral |
+| damage_nearby_on_event.maxTargets | 16 | unconditional declared neutral |
+
 ## Каноническая vocabulary
 
-Gameplay Author-visible semantic aliases: **нет**. У каждой механической операции и каждого enum-значения один канонический токен. Старые `passive`, `drink`, `eat`, plural ammo spellings и `rogue` не принимаются. `throwing` сохранён только как точное каноническое отображение stable `DamageClass.Throwing`, а не как алиас. `damageClass` имеет одну identity-форму: built-in token либо точный tModLoader `ModName/ClassName`, скопированный из loaded parent facts; псевдотокены `none`/`modded` и параллельное `damageClassFullName` запрещены.
+Точные event/structured/enum projections перечислены выше; технический alias сам по себе не запрещён. Синонимы spelling, напротив, не образуют дополнительный Author API. Старые `passive`, `drink`, `eat`, plural ammo spellings и `rogue` не принимаются. `throwing` сохранён только как точное каноническое отображение stable `DamageClass.Throwing`. `damageClass` имеет одну identity-форму: built-in token либо точный tModLoader `ModName/ClassName`, скопированный из loaded parent facts; псевдотокены `none`/`modded` и параллельное `damageClassFullName` запрещены.
 
 <a id="mappings"></a>
 
@@ -163,20 +381,21 @@ Gameplay Author-visible semantic aliases: **нет**. У каждой механ
 
 Lowery — технический lowering, не lore и не автор дополнительной механики. Author задаёт игровые расстояния в блоках, длительности в секундах, скорости в блоках/с. Меняется schema авторинга; сохранённый engine wire остаётся в прежних единицах. Canonical lowering выполняет объявленные проекции с учётом updatesPerTick именно затронутой сущности. Секунды разрешаются до ближайшего целого world tick, половина тика округляется вверх; неположенное обнуление ненулевого эффекта отклоняется, а не скрыто меняет механику. Pixel-labelled collision/sprite geometry и texture/UV units сохраняют своё объявленное пространство. Описание остаётся optional advisory: оно не требует нового отчёта и не запускает validator/Repair. Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.
 
-Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. Author получает его в `requiredJsonShape.realization` и `runtimeCapabilityContract.technicalNotes`; Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.
+Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с кратким concept и разделёнными realization.description (применение) / selfEvaluation (отладка). Legacy acceptance и Repair сохраняют эти optional advisory поля; Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.
 
 | optional prose | shared guidance |
 |---|---|
-| realization.description | optional advisory interpretation of the emitted runtimeProgram, not an observed execution. Write a concise item description in clear player language: explain the actual controls (use, alternate use, while selected or while equipped), effects, costs, conditions and limits that matter in play. Describe only supported behavior of the emitted bindings, calls and events; distinguish base values or conditional effects from guaranteed outcomes. Do not invent abilities, charges, safety, cooldowns or measured results from names, appearance or intent. Use Terraria blocks, blocks/s and seconds for player-facing distance, speed and time; gameplay params use their Author cards' human units and lowering produces engine units. Pixel-labelled geometry retains its declared engine units. Prefer readable actions over internal ids, capability names or a parameter dump. No extra lore or report is required; string minLength=0, maxLength=4000 Unicode code points |
-| realization.playerExperience | optional advisory notes on practical use and trade-offs of the same emitted mechanics, not additional mechanics or promises; avoid repeating the description; string minLength=0, maxLength=3000 Unicode code points |
+| realization.description | Brief player-facing description of actual use, effects and conditions. String minLength=0, maxLength=4000 Unicode characters. |
+| realization.playerExperience | Optional practical-use notes for the player. String minLength=0, maxLength=3000 Unicode characters. |
 
 | единицы / scope | shared model-facing guide |
 |---|---|
-| time | Write world durations/intervals in decimal seconds. The engine has 60 world ticks = 1 second; lowering resolves seconds to the nearest world tick, half-tick ties upward. Explicit zero stays zero; a positive effect may not round to disabled zero. Raw immunity.localCooldown and explicitly named projectile-update counters are counts, not seconds. |
-| distance | Write gameplay world distances in blocks. 1 Terraria block (tile) = 16 world pixels. rangeTiles/radiusTiles already mean blocks, including blink rangeTiles: do not divide again. Read whether each card means radius, diameter, origin offset or distance to a target center. |
-| speed | Write gameplay speeds in blocks/s, physical accelerations in blocks/s^2 and declared angular rates in radians/s. The canonical lowering accounts for the affected target's updatesPerTick; do not manually rescale Author values. Initial speed, flat bonuses, sprint floors and event impulses are distinct, not guaranteed final movement or jump height. Ammo speed is a base native launch contribution; the eventual projectile can have its own update rate. Dimensionless retention/lerp/multiplier controls retain their declared per-update meaning. |
-| scope | Use each Author card's declared units; the compiled wire and raw parent facts keep engine units. Pixel-labelled collision and local sprite geometry remain pixels; 16 world pixels = 1 block. Texture texels/canvas dimensions remain texture pixels; normalized UV/grip coordinates remain normalized: do not divide by 16. Texture resolution alone is not rendered world size, collision size or reach. |
-| vanillaScaleReference | Vanilla scale reference, not a balance ceiling: an ordinary standing unmounted player's collision box is 20x42 world pixels (1.25x2.625 blocks). Without gear/buffs or special terrain, nominal base run speed is 11.25 blocks/s; a normal jump assigns about 18.79 blocks/s upward velocity. The 15-update held-jump counter is not a distance. Jump height/range depend on hold, gravity and horizontal motion; these are not a measured height/range or a limit on authored mechanics. |
+| nativeSourceReferences | Read-only native source values may be shared as {sourceSameAs:N}: read the complete value at nativeSourceFacts[N] in this same dossier, expanding recursively. These are exact repetitions, not inferred mechanics or Author values. Literal tooltips and accepted generatedParent packets stay inline. |
+| time | Seconds resolve to the nearest world tick (60/s), half-tick ties upward. Positive effects that round to zero are rejected. immunity.localCooldown and projectile-update counters remain counts. |
+| distance | World distances use blocks; Tiles also means blocks. 1 block = 16 world pixels. |
+| speed | Physical speed/acceleration use blocks/s and blocks/s^2; angular rates use radians/s. The engine applies the target's updatesPerTick conversion. Retention/lerp/multiplier controls keep their declared per-update meaning. |
+| scope | Author cards use player-facing units; raw parent facts and compiled wire retain engine units. Pixel geometry and normalized UV/grip coordinates retain their own units. Texture resolution is independent of rendered size and collision geometry. |
+| vanillaScaleReference | Ordinary unmounted player: 20x42-pixel collision box; base run speed 11.25 blocks/s; normal jump initial upward velocity about 18.79 blocks/s. |
 | spread | radians; total span |
 
 ### Runtime opcodes
@@ -228,6 +447,8 @@ Event actions:
 | move_owner_on_event | 7 |
 | select_targets_and_emit_on_event | 8 |
 | apply_generated_buff_on_event | 9 |
+| damage_nearby_on_event | 10 |
+| apply_npc_effect_on_event | 11 |
 
 ### Entity kind → visual role
 
@@ -305,6 +526,6 @@ Type check: `python tools/testing/run_pyright.py --pythonpath "$(python -c 'impo
 
 Change-locality acceptance: изменить один canonical owner, обновить generated projections, пройти affected replay; не редактировать параллельные prose contracts и не запускать Live как замену локальному доказательству.
 
-## Запрет на добавление alias
+## Добавление точной projection
 
-Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует изменить canonical vocabulary owner, перегенерировать этот файл и пройти `tools/checks/audit_terraria_standardization.py`.
+Новая projection объявляется у существующего registry/ParamSpec owner и исполняется canonical lowerer/compiler. Нужны полный явный selector и единственный результат, receipt, source→wire identity, negative для contradictory-present и frozen Repair отсутствие. Полезные независимые параметры остаются у Author; старое ограничение compound controller не становится универсальным engine invariant новых primitives. Alias не даёт права добавлять meaningful defaults, выбирать channel/target/collision из имени или переписывать исторические saved items. После изменения owner обновить generated projections и пройти affected acceptance.

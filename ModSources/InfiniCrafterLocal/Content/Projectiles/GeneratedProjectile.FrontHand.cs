@@ -48,35 +48,14 @@ public sealed partial class GeneratedProjectile
         out Player.CompositeArmStretchAmount stretch, out float localArmRotation, out Vector2 hand)
     {
         RuntimeParamsSpec p = _entity!.Movement.Params;
-        // _age is the existing serialized active-update clock; delayed activation
-        // does not advance it. Whole world-tick age is invariant across extraUpdates.
-        double activeTicks = _age / Math.Max(1, Projectile.extraUpdates + 1);
-        double t = Math.Clamp(activeTicks / p.DurationTicks, 0d, 1d);
-        double q = 1d - Math.Abs(2d * t - 1d);
-        int start = RuntimeParamsSpec.FrontHandStretchRank(p.StartStretch);
-        int peak = RuntimeParamsSpec.FrontHandStretchRank(p.PeakStretch);
-        double length = 4d + 2d * (start + (peak - start) * q);
-        int nearest = start; double distance = double.PositiveInfinity;
-        for (int rank = start; rank <= peak; rank++)
-        {
-            double candidate = Math.Abs(4d + 2d * rank - length);
-            if (candidate < distance) { nearest = rank; distance = candidate; }
-        } // exact ties retain the shorter native arm
-        stretch = nearest switch {
-            0 => Player.CompositeArmStretchAmount.None,
-            1 => Player.CompositeArmStretchAmount.Quarter,
-            2 => Player.CompositeArmStretchAmount.ThreeQuarters,
-            3 => Player.CompositeArmStretchAmount.Full,
-            _ => throw new InvalidOperationException("invalid admitted native front-arm stretch"),
-        };
-        localArmRotation = axis.ToRotation() - owner.fullRotation - MathHelper.PiOver2;
-        hand = owner.RotatedRelativePoint(owner.GetFrontHandPosition(stretch, localArmRotation), addGfxOffY: false);
+        CalculateMotionFrontHand(owner, axis, p.DurationTicks, p.StartStretch!, p.PeakStretch!,
+            p.StartStretch!, .5d, out stretch, out localArmRotation, out hand, legacyClock: true);
     }
 
     private void ProjectFrontHand(Player owner, Vector2 axis,
-        Player.CompositeArmStretchAmount stretch, float localArmRotation)
+        Player.CompositeArmStretchAmount stretch, float localArmRotation, bool turnOwner = true)
     {
-        owner.ChangeDir(axis.X >= 0f ? 1 : -1);
+        if (turnOwner) owner.ChangeDir(axis.X >= 0f ? 1 : -1);
         // SetCompositeArmFront negates its input under reverse gravity; the
         // getter consumes the final stored rotation, not that pre-conversion input.
         owner.SetCompositeArmFront(true, stretch, localArmRotation * owner.gravDir);
@@ -101,11 +80,21 @@ public sealed partial class GeneratedProjectile
     internal static bool TryProjectFrontHandUseStyle(Player owner, GeneratedItem item)
     {
         RuntimeEntitySpec? primary = item.Data.RuntimeProgram.TryGetEntity(item.Data.RuntimeProgram.PrimaryEntityId);
-        if (primary?.Movement.Code != 20) return false;
+        if (primary is null || primary.Movement.Code != 20 && primary.ArmPose is null) return false;
         foreach (Projectile projectile in Main.ActiveProjectiles)
         {
             if (projectile.owner != owner.whoAmI || projectile.ModProjectile is not GeneratedProjectile generated
-                || !generated.Matches(item.Data.Id, primary.Id) || !generated.CanProjectFrontHand(owner)) continue;
+                || !generated.Matches(item.Data.Id, primary.Id)) continue;
+            if (primary.ArmPose is { } pose && generated._activationDelayTicks <= 0
+                && generated.MotionWindowActive(pose.Window) && generated.IsPrimaryRuntimeEntity && OwnerCanControl(owner)
+                && ReferenceEquals(generated.FindMotionPoseWriter(owner), generated)) {
+                Vector2 motionAxis = generated.MotionAxis(owner, publish: false);
+                generated.CalculateMotionFrontHand(owner, motionAxis, pose.DurationTicks, pose.StartStretch, pose.PeakStretch,
+                    pose.EndStretch, pose.PeakProgress, out var nativeStretch, out float nativeRotation, out _);
+                generated.ProjectFrontHand(owner, motionAxis, nativeStretch, nativeRotation, primary.Aim?.TurnOwner == true);
+                return true;
+            }
+            if (!generated.CanProjectFrontHand(owner)) continue;
             Vector2 axis = generated.FrontHandAxis();
             owner.ChangeDir(axis.X >= 0f ? 1 : -1);
             generated.CalculateFrontHand(owner, axis, out var stretch, out float rotation, out _);

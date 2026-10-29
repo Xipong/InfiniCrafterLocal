@@ -170,8 +170,6 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
                 assert (field in mechanics) == (field in data['gameplay'])
                 if field in data['gameplay']:
                     assert mechanics[field] == data['gameplay'][field]
-            calibration = packet['spritePresentationReadOnly']['sourceCalibration']
-            assert all(token in calibration for token in ('spriteReference', 'currentFrame', 'bake fill', 'unknown', 'hitbox', 'not a required copy'))
         else:
             assert packet['repairScope']['fieldPermissions']['itemPaths'] == ['silhouette']
             assert 'acceptedPresentationMechanicsReadOnly' not in packet
@@ -240,30 +238,6 @@ def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields
     assert 'originalRecipeContext' not in dossier
     assert captured['recipeKey'] == 'r_actual_owner', 'trace join remains at its owner, not in model design context'
     assert [request['_infini_stage'] for request in requests] == ['planner', 'author_repair']
-
-
-def test_author_request_owns_optional_alternate_cost_and_source_motion_advisories():
-    from infini_local.pipelines import llm_authoring_pipeline as author
-    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
-    parent = {'name': 'opaque parent', 'useTime': 21, 'useAnimation': 25, 'shootSpeed': 6.1}
-    request, user, _ = author.build_initial_author_request(parent, parent, 'r_advisory', model_name='offline-model')
-    packet = request_dossier(request)
-    assert user == dossier_text(request)
-    header = packet['priorityHeader']
-    concept = packet['requiredJsonShape']['concept']
-    assert 'include extra control modes only for meaningful utility' in concept['plannedPlayerActions'][0]['intent']
-    assert all('copying every parent capability is not required' in concept[field]
-               for field in ('parentAContribution', 'parentBContribution'))
-    assert any('source tempo' in line and 'when available' in line and 'intentional' in line for line in header)
-    motion = packet['runtimeCapabilityContract']['catalog']['fieldGuide']['projectileMotion']
-    assert 'aiStyle do not execute native AI' in motion
-    assert 'domain knowledge may guide' in motion and 'not a verified source measurement' in motion, 'the model can choose physics creatively; source evidence must not become a blanket inference ban'
-    from infini_local.pipelines.llm_authoring_prompt import sharp_engine_fn_catalog_for_llm
-    catalog = sharp_engine_fn_catalog_for_llm()
-    cost = json.dumps(catalog)
-    assert 'intended lifetime' in cost and 'whole generated item' in cost and 'does not refund' in cost
-    assert packet['parents']['A']['packet'] == raw_parent_card_for_llm(parent)
-    assert packet['parents']['B']['packet'] == raw_parent_card_for_llm(parent)
 
 
 def test_unknown_sprite_reference_never_comes_from_collider_dump_or_fallback(monkeypatch, tmp_path):

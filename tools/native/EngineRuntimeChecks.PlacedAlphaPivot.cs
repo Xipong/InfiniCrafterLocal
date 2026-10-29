@@ -118,10 +118,11 @@ internal static partial class EngineRuntimeChecks
                 } else Equal(true,pixels.All(pixel=>pixel == Color.Transparent),"second alpha-empty image stays transparent");
             },_=>throw new InvalidOperationException("CPU shell must not dispose"));
             var prepare=typeof(RuntimeSpriteCache).GetMethods(PersistenceStatic).Single(m=>m.Name=="PrepareTextureAndMeasureLocalForwardRadians");
-            object?[] args=prepare.GetParameters().Length==2?new object?[]{texture,null}:new object?[]{texture};
+            object?[] args={texture,null,null};
             float axis=(float)prepare.Invoke(null,args)!;
             Equal(1,reads,"one existing GetData"); Equal(1,uploads,"one existing SetData");
-            Rectangle? measured=args.Length==2?args[1] as Rectangle?:null;
+            Rectangle? measured=args[1] as Rectangle?;
+            Equal(true,args[2] is Vector2[] hull && hull.Length > 0,"same one-read pixel pass measures dropped support hull");
             Equal((Rectangle?)new Rectangle(2,1,5,4),measured,"alpha>0 pixel EDGES from same premultiplication pass");
             var principal=typeof(RuntimeSpriteCache).GetMethod("MeasureLocalForwardRadians",PersistenceStatic)!;
             Equal((float)principal.Invoke(null,new object[]{source,8,6})!,axis,"PCA threshold/axis unchanged");
@@ -229,7 +230,10 @@ internal static partial class EngineRuntimeChecks
             Equal(1,views.Length,"real exact-ledger placed projection");
             var body=(RuntimePlacedBodySpec)views[0].GetType().GetProperty("Body")!.GetValue(views[0])!;
             Equal("alpha_bounds",(string)prop!.GetValue(body)!,"projection retains explicit alpha choice");
-            byte[] before=PlacedLedgerSnapshot(ledger); string definition=JsonSerializer.Serialize(data);
+            // Compare the complete authoritative NBT state. The native gzip
+            // witness in a network snapshot has a wall-clock header, so two
+            // unchanged snapshots can have different transport bytes.
+            string before=PersistenceRawBytes(PlacedLedgerSaved(ledger)); string definition=JsonSerializer.Serialize(data);
             int width=player.inventory[player.selectedItem].width,height=player.inventory[player.selectedItem].height;
             float scale=player.inventory[player.selectedItem].scale;
             WithVfxGeometryQueue((batch,_,count,positions,colors)=>{
@@ -237,7 +241,7 @@ internal static partial class EngineRuntimeChecks
                 Equal(false,AlphaDraw(batch,CpuTexture(64,64),body,new Rectangle(640,640,16,16),Vector2.Zero,Rectangle.Empty),"empty PNG refuses cosmetic draw only");
                 Equal(index,count(),"empty refuses before queue submission");
             });
-            Equal(true,before.SequenceEqual(PlacedLedgerSnapshot(ledger)),"draw refusal preserves material ledger bytes");
+            Equal(before,PersistenceRawBytes(PlacedLedgerSaved(ledger)),"draw refusal preserves authoritative material ledger bytes");
             Equal(definition,JsonSerializer.Serialize(data),"definition unchanged");
             Equal(width,player.inventory[player.selectedItem].width,"item physics width unchanged");
             Equal(height,player.inventory[player.selectedItem].height,"item physics height unchanged");

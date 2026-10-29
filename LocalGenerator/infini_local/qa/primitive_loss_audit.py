@@ -36,12 +36,16 @@ def _nodes(node: Node, kind: str) -> Iterator[Node]:
 
 def _class_properties(data: bytes, class_name: str) -> set[str]:
     root = _PARSER.parse(data).root_node
+    properties: set[str] = set()
+    found = False
     for declaration in (*_nodes(root, "class_declaration"), *_nodes(root, "record_declaration")):
         name = next((n for n in declaration.named_children if n.type == "identifier"), None)
         if name is None or data[name.start_byte:name.end_byte] != class_name.encode():
             continue
-        properties: set[str] = set()
+        found = True
         for property_node in _nodes(declaration, "property_declaration"):
+            if property_node.parent != declaration.child_by_field_name("body"):
+                continue
             accessor = next((n for n in property_node.named_children if n.type == "accessor_list"), None)
             if accessor is None or not any(
                 token.type in {"set", "init"}
@@ -52,6 +56,7 @@ def _class_properties(data: bytes, class_name: str) -> set[str]:
             identifier = property_node.child_by_field_name("name")
             if identifier is not None:
                 properties.add(data[identifier.start_byte:identifier.end_byte].decode())
+    if found:
         return properties
     raise ValueError(f"Missing executable C# DTO class {class_name}")
 
@@ -106,6 +111,57 @@ def nullable_number_rejection_bounds(data: bytes, class_name: str, property_name
                 if raw in {b"Math.Tau", b"MathF.Tau"}: return math.tau
                 return float(raw.rstrip(b"fd"))
             return [bound(guard[2]), bound(guard[3])]
+    return None
+
+
+def number_rejection_bounds(data: bytes, class_name: str, property_name: str) -> list[float] | None:
+    """Prove bounded scalar setters, including a class-local finite guard helper.
+
+    This recognizes exact native guard shapes, not names or declared bounds.
+    A changed assignment, missing finite guard or unrecognized helper fails closed.
+    """
+    nullable = nullable_number_rejection_bounds(data, class_name, property_name)
+    if nullable is not None:
+        return nullable
+
+    def tokens(node: Node) -> bytes:
+        if node.type == "comment":
+            return b""
+        return b"".join(tokens(child) for child in node.children) if node.children else node.text or b""
+
+    for declaration in _nodes(_PARSER.parse(data).root_node, "class_declaration"):
+        name = declaration.child_by_field_name("name")
+        if name is None or name.text != class_name.encode():
+            continue
+        for prop in declaration.child_by_field_name("body").named_children:
+            if prop.type != "property_declaration" or prop.child_by_field_name("name").text != property_name.encode():
+                continue
+            storage = prop.child_by_field_name("type").text
+            if storage not in {b"int", b"float", b"double"}:
+                return None
+            accessors = list(_nodes(prop, "accessor_declaration"))
+            getter = next((row for row in accessors if row.children[0].type == "get"), None)
+            setter = next((row for row in accessors if row.children[0].type == "set"), None)
+            backing = re.fullmatch(rb"get=>([A-Za-z_][A-Za-z_0-9]*);", tokens(getter)) if getter else None
+            if not backing or setter is None:
+                return None
+            literal = rb"-?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?[fd]?"
+            direct = re.fullmatch(rb"set=>" + re.escape(backing[1]) + rb"=valueis>=(" + literal + rb")and<=(" + literal + rb")\?value:thrownewInvalidDataException\(.*\);", tokens(setter))
+            if direct and storage == b"int":
+                return [float(raw) for raw in direct.groups()]
+            call = re.fullmatch(rb"set=>" + re.escape(backing[1]) + rb"=([A-Za-z_][A-Za-z_0-9]*)\(value,(" + literal + rb"),(" + literal + rb")\);", tokens(setter))
+            if call is None or storage == b"int":
+                return None
+            helpers = [node for node in declaration.child_by_field_name("body").named_children
+                       if node.type == "method_declaration" and node.child_by_field_name("name").text == call[1]]
+            if len(helpers) != 1:
+                return None
+            guard = (b"privatestatic" + storage + call[1] + b"(" + storage + b"value," + storage + b"low," + storage + b"high)=>"
+                     + storage + b".IsFinite(value)&&value>=low&&value<=high?value:thrownewInvalidDataException(")
+            helper = tokens(helpers[0])
+            if not helper.startswith(guard) or not re.fullmatch(rb'"(?:[^"\\]|\\.)*"\);', helper[len(guard):]):
+                return None
+            return [float(raw.rstrip(b"fd")) for raw in call.groups()[1:]]
     return None
 
 
@@ -232,9 +288,153 @@ def event_surface_audit(
             "intentionallyHidden": hidden}
 
 
+def _runtime_dto_source() -> bytes:
+    # Both partial declarations are authoritative; inspecting only the original
+    # file misses the additive entity fields even though strict wire admits them.
+    directory = _MODEL_ROOT / "Common/Models/Contracts"
+    files = {"RuntimeProgramSpec.cs", "RuntimeMotionComponents.cs"}
+    files.update(cls + ".cs" for cap in CAPABILITY_REGISTRY.values()
+                 for cls in cap.wire_components.values() if (directory / (cls + ".cs")).is_file())
+    return b"\n".join((directory / name).read_bytes() for name in sorted(files))
+
+
+def _dto_component_types(data: bytes) -> tuple[dict[str, dict[str, str]], dict[str, tuple[str, ...]]]:
+    """Read concrete property/type bindings and inheritance, including partials."""
+    properties: dict[str, dict[str, str]] = {}
+    bases: dict[str, tuple[str, ...]] = {}
+    for declaration in _nodes(_PARSER.parse(data).root_node, "class_declaration"):
+        name = declaration.child_by_field_name("name").text.decode()
+        own = properties.setdefault(name, {})
+        base = next((n for n in declaration.named_children if n.type == "base_list"), None)
+        if base is not None:
+            bases[name] = tuple(n.text.decode() for n in base.named_children)
+        body = declaration.child_by_field_name("body")
+        for prop in body.named_children:
+            if prop.type != "property_declaration":
+                continue
+            accessor = prop.child_by_field_name("accessors")
+            if accessor is None or not any(token.type in {"set", "init"}
+                    for row in accessor.named_children for token in row.children):
+                continue
+            field = prop.child_by_field_name("name").text.decode()
+            storage = prop.child_by_field_name("type").text.decode()
+            if field in own:
+                raise ValueError(f"Duplicate C# DTO property {name}.{field}")
+            own[field] = storage
+    return properties, bases
+
+
+def _schema_fields(schema: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    fields: dict[str, list[dict[str, Any]]] = {}
+    for name, child in schema.get("properties", {}).items():
+        fields.setdefault(name, []).append(child)
+    for variant in schema.get("oneOf", []):
+        for name, children in _schema_fields(variant).items():
+            fields.setdefault(name, []).extend(children)
+    return fields
+
+
+def _inherited_dto_properties(own: dict[str, dict[str, str]], bases: dict[str, tuple[str, ...]],
+                              cls: str, visiting: tuple[str, ...] = ()) -> dict[str, str]:
+    if cls not in own or cls in visiting:
+        raise ValueError(f"Missing or cyclic executable C# DTO class {cls}")
+    fields = dict(own[cls])
+    for base in bases.get(cls, ()):
+        for field, storage in _inherited_dto_properties(own, bases, base, (*visiting, cls)).items():
+            if field in fields:
+                raise ValueError(f"Shadowed C# DTO property {cls}.{field}")
+            fields[field] = storage
+    return fields
+
+
+def _motion_component_surface_audit(dto: bytes) -> dict[str, Any]:
+    """Bind registry destinations to actual C# types, not a shadow DTO roster."""
+    from infini_local.core.runtime_authoring.capability_registry import PROJECTILE_MODIFIER_COMPONENTS
+
+    own, bases = _dto_component_types(dto)
+    unclassified: dict[str, set[str]] = {}
+    missing: dict[str, set[str]] = {}
+    drift: dict[str, set[str]] = {}
+    bindings: dict[str, str] = {}
+
+    def compare(cls: str, actual: set[str], source: set[str], wire: set[str]) -> None:
+        # Compare each destination before aggregating diagnostics. Unioning the
+        # shared Window owner's inputs first would hide a missing leaf in one
+        # capability behind the correct declaration of another capability.
+        unclassified.setdefault(cls, set()).update(actual - source)
+        missing.setdefault(cls, set()).update(source - actual)
+        drift.setdefault(cls, set()).update(actual ^ wire)
+
+    def inherited(cls: str, visiting: tuple[str, ...] = ()) -> dict[str, str]:
+        return _inherited_dto_properties(own, bases, cls, visiting)
+
+    def visit(cls: str, paths: set[str], schemas: list[dict[str, Any]]) -> None:
+        fields = inherited(cls)
+        source_fields = {path.split(".", 1)[0] for path in paths}
+        wire_fields: dict[str, list[dict[str, Any]]] = {}
+        for schema in schemas:
+            for name, children in _schema_fields(schema).items():
+                wire_fields.setdefault(name, []).extend(children)
+        pascal = lambda names: {name[0].upper() + name[1:] for name in names}
+        compare(cls, set(fields), pascal(source_fields), pascal(wire_fields))
+        # Record inherited owners too. Newly added unexposed base fields remain
+        # unclassified, both here and in every concrete inheritor.
+        for base in bases.get(cls, ()):
+            base_fields = set(inherited(base))
+            compare(base, base_fields, pascal(source_fields) & base_fields, pascal(wire_fields) & base_fields)
+        for name in source_fields | wire_fields.keys():
+            field = name[0].upper() + name[1:]
+            nested_paths = {path[len(name)+1:] for path in paths if path.startswith(name + ".")}
+            children = wire_fields.get(name, [])
+            if not nested_paths and not any(_schema_fields(child) for child in children):
+                continue
+            if field not in fields:
+                continue  # Missing field is reported by the containing class.
+            storage = fields[field].removesuffix("?").removesuffix("[]")
+            visit(storage, nested_paths, children)
+
+    entity_fields = inherited("RuntimeEntitySpec")
+    for fn, member in PROJECTILE_MODIFIER_COMPONENTS.items():
+        cap = CAPABILITY_REGISTRY[fn]
+        field = member[0].upper() + member[1:]
+        if field not in entity_fields:
+            raise ValueError(f"Registry projects absent RuntimeEntitySpec DTO field: {field}")
+        storage = entity_fields[field].removesuffix("?")
+        is_array = storage.endswith("[]")
+        if is_array != (cap.multiplicity == "many_per_target"):
+            raise ValueError(f"C# component multiplicity differs from registry: {field}")
+        cls = storage.removesuffix("[]")
+        bindings[member] = cls
+        prefix = f"runtimeProgram.entities[].{member}{'[]' if is_array else ''}."
+        paths = {path[len(prefix):] for path in cap.final_wire_paths if path.startswith(prefix)}
+        if not paths:
+            raise ValueError(f"Missing registry component projection: {fn}")
+        visit(cls, paths, [cap.flat_wire_params_schema()])
+    # Every declared nested event destination is checked independently, including
+    # its native field type, instead of unioning shared DTO inputs across calls.
+    event_fields = inherited("RuntimeEventActionSpec")
+    for cap in CAPABILITY_REGISTRY.values():
+        for member, declared_class in cap.wire_components.items():
+            if cap.category != "event":
+                raise ValueError(f"Unsupported nested component owner: {cap.name}")
+            field = member[0].upper() + member[1:]
+            storage = event_fields.get(field, "").removesuffix("?")
+            if storage != declared_class:
+                raise ValueError(f"Registry/native nested component binding differs: {cap.name}.{member}")
+            prefix = f"runtimeProgram.entities[].events[].{member}."
+            paths = {path[len(prefix):] for path in cap.final_wire_paths if path.startswith(prefix)}
+            schemas = _schema_fields(cap.flat_wire_params_schema()).get(member, [])
+            visit(storage, paths, schemas)
+    return {"ok": not any(unclassified.values()) and not any(missing.values()) and not any(drift.values()),
+            "unclassifiedByClass": {cls: sorted(fields) for cls, fields in unclassified.items()},
+            "missingDtoFieldsByClass": {cls: sorted(fields) for cls, fields in missing.items()},
+            "wireDtoDriftByClass": {cls: sorted(fields) for cls, fields in drift.items()},
+            "componentClasses": bindings}
+
+
 def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     """Require explicit Author projection or a reason for every component DTO field."""
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
+    dto = dto if dto is not None else _runtime_dto_source()
     paths = {path for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths}
     components: dict[str, tuple[str, ...]] = {
         "RuntimeSpawnSpec": ("runtimeProgram.entities[].spawn.",),
@@ -267,18 +467,21 @@ def runtime_component_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
         },
     }
     unclassified: dict[str, list[str]] = {}
+    own, bases = _dto_component_types(dto)
     for cls, prefixes in components.items():
         declared = {
             suffix[0].upper() + suffix[1:]
             for prefix in prefixes for path in paths
             if path.startswith(prefix) and (suffix := path[len(prefix):]) and "." not in suffix
         }
-        properties = _class_properties(dto, cls)
+        properties = set(_inherited_dto_properties(own, bases, cls))
         unclassified[cls] = sorted(properties - declared - hidden.get(cls, {}).keys())
         if declared - properties:
             raise ValueError(f"Registry projects absent {cls} DTO fields: {declared - properties}")
-    return {"ok": not any(unclassified.values()), "unclassifiedByClass": unclassified,
-            "intentionallyHidden": hidden}
+    motion = _motion_component_surface_audit(dto)
+    unclassified.update(motion["unclassifiedByClass"])
+    return {**motion, "ok": not any(unclassified.values()) and motion["ok"],
+            "unclassifiedByClass": unclassified, "intentionallyHidden": hidden}
 
 
 def item_gameplay_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
@@ -422,7 +625,7 @@ def structural_surface_audit(dto: bytes | None = None) -> dict[str, Any]:
     import infini_local.core.runtime_authoring.wire_validator as wire
     from infini_local.pipelines.visual_generation_pipeline import visual_response_schema
 
-    dto = dto if dto is not None else (_MODEL_ROOT / "Common/Models/Contracts/RuntimeProgramSpec.cs").read_bytes()
+    dto = dto if dto is not None else _runtime_dto_source()
     pascal = lambda names: {name[0].upper() + name[1:] for name in names}
     program = author.runtime_program_author_schema()
     binding_variants = program["properties"]["bindings"]["items"]["oneOf"]

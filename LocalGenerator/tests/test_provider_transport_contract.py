@@ -8,6 +8,8 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
 from http.server import BaseHTTPRequestHandler
+import http.client
+from pathlib import Path
 import time
 import copy
 from email.message import Message
@@ -32,6 +34,22 @@ PIN = "ExactVendor/Endpoint-Turbo"
 STAGES = ("planner", "visual_director", "vfx_director")
 
 
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_provider_json_byte_limit_rejects_overflow_without_truncation(loopback_transport, monkeypatch, method):
+    from infini_local.core.http_io import HttpResponseTooLarge
+    endpoint, _events = loopback_transport
+    body = {"value": "x" * 256}
+    encoded = json.dumps(body).encode()
+    base, _observed = endpoint([{"body": body}, {"body": body}])
+    send = (lambda limit: transport.http_get_json(base + "/models")) if method == "GET" else (
+        lambda limit: transport.http_json(base + "/chat/completions", {"model": "test"}, max_response_bytes=limit))
+    monkeypatch.setattr(transport, "MAX_PROVIDER_JSON_BYTES", len(encoded))
+    assert send(len(encoded)) == body
+    monkeypatch.setattr(transport, "MAX_PROVIDER_JSON_BYTES", len(encoded) - 1)
+    with pytest.raises(HttpResponseTooLarge):
+        send(len(encoded) - 1)
+
+
 def packet(stage="planner", *, schema=False):
     response_format = {"type": "json_object"}
     if schema:
@@ -49,8 +67,36 @@ def packet(stage="planner", *, schema=False):
     }, stage)
 
 
+@pytest.mark.parametrize("host", ["127.0.0.2", "127.42.1.2", "[::1]", "[::ffff:127.0.0.2]", "localhost."])
+def test_all_numeric_loopback_endpoints_are_exempt_from_remote_quotas(monkeypatch, host):
+    monkeypatch.setattr(llm_admission.time, "sleep", lambda _delay: pytest.fail("local request was paced"))
+    attempt = {}
+    for _ in range(2):
+        llm_admission._reserve_remote_rate_slot(f"http://{host}:1234/v1/chat/completions",
+            {"model": "gemma-local"}, b"{}", max_wait_seconds=0, attempt=attempt)
+    assert attempt["rateAdmissionPolicy"] == "local_exempt"
+
+
+def test_remote_model_quota_identity_preserves_case():
+    url = "https://provider.example/v1/chat/completions"
+    assert llm_admission._remote_rate_key(url, {"model": "Model"}) != llm_admission._remote_rate_key(url, {"model": "model"})
+    assert llm_admission._remote_rate_key("http://192.168.1.2/v1", {"model": "Model"})
+
+
 def http_error(url, code, body="provider rejected request"):
     return urllib.error.HTTPError(url, code, "synthetic failure", Message(), io.BytesIO(body.encode()))
+
+
+@pytest.mark.parametrize("provider,expected", [("local", "Vendor/First"), ("openrouter", "Vendor/Free:free")])
+def test_model_discovery_skips_invalid_rows_and_caches_only_advertised_ids(loopback_transport, provider, expected):
+    endpoint, _events = loopback_transport
+    listing = {"data": [None, [], "invalid", {"id": 123}, {"id": "  "},
+        {"id": "Vendor/First"}, {"name": "Vendor/Free:free"}]}
+    base, observed = endpoint([{"body": listing}])
+    context = {"provider": provider, "base_url": base, "model": "auto", "api_key": ""}
+    assert transport.resolve_llm_model(context) == expected
+    assert transport.resolve_llm_model(context) == expected
+    assert len(observed) == 1
 
 
 def schema_error(url):
@@ -936,3 +982,57 @@ def test_effective_schema_tracks_actual_transport_metadata(metadata, retained):
     actual = llm_provider_wire.effective_response_format({"response_format": response_format}, {"_debug": metadata})
     assert actual is (response_format if retained else None)
     assert llm_provider_wire.effective_response_format({}, {"_debug": metadata}) is None
+
+
+@pytest.mark.parametrize("declared_length", [None, 2, 3])
+def test_http_valid_json_prefix_does_not_hide_truncated_body(monkeypatch, declared_length):
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_GET(self):
+            self.send_response(200)
+            if declared_length is not None:
+                self.send_header("Content-Length", str(declared_length))
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+    with loopback_server(Handler) as server:
+        url = f"http://127.0.0.1:{server.server_port}/models"
+        if declared_length == 3:
+            with pytest.raises(http.client.IncompleteRead):
+                transport.http_get_json(url)
+        else:
+            assert transport.http_get_json(url) == {}
+
+
+def test_a1111_image_json_does_not_inherit_text_response_ceiling(loopback_transport, monkeypatch, tmp_path):
+    import base64
+    import io
+    from PIL import Image
+    from infini_local.core.http_io import HttpResponseTooLarge
+    from infini_local.pipelines import image_backend_pipeline as images
+
+    buffer = io.BytesIO()
+    Image.new("RGBA", (2, 2), "red").save(buffer, format="PNG")
+    png = buffer.getvalue()
+    body = {"images": [base64.b64encode(png).decode("ascii")]}
+    endpoint, _events = loopback_transport
+    base, _observed = endpoint([{"body": body}, {"body": body}])
+    with pytest.raises(HttpResponseTooLarge):
+        transport.http_json(base + "/sdapi/v1/txt2img", {}, max_response_bytes=32)
+
+    # Exercise the image caller with a small default text cap: it must explicitly
+    # retain the image response policy rather than inherit the text-model cap.
+    def image_transport(url, payload, **kwargs):
+        return transport.http_json(url, payload, **{"max_response_bytes": 32, **kwargs})
+
+    monkeypatch.setattr(images, "http_json", image_transport)
+    monkeypatch.setattr(images, "A1111_URL", base)
+    monkeypatch.setattr(images, "GENERATE_VARIANTS", 1)
+    paths = images.generate_a1111("literal", "", "batch", output_dir=tmp_path)
+    assert len(paths) == 1
+    assert Path(paths[0]).read_bytes() == png

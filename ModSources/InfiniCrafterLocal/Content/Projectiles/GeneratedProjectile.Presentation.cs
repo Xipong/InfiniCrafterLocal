@@ -41,10 +41,10 @@ public sealed partial class GeneratedProjectile
                 anchor=owner.RotatedRelativePoint(owner.GetFrontHandPosition(owner.compositeFrontArm.stretch,owner.compositeFrontArm.rotation),addGfxOffY:false);
             } else anchor=owner.MountedCenter;
             points=new[]{anchor,Projectile.Center};
-        } else if(kind=="beam"&&_entity!.Controller.Code==RuntimeControllerCode.ChannelBeam) {
+        } else if(kind=="beam"&&HasBeamGeometry) {
             if(Projectile.owner<0||Projectile.owner>=Main.player.Length||Main.player[Projectile.owner] is not {active:true})return false;
             GetChannelBeamGeometry(out var a,out var b,out _);points=new[]{a,b};
-        } else if(kind=="whip"&&_entity!.Controller.Code!=RuntimeControllerCode.ChannelBeam&&_entity.Movement.Code==18&&_whipPoints.Count>1) points=_whipPoints.ToArray();
+        } else if(kind=="whip"&&!HasBeamGeometry&&HasLashGeometry&&_whipPoints.Count>1) points=_whipPoints.ToArray();
         else return false;
         return points.Length<=65&&points.All(p=>float.IsFinite(p.X)&&float.IsFinite(p.Y));
     }
