@@ -85,33 +85,3 @@ Hurt/knockback и весь rocket consumer cycle. Headless seams **не** док
 Player.Update/world collision loop, GPU wires/flames/shoe visuals, multiplayer match,
 inventory/void-bag activation, полный slot UI/content registration или измеренную
 продолжительность полёта. Game/network/model/install не запускались.
-
-## Перемещение и строительство
-
-Эти поля `configure_accessory` выбираются независимо. Они действуют при функциональном
-ношении аксессуара, через native Player/ExtraJump; inventory и vanity их не включают.
-
-| Author | Native consumer и значение |
-|---|---|
-| `jumpCloud`, `jumpBlizzard`, `jumpSandstorm`, `jumpFart`, `jumpTsunami` | Соответствующий `ExtraJump.Enable()`. Нативные порядок прыжков, ограничения движения и восстановление после приземления сохраняются; equip не восстанавливает потраченные прыжки. |
-| `swimFlipper` | `ExtraJump.Flipper`: повторяемые плавательные прыжки в воде. |
-| `divingHelm` | `Player.accDivingHelm`: замедленный расход воздуха. |
-| `underwaterBreathing` | `Player.gills`: дыхание в воде и на суше; в For the Worthy требуется вода. |
-| `waterFloat` | `Player.canFloatInWater`: плавучесть, кнопка вниз разрешает погружение. |
-| `autoJump` | `Player.autoJump`: повтор прыжков при удержании кнопки. |
-| `frogJump` | `Player.frogLegJumpBoost`: нативные бонусы высоты прыжка и безопасного падения Frog Leg. |
-| `wallGrip` | Максимум с `Player.spikedBoots`: 0 — нет, 1 — скольжение/прыжок от стены, 2 — удержание на стене. |
-| `autoPaint` | `Player.autoPaint`: автоматическая покраска при строительстве с расходом краски. |
-| `rulerGrid` | `Player.rulerGrid`: сетка размещения через строительный переключатель. |
-| `buildRangeTiles` | Добавляет 0..20 клеток к `Player.blockRange`. |
-| `tileSpeedBonusPercent` | Добавляет 0..100 / 100 к `Player.tileSpeed`. |
-| `wallSpeedBonusPercent` | Добавляет 0..100 / 100 к `Player.wallSpeed`. |
-| `gravityControl` | `Player.gravControl`: управление гравитацией кнопкой вверх. |
-| `featherFall` | `Player.slowFall`: плавное падение с управлением вверх/вниз. |
-| `extraFallTiles` | Добавляет 0..100 клеток к порогу урона от падения; это не иммунитет. |
-
-Пропуск остаётся отсутствием в wire/DTO/network; явные `false`/`0` не дают способность
-и не отменяют вклад других предметов. `null`, неверные типы и значения вне границ
-отвергаются. Каждый присутствующий выбор получает собственный compiler receipt.
-Нативный ResetEffects снимает grants при снятии аксессуара; для ExtraJump бюджетом
-и перезарядкой управляет сам движок.

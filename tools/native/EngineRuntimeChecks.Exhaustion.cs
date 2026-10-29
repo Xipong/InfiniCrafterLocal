@@ -310,7 +310,7 @@ internal static partial class EngineRuntimeChecks
         // Reader guard must reject length BEFORE ReadBytes allocates (all state
         // strings use the existing BinaryWriter 7-bit UTF8 string convention).
         using var malformed = new MemoryStream(); using var writer = new BinaryWriter(malformed);
-        writer.Write((byte)7); writer.Write(0); writer.Write(1f); writer.Write(0f);
+        writer.Write((byte)9); writer.Write(0); writer.Write(1f); writer.Write(0f);
         writer.Write7BitEncodedInt(1000000); malformed.Position = 0;
         bool rejected = false;
         try { typeof(InfiniCraftPlayer).GetMethod("ReadGeneratedBuffState", MobilityConsumptionFlags)!.Invoke(f.RemoteBuff, new object[] { new BinaryReader(malformed) }); }

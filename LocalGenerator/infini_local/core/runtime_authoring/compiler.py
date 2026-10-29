@@ -240,6 +240,8 @@ def _compile_item_call(
             "manaRegen": "manaRegen",
             "lifeRegenHpPerSecond": "lifeRegen",
         })
+        if "playerEffect" in p:
+            ctx.project_parameter(call=call, param="playerEffect", value=p["playerEffect"], target=generated, prefix=effect_prefix + ".generatedBuff")
         if "combat" in p:
             ctx.project_parameter(call=call, param="combat", value=p["combat"], target=generated, prefix=effect_prefix + ".generatedBuff")
         return

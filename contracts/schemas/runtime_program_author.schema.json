@@ -83,6 +83,349 @@
         }
       ],
       "x-infini-semanticType": "bounded_text"
+    },
+    "player_effect": {
+      "additionalProperties": false,
+      "description": "Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff.",
+      "minProperties": 1,
+      "properties": {
+        "airJump": {
+          "additionalProperties": false,
+          "description": "Grant authored extra jumps through native jump input. Charges refresh only when Terraria refreshes jumps; switching equipment or refreshing a buff never refills them in midair. Jump visuals are authored independently with item_body/on_jump VFX.",
+          "properties": {
+            "count": {
+              "description": "Extra jumps available per native movement refresh, independently for this source.",
+              "maximum": 6,
+              "minimum": 1,
+              "type": "integer",
+              "x-infini-neutral": 0
+            },
+            "holdDurationSeconds": {
+              "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Maximum held-jump duration before native duration modifiers. Releasing jump ends the hold normally.",
+              "maximum": 2.0,
+              "minimum": 0.008333333333333333,
+              "type": "number",
+              "x-infini-authorProjection": {
+                "nonzeroMustRemainNonzero": true,
+                "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+              },
+              "x-infini-semanticType": "seconds",
+              "x-infini-units": "seconds"
+            },
+            "horizontalAccelerationMultiplier": {
+              "default": 1,
+              "description": "Multiply horizontal acceleration only during this active extra jump.",
+              "maximum": 5,
+              "minimum": 0.1,
+              "type": "number",
+              "x-infini-consumerConstraint": {
+                "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                "neutral": 1,
+                "rule": "nonneutral_must_remain_nonneutral",
+                "storage": "float32"
+              },
+              "x-infini-neutral": 1
+            },
+            "horizontalSpeedMultiplier": {
+              "default": 1,
+              "description": "Multiply maximum horizontal run speed only during this active extra jump.",
+              "maximum": 5,
+              "minimum": 0.1,
+              "type": "number",
+              "x-infini-consumerConstraint": {
+                "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+                "neutral": 1,
+                "rule": "nonneutral_must_remain_nonneutral",
+                "storage": "float32"
+              },
+              "x-infini-neutral": 1
+            },
+            "launchSpeedBlocksPerSecond": {
+              "description": "Author units: blocks/s. Native consumer: Upward speed while the extra jump is held, relative to gravity direction.",
+              "maximum": 120.0,
+              "minimum": 0.375,
+              "type": "number",
+              "x-infini-authorProjection": {
+                "nonzeroMustRemainNonzero": true
+              },
+              "x-infini-consumerConstraint": {
+                "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+                "neutral": null,
+                "rule": "nonneutral_must_remain_nonneutral",
+                "storage": "float32"
+              },
+              "x-infini-semanticType": "blocks/s",
+              "x-infini-units": "blocks/s"
+            }
+          },
+          "required": [
+            "count",
+            "launchSpeedBlocksPerSecond",
+            "holdDurationSeconds"
+          ],
+          "type": "object"
+        },
+        "allowLavaFishing": {
+          "description": "Allow catches in lava with otherwise suitable fishing gear.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "autoJump": {
+          "description": "Repeat ordinary native jumps while jump input remains held.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "autoManaPotionBelowPercent": {
+          "description": "Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "breathCapacityBonus": {
+          "description": "Add breath-capacity units; native drowning and breath consumption remain independent.",
+          "maximum": 1200,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "coinPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for coins.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "condition": {
+          "default": "always",
+          "description": "When to apply this component: stationary requires zero velocity and no active item animation.",
+          "enum": [
+            "always",
+            "stationary"
+          ],
+          "type": "string",
+          "x-infini-neutral": "always"
+        },
+        "extraCrateChancePercent": {
+          "description": "Additional independent percent chance to turn a non-crate fishing attempt into a crate attempt; ordinary catch eligibility remains native.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "fishingPowerPoints": {
+          "description": "Add fishing-power points before native rod/bait/environment multipliers.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "gravityControl": {
+          "description": "Permit native gravity-direction switching with up input.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "gravityMultiplier": {
+          "description": "Multiply native downward gravity; active contributions multiply, bounded to 0.01..25 overall.",
+          "maximum": 5,
+          "minimum": 0.1,
+          "type": "number",
+          "x-infini-consumerConstraint": {
+            "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation.",
+            "neutral": 1,
+            "rule": "nonneutral_must_remain_nonneutral",
+            "storage": "float32"
+          },
+          "x-infini-neutral": 1
+        },
+        "healingPotionCooldownOnHitReductionSeconds": {
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.",
+          "maximum": 60.0,
+          "minimum": 0,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "seconds",
+          "x-infini-units": "seconds"
+        },
+        "healingPotionCooldownReductionPercent": {
+          "description": "Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.",
+          "maximum": 90,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "healingPotionCooldownReductionSeconds": {
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.",
+          "maximum": 60.0,
+          "minimum": 0,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "seconds",
+          "x-infini-units": "seconds"
+        },
+        "heartPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for heart pickups.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "highlightCreatures": {
+          "description": "Enable native creature highlighting.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "highlightDanger": {
+          "description": "Enable native hazardous-tile highlighting.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "highlightTreasure": {
+          "description": "Enable native treasure highlighting.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "hurtInvulnerabilityBonusSeconds": {
+          "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Add immunity time after a surviving hurt to that hit's actual immunity slot.",
+          "maximum": 5.0,
+          "minimum": 0,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true,
+            "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "seconds",
+          "x-infini-units": "seconds"
+        },
+        "itemPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for every item; combines with specialized ranges.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "lifeRegenHpPerSecond": {
+          "description": "Author units: HP/s. Native consumer: Signed life-regeneration contribution; condition controls when this component is active.",
+          "maximum": 100.0,
+          "minimum": -50.0,
+          "multipleOf": 0.5,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "HP/s",
+          "x-infini-units": "HP/s"
+        },
+        "manaPickupRangeBlocks": {
+          "description": "Author units: blocks. Native consumer: Additional pickup range for mana-star pickups.",
+          "maximum": 40.0,
+          "minimum": 0.0,
+          "multipleOf": 0.0625,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks",
+          "x-infini-units": "blocks"
+        },
+        "maxFallSpeedBlocksPerSecond": {
+          "description": "Author units: blocks/s. Native consumer: Cap downward fall speed; zero contributes no cap. The strictest active cap wins.",
+          "maximum": 120.0,
+          "minimum": 0.0,
+          "type": "number",
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          },
+          "x-infini-consumerConstraint": {
+            "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values.",
+            "neutral": 0.0,
+            "rule": "nonneutral_must_remain_nonneutral",
+            "storage": "float32"
+          },
+          "x-infini-neutral": 0.0,
+          "x-infini-semanticType": "blocks/s",
+          "x-infini-units": "blocks/s"
+        },
+        "nightVision": {
+          "description": "Improve dark visibility without emitting world light.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "preventLineBreak": {
+          "description": "Prevent fishing-line breakage.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "revealHookedCatch": {
+          "description": "Reveal the hooked catch before reeling it in.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "safeFallDistanceBlocks": {
+          "description": "Add safe falling distance in blocks without granting damage immunity.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
+        },
+        "swimJump": {
+          "description": "Permit repeated swimming jumps while submerged; does not grant water breathing.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "wallCling": {
+          "description": "Permit native wall clinging and wall jumps.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "wallSlideAndJump": {
+          "description": "Permit native wall sliding and wall jumps; wallCling is an independent stronger contact mode.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "waterBreathing": {
+          "description": "Enable native gill breathing, including the world's native air/water breathing rules.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        },
+        "waterBuoyancy": {
+          "description": "Float in water while down input is not held; does not grant swimming jumps.",
+          "type": "boolean",
+          "x-infini-neutral": false
+        }
+      },
+      "required": [],
+      "type": "object",
+      "x-infini-semanticType": "bounded_text"
     }
   },
   "$id": "https://infinicrafter.local/contracts/runtime_program_author.schema.json",
@@ -4553,6 +4896,9 @@
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "boolean_capability"
+                  },
+                  "playerEffect": {
+                    "$ref": "#/$defs/player_effect"
                   }
                 },
                 "required": [
@@ -5522,26 +5868,6 @@
                     "x-infini-semanticType": "probability_percent",
                     "x-infini-units": "probability_percent"
                   },
-                  "autoJump": {
-                    "description": "Repeat jumps while the jump button is held.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "autoPaint": {
-                    "description": "Paint placed blocks using carried paint.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "buildRangeTiles": {
-                    "description": "Additional native tile placement reach in tiles; additive.",
-                    "maximum": 20,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "tiles"
-                  },
                   "damageReductionPercentagePoints": {
                     "description": "Add percentage points of damage reduction",
                     "maximum": 75,
@@ -5570,40 +5896,14 @@
                     "x-infini-semanticType": "defense_points",
                     "x-infini-units": "defense_points"
                   },
-                  "divingHelm": {
-                    "description": "Conserve breath, as a Diving Helmet.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "extraFallTiles": {
-                    "description": "Add safe falling distance in tiles; not fall immunity.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "tiles"
-                  },
                   "fallDamageImmune": {
                     "description": "Prevent fall damage while equipped",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "featherFall": {
-                    "description": "Slow falling; up/down controls descent.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "fireWalk": {
                     "description": "Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "frogJump": {
-                    "description": "Frog Leg jump-height and safe-fall bonuses.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -5664,38 +5964,8 @@
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
                   },
-                  "gravityControl": {
-                    "description": "Flip gravity with up input, as a Gravitation Potion.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "iceSkate": {
                     "description": "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "jumpBlizzard": {
-                    "description": "Blizzard extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "jumpCloud": {
-                    "description": "Cloud extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "jumpFart": {
-                    "description": "Fart extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "jumpSandstorm": {
-                    "description": "Sandstorm extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -5717,12 +5987,6 @@
                     "x-infini-neutral": 0.0,
                     "x-infini-semanticType": "blocks/s",
                     "x-infini-units": "blocks/s"
-                  },
-                  "jumpTsunami": {
-                    "description": "Tsunami extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
                   },
                   "lavaImmune": {
                     "description": "Grant lava immunity while equipped",
@@ -5866,6 +6130,9 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
+                  "playerEffect": {
+                    "$ref": "#/$defs/player_effect"
+                  },
                   "rocketBoots": {
                     "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing, sliding or movement-ability refresh refill, wings may convert charges to wingTime; mounts suppress flight",
                     "maximum": 5,
@@ -5875,12 +6142,6 @@
                     "x-infini-semanticType": "unitless_scalar",
                     "x-infini-units": "native rocket flight mode"
                   },
-                  "rulerGrid": {
-                    "description": "Placement grid controlled by the native builder toggle.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
                   "sentrySlotsBonus": {
                     "description": "Add sentry slots",
                     "maximum": 20,
@@ -5889,12 +6150,6 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "slots",
                     "x-infini-units": "slots"
-                  },
-                  "swimFlipper": {
-                    "description": "Flipper swimming jumps while wet.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
                   },
                   "taggedSummonSourceDamageBonusPercent": {
                     "description": "Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip",
@@ -5914,42 +6169,6 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
-                  },
-                  "tileSpeedBonusPercent": {
-                    "description": "Add percent/100 to native tile placement speed.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar"
-                  },
-                  "underwaterBreathing": {
-                    "description": "Gills breathing in water and air; For the Worthy requires water.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
-                  },
-                  "wallGrip": {
-                    "description": "0 none, 1 wall slide/jump, 2 wall cling; strongest level wins.",
-                    "maximum": 2,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar"
-                  },
-                  "wallSpeedBonusPercent": {
-                    "description": "Add percent/100 to native wall placement speed.",
-                    "maximum": 100,
-                    "minimum": 0,
-                    "type": "integer",
-                    "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar"
-                  },
-                  "waterFloat": {
-                    "description": "Float in water; down input permits descent.",
-                    "type": "boolean",
-                    "x-infini-neutral": false,
-                    "x-infini-semanticType": "bounded_text"
                   },
                   "waterWalk": {
                     "description": "Walk on water while equipped",
@@ -6292,6 +6511,9 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
+                  },
+                  "playerEffect": {
+                    "$ref": "#/$defs/player_effect"
                   },
                   "sentrySlotsBonus": {
                     "description": "Add sentry slots",
@@ -10497,6 +10719,89 @@
                   "graphEdge": false,
                   "namespace": "entity",
                   "targetKinds": [
+                    "owner_attached_projectile",
+                    "free_projectile",
+                    "stationary_projectile",
+                    "temporary_helper",
+                    "field",
+                    "child_projectile"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "fn",
+              "target",
+              "params"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "fn": {
+                "const": "reduce_healing_potion_cooldown_on_event"
+              },
+              "id": {
+                "description": "Stable unique call id.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string"
+              },
+              "params": {
+                "additionalProperties": false,
+                "properties": {
+                  "delaySeconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Delay this exact action after the chosen event; 0 executes immediately",
+                    "maximum": 10.0,
+                    "minimum": 0,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-neutral": 0.0,
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "seconds": {
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Amount removed per admitted event; 0.5 seconds removes 30 ticks. No active cooldown means no change.",
+                    "maximum": 60.0,
+                    "minimum": 0.008333333333333333,
+                    "type": "number",
+                    "x-infini-authorProjection": {
+                      "nonzeroMustRemainNonzero": true,
+                      "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+                    },
+                    "x-infini-semanticType": "seconds",
+                    "x-infini-units": "seconds"
+                  },
+                  "when": {
+                    "description": "Exact emitted event",
+                    "enum": [
+                      "on_hit",
+                      "on_crit"
+                    ],
+                    "type": "string",
+                    "x-infini-semanticType": "runtime_event_trigger"
+                  }
+                },
+                "required": [
+                  "when",
+                  "seconds"
+                ],
+                "type": "object"
+              },
+              "target": {
+                "description": "Authored entity id. Target kind is checked locally.",
+                "pattern": "^[a-z][a-z0-9_]{0,47}$",
+                "type": "string",
+                "x-infini-reference": {
+                  "allowSelf": true,
+                  "graphEdge": false,
+                  "namespace": "entity",
+                  "targetKinds": [
+                    "item_body",
                     "owner_attached_projectile",
                     "free_projectile",
                     "stationary_projectile",

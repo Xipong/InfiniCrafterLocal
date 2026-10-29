@@ -105,7 +105,7 @@ _EVENT_KEYS = frozenset({
     "id", "event", "action", "actionCode", "entityId", "count", "spreadRadians", "damageMultiplier",
     "delayTicks", "periodTicks", "buffId", "durationTicks", "radiusPx", "rangeTiles", "mode", "strength",
     "radiusTiles", "damageFraction", "maxHeal", "cooldownTicks", "safeTileOnly", "reactionCooldownTicks",
-    "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
+    "cooldownReductionTicks", "damageBasis", "knockbackBasis", "hitTargetSpawn", "effectGroupId", "useInput", "ownerStrength", "targetStrength", "maxTargets",
 }) | _TARGET_EMISSION_FIELDS | frozenset(member for cap in CAPABILITY_REGISTRY.values()
                                         if cap.category == "event" for member in cap.wire_components)
 _BINDING_KEYS = frozenset({"id", "input", "role", "usePolicy"})
@@ -347,8 +347,18 @@ def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
         # Duration and color describe an effect; neither executes one. The
         # registry marks exactly the executable stats with neutral values.
         if spec.kind == "object" and name in wire:
-            # Composite combat leaves retain their authored units on the wire.
-            params[name] = wire[name]
+            # Test executable leaves in their declared wire units. Nested
+            # modifiers may rename/scale fields; raw wire is not Author input.
+            for projection in _wire_projection_witness(spec, name, "buff", {"buff": wire}):
+                leaf = spec
+                for part in projection.authored_path.split(".")[1:]:
+                    leaf = leaf.properties.get(part)
+                    if leaf is None:
+                        break
+                if (leaf is not None and leaf.neutral is not None
+                    and type(projection.value) in (int, float, bool)
+                    and projection.value != leaf.to_wire(leaf.neutral)):
+                    return True
         if spec.neutral is None:
             continue
         value = wire.get(spec.wire_name or name)
@@ -1301,7 +1311,14 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
         component = fn.removeprefix("configure_")
         node = data.get(component)
         if not isinstance(node, Mapping):
+            if component in data:
+                errors.append({"path": "$." + component, "code": "required_object", "message": "Equipment must be an object."})
             continue
+        prefix = component + "."
+        allowed = frozenset(path[len(prefix):].split(".", 1)[0]
+                            for cap in CAPABILITY_REGISTRY.values() for path in cap.final_wire_paths
+                            if path.startswith(prefix))
+        _reject_unknown(node, allowed, "$." + component, errors)
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
             if not spec.wire_presence_requires_receipt or spec.structured:
                 continue

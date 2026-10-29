@@ -591,6 +591,7 @@ public sealed partial class InfiniCraftPlayer
 
     public override void PostUpdate()
     {
+        AutoUseManaPotion();
         RefreshRemoteStationAuthority();
         TickCraftLanePresentation();
         TickCraftAudioGuard();

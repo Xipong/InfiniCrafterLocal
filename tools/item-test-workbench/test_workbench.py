@@ -71,6 +71,33 @@ class WorkbenchTests(unittest.TestCase):
             mod.write_bytes(b'changed mod');self.assertNotEqual(before,w.native_binaries_state(host))
             mod.write_bytes(b'mod');host.write_bytes(b'changed host');self.assertNotEqual(before,w.native_binaries_state(host))
 
+    def test_no_build_refuses_changed_index_or_separate_mod_build_inputs(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d);here=root/'tools/item-test-workbench'
+            sources={
+                here/'vanilla-item-assets.json':b'{"items":{}}',
+                here/'production-mod/InfiniCrafterWorkbenchMod.csproj':b'<Project />',
+                root/'ModSources/InfiniCrafterLocal/Assets/item.png':b'asset',
+                root/'ModSources/InfiniCrafterLocal/Localization/en-US.hjson':b'Name: item',
+                root/'ModSources/InfiniCrafterLocal/build.txt':b'version=1',
+            }
+            for path,raw in sources.items():
+                path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+            dll=here/'bin/Release/net8.0/ItemTestWorkbench.dll'
+            dll.parent.mkdir(parents=True);dll.write_bytes(b'host')
+            (dll.parent/'InfiniCrafterLocal.dll').write_bytes(b'production mod')
+            with patch.object(w,'ROOT',root),patch.object(w,'HERE',here),patch.object(w,'doctor',return_value={'ready':True}):
+                (dll.parent/'build-provenance.json').write_text(json.dumps(w.build_state(dll)))
+                self.assertEqual(w.native_executable(no_build=True)[0],dll)
+                for path,raw in sources.items():
+                    with self.subTest(source=str(path.relative_to(root))):
+                        path.write_bytes(raw+b' changed')
+                        with self.assertRaisesRegex(RuntimeError,'stale or modified'):
+                            w.native_executable(no_build=True)
+                        path.write_bytes(raw)
+                        self.assertEqual(w.native_executable(no_build=True)[0],dll)
+
     def test_shared_build_gate_refuses_missing_or_malformed_readiness(self):
         from unittest.mock import patch
         spec=importlib.util.spec_from_file_location('workbench_release_gate',w.ROOT/'tools/validate_release.py')

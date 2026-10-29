@@ -24,7 +24,7 @@ public sealed partial class InfiniCraftPlayer
                 active.MovementSpeed, active.JumpBoost, active.ManaRegen, active.LifeRegen,
                 active.Combat?.DefensePoints ?? 0, active.Combat?.AttackSpeedPercent ?? 0, active.Combat?.CritChancePoints ?? 0,
                 active.Combat is { } combat ? new ReadOnlyDictionary<string, float>(new Dictionary<string, float>
-                    { [combat.DamageClass] = combat.DamagePercent }) : null);
+                    { [combat.DamageClass] = combat.DamagePercent }) : null, active.PlayerEffect is { } effect ? effect with { } : null);
         }
         var current = new GeneratedUtilityBuffValues(_generatedBuffTicks,
             _generatedMiningSpeedMultiplier, _generatedLightStrength, _generatedLightColorName,

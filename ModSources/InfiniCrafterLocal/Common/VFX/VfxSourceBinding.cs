@@ -20,6 +20,8 @@ internal abstract class VfxSourceBinding
     internal virtual bool TryGeometry(string kind,out Vector2[] points) {points=Array.Empty<Vector2>();return false;}
     internal static VfxSourceBinding? Capture(Projectile projectile)
         => projectile.ModProjectile is GeneratedProjectile generated ? new ProjectileBinding(projectile,generated):null;
+    internal static VfxSourceBinding CaptureAirJump(Player player,string itemId,long generation)
+        =>new AirJumpBinding(player,itemId,generation);
     internal static VfxSourceBinding? Capture(Player player,Item? item,GeneratedItemData data)
     {
         item ??= player.HeldItem?.ModItem is GeneratedItem held&&held.Data.Id==data.Id?player.HeldItem:null;
@@ -80,6 +82,28 @@ internal abstract class VfxSourceBinding
         internal override bool TryFrame(string anchor,out VfxSourceFrame frame) {
             frame=default;if(!IsLive||anchor=="hitPoint"||itemSlot>=0&&anchor is "tip" or "tipHistory")return false;
             frame=ItemFrame(owner,anchor);return frame.Valid;
+        }
+    }
+    private sealed class AirJumpBinding : VfxSourceBinding
+    {
+        private readonly Player owner;
+        private readonly int ownerSlot;
+        private readonly string itemId;
+        private readonly long generation;
+        private readonly object fence=new();
+        internal AirJumpBinding(Player player,string id,long lifetime)
+        {owner=player;ownerSlot=player.whoAmI;itemId=id;generation=lifetime;}
+        internal override object Generation=>fence;
+        internal override bool IsLive=>owner.active&&!owner.dead&&ownerSlot>=0&&ownerSlot<Main.player.Length
+            &&ReferenceEquals(Main.player[ownerSlot],owner)
+            &&owner.GetModPlayer<global::InfiniCrafterLocal.Common.Players.InfiniCraftPlayer>()
+                .TryGetLiveAirJumpSource(itemId,out _,out long current,generation)&&current==generation;
+        internal override bool TryFrame(string anchor,out VfxSourceFrame frame)
+        {
+            frame=default;
+            if(!IsLive||anchor is "hitPoint" or "tip" or "tipHistory")return false;
+            frame=ItemFrame(owner,anchor);
+            return frame.Valid;
         }
     }
 }

@@ -35,6 +35,7 @@ Author schema ограничивает значения всех примити�
 
 | Author | Действие / engine semantics | Единица | Neutral | Author range | Wire DTO | Фаза |
 |---|---|---|---|---|---|---|
+| playerEffect | Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff. | bounded_text | None | object | accessory.playerEffect | C# normalized item projection |
 | defensePoints | Add native item defense | defense_points | 0 | -50…200<br>runtime clamp: -100…500 | accessory.defense | ModItem.UpdateAccessory |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxLife | ModItem.UpdateAccessory |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | accessory.maxMana | ModItem.UpdateAccessory |
@@ -60,26 +61,6 @@ Author schema ограничивает значения всех примити�
 | fallDamageImmune | Prevent fall damage while equipped | bounded_text | False | boolean | accessory.fallDamageImmune | ModItem.UpdateAccessory |
 | lavaImmune | Grant lava immunity while equipped | bounded_text | False | boolean | accessory.lavaImmune | ModItem.UpdateAccessory |
 | waterWalk | Walk on water while equipped | bounded_text | False | boolean | accessory.waterWalk | ModItem.UpdateAccessory |
-| gravityControl | Flip gravity with up input, as a Gravitation Potion. | bounded_text | False | boolean | accessory.gravityControl | ModItem.UpdateAccessory |
-| featherFall | Slow falling; up/down controls descent. | bounded_text | False | boolean | accessory.featherFall | ModItem.UpdateAccessory |
-| extraFallTiles | Add safe falling distance in tiles; not fall immunity. | tiles | 0 | 0…100 | accessory.extraFallTiles | ModItem.UpdateAccessory |
-| autoPaint | Paint placed blocks using carried paint. | bounded_text | False | boolean | accessory.autoPaint | ModItem.UpdateAccessory |
-| rulerGrid | Placement grid controlled by the native builder toggle. | bounded_text | False | boolean | accessory.rulerGrid | ModItem.UpdateAccessory |
-| buildRangeTiles | Additional native tile placement reach in tiles; additive. | tiles | 0 | 0…20 | accessory.buildRangeTiles | ModItem.UpdateAccessory |
-| tileSpeedBonusPercent | Add percent/100 to native tile placement speed. | unitless_scalar | 0 | 0…100 | accessory.tileSpeedBonusPercent | ModItem.UpdateAccessory |
-| wallSpeedBonusPercent | Add percent/100 to native wall placement speed. | unitless_scalar | 0 | 0…100 | accessory.wallSpeedBonusPercent | ModItem.UpdateAccessory |
-| autoJump | Repeat jumps while the jump button is held. | bounded_text | False | boolean | accessory.autoJump | ModItem.UpdateAccessory |
-| frogJump | Frog Leg jump-height and safe-fall bonuses. | bounded_text | False | boolean | accessory.frogJump | ModItem.UpdateAccessory |
-| wallGrip | 0 none, 1 wall slide/jump, 2 wall cling; strongest level wins. | unitless_scalar | 0 | 0…2 | accessory.wallGrip | ModItem.UpdateAccessory |
-| swimFlipper | Flipper swimming jumps while wet. | bounded_text | False | boolean | accessory.swimFlipper | ModItem.UpdateAccessory |
-| divingHelm | Conserve breath, as a Diving Helmet. | bounded_text | False | boolean | accessory.divingHelm | ModItem.UpdateAccessory |
-| underwaterBreathing | Gills breathing in water and air; For the Worthy requires water. | bounded_text | False | boolean | accessory.underwaterBreathing | ModItem.UpdateAccessory |
-| waterFloat | Float in water; down input permits descent. | bounded_text | False | boolean | accessory.waterFloat | ModItem.UpdateAccessory |
-| jumpCloud | Cloud extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump. | bounded_text | False | boolean | accessory.jumpCloud | ModItem.UpdateAccessory |
-| jumpBlizzard | Blizzard extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump. | bounded_text | False | boolean | accessory.jumpBlizzard | ModItem.UpdateAccessory |
-| jumpSandstorm | Sandstorm extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump. | bounded_text | False | boolean | accessory.jumpSandstorm | ModItem.UpdateAccessory |
-| jumpFart | Fart extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump. | bounded_text | False | boolean | accessory.jumpFart | ModItem.UpdateAccessory |
-| jumpTsunami | Tsunami extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump. | bounded_text | False | boolean | accessory.jumpTsunami | ModItem.UpdateAccessory |
 | iceSkate | Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed | bounded_text | False | boolean | accessory.iceSkate | ModItem.UpdateAccessory |
 | noKnockback | Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate | bounded_text | False | boolean | accessory.noKnockback | ModItem.UpdateAccessory |
 | fireWalk | Enable Player.fireWalk: immunity to TileID.Sets.TouchDamageHot blocks only; NOT lava immunity, fire debuffs or all harmful tiles | bounded_text | False | boolean | accessory.fireWalk | ModItem.UpdateAccessory |
@@ -95,6 +76,7 @@ Authority: `owner_execute_sync`; техническая фаза/сетевая 
 |---|---|---|---|---|---|---|
 | slot | Armor equip slot | bounded_text | None | head/body/legs | armor.slot | C# normalized item projection |
 | setKey | Exact authored set key (empty when no matching set is intended) | bounded_text |  | ^[a-z0-9_]{0,48}$ | armor.setKey | C# normalized item projection |
+| playerEffect | Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff. | bounded_text | None | object | armor.playerEffect | C# normalized item projection |
 | defensePoints | Add native item defense | defense_points | 0 | 0…200<br>runtime clamp: 0…500 | armor.defense | ModItem.UpdateEquip |
 | maxLifePoints | Add maximum life | life_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxLife | ModItem.UpdateEquip |
 | maxManaPoints | Add maximum mana | mana_points | 0 | -200…1000<br>runtime clamp: -500…5000 | armor.maxMana | ModItem.UpdateEquip |

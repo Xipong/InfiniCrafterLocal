@@ -311,6 +311,9 @@ class EventKindSpec:
     producer_binding_actions: tuple[str, ...] = ()
     producer_binding_kinds: tuple[str, ...] = ()
     producer_binding_contact_damage: bool | None = None
+    presentation_only: bool = False
+    producer_player_effect_member: str = ""
+    vfx_anchors: tuple[str, ...] = ()
     producer_exact_params: Mapping[str, Mapping[str, Any]] = field(
         default_factory=lambda: MappingProxyType({}),
         compare=False,
@@ -330,6 +333,10 @@ class EventKindSpec:
             "producedByBindingActions": list(self.producer_binding_actions),
             "producedByBindingKinds": list(self.producer_binding_kinds),
             "producerBindingContactDamage": self.producer_binding_contact_damage,
+            **({"presentationOnly": True} if self.presentation_only else {}),
+            **({"producerPlayerEffectMember": self.producer_player_effect_member}
+               if self.producer_player_effect_member else {}),
+            **({"vfxAnchors": list(self.vfx_anchors)} if self.vfx_anchors else {}),
             "producerFreeKinds": producer_free_kinds,
             "producerExactParams": {
                 capability: dict(params)
@@ -1524,6 +1531,49 @@ _MOVEMENT_OWNER = "Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::
 _COMPILER_OWNER = "infini_local.core.runtime_authoring.compiler::compile_runtime_program"
 
 
+def _player_effect_param() -> ParamSpec:
+    """Shared mechanical vocabulary for equipment and timed generated buffs."""
+    return _p("object", "Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff.", required=False, shared_type="player_effect", min_properties=1, properties={
+        "condition": _p("string", "When to apply this component: stationary requires zero velocity and no active item animation.", required=False, enum=("always", "stationary"), default="always", neutral="always", wire_name="playerEffect.condition"),
+        "airJump": _p("object", "Grant authored extra jumps through native jump input. Charges refresh only when Terraria refreshes jumps; switching equipment or refreshing a buff never refills them in midair. Jump visuals are authored independently with item_body/on_jump VFX.", required=False, properties={
+            "count": _p("integer", "Extra jumps available per native movement refresh, independently for this source.", minimum=1, maximum=6, neutral=0, wire_name="playerEffect.airJump.count"),
+            "launchSpeedBlocksPerSecond": _world_units(_p("number", "Upward speed while the extra jump is held, relative to gravity direction.", minimum=0.1, maximum=32, wire_name="playerEffect.airJump.launchSpeedPxPerTick"), "launchSpeedPxPerTick", multiplier=16, divisor=60, units="blocks/s"),
+            "holdDurationSeconds": _seconds(_p("integer", "Maximum held-jump duration before native duration modifiers. Releasing jump ends the hold normally.", minimum=1, maximum=120, wire_name="playerEffect.airJump.holdDurationTicks"), "holdDurationTicks"),
+            "horizontalAccelerationMultiplier": _p("number", "Multiply horizontal acceleration only during this active extra jump.", required=False, minimum=0.1, maximum=5, default=1, neutral=1, consumer_storage="float32", wire_name="playerEffect.airJump.horizontalAccelerationMultiplier"),
+            "horizontalSpeedMultiplier": _p("number", "Multiply maximum horizontal run speed only during this active extra jump.", required=False, minimum=0.1, maximum=5, default=1, neutral=1, consumer_storage="float32", wire_name="playerEffect.airJump.horizontalSpeedMultiplier"),
+        }),
+        "autoJump": _p("boolean", "Repeat ordinary native jumps while jump input remains held.", required=False, neutral=False, wire_name="playerEffect.autoJump", wire_presence_requires_receipt=True),
+        "gravityControl": _p("boolean", "Permit native gravity-direction switching with up input.", required=False, neutral=False, wire_name="playerEffect.gravityControl", wire_presence_requires_receipt=True),
+        "gravityMultiplier": _p("number", "Multiply native downward gravity; active contributions multiply, bounded to 0.01..25 overall.", required=False, minimum=0.1, maximum=5, neutral=1, consumer_storage="float32", wire_name="playerEffect.gravityMultiplier", wire_presence_requires_receipt=True),
+        "maxFallSpeedBlocksPerSecond": _world_units(_p("number", "Cap downward fall speed; zero contributes no cap. The strictest active cap wins.", required=False, minimum=0, maximum=32, neutral=0, wire_name="playerEffect.maxFallSpeedPxPerTick", wire_presence_requires_receipt=True), "maxFallSpeedPxPerTick", multiplier=16, divisor=60, units="blocks/s"),
+        "safeFallDistanceBlocks": _p("integer", "Add safe falling distance in blocks without granting damage immunity.", required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.safeFallDistanceBlocks", wire_presence_requires_receipt=True),
+        "waterBreathing": _p("boolean", "Enable native gill breathing, including the world's native air/water breathing rules.", required=False, neutral=False, wire_name="playerEffect.waterBreathing", wire_presence_requires_receipt=True),
+        "swimJump": _p("boolean", "Permit repeated swimming jumps while submerged; does not grant water breathing.", required=False, neutral=False, wire_name="playerEffect.swimJump", wire_presence_requires_receipt=True),
+        "waterBuoyancy": _p("boolean", "Float in water while down input is not held; does not grant swimming jumps.", required=False, neutral=False, wire_name="playerEffect.waterBuoyancy", wire_presence_requires_receipt=True),
+        "wallSlideAndJump": _p("boolean", "Permit native wall sliding and wall jumps; wallCling is an independent stronger contact mode.", required=False, neutral=False, wire_name="playerEffect.wallSlideAndJump", wire_presence_requires_receipt=True),
+        "wallCling": _p("boolean", "Permit native wall clinging and wall jumps.", required=False, neutral=False, wire_name="playerEffect.wallCling", wire_presence_requires_receipt=True),
+        "breathCapacityBonus": _p("integer", "Add breath-capacity units; native drowning and breath consumption remain independent.", required=False, minimum=0, maximum=1200, neutral=0, wire_name="playerEffect.breathCapacityBonus", wire_presence_requires_receipt=True),
+        "fishingPowerPoints": _p("integer", 'Add fishing-power points before native rod/bait/environment multipliers.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.fishingPowerPoints", wire_presence_requires_receipt=True),
+        "preventLineBreak": _p("boolean", 'Prevent fishing-line breakage.', required=False, neutral=False, wire_name="playerEffect.preventLineBreak", wire_presence_requires_receipt=True),
+        "allowLavaFishing": _p("boolean", 'Allow catches in lava with otherwise suitable fishing gear.', required=False, neutral=False, wire_name="playerEffect.allowLavaFishing", wire_presence_requires_receipt=True),
+        "revealHookedCatch": _p("boolean", 'Reveal the hooked catch before reeling it in.', required=False, neutral=False, wire_name="playerEffect.revealHookedCatch", wire_presence_requires_receipt=True),
+        "extraCrateChancePercent": _p("integer", "Additional independent percent chance to turn a non-crate fishing attempt into a crate attempt; ordinary catch eligibility remains native.", required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.extraCrateChancePercent", wire_presence_requires_receipt=True),
+        "itemPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for every item; combines with specialized ranges.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.itemPickupRangePx", wire_presence_requires_receipt=True), "itemPickupRangePx", multiplier=16, units='blocks'),
+        "heartPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for heart pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.heartPickupRangePx", wire_presence_requires_receipt=True), "heartPickupRangePx", multiplier=16, units='blocks'),
+        "manaPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for mana-star pickups.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.manaPickupRangePx", wire_presence_requires_receipt=True), "manaPickupRangePx", multiplier=16, units='blocks'),
+        "coinPickupRangeBlocks": _world_units(_p("integer", 'Additional pickup range for coins.', required=False, minimum=0, maximum=640, neutral=0, wire_name="playerEffect.coinPickupRangePx", wire_presence_requires_receipt=True), "coinPickupRangePx", multiplier=16, units='blocks'),
+        "highlightTreasure": _p("boolean", 'Enable native treasure highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightTreasure", wire_presence_requires_receipt=True),
+        "highlightDanger": _p("boolean", 'Enable native hazardous-tile highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightDanger", wire_presence_requires_receipt=True),
+        "highlightCreatures": _p("boolean", 'Enable native creature highlighting.', required=False, neutral=False, wire_name="playerEffect.highlightCreatures", wire_presence_requires_receipt=True),
+        "nightVision": _p("boolean", 'Improve dark visibility without emitting world light.', required=False, neutral=False, wire_name="playerEffect.nightVision", wire_presence_requires_receipt=True),
+        "healingPotionCooldownReductionPercent": _p("integer", 'Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.', required=False, minimum=0, maximum=90, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionPercent", wire_presence_requires_receipt=True),
+        "healingPotionCooldownReductionSeconds": _seconds(_p("integer", 'Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.', required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownReductionTicks"),
+        "autoManaPotionBelowPercent": _p("integer", 'Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.autoManaPotionBelowPercent", wire_presence_requires_receipt=True),
+        "lifeRegenHpPerSecond": _world_units(_p("integer", 'Signed life-regeneration contribution; condition controls when this component is active.', required=False, minimum=-100, maximum=200, neutral=0, wire_name="playerEffect.lifeRegenUnits", wire_presence_requires_receipt=True), "lifeRegenUnits", multiplier=2, units='HP/s'),
+        "healingPotionCooldownOnHitReductionSeconds": _seconds(_p("integer", "Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.", required=False, minimum=0, maximum=3600, neutral=0, wire_name="playerEffect.healingPotionCooldownOnHitReductionTicks", wire_presence_requires_receipt=True), "healingPotionCooldownOnHitReductionTicks"),
+        "hurtInvulnerabilityBonusSeconds": _seconds(_p("integer", "Add immunity time after a surviving hurt to that hit's actual immunity slot.", required=False, minimum=0, maximum=300, neutral=0, wire_name="playerEffect.hurtInvulnerabilityBonusTicks", wire_presence_requires_receipt=True), "hurtInvulnerabilityBonusTicks"),
+    })
+
 def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
     """One Author vocabulary for equipped effects and their exact DTO projection."""
     phase = "ModItem.UpdateEquip" if armor else "ModItem.UpdateAccessory"
@@ -1558,6 +1608,7 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
                   consumer_storage="float32" if percent else "")
 
     p: dict[str, ParamSpec] = {
+        "playerEffect": _player_effect_param(),
         "defensePoints": stat("defense", "Add native item defense", 0 if armor else -50, 200, "defense_points", integer=True),
         "maxLifePoints": stat("maxLife", "Add maximum life", -200, 1000, "life_points", integer=True),
         "maxManaPoints": stat("maxMana", "Add maximum mana", -200, 1000, "mana_points", integer=True),
@@ -1590,26 +1641,6 @@ def _equipment_params(*, armor: bool) -> Mapping[str, ParamSpec]:
         p[name] = _p("boolean", meaning, required=False, wire_name=name,
                      neutral=False, execution_phase=phase)
     if not armor:
-        p["gravityControl"] = _p("boolean", "Flip gravity with up input, as a Gravitation Potion.", required=False, wire_name="gravityControl", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["featherFall"] = _p("boolean", "Slow falling; up/down controls descent.", required=False, wire_name="featherFall", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["extraFallTiles"] = _p("integer", "Add safe falling distance in tiles; not fall immunity.", required=False, minimum=0, maximum=100, wire_name="extraFallTiles", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["autoPaint"] = _p("boolean", "Paint placed blocks using carried paint.", required=False, wire_name="autoPaint", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["rulerGrid"] = _p("boolean", "Placement grid controlled by the native builder toggle.", required=False, wire_name="rulerGrid", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["buildRangeTiles"] = _p("integer", "Additional native tile placement reach in tiles; additive.", required=False, minimum=0, maximum=20, wire_name="buildRangeTiles", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["tileSpeedBonusPercent"] = _p("integer", "Add percent/100 to native tile placement speed.", required=False, minimum=0, maximum=100, wire_name="tileSpeedBonusPercent", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["wallSpeedBonusPercent"] = _p("integer", "Add percent/100 to native wall placement speed.", required=False, minimum=0, maximum=100, wire_name="wallSpeedBonusPercent", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["autoJump"] = _p("boolean", "Repeat jumps while the jump button is held.", required=False, wire_name="autoJump", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["frogJump"] = _p("boolean", "Frog Leg jump-height and safe-fall bonuses.", required=False, wire_name="frogJump", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["wallGrip"] = _p("integer", "0 none, 1 wall slide/jump, 2 wall cling; strongest level wins.", required=False, minimum=0, maximum=2, wire_name="wallGrip", neutral=0, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["swimFlipper"] = _p("boolean", "Flipper swimming jumps while wet.", required=False, wire_name="swimFlipper", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["divingHelm"] = _p("boolean", "Conserve breath, as a Diving Helmet.", required=False, wire_name="divingHelm", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["underwaterBreathing"] = _p("boolean", "Gills breathing in water and air; For the Worthy requires water.", required=False, wire_name="underwaterBreathing", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["waterFloat"] = _p("boolean", "Float in water; down input permits descent.", required=False, wire_name="waterFloat", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["jumpCloud"] = _p("boolean", "Cloud extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.", required=False, wire_name="jumpCloud", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["jumpBlizzard"] = _p("boolean", "Blizzard extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.", required=False, wire_name="jumpBlizzard", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["jumpSandstorm"] = _p("boolean", "Sandstorm extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.", required=False, wire_name="jumpSandstorm", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["jumpFart"] = _p("boolean", "Fart extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.", required=False, wire_name="jumpFart", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
-        p["jumpTsunami"] = _p("boolean", "Tsunami extra jump; native jump order and landing recharge apply. Enabling it does not refill a spent jump.", required=False, wire_name="jumpTsunami", neutral=False, execution_phase=phase, wire_presence_requires_receipt=True)
         for name, meaning in (
             ("iceSkate", "Enable Player.iceSkate: native ice acceleration/sliding behavior and no thin-ice break; not general movement speed"),
             ("noKnockback", "Enable Player.noKnockback for native hurt knockback immunity; damage, defense and enemy-knockback modifiers remain separate"),
@@ -2161,6 +2192,7 @@ _CAPS: list[CapabilitySpec] = [
         "item_utility",
         ("item_body",),
         {
+            "playerEffect": _player_effect_param(),
             "combat": _p("object", "Optional signed temporary combat modifiers; all fields explicit when selected. Negative values penalize their selected stat; zero has no effect. Same-effect refresh does not stack. No automatic active binding.", required=False, properties={
                 "defensePoints": _p("integer", "Signed Player.statDefense points; negative weakens defense; aggregate generated-buff range -100..100", minimum=-100, maximum=100, neutral=0, wire_name="combat.defensePoints"),
                 "attackSpeedPercent": _p("number", "Signed additive generic attack speed percent; negative slows attacks; aggregate range -80..100", minimum=-80, maximum=100, neutral=0, wire_name="combat.attackSpeedPercent", consumer_storage="float32"),
@@ -2183,6 +2215,7 @@ _CAPS: list[CapabilitySpec] = [
         py=_COMPILER_OWNER,
         cs="Content/Items/GeneratedItem.Use.cs::ApplyItemEffects",
         wire=(
+            *("gameplay.generatedBuff." + path for path in _player_effect_param().wire_field_names("playerEffect")),
             "gameplay.generatedBuff.durationTicks",
             "gameplay.generatedBuff.exhaustionTicks",
             "gameplay.generatedBuff.miningSpeedMultiplier",
@@ -3165,6 +3198,17 @@ _CAPS.extend([
         fixed_wire_literals={"mode": "owner_to_target", "radiusTiles": 1},
     ),
     _cap(
+        "reduce_healing_potion_cooldown_on_event",
+        "Subtract authored seconds from the owner's already running healing-potion cooldown. Both native potionDelay and Potion Sickness remaining time decrease, floored at zero.",
+        "event", ("item_body", *PROJECTILE_ENTITY_KIND_ORDER),
+        {"when": _event_when_param(("on_hit", "on_crit")),
+         "seconds": _seconds(_p("integer", "Amount removed per admitted event; 0.5 seconds removes 30 ticks. No active cooldown means no change.", minimum=1, maximum=3600, wire_name="cooldownReductionTicks", wire_presence_requires_receipt=True), "cooldownReductionTicks")},
+        component_slot="event_action", authority="owner_execute_sync", meaningful_for_stationary=True,
+        multiplicity="many_per_target", py=_COMPILER_OWNER,
+        cs="Common/Runtime/RuntimeProgramExecutor.cs::ExecuteAction",
+        events=("on_hit", "on_crit"),
+    ),
+    _cap(
         "heal_owner_on_event",
         "Heal the owning player from dealt damage on hit/crit.",
         "event",
@@ -3399,6 +3443,12 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         "Hostile NPC death credited to the owner. Functional equipment only; excludes critters/segments. Position=enemy center; no live target. Not projectile on_kill.",
         producer_binding_inputs=("equipped",), producer_binding_actions=("equip_passive",), producer_binding_kinds=("item_body",),
     ),
+    "on_jump": EventKindSpec(
+        "on_jump", ("item_body",), (),
+        "Presentation emitted once when an actual authored air jump starts. The granting equipment or active generated buff owns this event; ordinary ground jumps and vanilla extra jumps do not emit it.",
+        presentation_only=True, producer_player_effect_member="airJump",
+        vfx_anchors=("self", "owner", "hitPoint", "velocity", "field"),
+    ),
 })
 
 
@@ -3510,8 +3560,8 @@ if tuple(INPUT_KIND_REGISTRY) != INPUT_KINDS:
     raise RuntimeError("INPUT_KINDS must be the exact input registry projection")
 if tuple(BINDING_ACTION_REGISTRY) != BINDING_ACTIONS:
     raise RuntimeError("BINDING_ACTIONS must be the exact binding-action registry projection")
-if tuple(EVENT_KIND_REGISTRY) != EVENT_KINDS:
-    raise RuntimeError("EVENT_KINDS must be the exact event registry projection")
+if tuple(name for name, spec in EVENT_KIND_REGISTRY.items() if not spec.presentation_only) != EVENT_KINDS:
+    raise RuntimeError("EVENT_KINDS must be the exact executable gameplay event registry projection")
 
 
 def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:
@@ -3813,6 +3863,7 @@ EVENT_ACTION_OPCODE: Final[Mapping[str, int]] = MappingProxyType({
     "apply_generated_buff_on_event": 9,
     "damage_nearby_on_event": 10,
     "apply_npc_effect_on_event": 11,
+    "reduce_healing_potion_cooldown_on_event": 12,
 })
 
 

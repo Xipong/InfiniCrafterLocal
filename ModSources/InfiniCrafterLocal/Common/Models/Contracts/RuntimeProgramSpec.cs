@@ -466,19 +466,23 @@ public static class RuntimeEventKind
     public const string ChannelComplete = "channel_complete";
     public const string OnHurt = "on_hurt";
     public const string OnEnemyKill = "on_enemy_kill";
+    public const string OnJump = "on_jump";
     private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
     {
         OnUse, OnSpawn, OnHit, OnCrit, OnTileCollision, OnExpire, OnKill,
-        Periodic, OnRelease, ChannelComplete, OnHurt, OnEnemyKill,
+        Periodic, OnRelease, ChannelComplete, OnHurt, OnEnemyKill, OnJump,
     };
     public static bool IsKnown(string? value) => value is not null && Known.Contains(value);
 
-    public static void ValidateProducer(RuntimeEntitySpec entity, string eventName, bool itemContactEnabled, bool hasActiveItemUse, bool hasEquipment = false)
+    public static bool SupportsVfxAnchor(string eventName,string anchor)
+        =>eventName!=OnJump||anchor is "self" or "owner" or "hitPoint" or "velocity" or "field";
+
+    public static void ValidateProducer(RuntimeEntitySpec entity, string eventName, bool itemContactEnabled, bool hasActiveItemUse, bool hasEquipment = false, bool hasAirJump = false)
     {
         bool projectile = entity.IsProjectileEntity;
         bool sourceCompatible = eventName switch
         {
-            OnUse or OnHurt or OnEnemyKill => entity.Kind == RuntimeEntityKind.ItemBody,
+            OnUse or OnHurt or OnEnemyKill or OnJump => entity.Kind == RuntimeEntityKind.ItemBody,
             OnSpawn or OnTileCollision or OnExpire or OnKill or OnRelease or ChannelComplete => projectile,
             OnHit or OnCrit or Periodic => true,
             _ => false,
@@ -490,6 +494,7 @@ public static class RuntimeEventKind
         {
             OnUse => hasActiveItemUse,
             OnHurt or OnEnemyKill => hasEquipment,
+            OnJump => hasAirJump,
             OnHit or OnCrit => entity.Kind == RuntimeEntityKind.ItemBody ? itemContactEnabled : entity.Damage.Enabled,
             OnTileCollision => entity.Collision.TileCollide,
             OnRelease or ChannelComplete => entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease || entity.Charge is not null,
@@ -1851,6 +1856,7 @@ public static class RuntimeEventActionCode
     public const int ApplyGeneratedBuff = 9;
     public const int DamageNearby = 10;
     public const int ApplyNpcEffect = 11;
+    public const int ReduceHealingPotionCooldown = 12;
 }
 
 public sealed class RuntimeHitTargetSpawnSpec
@@ -2043,6 +2049,13 @@ public sealed class RuntimeEventActionSpec
 
     public float RadiusTiles { get; set; }
     public float DamageFraction { get; set; }
+    private int? _cooldownReductionTicks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? CooldownReductionTicks
+    {
+        get => _cooldownReductionTicks;
+        set { if (value is not int ticks || ticks < 1 || ticks > 3600) throw new InvalidDataException("cooldownReductionTicks must be 1..3600"); _cooldownReductionTicks = ticks; }
+    }
     public int MaxHeal { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public int ReactionCooldownTicks { get; set; }
@@ -2167,10 +2180,16 @@ public sealed class RuntimeEventActionSpec
         EntityId = RuntimeText.IdOptional(EntityId);
         if (!RuntimeEventKind.IsKnown(Event))
             throw new InvalidDataException($"unknown runtime event '{Event}'");
-        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ApplyNpcEffect)
+        if (ActionCode < RuntimeEventActionCode.SpawnEntity || ActionCode > RuntimeEventActionCode.ReduceHealingPotionCooldown)
             throw new InvalidDataException($"unsupported event action opcode {ActionCode}");
         if (!string.Equals(Action, RuntimeOpcodeNames.EventActionName(ActionCode), StringComparison.Ordinal))
             throw new InvalidDataException($"event action name/opcode mismatch '{Action}'/{ActionCode}");
+        if (ActionCode == RuntimeEventActionCode.ReduceHealingPotionCooldown)
+        {
+            if (CooldownReductionTicks is null || Event is not (RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit))
+                throw new InvalidDataException("cooldown reduction requires an explicit amount and a direct hit/crit event");
+        }
+        else if (CooldownReductionTicks is not null) throw new InvalidDataException("cooldown reduction belongs to its exact action");
         if (ActionCode == RuntimeEventActionCode.ApplyGeneratedBuff)
         {
             if (Event is not (RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill) || EffectGroupId is null)
@@ -2315,7 +2334,7 @@ internal static class RuntimeOpcodeNames
     {
         "", "spawn_entity_on_event", "apply_status_on_event", "damage_area_on_event",
         "chain_damage_on_event", "pull_on_event", "heal_owner_on_event", "move_owner_on_event",
-        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event",
+        "select_targets_and_emit_on_event", "apply_generated_buff_on_event", "damage_nearby_on_event", "apply_npc_effect_on_event", "reduce_healing_potion_cooldown_on_event",
     };
     public static string MovementName(int code) => code >= 0 && code < MovementNames.Length ? MovementNames[code] : "";
     public static string ControllerName(int code) => code >= 0 && code < ControllerNames.Length ? ControllerNames[code] : "";

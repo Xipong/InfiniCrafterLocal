@@ -509,7 +509,7 @@ public sealed partial class InfiniCraftPlayer
     private void WriteGeneratedBuffState(System.IO.BinaryWriter writer)
     {
         writer.Write((byte)Player.whoAmI);
-        writer.Write((byte)7); // includes original duration for death policy in each entry
+        writer.Write((byte)9); // typed player effects and exact jump-source lifetime
         writer.Write(_generatedBuffTicks);
         writer.Write(_generatedMiningSpeedMultiplier);
         writer.Write(_generatedLightStrength);
@@ -533,7 +533,7 @@ public sealed partial class InfiniCraftPlayer
     private void ReadGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 7)
+        if (version != 9)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         // Decode before replacing owner prediction; malformed packets do not
         // erase a valid timer table or leave half-read buff state behind.
@@ -555,6 +555,7 @@ public sealed partial class InfiniCraftPlayer
         _generatedMobilityCooldownTicks = mobility;
         ClampGeneratedBuffState();
         _activeGeneratedUtilityBuffs.Clear(); _activeGeneratedUtilityBuffs.AddRange(buffs);
+        foreach (var buff in buffs) _nextGeneratedBuffSourceGeneration = Math.Min(_nextGeneratedBuffSourceGeneration, buff.SourceGeneration);
         RebuildGeneratedUtilityBuffAggregate();
         _generatedItemExhaustion.Clear(); _generatedItemExhaustion.AddRange(exhaustion);
         if (Player.dead) RetireGeneratedUtilityOnDeath();
@@ -564,7 +565,7 @@ public sealed partial class InfiniCraftPlayer
     private static void DiscardGeneratedBuffState(System.IO.BinaryReader reader)
     {
         byte version = reader.ReadByte();
-        if (version != 7)
+        if (version != 9)
             throw new System.IO.InvalidDataException($"Unsupported generated utility state version {version}");
         _ = reader.ReadInt32();
         _ = reader.ReadSingle();
@@ -596,6 +597,12 @@ public sealed partial class InfiniCraftPlayer
         writer.Write(buff.LifeRegen);
         writer.Write(buff.Combat is not null);
         buff.Combat?.Write(writer);
+        writer.Write(buff.PlayerEffect is not null);
+        buff.PlayerEffect?.Write(writer);
+        if (buff.PlayerEffect?.AirJump is not null)
+        {
+            writer.Write(buff.SourceItemId); writer.Write(buff.SourceDefinitionIdentity); writer.Write(buff.SourceGeneration); writer.Write(buff.SourceComponent);
+        }
     }
 
     private static ActiveGeneratedUtilityBuff ReadGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)
@@ -609,7 +616,7 @@ public sealed partial class InfiniCraftPlayer
         float miningSpeedMultiplier = reader.ReadSingle();
         float lightStrength = reader.ReadSingle();
         string lightColor = ReadGeneratedBuffText(reader, 128).Trim();
-        return new ActiveGeneratedUtilityBuff
+        var buff = new ActiveGeneratedUtilityBuff
         {
             Ticks = ticks,
             InitialDurationTicks = initialDuration,
@@ -622,7 +629,22 @@ public sealed partial class InfiniCraftPlayer
             ManaRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
             LifeRegen = Math.Clamp(reader.ReadInt32(), -100, 120),
             Combat = reader.ReadBoolean() ? GeneratedCombatBuffSpec.Read(reader) : null,
+            PlayerEffect = reader.ReadBoolean() ? PlayerEffectSpec.Read(reader) : null,
         };
+        if (buff.PlayerEffect?.AirJump is not null)
+        {
+            buff.SourceItemId = ReadGeneratedBuffText(reader, 256);
+            buff.SourceDefinitionIdentity = ReadGeneratedBuffText(reader, 64);
+            buff.SourceGeneration = reader.ReadInt64();
+            buff.SourceComponent = ReadGeneratedBuffText(reader, 64);
+            if (string.IsNullOrWhiteSpace(buff.SourceItemId) || buff.SourceDefinitionIdentity.Length != 64
+                || buff.SourceDefinitionIdentity.Any(c => !(c is >= '0' and <= '9' or >= 'a' and <= 'f'))
+                || buff.SourceGeneration >= 0
+                || (buff.SourceComponent != "buff" && !(buff.SourceComponent.StartsWith("group:", StringComparison.Ordinal)
+                    && System.Text.RegularExpressions.Regex.IsMatch(buff.SourceComponent[6..], @"\A[a-z][a-z0-9_]{0,47}\z"))))
+                throw new System.IO.InvalidDataException("invalid jump source state");
+        }
+        return buff;
     }
 
     private static void DiscardGeneratedUtilityBuffEntry(System.IO.BinaryReader reader)

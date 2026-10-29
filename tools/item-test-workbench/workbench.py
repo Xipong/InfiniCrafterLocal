@@ -387,6 +387,7 @@ def source_fingerprint():
     files = sorted([*ROOT.glob("ModSources/InfiniCrafterLocal/**/*.cs"),
                     *ROOT.glob("tools/native/EngineRuntimeChecks*.cs"),
                     *HERE.glob("*.cs"), *HERE.glob("*.csproj"), *HERE.glob("production-mod/*.csproj"),
+                    HERE/"vanilla-item-assets.json",
                     *ROOT.glob("ModSources/InfiniCrafterLocal/Assets/**/*.*"),
                     *ROOT.glob("ModSources/InfiniCrafterLocal/Localization/**/*.*"),
                     ROOT/"ModSources/InfiniCrafterLocal/build.txt"])
