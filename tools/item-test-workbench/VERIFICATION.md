@@ -42,8 +42,9 @@ failures, and matrix continuation. Synthetic boundary tests are labelled as such
 they do not stand in for running the native smoke matrix.
 
 The shared manifest includes `item_workbench_python` in the Python CI group and
-`item_workbench_build` in the build group. The latter compiles this linked-source
-project; it does not run Linux graphics on the Windows build worker. Missing
+`item_workbench_build` in the build group. The latter compiles the host and its
+separate production-mod project, including the host's embedded vanilla PNG index;
+it does not run Linux graphics on the Windows build worker. Missing
 prerequisites are reported as `notRun`, not a passing native build.
 
 After the native prerequisites in [README.md](README.md) are configured, run the
@@ -73,6 +74,24 @@ corpora or explicit local inputs beyond the minimal public example. They are not
 unconditional installation checks or proof of all-item parity.
 
 ## Evidence reviewed during development
+
+Native geometry/ribbon extension (2026-10-27): Wooden Sword and a second native
+item outside the previous control set loaded exact pinned PNGs and recorded real
+hits. Missing, wrong-length, byte-tampered and symlinked item PNGs were refused by
+the native loader. The complete source index contains 5414 item PNGs; source facts
+are embedded in the checked executable and included in build freshness checks.
+The unchanged archived contact weapon previously refused for `historyRibbon`
+recorded one item-body and one projectile hit, 1064 original native ribbon segments
+and 90 native PNGs in the explicit procedural VFX-only scene. The original native
+SpriteBatch submissions were observed and a recorded frame visually inspected.
+No authored image was substituted. Reusable history controls cover full native
+PreDraw, stationary samples, capture-disabled GPU execution, repeat gameplay/pixels,
+and missing draw-context/resources. Authored/player artwork remains unrendered in
+procedural-only mode; full-game parity remains unclaimed.
+The final native executable passed 70 existing native regression checks and all
+27 history-ribbon checks, including the unchanged archived item. The affected
+owner checks passed: C# build, 104 offline workbench tests and 8 executable CI
+workflow tests; the 9 public CLI tests and all shared static gates also passed.
 
 Real-item probe usability verification (2026-10-27): 20 archived IFC items and 8
 vanilla identities were exercised in 55 native process runs. The default primary

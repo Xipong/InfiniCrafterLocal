@@ -105,13 +105,16 @@ internal static partial class EngineRuntimeChecks
         bool drawPlacedBodies=scenario["nativeRender"]?["drawPlacedBodies"]?.GetValue<bool>()??false;
         bool drawArtwork=scenario["nativeRender"]?["drawArtwork"]?.GetValue<bool>()??false;
         bool drawPlayer=scenario["nativeRender"]?["drawPlayer"]?.GetValue<bool>()??false;
+        bool drawProjectileVfx=scenario["nativeRender"]?["drawProjectileVfx"]?.GetValue<bool>()??false;
+        bool historyRibbon=data?.VfxManifest.Slots.Any(s=>s.RendererKind=="historyRibbon")==true;
+        if(drawProjectileVfx && (!renderClient || drawArtwork || data is null))throw new ArgumentException("drawProjectileVfx requires a generated item, client_vfx and drawArtwork=false; artwork mode owns its full PreDraw");
         bool drawVanillaProjectiles=scenario["nativeRender"]?["drawVanillaProjectiles"]?.GetValue<bool>()??false;
         if(drawVanillaProjectiles && (data is not null || !drawPlayer))throw new NotSupportedException("drawVanillaProjectiles requires a vanilla item and drawPlayer=true");
-        if((scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)&&!drawPlayer)throw new ArgumentException("drawNativeDust requires drawPlayer=true");
+        if((scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)&&!drawPlayer&&!drawProjectileVfx)throw new ArgumentException("drawNativeDust requires drawPlayer or drawProjectileVfx with verified native assets");
         if(nativeDummy&&!drawPlayer)throw new ArgumentException("native_training_dummy requires nativeRender.drawPlayer=true");
         if(!nativeDummy&&scenario["nativeRender"]?["dummyAssetRoot"] is not null)throw new ArgumentException("dummyAssetRoot requires native_training_dummy");
         if(drawPlayer&&!drawArtwork)throw new ArgumentException("drawPlayer requires drawArtwork=true");
-        if(!drawPlayer&&scenario["nativeRender"]?["playerAssetRoot"] is not null)throw new ArgumentException("playerAssetRoot requires drawPlayer=true");
+        if(!drawPlayer&&!drawProjectileVfx&&scenario["nativeRender"]?["playerAssetRoot"] is not null)throw new ArgumentException("playerAssetRoot requires drawPlayer or drawProjectileVfx");
         if(drawPlacedBodies && (!drawArtwork || scenario["world"] is null))throw new ArgumentException("drawPlacedBodies requires drawArtwork and explicit world scene");
         if(drawArtwork && !renderClient) throw new ArgumentException("drawArtwork requires client_vfx");
         if(!drawArtwork && scenario["nativeRender"]?["artworkFiles"] is not null) throw new ArgumentException("artworkFiles requires drawArtwork=true");
@@ -174,12 +177,14 @@ internal static partial class EngineRuntimeChecks
         if(hybridClient && !renderClient && data is not null && data.VfxManifest.Slots.Length!=0) throw new NotSupportedException("Client hybrid currently requires an empty VFX manifest; global VFX update/render lifecycle is not validated");
         if(hybridClient && data is not null) WValidateHybridEvents(data,renderClient);
         if(renderClient && data is not null) {
-            if(data.VfxManifest.Slots.Any(s=>s.RendererKind is not ("libraryParticle" or "soundCue" or "spriteElement" or "texturedPath" or "impactSprite" or "impactRing")))
+            if(data.VfxManifest.Slots.Any(s=>s.RendererKind is not ("libraryParticle" or "soundCue" or "spriteElement" or "texturedPath" or "impactSprite" or "impactRing" or "historyRibbon")))
                 throw new NotSupportedException("client_vfx requires an explicitly admitted original renderer; unsupported VFX renderer kind");
             if(data.VfxManifest.Slots.Any(s=>s.RendererKind is "spriteElement" or "texturedPath" or "impactSprite") && !drawArtwork)
                 throw new NotSupportedException("Authored material/impact VFX require drawArtwork=true with every exact publication PNG");
-            if(data.VfxManifest.Slots.Any(s=>s.RendererKind=="impactRing") && (!drawPlayer || !(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)))
-                throw new NotSupportedException("impactRing requires drawPlayer=true and drawNativeDust=true with original MagicPixel/Dust assets and full native projectile hooks");
+            if(historyRibbon && !drawPlayer && !drawProjectileVfx)
+                throw new NotSupportedException("historyRibbon requires drawPlayer or drawProjectileVfx with original MagicPixel and live native history");
+            if(data.VfxManifest.Slots.Any(s=>s.RendererKind=="impactRing") && (!(drawPlayer||drawProjectileVfx) || !(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false)))
+                throw new NotSupportedException("impactRing requires drawPlayer or drawProjectileVfx, plus drawNativeDust=true and original MagicPixel/Dust assets");
         }
         if(clientPlayer && data?.RuntimeProgram.BindingForInput(RuntimeInputKind.Hold)?.UsePolicy.Action.Kind==RuntimeBindingAction.SpawnEntity) throw new NotSupportedException("Client item contact mode currently refuses held projectile spawning");
         if(data is not null) {
@@ -412,13 +417,17 @@ internal static partial class EngineRuntimeChecks
                 using var nativeRenderer=renderClient?new WNativeVfxRenderer(graphics!,scenario["nativeRender"]!.AsObject(),Path.Combine(Path.GetDirectoryName(outputPath!)!,"native-frames")):null;
                 if(renderClient){Terraria.TimeLogger.Initialize();Terraria.Main.gameMenu=false;Terraria.Main.mapEnabled=false;
                 for(int lightingPhase=0;lightingPhase<4;lightingPhase++){nativeRenderer!.StepLighting();}}
-                using var playerAssets=drawPlayer?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("drawPlayer requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
+                using var playerAssets=(drawPlayer||drawProjectileVfx)?new WNativePlayerAssets(graphics!,scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("Native procedural/player draw requires playerAssetRoot or INFINI_PLAYER_ASSET_DIR")):null;
                 if(trainingDummy is not null)trainingDummy.InitializeGraphics(graphics!,scenario["nativeRender"]?["dummyAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_DUMMY_ASSET_DIR")??scenario["nativeRender"]?["playerAssetRoot"]?.GetValue<string>()??Environment.GetEnvironmentVariable("INFINI_PLAYER_ASSET_DIR")??throw new ArgumentException("native_training_dummy requires dummyAssetRoot or playerAssetRoot containing genuine dummy assets"));
                 using var artwork=drawArtwork?new WNativeArtwork(data!,owner,(scenario["nativeRender"]?["artworkFiles"]?.AsArray()??throw new ArgumentException("drawArtwork requires artworkFiles")).Select(f=>f!.GetValue<string>()).ToArray(),WProjectileId):null;
+                using var activeVfx=(drawProjectileVfx||historyRibbon&&drawPlayer)?new WNativeActiveVfx(artwork is not null):null;
+                if(activeVfx is not null)nativeRenderer!.SetActiveVfx(activeVfx,drawProjectileVfx);
                 using var vanillaProjectileAssets=drawVanillaProjectiles?new WNativeVanillaProjectileAssets(graphics!,scenario["vanillaAssetRoot"]!.GetValue<string>()):null;
                 using var placedBodies=drawPlacedBodies?new WNativePlacedBodies():null;
                 if(placedBodies is not null)nativeRenderer!.SetPlacedBodies(placedBodies);
                 if(nativeRenderer!=null) {
+                    if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;
+                    if(activeVfx is not null)report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("InfiniVfxRuntime.Draw under/over passes with native GeneratedProjectile history; DrawTrail/SpriteBatch submissions observed"));
                     if(artwork is not null) {if(drawPlayer){artwork.EnableNativePlayer();if(drawVanillaProjectiles)artwork.EnableNativeVanillaProjectiles();report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"Main.PlayerRenderer.DrawPlayers / native vanilla held-item DrawData":"Main.PlayerRenderer.DrawPlayers / PlayerDrawLayerLoader / GeneratedItem.ModifyItemDraw / ProjectileLoader.PreDraw/PostDraw"));}nativeRenderer.SetArtwork(artwork);if(playerAssets is not null)nativeRenderer.Report["playerAssets"]=playerAssets.Report;report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create(data is null?"PlayerDrawLayers.DrawPlayer_27_HeldItem / Dust.UpdateDust / Lighting.LightTiles":"GeneratedHeldItemDrawLayer.Draw / GeneratedItem.PreDrawInInventory / GeneratedProjectile.DrawAuthoredEntityVisual / InfiniDetachedVfxSystem.DrawProjectiles / Dust.UpdateDust / Lighting.LightTiles"));}
                     if(scenario["nativeRender"]?["drawNativeDust"]?.GetValue<bool>()??false){
                         report["execution"]!["nativeMethods"]!.AsArray().Add(JsonValue.Create("Main.DrawDust (original stateful native rendering; capture controls PNG export only)"));

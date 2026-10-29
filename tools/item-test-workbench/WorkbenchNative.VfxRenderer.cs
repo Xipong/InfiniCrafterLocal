@@ -28,7 +28,17 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     readonly WorkbenchGraphicsContext graphics;
     readonly string framesDir,contentRoot;
     readonly int width,height;
-    readonly bool capture,drawNativeDust,drawDroppedItems,drawVanillaProjectiles;
+    readonly bool capture,drawNativeDust,drawDroppedItems,drawVanillaProjectiles,drawProjectileVfx;
+    WNativeActiveVfx? activeVfx;
+    public void SetActiveVfx(WNativeActiveVfx value,bool proceduralOnly) {
+        if(proceduralOnly!=drawProjectileVfx)throw new InvalidOperationException("Procedural VFX draw scope differs from nativeRender request");
+        activeVfx=value;
+        Report["activeProjectileVfxEnabled"]=true;
+        Report["gpuRenderLifecycleEnabled"]=true;
+        Report["captureSemantics"]="Native active projectile GPU draw runs every tick; capture controls PNG export only";
+        Report["activeProjectileVfxScope"]=proceduralOnly?"Original InfiniVfxRuntime.Draw under/over passes with live GeneratedProjectile history and budget; authored sprites and player artwork explicitly unrendered":"Original GeneratedProjectile.PreDraw, including its authored sprite and under/over VFX passes";
+        if(proceduralOnly){Report["scope"]="Original generated procedural projectile VFX, detached layers and optional native dust; authored item/projectile sprites and player/world artwork unrendered";Report["gpuRenderLifecycleEnabled"]=true;Report["captureSemantics"]="Native procedural GPU draw runs every tick; capture controls PNG export only";}
+    }
     readonly Vector2 camera;
     readonly float zoom;
     readonly Game game;
@@ -51,7 +61,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         artwork=value;
         Report["artwork"]=value.Report;
         Report["scope"]="Original authored item/projectile PNG draw cores plus original detached VFX layers on neutral background; no Terraria world/player/NPC sprites";
-        Report["artworkDrawEnabled"]=capture||drawNativeDust||drawVanillaProjectiles;Report["itemArtworkRendered"]=false;Report["projectileArtworkRendered"]=false;
+        Report["artworkDrawEnabled"]=capture||drawNativeDust||drawVanillaProjectiles||activeVfx is not null;Report["itemArtworkRendered"]=false;Report["projectileArtworkRendered"]=false;
         Report["partialProjectileHook"]=true;
         Report["fullProjectilePreDrawExecuted"]=false;
         Report["unavailableDrawBranch"]="Full GeneratedProjectile.PreDraw immediate VFX branch requires genuine Terraria Content/Images/MagicPixel.xnb, unavailable; partial mode admits detached libraryParticle/material/impactSprite and unvalidated soundCue; primitive impactRing requires full native hooks";
@@ -79,10 +89,11 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
     public WNativeVfxRenderer(WorkbenchGraphicsContext graphics,JsonObject settings,string absoluteFramesDir)
     {
         this.graphics=graphics;framesDir=Path.GetFullPath(absoluteFramesDir);
-        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles"))throw new ArgumentException("Unknown nativeRender setting: "+key);
+        foreach(string key in settings.Select(x=>x.Key)) if(key is not ("capture" or "width" or "height" or "cameraX" or "cameraY" or "zoom" or "drawArtwork" or "artworkFiles" or "drawPlayer" or "playerAssetRoot" or "dummyAssetRoot" or "drawNativeDust" or "lightingMode" or "drawPlacedBodies" or "drawDroppedItems" or "drawVanillaProjectiles" or "drawProjectileVfx"))throw new ArgumentException("Unknown nativeRender setting: "+key);
         ConfigureScene(settings);drawVanillaProjectiles=settings["drawVanillaProjectiles"]?.GetValue<bool>()??false;drawDroppedItems=settings["drawDroppedItems"]?.GetValue<bool>()??false; if(drawDroppedItems && !(settings["drawArtwork"]?.GetValue<bool>()??false))throw new ArgumentException("drawDroppedItems requires drawArtwork");
         width=settings["width"]?.GetValue<int>()??512;height=settings["height"]?.GetValue<int>()??512;
-        drawNativeDust=settings["drawNativeDust"]?.GetValue<bool>()??false;if(drawNativeDust && !(settings["drawPlayer"]?.GetValue<bool>()??false))throw new ArgumentException("drawNativeDust requires drawPlayer=true and genuine loaded Dust texture");capture=settings["capture"]?.GetValue<bool>()??true;zoom=settings["zoom"]?.GetValue<float>()??1;
+        drawProjectileVfx=settings["drawProjectileVfx"]?.GetValue<bool>()??false;
+        drawNativeDust=settings["drawNativeDust"]?.GetValue<bool>()??false;if(drawNativeDust && !(settings["drawPlayer"]?.GetValue<bool>()??false) && !drawProjectileVfx)throw new ArgumentException("drawNativeDust requires drawPlayer or drawProjectileVfx and genuine loaded Dust texture");capture=settings["capture"]?.GetValue<bool>()??true;zoom=settings["zoom"]?.GetValue<float>()??1;
         camera=new Vector2(settings["cameraX"]?.GetValue<float>()??0,settings["cameraY"]?.GetValue<float>()??0);
         if(width<64||width>1024||height<64||height>1024||!float.IsFinite(zoom)||zoom<=0||zoom>16||!float.IsFinite(camera.X)||!float.IsFinite(camera.Y))throw new ArgumentException("Native render requires width/height64..1024, finite camera and zoom(0,16]");
         string source=Environment.GetEnvironmentVariable("INFINI_PARTICLE_ASSET_DIR")??throw new InvalidOperationException("Set INFINI_PARTICLE_ASSET_DIR to the verified ParticleLibrary resource directory produced by fetch_vfx_assets.py");
@@ -125,16 +136,22 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         try {
             string beforeUpdate=Rng();system.PostUpdateEverything();string afterUpdate=Rng();
             JsonObject snapshot=Snapshot(tick);snapshot["mainRngBeforeUpdate"]=beforeUpdate;snapshot["mainRngAfterUpdate"]=afterUpdate;snapshots.Add(snapshot);
-            if(!capture&&!drawNativeDust&&!drawVanillaProjectiles)return;
+            if(!capture&&!drawNativeDust&&!drawVanillaProjectiles&&activeVfx is null)return;
+            activeVfx?.BeginFrame();
             if(drawNativeDust){snapshot["nativeDustBeforeDraw"]=DustState();ConfigureDustReport();}
             string beforeDraw=Rng();
             int savedWidth=Main.screenWidth,savedHeight=Main.screenHeight;Vector2 savedCamera=Main.screenPosition;var savedView=Main.GameViewMatrix;
             JsonObject? scene = null;
             graphics.Device.SetRenderTarget(target);
-            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);if(drawDroppedItems)artwork?.DrawDroppedItems();trainingDummy?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
+            try {Main.screenWidth=width;Main.screenHeight=height;Main.screenPosition=camera;Main.GameViewMatrix=new Terraria.Graphics.SpriteViewMatrix(graphics.Device){Zoom=new Vector2(zoom)};scene=SceneSnapshot();graphics.Device.Clear(Color.Black);artwork?.BeginFrame();placedBodies?.Draw(tick);if(drawDroppedItems)artwork?.DrawDroppedItems();trainingDummy?.Draw();if(artwork?.NativePlayerEnabled!=true)artwork?.DrawHeld();if(artwork is not null) Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>artwork.DrawProjectiles()),Main.instance);else if(drawProjectileVfx)Invoke("DrawProjectiles",new Terraria.On_Main.orig_DrawProjectiles(_=>activeVfx!.Draw()),Main.instance);else {Invoke("BeginDrawBudgetFrame");Invoke("DrawLayer","BeforeProjectiles");Invoke("DrawLayer","AfterProjectiles");}if(artwork?.NativePlayerEnabled==true)artwork.DrawHeld();if(drawNativeDust)typeof(Main).GetMethod("DrawDust",All)!.Invoke(Main.instance,null);artwork?.DrawInventory();}
             finally {graphics.Device.SetRenderTarget(null);Main.screenWidth=savedWidth;Main.screenHeight=savedHeight;Main.screenPosition=savedCamera;Main.GameViewMatrix=savedView;}
             string afterDraw=Rng();
             Report["gpuRenderLifecycleExecuted"]=true;
+            if(activeVfx is not null) {
+                snapshot["activeProjectileVfx"]=activeVfx.Frame.DeepClone();
+                int segments=activeVfx.Frame["historyRibbonDraws"]!.AsArray().Sum(d=>d!["submittedSegments"]!.GetValue<int>());
+                Report["historyRibbonSubmittedSegments"]=(Report["historyRibbonSubmittedSegments"]?.GetValue<int>()??0)+segments;
+            }
             if(drawVanillaProjectiles){snapshot["nativeDrawCounters"]=artwork?.Frame.DeepClone();Report["pngExportEnabled"]=capture;Report["captureSemantics"]="Native projectile GPU render lifecycle executes every tick; capture controls PNG encoding/export only";}
             if(artwork is not null){
                 if((artwork.Frame["heldItemDrawCount"]?.GetValue<int>()??0)+(artwork.Frame["inventoryPreviewDrawCount"]?.GetValue<int>()??0)>0)Report["itemArtworkRendered"]=true;
@@ -147,6 +164,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
             string path=Path.Combine(framesDir,$"{tick:000000}.png");using(var stream=File.Create(path))target.SaveAsPng(stream,width,height);
             var frame=new JsonObject{["tick"]=tick,["width"]=width,["height"]=height,["resourcesReady"]=true,["particles"]=snapshot["particleCount"]!.DeepClone(),["records"]=snapshot["materialRecordCount"]!.DeepClone(),["path"]=Path.GetFileName(framesDir)+"/"+Path.GetFileName(path),["sha256"]=Hash(File.ReadAllBytes(path)),["nonblackPixels"]=pixels.Count(p=>p.R!=0||p.G!=0||p.B!=0),["mainRngBeforeDraw"]=beforeDraw,["mainRngAfterDraw"]=afterDraw,["drawChangedMainRng"]=beforeDraw!=afterDraw};
             frame["scene"]=scene;
+            if(activeVfx is not null)frame["activeProjectileVfx"]=activeVfx.Frame.DeepClone();
             if(artwork is not null) foreach(var pair in artwork.Frame) frame[pair.Key]=pair.Value?.DeepClone();
             if(artwork is not null) {
                 if(frame["heldItemDrawCount"]!.GetValue<int>()+frame["inventoryPreviewDrawCount"]!.GetValue<int>()>0) Report["itemArtworkRendered"]=true;
@@ -169,6 +187,7 @@ internal sealed partial class WNativeVfxRenderer : IDisposable
         Report["unrenderedArtwork"]=new JsonArray(artwork?.NativeVanillaEnabled==true&&!drawVanillaProjectiles?"Native projectile sprites (simulation/hits still execute)":"No additional projectile omission",trainingDummy is null?"Terraria tile/NPC/world artwork":"Solid terrain/world artwork and other NPCs");
         Report["unsupportedDrawPasses"]=new JsonArray("Locked-to-tile players before NPCs","Over-player/over-wire/hidden projectile passes","Full terrain/world scene");
         Report["passOrder"]=trainingDummy is null?new JsonArray("Original projectile/VFX wrapper","Ordinary native player/held layers","Original Main.DrawDust","Diagnostic inventory UI"):new JsonArray("Native training dummy non-solid tiles","Original projectile/VFX wrapper","Ordinary native player/held layers","Original Main.DrawDust","Diagnostic inventory UI");
+        if(drawProjectileVfx){Report["scope"]="Original procedural projectile VFX and Main.DrawDust; authored/player/world artwork unrendered";Report["unrenderedArtwork"]=new JsonArray("Authored item and projectile PNGs (no replacements)","Player artwork","Terraria tile/NPC/world artwork");Report["passOrder"]=new JsonArray("Original detached before-projectile layer","Original active projectile VFX under/over passes","Original detached after-projectile layer","Original Main.DrawDust");}
         RefreshVanillaReport();
     }
     static JsonArray DustState()=>new JsonArray(Main.dust.Select((d,i)=>new{d,i}).Where(v=>v.d.active).Select(v=>(JsonNode?)new JsonObject{["slot"]=v.i,["type"]=v.d.type,["x"]=v.d.position.X,["y"]=v.d.position.Y,["vx"]=v.d.velocity.X,["vy"]=v.d.velocity.Y,["scale"]=v.d.scale,["alpha"]=v.d.alpha,["rotation"]=v.d.rotation,["fadeIn"]=v.d.fadeIn,["noGravity"]=v.d.noGravity,["noLight"]=v.d.noLight,["colorR"]=v.d.color.R,["colorG"]=v.d.color.G,["colorB"]=v.d.color.B,["colorA"]=v.d.color.A,["shaderType"]=v.d.shader?.GetType().FullName,["customDataType"]=v.d.customData?.GetType().FullName,["frameX"]=v.d.frame.X,["frameY"]=v.d.frame.Y,["frameWidth"]=v.d.frame.Width,["frameHeight"]=v.d.frame.Height}).ToArray());
