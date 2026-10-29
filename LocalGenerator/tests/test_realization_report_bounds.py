@@ -176,7 +176,14 @@ def test_report_guidance_does_not_reject_empty_or_long_advisory_text(field, maxi
 def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     import infini_local.core.runtime_authoring.program_schema as program_schema
-    from infini_local.qa.capability_witnesses import build_capability_witness
+    from infini_local.qa.capability_witnesses import _value, build_capability_witness
+
+    def filled_parameter(spec, name):
+        if spec.alternatives:
+            return filled_parameter(spec.alternatives[0], name)
+        if spec.properties:
+            return {key: filled_parameter(child, key) for key, child in spec.properties.items()}
+        return _value(spec, name)
 
     schema = program_schema.author_item_response_schema()
     runtime = schema["properties"]["runtimeProgram"]["properties"]
@@ -186,8 +193,7 @@ def test_maximal_report_tail_and_runtime_shape_fit_schema_derived_work_guard():
     call = next(row for row in item["runtimeProgram"]["calls"] if row["fn"] == fn)
     for key, spec in CAPABILITY_REGISTRY[fn].params.items():
         if key not in call["params"]:
-            call["params"][key] = ({child: leaf.enum[0] if leaf.enum else leaf.neutral for child, leaf in spec.properties.items()}
-                                   if spec.properties else spec.enum[0] if spec.enum else spec.neutral)
+            call["params"][key] = filled_parameter(spec, key)
     for name, source in (("calls", call), ("entities", item["runtimeProgram"]["entities"][0]), ("bindings", item["runtimeProgram"]["bindings"][0])):
         item["runtimeProgram"][name] = [dict(copy.deepcopy(source), id=f"max_{name}_{index}") for index in range(runtime[name]["maxItems"])]
     report_schema = schema["properties"]["realization"]["properties"]
