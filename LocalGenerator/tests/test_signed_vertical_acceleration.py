@@ -1,4 +1,4 @@
-"""Signed acceleration is an explicit Author choice over the existing native opcode."""
+"""Independent signed acceleration preserves tiny values, target clocks and frozen Repair."""
 from copy import deepcopy
 
 import pytest
@@ -17,7 +17,7 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-FN = "move_gravity_arc"
+FN = "accelerate_projectile_vertical"
 PARAM = "accelerationYBlocksPerSecondSquared"
 
 
@@ -35,7 +35,8 @@ def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     assert validate_runtime_program(document)["ok"]
     wire = compile_runtime_program(document)
     entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
-    assert entity["movement"] == {"name": FN, "code": 2, "params": {"gravityPerTick": value}}
+    assert entity["verticalAcceleration"] == {"accelerationYPerUpdate": value}
+    assert entity["movement"] == {"name": "move_straight", "code": 0, "params": {}}
     assert entity["collision"]["extraUpdates"] == updates - 1
     assert validate_runtime_wire(wire)["ok"]
     receipts = wire["runtimeContract"]["finalWireReceipts"]
@@ -43,12 +44,12 @@ def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
                  and row["authoredPath"].endswith(".params." + PARAM)]
     assert len(delivered) == 1
     assert delivered[0]["status"] == "delivered" and delivered[0]["value"] == value
-    assert delivered[0]["finalPath"].endswith(".movement.params.gravityPerTick")
+    assert delivered[0]["finalPath"].endswith(".verticalAcceleration.accelerationYPerUpdate")
     for source in (None, document):
         assert audit_compiler_receipts(receipts, authored_document=source, final_document=wire)["ok"]
     damaged = deepcopy(wire)
     output = next(row for row in damaged["runtimeProgram"]["entities"] if row["id"] == call["target"])
-    output["movement"]["params"]["gravityPerTick"] = 0.5 if value != 0.5 else -0.5
+    output["verticalAcceleration"]["accelerationYPerUpdate"] = 0.5 if value != 0.5 else -0.5
     assert not validate_runtime_wire(damaged)["ok"]
 
 
@@ -65,7 +66,7 @@ def test_zero_is_explicit_and_schema_prompt_advertise_the_same_signed_domain():
     spec = CAPABILITY_REGISTRY[FN].params[PARAM]
     assert spec.minimum == -16200 and spec.maximum == 16200
     assert (spec.wire_minimum, spec.wire_maximum) == (-2, 2)
-    assert spec.neutral == 0 and spec.default is None and spec.required
+    assert spec.default is None and spec.required
     variant = next(row for row in capability_provider_union() if row["properties"]["fn"]["const"] == FN)
     shape = variant["properties"]["params"]
     assert PARAM in shape["required"]
@@ -74,11 +75,7 @@ def test_zero_is_explicit_and_schema_prompt_advertise_the_same_signed_domain():
     assert shape["properties"][PARAM]["x-infini-consumerConstraint"]["storage"] == "float32"
     card = next(row for row in compact_capability_catalog() if row["fn"] == FN)
     assert card["params"][PARAM]["min"] == spec.minimum and card["params"][PARAM]["max"] == spec.maximum
-    assert "negative accelerates upward" in card["does"]
-    assert "target clock" in card["params"][PARAM]["meaning"]
-    assert card["params"][PARAM]["projectionConstraints"]["targetContext"] == (
-        "same target's unique set_projectile_collision.updatesPerTick")
-    assert card["params"][PARAM]["units"] == "blocks/s²"
+    assert card["params"][PARAM]["units"] == "blocks/second^2"
     document = build_capability_witness(FN)
     del selected(document)["params"][PARAM]
     assert not validate_runtime_program(document)["ok"]
@@ -117,7 +114,19 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     assert validate_runtime_program(repaired)["ok"]
 
 
-def test_only_gravity_arc_domain_expands_and_obsolete_bounce_is_retired():
+@pytest.mark.parametrize("retired", ["move_gravity_arc", "move_orbit", "move_spiral", "move_expanding_wave",
+    "move_whip_lash", "channel_beam", "charge_then_release", "orient_whip_to_owner_gravity"])
+def test_retired_compound_names_are_not_fresh_author_aliases(retired):
+    document = build_capability_witness(FN)
+    selected(document)["fn"] = retired
+    before = deepcopy(document)
+    assert not validate_runtime_program(document)["ok"]
+    with pytest.raises(ValueError):
+        compile_runtime_program(document)
+    assert document == before
+
+
+def test_retained_metadata_envelopes_and_obsolete_bounce_retirement():
     assert "move_bounce" not in CAPABILITY_REGISTRY
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["scaleGrowthPerUpdate"].minimum == 0.001
     assert CAPABILITY_REGISTRY["move_expanding_wave"].params["maxScale"].maximum == 4

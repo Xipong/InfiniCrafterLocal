@@ -206,7 +206,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
             for field in ("hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity"):
                 if field in row:
                     scale_row[field] = copy.deepcopy(row[field])
-            if front_hand_sprite_requirement(row) is not None:
+            if "movement" in row and front_hand_sprite_requirement(row) is not None:
                 scale_row["movementReadOnly"] = copy.deepcopy(row["movement"])
             shared.append(scale_row)
         if shared:
@@ -221,7 +221,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         for field in ("hitboxCurve", *PROJECTILE_MODIFIER_COMPONENTS.values(), "whipUsesOwnerGravity"):
             if field in entity:
                 facts[field] = copy.deepcopy(entity[field])
-    if entity is not None and front_hand_sprite_requirement(entity) is not None:
+    if entity is not None and "movement" in entity and front_hand_sprite_requirement(entity) is not None:
         facts["movementReadOnly"] = copy.deepcopy(entity["movement"])
     if multipliers:
         facts["multipliers"] = multipliers

@@ -18,6 +18,14 @@ from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 from test_low_level_three_stage_pipeline import _accepted_visual_data, _visual_kit, _vfx_output, wire_transport
 
 
+def _runtime_mechanics(data):
+    """Presentation may change visual leaves, never any mechanical component."""
+    program = copy.deepcopy(data["runtimeProgram"])
+    for entity in program["entities"]:
+        entity.pop("visual", None)
+    return program
+
+
 def kit() -> dict:
     """Opaque-ID input retained for adjacent exact Repair-location scenarios."""
     item = dict(prompt="object", negativePrompt="", silhouette="object", visualIdentity="object", palette=["red"], preferredCanvasSize=32, renderSizePx=40, forwardAngleDegrees=45, inventoryScale=1.0, worldScale=1.0)
@@ -255,7 +263,7 @@ def test_scoped_visual_repair_preserves_good_siblings_absence_and_mechanics(wire
     assert repaired["animationPlan"] == raw_before["animationPlan"]
     assert result["gameplay"] == before["gameplay"]
     assert result["runtimeProgram"]["itemUse"] == before["runtimeProgram"]["itemUse"]
-    assert next(row for row in result["runtimeProgram"]["entities"] if row["id"] == "chained_door")["movement"] == before["runtimeProgram"]["entities"][1]["movement"]
+    assert _runtime_mechanics(result) == _runtime_mechanics(before)
     assert validate_runtime_wire(sanitize_recipe_for_delivery(result))["ok"]
     assert result["debug"]["visualRepairFilterAudit"]["ignoredChanges"]
     scope = request_dossier(requests[1])["repairScope"]
@@ -349,7 +357,7 @@ def test_vfx_consumes_art_palette_and_exact_impact_binding_without_prose_or_audi
     impact = next(row for row in build_visual_asset_plan(final) if row["role"] == "impact:chained_door")
     assert impact["prompt"] == "literal door impact" and impact["negativePrompt"] == ""
     assert final["gameplay"] == before["gameplay"]
-    assert final["runtimeProgram"]["entities"][1]["movement"] == before["runtimeProgram"]["entities"][1]["movement"]
+    assert _runtime_mechanics(final) == _runtime_mechanics(before)
     assert vfx.validate_vfx_manifest_wire(sanitize_recipe_for_delivery(final))["ok"]
     assert not responses
 

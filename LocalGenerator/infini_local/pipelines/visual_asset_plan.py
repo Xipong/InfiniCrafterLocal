@@ -220,8 +220,9 @@ def build_visual_asset_plan(data: dict[str, Any]) -> list[dict[str, Any]]:
             presentation_owner = entity_visual if mode == "baked_sprite" else {}
             owner_id = entity_id
         # Diagnostic projection only; no second authored authority or draw logic.
-        if any(field in presentation_owner for field in ("renderSizePx", "forwardAngleDegrees")):
-            plan[-1].update({field: copy.deepcopy(presentation_owner[field]) for field in ("renderSizePx", "forwardAngleDegrees") if field in presentation_owner})
+        presentation_fields = ("renderSizePx", "forwardAngleDegrees", "grip")
+        if any(field in presentation_owner for field in presentation_fields):
+            plan[-1].update({field: copy.deepcopy(presentation_owner[field]) for field in presentation_fields if field in presentation_owner})
             plan[-1]["presentationOwnerEntityId"] = owner_id
         impact_slot = impact_slots.get(entity_id)
         if isinstance(impact_slot, Mapping):

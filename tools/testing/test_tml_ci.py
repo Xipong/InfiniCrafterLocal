@@ -37,7 +37,10 @@ class TmlWorkflowTests(unittest.TestCase):
             root = Path(directory)
             tools = root / "tools"
             tools.mkdir()
-            for name in ("build/build_tml_windows.ps1", "build/parse_tml_build_log.py", "validate_release.py"):
+            # The CLI registers probe options before parsing doctor/build commands.
+            for name in ("build/build_tml_windows.ps1", "build/parse_tml_build_log.py", "validate_release.py",
+                         "item-test-workbench/workbench.py", "item-test-workbench/probe.py",
+                         "item-test-workbench/campaign.py", "item-test-workbench/agent_evidence.py"):
                 target = tools / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / "tools" / name, target)
@@ -107,15 +110,22 @@ class TmlWorkflowTests(unittest.TestCase):
         # while retaining the accurate notRun/skip classification (not a C# failure).
         self.assertEqual(code, 1, output)
         self.assertIn("[notRun] tml_build", output)
+        self.assertIn("[notRun] item_workbench_build", output)
         self.assertIn("TML_BUILD_SKIPPED=true", flags)
         self.assertNotIn("TML_BUILD_FAILED=true", flags)
         self.assertIn("Exit code 77 = intentional skip", output)
         self.assertNotIn("[run] dotnet", output)
         self.assertNotIn("dotnet build succeeded", output)
 
-    def test_clean_build_is_not_skip(self) -> None:
+    def test_clean_tml_build_does_not_hide_missing_required_workbench_references(self) -> None:
         code, flags, output = self.run_workflow()
-        self.assertEqual(code, 0, output)
+        # This deliberately minimal fixture has no tML reference directory. The
+        # clean mod compiler must stay passed, but the required workbench build
+        # must remain notRun and make the overall workflow fail (not false green).
+        self.assertEqual(code, 1, output)
+        self.assertIn("[passed] tml_build", output)
+        self.assertIn("[notRun] item_workbench_build", output)
+        self.assertNotIn("[failed] item_workbench_build", output)
         self.assertEqual(flags, "", output)
         self.assertIn("dotnet build succeeded and log parser found no errors", output)
 

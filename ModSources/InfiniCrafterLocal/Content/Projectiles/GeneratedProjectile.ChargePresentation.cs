@@ -20,11 +20,10 @@ public sealed partial class GeneratedProjectile
         status = default;
         if (!_configured || _runtimePayloadRejected || !Projectile.active || _presentationRetired
             || _activationDelayTicks > 0 || _age <= 0 || _released || _data is null
-            || _entity?.Controller.Code != RuntimeControllerCode.ChargeThenRelease
-            || _entity.Controller.Params.ChargeTicks <= 0 || owner is not { active: true, dead: false, channel: true }
+            || _entity is null || _entity.Charge is null && _entity.Controller.Code != RuntimeControllerCode.ChargeThenRelease || owner is not { active: true, dead: false, channel: true }
             || Projectile.owner != owner.whoAmI || !HoldingGeneratedItem(owner))
             return false;
-        int duration = AuthoredTicksToProjectileUpdates(_entity.Controller.Params.ChargeTicks);
+        int duration = AuthoredTicksToProjectileUpdates(_entity.Charge?.DurationTicks ?? _entity.Controller.Params.ChargeTicks);
         status = new(_presentationGeneration, Math.Clamp(_chargeTicks, 0, duration), duration);
         return true;
     }

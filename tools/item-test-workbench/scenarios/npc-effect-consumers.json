@@ -1,0 +1,64 @@
+{
+  "ticks": 60,
+  "seed": 1,
+  "player": {
+    "x": 640,
+    "y": 640,
+    "life": 100,
+    "mana": 200
+  },
+  "dummy": {
+    "x": 850,
+    "y": 640,
+    "width": 32,
+    "height": 48,
+    "life": 10000,
+    "defense": 20,
+    "vx": 0.1
+  },
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "aim",
+      "x": 850,
+      "y": 661
+    },
+    {
+      "tick": 0,
+      "kind": "primary"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "dummy_damaged"
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 24,
+      "stat": "vx",
+      "value": 0.1
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 25,
+      "stat": "vx",
+      "value": 0.09
+    },
+    {
+      "kind": "target_effect_at",
+      "tick": 26,
+      "stat": "vx",
+      "value": 0.081
+    },
+    {
+      "kind": "target_hit_damage_at",
+      "tick": 24,
+      "value": 98
+    },
+    {
+      "kind": "target_hit_damage_at",
+      "tick": 48,
+      "value": 106
+    }
+  ]
+}

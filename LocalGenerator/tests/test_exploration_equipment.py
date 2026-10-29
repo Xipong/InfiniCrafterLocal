@@ -19,6 +19,18 @@ SYSTEMS = [
     {"fishingPower": 25, "fishingLine": True, "lavaFishing": True, "fishingSonar": True, "fishingCrates": True},
 ]
 
+
+@pytest.mark.parametrize("field,value", [(field, value) for system in SYSTEMS for field, value in system.items()])
+def test_exploration_single_selection_keeps_other_abilities_absent(field, value):
+    doc, _ = fixture({field: value})
+    assert validate_runtime_program(doc)["ok"]
+    wire = compile_runtime_program(doc)
+    assert validate_runtime_wire(wire)["ok"]
+    fields = {name for system in SYSTEMS for name in system}
+    assert fields.intersection(wire["accessory"]) == {field}
+    assert wire["accessory"][field] == value
+
+
 @pytest.mark.parametrize("params", SYSTEMS)
 def test_exploration_system_exact_delivery_and_frozen_repair(params):
     doc, call = fixture(deepcopy(params))

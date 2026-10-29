@@ -86,7 +86,6 @@ def test_native_silver_fixture_is_actual_final_delivery(wire_transport, monkeypa
     assert entity_presentations(saved) == entity_presentations(current)
 
 
-
 @pytest.mark.parametrize("token", ["Silver", " silver", "silver ", "#C0C0C0", "silver gray", "effect", None])
 def test_visual_refuses_retired_global_color_instead_of_inventing_local_rgb(token):
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
@@ -111,22 +110,8 @@ def test_all_rendering_color_schema_branches_share_closed_local_rgb():
 
 
 @pytest.mark.parametrize("repair", [False, True])
-def test_serialized_vfx_packet_explains_readability_without_reauthoring(repair):
-    data = _accepted_visual_data("workbench_blade")
-    before = copy.deepcopy(data)
-    packet = _sent(data, repair)
-    rules = " ".join(packet["rules"])
-    assert "readable at gameplay zoom" in rules
-    assert "sound-only is not a visible gameplay cue" in rules
-    assert "impactRing ignores event startTick" in rules
-    assert "count, world-pixel dimensions, opacity and lifetime" in rules
-    assert "do not invent damage, extra gameplay projectiles or a larger damaging area" in rules
-    assert data == before
-
-
-@pytest.mark.parametrize("repair", [False, True])
 @pytest.mark.parametrize("draw,entity_scale", [(1, 1), (4, 4), (.1, .25)])
-def test_serialized_visual_packet_explains_hand_extent_without_moving_collision(wire_transport, repair, draw, entity_scale):
+def test_serialized_visual_packet_preserves_hand_geometry_without_moving_collision(wire_transport, repair, draw, entity_scale):
     data = compile_runtime_program(build_runtime_fixture("workbench_blade"))
     body = next(e for e in data["runtimeProgram"]["entities"] if e["kind"] == "owner_attached_projectile")
     body["hitbox"]["drawScale"] = draw
@@ -137,17 +122,11 @@ def test_serialized_visual_packet_explains_hand_extent_without_moving_collision(
     responses, requests = wire_transport
     responses.append({})
     visual._request_visual_kit(data, {}, {}, repair_errors=errors, previous={} if repair else None)
-    presentation = request_dossier(requests[0])["spritePresentationReadOnly"]
-    geometry = presentation["handContactGeometry"]
-    assert "6px" in geometry
-    assert "hitboxOffsetPx does not extend the visible body" in geometry
-    assert "signed distance from grip to the authored contact region" in geometry
-    assert "effective multiplier from formulas.body" in geometry
-    assert "clamp(P, .1, 8)" in geometry
-    assert "explicit curve/mirror exception" in geometry
-    assert "R/C and current P" not in geometry
     assert body["hitbox"]["drawScale"] == draw and body["visual"]["scale"] == entity_scale
-    assert "never move only the picture to pretend to extend collision reach" in geometry
+    runtime_rows = request_dossier(requests[0])["runtimeEntitiesReadOnly" if repair else "runtimeEntities"]
+    runtime_body = next(row for row in runtime_rows if row["id"] == body["id"])
+    for member in ("aim", "attachment", "reach", "rotation", "hitbox"):
+        assert runtime_body[member] == body[member]
     assert data == before
 
 

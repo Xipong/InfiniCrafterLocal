@@ -1,15 +1,12 @@
 """Native sentry, explicit placement and descendant accounting remain independent."""
 from copy import deepcopy
-import json
 
 import pytest
 from repair_test_helpers import frozen_call_repair
 
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
 from infini_local.qa.capability_witnesses import build_capability_witness
 
@@ -113,20 +110,6 @@ def test_missing_required_choice_and_item_body_target_remain_red(fn):
     else:
         item.setdefault("spawn", {})["descendantMaxActive"] = 1
     assert not validate_runtime_wire(wire)["ok"]
-
-
-@pytest.mark.parametrize("mode", ("json_object", "json_schema"))
-def test_production_author_request_carries_independent_native_choices(monkeypatch, mode):
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
-    _, content, _ = build_initial_author_request({}, {}, "native-sentry", model_name="test-model")
-    cards = {c["fn"]: c for c in json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    for fn in ("set_projectile_sentry", "set_descendant_concurrency"):
-        assert cards[fn] == CAPABILITY_REGISTRY[fn].author_prompt_card()
-        assert all(s.default is None for s in CAPABILITY_REGISTRY[fn].params.values())
-    assert "FindSentryRestingSpot" in json.dumps(cards["configure_spawn"])
-    assert "UpdateMaxTurrets" in cards["set_projectile_sentry"]["does"]
-    assert "ancestor lifetime ledger" in cards["set_descendant_concurrency"]["does"]
-    assert "network hydration" in cards["set_descendant_concurrency"]["does"]
 
 
 def test_frozen_repair_can_fix_pool_limit_without_enabling_native_or_changing_placement():

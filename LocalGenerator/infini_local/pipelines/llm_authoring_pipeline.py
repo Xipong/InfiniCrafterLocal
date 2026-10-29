@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring.repair_scope import runtime_repair_sche
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_REPAIR_SYSTEM_RULE,
     RUNTIME_ROW_SHAPE_RULE,
+    author_item_generation_provider_schema,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
     author_item_response_schema,
@@ -46,7 +47,8 @@ from infini_local.pipelines.llm_authoring_prompt import (
     runtime_units_for_llm,
     source_wire_units_for_llm,
 )
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm, share_exact_native_parent_facts
 from infini_local.pipelines.llm_provider_wire import (
     effective_response_format,
     apply_minimum_reasoning_effort,
@@ -66,20 +68,16 @@ from infini_local.storage.trace_tools import trace_message_summary
 
 _AUTHOR_CACHE_PREFIX_KEYS = (
     "priorityHeader", "runtimeProgramInvariants",
-    "runtimeCapabilityContract", "requiredJsonShape", "diagnosticReport",
+    "runtimeCapabilityContract", "requiredJsonShape",
 )
 _REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "runtimeVersions", "runtimeExecutionTruth")
 _FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "requiredJsonShape")
 
 
 _AUTHOR_SYSTEM = (
-    "You are Gameplay Author for InfiniCrafterLocal. Construct a single immutable JSON object "
-    "matching requiredJsonShape, using the supplied capability catalog. "
-    "runtimeProgram alone defines executable gameplay. Optional concept, realization and selfEvaluation "
-    "may help your design and self-check, but are advisory only: no mandatory report ceremony, "
-    "acceptance evidence or prose-based rejection. Code does not invent missing mechanics. "
-    "Apply the construction contracts beside each JSON fragment. Return strict JSON only: "
-    "double-quoted keys and strings, no trailing commas, JavaScript expressions, markdown or external reasoning."
+    "You are Gameplay Author for InfiniCrafterLocal, a Terraria (tModLoader) item generator. "
+    "Return one JSON object matching requiredJsonShape and the capability catalog. "
+    "Implement the item's gameplay in runtimeProgram."
 )
 
 
@@ -134,7 +132,7 @@ def build_initial_author_request(
 ) -> tuple[dict[str, Any], str, str]:
     payload = build_llm_author_payload(a, b, key)
     selected_model = model_name or resolve_llm_model()
-    system = _AUTHOR_SYSTEM + generation_system_suffix() + llm_reasoning_system_suffix(selected_model)
+    system = _AUTHOR_SYSTEM + llm_reasoning_system_suffix(selected_model)
     user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     request = {
         "model": selected_model,
@@ -145,7 +143,7 @@ def build_initial_author_request(
         "temperature": env_float("INFINI_LLM_TEMPERATURE", float(GENERATION_DEFAULTS["INFINI_LLM_TEMPERATURE"]), lo=0.0, hi=1.2),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_author",
-            schema=author_item_provider_response_schema,
+            schema=author_item_generation_provider_schema,
             strict=True,
             auto_preference="json_schema",
         ),
@@ -182,6 +180,15 @@ def _repair_malformed_author_json(
     )
     functions = sorted({row["fn"] for row in calls}) if known_calls and isinstance(calls, list) else sorted(CAPABILITY_REGISTRY)
     local_schema = author_item_response_schema()
+    # Generation length guidance must not force syntax-only Repair to clip raw
+    # advisory text. The exact-source comparison below still freezes every value.
+    for report_field in local_schema["properties"]["realization"]["properties"].values():
+        report_field.pop("minLength", None)
+        report_field.pop("maxLength", None)
+    # Syntax-only recovery must preserve current plain debug notes as well as
+    # historical structured reports; neither selects executable behavior.
+    for field in ("concept", "realization"):
+        local_schema["properties"][field] = {"anyOf": [local_schema["properties"][field], {"type": "string"}]}
     call_schema = local_schema["properties"]["runtimeProgram"]["properties"]["calls"]
     variants = [row for row in call_schema["items"]["oneOf"] if row["properties"]["fn"]["const"] in functions]
     call_schema["items"] = {"oneOf": variants} if len(variants) > 1 else variants[0]
@@ -407,6 +414,7 @@ def build_gameplay_repair_dossier(
     scope = build_runtime_repair_scope(current, exact_errors)
     fragments = runtime_repair_fragments(current, scope)
     blocker_plan = scope.get("blockerPlan") if isinstance(scope.get("blockerPlan"), Mapping) else {}
+
     parents = {
         "a": {"packet": raw_parent_card_for_llm(dict(a))},
         "b": {"packet": raw_parent_card_for_llm(dict(b))},
@@ -416,7 +424,7 @@ def build_gameplay_repair_dossier(
         return [
             CAPABILITY_REGISTRY[name].prompt_card()
             for name in names or []
-            if name in CAPABILITY_REGISTRY
+            if name in CAPABILITY_REGISTRY and CAPABILITY_REGISTRY[name].author_visible
         ]
 
     return {
@@ -450,7 +458,8 @@ def build_gameplay_repair_dossier(
             **realization_execution_truth_for_llm(),
             "units": runtime_units_for_llm(include_source_units=False),
         },
-        "parents": parents,
+
+        **share_exact_native_parent_facts(parents),
         # Like Author, keep parent-dependent reading aids beside the raw facts,
         # outside the shared instruction prefix. Visibility never grants edits.
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),

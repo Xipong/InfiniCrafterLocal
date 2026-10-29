@@ -14,28 +14,24 @@ namespace InfiniCrafterLocal.Common.VFX;
 /// <summary>Exact item-body entity/event VFX with bounded multiplayer relay.</summary>
 public static partial class InfiniItemVfxRuntime
 {
-    // v3 adds captured event coordinates. v2 is rejected; no legacy migration.
-    private const byte PacketVersion = 3;
-    private const int MaxRecentEventsPerPlayer = 64;
-    private static readonly Dictionary<(string Item, string Entity, string Event), ulong>[] RecentEvents =
-        new Dictionary<(string, string, string), ulong>[Main.maxPlayers];
+    // Independent occurrences can legitimately share an event and a world tick.
+    // Bound accepted network work without using item useTime as an event identity.
+    private const int MaxRemoteEventsPerPlayerPerTick = 64;
+    private static readonly (ulong Tick, int Count, Player? Player, object? Socket)[] ServerEvents = new (ulong, int, Player?, object?)[Main.maxPlayers];
+    private static readonly (ulong Tick, int Count, Player? Player, object? Socket)[] ClientEvents = new (ulong, int, Player?, object?)[Main.maxPlayers];
 
-    // Presentation-only throttle: exact events never suppress one another.
-    // A bounded per-peer table also limits identity churn; no activation IDs or gameplay authority.
-    private static bool AcceptRemoteEvent(Player player, string itemId, string entityId, string eventName)
+    private static bool AdmitRemoteEvent(int owner)
     {
-        int index = player.whoAmI;
-        if (index < 0 || index >= RecentEvents.Length) return false;
-        var recent = RecentEvents[index] ??= new();
-        ulong now = Main.GameUpdateCount;
-        var key = (itemId, entityId, eventName);
-        if (recent.TryGetValue(key, out ulong last) && now >= last &&
-            now - last < (ulong)Math.Clamp(player.HeldItem.useTime, 2, 60)) return false;
-        // All stored cooldowns expire within 60 ticks. Prune without evicting live guards.
-        foreach (var entry in new List<KeyValuePair<(string, string, string), ulong>>(recent))
-            if (now < entry.Value || now - entry.Value >= 60) recent.Remove(entry.Key);
-        if (!recent.ContainsKey(key) && recent.Count >= MaxRecentEventsPerPlayer) return false;
-        recent[key] = now;
+        if (owner < 0 || owner >= Main.maxPlayers) return false;
+        var limits = Main.netMode == NetmodeID.Server ? ServerEvents : ClientEvents;
+        ulong tick = Main.GameUpdateCount;
+        var player = Main.player[owner];
+        object? socket = Main.netMode == NetmodeID.Server ? Netplay.Clients[owner]?.Socket : Netplay.Connection?.Socket;
+        var entry = limits[owner];
+        if (entry.Tick != tick || !ReferenceEquals(entry.Player, player) || !ReferenceEquals(entry.Socket, socket))
+            entry = (tick, 0, player, socket);
+        if (entry.Count >= MaxRemoteEventsPerPlayerPerTick) return false;
+        limits[owner] = (tick, entry.Count + 1, player, socket);
         return true;
     }
 
@@ -65,7 +61,9 @@ public static partial class InfiniItemVfxRuntime
     public static void ClearUseEventCaches()
     {
         MaterialItemEventStream.Clear();
-        Array.Clear(RecentEvents);
+        Array.Clear(HeldEventWitnesses);
+        Array.Clear(ServerEvents);
+        Array.Clear(ClientEvents);
         ParticlesThisTick.Clear();
         ParticleTick = 0;
         PeriodicSlotsThisTick.Clear();
@@ -104,11 +102,7 @@ public static partial class InfiniItemVfxRuntime
         if (eventName is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit && !eventPosition.HasValue) return;
         Vector2 point = eventPosition ?? player.Center;
         if (!Finite(point)) return;
-        if(TrySendMaterialItemEvent(player,data,entityId,eventName,point))return;
-        var packet = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance.GetPacket();
-        packet.Write(global::InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);
-        packet.Write(PacketVersion); packet.Write(data.Id ?? ""); packet.Write(entityId); packet.Write(eventName);
-        packet.Write(point.X); packet.Write(point.Y); packet.Send();
+        SendItemEvent(player,data,entityId,eventName,point);
     }
 
     public static void OnPeriodic(Player player, GeneratedItemData? data, string entityId, Item? sourceItem=null, bool allowLightCue=true)
@@ -133,39 +127,10 @@ public static partial class InfiniItemVfxRuntime
         if (reader is null || Main.netMode == NetmodeID.SinglePlayer) return;
         try
         {
-            byte version=reader.ReadByte();
-            if(version==MaterialItemPacketVersion){HandleMaterialItemEvent(reader,whoAmI);return;}
-            if (version != PacketVersion) return;
-            if (Main.netMode == NetmodeID.Server)
-            {
-                string itemId = (reader.ReadString() ?? "").Trim();
-                string entityId = (reader.ReadString() ?? "").Trim();
-                string eventName = (reader.ReadString() ?? "").Trim();
-                Vector2 point = new(reader.ReadSingle(), reader.ReadSingle());
-                if (!Finite(point) || whoAmI < 0 || whoAmI >= Main.maxPlayers) return;
-                Player player = Main.player[whoAmI];
-                if (player?.active != true || EventSourceItem(player, itemId, eventName) is not GeneratedItem item || !HasExactSlot(item.Data, entityId, eventName)) return;
-                if (!AcceptRemoteEvent(player, itemId, entityId, eventName)) return;
-                var relay = global::InfiniCrafterLocal.InfiniCrafterLocalMod.Instance?.GetPacket();
-                if (relay is null) return;
-                relay.Write(global::InfiniCrafterLocal.Common.InfiniNetPacketIds.SyncGeneratedItemVfxEvent);
-                relay.Write(PacketVersion); relay.Write((byte)whoAmI); relay.Write(itemId); relay.Write(entityId); relay.Write(eventName);
-                relay.Write(point.X); relay.Write(point.Y); relay.Send(-1, whoAmI);
-                return;
-            }
-            int playerId = reader.ReadByte();
-            string remoteItemId = (reader.ReadString() ?? "").Trim();
-            string remoteEntityId = (reader.ReadString() ?? "").Trim();
-            string remoteEvent = (reader.ReadString() ?? "").Trim();
-            Vector2 remotePoint = new(reader.ReadSingle(), reader.ReadSingle());
-            if (!Finite(remotePoint) || playerId < 0 || playerId >= Main.maxPlayers) return;
-            Player remote = Main.player[playerId];
-            GeneratedItemData? data = remote is not null && EventSourceItem(remote, remoteItemId, remoteEvent) is GeneratedItem held ? held.Data : null;
-            if (data is null && global::InfiniCrafterLocal.InfiniCrafterLocalMod.GeneratedItems?.TryGet(remoteItemId, out GeneratedItemData registered) == true) data = registered;
-            if (remote?.active == true && data is not null && HasExactSlot(data, remoteEntityId, remoteEvent) &&
-                AcceptRemoteEvent(remote, remoteItemId, remoteEntityId, remoteEvent))
-                EmitLocal(remote, data, remoteEntityId, remoteEvent,
-                    eventPosition: remoteEvent is RuntimeEventKind.OnHit or RuntimeEventKind.OnCrit or RuntimeEventKind.OnHurt or RuntimeEventKind.OnEnemyKill ? remotePoint : null,includeMaterials:false);
+            // Earlier payloads had no event identity and cannot distinguish
+            // two genuine hits from a replay. They are refused, not guessed.
+            if (reader.ReadByte() == MaterialItemPacketVersion)
+                HandleMaterialItemEvent(reader, whoAmI);
         }
         catch { }
     }

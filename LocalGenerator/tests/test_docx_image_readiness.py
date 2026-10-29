@@ -18,9 +18,18 @@ from tests.vfx_image_fixtures import _data, _request, _existing_texture_data, of
 def _retained_delivery():
     from infini_local.core.vfx_manifest import _compile_manifest, VFX_DIRECTOR_SCHEMA
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
-    from tests.test_low_level_three_stage_pipeline import _accepted_visual_data
+    import json
+    from infini_local.pipelines import visual_generation_pipeline as visual
+    from tests.test_low_level_three_stage_pipeline import _visual_kit
 
-    data = _accepted_visual_data("workbench_blade")
+    # Replay unchanged saved wire through existing presentation adapters. Fresh
+    # Author now emits independent motion fields, which legitimately alter its
+    # read-only image facts; this control protects the historical delivery ABI.
+    fixture = Path(__file__).resolve().parents[2] / "tools/fixtures/docx-image-ready-delivered.json"
+    saved = json.loads(fixture.read_text(encoding="utf-8"))
+    assert validate_runtime_wire(saved)["ok"]
+    mechanics = copy.deepcopy(saved["runtimeProgram"])
+    data = visual._apply_kit(saved, _visual_kit(saved))
     data.update(id="docx_image_ready_offline", sourceMode="generated", schemaVersion=5,
                 runtimeApiVersion="infini.runtime-program.v5", recipeKey="docx_readiness_offline")
     data["vfxManifest"] = _compile_manifest(data, {"schema": VFX_DIRECTOR_SCHEMA, "slots": []}, "offline_recipe")
@@ -39,6 +48,11 @@ def _retained_delivery():
     data["visual"].update(spriteRawPath="", assetManifestPath="")
     outgoing = sanitize_recipe_for_delivery(data)
     assert validate_runtime_wire(outgoing)["ok"]
+    delivered_mechanics = copy.deepcopy(outgoing["runtimeProgram"])
+    for runtime in (delivered_mechanics, mechanics):
+        for entity in runtime["entities"]:
+            entity.pop("visual", None)
+    assert delivered_mechanics == mechanics
     return outgoing, raw
 
 
@@ -78,15 +92,33 @@ def test_retained_native_fixture_is_real_final_offline_projection(offline_backen
         assert validate_runtime_wire(payload)["ok"]
         assert validate_vfx_manifest_wire(payload)["ok"]
         assert delivery.visual_delivery_report(payload, check_backend_config=False)["ok"]
-    assert retained["visual"] == outgoing["visual"]
+    # Historical delivery remains readable, but current master-sampled refits
+    # legitimately change PNG bytes and their content-addressed publication URL.
+    # No authored visual field may change as a consequence of that normalization.
+    assert {k: v for k, v in retained["visual"].items() if k != "spriteUrl"} == {
+        k: v for k, v in outgoing["visual"].items() if k != "spriteUrl"}
     assert retained["vfxManifest"] == outgoing["vfxManifest"]
     def entity_images(payload):
-        return Counter((entity["id"], entity["kind"], json.dumps(entity["visual"], sort_keys=True))
-                       for entity in payload["runtimeProgram"]["entities"])
+        rows = []
+        for entity in payload["runtimeProgram"]["entities"]:
+            visual = dict(entity["visual"])
+            # This witness shares its item PNG with the child entities. Keep
+            # that ownership relation, not the historical encoder/refit digest.
+            assert visual["spriteUrl"] == payload["visual"]["spriteUrl"]
+            visual.pop("spriteUrl")
+            rows.append((entity["id"], entity["kind"], json.dumps(visual, sort_keys=True)))
+        return Counter(rows)
     # Include owner identity and multiplicity: dropping/duplicating a delivery or
     # assigning the right image to the wrong entity must not pass.
     assert entity_images(retained) == entity_images(outgoing)
-    assert (root / "docx-image-ready.png").read_bytes() == raw
+    from PIL import Image
+    from io import BytesIO
+    with Image.open(root / "docx-image-ready.png") as historical, Image.open(BytesIO(raw)) as current:
+        assert historical.size == current.size == (32, 32)
+        assert historical.mode == current.mode == "RGBA"
+        assert historical.getbbox() and current.getbbox()
+        assert current.getchannel("A").getextrema() == (0, 255)
+    assert outgoing["visual"]["spriteUrl"].startswith("/sprite/infini_asset_png_")
 
 
 

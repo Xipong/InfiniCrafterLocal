@@ -1,0 +1,77 @@
+{
+  "playerUpdate": "client_vfx",
+  "ticks": 180,
+  "seed": 1,
+  "vanillaAssetRoot": "artifacts/dependencies/vanilla-assets",
+  "player": {
+    "x": 530,
+    "y": 2198,
+    "direction": 1,
+    "life": 100,
+    "mana": 200,
+    "manaCrystals": 9
+  },
+  "dummy": {
+    "mode": "native_training_dummy",
+    "tileX": 65,
+    "tileY": 137
+  },
+  "inventory": [
+    {
+      "slot": 54,
+      "itemId": 40,
+      "stack": 999
+    }
+  ],
+  "tiles": [
+    {
+      "tileX": 1,
+      "tileY": 140,
+      "width": 97,
+      "height": 1
+    }
+  ],
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "aim",
+      "x": 1056,
+      "y": 2220
+    },
+    {
+      "tick": 0,
+      "kind": "primary"
+    },
+    {
+      "tick": 120,
+      "kind": "release"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "native_projectile_seen",
+      "id": 1
+    },
+    {
+      "kind": "hit_count_at_least",
+      "minimum": 1
+    },
+    {
+      "kind": "no_nonfinite"
+    }
+  ],
+  "nativeRender": {
+    "width": 960,
+    "height": 960,
+    "cameraX": 264,
+    "cameraY": 1404,
+    "zoom": 1.25,
+    "capture": true,
+    "drawArtwork": true,
+    "drawPlayer": true,
+    "drawNativeDust": true,
+    "drawVanillaProjectiles": true,
+    "lightingMode": "viewport_fill",
+    "artworkFiles": []
+  }
+}

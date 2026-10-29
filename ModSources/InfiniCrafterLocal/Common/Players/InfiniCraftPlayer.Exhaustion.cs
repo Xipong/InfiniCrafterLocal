@@ -99,7 +99,38 @@ public sealed partial class InfiniCraftPlayer
         if (changed && syncNetwork) CorrectGeneratedBuffPrediction();
     }
 
-    public override void UpdateDead() => ClearGeneratedItemExhaustion(syncNetwork: true);
+    private uint? _generatedUtilityDeathTick;
+
+    internal bool IsGeneratedUtilityActivationCurrent(uint? activationTick)
+        => !activationTick.HasValue || !_generatedUtilityDeathTick.HasValue
+            || unchecked(activationTick.Value - _generatedUtilityDeathTick.Value) is > 0 and <= int.MaxValue;
+
+    internal void ClearGeneratedUtilityState(bool syncNetwork = false)
+    {
+        bool changed = _generatedItemExhaustion.Count > 0 || _activeGeneratedUtilityBuffs.Count > 0 || _generatedBuffTicks > 0;
+        ClearGeneratedItemExhaustion();
+        _activeGeneratedUtilityBuffs.Clear();
+        ResetGeneratedUtilityBuffAggregate();
+        if (changed && syncNetwork) CorrectGeneratedBuffPrediction();
+    }
+
+    public override void UpdateDead()
+    {
+        // Keep the last dead tick: queued activations from this life must not revive buffs.
+        _generatedUtilityDeathTick = Main.GameUpdateCount;
+        RetireGeneratedUtilityOnDeath(syncNetwork: true);
+    }
+
+    private void RetireGeneratedUtilityOnDeath(bool syncNetwork = false)
+    {
+        bool changed = _generatedItemExhaustion.Count > 0;
+        ClearGeneratedItemExhaustion();
+        changed |= _activeGeneratedUtilityBuffs.RemoveAll(buff =>
+            buff.InitialDurationTicks == GeneratedBuffSpec.PermanentDurationTicks
+            || buff.InitialDurationTicks > GeneratedBuffSpec.PersistentAfterDeathMaxTicks) > 0;
+        RebuildGeneratedUtilityBuffAggregate();
+        if (changed && syncNetwork) CorrectGeneratedBuffPrediction();
+    }
 
     // Existing utility snapshot, no second protocol. BinaryWriter strings use
     // a 7-bit UTF8 byte count; read the count BEFORE allocating the bounded bytes.
@@ -153,7 +184,7 @@ public sealed class GeneratedItemExhaustionLifecycleSystem : ModSystem
             // Try query checks the roster/index without throwing first-chance
             // exceptions which tML logs even when our caller catches them.
             if (player is not null && player.TryGetModPlayer<InfiniCraftPlayer>(out var craftPlayer))
-                craftPlayer.ClearGeneratedItemExhaustion();
+                craftPlayer.ClearGeneratedUtilityState();
         }
     }
     public override void OnWorldUnload() => ClearPlayers();

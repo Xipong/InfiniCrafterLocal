@@ -57,7 +57,7 @@ internal static partial class EngineRuntimeChecks
         player.inventory[0] = item;
         var reset = typeof(PlayerDrawLayer).GetMethod("ResetVisibility", instance)!;
         var tree = typeof(PlayerDrawLayer).GetMethod("DrawWithTransformationAndChildren", instance)!;
-        PlayerDrawSet Info(Item host) => new() { drawPlayer = player, heldItem = host, ItemLocation = new Vector2(180, 180), Position = player.position, DrawDataCache = new List<DrawData>() };
+        PlayerDrawSet Info(Item host) => new() { drawPlayer = player, heldItem = host, ItemLocation = new Vector2(180, 180) + player.position - new Vector2(160, 160), Position = player.position, DrawDataCache = new List<DrawData>() };
         DrawData Entry(Texture2D texture) => new(texture, Vector2.Zero, texture.Bounds, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
         PlayerDrawSet Render(Item host, bool seed = false, bool shadow = false, bool hideParent = false)
         {
@@ -96,6 +96,65 @@ internal static partial class EngineRuntimeChecks
             Equal(false, ReferenceEquals(generated, visualized.ModItem), "visualized ModItem is distinct");
             Equal(true, ReferenceEquals(visualized.ModItem!.Item, visualized), "cloned ModItem owns native host");
             Sequence(Render(visualized), "native visualized clone still replaced", generatedTexture);
+
+            // Native renderer oracle, not a repeated +half-frame formula. Vary
+            // the native proxy frame so a hard-coded +16 cannot satisfy this.
+            data.Visual.Grip = new ItemGripSpec { NormalizedX = .25, NormalizedY = .5 };
+            foreach (int height in new[] { 23, 24, 32, 49 })
+            foreach (int direction in new[] { -1, 1 }) foreach (float gravity in new[] { -1f, 1f })
+            foreach (float rotation in new[] { -.7f, 0f, .9f })
+            {
+                typeof(Texture2D).GetProperty("Height")!.SetValue(nativeTexture,height);
+                player.direction=direction; player.gravDir=gravity; player.itemRotation=rotation;
+                player.compositeFrontArm.enabled=false;
+                item.useStyle=ItemUseStyleID.Shoot; data.RuntimeProgram.ItemUse.UseStyle="shoot";
+                typeof(Item).GetProperty("ModItem")!.SetValue(item,null);
+                PlayerDrawSet native;
+                try { native=Render(item); }
+                finally { typeof(Item).GetProperty("ModItem")!.SetValue(item,generated); }
+                PlayerDrawSet custom=Render(item);
+                Equal(1,native.DrawDataCache.Count,"native ordinary shoot reference emitted");
+                Equal(1,custom.DrawDataCache.Count,"generated ordinary shoot emitted");
+                AssertVfxNear(native.DrawDataCache[0].position,custom.DrawDataCache[0].position,
+                    "ordinary shoot contact follows real native frame translation across facing/gravity/rotation");
+            }
+            // A remote packet carries canonical world contact; the receiving
+            // draw-set translation still applies, exactly as for the local draw.
+            player.whoAmI=1; Terraria.Main.myPlayer=1;
+            player.SetCompositeArmFront(true,Player.CompositeArmStretchAmount.Full,-.4f);
+            PlayerDrawSet localContact=Render(item);
+            object pose=typeof(GeneratedHeldItemDrawLayer).GetMethod("BuildLocalPayload",statics)!
+                .Invoke(null,new object[]{player,item,data,true})!;
+            using(var packet=new System.IO.MemoryStream())
+            {
+                using var writer=new System.IO.BinaryWriter(packet,System.Text.Encoding.UTF8,true);
+                typeof(GeneratedHeldItemDrawLayer).GetMethod("WriteHeldItemPresentationPayload",statics)!
+                    .Invoke(null,new object[]{writer,pose});
+                packet.Position=0; Terraria.Main.myPlayer=0; Terraria.Main.netMode=NetmodeID.MultiplayerClient;
+                using var reader=new System.IO.BinaryReader(packet);
+                GeneratedHeldItemDrawLayer.HandleHeldItemPresentationSyncPacket(reader,0);
+                PlayerDrawSet remoteContact=Render(item);
+                AssertVfxNear(localContact.DrawDataCache[0].position,remoteContact.DrawDataCache[0].position,
+                    "remote resolved contact receives identical draw-set translation");
+                // No new packet: native interpolation/movement must carry the held
+                // contact with its owner instead of pinning it in world space.
+                Vector2 originalPosition = player.position, originalItemLocation = player.itemLocation;
+                foreach (Vector2 movement in new[] { new Vector2(31, -17), new Vector2(-23, 41) })
+                {
+                    player.position = originalPosition + movement;
+                    player.itemLocation = originalItemLocation + movement;
+                    PlayerDrawSet moved = Render(item);
+                    AssertVfxNear(remoteContact.DrawDataCache[0].position + movement,
+                        moved.DrawDataCache[0].position, "remote held contact follows owner between pose packets");
+                }
+                player.position = originalPosition; player.itemLocation = originalItemLocation;
+            }
+            GeneratedHeldItemDrawLayer.ClearNetCaches(); player.whoAmI=0;
+            Terraria.Main.myPlayer=0; Terraria.Main.netMode=NetmodeID.SinglePlayer;
+            player.compositeFrontArm.enabled=false;
+            typeof(Texture2D).GetProperty("Height")!.SetValue(nativeTexture,32);
+            player.direction=1; player.gravDir=1; player.itemRotation=0;
+            data.RuntimeProgram.ItemUse.UseStyle="hold_up"; data.ApplyToItem(item);
 
             textures.Remove(path);
             Sequence(Render(item), "missing PNG respects generated versus explicit diagnostic ownership", delivered ? Array.Empty<Texture2D>() : new[] { nativeTexture });

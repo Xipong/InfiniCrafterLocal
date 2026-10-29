@@ -1,0 +1,63 @@
+{
+  "playerUpdate": "client_hybrid",
+  "ticks": 160,
+  "seed": 1,
+  "player": {
+    "x": 800,
+    "y": 700,
+    "life": 100,
+    "maxLife": 100,
+    "mana": 200
+  },
+  "dummy": {
+    "x": 828,
+    "y": 700,
+    "life": 10000,
+    "noTileCollide": false
+  },
+  "tiles": [
+    {
+      "tileX": 1,
+      "tileY": 47,
+      "width": 97,
+      "height": 1
+    }
+  ],
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "primary"
+    },
+    {
+      "tick": 1,
+      "kind": "release"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "dummy_damaged"
+    },
+    {
+      "kind": "item_hit_count",
+      "value": 1
+    },
+    {
+      "kind": "mana_debited",
+      "value": 7
+    },
+    {
+      "kind": "no_nonfinite"
+    },
+    {
+      "kind": "all_inactive"
+    },
+    {
+      "kind": "projectile_hit_count",
+      "value": 12
+    },
+    {
+      "kind": "spawn_count",
+      "value": 11
+    }
+  ]
+}

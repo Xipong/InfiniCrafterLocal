@@ -124,23 +124,29 @@ def test_repair_changes_only_the_invalid_curve_leaf(name, valid):
     compile_runtime_program(repaired)
 
 
-def test_curve_conflicts_with_line_geometry_and_sprite_mirror_has_one_owner():
-    for driver in ("channel_beam", "move_whip_lash"):
+@pytest.mark.parametrize("reverse_scale_owners", [False, True])
+def test_curve_conflicts_with_line_geometry_and_sprite_mirror_has_one_owner(reverse_scale_owners):
+    for driver in ("set_projectile_beam_geometry", "set_projectile_lash_geometry"):
         doc = build_capability_witness(driver)
         owner = _call(doc, driver)["target"]
         doc["runtimeProgram"]["calls"].append({"id": "new_curve", "fn": FN, "target": owner, "params": deepcopy(PARAMS)})
         report = validate_runtime_program(doc)
         assert not report["ok"] and any(row["code"] == "exclusive_component_conflict" for row in report["errors"])
-    doc = build_capability_witness("move_expanding_wave")
-    owner = _call(doc, "move_expanding_wave")["target"]
+    doc = build_capability_witness("add_projectile_visual_scale")
+    owner = _call(doc, "add_projectile_visual_scale")["target"]
     doc["runtimeProgram"]["calls"].append({"id": "new_curve", "fn": FN, "target": owner, "params": {**PARAMS, "mirrorToSprite": True}})
+    if reverse_scale_owners:
+        doc["runtimeProgram"]["calls"].reverse()
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
+    assert scope["fieldPermissions"]["calls"] == [
+        {"id": "new_curve", "paths": ["params.mirrorToSprite"]}
+    ]
     fixed = deepcopy(_call(doc)); fixed["params"].update(mirrorToSprite=False, endScale=7)
     patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [fixed], "note": "keep independently authored visual growth"}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(doc, patch)
     assert _call(repaired)["params"] == PARAMS
-    assert _call(repaired, "move_expanding_wave") == _call(doc, "move_expanding_wave")
+    assert _call(repaired, "add_projectile_visual_scale") == _call(doc, "add_projectile_visual_scale")
     compile_runtime_program(repaired)
 
 
@@ -154,7 +160,12 @@ def test_full_request_and_numeric_native_range_audit_cover_the_new_owner():
     catalog = json.loads(user)["runtimeCapabilityContract"]["catalog"]
     card = next(row for row in catalog["capabilities"] if row["fn"] == FN)
     assert set(card["params"]) == set(PARAMS)
-    assert len(card["requires"]) == 3
+    assert card["requires"] == CAPABILITY_REGISTRY[FN].author_prompt_card()["requires"]
+    assert any(rule.get("kind") == "capability_present" and rule.get("capability") == "set_projectile_hitbox"
+               for rule in card["requires"])
+    assert any(rule.get("kind") == "capability_absent" and rule.get("param") == "mirrorToSprite"
+               and rule.get("equals") is True and "set_projectile_visual_scale_curve" in rule.get("anyOf", [])
+               for rule in card["requires"])
     audit = capability_library_audit()
     assert audit["ok"]
     rows = [row for row in audit["rangeParity"] if row["capability"] == FN]

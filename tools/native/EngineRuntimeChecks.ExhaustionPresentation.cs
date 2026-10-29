@@ -92,7 +92,7 @@ internal static partial class EngineRuntimeChecks
                 string tip = PresentationExhaustionValue<string>(row, "Tooltip");
                 Equal(true, tip.Contains(((ticks[i] + 59) / 60).ToString(Language.ActiveCulture.CultureInfo))
                     && !tip.Contains("ticks") && !tip.Contains("тиков") && !tip.Contains("Mods.InfiniCrafterLocal."), "localized own seconds; exact ticks stay in row");
-                Equal(true, tip.Contains(locale == "ru-RU" ? "только повторное применение" : "only reapplication"), "generated-buff-only refusal meaning");
+                Equal(true, tip.Length < 100, "live fatigue feedback stays a short countdown, not a policy manual");
             }
             string[] before = rows.Select(r => PresentationExhaustionValue<string>(r, "Tooltip")).ToArray();
             Equal(true, before.SequenceEqual(PresentationExhaustionRows(owner).Select(r => PresentationExhaustionValue<string>(r, "Tooltip"))), "reading presentation cannot advance timers");

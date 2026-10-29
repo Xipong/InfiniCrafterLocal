@@ -360,7 +360,22 @@ def _compile_entity_call(
         return
     if fn in PROJECTILE_MODIFIER_COMPONENTS:
         name = PROJECTILE_MODIFIER_COMPONENTS[fn]
-        project(component(name), f"{base}.{name}", p)
+        if CAPABILITY_REGISTRY[fn].multiplicity == "many_per_target":
+            rows = entity.setdefault(name, [])
+            index = len(rows)
+            rows.append({})
+            project(rows[index], f"{base}.{name}[{index}]", p)
+        else:
+            target, prefix = component(name), f"{base}.{name}"
+            cap = CAPABILITY_REGISTRY[fn]
+            project(target, prefix, {key: value for key, value in p.items() if key not in cap.nested_components})
+            for key, member in cap.nested_components.items():
+                if key in p:
+                    ctx.project_parameter(call=call, param=key, value=p[key],
+                                          target=component(member), prefix=f"{base}.{member}")
+            for key, value in cap.fixed_wire_literals.items():
+                ctx.write_derived(call=call, path=f"{prefix}.{key}", value=value,
+                    target=target, key=key, source=f"runtimeProgram.calls[{call.get('_sourceIndex', '?')}].fn")
         return
     if fn == "orient_whip_to_owner_gravity":
         ctx.write_derived(call=call, path=f"{base}.whipUsesOwnerGravity", value=True, target=entity,
@@ -402,9 +417,6 @@ def _compile_entity_call(
         for key, value in cap.fixed_wire_literals.items():
             ctx.write_derived(call=call, path=f"{event_base}.{key}", value=value,
                               target=event_row, key=key, source=source_fn)
-        if fn == "move_owner_on_event":
-            ctx.write_derived(call=call, path=f"{event_base}.mode", value="blink_to_event_position",
-                              target=event_row, key="mode", source=source_fn)
         project(event_row, event_base, p)
         return
     raise AssertionError(f"unhandled runtime entity capability {fn}")
@@ -424,7 +436,13 @@ def compile_runtime_program(document: Mapping[str, Any]) -> dict[str, Any]:
         if omitted:
             # Only the private compiler copy is completed; the Author source and
             # Repair's sparse fragments retain their original omission.
-            call["params"] = {**authored_params, **copy.deepcopy(omitted)}
+            call["params"] = copy.deepcopy(authored_params)
+            for path, value in omitted.items():
+                destination = call["params"]
+                parts = path.split(".")
+                for part in parts[:-1]:
+                    destination = destination.setdefault(part, {})
+                destination[parts[-1]] = copy.deepcopy(value)
             call["_neutralOmissions"] = frozenset(omitted)
 
     item_entity = next(row for row in authored_entities if row.get("kind") == "item_body")

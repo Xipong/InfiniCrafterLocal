@@ -1,9 +1,10 @@
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 """Opt-in live concurrency is independent of per-activation spawn count."""
 
 import copy
 import hashlib
 import json
+from pathlib import Path
 
 import pytest
 
@@ -21,7 +22,6 @@ from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.capability_library_audit import _runtime_param_bound_rows
 from infini_local.pipelines import llm_authoring_pipeline as gameplay
@@ -84,60 +84,60 @@ def test_present_malformed_concurrency_is_refused_at_author_and_saved_wire(value
     assert compiled == before
 
 
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_registry_concurrency_choice_reaches_actual_model_packet(monkeypatch, format_mode):
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
-    parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
-    request, content, _ = build_initial_author_request(parent, parent, "concurrency", model_name="test-model")
-    assert dossier_text(request) == content
-    cards = json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    card = next(row for row in cards if row["fn"] == CAPABILITY)
-    assert card == CAPABILITY_REGISTRY[CAPABILITY].author_prompt_card()
-    assert set(card["targets"]) == PROJECTILE_ENTITY_KINDS
-    assert card["params"]["maxActive"]["type"] == "integer"
-    assert (card["params"]["maxActive"]["min"], card["params"]["maxActive"]["max"]) == (1, 96)
-    assert "default" not in card["params"]["maxActive"]
-    assert "neutral" not in card["params"]["maxActive"]
-    assert all(term in card["does"] for term in (
-        "opt-in", "owner", "generated item ID", "entity ID", "all producers",
-        "root", "child", "binding", "input", "pending scheduler entries",
-        "effective batch", "all-or-nothing", "no clipping", "absence",
-        "1", "returned physical copy", "larger", "count", "per activation", "separate",
-        "different inventory copies", "alternate binding", "share the cap",
-        "owner-attached active-use singleton", "hold maintains one", "does not override",
-        "maxActive>1",
-    ))
-    spawn = next(row for row in cards if row["fn"] == "configure_spawn")
-    assert CAPABILITY in spawn["params"]["count"]["meaning"]
-
-
-def test_spawn_alias_keeps_historical_runtime_values_and_concurrency_absence():
+def test_independent_return_motion_keeps_explicit_values_and_concurrency_absence():
     document = build_runtime_fixture("returning_potion")
     before = copy.deepcopy(document)
     compiled = compile_runtime_program(document)
     assert document == before
-    from captured_projectile_author import historical_returning_potion_program
-    for entity in compiled["runtimeProgram"]["entities"]:
-        if "collision" in entity:
-            # Authenticate the fresh neutral before the historical projection removes it.
-            assert entity["collision"]["bounceSpeedRetention"] == 1
-    historical = historical_returning_potion_program(compiled["runtimeProgram"])
-    for entity in historical["entities"]:
-        if "collision" in entity:
-            assert "bounceSpeedRetention" not in entity["collision"]
-        if "spawn" in entity:
-            # Fresh `position.at` now writes these two old zero DTO defaults.
-            # The captured hash remains unchanged; compare every other byte.
-            assert entity["spawn"].pop("overTarget") == {"heightTiles": 0, "delayTicks": 0}
-    fingerprint = hashlib.sha256(json.dumps(historical, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    # Captured from the accepted old fixture before concurrency implementation.
-    assert fingerprint == "beccfa0cf7d8d67c54a27b7f28017d83b1c394277409bcbc662a878766877d04"
+    projectile = next(row for row in compiled["runtimeProgram"]["entities"] if row["id"] == "tonic_flask")
+    assert projectile["spawn"]["speedPxPerTick"] == 12
+    assert projectile["spawn"]["overTarget"] == {"heightTiles": 0, "delayTicks": 0}
+    assert projectile["collision"]["bounceSpeedRetention"] == 1
+    assert projectile["movement"] == {"name": "move_straight", "code": 0, "params": {}}
+    assert projectile["returnTrigger"] == {"afterTicks": 36, "onOwnerRelease": False,
+                                            "onTileCollision": False, "disableTileCollisionOnReturn": True}
+    assert projectile["seek"] == [{"target": "owner_center", "maxSpeed": 15,
+                                    "velocityLerpPerUpdate": 0.2, "limitSpeedToDistance": False,
+                                    "window": {"phase": "returning"}}]
+    assert projectile["arrival"] == {"target": "owner_center", "radiusPx": 24,
+                                      "window": {"phase": "returning"}, "action": "kill"}
     assert all("maxActive" not in row.get("spawn", {}) for row in compiled["runtimeProgram"]["entities"])
     assert not any(row.get("fn") == CAPABILITY for row in compiled["runtimeContract"]["finalWireReceipts"])
-    compiled.pop("runtimeContract")
+    assert audit_compiler_receipts(compiled["runtimeContract"]["finalWireReceipts"],
+                                   authored_document=document, final_document=compiled)["ok"]
     assert validate_runtime_wire(compiled)["ok"]
+    compiled.pop("runtimeContract")
+    saved_before = copy.deepcopy(compiled)
+    assert validate_runtime_wire(compiled)["ok"]
+    assert compiled == saved_before
     assert all(CAPABILITY not in kind.required_components for kind in ENTITY_KIND_REGISTRY.values())
     assert "maxActive" not in CAPABILITY_REGISTRY["configure_spawn"].params
+
+
+@pytest.mark.parametrize("fn,accepted", [("set_projectile_collision", True), ("move_bounce", False)])
+def test_immutable_old_wire_preserves_concurrency_absence_and_current_admission(fn, accepted):
+    # Genuine archived wire, never an inverse projection of a fresh composition.
+    path = Path(__file__).with_name("fixtures") / "projectile_retained_wire.json"
+    raw = path.read_bytes()
+    assert hashlib.sha256(raw).hexdigest() == "9bee5ef3ff732f5b0c2aa625efd6ac487e1e645cfdfeb0cf94f40a41ecb83fea"
+    archive = json.loads(raw)
+    assert archive["sourceHead"] == "a3d5950"
+    wire = next(row["wire"] for row in archive["cases"] if row["fn"] == fn)
+    before = copy.deepcopy(wire)
+    # Old diagnostic receipts remain retired even when the stripped wire is valid.
+    assert not validate_runtime_wire(wire)["ok"]
+    assert wire == before
+    saved = copy.deepcopy(wire)
+    saved.pop("runtimeContract")
+    saved_before = copy.deepcopy(saved)
+    report = validate_runtime_wire(saved)
+    assert report["ok"] is accepted, report
+    if not accepted:
+        assert any(row["code"] == "unsupported_opcode" and row["path"].endswith(".movement.code")
+                   for row in report["errors"])
+    assert all("maxActive" not in row.get("spawn", {}) for row in saved["runtimeProgram"]["entities"])
+    assert saved == saved_before
+    assert path.read_bytes() == raw
 
 
 def test_schema_registry_has_required_positive_param_but_optional_capability():
@@ -299,34 +299,24 @@ def test_qa_tracks_nullable_reject_bounds_instead_of_omitting_new_cap():
 
 
 
-def _assert_contact_facts(card):
-    facts = json.dumps(card, ensure_ascii=False)
-    assert all(term in facts for term in (
-        "pierce=1", "first damaging NPC contact", "native kill", "pierce=-1",
-        "does not kill from NPC contact", "on_hit", "no implicit explosion", "on_kill", "separate",
-        "N tile contacts", "bounceSpeedRetention", "collided-axis velocity", "next contact kills",
-        "move_boomerang", "move_returning_glaive", "move_flail_tether", "before bounce/kill handling",
-    ))
-
-
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-@pytest.mark.parametrize("fn,leaf,bad,phrases", [
-    pytest.param("move_gravity_arc", "accelerationYBlocksPerSecondSquared", -16201,
-                 ("adds gravity", "no horizontal friction"), id="signed-gravity"),
-    pytest.param("move_boomerang", "returnSpeedBlocksPerSecond", -3.75,
-                 ("wall collision", "starts return", "disables tileCollide", "does not kill"), id="return-motion"),
-    pytest.param("set_projectile_collision", "pierce", -2, (), id="pierce"),
-    pytest.param(CAPABILITY, "maxActive", 0, (), id="concurrency"),
+@pytest.mark.parametrize("fn,leaf,bad", [
+    pytest.param("accelerate_projectile_vertical", "accelerationYBlocksPerSecondSquared", -16201, id="signed-gravity"),
+    pytest.param("seek_projectile", "maxSpeedBlocksPerSecond", -3.75, id="return-motion"),
+    pytest.param("set_projectile_collision", "pierce", -2, id="pierce"),
+    pytest.param(CAPABILITY, "maxActive", 0, id="concurrency"),
 ])
-def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_transport, monkeypatch, mode, fn, leaf, bad, phrases):
+def test_contact_and_return_repairs_preserve_independent_collision_and_concurrency(wire_transport, monkeypatch, mode, fn, leaf, bad):
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
-    _, content, _ = build_initial_author_request(parent, parent, "contact-facts", model_name="test-model")
-    cards = {row["fn"]: row for row in json.loads(content)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    _assert_contact_facts(cards["set_projectile_collision"])
-    assert all(term in cards["configure_spawn"]["does"] for term in ("per activation", "separate", CAPABILITY))
-    assert all(term in cards[fn]["does"] for term in phrases)
-    good = build_capability_witness(fn) if phrases else _with_concurrency(6)
+    if fn == "seek_projectile":
+        good = _with_concurrency(6)
+        # Wall return and collision disabling are separate authored choices;
+        # steering and arrival must survive leaf-local speed Repair unchanged.
+        trigger = next(row for row in good["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_return_trigger")
+        trigger["params"]["onTileCollision"] = True
+    else:
+        good = build_capability_witness(fn) if fn == "accelerate_projectile_vertical" else _with_concurrency(6)
     broken = copy.deepcopy(good)
     call = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == fn)
     call["params"][leaf] = bad
@@ -338,10 +328,16 @@ def test_native_contact_return_facts_reach_serialized_author_and_repair(wire_tra
     fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, "contact-facts", failure_report={"stage": "validation", "errors": report["errors"]})
     packet = request_dossier(requests[-1])
     repair_card = next(row for row in packet["existingBrokenCapabilityCards"] if row["fn"] == fn)
-    assert all(term in repair_card["does"] for term in phrases)
-    if fn == "set_projectile_collision":
-        _assert_contact_facts(repair_card)
-    if fn == CAPABILITY:
-        assert packet["existingBrokenCapabilityCards"] == [CAPABILITY_REGISTRY[CAPABILITY].prompt_card()]
+    assert repair_card == CAPABILITY_REGISTRY[fn].prompt_card()
     assert packet["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params." + leaf]}]
-    assert compile_runtime_program(fixed)["runtimeProgram"] == compile_runtime_program(good)["runtimeProgram"]
+    compiled = compile_runtime_program(fixed)
+    assert compiled["runtimeProgram"] == compile_runtime_program(good)["runtimeProgram"]
+    assert validate_runtime_wire(compiled)["ok"]
+    if fn == "seek_projectile":
+        projectile = next(row for row in compiled["runtimeProgram"]["entities"] if row["id"] == "tonic_flask")
+        assert projectile["returnTrigger"]["onTileCollision"] is True
+        assert projectile["returnTrigger"]["disableTileCollisionOnReturn"] is True
+        assert projectile["seek"][0]["maxSpeed"] == 15
+        assert projectile["seek"][0]["window"] == {"phase": "returning"}
+        assert projectile["arrival"]["window"] == {"phase": "returning"}
+        assert projectile["spawn"]["maxActive"] == 6

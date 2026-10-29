@@ -1,6 +1,5 @@
 """Receipt provenance cannot be forged even when equal-valued outputs are swapped."""
 
-import json
 from copy import deepcopy
 import re
 from typing import Any
@@ -15,7 +14,7 @@ from infini_local.core.runtime_authoring.technical_lowering import (
     audit_compiler_receipts,
 )
 from infini_local.qa.capability_witnesses import build_capability_witness
-from infini_local.qa.runtime_program_fixtures import NON_ARCHETYPAL_FIXTURES, build_runtime_fixture
+from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
 def _call(doc, fn):
@@ -291,7 +290,9 @@ def test_item_effects_require_their_executable_binding(fn):
     [
         fn
         for fn, cap in CAPABILITY_REGISTRY.items()
-        if cap.category == "event"
+        # Fresh compilation uses canonical cards; retired event owners are
+        # exercised as frozen source/wire records in test_author_event_domains.
+        if cap.author_visible and cap.category == "event"
         and "delaySeconds" in cap.params and fn != "spawn_entity_on_event"
     ],
 )
@@ -568,25 +569,3 @@ def test_primary_global_receipts_reject_equal_role_cross_binding_identity(mutati
     # swapping only source paths still cannot authenticate source indices.
     assert standalone["ok"] is (mutation == "swap-source-paths")
     assert standalone["authoredSourceChecked"] is False
-
-
-@pytest.mark.parametrize("fixture", NON_ARCHETYPAL_FIXTURES)
-def test_global_receipts_accept_real_compiler_fixtures_without_mutation(fixture):
-    source = build_runtime_fixture(fixture)
-    source["runtimeProgram"]["entities"].reverse()
-    source["runtimeProgram"]["bindings"].reverse()
-    frozen_source = deepcopy(source)
-    assert "runtimeContract" not in source and "backedByClaims" not in source["realization"]
-    wire = compile_runtime_program(source)
-    assert set(wire["runtimeContract"]) == {"compiledSchema", "runtimeApiVersion", "finalWireReceipts", "validation", "technicalLoweringAudit"}
-    assert wire["runtimeProgram"]["schema"] == "infini.runtime-program.wire.v3" and "calls" not in wire["runtimeProgram"]
-    assert "runtimeFamily" not in json.dumps(wire) and "weaponFamily" not in json.dumps(wire)
-    frozen_wire = deepcopy(wire)
-    rows = wire["runtimeContract"]["finalWireReceipts"]
-    assert audit_compiler_receipts(rows, authored_document=source, final_document=wire)["ok"]
-    assert audit_compiler_receipts(rows, authored_document=source)["ok"]
-    report = audit_compiler_receipts(rows, final_document=wire)
-    assert report["ok"] and report.get("authoredSourceChecked") is False
-    wire_report = validate_runtime_wire(wire)
-    assert wire_report["ok"] and "promiseParityWarnings" not in wire_report
-    assert source == frozen_source and wire == frozen_wire

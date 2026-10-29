@@ -1,10 +1,11 @@
 """Offline witnesses for independent body/entity image scheduling (no paid API)."""
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 import copy
 import os
 import subprocess
 import sys
 import threading
-import time
 
 import pytest
 
@@ -39,7 +40,6 @@ def test_body_and_projectiles_overlap_only_within_global_bound(offline_backend, 
         try:
             if ordinal <= capacity:
                 first_wave.wait(timeout=3)
-            time.sleep(.01)
             return backend(*args, **kwargs)
         finally:
             with lock:
@@ -101,13 +101,40 @@ def test_runtime_checkbox_overrides_saved_limit(toggle, limit, expected):
     assert int(result.stdout.strip().splitlines()[-1]) == expected
 
 
-def test_unexpected_worker_failure_joins_inflight_and_leaves_dto_untouched(monkeypatch):
+@pytest.fixture
+def finish_during_join(monkeypatch):
+    """Release blocked I/O at the real executor's synchronous-join boundary.
+
+    Missing shutdown or wait=False leaves the worker visibly unfinished when
+    the operation returns. Teardown still releases and joins every real pool.
+    """
+    release = threading.Event()
+    pools = []
+
+    class ObservedExecutor(ThreadPoolExecutor):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            pools.append(self)
+
+        def shutdown(self, wait=True, *, cancel_futures=False):
+            if wait:
+                release.set()
+            return super().shutdown(wait=wait, cancel_futures=cancel_futures)
+
+    monkeypatch.setattr(generation, "ThreadPoolExecutor", ObservedExecutor)
+    yield release
+    release.set()
+    for pool in pools:
+        ThreadPoolExecutor.shutdown(pool, wait=True, cancel_futures=True)
+
+
+def test_unexpected_worker_failure_joins_inflight_and_leaves_dto_untouched(monkeypatch, finish_during_join):
     monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(2))
     started = threading.Event()
     finished = threading.Event()
     def slow(local, role):
         started.set()
-        time.sleep(.05)
+        assert finish_during_join.wait(5), "image worker was never joined"
         local["debug"]["unrelated"] = "worker only"
         finished.set()
     def fail(local, role):
@@ -122,35 +149,6 @@ def test_unexpected_worker_failure_joins_inflight_and_leaves_dto_untouched(monke
     assert data == {"debug": {"unrelated": "original"}}
 
 
-def test_visual_images_start_before_vfx_and_new_jobs_share_batch(offline_backend, monkeypatch):
-    data = _existing_texture_data("entity")
-    data.pop("vfxManifest")
-    frozen = copy.deepcopy(data)
-    monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(4))
-    backend = generation.generate_sdcpp
-    item_started, entity_started, vfx_started = (threading.Event() for _ in range(3))
-    calls = []
-    def transport(prompt, negative, asset_id, *args, **kwargs):
-        calls.append(asset_id)
-        if asset_id.startswith("infini_vfx_job_"):
-            vfx_started.set()
-        else:
-            (entity_started if asset_id.endswith("_orb") else item_started).set()
-            assert vfx_started.wait(3), "Visual calls remain in flight until VFX enqueues its job"
-        return backend(prompt, negative, asset_id, *args, **kwargs)
-    monkeypatch.setattr(generation, "generate_sdcpp", transport)
-    with generation.overlap_visual_images(data) as pending:
-        assert pending is not None
-        assert item_started.wait(3) and entity_started.wait(3)
-        assert data == frozen, "VFX receives an unmutated Visual DTO while PNGs are in flight"
-        # Stand-in for the accepted VFX Director result arriving later.
-        data["vfxManifest"] = _data([_request()])["vfxManifest"]
-        out = generation.maybe_generate_visual_assets(data, pending=pending)
-    assert len(calls) == 3 and len(set(calls)) == 3
-    assert out["visual"]["spriteStatus"] == "generated"
-    assert out["vfxManifest"]["assets"][0]["spriteStatus"] == "generated"
-
-
 def test_single_slot_does_not_start_images_before_vfx(offline_backend, monkeypatch):
     data = _existing_texture_data("entity")
     monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(1))
@@ -161,24 +159,27 @@ def test_single_slot_does_not_start_images_before_vfx(offline_backend, monkeypat
     assert len(offline_backend[0]) == 2
 
 
-def test_vfx_failure_joins_image_workers_without_mutating_input(offline_backend, monkeypatch):
+def test_vfx_failure_joins_image_workers_without_mutating_input(offline_backend, monkeypatch, finish_during_join):
     data = _existing_texture_data("entity")
     frozen = copy.deepcopy(data)
     monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(2))
     backend = generation.generate_sdcpp
-    started, done = threading.Event(), threading.Event()
-    def transport(*args, **kwargs):
-        started.set()
-        time.sleep(.05)
-        result = backend(*args, **kwargs)
-        done.set()
+    in_flight = threading.Barrier(3)  # Body, projectile, and the failing VFX caller.
+    started, completed = [], []
+    def transport(prompt, negative, asset_id, *args, **kwargs):
+        started.append(asset_id)
+        in_flight.wait(timeout=5)
+        assert finish_during_join.wait(5), "image worker was never joined"
+        result = backend(prompt, negative, asset_id, *args, **kwargs)
+        completed.append(asset_id)
         return result
     monkeypatch.setattr(generation, "generate_sdcpp", transport)
     with pytest.raises(ValueError, match="VFX rejected"):
         with generation.overlap_visual_images(data):
-            assert started.wait(3)
+            in_flight.wait(timeout=5)
             raise ValueError("VFX rejected")
-    assert done.is_set()
+    assert Counter(started) == Counter([data["id"], data["id"] + "_orb"])
+    assert Counter(completed) == Counter(started), "all running images must finish before VFX failure returns"
     assert data == frozen
 
 
@@ -192,16 +193,25 @@ def test_combine_overlaps_visual_calls_with_vfx_director(pipeline_harness, offli
     data.pop("vfxManifest")
     monkeypatch.setattr(generation, "IMAGE_GENERATION_GATE", ImageRequestGate(4))
     backend = generation.generate_sdcpp
-    image_started, vfx_finished = threading.Event(), threading.Event()
-    def transport(*args, **kwargs):
-        image_started.set()
-        assert vfx_finished.wait(3)
-        return backend(*args, **kwargs)
+    item_started, entity_started, vfx_started = (threading.Event() for _ in range(3))
+    calls, vfx_attempts = [], []
+    item_id, entity_id = data["id"], data["id"] + "_orb"
+    def transport(prompt, negative, asset_id, *args, **kwargs):
+        calls.append(asset_id)
+        if asset_id in {item_id, entity_id}:
+            (item_started if asset_id == item_id else entity_started).set()
+            assert vfx_started.wait(5), "Visual calls must stay in flight until the new VFX job starts"
+        else:
+            vfx_attempts.append(asset_id)
+            vfx_started.set()
+        return backend(prompt, negative, asset_id, *args, **kwargs)
     def director(candidate, *args):
-        assert image_started.wait(3), "image request must start before VFX returns"
-        assert not candidate["visual"].get("spritePath")
+        assert item_started.wait(5) and entity_started.wait(5), "all accepted Visual jobs must start before VFX returns"
+        assert candidate["visual"] == data["visual"]
+        assert candidate["runtimeProgram"] == data["runtimeProgram"]
+        assert "vfxManifest" not in candidate
+        assert Counter(calls) == Counter([item_id, entity_id])
         candidate["vfxManifest"] = _data([_request()])["vfxManifest"]
-        vfx_finished.set()
         return candidate
     monkeypatch.setattr(generation, "generate_sdcpp", transport)
     monkeypatch.setattr(pipeline, "try_llm_plan", lambda *args: copy.deepcopy(data))
@@ -209,4 +219,8 @@ def test_combine_overlaps_visual_calls_with_vfx_director(pipeline_harness, offli
     monkeypatch.setattr(pipeline, "maybe_generate_visual_assets", generation.maybe_generate_visual_assets)
     out = pipeline.combine(pipeline_harness)
     assert out["visual"]["spriteStatus"] == "generated"
-    assert len(offline_backend[0]) == 3
+    assert out["vfxManifest"]["assets"][0]["spriteStatus"] == "generated"
+    assert len(vfx_attempts) == 1
+    expected = Counter([item_id, entity_id, *vfx_attempts])
+    assert Counter(calls) == expected, "Visual jobs must not be resubmitted when the VFX batch arrives"
+    assert Counter(call["id"] for call in offline_backend[0]) == expected

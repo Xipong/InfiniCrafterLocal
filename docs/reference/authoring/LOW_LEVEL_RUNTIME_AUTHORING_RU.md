@@ -4,6 +4,10 @@
 
 Это human projection, не owner schema/registry. Exact shape — [program_schema.py](../../../LocalGenerator/infini_local/core/runtime_authoring/program_schema.py); model-facing prose — [author_item_contract.py](../../../LocalGenerator/infini_local/pipelines/author_item_contract.py). Inventory/units/wire facts генерируются в [capability inventory](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md) и [primitive parity](../generated/PRIMITIVE_PARITY_RU.md); технический manifest не надо копировать в LLM-каталог.
 
+Новые канонические формы pull, nearby damage, зависимых свойств и скорости,
+а также точная граница совместимости со старыми предметами описаны в
+[решениях по упрощению Author API](AUTHOR_API_SIMPLIFICATION_RU.md).
+
 <a id="response"></a>
 ## Author response
 
@@ -46,6 +50,56 @@ Author выдаёт один JSON: optional sketch `concept`, executable `runtim
 
 Construction facts живут у своих owners, а не в повторных глобальных checklist. Порядок ответа задают system и `requiredJsonShape`; отдельные повторные `gameplayAuthoringStages`, `principle`/`reportEvidenceRule`/`literalSynthesisRule` и `forbidden` не передаются. Полные catalog cards, shape examples и optional advisory guidance доступны во всех response modes, включая `json_object`/off: provider schema их не заменяет.
 
+### Полезная композиция баффов и дебаффов
+
+`priorityHeader` получает `AUTHOR_DESIGN_QUALITY_RULE` из prose owner: ценность основного
+действия в обычной ситуации (в бою — в том числе против одиночной цели), достижимая
+и полезная secondary/event-награда, взаимодополняющие действия и реально действующий
+обмен риска/ресурса на пользу. Число capabilities само по себе не делает результат
+интересным. Узкие применения, простые результаты, сильные оправданные преимущества
+и намеренные sidegrades допустимы: нет требования всегда усиливать предмет,
+добавлять twist, наследовать по эффекту каждого родителя или писать новый отчёт.
+Это ориентиры Author в том же единственном ответе, не кодовые правила баланса,
+admission gates или дополнительная critic-стадия.
+
+Баффы и дебаффы составляются из исполнимых generated-effect примитивов,
+а не выбираются из глобального списка buff-ID. Общее правило
+`AUTHOR_STATUS_COMPOSITION_RULE` доходит до Author и scoped Repair;
+оно не требует наследовать эффект и не создаёт дополнительную LLM-стадию.
+
+- **Игрок:** `apply_generated_buff_on_use` задаёт длительность и независимо
+  выбранные utility/combat modifiers; named groups, held refresh и существующие
+  event activations остаются отдельными решениями. Знаковые combat/stat modifiers
+  позволяют явно выбрать штраф или tradeoff, а не только положительный бонус.
+  Mining multiplier ниже единицы также является действующим эффектом.
+- **NPC:** `apply_npc_effect_on_event` на item body либо projectile применяется
+  к конкретно поражённому NPC на `on_hit`/`on_crit`. Независимы `damagePerSecond`
+  (потеря регенерации, HP/s), `defenseDelta`, `contactDamageMultiplier` и
+  `velocityRetentionPerTick`; нейтральные пропуски объявлены в registry.
+  Выбираются duration, optional delay и `chancePercent`. Один draw допускает
+  весь выбранный набор; отдельные calls имеют отдельные draws.
+- `velocityRetentionPerTick` — post-AI damping скорости за world tick, не точный
+  множитель native AI/movement speed. Contact damage не включает самостоятельно
+  выпускаемые NPC снаряды. DOT не создаёт скрытый projectile и не повторяет hit
+  events. Native immunity/AI конкретного именованного баффа не наследуются.
+- Повторный hit того же source/owner/action обновляет временный эффект, а не
+  складывает его бесконечно. Независимые эффекты сочетаются в ограниченном
+  native store; expiry и lifecycle сбрасывают их без изменения базовых NPC stats.
+  Owner-hit admission и дальнейший native tick — разные authority boundaries;
+  принимающая сторона не выполняет proc roll повторно.
+
+Существующие `apply_vanilla_buff_on_use`/`apply_status_on_event` сохраняют явную
+интеграцию с native buff-ID и чтение принятых definitions. ID — ссылка на
+native поведение, не его описание и не prerequisite для авторского эффекта.
+Новый общий registry ID отсутствует. Source-подтверждённое действие родителя
+передаётся локально с receiver, операциями, условиями и ограничениями анализа;
+неподдержанные эффекты остаются неизвестными. Repair не получает права менять
+валидные modifiers, события, probability или соседние calls из-за этой видимости.
+
+Offline Author → parse → compile → final wire и native-consumer checks
+проверяют контракт/исполнение. Они не являются замером качества новых ответов
+модели и не переписывают сохранённые предметы.
+
 Call/binding spelling и точные fixed-literal omissions объясняются один раз в `fieldGuide.rowShapes` (`RUNTIME_ROW_SHAPE_RULE`); в Repair та же инструкция передаётся в `rules`. `bindingTarget` сохраняет targeting/contact semantics, `stackCost` — расход/escrow и optional chance, без повторного описания формы. Source-motion guidance живёт в `fieldGuide.projectileMotion`, отдельный header сохраняет предпочтение source tempo. У `present_placed_item_sprite` summary/params/requires владеют PNG, transforms и exact tile reference; overlay добавляет только certified footprint/refusal. Актуальный полный набор cards и executable grammar берётся из canonical registry; число capabilities — в generated inventory.
 
 | Место в packet | Правило построения |
@@ -81,13 +135,13 @@ Terminal meaning: `on_hit` требует collision; proximity detonation не h
 <a id="front-hand"></a>
 ## Независимое движение передней кисти
 
-`move_front_hand` (opcode20) — явная низкоуровневая операция, не оружейный preset. Author выбирает её и все пять параметров; damage class, event graph, lifetime, item-use, contact lane и внешний вид остаются отдельными решениями. Точные dependencies/диапазоны принадлежат [registry catalog](../generated/LOW_LEVEL_CAPABILITY_INVENTORY_RU.md), а не этой навигационной заметке. Код не добавляет singleton, launch, motion или grip за модель.
+Новый Author выбирает отдельно ось (`set_projectile_aim`), привязку тела (`attach_projectile`), позу руки (`set_front_arm_pose`) и дополнительный вылет (`set_projectile_reach_curve`). Привязка к `front_hand` сама не навязывает треугольную позу, singleton, удержание кнопки, срок жизни или прохождение сквозь тайлы. Поза имеет явные start/peak/end stretch и peak progress: можно выбрать постоянное положение или асимметричное выдвижение. Поза не перемещает hitbox без отдельной привязки; вылет требует выбранной привязки. Единственный активный primary writer позы не запрещает несколько читателей положения руки.
 
-Native pose использует руку H и collision center C = H + aimedAxis * authored hitboxOffsetPx. Hitbox остаётся штатным axis-aligned rectangle, не pixel blade/OBB; coherent art/offset требует согласованного authored дизайна. Поза проходит extension/retraction по завершённым active world ticks `floor(activeAIUpdates/(extraUpdates+1))`, выбирая ближайшую native stretch length, ties shorter. Duration не продлевает lifetime или itemAnimation. Initial axis и synced cursor mode выбираются явно.
+Collision center и изображение следуют одному выбранному телу и оси. Hitbox остаётся штатным axis-aligned rectangle, не pixel blade/OBB; осевые/нормальные offsets задаются в мировых блоках, а image-local grip — в системе координат PNG. Native stretch выбирается по ближайшей длине, при равенстве — более короткий. Duration позы/вылета не продлевает lifetime или itemAnimation. Gameplay events используют выбранную ось и при нулевой translational velocity; delayed action сохраняет её при enqueue. Periodic dispatch сохраняет существующую фазу относительно movement update.
 
-Gameplay events этой entity используют ту же выбранную ось, хотя translational velocity равна нулю. Это относится к направлению дочернего `aim=velocity` и hit-target geometry; delayed action сохраняет ось при постановке события в очередь, а не перечитывает последующее положение курсора. Periodic dispatch сохраняет существующий порядок до очередного movement update.
+Visual Director передаёт size/forward axis/atomic grip выбранного финального PNG: `reuse_item_icon` использует root metadata, distinct `baked_sprite` — entity metadata. `no_asset`/`runtime_geometry` не требуют PNG. Missing selected leaves идут в точный frozen Visual Repair, не выводятся из art/hitbox/названия.
 
-Для sprite presentation Visual Director передаёт size/forward axis/atomic grip выбранного финального PNG: `reuse_item_icon` использует только root metadata; distinct `baked_sprite` — только entity metadata. `no_asset`/`runtime_geometry` не требуют этих PNG dependencies. Missing selected leaves идут в точный frozen Visual Repair, не выводятся из art/hitbox/названия. Старый `move_forward_then_retract` (code19) остаётся owner-center18px + triangular displacement, не управляет кистью и не превращается в новый driver; сохранённые рецепты не мигрируются.
+Сохранённые `move_front_hand=20` и `move_forward_then_retract=19` исполняются с прежними формулами, clocks, collision/lifetime semantics и без migration. В новом Author/Repair эти составные операции больше не предлагаются; отсутствие старого controller не дописывает вместо него новую композицию. Полная граница остальных motion primitives — [Projectile Author](../projectiles/PROJECTILE_AUTHOR_API_RU.md#composable-motion).
 
 <a id="visual-vfx"></a>
 ## Visual/VFX boundary и headless replay

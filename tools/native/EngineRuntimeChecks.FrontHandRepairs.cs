@@ -101,7 +101,7 @@ internal static partial class EngineRuntimeChecks
                 AssertVfxNear(b, new Vector2(projectile.ai[0], projectile.ai[1]), "published native ai carries final B");
                 byte[] extra = ReviewExtra(generated); // real existing ExtraAI serializer, mid-cycle age
                 var peerProjectile = new Projectile { owner = 0, whoAmI = 8, identity = 71, active = true,
-                    Center = projectile.Center, timeLeft = projectile.timeLeft, damage = projectile.damage };
+                    position = projectile.position, timeLeft = projectile.timeLeft, damage = projectile.damage };
                 // Model native SyncProjectile field delivery only on receiver, never assign owner ai.
                 Array.Copy(projectile.ai, peerProjectile.ai, projectile.ai.Length);
                 var peer = Attach(peerProjectile); typeof(Projectile).GetProperty("ModProjectile")!.SetValue(peerProjectile, peer);
@@ -172,10 +172,10 @@ internal static partial class EngineRuntimeChecks
             Equal(true, Update(), label + " stationary B publishes at first eligible update");
             AssertVfxNear(b, LocalVector(), label + " published ai carries final B");
 
-            // Real ExtraAI hydration plus native ai field delivery, not a socket/network match.
+            // Real ExtraAI hydration plus native top-left/ai delivery, not a socket/network match.
             byte[] extra = ReviewExtra(generated);
             var peerProjectile = new Projectile { owner = 0, whoAmI = 8, identity = projectile.identity, active = true,
-                Center = projectile.Center, velocity = projectile.velocity, timeLeft = projectile.timeLeft, damage = projectile.damage };
+                position = projectile.position, velocity = projectile.velocity, timeLeft = projectile.timeLeft, damage = projectile.damage };
             Array.Copy(projectile.ai, peerProjectile.ai, projectile.ai.Length);
             var peer = Attach(peerProjectile); typeof(Projectile).GetProperty("ModProjectile")!.SetValue(peerProjectile, peer);
             Terraria.Main.projectile[8] = peerProjectile; Terraria.Main.myPlayer = 1; Terraria.Main.netMode = NetmodeID.MultiplayerClient;
@@ -348,8 +348,8 @@ internal static partial class EngineRuntimeChecks
                     generated.OnKill(30); // actual event -> snapshot -> enqueue; no private EmitEventSprite shortcut
                     Equal(1, queue.Count, "native on_kill event captures one body copy");
                     object emission = queue[0]!;
-                    Equal(legacy ? .1f : .015625f, (float)emission.GetType().GetProperty("Scale")!.GetValue(emission)!,
-                        legacy ? "old-driver event clamp retained" : "RED: new20 detached captures exact dynamic body scale");
+                    Equal(.015625f, (float)emission.GetType().GetProperty("Scale")!.GetValue(emission)!,
+                        "all drivers with explicit visual scale preserve the body scale");
                     // Encoder/decoder uses existing scale float. No sockets or Send call.
                     object payload = typeof(GeneratedProjectile).GetMethod("CaptureVfxPayload", TestInstance)!
                         .Invoke(generated, new object[] { RuntimeEventKind.OnKill, projectile.Center, (byte)0 })!;
@@ -359,7 +359,7 @@ internal static partial class EngineRuntimeChecks
                     object decoded = typeof(GeneratedProjectile).GetMethod("ReadVfxEventPayload", BindingFlags.Static | BindingFlags.NonPublic)!
                         .Invoke(null, new object[] { new BinaryReader(wire) })!;
                     var snap = (InfiniVfxProjectileSnapshot)decoded.GetType().GetProperty("Snapshot")!.GetValue(decoded)!;
-                    Equal(legacy ? .1f : .015625f, snap.Pose.Scale, "actual event wire preserves selected bounded body scale");
+                    Equal(.015625f, snap.Pose.Scale, "actual event wire preserves selected bounded body scale");
                     // Retire and replace source before actual detached batch. The queue cannot borrow it.
                     projectile.active = false; Terraria.Main.projectile[7] = new Projectile { whoAmI = 7 };
                     projectile.scale = 7; projectile.rotation = -2; projectile.Center = Vector2.Zero; projectile.gfxOffY = -30;
@@ -375,11 +375,9 @@ internal static partial class EngineRuntimeChecks
                     if (!legacy) Equal(true, SameFrontHandPositionUv(mainQuad, flushed!), "decoded detached UV/position exactly retains rigid frame");
                     if (legacy) {
                         system.OnWorldUnload();
-                        var invalidLegacy = snap with { Pose = snap.Pose with { Scale = .015625f } };
-                        Equal(false, InfiniVfxRuntime.OnDetachedEvent(data, entity.Id, RuntimeEventKind.OnKill,
-                            data.VfxManifest, snap.Center, Vector2.Zero, "invalid_legacy_scale", invalidLegacy),
-                            "legacy decoder/consumer cannot gain new20 exact-scale envelope");
-                        Equal(0, queue.Count, "invalid legacy scale emits nothing");
+                        var ordinary = MotionDefinition("{}");
+                        Equal(false, snap.IsValidFor(ordinary.RuntimeProgram.TryGetEntity(ordinary.RuntimeProgram.PrimaryEntityId)),
+                            "an ordinary body without an explicit scale component retains the bounded envelope");
                     }
                     recordingDetached = false; batch.Begin();
                 }

@@ -1,37 +1,42 @@
 """Movement choices stay explicit; source identity never selects a driver."""
 
 import copy
-import json
-
 import pytest
 
-from infini_local.core import llm_config
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 from infini_local.core.runtime_authoring.compiler import compile_runtime_program
 from infini_local.core.runtime_authoring.validator import validate_runtime_program
-from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+from infini_local.pipelines.llm_authoring_pipeline import try_llm_plan
 from infini_local.qa.capability_witnesses import build_capability_witness
+from test_low_level_three_stage_pipeline import wire_transport  # noqa: F401
 
 
-@pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_actual_author_packet_explains_no_hidden_ballistics(monkeypatch, mode):
-    monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
-    parent = {"id": 39, "name": "Wooden Bow", "shoot": 1, "directProjectileRaw": {"type": 1, "fullName": "Terraria/WoodenArrowFriendly", "aiStyle": 1, "arrow": True}}
-    before = copy.deepcopy(parent)
-    _, user, _ = build_initial_author_request(parent, {}, "physics-choice", model_name="offline")
-    cards = {row["fn"]: row for row in json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    meaning = CAPABILITY_REGISTRY["move_straight"].summary
-    assert "no gravity" in meaning and "never invokes native projectile AI" in meaning
-    assert cards["move_straight"]["does"] == meaning
-    guide = json.loads(user)["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["projectileMotion"]
-    assert "straight" in guide and "falling" in guide and "intentional" in guide
-    assert parent == before
-
-
-@pytest.mark.parametrize("driver", ["move_straight", "move_gravity_arc"])
-def test_both_deliberate_motion_choices_remain_valid(driver):
-    document = build_capability_witness(driver)
+@pytest.mark.parametrize("falling", [False, True])
+def test_native_arrow_parent_does_not_override_either_authored_motion_choice(wire_transport, falling):
+    document = build_capability_witness("move_straight")
+    if falling:
+        document["runtimeProgram"]["calls"].append({"id": "explicit_gravity", "fn": "accelerate_projectile_vertical",
+            "target": document["runtimeProgram"]["primaryEntityId"],
+            "params": {"accelerationYBlocksPerSecondSquared": 12}})
     before = copy.deepcopy(document)
+    parent = {"id": 39, "name": "Wooden Bow", "shoot": 1,
+              "directProjectileRaw": {"type": 1, "fullName": "Terraria/WoodenArrowFriendly", "aiStyle": 1, "arrow": True}}
+    parent_before = copy.deepcopy(parent)
+    responses, _ = wire_transport
+    responses.append(document)
+    accepted = try_llm_plan(parent, {}, "physics-choice")
+    assert accepted is not None and not responses
+    assert accepted["runtimeProgram"] == before["runtimeProgram"]
+    assert parent == parent_before
     assert validate_runtime_program(document)["ok"]
-    compile_runtime_program(document)
+    wire = compile_runtime_program(accepted)
+    entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == document["runtimeProgram"]["primaryEntityId"])
+    assert entity["movement"] == {"name": "move_straight", "code": 0, "params": {}}
+    assert ("verticalAcceleration" in entity) is falling
+    assert "controller" not in entity
+    from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
+    from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
+    assert validate_runtime_wire(wire)["ok"]
+    for source in (document, None):
+        assert audit_compiler_receipts(wire["runtimeContract"]["finalWireReceipts"],
+                                      authored_document=source, final_document=wire)["ok"]
     assert document == before

@@ -1,8 +1,11 @@
 """The serialized Author packet exposes the canonical shape, units and construction grammar."""
 
 from __future__ import annotations
-from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-from prompt_packet_helpers import request_dossier, dossier_text
+from infini_local.core.runtime_authoring.capability_registry import (
+    CAPABILITY_REGISTRY, BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY,
+)
+from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
 import copy
 import json
 import pytest
@@ -24,11 +27,59 @@ from infini_local.pipelines.llm_authoring_prompt import (
     PLANNER_PROMPT_LIMIT_CHARS,
     PLANNER_PROMPT_MIN_HEADROOM_CHARS,
     planner_prompt_usability_report,
-    build_llm_author_payload,
 )
 from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
 from infini_local.pipelines import llm_authoring_pipeline as pipeline
 from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+
+
+def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
+    """Compare delivered metadata to its typed owners, including multiplicity.
+
+    Inventory order is not gameplay order. Parameter arrays and schema branches
+    inside each card keep their literal identity. Editorial overlays may evolve;
+    they cannot replace any field owned by the registry.
+    """
+    from test_author_request_compaction import _expand_constraint_references
+
+    inventories = (
+        ("capabilities", "fn", [cap.author_prompt_card() for cap in capabilities.values() if cap.author_visible]),
+        ("entityKinds", "kind", [row.prompt_card() for row in ENTITY_KIND_REGISTRY.values()]),
+        ("inputs", "input", [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()]),
+        ("bindingActions", "action", [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()]),
+        ("events", "event", [row.author_prompt_card() for row in EVENT_KIND_REGISTRY.values()]),
+    )
+    for group, identity, expected in inventories:
+        actual = _expand_constraint_references(catalog[group], catalog["fieldGuide"]["consumerConstraints"])
+        actual = expand_catalog_targets(actual, catalog["fieldGuide"]["targetKindSets"])
+        actual = [{key: value for key, value in row.items() if key != "constructionMeaning"} for row in actual]
+        assert sorted(actual, key=lambda row: row[identity]) == sorted(expected, key=lambda row: row[identity]), group
+
+    # A reference must identify a complete literal parameter of the right owner,
+    # not another reference or merely a similarly named parameter.
+    cards = {row["fn"]: row for row in catalog["capabilities"]}
+    for fn, card in cards.items():
+        for name, param in card["params"].items():
+            if "paramRef" in param:
+                owner, leaf = param["paramRef"].split(".")
+                assert leaf == name
+                assert capabilities[owner].params[leaf] == capabilities[fn].params[name]
+                assert "paramRef" not in cards[owner]["params"][leaf]
+    canonical = runtime_authoring_prompt_field_guide()
+    assert {key: catalog["fieldGuide"][key] for key in canonical} == canonical
+    from infini_local.core.runtime_authoring.terraria_vocabulary import (
+        DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS,
+        ITEM_USE_STYLE_MEANINGS, ITEM_USE_STYLE_TMODLOADER_NAMES, ITEM_USE_STYLE_TOKENS,
+    )
+    for key, tokens, meanings in (
+        ("damageClass", DAMAGE_CLASS_TOKENS, DAMAGE_CLASS_MEANINGS),
+        ("itemUseStyle", ITEM_USE_STYLE_TOKENS, ITEM_USE_STYLE_MEANINGS),
+    ):
+        vocabulary = catalog["fieldGuide"][key]
+        assert vocabulary["builtInTokens"] == list(tokens)
+        assert vocabulary["meaningByToken"] == dict(meanings)
+        assert set(meanings) == set(tokens)
+    assert set(ITEM_USE_STYLE_TMODLOADER_NAMES) == set(cards["configure_item_use"]["params"]["useStyle"]["enum"])
 
 
 @pytest.mark.parametrize("fixture_name", ["fishing_platform_tool", "workbench_blade"])
@@ -43,8 +94,6 @@ def test_coherence_advice_preserves_explicit_useful_placement_and_nonplacement(m
     # Constructing the new advisory packet must neither edit an existing design
     # nor turn guidance into a validator prohibition or deterministic selection.
     request, user, _ = build_initial_author_request(item, {}, "preserve-design", model_name="offline-test")
-    intent = json.loads(user)["requiredJsonShape"]["concept"]["plannedPlayerActions"][0]["intent"]
-    assert "placement and multiple purposeful actions remain legal" in intent
     assert dossier_text(request) == user
     prepared = pipeline._prepare_parsed_author_item(item, response_format=request["response_format"])
     assert prepared == before and item == before
@@ -84,7 +133,6 @@ def test_format_repair_with_coherence_advice_preserves_existing_placement(monkey
     )
     context = request_dossier(requests[0])
     assert "concept" not in context["requiredJsonShape"], "syntax repair is not a second design request"
-    assert any("Do not redesign, add, drop" in rule for rule in context["rules"])
     assert context["malformedRawText"] == content[:-1] + ",}"
     assert prepared == before and item == before and raw == content
 
@@ -103,7 +151,6 @@ def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(m
     repaired, request = repair_with_response(monkeypatch, item, patch, "json_object")
     context = request_dossier(request)
     assert "concept" not in context["requiredJsonShape"]
-    assert "one clear core gameplay loop" not in dossier_text(request)
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     assert_repaired_source(repaired, before)
     assert _stats(item)["params"]["damage"] == -1, "repair does not mutate its input"
@@ -112,32 +159,126 @@ def test_scoped_repair_does_not_use_coherence_advice_to_remove_valid_placement(m
 def test_author_shape_card_and_schema_share_public_members():
     card = author_item_prompt_shape_card()
     schema = author_item_response_schema()
-    assert set(card["root"]) == set(schema["required"])
-    assert set(card["root"]) | set(card["optionalAdvisory"]) == set(schema["properties"])
+    assert set(card["root"]) == set(schema["properties"])
+    assert set(card["root"]) - set(schema["required"]) == {"concept", "realization"}
+    assert isinstance(card["concept"], str)
+    assert set(card["realization"]) == {"description", "selfEvaluation"}
+    assert set(schema["required"]) == {"name", "category", "runtimeProgram"}
     assert {row["input"] for row in card["runtimeProgram"]["bindings"]} == set(INPUT_KIND_REGISTRY)
     assert all(not strict_schema_errors(row, binding_schema()) for row in card["runtimeProgram"]["bindings"])
     repair_card = author_item_repair_prompt_shape_card()
     assert set(repair_card) == set(author_item_repair_response_schema()["properties"])
 
 
-@pytest.mark.parametrize("rich", [False, True], ids=["source-numeric-parents", "rich-generated-parents"])
-def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(rich):
+@pytest.mark.parametrize("mode,rich", [
+    pytest.param("json_schema", True, id="schema-generated-parent"),
+    pytest.param("json_object", False, id="json-native-parent"),
+    pytest.param("off", True, id="unconstrained-generated-parent"),
+])
+def test_author_packet_guide_and_prompt_budget_keep_registry_reachable(monkeypatch, rich, mode):
+    from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+    from test_source_unit_guidance import _serialized_chat_request
+
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     a = build_runtime_fixture("held_and_deployed") if rich else {"id": "a", "name": "A", "damage": 10, "useTime": 20}
     b = a if rich else {"id": "b", "name": "B", "damage": 20, "useTime": 30}
-    catalog = build_llm_author_payload(a, b, "budget-proof")["runtimeCapabilityContract"]["catalog"]
-    guide = catalog["fieldGuide"]
-    canonical = runtime_authoring_prompt_field_guide()
-    assert {k: guide[k] for k in canonical if k not in {"stackCost", "bindingTarget"}} == {
-        k: v for k, v in canonical.items() if k not in {"stackCost", "bindingTarget"}
-    }
-    assert guide["bindingTarget"].startswith(canonical["bindingTarget"])
-    assert "whole generated item" in guide["stackCost"]
+    before = copy.deepcopy((a, b))
+    request, text, _ = build_initial_author_request(a, b, "budget-proof", model_name="offline-test")
+    assert (request["response_format"] or {}).get("type") == (None if mode == "off" else mode)
+    assert dossier_text(request) == text
+    # Observe the actual HTTP JSON, after provider preparation and serialization.
+    packet = _serialized_chat_request(monkeypatch, request)
+    assert packet["messages"] == request["messages"]
+    assert packet.get("response_format") == request["response_format"]
+    assert len(text) <= PLANNER_PROMPT_LIMIT_CHARS - PLANNER_PROMPT_MIN_HEADROOM_CHARS
+    delivered = request_dossier(packet, declaration=request)
+    assert delivered["parents"] == {key: {"packet": raw_parent_card_for_llm(parent)}
+                                    for key, parent in zip(("A", "B"), before)}
+    assert (a, b) == before
+    assert delivered["requiredJsonShape"] == author_item_prompt_shape_card()
+    catalog = delivered["runtimeCapabilityContract"]["catalog"]
+    _assert_catalog_delivery(catalog)
+    visible = {cap.name for cap in CAPABILITY_REGISTRY.values() if cap.author_visible}
+    assert {row["fn"] for row in catalog["capabilities"]} == visible
+    assert len(catalog["capabilities"]) == len(visible)
+    if mode == "json_schema":
+        variants = packet["response_format"]["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
+        assert {row["properties"]["fn"]["const"] for row in variants} == visible
+        assert len(variants) == len(visible)
     report = planner_prompt_usability_report(a, b, "budget-proof")
     assert report["ok"] and report["headroom"] >= PLANNER_PROMPT_MIN_HEADROOM_CHARS
     assert report["limit"] == PLANNER_PROMPT_LIMIT_CHARS
-    assert report["visibleCapabilities"] == len(CAPABILITY_REGISTRY.values())
+    assert report["visibleCapabilities"] == len(visible)
     assert report["missingCapabilities"] == report["extraCapabilities"] == []
     assert report["containsWeaponMacro"] is False and report["containsFamilyRouter"] is False
+
+
+@pytest.mark.parametrize("defect", ["missing", "duplicate", "wrong-bound"])
+def test_catalog_delivery_oracle_accepts_reordering_and_rejects_loss(monkeypatch, defect):
+    """Negative controls prevent a dict/set conversion from hiding lost data."""
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
+    request, _, _ = build_initial_author_request({}, {}, "delivery-control", model_name="offline")
+    catalog = request_dossier(request)["runtimeCapabilityContract"]["catalog"]
+    for group in ("capabilities", "entityKinds", "inputs", "bindingActions", "events"):
+        catalog[group].reverse()
+    _assert_catalog_delivery(catalog)
+    cards = catalog["capabilities"]
+    if defect == "missing":
+        cards.pop()
+    elif defect == "duplicate":
+        cards.append(copy.deepcopy(cards[0]))
+    else:
+        stats = next(row for row in cards if row["fn"] == "configure_item_stats")
+        stats["params"]["damage"]["max"] += 1
+    with pytest.raises(AssertionError):
+        _assert_catalog_delivery(catalog)
+
+
+def test_rewording_canonical_cards_reaches_author_and_repair_without_changing_mechanics(monkeypatch):
+    """A safe editorial change must propagate without requiring test rewrites."""
+    from dataclasses import replace
+    import infini_local.core.runtime_authoring.capability_registry as registry
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.pipelines import llm_authoring_prompt as prompt
+    from test_source_unit_guidance import _serialized_chat_request
+    from infini_local.qa.capability_witnesses import build_capability_witness
+
+    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_schema")
+    source = build_capability_witness("configure_item_stats")
+    before = copy.deepcopy(source)
+    wire = compile_runtime_program(source)
+    provider_schema = author_item_provider_response_schema()
+    cap = registry.CAPABILITY_REGISTRY["configure_item_stats"]
+    summary = "Item statistics in revised player language."
+    meaning = "Mana points requested by the item's native use."
+    changed = replace(cap, summary=summary, params={**cap.params, "manaCost": replace(cap.params["manaCost"], description=meaning)})
+    registry_copy = {**registry.CAPABILITY_REGISTRY, cap.name: changed}
+    for owner in (registry, prompt, pipeline):
+        monkeypatch.setattr(owner, "CAPABILITY_REGISTRY", registry_copy)
+
+    request, _, _ = build_initial_author_request({}, {}, "editorial-control", model_name="offline")
+    delivered = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
+    catalog = delivered["runtimeCapabilityContract"]["catalog"]
+    _assert_catalog_delivery(catalog, registry_copy)
+    card = next(row for row in catalog["capabilities"] if row["fn"] == cap.name)
+    assert card["does"] == summary and card["params"]["manaCost"]["meaning"] == meaning
+    assert author_item_provider_response_schema() == provider_schema
+    assert compile_runtime_program(source) == wire and source == before
+
+    # Real scoped Repair must receive the revised canonical card while refusing
+    # a response that tries to change valid neighboring mechanics.
+    stats = _stats(source)
+    stats["params"]["damage"] = True
+    correction = copy.deepcopy(_stats(before))
+    correction["params"]["manaCost"] = 19
+    repaired, repair_request = repair_with_response(monkeypatch, source, {
+        "note": "Fix invalid damage only", "callsUpsert": [correction],
+    }, "json_schema")
+    repair = request_dossier(_serialized_chat_request(monkeypatch, repair_request), declaration=repair_request)
+    assert repair["existingBrokenCapabilityCards"] == [changed.prompt_card()]
+    assert repair["repairScope"]["fieldPermissions"]["calls"] == [{"id": stats["id"], "paths": ["params.damage"]}]
+    assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
+    assert_repaired_source(repaired, before)
 
 
 @pytest.mark.parametrize("pick_power", [0, 50], ids=["inactive-tool-keeps-light", "active-tool-keeps-light"])

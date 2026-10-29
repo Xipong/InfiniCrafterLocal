@@ -233,6 +233,7 @@ def synthetic_no_image_execution_control(
                 continue
         if row["code"] in {
             "required_item_sprite_missing", "required_entity_sprite_missing",
+            "required_placed_body_sprite_missing",
             "required_equipment_overlay_missing", "required_impact_sprite_missing",
         } and row.get("status") == "qa_no_image_fixture":
             # Fresh delivery correctly refuses QA labels as production readiness.

@@ -6,6 +6,7 @@ not own HTTP requests, logical deadlines, retry decisions or LLM item leases.
 from __future__ import annotations
 
 from email.utils import parsedate_to_datetime
+import ipaddress
 import math
 import re
 import threading
@@ -126,9 +127,17 @@ def _remote_admission_policy(url: str, payload: dict[str, Any]) -> str:
 def _remote_rate_key(url: str, payload: dict[str, Any]) -> str:
     parsed = urlsplit(url)
     host = (parsed.hostname or "").strip().lower()
-    if host in {"", "localhost", "127.0.0.1", "::1"}:
+    if host in {"", "localhost", "localhost."}:
         return ""
-    model = str(payload.get("model") or "unknown").strip().lower()
+    try:
+        address = ipaddress.ip_address(host)
+        mapped = getattr(address, "ipv4_mapped", None)
+        if address.is_loopback or (mapped is not None and mapped.is_loopback):
+            return ""
+    except ValueError:
+        pass
+    # Model IDs are provider-owned and can be case-sensitive.
+    model = str(payload.get("model") or "unknown").strip()
     return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}|{model}"
 
 

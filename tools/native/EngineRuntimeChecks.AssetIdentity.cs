@@ -22,9 +22,9 @@ internal static partial class EngineRuntimeChecks
     {
         // Observe the caller's exact IL site: optimized JIT code may inline File.OpenRead.
         // The two-argument API now forwards to the exact selected-generation
-        // loader which returns alpha bounds too. Observe the actual I/O owner.
-        return new MonoMod.RuntimeDetour.ILHook(typeof(RuntimeSpriteCache).GetMethod("TryGet",
-            new[] { typeof(string), typeof(float).MakeByRefType(), typeof(Rectangle?).MakeByRefType() })!, il => {
+        // loader which returns alpha bounds and support hull. Observe the actual I/O owner.
+        return new MonoMod.RuntimeDetour.ILHook(typeof(RuntimeSpriteCache).GetMethod("TryGet", BindingFlags.Instance | BindingFlags.NonPublic,
+            null, new[] { typeof(string), typeof(float).MakeByRefType(), typeof(Rectangle?).MakeByRefType(), typeof(Vector2[]).MakeByRefType() }, null)!, il => {
             var sites = il.Body.Instructions.Where(ins => ins.OpCode == Mono.Cecil.Cil.OpCodes.Call
                 && ins.Operand is Mono.Cecil.MethodReference method && method.DeclaringType.FullName == typeof(File).FullName
                 && method.Name == nameof(File.OpenRead) && method.Parameters.Count == 1

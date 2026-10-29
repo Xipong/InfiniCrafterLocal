@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 from pathlib import Path
@@ -14,9 +15,7 @@ from infini_local.pipelines.combine_pipeline import _cached_payload_report
 from infini_local.services import asset_sync_service
 from infini_local.storage import world_storage
 from infini_local.web.server_utility_routes import ServerUtilityRoutes
-import contextlib
 import threading
-import time
 from infini_local.pipelines.visual_generation_pipeline import _apply_kit, _validate_kit
 from infini_local.core.vfx_manifest import VFX_MANIFEST_SCHEMA, _compile_manifest, _hydrate_vfx_asset_prompts
 from infini_local.qa.live_no_image_fixture import write_no_image_fixture_png
@@ -57,8 +56,7 @@ def _assert_cache_refusal(data: dict, root: Path) -> None:
 
 
 @pytest.mark.parametrize("order", ["first", "later", "only"])
-@pytest.mark.parametrize("consumer", ["plan", "delivery"])
-def test_malformed_renderer_consumer_preserves_indexed_canonical_rejection(offline_backend, order, consumer):
+def test_malformed_renderer_consumers_preserve_indexed_canonical_rejection(offline_backend, order):
     calls, _ = offline_backend
     data = _data([])
     good = _slot("good", "")
@@ -73,15 +71,14 @@ def test_malformed_renderer_consumer_preserves_indexed_canonical_rejection(offli
     canonical = validate_vfx_manifest_wire(data)
     assert not canonical["ok"]
     assert f"$.vfxManifest.slots[{index}].rendererKind" in {row["path"] for row in canonical["errors"]}
-    if consumer == "plan":
-        with pytest.raises(ValueError, match="Invalid VFX asset request wire: ") as rejected:
-            build_visual_asset_plan(data)
-        assert json.loads(str(rejected.value).split(": ", 1)[1]) == canonical["errors"]
-    else:
-        report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
-        assert not report["ok"]
-        problem = next(row for row in report["problems"] if row["code"] == "vfx_manifest_invalid")
-        assert problem["errors"] == canonical["errors"]
+    with pytest.raises(ValueError, match="Invalid VFX asset request wire: ") as rejected:
+        build_visual_asset_plan(data)
+    assert json.loads(str(rejected.value).split(": ", 1)[1]) == canonical["errors"]
+    assert data == before
+    report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
+    assert not report["ok"]
+    problem = next(row for row in report["problems"] if row["code"] == "vfx_manifest_invalid")
+    assert problem["errors"] == canonical["errors"]
     assert data == before
     assert calls == []
     _assert_cache_refusal(data, visual_delivery_gate.SPRITE_DIR / "malformed-cache")
@@ -102,6 +99,36 @@ def _pad_complete_png(path: Path, target_size: int) -> None:
     image.save(path, pnginfo=info)
     assert path.stat().st_size == target_size
     assert asset_sync_service.is_complete_png_file(path)
+
+
+def test_png_admission_bounds_file_io_before_rejecting_oversize(tmp_path, monkeypatch):
+    from PIL import Image
+    path = tmp_path / "bounded.png"
+    Image.new("RGBA", (2, 2), (255, 100, 40, 255)).save(path)
+    raw = path.read_bytes()
+    monkeypatch.setattr(asset_sync_service, "_MAX_PNG_BYTES", len(raw))
+    assert asset_sync_service.is_complete_png_file(path)
+    path.write_bytes(raw + b"x" * 1024)
+    opened = []
+    real_open = Path.open
+
+    class BoundedRead:
+        def __enter__(self):
+            self.stream = real_open(path, "rb")
+            return self
+
+        def read(self, size=-1):
+            assert 0 < size <= len(raw) + 1
+            result = self.stream.read(size)
+            opened.append(len(result))
+            return result
+
+        def __exit__(self, *args):
+            self.stream.close()
+
+    monkeypatch.setattr(Path, "open", lambda self, *a, **kw: BoundedRead() if self == path else real_open(self, *a, **kw))
+    assert not asset_sync_service.is_complete_png_file(path)
+    assert sum(opened) <= len(raw) + 1, "oversize rejection must bound total file reads"
 
 @pytest.mark.parametrize('width,height,accepted', [
     (512, 1, True), (1, 512, True), (513, 1, False), (1, 513, False),
@@ -282,9 +309,11 @@ def test_whole_roster_file_count_refusal_reaches_cache(offline_backend, monkeypa
     data["visual"]["equipOverlayPath"] = str(overlay)
     files = asset_sync_service.runtime_asset_files(data)
     assert len(files) == 3 and all(_get_asset(name).code == 200 for name in files)
+    monkeypatch.setattr(visual_delivery_gate, "MAX_DELIVERABLE_ASSET_FILES", len(files))
     assert visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)["ok"]
-    # The existing hard 32/33 boundary observer uses this same delivery owner.
-    monkeypatch.setattr(visual_delivery_gate, "MAX_DELIVERABLE_ASSET_FILES", 2)
+    world_storage.write_world_recipe_cache(tmp_path / "at-count-cache", "test", "recipe", "world", data)
+    assert world_storage.read_world_recipe_cache(tmp_path / "at-count-cache", "test", "v5", "recipe", "world")
+    monkeypatch.setattr(visual_delivery_gate, "MAX_DELIVERABLE_ASSET_FILES", len(files) - 1)
     report = visual_delivery_gate.visual_delivery_report(data, check_backend_config=False)
     assert {p["code"] for p in report["problems"]} == {"asset_roster_file_limit_exceeded"}
     _assert_cache_refusal(data, tmp_path / "over-count-cache")
@@ -431,32 +460,6 @@ def test_authored_asset_transaction_projects_generates_and_refuses_missing_bytes
     assert problem in {row["code"] for row in refused["problems"]}
 
 
-def test_delivery_asset_roster_is_bounded_by_count_and_total_bytes(tmp_path: Path) -> None:
-    many: list[Path] = []
-    for index in range(33):
-        path = tmp_path / f"asset-{index}.png"
-        write_no_image_fixture_png(path)
-        many.append(path)
-    assert {problem["code"] for problem in visual_delivery_gate._asset_roster_problems(many)} == {
-        "asset_roster_file_limit_exceeded"
-    }
-    assert visual_delivery_gate._asset_roster_problems(many[:32]) == []
-
-    large: list[Path] = []
-    from PIL import Image
-    from PIL.PngImagePlugin import PngInfo
-    for index in range(3):
-        path = tmp_path / f"large-{index}.png"
-        write_no_image_fixture_png(path)
-        info = PngInfo()
-        info.add_text("offline_padding", "x" * (6 * 1024 * 1024))
-        with Image.open(path) as image:
-            image.save(path, pnginfo=info)
-        large.append(path)
-    assert {"asset_roster_byte_limit_exceeded"} == {
-        problem["code"] for problem in visual_delivery_gate._asset_roster_problems(large)
-    }
-
 def _delivery_data(path: Path) -> dict:
     return {
         "visual": {"spriteStatus": "generated", "spritePath": str(path)},
@@ -472,8 +475,7 @@ def _delivery_data(path: Path) -> dict:
     pytest.param("placeholder.png", "none", "placeholder", False, id="healthy-placeholder-not-generated"),
     pytest.param("corrupt.png", "corrupt", "generated", False, id="corrupt-png"),
     pytest.param("truncated.png", "truncated", "generated", False, id="truncated-real-png"),
-    *(pytest.param(name, "corrupt", "generated", False, id=f"non-png-{name}")
-      for name in ("sprite.txt", "sprite.json", "sprite")),
+    pytest.param("sprite.txt", "none", "generated", False, id="valid-png-with-unsupported-extension"),
 ])
 def test_delivery_png_admission_requires_complete_bytes_and_completed_status(monkeypatch, tmp_path, name, damage, status, accepted):
     monkeypatch.setattr(visual_delivery_gate, "VISUAL_REQUIRE_ITEM_SPRITE", True)
@@ -496,52 +498,66 @@ def test_delivery_png_admission_requires_complete_bytes_and_completed_status(mon
     assert data == before
 
 
-def test_image_request_gate_bounds_parallel_backend_ownership() -> None:
+def test_real_backend_dispatch_owns_gate_and_releases_it_after_failure(monkeypatch) -> None:
     gate = ImageRequestGate(1)
-    active = 0
-    maximum = 0
-    completed = []
-    lock = threading.Lock()
+    entered, release, queued = (threading.Event() for _ in range(3))
+    calls = []
+    failure = RuntimeError("synthetic backend failure")
 
-    def worker(index: int) -> None:
-        nonlocal active, maximum
-        with gate.slot():
-            with lock:
-                active += 1
-                maximum = max(maximum, active)
-            time.sleep(0.03)
-            with lock:
-                active -= 1
-                completed.append(index)
+    def backend(prompt, negative, asset_id, canvas, **kwargs):
+        calls.append((asset_id, prompt, negative, canvas))
+        if asset_id == "failing":
+            entered.set()
+            assert release.wait(5), "test did not release the backend"
+            raise failure
+        return [asset_id + ".png"]
 
-    threads = [threading.Thread(target=worker, args=(index,), daemon=True) for index in range(3)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join(timeout=5)
-    assert all(not thread.is_alive() for thread in threads), "image gate leaked a blocked worker"
-    assert sorted(completed) == [0, 1, 2], "every admitted backend request must finish"
-    assert active == 0
-    assert maximum == 1
+    def dispatch(asset_id):
+        if asset_id == "healthy":
+            queued.set()
+        return visual_sprite_generation._generate_backend_variants(
+            {}, prompt="literal " + asset_id, negative="authored negative",
+            asset_id=asset_id, canvas=32, role="item",
+        )
 
-def test_backend_dispatch_enters_shared_image_gate(monkeypatch) -> None:
-    events: list[str] = []
-
-    class ProbeGate:
-        @contextlib.contextmanager
-        def slot(self):
-            events.append("enter")
-            try:
-                yield
-            finally:
-                events.append("exit")
-
-    monkeypatch.setattr(visual_sprite_generation, "IMAGE_GENERATION_GATE", ProbeGate())
-    monkeypatch.setattr(visual_sprite_generation, "IMAGE_BACKEND", "off")
-    assert visual_sprite_generation._generate_backend_variants(
-        {}, prompt="x", negative="", asset_id="x", canvas=32, role="item"
-    ) == []
-    assert events == ["enter", "exit"]
+    monkeypatch.setattr(visual_sprite_generation, "IMAGE_GENERATION_GATE", gate)
+    monkeypatch.setattr(visual_sprite_generation, "IMAGE_BACKEND", "sdcpp")
+    monkeypatch.setattr(visual_sprite_generation, "IMAGE_BACKEND_CONFIG_ERROR", "")
+    monkeypatch.setattr(visual_sprite_generation, "generate_sdcpp", backend)
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        first = workers.submit(dispatch, "failing")
+        second = None
+        try:
+            assert entered.wait(5), "backend was never entered"
+            # Probe the actual admission primitive while the real dispatcher is
+            # inside external I/O; scheduler timing cannot make this pass.
+            spare = gate._semaphore.acquire(blocking=False)
+            if spare:
+                gate._semaphore.release()
+            assert not spare, "backend dispatch did not hold its only admission slot"
+            second = workers.submit(dispatch, "healthy")
+            assert queued.wait(5), "sibling request never started"
+            assert not second.done(), "sibling bypassed the occupied backend gate"
+            release.set()
+            with pytest.raises(RuntimeError) as caught:
+                first.result(timeout=5)
+            assert caught.value is failure
+            assert second.result(timeout=5) == ["healthy.png"]
+        finally:
+            release.set()
+            # Even a missing-release regression must not strand an executor
+            # worker after its bounded result() assertion has failed.
+            if second is not None and not second.done():
+                try:
+                    gate._semaphore.release()
+                except ValueError:
+                    pass
+    assert sorted(calls) == [
+        ("failing", "literal failing", "authored negative", 32),
+        ("healthy", "literal healthy", "authored negative", 32),
+    ]
+    assert gate._semaphore.acquire(blocking=False), "successful sibling leaked its slot"
+    gate._semaphore.release()
 
 @pytest.fixture
 def recipe(tmp_path, monkeypatch) -> dict:

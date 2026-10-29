@@ -16,26 +16,28 @@ from infini_local.core.runtime_authoring.program_schema import (
 from infini_local.core.schema_validation import strict_schema_errors
 
 
+AUTHOR_DESIGN_QUALITY_RULE = (
+    "Create a coherent, useful new Terraria item inspired by both parents. "
+    "Choose mechanics and controls that work together, with power and costs informed by the supplied source facts."
+)
+
+AUTHOR_STATUS_COMPOSITION_RULE = (
+    "Composed status effects do not inherit native buff immunity or AI. "
+    "Parent effect references cover only their listed operations and conditions."
+)
+
+
 PRIMARY_REPAIR_SYSTEM_RULE = (
     f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
 )
 RUNTIME_ROW_SHAPE_RULE = (
-    "Binding/call rows in requiredJsonShape illustrate separate forms, not a complete program. "
-    "Example ids and values are placeholders, not defaults or edit permissions. "
-    "Use actual ids and the selected capability card's exact required/conditional and permitted optional keys. "
-    "Call examples use one explicit id/fn/target/params envelope. "
-    "target is an exact existing compatible entity id, including the declared item_body id, not a literal item alias; "
-    "zero-argument calls use params={}. "
-    "Only item-body-only target and zero-argument params may be omitted as exact declared wire equivalences. "
-    "During Repair preserve accepted values and absences rather than reformatting existing calls. "
-    "For new bindings use id/input/action:{kind,targetId}/stackCost/contactDamage. "
-    "Fixed binding literals may be explicit or omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
-    "item-body-only action targetId=the exact unique declared item_body id; hold/equipped stackCost=0 and contactDamage=false; "
-    "place_item stackCost=1 and contactDamage=false. Projectile action targets remain explicit. "
-    "Every present literal must be exact and correctly typed; never choose a different action from these equivalences. "
-    "Active non-placement kind, stackCost and contactDamage remain explicit independent decisions. "
-    "placementCallId is required for place_item and forbidden for other actions; effectGroupId is optional only for apply_item_effects. "
-    "In a complete Author binding, absent effectGroupId selects ungrouped item effects."
+    "Rows illustrate alternative forms. Calls may omit target only for item-body-only capabilities, "
+    "and params only for zero-argument capabilities. "
+    "Fixed binding literals may be omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
+    "item-body-only action targetId=the unique item_body id; hold/equipped stackCost=0 and contactDamage=false; "
+    "place_item stackCost=1 and contactDamage=false. Active non-placement kind, stackCost and contactDamage are explicit. "
+    "placementCallId belongs only to place_item; effectGroupId belongs only to apply_item_effects, "
+    "where absence selects ungrouped effects."
 )
 
 
@@ -44,13 +46,11 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
         "exactlyOnePrimaryEntity": True,
         "authoredField": PRIMARY_ENTITY_AUTHOR_PATH,
         "primaryRule": (
-            "Select one existing entity id for lifecycle/held representation, not by damage or mere spawning. "
+            "Select the entity owning lifecycle/held representation. "
             "Use the item_body for item-graphic/body-contact representation. When all active bindings spawn "
             "the same entity, all have contactDamage=false and configure_item_use.hideUseGraphic=true, select "
-            "that exact spawn target. This selector does not create movement, a controller, damage or a concurrency cap. "
+            "that spawn target. "
             "A movement/controller that claims held-projectile representation does so only for this primary entity. "
-            "Binding/call rows do not carry role; Lowery derives wire roles "
-            "by exact target equality with primaryEntityId."
         ),
     }
 
@@ -94,9 +94,9 @@ def _call_prompt_shape_cards(variants: Iterable[Mapping[str, Any]]) -> list[dict
     mechanics or a second capability catalogue in the shape card.
     """
     hints = {
-        "id": "stable_call_id", "fn": "selected catalog capability",
-        "target": "exact existing compatible entity id",
-        "params": {"exact selected card keys": "all required/conditional and permitted optional typed values"},
+        "id": "stable_call_id", "fn": "catalog capability name",
+        "target": "entity_id",
+        "params": {"selected capability parameters": "values"},
     }
     forms: dict[tuple[str, ...], dict[str, Any]] = {}
     for variant in variants:
@@ -105,126 +105,38 @@ def _call_prompt_shape_cards(variants: Iterable[Mapping[str, Any]]) -> list[dict
     return list(forms.values())
 
 
+def _realization_prompt_shape_card() -> dict[str, str]:
+    """Separate optional player-facing prose from implementation debug."""
+    properties = _author_schema()["properties"]["realization"]["properties"]
+    roles = {
+        "description": "Brief player-facing description of actual use, effects and conditions.",
+        "playerExperience": "Optional practical-use notes for the player.",
+        "selfEvaluation": "Optional implementation/debug notes, including any mismatch with the idea. Not player text or an observed test result.",
+    }
+    return {name: f"{roles[name]} String minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode characters."
+            for name, spec in properties.items()}
+
+
 def author_item_prompt_shape_card() -> dict[str, Any]:
+    """Executable item plus concise advisory design/debug notes."""
     schema = _author_schema()
-    concept_properties = schema["properties"]["concept"]["properties"]
-    report_properties = schema["properties"]["realization"]["properties"]
     call_variants = schema["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["oneOf"]
-    card = {
-        # This order is model-facing: non-binding intent, executable mechanics,
-        # then the same Author's account and self-evaluation of the result.
-        "root": ["name", "category", "runtimeProgram"],
-        "optionalAdvisory": ["concept", "realization"],
-        "name": "non-empty string",
-        "category": "combat|tool|equipment|placeable|consumable|material|hybrid|generic",
-        "concept": {
-            "literalSynthesis": (
-                "non-empty string: preserve the actual parents' concrete appearance/identity, including "
-                "deliberately surreal physical combinations. Use only supplied parent identities; "
-                "illustrative examples are not additional parents. Literal appearance does not require "
-                "inheriting every parent capability."
-            ),
-            "coreMechanic": (
-                "non-empty string: describe coherent, purposeful mechanics with simple, immediately useful play. "
-                "A clear central purpose can include multiple complementary actions; this is not a single-loop rule "
-                "or a capability restriction. Let complexity serve player value. Ground power in the actual ingredient power, "
-                "rarity, acquisition facts and resource economy together; distinguish source observations from assumptions. "
-                "Use supplied progression facts when present; do not invent an acquisition tier from rarity, value or identity alone. "
-                "Compare the resulting primary action's useful output, control, repeat-hit policy and recurring payment "
-                "with the parent action it replaces; there is no mandatory upgrade or inheritance, but make losses "
-                "and increased costs purposeful rather than accidental. manaCostInput selects primary_use, alternate_use or both "
-                "for native manaCost payment; omitted means both. Scope a costly added utility to its intended input. "
-                "A source dropSeedsIfInInventory flag describes a native inventory passive; a generated definition gains "
-                "that support only by explicit collect_seeds_from_grass selection (no params or use binding). "
-                "Native seed RNG, drop ownership and inventory slots remain unchanged. This is optional, never mandatory "
-                "inheritance; ammo selection alone does not grant it. "
-                "useAmmoCategoryName describes required ammo; ammoCategoryName describes an ammo item's own category. "
-                "A source marked weapon_item.shoot_field is not a fired-shot observation, even under effectiveProjectile; "
-                "do not confuse that native field with the projectile chosen by an actual ammo shot. "
-                "Read damage in its source role: ammunition damage is a contribution to a compatible launcher's attack, "
-                "not proof of a standalone weapon; ammunition useTime alone does not establish attack cadence. "
-                "Turning that contribution into an autonomous attack is a new benefit: account for the removed launcher "
-                "requirement and the new throughput/resource cost rather than treating source damage as free power. "
-                "Do not treat cheap abundant inputs as evidence for exceptional output merely because the new theme sounds powerful. "
-                "Price the reusable benefit when converting a consumable into repeatable utility, not just its one-time craft cost. "
-                "Free reuse can be appropriate when the actual ingredients and resulting benefit justify it; no universal cooldown "
-                "or recurring payment is required. Balance total combat throughput, not only headline damage: include child attacks, "
-                "chains, bounces, target count, hit cadence, lifetime, concurrency, craftYield, stackCost and actual payment frequency. "
-                "Balance repeatable utility by effective uptime and ongoing resource economy, not just "
-                "strength, duration or one-time crafting cost: duration is not a cooldown, and free repeated refresh "
-                "can make a brief effect permanent. Choose a meaningful recurring cost, supported reuse limit "
-                "or deliberately weaker effect; intentional free sustained utility remains a design choice "
-                "but must be valued as sustained, not sold as a limited burst. Use only supported mechanics; "
-                "never invent charges, cooldowns or resource payments that the catalog cannot execute."
-            ),
-            "parentAContribution": (
-                "non-empty string: explain this actual parent's appearance/identity and purposeful "
-                "mechanical contribution, which may be newly invented rather than inherited; "
-                "copying every parent capability is not required."
-            ),
-            "parentBContribution": (
-                "non-empty string: explain this actual parent's appearance/identity and purposeful "
-                "mechanical contribution, which may be newly invented rather than inherited; "
-                "copying every parent capability is not required."
-            ),
-            "playerExperience": "non-empty string: explain practical player value and deliberate costs of the selected mechanics",
-            "plannedPlayerActions": [{
-                "input": "primary_use|alternate_use|hold|equipped|passive_or_event",
-                "intent": (
-                    "non-binding initial player-facing intent: include extra control modes only for "
-                    "meaningful utility. A parent createTile fact permits placement; it does not require it. "
-                    "For alternate placement, identify the placed target's meaningful utility worth "
-                    "escrowing the same generated item: accepted placement removes it from inventory "
-                    "and makes it unavailable until the tile breaks and returns it. Explicit useful "
-                    "placement and multiple purposeful actions remain legal."
-                ),
-            }],
-        },
+    return {
+        "root": ["name", "category", "concept", "runtimeProgram", "realization"],
+        "concept": "Brief design intent: the item you want to create.",
+        "realization": {key: value for key, value in _realization_prompt_shape_card().items()
+                        if key in {"description", "selfEvaluation"}},
+        "name": "non-empty item name",
+        "category": "UI/equipment classification: combat|tool|equipment|placeable|consumable|material|hybrid|generic",
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
             "schema": RUNTIME_PROGRAM_SCHEMA,
-            PRIMARY_ENTITY_FIELD: "exact existing entity id chosen once by the model",
+            PRIMARY_ENTITY_FIELD: "lifecycle/held entity id",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
             "bindings": _binding_prompt_shape_cards(),
             "calls": _call_prompt_shape_cards(call_variants),
         },
-        "realization": {
-            "description": (
-                "optional advisory interpretation of the emitted runtimeProgram, not an observed execution. "
-                "Write a concise item description in clear player language: explain the actual controls "
-                "(use, alternate use, while selected or while equipped), effects, costs, conditions and limits "
-                "that matter in play. Describe only supported behavior of the emitted bindings, calls and events; "
-                "distinguish base values or conditional effects from guaranteed outcomes. Do not invent abilities, "
-                "charges, safety, cooldowns or measured results from names, appearance or intent. "
-                "Use Terraria blocks, blocks/s and seconds for player-facing distance, speed and time; "
-                "gameplay params use their Author cards' human units and lowering produces engine units. Pixel-labelled geometry retains its declared engine units. Prefer readable actions over internal ids, "
-                "capability names or a parameter dump. No extra lore or report is required; "
-                f"string minLength={report_properties['description']['minLength']}, "
-                f"maxLength={report_properties['description']['maxLength']} Unicode code points"
-            ),
-            "playerExperience": (
-                "optional advisory notes on practical use and trade-offs of the same emitted mechanics, "
-                "not additional mechanics or promises; avoid repeating the description; "
-                f"string minLength={report_properties['playerExperience']['minLength']}, "
-                f"maxLength={report_properties['playerExperience']['maxLength']} Unicode code points"
-            ),
-            "selfEvaluation": "optional advisory notes; no required checklist, verdict, runtime references or acceptance claim",
-        },
     }
-    # JSON-object providers do not send the response schema. Make existing
-    # text bounds visible next to the prose, not an extra reporting duty.
-    for name, spec in concept_properties.items():
-        if spec.get("type") == "string":
-            card["concept"][name] = (
-                f"string minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode code points. "
-                + card["concept"][name]
-            )
-    intent = concept_properties["plannedPlayerActions"]["items"]["properties"]["intent"]
-    card["concept"]["plannedPlayerActions"][0]["intent"] = (
-        f"string minLength={intent['minLength']}, maxLength={intent['maxLength']} Unicode code points. "
-        + card["concept"]["plannedPlayerActions"][0]["intent"]
-    )
-    return card
 
 
 def provider_nullable_transport_rule(response_format: Mapping[str, Any] | None) -> str:
@@ -512,6 +424,20 @@ def author_item_provider_response_schema(*, local_schema: Mapping[str, Any] | No
     )
 
 
+def _generation_author_schema() -> dict[str, Any]:
+    """Separate player text from debug without restoring structured concept essays."""
+    schema = author_item_response_schema()
+    schema["properties"]["concept"] = {"type": "string"}
+    report = schema["properties"]["realization"]
+    report["properties"] = {key: value for key, value in report["properties"].items()
+                            if key in {"description", "selfEvaluation"}}
+    return schema
+
+
+def author_item_generation_provider_schema() -> dict[str, Any]:
+    return author_item_provider_response_schema(local_schema=_generation_author_schema())
+
+
 def author_item_repair_response_schema(
     *, capability_names: Iterable[str] | None = None,
 ) -> dict[str, Any]:
@@ -541,7 +467,7 @@ def author_item_repair_prompt_shape_card(*, capability_names: Iterable[str] | No
             }]
             continue
         if key == "realizationReplacement":
-            placeholders[key] = copy.deepcopy(author_item_prompt_shape_card()["realization"])
+            placeholders[key] = _realization_prompt_shape_card()
             continue
         if key == PRIMARY_ENTITY_SELECTION_FIELD:
             placeholders[key] = f"entity_id chosen from repairScope.repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.candidateEntityIds, or null"
@@ -646,12 +572,25 @@ def project_provider_author_item_to_local(
 ) -> Any:
     if not isinstance(response_format, Mapping) or response_format.get("type") != "json_schema":
         return copy.deepcopy(value)
+    local = author_item_response_schema()
+    envelope = response_format.get("json_schema")
+    provider = envelope.get("schema") if isinstance(envelope, Mapping) else None
+    if isinstance(provider, Mapping):
+        # Decode only the exact fresh-generation advisory projection. Historical
+        # string reports and other shapes remain raw advisory data.
+        generation = _generation_author_schema()
+        for field in ("concept", "realization"):
+            child = generation["properties"][field]
+            expected = {"anyOf": [_provider_strict_projection(child, omit_annotations=True), {"type": "null"}]}
+            if (provider.get("properties") or {}).get(field) == expected:
+                local["properties"][field] = child
     return project_provider_nullable_optionals_to_local(
-        value, author_item_response_schema(), response_format=response_format,
+        value, local, response_format=response_format,
     )
 
 
 __all__ = [
+    "AUTHOR_DESIGN_QUALITY_RULE",
     "PRIMARY_REPAIR_SYSTEM_RULE",
     "author_item_prompt_shape_card",
     "author_item_provider_repair_response_schema",

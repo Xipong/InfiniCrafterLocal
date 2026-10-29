@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "LocalGenerator"))
 
 from infini_local.core.runtime_authoring.capability_registry import (  # noqa: E402
+    CAPABILITY_REGISTRY,
     CONTROLLER_OPCODE,
     ENTITY_KIND_REGISTRY,
     EVENT_KIND_REGISTRY,
@@ -28,6 +29,8 @@ from infini_local.core.runtime_authoring.program_schema import (  # noqa: E402
 from infini_local.core.runtime_authoring.technical_lowering import (  # noqa: E402
     EXACT_REPETITION_COMPRESSION_POLICY,
     GLOBAL_TECHNICAL_LOWERINGS,
+    capability_fixed_outputs,
+    declared_neutral_omissions,
 )
 from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E402
     AMMO_CATEGORY_TMODLOADER_NAMES,
@@ -35,7 +38,7 @@ from infini_local.core.runtime_authoring.terraria_vocabulary import (  # noqa: E
     ITEM_USE_STYLE_TMODLOADER_NAMES,
 )
 
-from infini_local.pipelines.author_item_contract import author_item_prompt_shape_card  # noqa: E402
+from infini_local.pipelines.author_item_contract import author_item_repair_prompt_shape_card  # noqa: E402
 from infini_local.pipelines.llm_authoring_prompt import concise_terraria_tick_guide_for_llm  # noqa: E402
 
 OUTPUT = ROOT / "docs/reference/generated/LOWERY_RU.md"
@@ -73,12 +76,13 @@ def render() -> str:
         "",
         "## READ THIS FIRST — замороженная граница",
         "",
-        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references, metadata и optional advisory realization/selfEvaluation. "
+        "1. Gameplay Author сам выбирает механику, entities, bindings, calls, params, events, references и metadata. "
         "Ни имя, tooltip, category, family, parent tag или capability prose не разрешают коду дописать дизайн.",
         "2. Deterministic Python имеет право только проверить exact authored graph, ограничить его, отфильтровать exact Repair scope и выполнить lossless technical lowering.",
         "3. Lowery не является вторым Author. Он не выбирает movement, attachment, delivery, lifecycle, input, target, entity kind, event, damage, visual topology, hitbox topology, root executor или fallback mechanic. Он может скрывать неудобство API, но не сжимать пространство дизайна.",
-        "4. Authoring compression допустима только для буквально одинакового low-level значения, повторённого минимум "
-        f"**{EXACT_REPETITION_COMPRESSION_POLICY['minimumRepeatedPlacements']}** раз. Она обязана сохранять literal equality и не может добавлять design choice.",
+        "4. Сжатие буквально повторённых low-level параметров допускается от "
+        f"**{EXACT_REPETITION_COMPRESSION_POLICY['minimumRepeatedPlacements']}** одинаковых placements и сохраняет literal equality. "
+        "Этот threshold не запрещает точный выбранный alias или one-to-one technical projection; ни один из них не добавляет design choice.",
         "5. Обязательная wire projection из уже authored identity (например, exact entity kind → renderer role или exact primary id/target equality → binding role) не считается authoring compression: она сериализует одно решение, а не заменяет несколько решений модели.",
         "6. Repair получает конечные registry-derived alternatives и exact permissions. Модель выбирает и явно пишет полный вариант; patch не заполняет пропуски и после frozen-first merge повторно запускается canonical validator.",
         "7. Только optional params с явно объявленным registry default=neutral допускают пропуск в полном Author как точный выбор этой нейтрали. При omission_condition должна выполняться точная объявленная неисполняемая ветвь; вне её поле обязательно. Compiler материализует нейтраль после validation с отдельным receipt declared_neutral_omission. Это явное изменение контракта, не fallback невалидного значения и не правило для всех нулей. Связанные эффекты/обязательные группы проверяются совместно; omission в Repair означает не менять. Если разрешённый Repair меняет ветвь на исполняемую, он должен явно добавить ставший обязательным leaf.",
@@ -154,9 +158,57 @@ def render() -> str:
     ])
     lines += [
         "",
+        "### Точные выбранные проекции capabilities",
+        "",
+        "Это не второй список политик: значения ниже получены из registry fixed_wire_literals, "
+        "MOVEMENT_OPCODE/CONTROLLER_OPCODE/EVENT_ACTION_OPCODE и cap.wire_action через canonical lowerer. "
+        "Каждый fn-selected выход требует ровно один technical_projection receipt с exact source .fn, callId, finalPath и типизированным значением. "
+        "Source-aware audit связывает его с реально выбранным executor и authored target; согласованно изменить wire и receipt недостаточно. "
+        "Без Author `authoredSourceChecked=false`: это только проверка согласованности сохранённых утверждений, не восстановление неизвестного намерения. "
+        "Старые wire/opcodes/отсутствия не переписываются на чтении.",
+        "",
+    ]
+    lines += table(("capability", "fn-selected wire output", "exact value"), [
+        (fn, path, repr(value)) for fn in CAPABILITY_REGISTRY
+        for path, value in capability_fixed_outputs(fn).items()
+    ])
+    lines += ["", "### Явные event-проекции", "",
+              "Разное authored имя может выбирать точную зарегистрированную проекцию существующего event executor. "
+              "Это полезный отдельный выбор, не разрешение угадывать действие из prose и не whole-weapon macro.", ""]
+    lines += table(("authored capability", "wire action", "fixed outputs"), [
+        (fn, cap.wire_action, repr(dict(cap.fixed_wire_literals)))
+        for fn, cap in CAPABILITY_REGISTRY.items() if cap.wire_action
+    ])
+    lines += ["", "### Structured и enum projections", "",
+              "Typed structured choices и конечные enum-отображения также принадлежат ParamSpec; "
+              "они сохраняют явно выбранную ветвь и полезные независимые параметры.", ""]
+    lines += table(("capability.param", "declared projection"), [
+        (f"{fn}.{name}", repr(spec.projection_paths(name) if spec.structured else dict(spec.wire_enum)))
+        for fn, cap in CAPABILITY_REGISTRY.items() for name, spec in cap.params.items()
+        if spec.structured or spec.wire_enum
+    ])
+    lines += ["", "### Разрешённые neutral omissions", "",
+              "Это только объявленные default=neutral, не универсальное правило для нуля. "
+              "При условии вне указанной ветви leaf остаётся обязательным; contradictory-present не исправляется. "
+              "Compiler выдаёт declared_neutral_omission receipt, а Repair отсутствие сохраняет.", ""]
+    lines += table(("capability.param", "exact neutral", "omission condition"), [
+        (f"{fn}.{name}", repr(value),
+         repr({"targetKinds": spec.omission_condition.target_kinds,
+               "paramEquals": spec.omission_condition.param_equals,
+               "targetCapabilities": spec.omission_condition.target_capabilities}) if spec.omission_condition else
+         next(("all timing absent: " + ", ".join((rule.param, rule.other_param, *rule.any_of))
+               for rule in cap.requirements if rule.kind == "timing_pair_or_window" and rule.allow_absent
+               and name.split(".", 1)[0] in rule.any_of), "unconditional declared neutral"))
+        for fn, cap in CAPABILITY_REGISTRY.items()
+        for name, value in declared_neutral_omissions(fn, {}).items()
+        for spec in (cap.params[name.split(".", 1)[0]],)
+    ])
+    lines += [
+        "",
         "## Каноническая vocabulary",
         "",
-        "Gameplay Author-visible semantic aliases: **нет**. У каждой механической операции и каждого enum-значения один канонический токен. Старые `passive`, `drink`, `eat`, plural ammo spellings и `rogue` не принимаются. `throwing` сохранён только как точное каноническое отображение stable `DamageClass.Throwing`, а не как алиас. `damageClass` имеет одну identity-форму: built-in token либо точный tModLoader `ModName/ClassName`, скопированный из loaded parent facts; псевдотокены `none`/`modded` и параллельное `damageClassFullName` запрещены.",
+        "Точные event/structured/enum projections перечислены выше; технический alias сам по себе не запрещён. "
+        "Синонимы spelling, напротив, не образуют дополнительный Author API. Старые `passive`, `drink`, `eat`, plural ammo spellings и `rogue` не принимаются. `throwing` сохранён только как точное каноническое отображение stable `DamageClass.Throwing`. `damageClass` имеет одну identity-форму: built-in token либо точный tModLoader `ModName/ClassName`, скопированный из loaded parent facts; псевдотокены `none`/`modded` и параллельное `damageClassFullName` запрещены.",
         "",
         '<a id="mappings"></a>',
         "",
@@ -201,13 +253,14 @@ def render() -> str:
         "Механическая истина — явно emitted runtimeProgram, а не красивое обещание в тексте.",
         "",
         "Ниже — тот же model-facing текст из существующих prompt owners, а не отдельный prose-контракт. "
-        "Author получает его в `requiredJsonShape.realization` и `runtimeCapabilityContract.technicalNotes`; "
+        "Initial Author получает единицы в `runtimeCapabilityContract.technicalNotes` и generation-only provider schema с кратким concept и разделёнными realization.description (применение) / selfEvaluation (отладка). "
+        "Legacy acceptance и Repair сохраняют эти optional advisory поля; "
         "Repair — в `requiredJsonShape.realizationReplacement` и `runtimeExecutionTruth.units.playerFacingUnits`. "
         "Он передаётся в JSON messages при json_schema и json_object; schema annotations для этого не требуются. "
         "Если Repair добровольно возвращает описание, оно относится к post-merge программе; read-only context не даёт права менять frozen механику.",
         "",
     ]
-    realization = author_item_prompt_shape_card()["realization"]
+    realization = author_item_repair_prompt_shape_card()["realizationReplacement"]
     lines += table(("optional prose", "shared guidance"), [
         (f"realization.{name}", realization[name]) for name in ("description", "playerExperience")
     ])
@@ -294,9 +347,14 @@ def render() -> str:
         "",
         "Change-locality acceptance: изменить один canonical owner, обновить generated projections, пройти affected replay; не редактировать параллельные prose contracts и не запускать Live как замену локальному доказательству.",
         "",
-        "## Запрет на добавление alias",
+        "## Добавление точной projection",
         "",
-        "Новый gameplay alias допустим только если два входа обозначают одно и то же точное действие и один из них не показывается Author. Любое новое имя должно быть либо единственным canonical token, либо внутренней migration/config нормализацией вне gameplay. Добавление alias в Author schema требует изменить canonical vocabulary owner, перегенерировать этот файл и пройти `tools/checks/audit_terraria_standardization.py`.",
+        "Новая projection объявляется у существующего registry/ParamSpec owner и исполняется canonical lowerer/compiler. "
+        "Нужны полный явный selector и единственный результат, receipt, source→wire identity, negative для contradictory-present "
+        "и frozen Repair отсутствие. Полезные независимые параметры остаются у Author; старое ограничение compound controller "
+        "не становится универсальным engine invariant новых primitives. Alias не даёт права добавлять meaningful defaults, "
+        "выбирать channel/target/collision из имени или переписывать исторические saved items. "
+        "После изменения owner обновить generated projections и пройти affected acceptance.",
         "",
     ]
     return "\n".join(lines)

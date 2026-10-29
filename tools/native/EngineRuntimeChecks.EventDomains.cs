@@ -67,7 +67,8 @@ internal static partial class EngineRuntimeChecks
 
     private static void TargetBiasKeepsSavedDtoDomainAndActualDistanceDiscount()
     {
-        var find = typeof(GeneratedProjectile).GetMethod("FindNearestNpc", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var find = typeof(GeneratedProjectile).GetMethod("FindFiringTarget", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var previousTarget = typeof(GeneratedProjectile).GetField("_lastTarget", BindingFlags.Instance | BindingFlags.NonPublic)!;
         foreach (var role in SwarmRoles)
         foreach (float bias in new[] { 0f, 0.5f, 0.75f, 0.9f, 0.95f, 1f })
         {
@@ -83,18 +84,22 @@ internal static partial class EngineRuntimeChecks
             Equal(bias, entity.Targeting.SameTargetBias, "strict reader preserves saved targeting 0..1");
             var generated = SwarmHost(data, entity);
             Vector2 center = new(1600, 1600);
+            generated.Projectile.Center = center;
+            previousTarget.SetValue(generated, 0);
             var previous = Terraria.Main.npc[0] = EventDomainNpc(0, center, 100);
             var nearer = Terraria.Main.npc[1] = EventDomainNpc(1, center, 15);
             for (int repeat = 0; repeat < 3; repeat++)
             {
-                var selected = (NPC?)find.Invoke(generated, new object[] { center, entity.Targeting.RangeTiles * 16, 0, entity.Targeting.SameTargetBias });
+                var selected = (NPC?)find.Invoke(generated, new object[] { entity.Targeting.RangeTiles * 16, entity.Targeting });
                 Equal(bias >= 0.9f ? previous.whoAmI : nearer.whoAmI, selected!.whoAmI,
                     "native selector discounts distance; saved 0.9..1 saturates identically");
             }
-            var noPrevious = (NPC?)find.Invoke(generated, new object[] { center, 20f, -1, bias });
+            previousTarget.SetValue(generated, -1);
+            var noPrevious = (NPC?)find.Invoke(generated, new object[] { 20f, entity.Targeting });
             Equal(nearer.whoAmI, noPrevious!.whoAmI, "without a previous target there is no discount");
             nearer.active = false;
-            var onlyOutside = (NPC?)find.Invoke(generated, new object[] { center, 20f, 0, bias });
+            previousTarget.SetValue(generated, 0);
+            var onlyOutside = (NPC?)find.Invoke(generated, new object[] { 20f, entity.Targeting });
             Equal(bias >= 0.9f, onlyOutside is not null, "range is a score threshold, not a hard physical cap for the previous target");
         }
     }

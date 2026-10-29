@@ -57,7 +57,7 @@
               },
               "grip": {
                 "additionalProperties": false,
-                "description": "Atomic hand pivot on the selected final PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units or gameplay geometry. Optional except for a sprite-consuming move_front_hand. Root/reuse select the single item grip; only distinct baked entities own an entity grip. Not authored HoldoutOffset.",
+                "description": "Atomic hand pivot on the selected final PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units or gameplay geometry. Optional except for sprite-consuming attachment.anchor=front_hand or retained move_front_hand; armPose alone does not require it. Root/reuse select the single item grip; only distinct baked entities own an entity grip. Not authored HoldoutOffset.",
                 "properties": {
                   "normalizedX": {
                     "maximum": 1.0,
@@ -322,7 +322,7 @@
             },
             "grip": {
               "additionalProperties": false,
-              "description": "Atomic hand pivot on the selected final PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units or gameplay geometry. Optional except for a sprite-consuming move_front_hand. Root/reuse select the single item grip; only distinct baked entities own an entity grip. Not authored HoldoutOffset.",
+              "description": "Atomic hand pivot on the selected final PNG canvas after crop/fit/padding, before facing/gravity flips. normalizedX=0 is left, 1 right; normalizedY=0 top, 1 bottom. Both required; no pixel units or gameplay geometry. Optional except for sprite-consuming attachment.anchor=front_hand or retained move_front_hand; armPose alone does not require it. Root/reuse select the single item grip; only distinct baked entities own an entity grip. Not authored HoldoutOffset.",
               "properties": {
                 "normalizedX": {
                   "maximum": 1.0,

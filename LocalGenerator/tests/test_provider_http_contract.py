@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from email.message import Message
 import io
 import json
 from pathlib import Path
@@ -124,12 +125,27 @@ def boundary_handler(*, path="/combine", body=b"{}", length=None, address="127.0
     )
     handler = handler_class.__new__(handler_class)
     handler.path, handler.client_address = path, (address, 1234)
-    handler.headers = {"Content-Length": str(length if length is not None else len(body))}
+    handler.headers = {"Content-Length": str(length if length is not None else len(body)), "Host": "127.0.0.1:5055"}
+    handler.server = SimpleNamespace(server_port=5055)
     handler.rfile = body if isinstance(body, ReadProbe) else ReadProbe(body)
     handler.wfile, handler.connection = io.BytesIO(), Connection()
     for name in ("json", "json_status", "json_error", "send_error"):
         setattr(handler, name, getattr(capture, name))
     return handler, capture
+
+
+@pytest.mark.parametrize("path", ["/combine", "/debug/vfx"])
+@pytest.mark.parametrize("headers", [
+    {"Origin": "https://untrusted.example"}, {"Origin": "null"},
+    {"Sec-Fetch-Site": "cross-site"}, {"Host": "rebound.example:5055"},
+])
+def test_local_generation_mutations_reject_foreign_browser_origins(path, headers):
+    body = ReadProbe(b"{}", forbidden=True)
+    handler, capture = boundary_handler(path=path, body=body, length=2)
+    handler.headers.update(headers)
+    handler.do_POST()
+    assert capture.code == 403
+    assert body.read_calls == 0
 
 
 def utility_routes(root):
@@ -146,6 +162,26 @@ def utility_routes(root):
         normalize_asset_prompt=lambda *_a, **_k: "", generate_visual_asset=lambda *_a, **_k: ("", "", 0.0, {}),
         asset_negative_prompt=lambda _: "", alpha_stats=lambda _: {}, image_module=None,
     )
+
+
+@pytest.mark.parametrize("headers", [
+    [("Content-Length", "2"), ("Content-Length", "2")],
+    [("Content-Length", "2"), ("Content-Length", "3")],
+    [("Transfer-Encoding", "chunked")],
+    [("Transfer-Encoding", "identity"), ("Content-Length", "2")],
+    [("Content-Length", "+2")], [("Content-Length", "0_2")],
+])
+def test_ambiguous_request_framing_never_reaches_combine(headers):
+    body = ReadProbe(b"{}", forbidden=True)
+    handler, capture = boundary_handler(body=body, length=2)
+    handler.headers = Message()
+    handler.headers["Host"] = "127.0.0.1:5055"
+    handler.server = SimpleNamespace(server_port=5055)
+    for key, value in headers:
+        handler.headers[key] = value
+    handler.do_POST()
+    assert capture.code == 400 and capture.payload["error"] == "invalid_json"
+    assert body.read_calls == 0
 
 
 @pytest.mark.parametrize("method,path,address,status,payload,reads", [
@@ -171,7 +207,8 @@ def test_ingress_route_authority_precedes_body_read(method, path, address, statu
 @pytest.mark.parametrize("body,length,status,error,reads,timeout,internal", [
     pytest.param(body, len(body), 400, "invalid_json", 1, False, False, id=label)
     for label, body in [("array", b"[]"), ("null", b"null"), ("nan", b'{"value":NaN}'),
-        ("duplicate-key", b'{"value":1,"value":2}'), ("invalid-utf8", b'{"value":"\xff"}')]
+        ("duplicate-key", b'{"value":1,"value":2}'), ("invalid-utf8", b'{"value":"\xff"}'),
+        ("excessive-nesting", b'{"value":' + b'[' * 10000 + b'0' + b']' * 10000 + b'}')]
 ] + [
     pytest.param(b"{}", 8, 400, "invalid_json", 2, False, False, id="early-eof"),
     pytest.param(b"", MAX_JSON_BODY_BYTES + 1, 413, "request_too_large", 0, False, False, id="oversized-no-read"),

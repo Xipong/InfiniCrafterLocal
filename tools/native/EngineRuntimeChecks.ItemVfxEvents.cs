@@ -198,6 +198,9 @@ internal static partial class EngineRuntimeChecks
 
     private static void ItemOutgoingVfxRejectsNonfinitePoint()
     {
+        // Native inventory publication is independently exercised by FirstHeldItemEventPublishesTokenBeforeClaim.
+        // This socket-free fixture observes the event stream, not Terraria socket buffers.
+        using var equipmentPublication = PersistenceObserveNetworkSend((_, __) => { });
         WithLighting((config, lights) =>
         {
             var instance = typeof(global::InfiniCrafterLocal.InfiniCrafterLocalMod).GetProperty("Instance")!;
@@ -217,6 +220,10 @@ internal static partial class EngineRuntimeChecks
                 var player = new Player { active = true, whoAmI = 4 };
                 var data = GeneratedItemData.Placeholder();
                 data.VfxManifest = LightManifest(data.RuntimeProgram.ItemEntityId, RuntimeEventKind.OnUse);
+                var generated = new GeneratedItem();
+                var item = new Item { type = ItemID.Wood, stack = 1 };
+                AttachItem(generated, item, data);
+                player.inventory[0] = item;
                 foreach (bool explicitPoint in new[] { false, true })
                 foreach (Vector2 point in new[] { new Vector2(float.NaN, 160), new Vector2(160, float.PositiveInfinity),
                     new Vector2(float.NegativeInfinity, 160), Vector2.Zero })
@@ -296,59 +303,19 @@ internal static partial class EngineRuntimeChecks
                 InfiniItemVfxRuntime.OnPeriodic(player, data, entity);
                 Equal(15, Terraria.Main.dust.Count(d => d.active), "explicit zero stays silent");
 
-                // Real decoder, no sockets: validate remote coordinates and exact-event cooldown.
+                // Retired v3 had no event occurrence and cannot distinguish two
+                // genuine hits from a duplicate. Fail closed rather than guess.
                 Terraria.Main.netMode = NetmodeID.MultiplayerClient; Terraria.Main.myPlayer = 0;
                 data.VfxManifest = LightManifest(entity, RuntimeEventKind.OnHit);
-                slot = data.VfxManifest.Slots[0]; slot.Anchor = "hitPoint";
-                void Receive(string ev, Vector2 point, byte version = 3, string? id = null)
+                lights.Clear();
+                using (var oldPacket = new MemoryStream())
                 {
-                    using var stream = new MemoryStream();
-                    using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
-                    { writer.Write(version); writer.Write((byte)4); writer.Write(id ?? data.Id); writer.Write(entity); writer.Write(ev); writer.Write(point.X); writer.Write(point.Y); }
-                    stream.Position = 0;
-                    using var reader = new BinaryReader(stream);
-                    InfiniItemVfxRuntime.HandleUseEventPacket(reader, 4);
+                    using (var writer = new BinaryWriter(oldPacket, System.Text.Encoding.UTF8, true))
+                    { writer.Write((byte)3); writer.Write((byte)4); writer.Write(data.Id); writer.Write(entity); writer.Write(RuntimeEventKind.OnHit); writer.Write(320f); writer.Write(240f); }
+                    oldPacket.Position = 0;
+                    InfiniItemVfxRuntime.HandleUseEventPacket(new BinaryReader(oldPacket), 4);
                 }
-                lights.Clear(); Receive(slot.Event, target.Center, 2);
-                Equal(0, lights.Count, "old packet fails closed without migration");
-                Receive(slot.Event, new Vector2(float.NaN, 240));
-                Receive(slot.Event, target.Center, id: "wrong");
-                Equal(0, lights.Count, "invalid coordinate and identity rejected");
-                Receive(slot.Event, target.Center);
-                Equal(1, lights.Count, "real v3 decoder emits light");
-                Equal(true, ((Point)lights[0]!.GetType().GetField("Position")!.GetValue(lights[0])!).Equals(target.Center.ToTileCoordinates()), "relay keeps captured hit point");
-                lights.Clear(); Receive(slot.Event, target.Center);
-                Equal(0, lights.Count, "duplicate exact event is throttled");
-                slot.Event = RuntimeEventKind.OnCrit; Receive(slot.Event, target.Center);
-                Equal(1, lights.Count, "hit does not suppress crit in same tick");
-                lights.Clear(); slot.Event = RuntimeEventKind.OnUse; slot.Anchor = "owner";
-                Receive(slot.Event, target.Center);
-                Equal(true, ((Point)lights[0]!.GetType().GetField("Position")!.GetValue(lights[0])!).Equals(player.Center.ToTileCoordinates()), "owner anchor ignores remote event point");
-                lights.Clear(); clock.SetValue(null, 130u); player.active = false; Receive(slot.Event, target.Center);
-                Equal(0, lights.Count, "inactive peer rejected");
-
-                // Actual server decoder without Mod/socket initialization: observe its bounded
-                // acceptance table before the absent transport endpoint, not fabricated sends.
-                InfiniItemVfxRuntime.ClearUseEventCaches();
-                Terraria.Main.netMode = NetmodeID.Server; clock.SetValue(null, 0u);
-                var tables = (Array)typeof(InfiniItemVfxRuntime).GetField("RecentEvents", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
-                int Accepted() => (tables.GetValue(4) as System.Collections.IDictionary)?.Count ?? 0;
-                void ServerReceive(string ev, string? id = null)
-                {
-                    using var stream = new MemoryStream();
-                    using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true))
-                    { writer.Write((byte)3); writer.Write(id ?? data.Id); writer.Write(entity); writer.Write(ev); writer.Write(target.Center.X); writer.Write(target.Center.Y); }
-                    stream.Position = 0;
-                    using var reader = new BinaryReader(stream);
-                    InfiniItemVfxRuntime.HandleUseEventPacket(reader, 4);
-                }
-                ServerReceive(slot.Event); Equal(0, Accepted(), "server rejects inactive sender");
-                player.active = true;
-                ServerReceive(slot.Event, "wrong"); Equal(0, Accepted(), "server validates held item identity");
-                foreach (string ev in new[] { RuntimeEventKind.OnUse, RuntimeEventKind.OnHit, RuntimeEventKind.OnCrit })
-                { slot.Event = ev; ServerReceive(ev); }
-                Equal(3, Accepted(), "tick-zero use/hit/crit accepted independently by actual server decoder");
-                ServerReceive(slot.Event); Equal(3, Accepted(), "same event cannot expand cooldown table");
+                Equal(0, lights.Count, "retired identity-free event packet rejected");
             }
             finally
             {

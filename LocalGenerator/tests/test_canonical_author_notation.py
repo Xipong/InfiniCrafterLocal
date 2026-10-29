@@ -1,5 +1,5 @@
 
-from prompt_packet_helpers import request_dossier, dossier_text
+from prompt_packet_helpers import request_dossier
 """Current Author notation: one source admission/compiler/Repair boundary."""
 from copy import deepcopy
 
@@ -45,9 +45,9 @@ def test_provider_roundtrip_preserves_sparse_and_explicit_envelope_branches(monk
     request, user, _ = build_initial_author_request({}, {}, "call-envelope", model_name="offline")
     packet = json.loads(user)
     assert [set(row) for row in packet["requiredJsonShape"]["runtimeProgram"]["calls"]] == [{"id", "fn", "target", "params"}]
-    assert "one explicit id/fn/target/params envelope" in packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["rowShapes"]
     schema = author_item_response_schema()
     for source in (build_capability_witness(fn), _explicit_calls(build_capability_witness(fn))):
+        source = {key: value for key, value in source.items() if key in schema["required"]}
         encoded = _encode_nullable_fixture(source, schema) if mode == "json_schema" else deepcopy(source)
         if mode == "json_schema":
             Draft202012Validator(request["response_format"]["json_schema"]["schema"]).validate(encoded)
@@ -583,7 +583,6 @@ def test_source_native_repair_can_create_implied_item_call_without_authored_targ
 
 
 def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
-    import json
     from infini_local.core.runtime_authoring.capability_registry import capability_provider_union
     from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_object")
@@ -593,12 +592,6 @@ def test_real_author_card_uses_one_explicit_call_envelope(monkeypatch):
     assert {frozenset(row) for row in calls} == {
         frozenset(variant["properties"]) for variant in capability_provider_union()
     } == {frozenset(("id", "fn", "target", "params"))}
-    guide = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]
-    assert "one explicit id/fn/target/params envelope" in guide["rowShapes"]
-    assert "zero-argument calls use params={}" in guide["rowShapes"]
-    assert "exact declared wire equivalences" in guide["rowShapes"]
-    assert "not a literal item alias" in guide["rowShapes"]
-    assert "usePolicy" not in guide["bindingTarget"] and "omit" in guide["rowShapes"]
 
 
 def test_malformed_active_input_repairs_source_leaf_and_freezes_group_and_lanes():

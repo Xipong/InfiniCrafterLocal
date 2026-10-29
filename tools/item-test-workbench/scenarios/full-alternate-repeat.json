@@ -1,0 +1,88 @@
+{
+  "playerUpdate": "full",
+  "ticks": 430,
+  "seed": 1,
+  "player": {
+    "x": 800,
+    "y": 700,
+    "life": 100,
+    "maxLife": 100,
+    "mana": 200,
+    "manaCrystals": 9
+  },
+  "dummy": {
+    "x": 1000,
+    "y": 700,
+    "width": 32,
+    "height": 48,
+    "life": 10000
+  },
+  "tiles": [
+    {
+      "tileX": 1,
+      "tileY": 47,
+      "width": 97,
+      "height": 1
+    }
+  ],
+  "actions": [
+    {
+      "tick": 0,
+      "kind": "alt"
+    },
+    {
+      "tick": 1,
+      "kind": "release"
+    },
+    {
+      "tick": 60,
+      "kind": "alt"
+    },
+    {
+      "tick": 61,
+      "kind": "release"
+    },
+    {
+      "tick": 121,
+      "kind": "alt"
+    },
+    {
+      "tick": 122,
+      "kind": "release"
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "spawn_count",
+      "value": 0
+    },
+    {
+      "kind": "mana_debited",
+      "value": 30
+    },
+    {
+      "kind": "teleport_count",
+      "value": 2
+    },
+    {
+      "kind": "generated_buff_seen"
+    },
+    {
+      "kind": "generated_buff_expired"
+    },
+    {
+      "kind": "jump_boost_seen",
+      "minimum": 1.5
+    },
+    {
+      "kind": "jump_boost_equals",
+      "value": 0
+    },
+    {
+      "kind": "mobility_cooldown_expired"
+    },
+    {
+      "kind": "no_nonfinite"
+    }
+  ]
+}

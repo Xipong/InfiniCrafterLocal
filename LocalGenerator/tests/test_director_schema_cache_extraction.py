@@ -66,7 +66,7 @@ def _packet(monkeypatch, stage, fixture, mode, *, captured=None, vfx_source=None
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program
     from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
     import vfx_material_fixtures
-    data = (vfx_material_fixtures._data("channel_beam") if fixture == "channel_beam"
+    data = (vfx_material_fixtures._data("set_projectile_beam_geometry") if fixture == "set_projectile_beam_geometry"
             else compile_runtime_program(build_runtime_fixture(fixture)))
     with monkeypatch.context() as mp:
         mp.setattr(vfx_material_fixtures, "_data", lambda: copy.deepcopy(data))
@@ -170,7 +170,7 @@ def test_visual_caches_literal_entity_grammar_not_roster(monkeypatch, stage, mod
     from prompt_packet_helpers import request_dossier
     from infini_local.pipelines import visual_generation_pipeline as visual
     packets = []
-    for fixture in ("workbench_blade", "door_on_chain", "channel_beam"):
+    for fixture in ("workbench_blade", "door_on_chain", "set_projectile_beam_geometry"):
         packet, data = _packet(monkeypatch, stage, fixture, mode)
         if stage.endswith("repair"):
             _assert_visual_size_repair_packet(packet, data, mode)
@@ -253,7 +253,7 @@ def test_vfx_caches_owned_slot_grammar_not_dynamic_compatibility(monkeypatch, st
     from prompt_packet_helpers import request_dossier
     from infini_local.core import vfx_manifest as vfx
     packets = []
-    for fixture in ("workbench_blade", "door_on_chain", "channel_beam"):
+    for fixture in ("workbench_blade", "door_on_chain", "set_projectile_beam_geometry"):
         packet, data = _packet(monkeypatch, stage, fixture, mode)
         if stage.endswith("repair"):
             _assert_vfx_alpha_repair_packet(packet, data, mode)
@@ -296,7 +296,7 @@ def test_actual_native_serialization_is_static_across_three_rosters_with_exact_d
     context = {"provider": "openai_codex", "base_url": "https://chatgpt.com/backend-api/codex",
                "api_mode": "responses", "model": "gpt-6.1-sol"}
     wires = []
-    for fixture in ("workbench_blade", "door_on_chain", "channel_beam"):
+    for fixture in ("workbench_blade", "door_on_chain", "set_projectile_beam_geometry"):
         captured = []
         packet, _ = _packet(monkeypatch, stage, fixture, mode, captured=captured)
         before = copy.deepcopy(packet)

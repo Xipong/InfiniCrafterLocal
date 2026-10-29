@@ -1,0 +1,130 @@
+"""Offline setup tests: all network bytes are supplied by local fixtures."""
+import copy
+import importlib.util
+from pathlib import Path
+import tempfile
+import unittest
+
+SPEC = importlib.util.spec_from_file_location("fetch_vfx_assets", Path(__file__).with_name("fetch_vfx_assets.py"))
+setup = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(setup)
+
+
+class FetchVfxAssetsTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.out = self.root / "assets"
+        self.dll = self.root / "ParticleLibrary.dll"
+        self.dll.write_bytes(b"existing DLL")
+        self.contents = {"LICENSE": b"test license", "Assets/Textures/Star.png": b"test image bytes"}
+        self.manifest = {"package": "ParticleLibrary", "version": "test", "commit": "a" * 40,
+            "installedDll": {"bytes": self.dll.stat().st_size, "sha256": setup.digest(self.dll.read_bytes())},
+            "files": [{"path": path, "sourceURL": setup.OFFICIAL_PREFIX + "a" * 40 + "/" + path,
+                       "bytes": len(data), "sha256": setup.digest(data)} for path, data in self.contents.items()]}
+        self.calls = []
+
+    def fetch(self, entry):
+        self.calls.append(entry["path"])
+        return self.contents[entry["path"]]
+
+    def run_setup(self, manifest=None, fetch=None):
+        return setup.provision(self.out, self.dll, manifest or self.manifest, fetch or self.fetch)
+
+    def test_download_and_reuse(self):
+        result = self.run_setup()
+        self.assertEqual(result["downloaded"], 2)
+        self.assertFalse(result["runtimeReady"])
+        self.assertEqual(result["environment"]["INFINI_PARTICLE_ASSET_DIR"], str(self.out))
+        self.calls.clear()
+        result = self.run_setup()
+        self.assertEqual(result["reused"], 2)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(list(self.out.rglob(".asset-*")), [])
+
+    def test_wrong_dll_refuses_before_download(self):
+        self.dll.write_bytes(b"wrong DLL")
+        with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+            self.run_setup()
+        self.assertEqual(self.calls, [])
+        self.assertFalse(self.out.exists())
+
+    def test_existing_mismatch_never_overwritten(self):
+        path = self.out / "LICENSE"
+        path.parent.mkdir()
+        path.write_bytes(b"user data")
+        with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+            self.run_setup()
+        self.assertEqual(path.read_bytes(), b"user data")
+        self.assertEqual(self.calls, [])
+
+    def test_corrupt_download_not_installed(self):
+        with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+            self.run_setup(fetch=lambda _: b"corrupt")
+        self.assertFalse(self.out.exists())
+
+    def test_same_length_corruption_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+            self.run_setup(fetch=lambda e: b"x" * e["bytes"])
+        self.assertFalse(self.out.exists())
+
+    def test_official_source_and_commit_required(self):
+        m = copy.deepcopy(self.manifest)
+        m["files"][0]["sourceURL"] = "https://example.com/LICENSE"
+        with self.assertRaisesRegex(ValueError, "official"):
+            self.run_setup(manifest=m)
+        self.assertEqual(self.calls, [])
+
+    def test_traversal_rejected(self):
+        m = copy.deepcopy(self.manifest)
+        m["files"][0]["path"] = "../outside"
+        m["files"][0]["sourceURL"] = setup.OFFICIAL_PREFIX + m["commit"] + "/../outside"
+        with self.assertRaisesRegex(ValueError, "Unsafe"):
+            self.run_setup(manifest=m)
+        self.assertEqual(self.calls, [])
+
+    def test_duplicate_rejected(self):
+        m = copy.deepcopy(self.manifest)
+        m["files"].append(m["files"][0])
+        with self.assertRaisesRegex(ValueError, "Duplicate"):
+            self.run_setup(manifest=m)
+        self.assertEqual(self.calls, [])
+
+    def test_symlink_destination_rejected(self):
+        self.out.mkdir()
+        outside = self.root / "outside"
+        outside.mkdir()
+        try:
+            (self.out / "Assets").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            self.skipTest("Symlinks unavailable on this platform")
+        with self.assertRaisesRegex(ValueError, "Symlink"):
+            self.run_setup()
+        self.assertEqual(self.calls, [])
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_concurrent_mismatching_file_not_overwritten(self):
+        def race(entry):
+            path = self.out / entry["path"]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"other writer")
+            return self.contents[entry["path"]]
+        with self.assertRaisesRegex(ValueError, "Integrity mismatch"):
+            self.run_setup(fetch=race)
+        self.assertEqual((self.out / "LICENSE").read_bytes(), b"other writer")
+        self.assertEqual(list(self.out.rglob(".asset-*")), [])
+
+    def test_download_failure_keeps_only_prior_verified_files(self):
+        def fail_second(entry):
+            if entry["path"] != "LICENSE":
+                raise OSError("test offline")
+            return self.contents[entry["path"]]
+        with self.assertRaisesRegex(OSError, "offline"):
+            self.run_setup(fetch=fail_second)
+        self.assertEqual((self.out / "LICENSE").read_bytes(), self.contents["LICENSE"])
+        self.assertFalse((self.out / "Assets").exists())
+
+
+if __name__ == "__main__":
+    unittest.main()

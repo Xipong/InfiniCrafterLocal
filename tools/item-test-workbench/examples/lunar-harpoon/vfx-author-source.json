@@ -1,0 +1,125 @@
+{
+  "schema": "infini.vfx-director.runtime-events.v3",
+  "slots": [
+    {
+      "rendererKind": "libraryParticle",
+      "anchor": "self",
+      "blend": "additive",
+      "layer": "AfterProjectiles",
+      "startTick": 0,
+      "repeatEvery": 0,
+      "duration": 18,
+      "alpha": 0.8,
+      "particle": {
+        "textureId": "star",
+        "count": 4,
+        "speedMinPxPerTick": 0.5,
+        "speedMaxPxPerTick": 1.5,
+        "spreadRadians": 6.283185307,
+        "inheritVelocity": 0,
+        "drag": 0.9,
+        "accelerationXPxPerTickSquared": 0,
+        "accelerationYPxPerTickSquared": -0.015,
+        "widthPx": 8,
+        "heightPx": 8,
+        "rotationRadians": 0,
+        "rotationSpeedRadiansPerTick": 0.05,
+        "colorStart": {
+          "r": 190,
+          "g": 245,
+          "b": 255
+        },
+        "colorEnd": {
+          "r": 70,
+          "g": 150,
+          "b": 230
+        },
+        "endScaleMultiplier": 0.25,
+        "endOpacity": 0
+      },
+      "id": "lunar_on_release",
+      "entityId": "harpoon",
+      "event": "on_release"
+    },
+    {
+      "rendererKind": "libraryParticle",
+      "anchor": "hitPoint",
+      "blend": "additive",
+      "layer": "AfterProjectiles",
+      "startTick": 0,
+      "repeatEvery": 0,
+      "duration": 18,
+      "alpha": 0.8,
+      "particle": {
+        "textureId": "star",
+        "count": 8,
+        "speedMinPxPerTick": 0.5,
+        "speedMaxPxPerTick": 1.5,
+        "spreadRadians": 6.283185307,
+        "inheritVelocity": 0,
+        "drag": 0.9,
+        "accelerationXPxPerTickSquared": 0,
+        "accelerationYPxPerTickSquared": -0.015,
+        "widthPx": 8,
+        "heightPx": 8,
+        "rotationRadians": 0,
+        "rotationSpeedRadiansPerTick": 0.05,
+        "colorStart": {
+          "r": 190,
+          "g": 245,
+          "b": 255
+        },
+        "colorEnd": {
+          "r": 70,
+          "g": 150,
+          "b": 230
+        },
+        "endScaleMultiplier": 0.25,
+        "endOpacity": 0
+      },
+      "id": "lunar_on_hit",
+      "entityId": "harpoon",
+      "event": "on_hit"
+    },
+    {
+      "rendererKind": "libraryParticle",
+      "anchor": "self",
+      "blend": "additive",
+      "layer": "AfterProjectiles",
+      "startTick": 0,
+      "repeatEvery": 0,
+      "duration": 18,
+      "alpha": 0.8,
+      "particle": {
+        "textureId": "star",
+        "count": 4,
+        "speedMinPxPerTick": 0.5,
+        "speedMaxPxPerTick": 1.5,
+        "spreadRadians": 6.283185307,
+        "inheritVelocity": 0,
+        "drag": 0.9,
+        "accelerationXPxPerTickSquared": 0,
+        "accelerationYPxPerTickSquared": -0.015,
+        "widthPx": 8,
+        "heightPx": 8,
+        "rotationRadians": 0,
+        "rotationSpeedRadiansPerTick": 0.05,
+        "colorStart": {
+          "r": 190,
+          "g": 245,
+          "b": 255
+        },
+        "colorEnd": {
+          "r": 70,
+          "g": 150,
+          "b": 230
+        },
+        "endScaleMultiplier": 0.25,
+        "endOpacity": 0
+      },
+      "id": "lunar_on_kill",
+      "entityId": "harpoon",
+      "event": "on_kill"
+    }
+  ]
+}

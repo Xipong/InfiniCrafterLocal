@@ -279,7 +279,7 @@ public sealed class InfiniCraftStationUISystem : ModSystem
         Vector2 measured = FontAssets.MouseText.Value.MeasureString(text);
         float scale = FitTextScale(measured.X, rect.Width - 12, 0.75f);
         Vector2 size = measured * scale;
-        Utils.DrawBorderString(spriteBatch, text, new Vector2(rect.Center.X - size.X / 2f, rect.Center.Y - size.Y / 2f - 2), enabled ? Color.White : Color.Gray, scale);
+        Utils.DrawBorderString(spriteBatch, text, new Vector2(rect.Center.X - size.X / 2f, rect.Center.Y - size.Y / 2f), enabled ? Color.White : Color.Gray, scale);
     }
 
     private static float FitTextScale(float measuredWidth, float availableWidth, float maximumScale)
@@ -323,7 +323,8 @@ public sealed class InfiniCraftStationUISystem : ModSystem
 
     private static void DrawRect(SpriteBatch spriteBatch, Rectangle rect, Color color)
     {
-        spriteBatch.Draw(TextureAssets.MagicPixel.Value, rect, color);
+        spriteBatch.Draw(TextureAssets.MagicPixel.Value, rect, new Rectangle(0, 0, 1, 1),
+            Color.FromNonPremultiplied(color.R, color.G, color.B, color.A));
     }
 
     private static string Truncate(string value, int maxChars)

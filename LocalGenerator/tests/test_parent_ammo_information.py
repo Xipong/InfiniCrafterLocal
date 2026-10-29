@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import copy
-import json
 
 import pytest
 
@@ -40,67 +39,3 @@ def test_literal_inventory_seed_drop_flag_is_source_context_not_implicit_child_b
     assert request_dossier(request)["parents"]["A"]["packet"]["raw"]["item"]["dropSeedsIfInInventory"] is enabled
     assert parent == before
     assert "dropSeedsIfInInventory" not in raw_parent_card_for_llm({"name": "Blowpipe"})["raw"]["item"]
-
-
-def test_real_author_packet_explains_ammo_identity_without_forcing_projectile_design():
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
-
-    request, _, _ = build_initial_author_request({}, {}, "ammo-reading", model_name="offline-test-model")
-    payload = request_dossier(request)
-    card = next(row for row in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
-                if row["fn"] == "configure_weapon_ammo")
-    text = json.dumps(card, ensure_ascii=False)
-    assert "Seeds share the dart category" in text
-    assert "does not select projectile appearance" in text
-    assert "inventory-only" in text
-    # This is comprehension guidance, not a new seed ammo category or forced design.
-    assert author_item_response_schema()["required"] == ["name", "category", "runtimeProgram"]
-
-
-def test_author_advisory_exposes_inheritance_tradeoffs_and_explicit_cost_scope():
-    from infini_local.pipelines.author_item_contract import author_item_response_schema
-
-    request, _, _ = build_initial_author_request({}, {}, "source-tradeoffs", model_name="offline-test-model")
-    payload = request_dossier(request)
-    guidance = payload["requiredJsonShape"]["concept"]["coreMechanic"]
-    assert "Compare the resulting primary action" in guidance
-    assert "manaCostInput" in guidance
-    stats = next(card for card in payload["runtimeCapabilityContract"]["catalog"]["capabilities"]
-                 if card["fn"] == "configure_item_stats")
-    scope = stats["params"]["manaCostInput"]
-    # The actual model-facing contract offers each cost scope and explicitly
-    # preserves old shared-cost semantics on omission; prose order is irrelevant.
-    assert set(scope["enum"]) == {"primary_use", "alternate_use", "both"}
-    assert scope["optional"] is True
-    assert scope["default"] == scope["neutral"] == "both"
-    assert "no mandatory upgrade or inheritance" in guidance
-    assert "dropSeedsIfInInventory" in guidance
-    assert "only by explicit collect_seeds_from_grass selection" in guidance
-    assert "never mandatory inheritance" in guidance
-    assert "concept" not in author_item_response_schema()["required"]
-
-
-@pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
-def test_actual_author_cards_explain_spawn_axes_event_origin_and_yoyo_rotation(monkeypatch, format_mode):
-    monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', format_mode)
-    request, _, _ = build_initial_author_request({}, {}, "emission-reading", model_name="offline-test-model")
-    cards = {row["fn"]: row for row in request_dossier(request)["runtimeCapabilityContract"]["catalog"]["capabilities"]}
-    spawn = json.dumps(cards["configure_spawn"], ensure_ascii=False)
-    yoyo = json.dumps(cards["move_yoyo_hover"], ensure_ascii=False)
-    assert "on_hit/on_crit: struck NPC center" in spawn
-    assert "periodic/on_spawn/on_kill: source projectile center" in spawn
-    assert "facing uses current owner.direction" in spawn
-    assert "velocity uses the producer-supplied gameplay axis" in spawn
-    assert "cursor uses MouseWorld minus the shifted spawn position" in spawn
-    assert "not the visible sprite's rotation" in spawn
-    assert "rotates the body by 0.35 radians per projectile update" in yoyo
-    assert "does not turn the player toward the cursor" in yoyo
-
-
-def test_author_distinguishes_weapon_shoot_field_from_an_observed_ammunition_shot():
-    request, _, _ = build_initial_author_request({}, {}, "source-observation-reading", model_name="offline-test-model")
-    guidance = request_dossier(request)["requiredJsonShape"]["concept"]["coreMechanic"]
-    assert "useAmmoCategoryName describes required ammo" in guidance
-    assert "ammoCategoryName describes an ammo item's own category" in guidance
-    assert "weapon_item.shoot_field is not a fired-shot observation" in guidance
-    assert "effectiveProjectile" in guidance

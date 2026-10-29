@@ -1,0 +1,5358 @@
+{
+  "schema": "infini.native-equipment-sources.v1",
+  "sources": [
+    {
+      "method": "Player.GrantArmorBenefits",
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "7291da1c5cb5a388b7cc5c3f8d20c2a9aa919710048c11aa3dd3d4902b43f07e",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+      "records": [
+        {
+          "itemId": 100,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2875,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2891
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ShadowGreaves"
+        },
+        {
+          "itemId": 101,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2875,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2891
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ShadowScalemail"
+        },
+        {
+          "itemId": 102,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2875,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2891
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ShadowHelmet"
+        },
+        {
+          "itemId": 123,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2638,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 2662
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MeteorHelmet"
+        },
+        {
+          "itemId": 124,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2638,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 2662
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MeteorSuit"
+        },
+        {
+          "itemId": 125,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2638,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 2662
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MeteorLeggings"
+        },
+        {
+          "itemId": 151,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2526,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 2550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NecroHelmet"
+        },
+        {
+          "itemId": 152,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2526,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 2550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NecroBreastplate"
+        },
+        {
+          "itemId": 153,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2526,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 2550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NecroGreaves"
+        },
+        {
+          "itemId": 228,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2691,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 40,
+                  "units": "points",
+                  "ilOffset": 2703
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2722
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/JungleHat"
+        },
+        {
+          "itemId": 229,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2747,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 20,
+                  "units": "points",
+                  "ilOffset": 2759
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 2786
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/JungleShirt"
+        },
+        {
+          "itemId": 230,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2815,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 20,
+                  "units": "points",
+                  "ilOffset": 2827
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2846
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/JunglePants"
+        },
+        {
+          "itemId": 231,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3023,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3039
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MoltenHelmet"
+        },
+        {
+          "itemId": 232,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3051,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 3075
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MoltenBreastplate"
+        },
+        {
+          "itemId": 233,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3091,
+              "effects": [
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 3107
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MoltenGreaves"
+        },
+        {
+          "itemId": 238,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 1809,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 1833
+                }
+              ],
+              "conditionalEffects": [
+                {
+                  "condition": {
+                    "nativeMember": "Terraria.Main.tenthAnniversaryWorld",
+                    "equals": true,
+                    "observed": false
+                  },
+                  "guardIlOffset": 1843,
+                  "effects": [
+                    {
+                      "stat": "maximumMinions",
+                      "nativeMember": "Terraria.Player.maxMinions",
+                      "operation": "add",
+                      "value": 1,
+                      "units": "slots",
+                      "ilOffset": 1854
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/WizardHat"
+        },
+        {
+          "itemId": 256,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2363,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 3.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2379
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NinjaHood"
+        },
+        {
+          "itemId": 257,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2363,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 3.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2379
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NinjaShirt"
+        },
+        {
+          "itemId": 258,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2363,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 3.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2379
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NinjaPants"
+        },
+        {
+          "itemId": 268,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 1789,
+              "effects": [
+                {
+                  "nativeMember": "Terraria.Player.accDivingHelm",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 1793
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/DivingHelmet"
+        },
+        {
+          "itemId": 371,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3119,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 9.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3135
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 3158
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 40,
+                  "units": "points",
+                  "ilOffset": 3173
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CobaltHat"
+        },
+        {
+          "itemId": 372,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3189,
+              "effects": [
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 3204
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 3231
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CobaltHelmet"
+        },
+        {
+          "itemId": 373,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3247,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 3271
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 10.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3290
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CobaltMask"
+        },
+        {
+          "itemId": 374,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3302,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3318
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CobaltBreastplate"
+        },
+        {
+          "itemId": 375,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3330,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.03,
+                  "units": "additive_fraction",
+                  "ilOffset": 3354
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 3372
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CobaltLeggings"
+        },
+        {
+          "itemId": 376,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3388,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 3412
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 60,
+                  "units": "points",
+                  "ilOffset": 3427
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MythrilHood"
+        },
+        {
+          "itemId": 377,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3443,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 8.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3459
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 3482
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MythrilHelmet"
+        },
+        {
+          "itemId": 378,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3498,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 3522
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3541
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MythrilHat"
+        },
+        {
+          "itemId": 379,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3553,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 3577
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MythrilChainmail"
+        },
+        {
+          "itemId": 380,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3593,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 10.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3609
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MythrilGreaves"
+        },
+        {
+          "itemId": 400,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3661,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 3685
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 12.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3704
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 80,
+                  "units": "points",
+                  "ilOffset": 3715
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AdamantiteHeadgear"
+        },
+        {
+          "itemId": 401,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3731,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3747
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.14,
+                  "units": "additive_fraction",
+                  "ilOffset": 3770
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AdamantiteHelmet"
+        },
+        {
+          "itemId": 402,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3786,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.14,
+                  "units": "additive_fraction",
+                  "ilOffset": 3810
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 10.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3829
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AdamantiteMask"
+        },
+        {
+          "itemId": 403,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3841,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 3865
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AdamantiteBreastplate"
+        },
+        {
+          "itemId": 404,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3881,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 3897
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 3911
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AdamantiteLeggings"
+        },
+        {
+          "itemId": 410,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7313,
+              "effects": [
+                {
+                  "stat": "pickUseTimeMultiplier",
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7328
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MiningShirt"
+        },
+        {
+          "itemId": 411,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7344,
+              "effects": [
+                {
+                  "stat": "pickUseTimeMultiplier",
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7359
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MiningPants"
+        },
+        {
+          "itemId": 551,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5102,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5118
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/HallowedPlateMail"
+        },
+        {
+          "itemId": 552,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5143,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 5167
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 5185
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/HallowedGreaves"
+        },
+        {
+          "itemId": 553,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4967,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 4991
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 8.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5010
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/HallowedHelmet"
+        },
+        {
+          "itemId": 558,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4801,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 4825
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 12.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4844
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 100,
+                  "units": "points",
+                  "ilOffset": 4855
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/HallowedHeadgear"
+        },
+        {
+          "itemId": 559,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4884,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 10.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4900
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 4923
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 4942
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/HallowedMask"
+        },
+        {
+          "itemId": 684,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6848,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 6872
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 6899
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FrostHelmet"
+        },
+        {
+          "itemId": 685,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6915,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 11.0,
+                  "units": "percentage_points",
+                  "ilOffset": 6931
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 11.0,
+                  "units": "percentage_points",
+                  "ilOffset": 6946
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FrostBreastplate"
+        },
+        {
+          "itemId": 686,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6958,
+              "effects": [
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 6973
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 6992
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FrostLeggings"
+        },
+        {
+          "itemId": 792,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2983,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.03,
+                  "units": "additive_fraction",
+                  "ilOffset": 3007
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CrimsonHelmet"
+        },
+        {
+          "itemId": 793,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2983,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.03,
+                  "units": "additive_fraction",
+                  "ilOffset": 3007
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CrimsonScalemail"
+        },
+        {
+          "itemId": 794,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2983,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.03,
+                  "units": "additive_fraction",
+                  "ilOffset": 3007
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CrimsonGreaves"
+        },
+        {
+          "itemId": 956,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2929,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2945
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientShadowHelmet"
+        },
+        {
+          "itemId": 957,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2929,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2945
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientShadowScalemail"
+        },
+        {
+          "itemId": 958,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2929,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2945
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientShadowGreaves"
+        },
+        {
+          "itemId": 959,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2526,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 2550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientNecroHelmet"
+        },
+        {
+          "itemId": 960,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2691,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 40,
+                  "units": "points",
+                  "ilOffset": 2703
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2722
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientCobaltHelmet"
+        },
+        {
+          "itemId": 961,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2747,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 20,
+                  "units": "points",
+                  "ilOffset": 2759
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 2786
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientCobaltBreastplate"
+        },
+        {
+          "itemId": 962,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2815,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 20,
+                  "units": "points",
+                  "ilOffset": 2827
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2846
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientCobaltLeggings"
+        },
+        {
+          "itemId": 1001,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5340,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 5364
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5383
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ChlorophyteMask"
+        },
+        {
+          "itemId": 1002,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5395,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 5419
+                },
+                {
+                  "nativeMember": "Terraria.Player.chloroAmmoCost80",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 5426
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ChlorophyteHelmet"
+        },
+        {
+          "itemId": 1003,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5442,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 80,
+                  "units": "points",
+                  "ilOffset": 5454
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.17,
+                  "units": "additive_fraction",
+                  "ilOffset": 5472
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 5499
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ChlorophyteHeadgear"
+        },
+        {
+          "itemId": 1004,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5515,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 5539
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5558
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ChlorophytePlateMail"
+        },
+        {
+          "itemId": 1005,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5570,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 8.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5586
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 5600
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ChlorophyteGreaves"
+        },
+        {
+          "itemId": 1158,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/PygmyNecklace"
+        },
+        {
+          "itemId": 1159,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7415,
+              "effects": [
+                {
+                  "stat": "whipRangeMultiplier",
+                  "nativeMember": "Terraria.Player.whipRangeMultiplier",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7430
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7459,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7483
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TikiMask"
+        },
+        {
+          "itemId": 1160,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7459,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7483
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TikiShirt"
+        },
+        {
+          "itemId": 1161,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7388,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7399
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 7459,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7483
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TikiPants"
+        },
+        {
+          "itemId": 1205,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3927,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 3951
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 3970
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/PalladiumMask"
+        },
+        {
+          "itemId": 1206,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3982,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 4006
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 9.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4025
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/PalladiumHelmet"
+        },
+        {
+          "itemId": 1207,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4037,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 4061
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 9.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4080
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 60,
+                  "units": "points",
+                  "ilOffset": 4091
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/PalladiumHeadgear"
+        },
+        {
+          "itemId": 1208,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4107,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.03,
+                  "units": "additive_fraction",
+                  "ilOffset": 4131
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 2.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4150
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/PalladiumBreastplate"
+        },
+        {
+          "itemId": 1209,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4162,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.02,
+                  "units": "additive_fraction",
+                  "ilOffset": 4186
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 1.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4205
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/PalladiumLeggings"
+        },
+        {
+          "itemId": 1210,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4217,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.11,
+                  "units": "additive_fraction",
+                  "ilOffset": 4241
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.11,
+                  "units": "additive_fraction",
+                  "ilOffset": 4260
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 4274
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/OrichalcumMask"
+        },
+        {
+          "itemId": 1211,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4290,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 15.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4306
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 4320
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/OrichalcumHelmet"
+        },
+        {
+          "itemId": 1212,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4336,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 18.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4352
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 80,
+                  "units": "points",
+                  "ilOffset": 4363
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/OrichalcumHeadgear"
+        },
+        {
+          "itemId": 1213,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4379,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4395
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/OrichalcumBreastplate"
+        },
+        {
+          "itemId": 1214,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4407,
+              "effects": [
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.11,
+                  "units": "additive_fraction",
+                  "ilOffset": 4422
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 4449
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/OrichalcumLeggings"
+        },
+        {
+          "itemId": 1215,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4465,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 4489
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 9.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4508
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 4523
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TitaniumMask"
+        },
+        {
+          "itemId": 1216,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4535,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 4559
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4578
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TitaniumHelmet"
+        },
+        {
+          "itemId": 1217,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4590,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 4614
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4633
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 100,
+                  "units": "points",
+                  "ilOffset": 4644
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TitaniumHeadgear"
+        },
+        {
+          "itemId": 1218,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4660,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.04,
+                  "units": "additive_fraction",
+                  "ilOffset": 4684
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 3.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4703
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TitaniumBreastplate"
+        },
+        {
+          "itemId": 1219,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4715,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.03,
+                  "units": "additive_fraction",
+                  "ilOffset": 4739
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 3.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4758
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 4772
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TitaniumLeggings"
+        },
+        {
+          "itemId": 1282,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6075,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 20,
+                  "units": "points",
+                  "ilOffset": 6087
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 6105
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AmethystRobe"
+        },
+        {
+          "itemId": 1283,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6121,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 40,
+                  "units": "points",
+                  "ilOffset": 6133
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 6151
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TopazRobe"
+        },
+        {
+          "itemId": 1284,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6167,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 40,
+                  "units": "points",
+                  "ilOffset": 6179
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 6197
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SapphireRobe"
+        },
+        {
+          "itemId": 1285,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6213,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 60,
+                  "units": "points",
+                  "ilOffset": 6225
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.11,
+                  "units": "additive_fraction",
+                  "ilOffset": 6243
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/EmeraldRobe"
+        },
+        {
+          "itemId": 1286,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6272,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 60,
+                  "units": "points",
+                  "ilOffset": 6284
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.13,
+                  "units": "additive_fraction",
+                  "ilOffset": 6302
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/RubyRobe"
+        },
+        {
+          "itemId": 1287,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6318,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 80,
+                  "units": "points",
+                  "ilOffset": 6330
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 6348
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/DiamondRobe"
+        },
+        {
+          "itemId": 1316,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6390,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 250,
+                  "units": "native_units",
+                  "ilOffset": 6405
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 6421,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 6445
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TurtleHelmet"
+        },
+        {
+          "itemId": 1317,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6390,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 250,
+                  "units": "native_units",
+                  "ilOffset": 6405
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 6461,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 6485
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 8.0,
+                  "units": "percentage_points",
+                  "ilOffset": 6504
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TurtleScaleMail"
+        },
+        {
+          "itemId": 1318,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6390,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 250,
+                  "units": "native_units",
+                  "ilOffset": 6405
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 6516,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 4.0,
+                  "units": "percentage_points",
+                  "ilOffset": 6532
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/TurtleLeggings"
+        },
+        {
+          "itemId": 1504,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5704,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 5728
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5747
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpectreRobe"
+        },
+        {
+          "itemId": 1505,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5759,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 5783
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 5801
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpectrePants"
+        },
+        {
+          "itemId": 1549,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5967,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 13.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5983
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.13,
+                  "units": "additive_fraction",
+                  "ilOffset": 6006
+                },
+                {
+                  "nativeMember": "Terraria.Player.ammoCost80",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 6013
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ShroomiteBreastplate"
+        },
+        {
+          "itemId": 1550,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6029,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 6045
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 6059
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ShroomiteLeggings"
+        },
+        {
+          "itemId": 1832,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8374,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 8385
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.11,
+                  "units": "additive_fraction",
+                  "ilOffset": 8412
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpookyHelmet"
+        },
+        {
+          "itemId": 1833,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8428,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "slots",
+                  "ilOffset": 8439
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.11,
+                  "units": "additive_fraction",
+                  "ilOffset": 8466
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpookyBreastplate"
+        },
+        {
+          "itemId": 1834,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8482,
+              "effects": [
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.2,
+                  "units": "additive_fraction",
+                  "ilOffset": 8497
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 8511
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.11,
+                  "units": "additive_fraction",
+                  "ilOffset": 8538
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpookyLeggings"
+        },
+        {
+          "itemId": 2189,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5616,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 60,
+                  "units": "points",
+                  "ilOffset": 5628
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.13,
+                  "units": "additive_fraction",
+                  "ilOffset": 5646
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 5673
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 10.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5692
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpectreMask"
+        },
+        {
+          "itemId": 2199,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6557,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 250,
+                  "units": "native_units",
+                  "ilOffset": 6572
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 6619,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 6643
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/BeetleHelmet"
+        },
+        {
+          "itemId": 2200,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6659,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 6683
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 8.0,
+                  "units": "percentage_points",
+                  "ilOffset": 6702
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 6717
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 6731
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/BeetleScaleMail"
+        },
+        {
+          "itemId": 2201,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6588,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 400,
+                  "units": "native_units",
+                  "ilOffset": 6603
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 6747,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 6771
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 6790
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/BeetleShell"
+        },
+        {
+          "itemId": 2202,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6557,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 250,
+                  "units": "native_units",
+                  "ilOffset": 6572
+                }
+              ]
+            },
+            {
+              "guardIlOffset": 6802,
+              "effects": [
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 6818
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 6832
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/BeetleLeggings"
+        },
+        {
+          "itemId": 2275,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2566,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 2590
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2609
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MagicHat"
+        },
+        {
+          "itemId": 2277,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2143,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 2167
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2186
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 2201
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 2215
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/Gi"
+        },
+        {
+          "itemId": 2279,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2231,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 2255
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 6.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2274
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 2288
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/GypsyRobe"
+        },
+        {
+          "itemId": 2361,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7058,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7069
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.04,
+                  "units": "additive_fraction",
+                  "ilOffset": 7096
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/BeeHeadgear"
+        },
+        {
+          "itemId": 2362,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7112,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7123
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.04,
+                  "units": "additive_fraction",
+                  "ilOffset": 7150
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/BeeBreastplate"
+        },
+        {
+          "itemId": 2363,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7166,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 7190
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/BeeGreaves"
+        },
+        {
+          "itemId": 2367,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3634,
+              "effects": [
+                {
+                  "stat": "fishingPower",
+                  "nativeMember": "Terraria.Player.fishingSkill",
+                  "operation": "add",
+                  "value": 5,
+                  "units": "points",
+                  "ilOffset": 3645
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AnglerHat"
+        },
+        {
+          "itemId": 2368,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3634,
+              "effects": [
+                {
+                  "stat": "fishingPower",
+                  "nativeMember": "Terraria.Player.fishingSkill",
+                  "operation": "add",
+                  "value": 5,
+                  "units": "points",
+                  "ilOffset": 3645
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AnglerVest"
+        },
+        {
+          "itemId": 2369,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 3634,
+              "effects": [
+                {
+                  "stat": "fishingPower",
+                  "nativeMember": "Terraria.Player.fishingSkill",
+                  "operation": "add",
+                  "value": 5,
+                  "units": "points",
+                  "ilOffset": 3645
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AnglerPants"
+        },
+        {
+          "itemId": 2370,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7512,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 7536
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpiderMask"
+        },
+        {
+          "itemId": 2371,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7512,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 7536
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7550
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpiderBreastplate"
+        },
+        {
+          "itemId": 2372,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7566,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.06,
+                  "units": "additive_fraction",
+                  "ilOffset": 7590
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7604
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SpiderGreaves"
+        },
+        {
+          "itemId": 2757,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7983,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 7999
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.16,
+                  "units": "additive_fraction",
+                  "ilOffset": 8022
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/VortexHelmet"
+        },
+        {
+          "itemId": 2758,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8038,
+              "effects": [
+                {
+                  "nativeMember": "Terraria.Player.ammoCost75",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 8042
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 12.0,
+                  "units": "percentage_points",
+                  "ilOffset": 8061
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 8084
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/VortexBreastplate"
+        },
+        {
+          "itemId": 2759,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8100,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 8.0,
+                  "units": "percentage_points",
+                  "ilOffset": 8116
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 8139
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 8157
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/VortexLeggings"
+        },
+        {
+          "itemId": 2760,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8173,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 60,
+                  "units": "points",
+                  "ilOffset": 8185
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 8203
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 8222
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 8245
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NebulaHelmet"
+        },
+        {
+          "itemId": 2761,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8261,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.09,
+                  "units": "additive_fraction",
+                  "ilOffset": 8285
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 9.0,
+                  "units": "percentage_points",
+                  "ilOffset": 8304
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NebulaBreastplate"
+        },
+        {
+          "itemId": 2762,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 8316,
+              "effects": [
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 8331
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 8358
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NebulaLeggings"
+        },
+        {
+          "itemId": 2763,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7773,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 300,
+                  "units": "native_units",
+                  "ilOffset": 7788
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 26.0,
+                  "units": "percentage_points",
+                  "ilOffset": 7807
+                },
+                {
+                  "stat": "lifeRegeneration",
+                  "nativeMember": "Terraria.Player.lifeRegen",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "native_half_hp_per_second_units",
+                  "ilOffset": 7817
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SolarFlareHelmet"
+        },
+        {
+          "itemId": 2764,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7833,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 300,
+                  "units": "native_units",
+                  "ilOffset": 7848
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.29,
+                  "units": "additive_fraction",
+                  "ilOffset": 7875
+                },
+                {
+                  "stat": "lifeRegeneration",
+                  "nativeMember": "Terraria.Player.lifeRegen",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "native_half_hp_per_second_units",
+                  "ilOffset": 7889
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SolarFlareBreastplate"
+        },
+        {
+          "itemId": 2765,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7905,
+              "effects": [
+                {
+                  "stat": "aggro",
+                  "nativeMember": "Terraria.Player.aggro",
+                  "operation": "add",
+                  "value": 300,
+                  "units": "native_units",
+                  "ilOffset": 7920
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 7939
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 7953
+                },
+                {
+                  "stat": "lifeRegeneration",
+                  "nativeMember": "Terraria.Player.lifeRegen",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "native_half_hp_per_second_units",
+                  "ilOffset": 7967
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SolarFlareLeggings"
+        },
+        {
+          "itemId": 3109,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2317,
+              "effects": [
+                {
+                  "nativeMember": "Terraria.Player.nightVision",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 2321
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/NightVisionHelmet"
+        },
+        {
+          "itemId": 3212,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2115,
+              "effects": [
+                {
+                  "stat": "armorPenetration",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_armorPenetration",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "points",
+                  "ilOffset": 2131
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/SharkToothNecklace"
+        },
+        {
+          "itemId": 3266,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7206,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 7230
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ObsidianHelm"
+        },
+        {
+          "itemId": 3267,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7246,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7257
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ObsidianShirt"
+        },
+        {
+          "itemId": 3268,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7273,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 7297
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/ObsidianPants"
+        },
+        {
+          "itemId": 3374,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2391,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 4.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2407
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FossilHelm"
+        },
+        {
+          "itemId": 3375,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2419,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 2443
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FossilShirt"
+        },
+        {
+          "itemId": 3376,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2459,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 4.0,
+                  "units": "percentage_points",
+                  "ilOffset": 2475
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FossilPants"
+        },
+        {
+          "itemId": 3381,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7620,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7631
+                },
+                {
+                  "stat": "maximumSentries",
+                  "nativeMember": "Terraria.Player.maxTurrets",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7645
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.22,
+                  "units": "additive_fraction",
+                  "ilOffset": 7672
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/StardustHelmet"
+        },
+        {
+          "itemId": 3382,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7701,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "slots",
+                  "ilOffset": 7712
+                },
+                {
+                  "stat": "whipRangeMultiplier",
+                  "nativeMember": "Terraria.Player.whipRangeMultiplier",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 7730
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.22,
+                  "units": "additive_fraction",
+                  "ilOffset": 7757
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/StardustBreastplate"
+        },
+        {
+          "itemId": 3383,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7701,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 2,
+                  "units": "slots",
+                  "ilOffset": 7712
+                },
+                {
+                  "stat": "whipRangeMultiplier",
+                  "nativeMember": "Terraria.Player.whipRangeMultiplier",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 7730
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.22,
+                  "units": "additive_fraction",
+                  "ilOffset": 7757
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/StardustLeggings"
+        },
+        {
+          "itemId": 3770,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 1870,
+              "effects": [
+                {
+                  "nativeMember": "Terraria.Player.slowFall",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 1874
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/DjinnsCurse"
+        },
+        {
+          "itemId": 3776,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 1910,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 1934
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 1961
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientBattleArmorHat"
+        },
+        {
+          "itemId": 3777,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 1977,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 40,
+                  "units": "points",
+                  "ilOffset": 1989
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 2016
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 2030
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientBattleArmorShirt"
+        },
+        {
+          "itemId": 3778,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2046,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 40,
+                  "units": "points",
+                  "ilOffset": 2058
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 2085
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 2099
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientBattleArmorPants"
+        },
+        {
+          "itemId": 4008,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 2317,
+              "effects": [
+                {
+                  "nativeMember": "Terraria.Player.nightVision",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 2321
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/UltrabrightHelmet"
+        },
+        {
+          "itemId": 4256,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 6272,
+              "effects": [
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 60,
+                  "units": "points",
+                  "ilOffset": 6284
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.13,
+                  "units": "additive_fraction",
+                  "ilOffset": 6302
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AmberRobe"
+        },
+        {
+          "itemId": 4404,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 1890,
+              "effects": [
+                {
+                  "nativeMember": "Terraria.Player.canFloatInWater",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 1894
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FloatingTube"
+        },
+        {
+          "itemId": 4873,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5035,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 5059
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 5073
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/HallowedHood"
+        },
+        {
+          "itemId": 4896,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4884,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeCrit",
+                  "operation": "add",
+                  "value": 10.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4900
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 4923
+                },
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 4942
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientHallowedMask"
+        },
+        {
+          "itemId": 4897,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4967,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedDamage",
+                  "operation": "add",
+                  "value": 0.15,
+                  "units": "additive_fraction",
+                  "ilOffset": 4991
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "ranged",
+                  "nativeMember": "Terraria.Player.get_rangedCrit",
+                  "operation": "add",
+                  "value": 8.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5010
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientHallowedHelmet"
+        },
+        {
+          "itemId": 4898,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 4801,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicDamage",
+                  "operation": "add",
+                  "value": 0.12,
+                  "units": "additive_fraction",
+                  "ilOffset": 4825
+                },
+                {
+                  "stat": "critChance",
+                  "damageClass": "magic",
+                  "nativeMember": "Terraria.Player.get_magicCrit",
+                  "operation": "add",
+                  "value": 12.0,
+                  "units": "percentage_points",
+                  "ilOffset": 4844
+                },
+                {
+                  "stat": "maximumMana",
+                  "nativeMember": "Terraria.Player.statManaMax2",
+                  "operation": "add",
+                  "value": 100,
+                  "units": "points",
+                  "ilOffset": 4855
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientHallowedHeadgear"
+        },
+        {
+          "itemId": 4899,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5035,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 5059
+                },
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 5073
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientHallowedHood"
+        },
+        {
+          "itemId": 4900,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5102,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 7.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5118
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientHallowedPlateMail"
+        },
+        {
+          "itemId": 4901,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5143,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.07,
+                  "units": "additive_fraction",
+                  "ilOffset": 5167
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.08,
+                  "units": "additive_fraction",
+                  "ilOffset": 5185
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/AncientHallowedGreaves"
+        },
+        {
+          "itemId": 4982,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5201,
+              "effects": [
+                {
+                  "stat": "critChance",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allCrit",
+                  "operation": "add",
+                  "value": 5.0,
+                  "units": "percentage_points",
+                  "ilOffset": 5217
+                },
+                {
+                  "stat": "manaCostMultiplier",
+                  "nativeMember": "Terraria.Player.manaCost",
+                  "operation": "add",
+                  "value": -0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 5231
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CrystalNinjaHelmet"
+        },
+        {
+          "itemId": 4983,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5247,
+              "effects": [
+                {
+                  "stat": "damage",
+                  "damageClass": "generic",
+                  "nativeMember": "Terraria.Player.get_allDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 5271
+                },
+                {
+                  "nativeMember": "Terraria.Player.huntressAmmoCost90",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 5278
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CrystalNinjaChestplate"
+        },
+        {
+          "itemId": 4984,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 5294,
+              "effects": [
+                {
+                  "stat": "attackSpeed",
+                  "damageClass": "melee",
+                  "nativeMember": "Terraria.Player.get_meleeSpeed",
+                  "operation": "add",
+                  "value": 0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 5310
+                },
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.2,
+                  "units": "additive_fraction",
+                  "ilOffset": 5324
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/CrystalNinjaLeggings"
+        },
+        {
+          "itemId": 5001,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 108,
+              "effects": [
+                {
+                  "stat": "movementSpeed",
+                  "nativeMember": "Terraria.Player.moveSpeed",
+                  "operation": "add",
+                  "value": 0.25,
+                  "units": "additive_fraction",
+                  "ilOffset": 123
+                },
+                {
+                  "nativeMember": "Terraria.Player.moonLordLegs",
+                  "operation": "set",
+                  "value": true,
+                  "units": "boolean_state",
+                  "ilOffset": 130
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MoonLordLegs"
+        },
+        {
+          "itemId": 5068,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7004,
+              "effects": [
+                {
+                  "stat": "maximumMinions",
+                  "nativeMember": "Terraria.Player.maxMinions",
+                  "operation": "add",
+                  "value": 1,
+                  "units": "slots",
+                  "ilOffset": 7015
+                },
+                {
+                  "stat": "damage",
+                  "damageClass": "summon",
+                  "nativeMember": "Terraria.Player.get_minionDamage",
+                  "operation": "add",
+                  "value": 0.05,
+                  "units": "additive_fraction",
+                  "ilOffset": 7042
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/FlinxFurCoat"
+        }
+      ]
+    },
+    {
+      "method": "Player.UpdateArmorSets",
+      "assemblyVersion": "1.4.4.9",
+      "sourceMethodSha256": "dd6a0bbf7849f8bca4adfa6e2c2b605df889f3b633e884729fbb5d286ce96c2c",
+      "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+      "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+      "records": [
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                278
+              ],
+              "body": [
+                246
+              ],
+              "legs": [
+                234
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.AshWood",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.ashWoodBonus",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 407
+            }
+          ],
+          "guardIlOffset": 350
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                112
+              ],
+              "body": [
+                75
+              ],
+              "legs": [
+                64
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Pumpkin",
+          "effects": [
+            {
+              "stat": "damage",
+              "damageClass": "generic",
+              "nativeMember": "Terraria.Player.get_allDamage",
+              "operation": "add",
+              "value": 0.1,
+              "units": "additive_fraction",
+              "ilOffset": 830
+            }
+          ],
+          "guardIlOffset": 762
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                180
+              ],
+              "body": [
+                182
+              ],
+              "legs": [
+                122
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Gladiator",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.noKnockback",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 889
+            }
+          ],
+          "guardIlOffset": 835
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                22
+              ],
+              "body": [
+                14
+              ],
+              "legs": [
+                14
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Ninja",
+          "effects": [
+            {
+              "stat": "movementSpeed",
+              "nativeMember": "Terraria.Player.moveSpeed",
+              "operation": "add",
+              "value": 0.2,
+              "units": "additive_fraction",
+              "ilOffset": 953
+            }
+          ],
+          "guardIlOffset": 894
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                188
+              ],
+              "body": [
+                189
+              ],
+              "legs": [
+                129
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Fossil",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.ammoCost80",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 1015
+            }
+          ],
+          "guardIlOffset": 958
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                75,
+                7
+              ],
+              "body": [
+                7
+              ],
+              "legs": [
+                7
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Bone",
+          "effects": [
+            {
+              "stat": "critChance",
+              "damageClass": "ranged",
+              "nativeMember": "Terraria.Player.get_rangedCrit",
+              "operation": "add",
+              "value": 10.0,
+              "units": "percentage_points",
+              "ilOffset": 1087
+            }
+          ],
+          "guardIlOffset": 1020
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                5,
+                74
+              ],
+              "body": [
+                5,
+                48
+              ],
+              "legs": [
+                5,
+                44
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.ShadowScale",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.shadowArmor",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 2805
+            }
+          ],
+          "guardIlOffset": 2730
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                57
+              ],
+              "body": [
+                37
+              ],
+              "legs": [
+                35
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Crimson",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.crimsonRegen",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 2858
+            }
+          ],
+          "guardIlOffset": 2810
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                156
+              ],
+              "body": [
+                66
+              ],
+              "legs": [
+                55
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.SpectreDamage",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.ghostHurt",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 2994
+            }
+          ],
+          "guardIlOffset": 2943
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                6
+              ],
+              "body": [
+                6
+              ],
+              "legs": [
+                6
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Meteor",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.spaceGun",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 3044
+            }
+          ],
+          "guardIlOffset": 2999
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                46
+              ],
+              "body": [
+                27
+              ],
+              "legs": [
+                26
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Frost",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.frostBurn",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 3097
+            },
+            {
+              "stat": "damage",
+              "damageClass": "melee",
+              "nativeMember": "Terraria.Player.get_meleeDamage",
+              "operation": "add",
+              "value": 0.1,
+              "units": "additive_fraction",
+              "ilOffset": 3124
+            },
+            {
+              "stat": "damage",
+              "damageClass": "ranged",
+              "nativeMember": "Terraria.Player.get_rangedDamage",
+              "operation": "add",
+              "value": 0.1,
+              "units": "additive_fraction",
+              "ilOffset": 3151
+            }
+          ],
+          "guardIlOffset": 3049
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                76,
+                8
+              ],
+              "body": [
+                49,
+                8
+              ],
+              "legs": [
+                45,
+                8
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Jungle",
+          "effects": [
+            {
+              "stat": "manaCostMultiplier",
+              "nativeMember": "Terraria.Player.manaCost",
+              "operation": "add",
+              "value": -0.16,
+              "units": "additive_fraction",
+              "ilOffset": 3242
+            }
+          ],
+          "guardIlOffset": 3156
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                11
+              ],
+              "body": [
+                20
+              ],
+              "legs": [
+                19
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Mining",
+          "effects": [
+            {
+              "stat": "pickUseTimeMultiplier",
+              "nativeMember": "Terraria.Player.pickSpeed",
+              "operation": "add",
+              "value": -0.1,
+              "units": "additive_fraction",
+              "ilOffset": 3485
+            }
+          ],
+          "guardIlOffset": 3426
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                216
+              ],
+              "body": [
+                20
+              ],
+              "legs": [
+                19
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Mining",
+          "effects": [
+            {
+              "stat": "pickUseTimeMultiplier",
+              "nativeMember": "Terraria.Player.pickSpeed",
+              "operation": "add",
+              "value": -0.1,
+              "units": "additive_fraction",
+              "ilOffset": 3552
+            }
+          ],
+          "guardIlOffset": 3490
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                161
+              ],
+              "body": [
+                169
+              ],
+              "legs": [
+                104
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Angler",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.anglerSetSpawnReduction",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 3814
+            }
+          ],
+          "guardIlOffset": 3760
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                70
+              ],
+              "body": [
+                46
+              ],
+              "legs": [
+                42
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Cactus",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.cactusThorns",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 3867
+            }
+          ],
+          "guardIlOffset": 3819
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "body": [
+                54
+              ],
+              "legs": [
+                49
+              ],
+              "head": [
+                83,
+                84,
+                85
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Palladium",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.onHitRegen",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 4478
+            }
+          ],
+          "guardIlOffset": 4410
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "body": [
+                55
+              ],
+              "legs": [
+                50
+              ],
+              "head": [
+                86,
+                87,
+                88
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Orichalcum",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.onHitPetal",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 4551
+            }
+          ],
+          "guardIlOffset": 4483
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                82
+              ],
+              "body": [
+                53
+              ],
+              "legs": [
+                48
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Tiki",
+          "effects": [
+            {
+              "stat": "maximumMinions",
+              "nativeMember": "Terraria.Player.maxMinions",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 5068
+            },
+            {
+              "stat": "whipRangeMultiplier",
+              "nativeMember": "Terraria.Player.whipRangeMultiplier",
+              "operation": "add",
+              "value": 0.2,
+              "units": "additive_fraction",
+              "ilOffset": 5086
+            }
+          ],
+          "guardIlOffset": 5013
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                134
+              ],
+              "body": [
+                95
+              ],
+              "legs": [
+                79
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Spooky",
+          "effects": [
+            {
+              "stat": "damage",
+              "damageClass": "summon",
+              "nativeMember": "Terraria.Player.get_minionDamage",
+              "operation": "add",
+              "value": 0.25,
+              "units": "additive_fraction",
+              "ilOffset": 5162
+            }
+          ],
+          "guardIlOffset": 5091
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                162
+              ],
+              "body": [
+                170
+              ],
+              "legs": [
+                105
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.Spider",
+          "effects": [
+            {
+              "stat": "damage",
+              "damageClass": "summon",
+              "nativeMember": "Terraria.Player.get_minionDamage",
+              "operation": "add",
+              "value": 0.12,
+              "units": "additive_fraction",
+              "ilOffset": 5361
+            }
+          ],
+          "guardIlOffset": 5287
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                204
+              ],
+              "body": [
+                201
+              ],
+              "legs": [
+                145
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.SquireTier2",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setSquireT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 6751
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 6765
+            }
+          ],
+          "guardIlOffset": 6694
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                203
+              ],
+              "body": [
+                200
+              ],
+              "legs": [
+                144
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.ApprenticeTier2",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setApprenticeT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 6827
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 6841
+            }
+          ],
+          "guardIlOffset": 6770
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                205
+              ],
+              "body": [
+                202
+              ],
+              "legs": [
+                147,
+                146
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.HuntressTier2",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setHuntressT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 6916
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 6930
+            }
+          ],
+          "guardIlOffset": 6846
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                206
+              ],
+              "body": [
+                203
+              ],
+              "legs": [
+                148
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.MonkTier2",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setMonkT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 6992
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 7006
+            }
+          ],
+          "guardIlOffset": 6935
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                210
+              ],
+              "body": [
+                204
+              ],
+              "legs": [
+                152
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.SquireTier3",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setSquireT3",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7068
+            },
+            {
+              "nativeMember": "Terraria.Player.setSquireT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7075
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 7089
+            }
+          ],
+          "guardIlOffset": 7011
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                211
+              ],
+              "body": [
+                205
+              ],
+              "legs": [
+                153
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.ApprenticeTier3",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setApprenticeT3",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7151
+            },
+            {
+              "nativeMember": "Terraria.Player.setApprenticeT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7158
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 7172
+            }
+          ],
+          "guardIlOffset": 7094
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                212
+              ],
+              "body": [
+                206
+              ],
+              "legs": [
+                154,
+                155
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.HuntressTier3",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setHuntressT3",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7247
+            },
+            {
+              "nativeMember": "Terraria.Player.setHuntressT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7254
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 7268
+            }
+          ],
+          "guardIlOffset": 7177
+        },
+        {
+          "condition": {
+            "functionalEquipSlots": {
+              "head": [
+                213
+              ],
+              "body": [
+                207
+              ],
+              "legs": [
+                156
+              ]
+            },
+            "allSlotsRequired": true,
+            "vanitySatisfies": false
+          },
+          "setBonusLocalizationKey": "ArmorSetBonus.MonkTier3",
+          "effects": [
+            {
+              "nativeMember": "Terraria.Player.setMonkT3",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7330
+            },
+            {
+              "nativeMember": "Terraria.Player.setMonkT2",
+              "operation": "set",
+              "value": true,
+              "units": "boolean_state",
+              "ilOffset": 7337
+            },
+            {
+              "stat": "maximumSentries",
+              "nativeMember": "Terraria.Player.maxTurrets",
+              "operation": "add",
+              "value": 1,
+              "units": "slots",
+              "ilOffset": 7351
+            }
+          ],
+          "guardIlOffset": 7273
+        }
+      ]
+    }
+  ]
+}
