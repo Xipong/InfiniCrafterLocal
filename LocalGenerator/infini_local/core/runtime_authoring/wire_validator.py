@@ -293,7 +293,7 @@ def _validate_npc_effect(event: Mapping[str, Any], entity: Mapping[str, Any], ru
 
 
 def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any]], path: str = "$.gameplay.generatedBuff") -> None:
-    """Check every present leaf; absent legacy leaves retain C# DTO defaults."""
+    """Validate present leaves; a nonneutral buff must explicitly own its lifetime."""
     specs = {name: spec for name, spec in CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params.items() if name != "effectGroupId"}
     _reject_unknown(wire, frozenset(spec.wire_name or name for name, spec in specs.items()),
                     path, errors)
@@ -313,17 +313,14 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
         elif spec.kind == "string":
             valid = isinstance(value, str) and (value in spec.enum or (value == "" and no_light))
         elif spec.wire_kind:
-            valid = ((key == "durationTicks" and type(value) is int and value == 0)
-                     or spec.matches_scalar_projection(value))
+            valid = spec.matches_scalar_projection(value)
         else:
             integer_wire = spec.projected_kind == "integer"
             typed = type(value) is int if integer_wire else type(value) in (int, float)
             if typed:
                 try:
                     authored = value * spec.wire_divisor / spec.wire_multiplier
-                    # Zero duration is the inactive DTO state, not an active
-                    # authored buff. Other bounds/conversions are registry-owned.
-                    minimum = 0 if key == "durationTicks" else spec.minimum
+                    minimum = spec.minimum
                     valid = (isfinite(authored)
                              and (minimum is None or authored >= minimum)
                              and (spec.maximum is None or authored <= spec.maximum)
@@ -335,6 +332,12 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
             errors.append({"path": f"{path}.{key}",
                            "code": "invalid_generated_buff_field",
                            "message": "Value must match the declared generated-buff wire type and domain without coercion."})
+            if key == "durationTicks" and (type(value) is not int or value < 0):
+                errors.append({"path": f"{path}.{key}", "code": "invalid_integer",
+                               "message": "Generated buff duration must be a nonnegative integer; zero means permanent."})
+    if "durationTicks" not in wire and _generated_buff_has_effect(wire):
+        errors.append({"path": f"{path}.durationTicks", "code": "missing_generated_buff_duration",
+                       "message": "A nonneutral generated buff requires explicit durationTicks; zero selects permanent duration."})
 
 
 def _generated_buff_has_effect(wire: Mapping[str, Any]) -> bool:
@@ -415,8 +418,8 @@ def _validate_effect_groups(runtime: Mapping[str, Any], errors: list[dict[str, A
         generated = row.get("generatedBuff")
         if isinstance(generated, Mapping):
             _validate_generated_buff(generated, errors, f"{path}.generatedBuff")
-            if type(generated.get("durationTicks")) is not int or not 1 <= generated["durationTicks"] <= 21600:
-                errors.append({"path": f"{path}.generatedBuff.durationTicks", "code": "invalid_effect_group", "message": "Named generated buff requires explicit 1..21600 duration."})
+            if "durationTicks" not in generated:
+                errors.append({"path": f"{path}.generatedBuff.durationTicks", "code": "invalid_effect_group", "message": "Named generated buff requires an explicit duration; zero selects permanent duration."})
         if not _item_effects_present(row):
             errors.append({"path": path, "code": "empty_effect_group", "message": "Effect group must contain an executable explicit item effect."})
     return groups
@@ -427,7 +430,7 @@ def _item_effects_present(effects: Mapping[str, Any]) -> bool:
     duration = generated.get("durationTicks") if isinstance(generated, Mapping) else None
     return (any(type(effects.get(key)) is int and effects[key] > 0 for key in ("healLife", "healMana"))
             or isinstance(effects.get("extraBuffs"), list) and bool(effects["extraBuffs"])
-            or isinstance(generated, Mapping) and type(duration) is int and duration > 0 and _generated_buff_has_effect(generated)
+            or isinstance(generated, Mapping) and type(duration) is int and duration >= 0 and _generated_buff_has_effect(generated)
             or effects.get("mobilityMode") in ("recall_home", "blink_to_cursor"))
 
 
@@ -1316,7 +1319,7 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
     # hide malformed values behind an otherwise valid healing effect.
     heals_life = _positive_integer_effect(gameplay.get("healLife", 0), "$.gameplay.healLife", errors)
     heals_mana = _positive_integer_effect(gameplay.get("healMana", 0), "$.gameplay.healMana", errors)
-    buff_has_duration = _positive_integer_effect(generated_buff.get("durationTicks", 0), "$.gameplay.generatedBuff.durationTicks", errors)
+    buff_has_duration = type(generated_buff.get("durationTicks")) is int and generated_buff["durationTicks"] >= 0
     has_generated_buff = buff_has_duration and _generated_buff_has_effect(generated_buff)
     has_use_effect = (
         heals_life

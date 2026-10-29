@@ -129,6 +129,13 @@ def compact_item_raw_for_llm(item: dict[str, Any]) -> dict[str, Any]:
     raw = {key: item_field(item, key, None) for key in LLM_ITEM_RAW_KEYS
            if item_field(item, key, None) is not None}
     out = _select_raw_keys(raw, LLM_ITEM_RAW_KEYS)
+    # Native null means no explicit per-animation cap, not an unknown field.
+    # Preserve a present request-local null instead of borrowing an older
+    # fingerprint cap; packets from before this observation remain absent.
+    for source in (item, fingerprint_of(item)):
+        if "useLimitPerAnimation" in source:
+            out["useLimitPerAnimation"] = copy.deepcopy(source["useLimitPerAnimation"])
+            break
     # Literal source text/provenance is one observation: preserve line order,
     # whitespace, empty lines and source-bound refusal without compacting it.
     for key in ("tooltipLines", "tooltipSource", "nativeShootReference", "nativeContactHitStatusReference",

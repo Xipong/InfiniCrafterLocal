@@ -4575,9 +4575,9 @@
                       },
                       "durationSeconds": {
                         "type": "number",
-                        "minimum": 0.008333333333333333,
-                        "maximum": 360.0,
-                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Remaining effect lifetime for one application; not a reuse cooldown. Identical-effect refresh retains the greater of current remaining ticks and this duration",
+                        "minimum": 0,
+                        "maximum": 35791394.1,
+                        "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Effect lifetime for one application: 0 is permanent until death or world exit; positive values expire normally. Death removes effects whose original duration exceeds 20 minutes; shorter effects persist. Identical effects refresh to the greater remaining duration without stacking",
                         "x-infini-units": "seconds",
                         "x-infini-semanticType": "seconds",
                         "x-infini-authorProjection": {

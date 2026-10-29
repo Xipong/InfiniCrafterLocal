@@ -159,9 +159,8 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     shape = packet["requiredJsonShape"]["runtimeProgram"]
     assert shape["bindings"] and shape["calls"]
     assert {"id", "fn", "target", "params"} <= shape["calls"][0].keys()
-    # Duration/cooldown semantics belong to executable capabilities, not an
-    # optional concept's design checklist. The brief requests a playable item.
-    assert "not a reuse cooldown" in json.dumps(cards["apply_generated_buff_on_use"])
+    # The complete executable capability fields were compared above. Their
+    # explanatory wording is not part of the packet contract.
     assert "useful new Terraria item" in packet["priorityHeader"][0]
     assert isinstance(packet["requiredJsonShape"]["concept"], str)
     assert parent == frozen

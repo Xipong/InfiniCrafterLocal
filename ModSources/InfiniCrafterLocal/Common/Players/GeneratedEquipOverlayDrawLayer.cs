@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using Terraria;
 using Terraria.DataStructures;
 using Terraria.ModLoader;
+using Terraria.ModLoader.Default;
 
 namespace InfiniCrafterLocal.Common.Players;
 
@@ -20,7 +21,7 @@ namespace InfiniCrafterLocal.Common.Players;
 /// </summary>
 public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
 {
-    private readonly record struct OverlayEntry(GeneratedItemData Data, string Slot, int AccessoryIndex, Item SourceItem);
+    private readonly record struct OverlayEntry(GeneratedItemData Data, string Slot, int DyeShader, Item SourceItem);
     private const int EquipCatchupRetryTicks = 90;
     private static readonly object EquipCatchupLock = new();
     private static readonly Dictionary<string, int> EquipCatchupTicks = new(StringComparer.Ordinal);
@@ -138,10 +139,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
                         _ => offset,
                     };
                     targetPixels = 18f;
-                    int dyeIndex = entry.AccessoryIndex + 3;
-                    shader = player.dye is not null && dyeIndex >= 0 && dyeIndex < player.dye.Length
-                        ? player.dye[dyeIndex].dye
-                        : 0;
+                    shader = entry.DyeShader;
                     lightColor = drawInfo.colorArmorBody;
                     partPosition = player.bodyPosition;
                     pivot = drawInfo.bodyVect;
@@ -218,20 +216,41 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
             bool hidden = player.hideVisibleAccessory is { Length: > 0 }
                 && normalIndex < player.hideVisibleAccessory.Length
                 && player.hideVisibleAccessory[normalIndex];
+            int dye = player.dye is not null && normalIndex < player.dye.Length ? player.dye[normalIndex].dye : 0;
             if (!hidden && !player.ItemIsVisuallyIncompatible(player.armor[normalIndex]))
-                TryAdd(player.armor, normalIndex, entries, "accessory", accessoryIndex);
+                TryAdd(player.armor, normalIndex, entries, "accessory", dye);
             int vanityIndex = accessoryIndex + 13;
             if (vanityIndex < player.armor.Length && !player.ItemIsVisuallyIncompatible(player.armor[vanityIndex]))
-                TryAdd(player.armor, vanityIndex, entries, "accessory", accessoryIndex);
+                TryAdd(player.armor, vanityIndex, entries, "accessory", dye);
+        }
+        // ModAccessorySlot properties read Main.CurrentPlayer, including when
+        // the layer draws a remote player. Native eligibility also preserves
+        // separate functional/vanity conflicts in shared equipment loadouts.
+        using (new Main.CurrentPlayerOverride(player))
+        foreach (ModAccessorySlot slot in ModContent.GetContent<ModAccessorySlot>())
+        {
+            if (slot.Type < 0 || slot.Type >= player.GetModPlayer<ModAccessorySlotPlayer>().LoadedSlotCount) continue;
+            var loader = LoaderManager.Get<AccessorySlotLoader>();
+            int dye = slot.DyeItem.dye;
+            if (loader.ModdedIsSpecificItemSlotUnlockedAndUsable(slot.Type, player, false)
+                && !slot.HideVisuals && !player.ItemIsVisuallyIncompatible(slot.FunctionalItem))
+                TryAdd(slot.FunctionalItem, entries, "accessory", dye);
+            if (loader.ModdedIsSpecificItemSlotUnlockedAndUsable(slot.Type, player, true)
+                && !player.ItemIsVisuallyIncompatible(slot.VanityItem))
+                TryAdd(slot.VanityItem, entries, "accessory", dye);
         }
         return entries;
     }
 
-    private static void TryAdd(Item[] armor, int index, List<OverlayEntry> entries, string slot, int accessoryIndex)
+    private static void TryAdd(Item[] armor, int index, List<OverlayEntry> entries, string slot, int dye)
     {
         if (index < 0 || index >= armor.Length)
             return;
-        Item item = armor[index];
+        TryAdd(armor[index], entries, slot, dye);
+    }
+
+    private static void TryAdd(Item item, List<OverlayEntry> entries, string slot, int dye)
+    {
         if (item is null || item.IsAir || item.ModItem is not GeneratedItem generated || generated.Data is null)
             return;
         GeneratedItemData data = ResolveEquipPresentationData(generated.Data);
@@ -239,7 +258,7 @@ public abstract class GeneratedEquipOverlayDrawLayerBase : PlayerDrawLayer
             ? data.Accessory?.Enabled == true
             : data.Armor?.Enabled == true && string.Equals(data.Armor.Slot, slot, StringComparison.Ordinal);
         if (roleMatches)
-            entries.Add(new OverlayEntry(data, slot, accessoryIndex,item));
+            entries.Add(new OverlayEntry(data, slot, dye,item));
     }
 
     private static GeneratedItemData ResolveEquipPresentationData(GeneratedItemData compact)

@@ -75,7 +75,7 @@ public sealed class RuntimeItemEffectGroupSpec : IItemEffectsSpec
         if (GeneratedBuff is { } buff)
         {
             static bool Between(float value, float low, float high) => float.IsFinite(value) && value >= low && value <= high;
-            if (buff.DurationTicks is < 1 or > 21600 || !Between(buff.MiningSpeedMultiplier, .25f, 4f)
+            if (!buff.HasExplicitDuration || buff.DurationTicks is < 0 or > GeneratedBuffSpec.MaxFiniteDurationTicks || !Between(buff.MiningSpeedMultiplier, .25f, 4f)
                 || !Between(buff.EmitLightStrength, 0f, 1.5f) || buff.OreSenseRadiusTiles is not (0 or 1)
                 || !Between(buff.MovementSpeed, -.8f, 2f) || !Between(buff.JumpBoost, -8f, 8f)
                 || buff.ManaRegen is < -100 or > 120 || buff.LifeRegen is < -100 or > 120

@@ -9,7 +9,13 @@
 
 - **Snapshot:** `GeneratorClient.ParentFacts.cs` читает выбранные поля native Item
   и нового Projectile после `SetDefaults`. `lifeRegen` — сырой вклад Item;
-  `armorPenetration` — исходное значение Projectile. Это не итоговый player regen,
+  `armorPenetration` отдельно сохраняется у Item и Projectile;
+  `itemScale` — базовое `Item.scale` без reforge prefix, не размер PNG.
+  `useLimitPerAnimation` — буквальный native лимит применений внутри одной
+  анимации: `null` означает отсутствие явного лимита, отсутствие поля в старом
+  пакете остаётся неизвестным. Число выстрелов не выводится из одного отношения
+  `useAnimation / useTime`: например, у BookStaff и FairyQueenMagicItem native
+  лимит равен 4, у FairyQueenRangedItem — 5. Это не итоговый player regen,
   не результат выстрела и не полное описание AI. Ноль сохраняется, неизвестное
   поведение не становится отрицательным утверждением.
 - **Certified source reference:** существующий offline IL extractor читает

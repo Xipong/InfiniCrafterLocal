@@ -136,6 +136,22 @@ tick schedule, что и gameplay curve A12, но хранится отдель�
 Projectile.scale = drawScale × visual.scale × curve. Размер damage rectangle
 и tile collision из этого значения не выводятся.
 
+При явном motion `window` curve пишет scale только во время выбранной фазы;
+после её закрытия сохраняется последнее значение. `visualScaleRate` также
+накапливает состояние по активным AI updates. Native `SyncProjectile` не
+переносит `Projectile.scale`, поэтому только эти два stateful случая используют
+ExtraAI v7: прежний composable snapshot и одно конечное число scale в диапазоне
+0.01…128. Exact definition обязана содержать `visualScaleRate` или windowed
+`visualScaleCurve`; отсутствующее, лишнее, non-finite или выходящее за диапазон
+состояние отвергается, в том числе при поздней загрузке definition. Остальные
+projectiles сохраняют прежние варианты v4/v5/v6; сохранённый item DTO не меняется.
+Для stateful scale клиент и сервер должны использовать совпадающую версию мода.
+
+Hydration восстанавливает полученное значение без повторного применения rate.
+Локальный authoritative source сохраняет собственный scale; старые наблюдения
+не откатывают scale и active clock ни у уже исполняющегося peer, ни в pending
+очереди definition. Следующая AI-update выполняет ровно следующий authored шаг.
+
 Основной PNG и generic `runtime_geometry` получают полный продукт именно
 этой явно выбранной visual curve. Старый clamp 0.1…8 и минимальные размеры
 generic body не обрезают его; например, drawScale=2, visual.scale=3 и curve=2

@@ -108,6 +108,31 @@ def _vfx_packets(data, captured):
     return [request_dossier(row) for row in captured[start:]]
 
 
+@pytest.mark.parametrize("envelope", ["root", "fingerprint"])
+@pytest.mark.parametrize("facts", [
+    {"itemScale": 0.7, "armorPenetration": 13, "useLimitPerAnimation": 4},
+    {"itemScale": 1.0, "armorPenetration": 0, "useLimitPerAnimation": None},
+    {"itemScale": 0.0, "armorPenetration": 0, "useLimitPerAnimation": 0},
+    {},
+], ids=["native-nondefault", "native-neutral-and-unlimited", "explicit-zero", "unobserved"])
+def test_native_item_stats_preserve_presence_and_nullable_use_limit_in_stage_packets(offline_packets, envelope, facts):
+    captured, _ = offline_packets
+    parent = {"name": "literal source", **(facts if envelope == "root" else {"fingerprint": facts})}
+    # A present null explicitly owns the current observation; older fingerprint
+    # data cannot turn the native no-limit value into a cap.
+    if envelope == "root" and "useLimitPerAnimation" in facts and facts["useLimitPerAnimation"] is None:
+        parent["fingerprint"] = {"useLimitPerAnimation": 8}
+    before = copy.deepcopy(parent)
+    for raw in _source_packets(parent, captured):
+        item = raw["item"]
+        for field in ("itemScale", "armorPenetration", "useLimitPerAnimation"):
+            assert (field in item) == (field in facts)
+            if field in facts:
+                assert json.dumps(item[field]) == json.dumps(facts[field])
+        assert all(field not in raw.get("vanillaFlags", {}) for field in facts)
+    assert parent == before
+
+
 @pytest.mark.parametrize("author_field,wire_field,value", [
     ("useTimeSeconds", "useTime", 47), ("useAnimationSeconds", "useAnimation", 53), ("scale", "itemScale", 2.75),
 ])
