@@ -107,7 +107,7 @@ def test_expanded_report_boundary_survives_author_repair_and_python_delivery(tmp
 
 
 @pytest.mark.parametrize("mode", ["json_object", "off"])
-def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(monkeypatch, mode):
+def test_author_does_not_solicit_reports_and_repair_discloses_schema_owned_bounds(monkeypatch, mode):
     import infini_local.core.runtime_authoring.program_schema as program_schema
 
     canonical = program_schema.realization_schema
@@ -143,7 +143,9 @@ def test_actual_author_and_repair_packets_disclose_schema_owned_report_bounds(mo
     result = pipeline.repair_author_item_after_failure(item, {}, {}, "report-card", failure_report={"errors": []})
     repair = requests[0]
     expected_format = {"type": "json_object"} if mode == "json_object" else None
-    for request, root in ((author, "realization"), (repair, "realizationReplacement")):
+    assert isinstance(request_dossier(author)["requiredJsonShape"]["realization"], str)
+    assert author.get("response_format") == expected_format
+    for request, root in ((repair, "realizationReplacement"),):
         assert request.get("response_format") == expected_format
         card = request_dossier(request)["requiredJsonShape"][root]
         for field, schema in author_item_response_schema()["properties"]["realization"]["properties"].items():

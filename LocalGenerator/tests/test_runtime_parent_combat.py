@@ -78,6 +78,7 @@ def test_parent_combat_composes_with_accepted_volley_ammo_lifecycle_beam_through
     packet = json.loads(user)
     names = {card["fn"] for card in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]}
     source = _accepted_main_combat_composition(damage_basis, knockback_basis, multiplier)
+    source = {key: source[key] for key in ("name", "category", "runtimeProgram")}
     assert {"target_and_fire", "configure_weapon_ammo", "set_projectile_sentry", "set_descendant_concurrency",
             "set_projectile_beam_geometry", "sustain_projectile_mana"} <= names
     assert "channel_beam" not in names

@@ -224,5 +224,7 @@ def test_actual_offline_author_request_transports_typed_composition(monkeypatch,
     assert card["params"]["damagePerSecond"]["max"] == 200
     assert card["params"]["chancePercent"]["max"] == 100
     assert "before" in card["params"]["chancePercent"]["meaning"].lower()
-    parsed = provider_roundtrip(document(chancePercent=25), request["response_format"])
+    source = document(chancePercent=25)
+    source = {key: source[key] for key in ("name", "category", "runtimeProgram")}
+    parsed = provider_roundtrip(source, request["response_format"])
     assert event(check(parsed))["npcEffect"]["chance"] == 0.25

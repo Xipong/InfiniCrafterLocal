@@ -88,7 +88,9 @@ def test_real_author_packet_and_nullable_inverse_preserve_full_emission_choice(w
     responses, requests = wire_transport
     doc = _doc(selectionAnchor="event_target", repeatPolicy="exclude_visited", requireLineOfSight=True,
                stepCount=12, stepRangeTiles=59.99999999999999, initialIgnoreCountdownUpdates=0, delaySeconds=1 / 60)
-    payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if mode == "json_schema" else doc
+    doc = {key: value for key, value in doc.items() if key in {"name", "category", "runtimeProgram"}}
+    local_schema = contract.author_item_response_schema()
+    payload = _encode_nullable_fixture(doc, local_schema) if mode == "json_schema" else doc
     responses.append(payload)
     result = author.try_llm_plan({"name": "A"}, {"name": "B"}, "explicit links")
     assert result is not None
@@ -344,10 +346,12 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
             else:
                 row.pop("target", None)
             calls.append(row)
+    doc = {key: value for key, value in doc.items() if key in {"name", "category", "runtimeProgram"}}
     before = json.dumps(doc, sort_keys=True)
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", format_mode)
     responses, requests = wire_transport
-    payload = _encode_nullable_fixture(doc, contract.author_item_response_schema()) if format_mode == "json_schema" else doc
+    local_schema = contract.author_item_response_schema()
+    payload = _encode_nullable_fixture(doc, local_schema) if format_mode == "json_schema" else doc
     responses.append(payload)
     accepted = author.try_llm_plan({"name": "A"}, {"name": "B"}, "combined-offline")
     assert accepted is not None and len(requests) == 1 and not responses
@@ -397,7 +401,7 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     hostile_binding = deepcopy(binding)
     hostile_binding["stackConsumeChancePercent"] = 90
     repaired, dossier, repaired_wire = frozen_gameplay_repair(monkeypatch, broken,
-        {"note": "exact curve correction with hostile frozen companions", "realizationReplacement": broken["realization"],
+        {"note": "exact curve correction with hostile frozen companions",
          "callsUpsert": [candidate, frozen, hostile_spawn, hostile_emission, hostile_combat, hostile_geometry],
          "bindingsUpsert": [hostile_binding]}, format_mode,
         {"calls": [{"id": curve["id"], "paths": ["params.endScale"]}]},

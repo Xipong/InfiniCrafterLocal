@@ -159,12 +159,11 @@ def test_author_packet_retains_full_grammar_without_counterexample_item_anecdote
     shape = packet["requiredJsonShape"]["runtimeProgram"]
     assert shape["bindings"] and shape["calls"]
     assert {"id", "fn", "target", "params"} <= shape["calls"][0].keys()
-    assert "not defaults or edit permissions" in catalog["fieldGuide"]["rowShapes"]
-    assert "permitted omissions remain valid" in catalog["fieldGuide"]["paramNotation"]
     # Duration/cooldown semantics belong to executable capabilities, not an
-    # optional concept's design checklist. Creative permission stays in the brief.
+    # optional concept's design checklist. The brief requests a playable item.
     assert "not a reuse cooldown" in json.dumps(cards["apply_generated_buff_on_use"])
-    assert "free sustained benefits are valid" in packet["priorityHeader"][0]
+    assert "useful new Terraria item" in packet["priorityHeader"][0]
+    assert isinstance(packet["requiredJsonShape"]["concept"], str)
     assert parent == frozen
     assert "Exact source fact" in json.dumps(packet["parents"])
     instructions = " ".join(row["content"] for row in request["messages"][:2]).lower()

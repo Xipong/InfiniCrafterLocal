@@ -48,77 +48,33 @@ VISIBLE_ENGINE_FUNCTIONS = tuple(sorted(name for name, capability in CAPABILITY_
 
 
 def concise_terraria_tick_guide_for_llm() -> dict[str, str]:
-    """Shared Author units and source-grounded scale, not an extra design stage."""
+    """Author units, raw-source distinction and engine-specific quantization."""
     return {
         "nativeSourceReferences": NATIVE_SOURCE_REFERENCE_RULE,
-        "time": (
-            "Write world durations/intervals in decimal seconds. The engine has 60 world ticks = 1 second; "
-            "lowering resolves seconds to the nearest world tick, half-tick ties upward. "
-            "Explicit zero stays zero; a positive effect may not round to disabled zero. "
-            "Raw immunity.localCooldown and explicitly named projectile-update counters are counts, not seconds."
-        ),
-        "distance": (
-            "Write gameplay world distances in blocks. 1 Terraria block (tile) = 16 world pixels. "
-            "rangeTiles/radiusTiles already mean blocks, including blink rangeTiles: do not divide again. "
-            "Read whether each card means radius, diameter, origin offset or distance to a target center."
-        ),
-        "speed": (
-            "Write gameplay speeds in blocks/s, physical accelerations in blocks/s^2 and declared angular rates in radians/s. "
-            "The canonical lowering accounts for the affected target's updatesPerTick; do not manually rescale Author values. "
-            "Initial speed, flat bonuses, sprint floors and event impulses are distinct, not guaranteed final movement or jump height. "
-            "Ammo speed is a base native launch contribution; the eventual projectile can have its own update rate. "
-            "Dimensionless retention/lerp/multiplier controls retain their declared per-update meaning."
-        ),
-        "scope": (
-            "Use each Author card's declared units; the compiled wire and raw parent facts keep engine units. "
-            "Pixel-labelled collision and local sprite geometry remain pixels; 16 world pixels = 1 block. "
-            "Texture texels/canvas dimensions remain texture pixels; normalized UV/grip coordinates remain normalized: do not divide by 16. "
-            "Texture resolution alone is not rendered world size, collision size or reach."
-        ),
-        "vanillaScaleReference": (
-            "Vanilla scale reference, not a balance ceiling: an ordinary standing unmounted player's collision box is "
-            "20x42 world pixels (1.25x2.625 blocks). Without gear/buffs or special terrain, nominal base run speed is "
-            "11.25 blocks/s; a normal jump assigns about 18.79 blocks/s upward velocity. "
-            "The 15-update held-jump counter is not a distance. Jump height/range depend on hold, gravity and horizontal motion; "
-            "these are not a measured height/range or a limit on authored mechanics."
-        ),
+        "time": "Seconds resolve to the nearest world tick (60/s), half-tick ties upward. Positive effects that round to zero are rejected. immunity.localCooldown and projectile-update counters remain counts.",
+        "distance": "World distances use blocks; Tiles also means blocks. 1 block = 16 world pixels.",
+        "speed": "Physical speed/acceleration use blocks/s and blocks/s^2; angular rates use radians/s. The engine applies the target's updatesPerTick conversion. Retention/lerp/multiplier controls keep their declared per-update meaning.",
+        "scope": "Author cards use player-facing units; raw parent facts and compiled wire retain engine units. Pixel geometry and normalized UV/grip coordinates retain their own units. Texture resolution is independent of rendered size and collision geometry.",
+        "vanillaScaleReference": "Ordinary unmounted player: 20x42-pixel collision box; base run speed 11.25 blocks/s; normal jump initial upward velocity about 18.79 blocks/s.",
         "spread": "radians; total span",
     }
 
 
 def source_interpretation_for_llm() -> dict[str, str]:
-    """Source-specific meanings, independent of optional design/report fields."""
+    """Interpret observations without turning source metadata into mechanics."""
     return {
-        "progression": (
-            "Supplied acquisition/progression facts are evidence; rarity, value or identity alone do not establish a tier. "
-            "Inventory observations show current inputs, not every available progression choice; "
-            "fallback examples do not prove possession or progression."
-        ),
+        "progression": "Inventory entries are current observations; fallback examples are illustrative. Acquisition/progression facts establish tier, not rarity or value alone.",
         "ammunition": (
-            "useAmmoCategoryName is the weapon's required ammo category; ammoCategoryName is the ammo item's own category. "
-            "weapon_item.shoot_field is a native field, not a fired-shot observation, even under effectiveProjectile. "
-            "Ammo damage contributes to a compatible launcher's attack; it is not standalone weapon damage, "
-            "and ammo useTime alone does not establish attack cadence. Projectile replacement does not remove ammunition damage; "
-            "distinguish that contribution from flight, penetration and statuses, without assuming a simple additive damage formula. "
-            "Read supplied weapon-ammo configurations separately, not as an average or automatically the strongest. "
-            "Source-proved conditional weapon abilities are distinct from current ammo availability."
+            "weapon_item.shoot_field is a native field, not an observed fired shot, even under effectiveProjectile. "
+            "Ammo damage contributes to a compatible launcher, including when its projectile is replaced; "
+            "ammo useTime does not set the launcher's cadence. Weapon-ammo configurations describe separate cases."
         ),
-        "inventoryPassives": (
-            "dropSeedsIfInInventory describes a native inventory passive. A generated item gains it only by explicit "
-            "collect_seeds_from_grass selection; ammo selection does not inherit it."
-        ),
+        "inventoryPassives": "dropSeedsIfInInventory is the native inventory passive implemented by collect_seeds_from_grass.",
     }
 
 
 def planner_priority_header_for_llm() -> list[str]:
-    return [
-        AUTHOR_DESIGN_QUALITY_RULE,
-        "category is UI/equipment metadata only; never select a weapon archetype for execution. Deterministic code never infers gameplay from names, parent tooltip, tags, category or parent prose; author every mechanic explicitly in runtimeProgram.",
-        "Use only capabilities present in runtimeCapabilityContract.catalog.capabilities.",
-        AUTHOR_STATUS_COMPOSITION_RULE,
-        "Choose contact and controls independently: attach_projectile anchor=front_hand reads the shared native hand; set_projectile_aim chooses its axis. set_front_arm_pose writes the primary arm pose without attaching a body. attach_projectile.reachCurve adds explicit displacement, never reach inferred from grip or PNG size. Lifetime, owner control, rotation, collision, return triggers and arrival actions are separate choices. Kind/visualRole/reuse alone select none of them. Preserve useful source reach and handling deliberately; independent shots and transformations remain legal.",
-        "All ids are stable lowercase snake_case and globally unique across entities, bindings, and calls.",
-    ]
+    return [AUTHOR_DESIGN_QUALITY_RULE]
 
 
 def _source_path_objects(packet: Mapping[str, Any], path: str) -> list[Mapping[str, Any]]:
@@ -224,19 +180,10 @@ def source_wire_units_for_llm(
             scope_rows.append({"source": source, "fn": fn, **({"when": dict(condition)} if condition else {}), "fields": fields})
     return {
         "readingRule": (
-            "Paths are relative to each parent packet; [] means each entry in that exact container. "
-            "Read a source number in the listed Author param's units using sourceToAuthor; source means unchanged magnitude. "
-            "Dotted field keys are relative paths inside that exact source container. A scope's optional when maps "
-            "exact wire discriminator paths to required literal values; apply that reading only to matching source objects. "
-            "Only declared numeric projections are listed; "
-            "no rule is implied for unlisted fields, boolean projections or a changed selector. "
-            "For update-scaled readings, updatesPerTick is collision.extraUpdates + 1 of the same entity, never its emitter; "
-            "if that context is absent, do not assume an update count. A list of alternative Author paths is a unit aid, "
-            "not a branch reconstruction or permission to change the source. Use the exact scope and fn, never the bare field name. "
-            "This is a unit explanation, not a bit-exact inverse for arbitrary floating-point values; "
-            "do not rewrite source, round it or replace it with tooltip prose. Values still must satisfy the selected "
-            "card's bounds/dependencies. This reading aid does not require an inherited ability for each new mechanic "
-            "or authorize code-selected rebalancing, defaults or additional Repair permissions."
+            "Paths start at each parent packet; [] visits that array. Field keys are relative to the named source container. "
+            "Apply sourceToAuthor only to the stated source, fn and matching when discriminators; source alone means unchanged magnitude. "
+            "For update-scaled values, updatesPerTick = collision.extraUpdates + 1 on the same entity. "
+            "Unlisted fields or absent update context have no supplied conversion. Alternative authorParam paths share a unit reading."
         ),
         "fieldColumns": ["authorParam", "sourceToAuthor", "authorUnits"],
         "scopes": scope_rows,
@@ -246,17 +193,9 @@ def source_wire_units_for_llm(
 def descendant_spawn_budget_for_llm() -> str:
     """Shared execution meaning, not a required concurrency design."""
     return (
-        "Projectile periodic/event/controller producers share the activation's default "
-        "32-successful-child-spawn lifetime allowance across descendants, unless the root explicitly "
-        "selects set_descendant_concurrency. Child death does not refund that allowance: later spawn "
-        "requests are refused after exhaustion even if the producer remains alive. Failed or cancelled "
-        "reservations are refunded. An optional set_descendant_concurrency on the root instead uses "
-        "pending/live descendant slots released at retirement; a nested pool retains every ancestor "
-        "pool and ancestor lifetime ledger. Intentionally finite producers remain valid without this "
-        "call. Describe the chosen finite or replenishable output honestly; an interval and long "
-        "lifetime alone are not guaranteed successful shots. Owner/entity/depth limits still apply. "
-        "This projectile lifetime ledger is not the item_body periodic clock's per-dispatch budget. "
-        "Read-only Repair context does not authorize adding a pool."
+        "Projectile descendants share 32 successful child spawns over an activation's lifetime; child death does not refund them. "
+        "Failed/cancelled reservations are refunded. set_descendant_concurrency instead uses pending/live slots released at retirement; "
+        "nested pools retain ancestor pools and lifetime ledgers. Item-body periodic uses a per-dispatch budget."
     )
 
 
@@ -310,75 +249,31 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     field_guide = runtime_authoring_prompt_field_guide()
     field_guide["descendantSpawnBudget"] = descendant_spawn_budget_for_llm()
     field_guide["sourceInterpretation"] = source_interpretation_for_llm()
+    field_guide["statusEffects"] = AUTHOR_STATUS_COMPOSITION_RULE
     if include_source_units:
         field_guide.update(runtime_units_for_llm())
 
-    field_guide["referenceRules"] = (
-        "Reference fields use their own targetKinds/allowSelf/graphEdge cards: an existing compatible entity, "
-        "not a created-by-reference binding; graph edges cannot cycle. target_and_fire needs a source in its targets "
-        "and an explicitly referenced shot entity."
-    )
-    field_guide["eventSource"] = (
-        "Event call target is its emitting source, not necessarily the binding action target; "
-        "use event sources/producers and call acceptedEvents. Names or proximity alone do not produce events."
-    )
-    field_guide["sourceValues"] = (
-        "Choose meaningful params from design/source facts or omit unnecessary calls. "
-        "Never guess tile/wall/buff IDs or copy source sentinel -1 into a param whose card minimum is 0. "
-        "A placeable native Item.damage=-1 is not an observed damage or firing rate of its wired tile attack; "
-        "that sentinel alone does not show weak trap power."
-    )
+    field_guide["sourceValues"] = "Native Item.damage=-1 is a sentinel, not the damage or cadence of a wired tile attack."
     field_guide["projectileMotion"] = (
-        "move_straight has no falling arc; accelerate_projectile_vertical adds signed world acceleration. "
-        "Velocity scaling, sine law, seek, orbit, attachment, rotation, return and arrival are independent choices; "
-        "none implies channel, collision policy or lifetime. Optional window admits a phase-only gate or "
-        "all timing fields together; since_release/since_return clocks are inactive before their latch. "
-        "Use each card's units and dependencies. Source projectile identity, arrow flags and aiStyle do not "
-        "execute native AI here; domain knowledge is not a verified source measurement. Altered motion is "
-        "legal when deliberate; never promise a ballistic arc with only constant velocity."
+        "since_release/since_return clocks start at their latch. "
+        "Source projectile identity, arrow flags and aiStyle do not execute native AI here."
     )
     field_guide["damageClass"] = {
         "builtInTokens": list(DAMAGE_CLASS_TOKENS), "meaningByToken": dict(DAMAGE_CLASS_MEANINGS),
         "nativeManaPayment": "Native integer truncation can make cheap spells cost zero even with a positive mana-cost coefficient. The coefficient floor 0.1 is not a minimum of 1 mana.",
-        "scope": "Damage/stat inheritance and class effects only; no movement, minions, ammo consumption or mana cost. Parent damageClass=none is source-only, not a runtime token. Modded token is exact parent-backed ModName/ClassName; no other tokens.",
+        "scope": "Parent damageClass=none is source-only. Modded tokens use the exact parent-backed ModName/ClassName.",
     }
     field_guide["itemUseStyle"] = {
         "builtInTokens": list(ITEM_USE_STYLE_TOKENS), "meaningByToken": dict(ITEM_USE_STYLE_MEANINGS),
-        "scope": "configure_item_use.useStyle selects held-item/player-arm animation during active use only, not a functional tool/use mechanic, projectile, damage, food, drink, golf, mowing or lamp effect. Author the input binding and executable effects separately; style names are not weapon presets.",
+        "scope": "configure_item_use.useStyle selects held-item/player-arm animation during active use. Select input bindings and executable effects separately.",
     }
     entities = [row.prompt_card() for row in ENTITY_KIND_REGISTRY.values()]
     for entity in entities:
-        kind = entity["kind"]
-        if kind == "item_body":
+        if entity["kind"] == "item_body":
             entity["constructionMeaning"] = "Exactly one item_body."
-        elif kind == "free_projectile":
-            entity["constructionMeaning"] = "An admitted spawn creates independent projectiles, not a singleton minion/companion; no minion-slot behavior or per-owner cap is implied. configure_spawn.count is a batch count, not a live-copy cap. A hold binding does not spawn again while a matching entity remains alive."
     inputs = [row.prompt_card() for row in INPUT_KIND_REGISTRY.values()]
-    for row in inputs:
-        if row["input"] == "hold":
-            row["constructionMeaning"] = "While-selected HoldItem lane, not an extra primary_use or equipped/worn effect."
-        elif row["input"] == "equipped":
-            row["constructionMeaning"] = "Passive while worn, not active use or item_body periodic. At most one equipped binding: runtime uses the first. Matching armor-set effects run from the head only with matching head/body/legs equipped."
     actions = [row.prompt_card() for row in BINDING_ACTION_REGISTRY.values()]
-    for action in actions:
-        if action["action"] == "place_item":
-            action["constructionMeaning"] = (
-                "Pure placeable uses primary_use; hybrid uses non-placement primary_use and place_item on alternate_use. "
-                "placementCallId references one configure_tile_placement or configure_wall_placement on the same item_body. "
-                "Only accepted placement spends the stack and escrows this same generated item, unavailable while placed and returned when its tile breaks. "
-                "No item_body.on_use or simultaneous attack on this placement binding. Parent tileId alone does not establish placeStyle or exact tile behavior."
-            )
-    events = [row.prompt_card() for row in EVENT_KIND_REGISTRY.values()]
-    event_detail = {
-        "on_hit": "Requires actual NPC collision/contact; item_body also needs enabled body hitbox, not merely contactDamage=true. Proximity alone is insufficient.",
-        "on_crit": "Requires actual critical NPC contact; item_body needs enabled body hitbox.",
-        "on_kill": "Projectile termination event, including collision death, penetration exhaustion, proximity detonation, natural expiry and ordinary return-to-owner completion or controller cancellation. Only explicitly attached actions execute; termination does not imply an explosion.",
-        "on_tile_collision": "Emitted at each tile collision, including a bounce.",
-        "periodic": "Periodic event calls require when={everySeconds:n}; n is an explicit interval in seconds within the call's declared bounds. item_body periodic runs while held (HoldItem), not merely equipped.",
-    }
-    for event in events:
-        if event["event"] in event_detail:
-            event["constructionMeaning"] = event_detail[event["event"]]
+    events = [row.author_prompt_card() for row in EVENT_KIND_REGISTRY.values()]
     capabilities = compact_capability_catalog()
     target_groups: dict[tuple[str, ...], list[dict[str, Any]]] = {}
     for card in capabilities:
@@ -395,35 +290,17 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     if target_sets:
         field_guide["targetKindSets"] = target_sets
         field_guide["targetKindReadingRule"] = (
-            "targetsRef names the exact allowed entity kinds in fieldGuide.targetKindSets; "
-            "it replaces only a repeated literal targets list, not an Author value or a default."
+            "targetsRef refers to fieldGuide.targetKindSets."
         )
     field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
     field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
     field_guide["consumerConstraintReadingRule"] = (
-        "Param consumerConstraint/projectionConstraints and nested shape x-infini-consumerConstraint/"
-        "x-infini-authorProjection each name one complete numeric rule in fieldGuide.consumerConstraints. "
-        "Every referenced storage, neutral, rounding, target-clock and contextual-bound constraint applies. "
-        "References explain parameter constraints; they are not Author values."
+        "consumerConstraint/projectionConstraints and nested x-infini-consumerConstraint/x-infini-authorProjection "
+        "refer to fieldGuide.consumerConstraints."
     )
     for card in capabilities:
-        if card["fn"] in {"target_and_fire", "spawn_entity_on_event"}:
-            card["constructionMeaning"] = (
-                "For projectile descendant production, see fieldGuide.descendantSpawnBudget: "
-                "interval and entity lifetime do not guarantee sustained output."
-            )
-        elif card["fn"] == "present_placed_item_sprite":
-            card["constructionMeaning"] = "Certified native scope: 16x16/256 cells max; unproved post-place actors or visual callbacks are refused."
-        elif card["fn"] == "enable_placed_vfx":
-            card["constructionMeaning"] = "Opt-in live placed effects, certified 16x16/256 cells max, same exact executed tile placement. minFrameY/maxFrameY consume inclusive top-left native TileFrameY; use read-only parent nativeTileState when available, never guess or automatically choose bounds. Full 0..32767 selects all nonnegative frames. VFX Director later authors separate periodic/self spriteElement/libraryParticle/lightCue slots with placementBindingId; none exist yet. Physical root art and optional static present_placed_item_sprite stay independent. No container/actor lifecycle or material return changes."
-        elif card["fn"] == "add_placed_light":
-            card["constructionMeaning"] = "Independent explicit light; one center cell per committed native footprint, not player/held PNG or sprite heads. Certified 16x16/256 cells max; unproved post-place actors refused. Strength/color remain required; no default."
-        elif card["fn"] == "charge_then_release":
-            card["constructionMeaning"] = "Needs channel=true and an explicitly spawned charged entity; non-damaging until release, then bounded chargeSeconds scales authored release velocity/movement. customHeldSprite is presentation, not release trigger."
-        elif card["fn"] == "configure_item_use":
-            card["constructionMeaning"] = "Timing is owned by configure_item_stats.useTimeSeconds (cadence) and configure_item_stats.useAnimationSeconds (animation duration), not params of this call. Here autoReuse repeats active use while held, and channel keeps that use active."
-        elif card["fn"] == "configure_item_stats":
-            card["constructionMeaning"] = "Only an item with both a place_item binding and reusable spawn_entity/use_item_body use (stackCost=0) requires maxStack=1: one durable unit switches inventory/placed form. This rule does not limit stacks without placement or with only one-shot non-placement use (stackCost=1)."
+        if card["fn"] == "configure_item_stats":
+            card["constructionMeaning"] = "Combining placement with reusable spawn_entity/use_item_body (stackCost=0) requires maxStack=1."
     return {
         "apiVersion": RUNTIME_PROGRAM_API_VERSION,
         "authoringSchema": RUNTIME_PROGRAM_SCHEMA,
@@ -453,14 +330,15 @@ def _balance_corridor(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
         "parentUseTimeTicks": [item_field(parent, "useTime", None) for parent in (a, b)],
         "parentProgressionFacts": stage.get("sourceNumericProgressionFacts"),
         "broadEnvelope": envelope,
-        "rule": "These are broad numeric bounds and literal parent observations, not proof of acquisition tier or expected power, a semantic classifier, weapon archetype, or permission for code to rewrite the design.",
+        "rule": "Broad numeric bounds and observed parent values. Acquisition tier requires source progression facts, not rarity or value alone.",
     }
 
 
 def runtime_program_invariants_for_llm() -> dict[str, Any]:
     return {
+        "ids": "Entity, binding and call ids are globally unique and match catalog.fieldGuide.stableIdPattern.",
         "primaryEntityOwnership": primary_entity_llm_invariant(),
-        "graphAndSpawnBudget": "Event references form an acyclic graph. From binding spawn roots, child depth <= catalog.limits.childDepth (3); each event spawn count <= 12, and the static sum of spawn_entity_on_event counts <= catalog.limits.eventSpawnsPerActivation (32). Only item-body on_use primary-only and alternate-only counts are disjoint: count shared/both/other events plus the larger input-only subtotal, not both subtotals. Periodic/controller repetitions use a runtime activation budget: the default lifetime allowance does not replenish. Explicit set_descendant_concurrency replaces a root's descendant ledger with a replenishable live-slot pool; nested pools retain ancestor limits. Owner/entity/depth caps still apply; no successful shot count is guaranteed.",
+        "graphAndSpawnBudget": "Event references form an acyclic graph. From binding spawn roots, child depth <= 3; each event spawn count <= 12, and the static sum of spawn_entity_on_event counts <= 32. For item-body on_use, count shared/both/other events plus the larger of primary-only and alternate-only subtotals. Runtime lifetime/concurrency accounting is explained in catalog.fieldGuide.descendantSpawnBudget.",
     }
 
 def realization_execution_truth_for_llm() -> dict[str, str]:

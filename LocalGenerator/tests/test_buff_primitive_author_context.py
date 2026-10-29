@@ -44,10 +44,10 @@ def test_author_explicitly_composes_buffs_and_debuffs_without_requiring_native_i
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, _, _ = build_initial_author_request({}, {}, "effect-composition", model_name="offline")
     packet = request_dossier(_serialized_chat_request(monkeypatch, request), declaration=request)
-    guidance = " ".join(packet["priorityHeader"])
-    assert "Compose buffs and debuffs" in guidance
-    assert "primitives" in guidance and "recipient" in guidance
-    assert "native buff ID" in guidance and "immunity" in guidance
+    guidance = packet["runtimeCapabilityContract"]["catalog"]["fieldGuide"]["statusEffects"]
+    assert "status effects" in guidance
+    assert "native buff immunity or AI" in guidance
+    assert "listed operations and conditions" in guidance
     assert "statusIdentityChoices" not in json.dumps(packet)
 
 

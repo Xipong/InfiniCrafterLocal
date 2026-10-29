@@ -17,44 +17,27 @@ from infini_local.core.schema_validation import strict_schema_errors
 
 
 AUTHOR_DESIGN_QUALITY_RULE = (
-    "Design a useful, distinctive fusion inspired by both parents' identity and affordances. "
-    "Choose mechanics and controls that work together and justify the item's place in play. "
-    "Ground its power and ongoing costs in the supplied source facts and actual executable behavior. "
-    "New mechanics, simple combinations, niche utility, sidegrades and free sustained benefits are valid; "
-    "there is no required twist, upgrade, per-parent effect quota or design report. "
-    "Parent provenance constrains factual claims, not creative invention from supported primitives."
+    "Create a coherent, useful new Terraria item inspired by both parents. "
+    "Choose mechanics and controls that work together, with power and costs informed by the supplied source facts."
 )
 
 AUTHOR_STATUS_COMPOSITION_RULE = (
-    "Compose buffs and debuffs from generated effect primitives: explicitly choose the recipient, "
-    "modifiers, activation, duration and any supported chance. Signed modifiers can impose penalties "
-    "or tradeoffs. A native buff ID identifies existing native behavior; it is not an effect description "
-    "or a prerequisite for an invented effect. Parent effect references certify only their listed "
-    "receiver, operations and source conditions; partial/unknown behavior remains unknown. Custom "
-    "effects do not inherit a named native buff's immunity, AI or other unselected mechanics. "
-    "Describe the actual composed effects, not unimplemented equivalence to a familiar buff."
+    "Composed status effects do not inherit native buff immunity or AI. "
+    "Parent effect references cover only their listed operations and conditions."
 )
+
 
 PRIMARY_REPAIR_SYSTEM_RULE = (
     f"Use {PRIMARY_ENTITY_SELECTION_FIELD} whenever its repair transaction is enabled."
 )
 RUNTIME_ROW_SHAPE_RULE = (
-    "Binding/call rows in requiredJsonShape illustrate separate forms, not a complete program. "
-    "Example ids and values are placeholders, not defaults or edit permissions. "
-    "Use actual ids and the selected capability card's exact required/conditional and permitted optional keys. "
-    "Call examples use one explicit id/fn/target/params envelope. "
-    "target is an exact existing compatible entity id, including the declared item_body id, not a literal item alias; "
-    "zero-argument calls use params={}. "
-    "Only item-body-only target and zero-argument params may be omitted as exact declared wire equivalences. "
-    "During Repair preserve accepted values and absences rather than reformatting existing calls. "
-    "For new bindings use id/input/action:{kind,targetId}/stackCost/contactDamage. "
-    "Fixed binding literals may be explicit or omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
-    "item-body-only action targetId=the exact unique declared item_body id; hold/equipped stackCost=0 and contactDamage=false; "
-    "place_item stackCost=1 and contactDamage=false. Projectile action targets remain explicit. "
-    "Every present literal must be exact and correctly typed; never choose a different action from these equivalences. "
-    "Active non-placement kind, stackCost and contactDamage remain explicit independent decisions. "
-    "placementCallId is required for place_item and forbidden for other actions; effectGroupId is optional only for apply_item_effects. "
-    "In a complete Author binding, absent effectGroupId selects ungrouped item effects."
+    "Rows illustrate alternative forms. Calls may omit target only for item-body-only capabilities, "
+    "and params only for zero-argument capabilities. "
+    "Fixed binding literals may be omitted: hold kind=spawn_entity; equipped kind=equip_passive; "
+    "item-body-only action targetId=the unique item_body id; hold/equipped stackCost=0 and contactDamage=false; "
+    "place_item stackCost=1 and contactDamage=false. Active non-placement kind, stackCost and contactDamage are explicit. "
+    "placementCallId belongs only to place_item; effectGroupId belongs only to apply_item_effects, "
+    "where absence selects ungrouped effects."
 )
 
 
@@ -63,13 +46,11 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
         "exactlyOnePrimaryEntity": True,
         "authoredField": PRIMARY_ENTITY_AUTHOR_PATH,
         "primaryRule": (
-            "Select one existing entity id for lifecycle/held representation, not by damage or mere spawning. "
+            "Select the entity owning lifecycle/held representation. "
             "Use the item_body for item-graphic/body-contact representation. When all active bindings spawn "
             "the same entity, all have contactDamage=false and configure_item_use.hideUseGraphic=true, select "
-            "that exact spawn target. This selector does not create movement, a controller, damage or a concurrency cap. "
+            "that spawn target. "
             "A movement/controller that claims held-projectile representation does so only for this primary entity. "
-            "Binding/call rows do not carry role; Lowery derives wire roles "
-            "by exact target equality with primaryEntityId."
         ),
     }
 
@@ -113,9 +94,9 @@ def _call_prompt_shape_cards(variants: Iterable[Mapping[str, Any]]) -> list[dict
     mechanics or a second capability catalogue in the shape card.
     """
     hints = {
-        "id": "stable_call_id", "fn": "selected catalog capability",
-        "target": "exact existing compatible entity id",
-        "params": {"exact selected card keys": "all required/conditional and permitted optional typed values"},
+        "id": "stable_call_id", "fn": "catalog capability name",
+        "target": "entity_id",
+        "params": {"selected capability parameters": "values"},
     }
     forms: dict[tuple[str, ...], dict[str, Any]] = {}
     for variant in variants:
@@ -124,84 +105,37 @@ def _call_prompt_shape_cards(variants: Iterable[Mapping[str, Any]]) -> list[dict
     return list(forms.values())
 
 
+def _realization_prompt_shape_card() -> dict[str, str]:
+    """Legacy advisory replacement remains available to scoped Repair."""
+    properties = _author_schema()["properties"]["realization"]["properties"]
+    return {
+        name: (
+            "optional advisory text about the emitted mechanics; "
+            f"string minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode code points"
+        )
+        for name, spec in properties.items()
+    }
+
+
 def author_item_prompt_shape_card() -> dict[str, Any]:
+    """Executable item plus concise advisory design/debug notes."""
     schema = _author_schema()
-    concept_properties = schema["properties"]["concept"]["properties"]
-    report_properties = schema["properties"]["realization"]["properties"]
     call_variants = schema["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["oneOf"]
-    card = {
-        # This order is model-facing: non-binding intent, executable mechanics,
-        # then the same Author's account and self-evaluation of the result.
-        "root": ["name", "category", "runtimeProgram"],
-        "optionalAdvisory": ["concept", "realization"],
-        "name": "non-empty string",
-        "category": "combat|tool|equipment|placeable|consumable|material|hybrid|generic",
-        "concept": {
-            "literalSynthesis": (
-                "non-empty string: preserve the actual parents' concrete appearance/identity, including "
-                "deliberately surreal physical combinations. Use only supplied parent identities; "
-                "illustrative examples are not additional parents. Literal appearance does not require "
-                "inheriting every parent capability."
-            ),
-            "coreMechanic": (
-                "non-empty string: the intended gameplay, controls and practical value of the fusion. "
-                "This is advisory design context; runtimeProgram defines what actually executes."
-            ),
-            "parentAContribution": (
-                "non-empty string: explain this actual parent's appearance/identity and purposeful "
-                "mechanical contribution, which may be newly invented rather than inherited; "
-                "copying every parent capability is not required."
-            ),
-            "parentBContribution": (
-                "non-empty string: explain this actual parent's appearance/identity and purposeful "
-                "mechanical contribution, which may be newly invented rather than inherited; "
-                "copying every parent capability is not required."
-            ),
-            "playerExperience": "non-empty string: explain practical player value and deliberate costs of the selected mechanics",
-            "plannedPlayerActions": [{
-                "input": "primary_use|alternate_use|hold|equipped|passive_or_event",
-                "intent": "non-binding player-facing intent for this input or event; no extra control mode is required",
-            }],
-        },
+    return {
+        "root": ["name", "category", "concept", "runtimeProgram", "realization"],
+        "concept": "Brief design intent: the item you want to create.",
+        "realization": "Brief implementation/debug account: how runtimeProgram realizes the idea, including any mismatch you notice. Advisory, not an observed test result.",
+        "name": "non-empty item name",
+        "category": "UI/equipment classification: combat|tool|equipment|placeable|consumable|material|hybrid|generic",
         "runtimeProgram": {
             "apiVersion": RUNTIME_PROGRAM_API_VERSION,
             "schema": RUNTIME_PROGRAM_SCHEMA,
-            PRIMARY_ENTITY_FIELD: "exact existing entity id chosen once by the model",
+            PRIMARY_ENTITY_FIELD: "lifecycle/held entity id",
             "entities": [{"id": "stable_id", "kind": "catalog entity kind"}],
             "bindings": _binding_prompt_shape_cards(),
             "calls": _call_prompt_shape_cards(call_variants),
         },
-        "realization": {
-            "description": (
-                "optional advisory player-facing description of the emitted runtimeProgram: controls, effects and relevant costs/conditions. "
-                "Describe supported behavior and its conditions/limits; do not claim measured execution or additional abilities. "
-                "Use blocks, blocks/s and seconds for world quantities; retain declared units for pixel geometry. "
-                f"string minLength={report_properties['description']['minLength']}, "
-                f"maxLength={report_properties['description']['maxLength']} Unicode code points"
-            ),
-            "playerExperience": (
-                "optional advisory notes on practical use and trade-offs of the same emitted mechanics, "
-                "not additional mechanics or promises; avoid repeating the description; "
-                f"string minLength={report_properties['playerExperience']['minLength']}, "
-                f"maxLength={report_properties['playerExperience']['maxLength']} Unicode code points"
-            ),
-            "selfEvaluation": "optional advisory notes; no required checklist, verdict, runtime references or acceptance claim",
-        },
     }
-    # JSON-object providers do not send the response schema. Make existing
-    # text bounds visible next to the prose, not an extra reporting duty.
-    for name, spec in concept_properties.items():
-        if spec.get("type") == "string":
-            card["concept"][name] = (
-                f"string minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode code points. "
-                + card["concept"][name]
-            )
-    intent = concept_properties["plannedPlayerActions"]["items"]["properties"]["intent"]
-    card["concept"]["plannedPlayerActions"][0]["intent"] = (
-        f"string minLength={intent['minLength']}, maxLength={intent['maxLength']} Unicode code points. "
-        + card["concept"]["plannedPlayerActions"][0]["intent"]
-    )
-    return card
 
 
 def provider_nullable_transport_rule(response_format: Mapping[str, Any] | None) -> str:
@@ -489,6 +423,18 @@ def author_item_provider_response_schema(*, local_schema: Mapping[str, Any] | No
     )
 
 
+def author_item_generation_provider_schema() -> dict[str, Any]:
+    """Solicit concise debug notes without imposing legacy structured reports.
+
+    Only provider guidance changes; local advisory acceptance preserves both
+    plain notes and historical objects without certifying their accuracy.
+    """
+    schema = author_item_response_schema()
+    for field in ("concept", "realization"):
+        schema["properties"][field] = {"type": "string"}
+    return author_item_provider_response_schema(local_schema=schema)
+
+
 def author_item_repair_response_schema(
     *, capability_names: Iterable[str] | None = None,
 ) -> dict[str, Any]:
@@ -518,7 +464,7 @@ def author_item_repair_prompt_shape_card(*, capability_names: Iterable[str] | No
             }]
             continue
         if key == "realizationReplacement":
-            placeholders[key] = copy.deepcopy(author_item_prompt_shape_card()["realization"])
+            placeholders[key] = _realization_prompt_shape_card()
             continue
         if key == PRIMARY_ENTITY_SELECTION_FIELD:
             placeholders[key] = f"entity_id chosen from repairScope.repairTransactions.{PRIMARY_ENTITY_SELECTION_FIELD}.candidateEntityIds, or null"
@@ -623,8 +569,17 @@ def project_provider_author_item_to_local(
 ) -> Any:
     if not isinstance(response_format, Mapping) or response_format.get("type") != "json_schema":
         return copy.deepcopy(value)
+    local = author_item_response_schema()
+    envelope = response_format.get("json_schema")
+    provider = envelope.get("schema") if isinstance(envelope, Mapping) else None
+    if isinstance(provider, Mapping):
+        # Initial generation advertises plain advisory notes, unlike legacy
+        # structured reports. Decode only its exact declared null transport.
+        for field in ("concept", "realization"):
+            if (provider.get("properties") or {}).get(field) == {"anyOf": [{"type": "string"}, {"type": "null"}]}:
+                local["properties"][field] = {"type": "string"}
     return project_provider_nullable_optionals_to_local(
-        value, author_item_response_schema(), response_format=response_format,
+        value, local, response_format=response_format,
     )
 
 

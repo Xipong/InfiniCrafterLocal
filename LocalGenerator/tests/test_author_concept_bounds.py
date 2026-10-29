@@ -1,4 +1,4 @@
-"""Optional concept limits are visible even without provider JSON Schema."""
+"""Concise debug notes are requested while legacy advisory shapes remain accepted."""
 import copy
 import json
 
@@ -12,7 +12,7 @@ from infini_local.pipelines import llm_authoring_pipeline as author
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
-def test_rendered_author_exposes_canonical_concept_text_bounds(monkeypatch, mode):
+def test_rendered_author_requests_concise_notes_but_preserves_legacy_bounds(monkeypatch, mode):
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, _, _ = author.build_initial_author_request({}, {}, "concept-bounds", model_name="offline")
     packet = request_dossier(request)
@@ -20,19 +20,24 @@ def test_rendered_author_exposes_canonical_concept_text_bounds(monkeypatch, mode
     schema = contract.author_item_response_schema()
     concept = schema["properties"]["concept"]
     assert "concept" not in schema["required"]
-    assert "concept" in shape["optionalAdvisory"]
-    assert "concept" not in shape["root"]
-    for name, spec in concept["properties"].items():
-        if spec.get("type") == "string":
-            assert f"minLength={spec['minLength']}, maxLength={spec['maxLength']} Unicode code points" in shape["concept"][name]
-    intent = concept["properties"]["plannedPlayerActions"]["items"]["properties"]["intent"]
-    assert f"minLength={intent['minLength']}, maxLength={intent['maxLength']} Unicode code points" in shape["concept"]["plannedPlayerActions"][0]["intent"]
+    assert {"concept", "realization"} <= shape.keys()
+    assert {"concept", "realization"} <= set(shape["root"])
+    assert isinstance(shape["concept"], str) and isinstance(shape["realization"], str)
     # Inspect serialized messages, not only schema annotations/merged helpers.
     sent_shapes = [json.loads(message["content"])["requiredJsonShape"]
                    for message in request["messages"][1:]
                    if "requiredJsonShape" in json.loads(message["content"])]
     assert sent_shapes == [shape]
-    assert "Summarize the mechanic" not in shape["concept"]["coreMechanic"]
+    if mode == "json_schema":
+        delivered = request["response_format"]["json_schema"]["schema"]
+        legacy = contract.author_item_provider_response_schema()
+        expected = copy.deepcopy(legacy)
+        for field in ("concept", "realization"):
+            expected["properties"][field] = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+        assert delivered == expected, "only advisory roots may differ from the full provider grammar"
+        assert set(delivered["properties"]) == set(delivered["required"]) == {"name", "category", "concept", "runtimeProgram", "realization"}
+        assert delivered["$defs"] == legacy["$defs"]
+        assert delivered["properties"]["runtimeProgram"] == legacy["properties"]["runtimeProgram"]
     valid = {name: "x" * spec["maxLength"] for name, spec in concept["properties"].items()
              if spec.get("type") == "string"}
     validator = Draft202012Validator(concept)
@@ -41,12 +46,13 @@ def test_rendered_author_exposes_canonical_concept_text_bounds(monkeypatch, mode
     assert not validator.is_valid(valid), "visibility must not relax the existing bound"
 
 
-def test_concept_prompt_limits_follow_canonical_schema_not_shadow_constants(monkeypatch):
+def test_changed_legacy_concept_bounds_do_not_impose_structured_report(monkeypatch):
     schema = copy.deepcopy(contract.author_item_response_schema())
     schema["properties"]["concept"]["properties"]["coreMechanic"]["maxLength"] = 537
     monkeypatch.setattr(contract, "_author_schema", lambda: schema)
     shape = contract.author_item_prompt_shape_card()
-    assert "maxLength=537 Unicode code points" in shape["concept"]["coreMechanic"]
+    assert isinstance(shape["concept"], str)
+    assert contract.author_item_response_schema()["properties"]["concept"]["properties"]["coreMechanic"]["maxLength"] == 537
 
 
 @pytest.mark.parametrize("length,valid", [(501, True), (2000, True), (2001, False)])
@@ -79,4 +85,26 @@ def test_expanded_core_mechanic_bound_reaches_provider_and_repair_metadata():
     assert spec == {"type": "string", "minLength": 1, "maxLength": 2000}
     assert provider_concept["properties"]["coreMechanic"] == spec
     assert repair["properties"]["metadataPatch"]["properties"]["concept"]["properties"]["coreMechanic"] == spec
-    assert "maxLength=2000 Unicode code points" in contract.author_item_prompt_shape_card()["concept"]["coreMechanic"]
+    assert isinstance(contract.author_item_prompt_shape_card()["concept"], str)
+
+
+def test_legacy_advisory_record_still_passes_full_provider_inverse_and_compiler():
+    from infini_local.core.runtime_authoring.compiler import compile_runtime_program
+    from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
+    from test_codex_subscription_contract import _encode_nullable_fixture
+
+    source = build_runtime_fixture("workbench_blade")
+    before = copy.deepcopy(source)
+    local = contract.author_item_response_schema()
+    legacy_provider = contract.author_item_provider_response_schema()
+    encoded = _encode_nullable_fixture(source, local)
+    Draft202012Validator(legacy_provider).validate(encoded)
+    restored = author._prepare_parsed_author_item(encoded, response_format={
+        "type": "json_schema", "json_schema": {"schema": legacy_provider}})
+    assert restored == before and source == before
+    compiled, expected = compile_runtime_program(restored), compile_runtime_program(before)
+    assert compiled["runtimeProgram"] == expected["runtimeProgram"]
+    assert compiled["gameplay"] == expected["gameplay"]
+    assert compiled["concept"] == expected["concept"] and compiled["realization"] == expected["realization"]
+    generation = contract.author_item_generation_provider_schema()
+    assert not Draft202012Validator(generation).is_valid(encoded), "fresh generation requests plain notes, not legacy structured essays"

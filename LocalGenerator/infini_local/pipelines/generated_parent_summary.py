@@ -13,7 +13,7 @@ def generated_parent_summary_from_data(data: Mapping[str, Any]) -> dict[str, Any
     if not result_id:
         raise ValueError("generatedParentSummary requires the accepted top-level generated id")
     realization = data.get("realization")
-    realization = realization if isinstance(realization, Mapping) else {}
+    realization = {"description": realization} if isinstance(realization, str) else realization if isinstance(realization, Mapping) else {}
     return {
         "schema": "infini.generated-parent-summary.v2",
         "name": str(data.get("name") or "Generated Item"),

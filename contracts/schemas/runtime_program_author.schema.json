@@ -1100,7 +1100,7 @@
                 "const": "set_projectile_owner_control"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1196,7 +1196,7 @@
                 "const": "accumulate_projectile_charge"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1367,7 +1367,7 @@
                 "const": "gate_projectile_contact"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1423,7 +1423,7 @@
                 "const": "set_projectile_beam_geometry"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1573,7 +1573,7 @@
                 "const": "sustain_projectile_mana"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1616,7 +1616,7 @@
                 "const": "set_projectile_lash_geometry"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1787,7 +1787,7 @@
                 "const": "set_projectile_aim"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1795,7 +1795,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "source": {
-                    "description": "Explicit axis source.",
+                    "description": "Axis source.",
                     "enum": [
                       "initial",
                       "cursor",
@@ -1807,7 +1807,7 @@
                   },
                   "turnOwner": {
                     "default": false,
-                    "description": "Explicitly turn owner toward axis; omission adds no turning side effect.",
+                    "description": "Turn the owner toward the axis.",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
@@ -1852,7 +1852,7 @@
                 "const": "attach_projectile"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -1860,7 +1860,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "anchor": {
-                    "description": "Native anchor; reading front hand does not claim its pose writer.",
+                    "description": "Multiple attachments can share front_hand; set_front_arm_pose controls its pose.",
                     "enum": [
                       "owner_center",
                       "owner_mounted",
@@ -2122,7 +2122,7 @@
                 "const": "set_front_arm_pose"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2233,7 +2233,7 @@
                 "const": "orbit_projectile"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2392,7 +2392,7 @@
                 "const": "seek_projectile"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2466,7 +2466,7 @@
                     "x-infini-units": "blocks/second"
                   },
                   "minimumSpeedBlocksPerSecond": {
-                    "description": "Author units: blocks/second. Native consumer: Optional nonnegative desired-speed floor.",
+                    "description": "Author units: blocks/second. Native consumer: Desired-speed floor.",
                     "maximum": 1800.0,
                     "minimum": 0.0,
                     "type": "number",
@@ -2605,7 +2605,7 @@
                 "const": "set_projectile_return_trigger"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2700,7 +2700,7 @@
                 "const": "set_projectile_arrival"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2777,7 +2777,7 @@
                 "const": "set_projectile_proximity_action"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2878,7 +2878,7 @@
                 "const": "accelerate_projectile_vertical"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -2972,7 +2972,7 @@
                 "const": "scale_projectile_velocity"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3085,7 +3085,7 @@
                 "const": "set_projectile_rotation"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3210,7 +3210,7 @@
                 "const": "oscillate_projectile_velocity"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3396,7 +3396,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "phaseRadians": {
-                    "description": "Explicit starting sine phase.",
+                    "description": "Starting sine phase.",
                     "maximum": 100,
                     "minimum": -100,
                     "type": "number",
@@ -3457,7 +3457,7 @@
                 "const": "add_projectile_visual_scale"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3509,7 +3509,7 @@
                     "x-infini-units": "scale/second"
                   },
                   "maxScale": {
-                    "description": "Positive visual scale ceiling.",
+                    "description": "Visual scale ceiling.",
                     "maximum": 20,
                     "minimum": 0.01,
                     "type": "number",
@@ -3569,7 +3569,7 @@
                 "const": "set_projectile_opacity"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3626,7 +3626,7 @@
                 "const": "configure_item_stats"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3641,7 +3641,7 @@
                     "x-infini-semanticType": "item_count"
                   },
                   "damage": {
-                    "description": "Base item damage",
+                    "description": "Base damage.",
                     "maximum": 2000,
                     "minimum": 0,
                     "type": "integer",
@@ -3662,7 +3662,7 @@
                     "x-infini-units": "pixels"
                   },
                   "knockback": {
-                    "description": "Item.knockBack engine strength, not pixels or damage",
+                    "description": "Item.knockBack strength.",
                     "maximum": 20,
                     "minimum": 0,
                     "type": "number",
@@ -3671,7 +3671,7 @@
                   },
                   "manaCost": {
                     "default": 0,
-                    "description": "Base Item.mana points before player mana-cost modifiers, not guaranteed final mana spent. For primary_use/alternate_use, native mana payment is attempted when a new use animation starts; useTimeSeconds can permit additional activations inside that animation without another native mana payment. This is not a per-projectile or per-successful-spawn debit. A separately explicit controller manaPayment may add recurring payment; do not infer it. Omitted means no mana cost, independently of DamageClass.",
+                    "description": "Base mana cost, paid when a new use animation starts. Multiple activations within that animation share this payment; sustain_projectile_mana can add recurring payments.",
                     "maximum": 500,
                     "minimum": 0,
                     "type": "integer",
@@ -3680,7 +3680,7 @@
                   },
                   "manaCostInput": {
                     "default": "both",
-                    "description": "Which active input pays manaCost through native animation-start payment. The other input costs no base item mana. Omitted means both, preserving shared-cost behavior. This does not change explicit controller manaPayment.",
+                    "description": "Active input charged the base manaCost.",
                     "enum": [
                       "primary_use",
                       "alternate_use",
@@ -3698,21 +3698,21 @@
                     "x-infini-semanticType": "stack_count"
                   },
                   "rarity": {
-                    "description": "Exact loaded Item.rare ID; copy modded IDs from parent facts, do not guess",
+                    "description": "Loaded Item.rare ID; modded IDs come from parent facts.",
                     "maximum": 65535,
                     "minimum": 0,
                     "type": "integer",
                     "x-infini-semanticType": "loaded_rarity_id"
                   },
                   "scale": {
-                    "description": "Dimensionless held Item scale (1 unchanged/neutral); multiplies the presentation base size, not bake resolution. Independent of dropped worldScale and projectile hitbox.drawScale/visual.scale",
+                    "description": "Multiplies held-item presentation size; dropped and projectile scale are separate.",
                     "maximum": 4,
                     "minimum": 0.25,
                     "type": "number",
                     "x-infini-semanticType": "draw_scale"
                   },
                   "useAnimationSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Duration of one use animation, independent of useTimeSeconds; differing values can allow multiple uses during one animation, not necessarily one projectile per click",
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Duration of one use animation; it can contain multiple useTimeSeconds activations.",
                     "maximum": 10.0,
                     "minimum": 0.008333333333333333,
                     "type": "number",
@@ -3724,7 +3724,7 @@
                     "x-infini-units": "seconds"
                   },
                   "useTimeSeconds": {
-                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Terraria use/reuse interval (60 ticks/s), not the animation length",
+                    "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Interval between activations.",
                     "maximum": 10.0,
                     "minimum": 0.008333333333333333,
                     "type": "number",
@@ -3736,7 +3736,7 @@
                     "x-infini-units": "seconds"
                   },
                   "valueCopper": {
-                    "description": "Exact Terraria Item.value field in copper; NPC shop price/base value, not an inferred player resale amount",
+                    "description": "NPC shop base price (Item.value).",
                     "maximum": 100000000,
                     "minimum": 0,
                     "type": "integer",
@@ -3796,7 +3796,7 @@
                 "const": "configure_item_use"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3814,7 +3814,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "customHeldSprite": {
-                    "description": "Custom held-root visibility only, not gameplay release timing: hidden suppresses it; visible keeps it while use is active; inherit or omission follows hideUseGraphic. This does not schedule gameplay release or change vanilla hideUseGraphic.",
+                    "description": "Generated root sprite visibility during active use. inherit or omission follows hideUseGraphic; hidden/visible override it.",
                     "enum": [
                       "hidden",
                       "visible",
@@ -3841,7 +3841,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "hideUseGraphic": {
-                    "description": "Suppress vanilla item-use sprite. Choose true for deliberate invisibility or an actual physical held-body replacement, not merely because the item fires. Free projectiles do not replace the held launcher/body. customHeldSprite=inherit or omission also follows this flag for the custom generated root; explicit visible keeps that root visible while active, so true may intentionally hide vanilla while retaining the custom body. Coordinate the authored visibility with Visual/VFX physical representation; neither stage edits this flag",
+                    "description": "Suppress the vanilla item-use sprite.",
                     "type": "boolean",
                     "x-infini-semanticType": "bounded_text"
                   },
@@ -3929,7 +3929,7 @@
                 "const": "collect_seeds_from_grass"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -3966,7 +3966,7 @@
                 "const": "configure_item_contact_hitbox"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4023,7 +4023,7 @@
                 "const": "configure_weapon_ammo"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4096,7 +4096,7 @@
                 "const": "configure_vanilla_ammo_item"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4131,14 +4131,14 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "projectileId": {
-                    "description": "Exact vanilla ProjectileID fired when this ammo is consumed; do not guess",
+                    "description": "Vanilla ProjectileID fired when this ammunition is consumed.",
                     "maximum": 1021,
                     "minimum": 1,
                     "type": "integer",
                     "x-infini-semanticType": "terraria_projectile_id"
                   },
                   "shootSpeedContributionBlocksPerSecond": {
-                    "description": "Author units: blocks/s (base native launch contribution, not final projectile speed). Native consumer: Base/native launch contribution in blocks/s; this contribution is not a guaranteed final projectile speed",
+                    "description": "Author units: blocks/s (base native launch contribution, not final projectile speed). Native consumer: Native ammunition launch-speed contribution.",
                     "maximum": 300.0,
                     "minimum": -75.0,
                     "type": "number",
@@ -4191,7 +4191,7 @@
                 "const": "restore_resources_on_use"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4261,7 +4261,7 @@
                 "const": "apply_vanilla_buff_on_use"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4269,7 +4269,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "buffId": {
-                    "description": "Exact explicit Terraria BuffID or loaded ModContent.BuffType for native interoperability/history; the ID identifies the native effect, not a semantic description. Never invent IDs or infer effects from names. Prefer generated effect composition for newly authored mechanics. Native immunity and target behavior still apply; player-only effects need not affect NPCs. Choose recipient, supported event and duration explicitly; identity alone supplies none.",
+                    "description": "Terraria BuffID or loaded ModContent.BuffType. Native immunity and recipient behavior apply; player-only effects may have no effect on NPCs.",
                     "maximum": 65535,
                     "minimum": 1,
                     "type": "integer",
@@ -4328,7 +4328,7 @@
                 "const": "apply_generated_buff_on_use"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4590,7 +4590,7 @@
                 "const": "refresh_generated_effect_group_while_held"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4637,7 +4637,7 @@
                 "const": "configure_tool"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4712,7 +4712,7 @@
                 "const": "configure_tile_placement"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4768,7 +4768,7 @@
                 "const": "configure_wall_placement"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4824,7 +4824,7 @@
                 "const": "present_placed_item_sprite"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -4995,7 +4995,7 @@
                 "const": "add_placed_light"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5083,7 +5083,7 @@
                 "const": "enable_placed_vfx"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5156,7 +5156,7 @@
                 "const": "require_use_condition"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5259,7 +5259,7 @@
                 "const": "add_hold_light"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5285,7 +5285,7 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "strength": {
-                    "description": "Client light RGB coefficient multiplying selected color (not a tile radius)",
+                    "description": "RGB intensity multiplier.",
                     "maximum": 1.5,
                     "minimum": 0.01,
                     "type": "number",
@@ -5327,7 +5327,7 @@
                 "const": "move_player_on_use"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5410,7 +5410,7 @@
                 "const": "recall_home_on_use"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5469,7 +5469,7 @@
                 "const": "configure_accessory"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5495,7 +5495,7 @@
                     "x-infini-units": "blocks/s"
                   },
                   "aggroPoints": {
-                    "description": "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
+                    "description": "Add Player.aggro points; negative values reduce targeting.",
                     "maximum": 1000,
                     "minimum": -1000,
                     "type": "integer",
@@ -5523,7 +5523,7 @@
                     "x-infini-units": "probability_percent"
                   },
                   "damageReductionPercentagePoints": {
-                    "description": "Add percent/100 to Player.endurance damage reduction",
+                    "description": "Add percentage points of damage reduction",
                     "maximum": 75,
                     "minimum": 0,
                     "type": "number",
@@ -5572,7 +5572,7 @@
                     "x-infini-units": "armor_points"
                   },
                   "genericAttackSpeedBonusPercent": {
-                    "description": "Add percent/100 to generic attack speed",
+                    "description": "Add a generic attack-speed percentage bonus",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -5600,7 +5600,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "genericKnockbackBonusPercent": {
-                    "description": "Add percent/100 to generic StatModifier knockback; not flat points",
+                    "description": "Add a generic knockback percentage bonus; not flat knockback points",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -5649,7 +5649,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "lifeRegenHpPerSecond": {
-                    "description": "Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing",
+                    "description": "Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration",
                     "maximum": 100,
                     "minimum": -50,
                     "multipleOf": 0.5,
@@ -5659,7 +5659,7 @@
                     "x-infini-units": "HP/s"
                   },
                   "lightColor": {
-                    "description": "Explicit equipped light color",
+                    "description": "Equipped light color.",
                     "enum": [
                       "white",
                       "red",
@@ -5687,7 +5687,7 @@
                     "x-infini-units": "engine units: RGB coefficient"
                   },
                   "manaCostReductionPercentagePoints": {
-                    "description": "Subtract percent/100 from Player.manaCost factor, floored at 0.1",
+                    "description": "Reduce the mana-cost percentage by this many percentage points, with a 10% cost-factor floor per application",
                     "maximum": 90,
                     "minimum": 0,
                     "type": "number",
@@ -5706,7 +5706,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "manaRegenBonusPoints": {
-                    "description": "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
+                    "description": "Add Player.manaRegenBonus points.",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -5760,7 +5760,7 @@
                     "x-infini-units": "slots"
                   },
                   "moveSpeedBonusPercent": {
-                    "description": "Add percent/100 to Player.moveSpeed",
+                    "description": "Add a movement-speed percentage bonus",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -5803,7 +5803,7 @@
                     "x-infini-units": "slots"
                   },
                   "taggedSummonSourceDamageBonusPercent": {
-                    "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
+                    "description": "Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip",
                     "maximum": 300,
                     "minimum": 0,
                     "type": "number",
@@ -5828,7 +5828,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "whipRangeBonusPercent": {
-                    "description": "Add percent/100 to Player.whipRangeMultiplier",
+                    "description": "Add a whip-range percentage bonus",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -5884,7 +5884,7 @@
                 "const": "configure_armor"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -5892,7 +5892,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "aggroPoints": {
-                    "description": "Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
+                    "description": "Add Player.aggro points; negative values reduce targeting.",
                     "maximum": 1000,
                     "minimum": -1000,
                     "type": "integer",
@@ -5920,7 +5920,7 @@
                     "x-infini-units": "probability_percent"
                   },
                   "damageReductionPercentagePoints": {
-                    "description": "Add percent/100 to Player.endurance damage reduction",
+                    "description": "Add percentage points of damage reduction",
                     "maximum": 75,
                     "minimum": 0,
                     "type": "number",
@@ -5963,7 +5963,7 @@
                     "x-infini-units": "armor_points"
                   },
                   "genericAttackSpeedBonusPercent": {
-                    "description": "Add percent/100 to generic attack speed",
+                    "description": "Add a generic attack-speed percentage bonus",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -5991,7 +5991,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "genericKnockbackBonusPercent": {
-                    "description": "Add percent/100 to generic StatModifier knockback; not flat points",
+                    "description": "Add a generic knockback percentage bonus; not flat knockback points",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -6034,7 +6034,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "lifeRegenHpPerSecond": {
-                    "description": "Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing",
+                    "description": "Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration",
                     "maximum": 100,
                     "minimum": -50,
                     "multipleOf": 0.5,
@@ -6044,7 +6044,7 @@
                     "x-infini-units": "HP/s"
                   },
                   "lightColor": {
-                    "description": "Explicit equipped light color",
+                    "description": "Equipped light color.",
                     "enum": [
                       "white",
                       "red",
@@ -6072,7 +6072,7 @@
                     "x-infini-units": "engine units: RGB coefficient"
                   },
                   "manaCostReductionPercentagePoints": {
-                    "description": "Subtract percent/100 from Player.manaCost factor, floored at 0.1",
+                    "description": "Reduce the mana-cost percentage by this many percentage points, with a 10% cost-factor floor per application",
                     "maximum": 90,
                     "minimum": 0,
                     "type": "number",
@@ -6091,7 +6091,7 @@
                     "x-infini-units": "percentage_points"
                   },
                   "manaRegenBonusPoints": {
-                    "description": "Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
+                    "description": "Add Player.manaRegenBonus points.",
                     "maximum": 200,
                     "minimum": -100,
                     "type": "integer",
@@ -6145,7 +6145,7 @@
                     "x-infini-units": "slots"
                   },
                   "moveSpeedBonusPercent": {
-                    "description": "Add percent/100 to Player.moveSpeed",
+                    "description": "Add a movement-speed percentage bonus",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -6178,7 +6178,7 @@
                     "minProperties": 1,
                     "properties": {
                       "aggroPoints": {
-                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.aggro engine points (negative reduces targeting); not a probability or radius",
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.aggro points; negative values reduce targeting.",
                         "maximum": 1000,
                         "minimum": -1000,
                         "type": "integer",
@@ -6206,7 +6206,7 @@
                         "x-infini-units": "probability_percent"
                       },
                       "damageReductionPercentagePoints": {
-                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.endurance damage reduction",
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percentage points of damage reduction",
                         "maximum": 75,
                         "minimum": 0,
                         "type": "number",
@@ -6243,7 +6243,7 @@
                         "x-infini-units": "percentage_points"
                       },
                       "lifeRegenHpPerSecond": {
-                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; +1 HP/s writes +2 Player.lifeRegen engine units, -1 HP/s writes -2; 0 adds nothing",
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration",
                         "maximum": 100,
                         "minimum": -50,
                         "multipleOf": 0.5,
@@ -6253,7 +6253,7 @@
                         "x-infini-units": "HP/s"
                       },
                       "manaCostReductionPercentagePoints": {
-                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Subtract percent/100 from Player.manaCost factor, floored at 0.1",
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Reduce the mana-cost percentage by this many percentage points, with a 10% cost-factor floor per application",
                         "maximum": 90,
                         "minimum": 0,
                         "type": "number",
@@ -6272,7 +6272,7 @@
                         "x-infini-units": "percentage_points"
                       },
                       "manaRegenBonusPoints": {
-                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add raw Player.manaRegenBonus points; 0 adds nothing, not mana/s",
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add Player.manaRegenBonus points.",
                         "maximum": 200,
                         "minimum": -100,
                         "type": "integer",
@@ -6290,7 +6290,7 @@
                         "x-infini-units": "slots"
                       },
                       "moveSpeedBonusPercent": {
-                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add percent/100 to Player.moveSpeed",
+                        "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add a movement-speed percentage bonus",
                         "maximum": 300,
                         "minimum": -90,
                         "type": "number",
@@ -6340,7 +6340,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "taggedSummonSourceDamageBonusPercent": {
-                    "description": "Multiply summon projectile source damage by 1+percent/100 only against an NPC tagged by this owner's generated whip",
+                    "description": "Increase summon projectile source damage by this percentage only against an NPC tagged by this owner's generated whip",
                     "maximum": 300,
                     "minimum": 0,
                     "type": "number",
@@ -6365,7 +6365,7 @@
                     "x-infini-semanticType": "bounded_text"
                   },
                   "whipRangeBonusPercent": {
-                    "description": "Add percent/100 to Player.whipRangeMultiplier",
+                    "description": "Add a whip-range percentage bonus",
                     "maximum": 300,
                     "minimum": -90,
                     "type": "number",
@@ -6418,7 +6418,7 @@
                 "const": "add_equipment_damage_bonus"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -6501,7 +6501,7 @@
                 "const": "configure_spawn"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7137,7 +7137,7 @@
                 "const": "set_projectile_concurrency"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7192,7 +7192,7 @@
                 "const": "set_projectile_sentry"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7244,7 +7244,7 @@
                 "const": "set_descendant_concurrency"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7299,7 +7299,7 @@
                 "const": "set_projectile_damage"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7375,7 +7375,7 @@
                 "const": "set_projectile_lifetime"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7434,7 +7434,7 @@
                 "const": "set_projectile_hitbox"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7514,7 +7514,7 @@
                 "const": "set_projectile_hitbox_curve"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7632,7 +7632,7 @@
                 "const": "set_projectile_turn_modifier"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -7815,7 +7815,7 @@
                 "const": "set_projectile_homing_modifier"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -8038,7 +8038,7 @@
                 "const": "attract_npcs_while_active"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -8285,7 +8285,7 @@
                 "const": "set_projectile_visual_scale_curve"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -8400,7 +8400,7 @@
                 "const": "set_projectile_collision"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -8536,7 +8536,7 @@
                 "const": "move_straight"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -8579,7 +8579,7 @@
                 "const": "target_and_fire"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -8753,7 +8753,7 @@
                 "const": "spawn_entity_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -8981,7 +8981,7 @@
                 "const": "spawn_entity_from_hit_target"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -9091,7 +9091,7 @@
                         "x-infini-units": "blocks"
                       },
                       "beforeProbability": {
-                        "description": "Independent per-child probability of the before-target branch; this is geometry, not a promised re-hit chance.",
+                        "description": "Per-child probability of selecting the before-target position.",
                         "maximum": 1,
                         "minimum": 0,
                         "type": "number",
@@ -9223,7 +9223,7 @@
                 "const": "select_targets_and_emit_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -9362,7 +9362,7 @@
                 "const": "apply_generated_buff_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -9455,7 +9455,7 @@
                 "const": "apply_npc_effect_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -9611,7 +9611,7 @@
                 "const": "apply_status_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -9619,7 +9619,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "buffId": {
-                    "description": "Exact explicit Terraria BuffID or loaded ModContent.BuffType for native interoperability/history; the ID identifies the native effect, not a semantic description. Never invent IDs or infer effects from names. Prefer generated effect composition for newly authored mechanics. Native immunity and target behavior still apply; player-only effects need not affect NPCs. Choose recipient, supported event and duration explicitly; identity alone supplies none.",
+                    "description": "Terraria BuffID or loaded ModContent.BuffType. Native immunity and recipient behavior apply; player-only effects may have no effect on NPCs.",
                     "maximum": 65535,
                     "minimum": 1,
                     "type": "integer",
@@ -9702,7 +9702,7 @@
                 "const": "damage_nearby_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -9838,7 +9838,7 @@
                 "const": "pull_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -10178,7 +10178,7 @@
                 "const": "heal_owner_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -10265,7 +10265,7 @@
                 "const": "move_owner_on_event"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -10363,7 +10363,7 @@
                 "const": "emit_light_while_active"
               },
               "id": {
-                "description": "Stable call id used by Repair and self-evaluation runtimeRefs.",
+                "description": "Stable unique call id.",
                 "pattern": "^[a-z][a-z0-9_]{0,47}$",
                 "type": "string"
               },
@@ -10389,7 +10389,7 @@
                     "x-infini-semanticType": "runtime_color"
                   },
                   "strength": {
-                    "description": "Client light RGB coefficient multiplying selected color (not a tile radius)",
+                    "description": "RGB intensity multiplier.",
                     "maximum": 1.5,
                     "minimum": 0.01,
                     "type": "number",

@@ -90,7 +90,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Independent explicit owner cancellation, held-projectile claim, animation and lifetime policies; no position or damage.",
+      "purpose": "Set owner cancellation, held-projectile ownership, animation and lifetime policies.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -169,7 +169,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Accumulate and latch release. Without releaseEffect, no velocity, combat or lifetime rewrite; aim and contact stay independent.",
+      "purpose": "Accumulate charge and latch release; releaseEffect optionally changes velocity, combat or lifetime at release.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -333,7 +333,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Constrain actual damage eligibility during an explicit phase, including before the first AI; outside the gate retain base authored eligibility.",
+      "purpose": "Gate damage eligibility by phase, including before the first AI update; outside the gate retain base eligibility.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -415,7 +415,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Define an independent shared line for collision, draw and VFX from body center and Aim, without channel/control/lifetime policy.",
+      "purpose": "Share a line between collision, draw and VFX, starting at body center along the Aim axis.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -557,7 +557,7 @@
       "networkAuthority": "owner_request_server_execute",
       "parameters": {},
       "positionOwnership": "none",
-      "purpose": "Pay recurring native held-item mana at the held item's use-time cadence, independently of geometry or damage class; initial payment belongs to item use.",
+      "purpose": "Pay recurring native held-item mana at the held item's use-time cadence; initial payment belongs to item use.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -716,7 +716,7 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Define one bounded curved polyline; terminal point owns body center, collision and draw share geometry; no implicit tags or animation lifetime. Requires explicit collision.tileCollide=false: the curve does not execute native body tile collision.",
+      "purpose": "Share a bounded curved polyline between collision and draw; its terminal point owns body center. tileCollide must be false because the curve bypasses native body tile collision.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -809,7 +809,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Define a world unit axis, without translation.",
+      "purpose": "Define the world unit axis used by attachment, geometry and rotation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -912,7 +912,7 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Set absolute center from one native anchor and explicit axis/normal offsets; no control or lifetime policy. An always-active attachment requires explicit collision.tileCollide=false because it bypasses native integration; a phase/timing-limited attachment may keep tile collision for free flight.",
+      "purpose": "Set body center from a native anchor and axis/normal offsets. Always-active attachment bypasses native integration and requires tileCollide=false; a phase/timing-limited attachment allows tile collision during free flight.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1037,7 +1037,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Write the primary native front arm pose independently of body position; interpolate lengths piecewise, nearest stretch ties shorter.",
+      "purpose": "Write the primary front arm pose; interpolate stretch lengths piecewise, nearest stretch ties shorter.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1280,7 +1280,7 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Own an absolute anchored orbit with explicit phase and identity phase; tile collision remains independently authored.",
+      "purpose": "Move around an anchored orbit with per-instance phase.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1418,7 +1418,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Lerp velocity toward an explicit target independently of spin, return, lifetime or collision. At most two disjoint outbound/returning instances.",
+      "purpose": "Lerp velocity toward a target. Supports up to two disjoint outbound/returning instances.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1548,7 +1548,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "OR-latch returning exactly once, without seek, arrival, spin or implicit tile policy.",
+      "purpose": "Latch the returning state once when any selected trigger fires.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1631,7 +1631,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Kill on reaching the selected owner anchor; fn selects action=kill. No return latch is implied.",
+      "purpose": "Kill when reaching the selected owner anchor.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1725,7 +1725,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Select nearest valid NPC deterministically and kill, independently of steering; expiry emits on_expire then on_kill, not on_hit.",
+      "purpose": "Find the nearest valid NPC and terminate on proximity; expire_then_kill emits on_expire then on_kill.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1781,7 +1781,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Add signed world vertical acceleration independently of steering.",
+      "purpose": "Add signed world vertical acceleration.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -1904,7 +1904,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "After turn and before homing, multiply velocity per update, optionally cap its magnitude. Zero stops; below one brakes. At most two independently timed, provably disjoint instances; no early-stage scaling.",
+      "purpose": "After turn and before homing, multiply velocity per update and optionally cap its magnitude. Supports two provably disjoint timing windows.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1998,7 +1998,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Choose sprite rotation without changing velocity.",
+      "purpose": "Rotate the sprite.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -2103,7 +2103,7 @@
         }
       },
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Independent sine steering; no NPC targeting or opacity. Fixed order: Seek, vertical acceleration, retention, oscillation, existing turn/speed/homing modifiers.",
+      "purpose": "Add sine steering after seek, vertical acceleration and retention, before the turn/speed/homing modifiers.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2226,7 +2226,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set body opacity independently of steering or collision.",
+      "purpose": "Set body opacity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2415,7 +2415,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set exact item stats; no weapon class or behaviour is inferred.",
+      "purpose": "Set item stats.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2581,7 +2581,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set exact item use/draw/input affordances.",
+      "purpose": "Configure use behavior and held-item presentation.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2607,7 +2607,7 @@
       "networkAuthority": "native_worldgen",
       "parameters": {},
       "positionOwnership": "none",
-      "purpose": "Inventory passive: explicitly let this generated definition satisfy Terraria's native grass seed-collection inventory check. No use/equip/hold binding is needed. Only carried inventory slots 0..57 count (not mouse slot, equipment, banks or Void Bag); native tile admission, 50% seed RNG and nearest-player selection remain unchanged. Does not consume the item. No parameters.",
+      "purpose": "Enable Terraria's grass seed-collection inventory check. Only carried slots 0..57 count; native tile admission, 50% seed RNG and nearest-player selection apply. The item is retained.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "one bounded native inventory witness; no added spawns or RNG",
@@ -2658,7 +2658,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Modify the current Terraria contact rectangle when a binding enables item-body contact; not a fixed PNG box. Keep its center; round each dimension times hitboxScale, add contactForgivenessPx on each side, minimum 1px. Omission leaves native geometry unchanged.",
+      "purpose": "Resize the Terraria item-contact rectangle around its current center: round each dimension times hitboxScale, then add contactForgivenessPx on each side, minimum 1px.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -2728,7 +2728,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Require native Terraria ammo selection and conservation for every active spawn_entity shot of this item. The authored runtime entity always supplies projectile behavior; selected ammo projectile AI is not copied. Native weapon-plus-ammo damage and knockback reach that root unchanged. native_shot requires constant velocity on each active binding target; authored_spawn preserves explicitly sampled velocity. Other actions and passive hold spawns do not consume ammo. This capability cannot coexist with configure_vanilla_ammo_item on the same item.",
+      "purpose": "Use native Terraria ammunition selection and conservation for active spawn_entity shots. Weapon-plus-ammo damage and knockback feed the authored projectile; its behavior comes from the runtime entity. native_shot requires constant velocity on each active target; authored_spawn preserves its sampled velocity. Other actions and hold spawns do not consume ammunition.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -2828,7 +2828,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Mark this generated item as one exact vanilla ammo category and projectile. It does not configure a weapon to consume ammo.",
+      "purpose": "Make the generated item usable as the selected vanilla ammunition.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3185,7 +3185,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply a bounded generated utility effect. Refreshing an identical effect retains maximum remaining duration, not extra strength; distinct effects coexist under player stat caps. exhaustionSeconds starts at successful application or refresh, independently of buff duration. Normal attacks and other item effects are unchanged; attack cadence is separately authored. Free repeatable refresh can sustain indefinite uptime despite a short duration.",
+      "purpose": "Apply a generated utility effect. Identical effects refresh to the greater remaining duration; distinct effects coexist under player stat caps. exhaustionSeconds starts on successful application or refresh. Repeated refresh can sustain the effect indefinitely.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3236,7 +3236,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Attempt to refresh one named generated utility buff group each world tick while this exact item is held; its exhaustionSeconds policy still applies. durationSeconds controls lingering after release, independently of exhaustion. Only apply_generated_buff_on_use may populate the group; no healing, teleport, native buff or invisible projectile is inferred.",
+      "purpose": "Refresh the selected apply_generated_buff_on_use group each world tick while held, subject to its exhaustionSeconds lockout. durationSeconds determines lingering after release.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -3614,7 +3614,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit persistent static presentation of the same item_body's existing full-frame root PNG over one exact native tile placement. Replaces all native body/flame pictures: native animation and on/off visual states do not survive in this single PNG; baked flames stay static and visible when the native tile is switched off. To retain native animation/state pictures omit this call. Independently opt-in enable_placed_vfx can later support separate live effects selected by placementBindingId; it does not animate this root PNG or restore native flame pictures. Native tile support, solidity, mining, wiring, interactions and light remain unchanged; a two-headed sprite does not create two mechanical lights. Absent call retains native presentation. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this presentation call.",
+      "purpose": "Draw the full root item PNG over the native placed tile, replacing its body/flame pictures. This single static image replaces native animation and on/off visuals; baked flames remain visible when switched off. Omit to retain native pictures. enable_placed_vfx can add separate live effects. Native support, solidity, mining, wiring, interactions and light remain unchanged. Requires the configure_tile_placement footprint, up to 16x16/256 cells.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3718,7 +3718,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add independent persistent light at the center tile of one exact committed native tile footprint. Explicit strength and color; no held/projectile light, PNG dependency or inferred emitter count. Absent call adds no light. Native tile light and interactions remain unchanged. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Container behavior belongs to that native placement, not this light call.",
+      "purpose": "Add persistent light at the center tile of the committed native footprint (up to 16x16/256 cells). Native tile light remains.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3810,7 +3810,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Opt in to independent live placed VFX slots on one exact committed native tile footprint, not held-item effects. Bounds consume actual top-left native TileFrameY inclusively, not animation time/count: 0..32767 selects all nonnegative frames. Native state facts are read-only; never infer a gate from names. VFX Director later selects this placement binding for periodic self spriteElement/libraryParticle/lightCue. Same item root PNG remains stable physical art; existing independent VFX assets can animate separate flames without rotating/pulsing the whole root. No effects/defaults are inserted. Requires an exact bounded native footprint (16x16/256 cells max) from configure_tile_placement. Does not change its native container behavior, material ownership or returns.",
+      "purpose": "Expose live placed-effect slots for this committed native footprint (up to 16x16/256 cells). Inclusive bounds select the top-left native TileFrameY; 0..32767 covers all nonnegative frames. VFX Director may add periodic self spriteElement/libraryParticle/lightCue effects to this placement binding, separately from the static root PNG.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -3892,7 +3892,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Gate one active input; one condition per input. Omit for unrestricted use.",
+      "purpose": "Require one condition for the selected active input.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -4496,7 +4496,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply independently chosen passive equipment effects; numeric bonuses use explicit units.",
+      "purpose": "Apply passive equipment effects.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -4910,7 +4910,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply independently chosen armor effects and matching three-piece set bonuses.",
+      "purpose": "Apply armor effects and matching three-piece set bonuses.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -5023,7 +5023,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Add one selected DamageClass modifier while equipped or with a matching armor set; each class and phase is a separate explicit choice.",
+      "purpose": "Add a DamageClass modifier while equipped or with a matching armor set.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -5139,7 +5139,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set this entity spawn cardinality per activation, initial direction and position; cardinality is separate from the optional set_projectile_concurrency live cap, not a singleton guarantee. Does not choose movement or damage.",
+      "purpose": "Set the spawn batch size, initial direction and position.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -5391,7 +5391,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicit opt-in concurrency cap: count live projectiles for the same owner + generated item ID + exact entity ID, across all producers regardless of root/child, binding or input; pending scheduler entries are not live. The requested effective batch is admitted all-or-nothing when enough slots remain, otherwise refused; no clipping by this cap of the effective batch after existing global/depth/event-budget limits. count is per activation; concurrency is separate. Select maxActive=1 for one returned physical copy, or deliberately choose a larger positive cap. Same-ID different inventory copies and an alternate binding to the same entity share the cap. This does not override existing producer semantics: the owner-attached active-use singleton remains, and hold maintains one existing batch; maxActive>1 does not bypass repeat-use singleton or make hold refill to this cap. First-batch count retains its existing meaning. Capability absence adds no admission cap.",
+      "purpose": "Cap live projectiles sharing owner, generated item ID and entity ID across all producers; pending scheduler entries are excluded. Admit each effective batch all-or-nothing after other global/depth/event limits. Inventory copies and alternate bindings sharing the same IDs share this cap. Existing owner-attached active-use singleton and hold-batch suppression still apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5433,7 +5433,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicitly choose native sentry registration for this entity. enabled=true participates in the owner's native sentry cap; each successful native sentry spawn immediately checks that cap and may retire the oldest sentry. Each active input uses the sentry status of its own target. Lifetime, position, damage, collision, targeting and child budget remain separate authored choices; native sentry does not imply stationary movement. Omission leaves the entity without native sentry registration.",
+      "purpose": "Register as a native sentry. Each successful sentry spawn checks the owner's sentry cap and may retire the oldest sentry. Each active input uses its own target's sentry status.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5475,7 +5475,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Explicitly bound pending spawn reservations plus live descendants of each physical source projectile. A free root binding gets its own replenishable descendant pool instead of the monotonic activation event ledger; the root itself is excluded. A nested source adds this cap while retaining every ancestor pool and any ancestor lifetime ledger. All descendant event/controller producers share that ancestry; death or retirement releases only concurrent occupancy, never restores a lifetime allowance. Failed or cancelled spawns refund their reservation. Independent roots have independent pools; global owner/depth/entity caps remain. Absence retains the existing lifetime budget.",
+      "purpose": "Cap pending reservations plus live descendants of each physical source projectile, excluding the root. A root pool replaces its lifetime event ledger; nested pools retain every ancestor pool and lifetime ledger. Death releases concurrent occupancy, while failed/cancelled spawns refund reservations. Independent roots have independent pools; owner/depth/entity limits still apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5554,7 +5554,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Enable contact damage with explicit class, damage and knockback.",
+      "purpose": "Set contact damage, damage class and knockback.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5598,7 +5598,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set exact bounded entity lifetime.",
+      "purpose": "Set lifetime.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -5880,7 +5880,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Rotate velocity after motion; modifier order: turn, speed, homing. Requires, never selects, a trajectory.",
+      "purpose": "Rotate velocity after motion, before speed and homing modifiers.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -6291,7 +6291,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Attraction after movement/modifiers each active projectile update, not periodic/on-hit. Projectile velocity/trajectory unchanged. Scan NPC index order: chaseable, positive-resistance, inside hard range; at most maxTargets. Native resistance clamps to 0.1..1.",
+      "purpose": "Attract NPCs after movement/modifiers each active update. Scan NPC index order for chaseable, positive-resistance targets inside range, up to maxTargets. Native resistance clamps to 0.1..1.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -6406,7 +6406,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Set sprite/generic body scale to authored drawScale times visual.scale times an independent time curve. Linear or exponential interpolation uses active world ticks. This does not change damage or tile collision. Beam/whip line drivers are excluded because their exact body geometry uses collision dimensions. A separate gameplay hitbox curve can coexist only with its mirrorToSprite=false; no_asset still deliberately hides the body.",
+      "purpose": "Scale the body by drawScale × visual.scale × a linear or exponential active-world-time curve. Collision remains unchanged. Beam/whip line drivers are excluded; a separate hitbox curve may coexist with mirrorToSprite=false. no_asset hides the body.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -6613,7 +6613,7 @@
       "networkAuthority": "owner_execute_sync",
       "parameters": {},
       "positionOwnership": "velocity_or_position_controller",
-      "purpose": "Keep initial velocity: no gravity, no drag, no falling arc. The generated proxy never invokes native projectile AI merely because a source is an arrow or has aiStyle=1.",
+      "purpose": "Keep initial velocity.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [],
       "safetyLimits": "bounded by runtime program limits",
@@ -8709,7 +8709,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Emit authored moving children from explicit before/after geometry around the actually hit NPC. Capture its centre, size, event direction and owner seed at event admission, including delay. Each child uses its own authored velocity rule; geometry does not promise a re-hit or inherit a hidden parent-speed formula.",
+      "purpose": "Spawn moving children around the hit NPC using before/after geometry. Capture its center, size, event direction and owner seed at event admission, including delayed actions.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -8883,7 +8883,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Plan bounded NPC links at the hit callback and emit a separate authored projectile for each link. Each search and initial emission starts at the selected anchor; all links are planned at dispatch, not after child hits. The child owns its speed, movement, damage and native collision; a selected target is an initial direction, not a guaranteed hit. No direct damage, status or VFX is implied.",
+      "purpose": "Plan NPC links at the hit callback and emit one projectile per link. Each search and initial emission starts at the selected anchor; all links are planned at dispatch. The selected target supplies the initial direction; the child supplies flight and collision.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -8976,7 +8976,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply one exact named generated-utility-buff group to the owner after a functional equipment reaction. Populate it with apply_generated_buff_on_use using the same effectGroupId; no active-use binding is needed for that group. The group must contain only this generated buff, never healing, native buffs or teleport. Identical effects refresh remaining duration without stacking strength; existing item exhaustion and shared per-action reaction cooldowns still apply.",
+      "purpose": "Apply the selected apply_generated_buff_on_use group to the owner after an equipment reaction, without an active-use binding. The group contains only this generated buff. Identical effects refresh duration; item exhaustion and shared reaction cooldowns apply.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -9106,7 +9106,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Apply independently composed timed modifiers to the actually hit NPC, without a BuffID or name-to-effect mapping. The same item/entity/action/owner refreshes remaining duration, not strength per hit; independent records may combine under bounded native caps. Chance rolls once per hit/crit admission before delay; the server receiver never rerolls, and independent calls draw independently. This is a bounded set of modifiers, not the full native buff repertoire.",
+      "purpose": "Apply timed modifiers to the hit NPC. The same item/entity/action/owner refreshes remaining duration; independent records combine under native caps. Chance rolls once per hit/crit admission before delay, independently for each call.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -9320,7 +9320,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Damage up to maxTargets nearest eligible NPCs around the event position, ranked by distance then NPC slot; omission selects the technical maximum of 16, not unlimited targets. Exclude the event's direct target only for on_hit/on_crit. For other events, including on_expire/on_kill, ignore direct-target exclusion; a previously hit NPC is not excluded by hit history. An additional hit is not guaranteed: native NPC eligibility/damage rules still apply.",
+      "purpose": "Damage the nearest eligible NPCs around the event position, ordered by distance then NPC slot. Direct-target exclusion applies only to on_hit/on_crit; other events have no hit-history exclusion.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

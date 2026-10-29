@@ -31,6 +31,7 @@ from infini_local.core.runtime_authoring.repair_scope import runtime_repair_sche
 from infini_local.pipelines.author_item_contract import (
     PRIMARY_REPAIR_SYSTEM_RULE,
     RUNTIME_ROW_SHAPE_RULE,
+    author_item_generation_provider_schema,
     author_item_provider_repair_response_schema,
     author_item_provider_response_schema,
     author_item_response_schema,
@@ -74,11 +75,9 @@ _FORMAT_REPAIR_CACHE_PREFIX_KEYS = ("schema", "task", "rules", "requiredJsonShap
 
 
 _AUTHOR_SYSTEM = (
-    "You are Gameplay Author for InfiniCrafterLocal. Design a worthwhile fusion of the supplied parents. "
+    "You are Gameplay Author for InfiniCrafterLocal, a Terraria (tModLoader) item generator. "
     "Return one JSON object matching requiredJsonShape and the capability catalog. "
-    "runtimeProgram alone defines executable gameplay; code does not invent missing mechanics. "
-    "concept and realization are optional advisory context, not acceptance evidence. "
-    "Return JSON only, without markdown or external reasoning."
+    "Implement the item's gameplay in runtimeProgram."
 )
 
 
@@ -133,7 +132,7 @@ def build_initial_author_request(
 ) -> tuple[dict[str, Any], str, str]:
     payload = build_llm_author_payload(a, b, key)
     selected_model = model_name or resolve_llm_model()
-    system = _AUTHOR_SYSTEM + generation_system_suffix() + llm_reasoning_system_suffix(selected_model)
+    system = _AUTHOR_SYSTEM + llm_reasoning_system_suffix(selected_model)
     user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     request = {
         "model": selected_model,
@@ -144,7 +143,7 @@ def build_initial_author_request(
         "temperature": env_float("INFINI_LLM_TEMPERATURE", float(GENERATION_DEFAULTS["INFINI_LLM_TEMPERATURE"]), lo=0.0, hi=1.2),
         "response_format": llm_json_response_format(
             "infini_low_level_runtime_author",
-            schema=author_item_provider_response_schema,
+            schema=author_item_generation_provider_schema,
             strict=True,
             auto_preference="json_schema",
         ),
@@ -181,6 +180,10 @@ def _repair_malformed_author_json(
     )
     functions = sorted({row["fn"] for row in calls}) if known_calls and isinstance(calls, list) else sorted(CAPABILITY_REGISTRY)
     local_schema = author_item_response_schema()
+    # Syntax-only recovery must preserve current plain debug notes as well as
+    # historical structured reports; neither selects executable behavior.
+    for field in ("concept", "realization"):
+        local_schema["properties"][field] = {"anyOf": [local_schema["properties"][field], {"type": "string"}]}
     call_schema = local_schema["properties"]["runtimeProgram"]["properties"]["calls"]
     variants = [row for row in call_schema["items"]["oneOf"] if row["properties"]["fn"]["const"] in functions]
     call_schema["items"] = {"oneOf": variants} if len(variants) > 1 else variants[0]

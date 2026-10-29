@@ -1067,6 +1067,8 @@ def _request_visual_kit(
     item_context = {"name": data.get("name"), "realization": copy.deepcopy(data.get("realization") or {})}
     concept = data.get("concept")
     synthesis = concept.get("literalSynthesis") if isinstance(concept, Mapping) else None
+    if isinstance(concept, str):
+        item_context["concept"] = concept
     if isinstance(synthesis, str) and synthesis.strip():
         # Carry appearance intent literally, without importing planned mechanics
         # or turning optional prose into an authority over accepted runtime.
@@ -1391,11 +1393,13 @@ def apply_visual_director(data: dict[str, Any], a: dict[str, Any], b: dict[str, 
             raise PlannerUnavailable("Visual Director is required for LLM-authored craft")
         if equipment_overlay_required:
             raise PlannerUnavailable("Equipment overlay requires a model-authored Visual Director response")
+        realization = data.get("realization")
+        description = realization.get("description") if isinstance(realization, Mapping) else realization if isinstance(realization, str) else None
         dev_item = {
             "prompt": f"Terraria pixel-art inventory sprite of {data.get('name')}; literal combined parent object, transparent background",
             "negativePrompt": "placeholder, text, watermark",
             "silhouette": "compact readable combined object",
-            "visualIdentity": str((data.get("realization") or {}).get("description") or data.get("name") or "generated item"),
+            "visualIdentity": str(description or data.get("name") or "generated item"),
             "palette": ["neutral", "accent"],
             "preferredCanvasSize": 32,
             "inventoryScale": 1.0,
