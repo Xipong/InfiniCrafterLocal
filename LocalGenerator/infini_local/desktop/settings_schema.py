@@ -14,6 +14,7 @@ from infini_local.desktop.settings_paths import ROOT
 # State belongs to settings_controller.py; I/O workflows to studio_operations.py.
 
 FIELD_ORDER = [
+    "INFINI_LANGUAGE",
     "INFINI_USE_LLM",
     "INFINI_PROMPT_STYLE",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK",
@@ -187,6 +188,7 @@ def repair_sdcpp_command_template(template: str) -> tuple[str, bool, str]:
 
 
 DEFAULTS = {
+    "INFINI_LANGUAGE": "ru",
     "INFINI_USE_LLM": "1",
     "INFINI_PROMPT_STYLE": "Default",
     "INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK": "0",
@@ -454,6 +456,7 @@ FIELD_HELP = {
     "INFINI_TRACE_MAX_PROMPT_CHARS": "Лимит только текстового preview: 0 (по умолчанию) = без лимита. Положительное старое значение не обрезает сохранённые записи, prompts/ответы или stage_requests.",
     "INFINI_TRACE_EVENTS_TAIL": "Сколько последних записей показывать во вкладке Trace; полное содержимое каждой записи сохраняется, старые записи из архива не удаляются.",
     "INFINI_CONSOLE_EVENT_LEVEL": "Эхо событий в окно сервера: warn — рекомендуемое, off — без эха. Полные события при ON сохраняются в cache/events.ndjson. При полном логировании OFF дополнительные события не пишутся/не печатаются независимо от уровня; остаются только краткие фатальные ошибки.",
+    "INFINI_LANGUAGE": "Язык интерфейса и текста новых предметов. Для генерации сохрани настройки и перезапусти сервер.",
     "INFINI_GUI_PIPELINE_PRESET": "Последний применённый pipeline preset. GUI хранит его в config.env, чтобы после перезапуска открывать тот же режим, а не первый пункт списка.",
     "INFINI_SAVE_SPRITE_STAGES": "Сохранять промежуточные PNG-этапы спрайт-пайплайна (raw, bg_removed, master, final bake) в cache/sprites. Нужен для отладки мастер-канваса и обрезки.",
     "INFINI_CHROMA_TOLERANCE": "Допуск для удаления chroma-key фона. Больше = агрессивнее к магенте, но выше риск задеть полезные edge-пиксели. Обычно 30-40.",

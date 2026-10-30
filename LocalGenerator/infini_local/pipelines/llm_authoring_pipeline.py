@@ -5,6 +5,7 @@ import json
 import math
 from typing import Any, Mapping
 
+from infini_local.core import llm_config
 from infini_local.core.env_utils import env_first_allow_empty, env_float, env_int
 from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 from infini_local.core.errors import PlannerUnavailable
@@ -82,6 +83,10 @@ _AUTHOR_SYSTEM = (
 )
 
 
+def _item_language_instruction() -> str:
+    return "\nНазвание и описание предмета пиши на русском языке." if llm_config.LANGUAGE == "ru" else ""
+
+
 def _stage_accounting(data: dict[str, Any]) -> dict[str, int]:
     debug = data.setdefault("debug", {})
     accounting = debug.setdefault("llmStageAccounting", {})
@@ -133,7 +138,7 @@ def build_initial_author_request(
 ) -> tuple[dict[str, Any], str, str]:
     payload = build_llm_author_payload(a, b, key)
     selected_model = model_name or resolve_llm_model()
-    system = _AUTHOR_SYSTEM + llm_reasoning_system_suffix(selected_model)
+    system = _AUTHOR_SYSTEM + _item_language_instruction() + llm_reasoning_system_suffix(selected_model)
     user_content = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     request = {
         "model": selected_model,
@@ -543,7 +548,7 @@ def repair_author_item_after_failure(
         "rewrites are ignored. New nodes are allowed only by the exact blocker create policy. The final requiredJsonShape field of the user JSON is solely the output patch shape; emit only its listed root keys with your chosen values, never source-context keys or requiredJsonShape itself. Return strict patch JSON only."
     )
     messages = [
-        stage_chat_message("system", "author_repair_contract", repair_system + generation_system_suffix() + llm_reasoning_system_suffix(model_name)),
+        stage_chat_message("system", "author_repair_contract", repair_system + _item_language_instruction() + generation_system_suffix() + llm_reasoning_system_suffix(model_name)),
         stage_chat_message("user", "author_repair_context", repair_user),
     ]
     request = apply_llm_common_options({

@@ -264,6 +264,15 @@ kbd {
 .breadcrumb > span:first-child, .slash { color: var(--subtle); }
 #crumb { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-actions { display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+.language-switch { display: flex; align-items: center; flex-shrink: 0; }
+.language-switch select {
+  width: 64px; min-height: 36px; padding: 6px 8px;
+  color: var(--text); background: var(--control); border: 1px solid var(--line);
+  border-radius: var(--radius-control); font: 600 12px/1.4 var(--sans); cursor: pointer;
+}
+@media (max-width: 720px) {
+  .language-switch select { width: 55px; min-height: 44px; padding-inline: 5px; }
+}
 .search-trigger {
   display: flex;
   align-items: center;

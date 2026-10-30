@@ -55,6 +55,64 @@ def finish_catalog(server, snapshot, command, *, ok=True):
 
 
 @pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
+def test_language_switch_preserves_draft_values_and_saved_selection(browser_studio, viewport):
+    page, server, snapshot = browser_studio
+    expect = pytest.importorskip('playwright.sync_api').expect
+    values = snapshot['savedValues']
+    raw_value = 'Сохранить {0} <b>untouched</b>'
+    values.update(INFINI_LANGUAGE='ru', INFINI_PRIVATE_UNKNOWN=raw_value)
+    snapshot['values'] = dict(values)
+    server.publish(snapshot)
+    page.set_viewport_size(viewport)
+    page.goto(server.url + '#configure')
+    page.locator('details[data-details="all-settings"]').evaluate('(element) => element.open = true')
+    field = page.locator('#field-INFINI_PRIVATE_UNKNOWN')
+    expect(field).to_have_value(raw_value)
+    changed = raw_value + ' — черновик'
+    field.fill(changed)
+    heading_ru = page.locator('#workspace h1').inner_text()
+    language = page.locator('#language-select')
+    language.select_option('en')
+    expect(page.locator('html')).to_have_attribute('lang', 'en')
+    expect(page.locator('#workspace h1')).not_to_have_text(heading_ru)
+    expect(language).to_be_focused()
+    expect(field).to_have_value(changed)
+    expect(page.locator('#save-tray')).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+
+    page.locator('#save-tray [data-action="save"]').click()
+    command = server.commands.get(timeout=5)
+    assert command['action'] == 'save'
+    assert command['values']['INFINI_LANGUAGE'] == 'en'
+    assert command['values']['INFINI_PRIVATE_UNKNOWN'] == changed
+    assert command['values']['INFINI_CODEX_LLM_MODEL'] == values['INFINI_CODEX_LLM_MODEL']
+    # A later language choice belongs to the draft, not the pending Save.
+    language.select_option('ru')
+    expect(page.locator('html')).to_have_attribute('lang', 'ru')
+    saved = dict(values, **command['values'])
+    snapshot.update(values=saved, savedValues=saved, savedRevision='language-saved',
+                    actionResults=[{'id': command['id'], 'action': 'save', 'status': 'succeeded',
+                                    'ok': True, 'savedValues': saved, 'savedRevision': 'language-saved'}])
+    server.publish(snapshot)
+    expect(page.locator('#save-tray [data-action="save"]')).to_be_enabled()
+    expect(page.locator('html')).to_have_attribute('lang', 'ru')
+    expect(page.locator('#save-tray')).to_be_visible()
+    expect(field).to_have_value(changed)
+    language.select_option('en')
+    expect(page.locator('#save-tray')).to_be_hidden()
+    page.reload()
+    expect(page.locator('html')).to_have_attribute('lang', 'en')
+    expect(language).to_have_value('en')
+    page.locator('details[data-details="all-settings"]').evaluate('(element) => element.open = true')
+    expect(field).to_have_value(changed)
+    language.select_option('ru')
+    expect(page.locator('html')).to_have_attribute('lang', 'ru')
+    expect(page.locator('#workspace h1')).to_have_text(heading_ru)
+    expect(field).to_have_value(changed)
+    assert server.commands.empty(), 'Switching interface language alone must not write settings'
+
+
+@pytest.mark.parametrize('viewport', [{'width': 1440, 'height': 1000}, {'width': 390, 'height': 844}])
 def test_draft_status_tracks_edits_save_receipt_and_lan_without_losing_focus(browser_studio, viewport):
     page, server, snapshot = browser_studio
     expect = pytest.importorskip('playwright.sync_api').expect

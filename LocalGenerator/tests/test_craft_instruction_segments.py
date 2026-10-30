@@ -97,6 +97,17 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
     return packets
 
 
+@pytest.mark.parametrize("stage", ["author", "repair", "format", "visual", "vfx"])
+def test_item_language_changes_only_text_authoring_instructions(monkeypatch, stage):
+    monkeypatch.setattr(llm_config, "LANGUAGE", "en")
+    english = stage_packets(monkeypatch, stage, labels=("same-recipe",))[0]
+    monkeypatch.setattr(llm_config, "LANGUAGE", "ru")
+    russian = stage_packets(monkeypatch, stage, labels=("same-recipe",))[0]
+    assert (english["messages"][0] != russian["messages"][0]) is (stage in {"author", "repair"})
+    assert english["messages"][1:] == russian["messages"][1:]
+    assert english["response_format"] == russian["response_format"]
+
+
 @pytest.mark.parametrize("stage", ["repair", "format", "visual", "visual_repair", "vfx", "vfx_repair"])
 def test_every_production_stage_owns_only_complete_static_instructions(monkeypatch, stage):
     first, second = stage_packets(monkeypatch, stage)

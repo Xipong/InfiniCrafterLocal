@@ -18,6 +18,7 @@ const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const nodes = new Map();
 global.document = {
+  documentElement:{lang:'ru'},
   activeElement:null, addEventListener(){}, querySelectorAll(){return [];},
   querySelector(selector){
     if (!nodes.has(selector)) nodes.set(selector,{hidden:false,textContent:'',innerHTML:'',classList:{toggle(){}}});
@@ -25,6 +26,7 @@ global.document = {
   }
 };
 global.window = {INFINI_BOOTSTRAP:{token:'test-only'},addEventListener(){}};
+vm.runInThisContext(fs.readFileSync(require('node:path').join(require('node:path').dirname(process.argv[2]),'studio-i18n.js'),'utf8'));
 let source = fs.readFileSync(process.argv[2],'utf8');
 // Only replace the startup call. Reconciliation and dirty-state code are the
 // production functions; rendering is outside this state-only regression.

@@ -22,6 +22,7 @@ from infini_local.core.config_bootstrap import (
 from infini_local.core.contract_versions import TMODLOADER_GREY_ZONE_NOTES
 from infini_local.core.llm_config import (
     ALLOW_DETERMINISTIC_DEV_FALLBACK,
+    LANGUAGE,
     LLM_MAX_TOKENS,
     LLM_PROVIDER,
     LLM_REASONING_EXCLUDE,
@@ -299,6 +300,7 @@ def _health_payload() -> dict[str, Any]:
         "effectiveConfig": {
             "cacheDir": str(CACHE_DIR.resolve()),
             "worldRecipesDir": str(WORLD_RECIPES_DIR.resolve()),
+            "language": LANGUAGE,
             "imageBackend": visual_config.IMAGE_BACKEND,
             "llmProvider": str(auth.get("provider") or ""),
             "llmModel": str(auth.get("model") or ""),

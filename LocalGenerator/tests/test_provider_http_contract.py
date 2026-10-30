@@ -289,6 +289,7 @@ def test_health_acknowledges_only_allowlisted_applied_config(tmp_path, monkeypat
         "cacheDir": str((tmp_path / "cache").resolve()),
         "worldRecipesDir": str((tmp_path / "worlds").resolve()),
         "imageBackend": server.visual_config.IMAGE_BACKEND,
+        "language": server.LANGUAGE,
         "llmProvider": "openrouter", "llmModel": "fixture/model",
         "openrouterProvider": "Exact/slug", "sdcppAutostart": False,
     }

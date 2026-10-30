@@ -375,6 +375,9 @@ def test_safe_restart_obeys_atomic_shutdown_before_saving_or_launching(guarded_r
     health = {"ok": True, "serverRoot": str(root), "pid": gui.proc.pid,
               "effectiveConfig": gui._proposed_effective_config(),
               "generationActivity": {"active": 0, "waiting": 0, "accepting": True}}
+    if shutdown_code == 200:
+        # Upgrade from an already-running server without the new language field.
+        health["effectiveConfig"].pop("language")
     gui.values["INFINI_PROMPT_STYLE"] = "Terraria Like"
     with _gui_loopback_http({"/health": (200, health), "/shutdown": (shutdown_code, {"ok": shutdown_code == 200})}) as (base, requests):
         gui.values["INFINI_PORT"] = base.rsplit(":", 1)[1]
@@ -451,7 +454,7 @@ def applied_gui(gui_workflow):
     gui.values = settings_env.parse_env(config)
     effective = {"cacheDir": str(root / "selected-cache"), "worldRecipesDir": str(root / "selected-worlds"),
                  "imageBackend": "off", "llmProvider": "openrouter", "llmModel": "Provider/Model",
-                 "openrouterProvider": "Exact-Slug", "sdcppAutostart": False}
+                 "openrouterProvider": "Exact-Slug", "sdcppAutostart": False, "language": "ru"}
     gui.proc = OwnedProcess()
     return gui, root, config, effective
 
@@ -481,6 +484,9 @@ def test_health_feedback_is_async_bounded_truthful_and_nonsecret(applied_gui, he
     assert rows[0]["requestId"] in text and rows[-1]["requestId"] not in text
     assert "CANARY" not in feedback + gui.status + text
     assert "DO_NOT_DISPLAY" not in text
+    gui.values["INFINI_LANGUAGE"] = "en"
+    gui.save()
+    assert "language" in gui.applied_config
     gui.values["INFINI_OPENROUTER_PROVIDER"] = "exact-slug"  # case-sensitive pin
     gui.save()
     assert "matches" not in gui.applied_config.lower()
