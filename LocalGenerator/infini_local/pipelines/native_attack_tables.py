@@ -37,6 +37,10 @@ def _collision(value: Any) -> bool:
 
 
 def _tables(value: Any) -> Any:
+    # Semantic render layers are already a named, consumer-facing view. Zipping
+    # their fields back into a generic table would hide the useful layer labels.
+    if isinstance(value, dict) and isinstance(value.get("renderLayerView"), dict) and value["renderLayerView"].get("version") == 1:
+        return deepcopy(value)
     if not isinstance(value, (list, dict)):
         return value
     transformed = ([_tables(v) for v in value] if isinstance(value, list)

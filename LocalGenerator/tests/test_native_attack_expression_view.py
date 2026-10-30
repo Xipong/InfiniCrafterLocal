@@ -184,6 +184,11 @@ def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode
         projected = unpack_attack_tables(view)
         assert projected == project_attack_behavior(source)
         assert projected["behaviorView"]["version"] == 1
+        if fixture == "native_excalibur":
+            literal_draw = view.get("data", view)["draw"]["programs"][0]
+            assert literal_draw["layers"][6]["tint"] == "((rgba.white*0.4)*fade)"
+            assert "$table" not in json.dumps(literal_draw)
+            assert "geometryRule" in projected["collision"]["predicateSources"][0]
     if scope is not None:
         assert packet["repairScope"] == scope
     assert json.dumps(parent) == before

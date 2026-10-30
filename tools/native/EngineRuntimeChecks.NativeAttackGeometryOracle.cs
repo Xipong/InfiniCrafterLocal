@@ -57,4 +57,80 @@ internal static partial class EngineRuntimeChecks
         }
         finally { Terraria.Main.dust = oldDust; }
     }
+    // Independent executable rendering of the model-facing helper rules. This
+    // deliberately does not call native cone/corner/rotation helpers on the
+    // expected side; the actual side invokes those installed native methods.
+    private static bool GeometryRulePoint(Vector2 point, Vector2 center, float length, float rotation, float angleLimit)
+    {
+        Vector2 offset = point - center;
+        double rotation64 = 0f - rotation;
+        double cosine = Math.Cos(rotation64), sine = Math.Sin(rotation64);
+        var rotated = new Vector2((float)(offset.X * cosine - offset.Y * sine), (float)(offset.X * sine + offset.Y * cosine)) + Vector2.Zero;
+        float angle = (float)Math.Atan2(rotated.Y, rotated.X);
+        float distance = (float)Math.Sqrt(offset.X * offset.X + offset.Y * offset.Y);
+        return !(angle < -angleLimit || angle > angleLimit) && distance < length;
+    }
+
+    private static bool GeometryRuleRectangle(Rectangle rectangle, Vector2 center, float length, float rotation, float angleLimit)
+    {
+        Vector2 tip = center + new Vector2((float)Math.Cos(rotation), (float)Math.Sin(rotation)) * length;
+        float Clamp(float value, float minimum, float maximum)
+        {
+            if (value > maximum) value = maximum;
+            if (value < minimum) value = minimum;
+            return value;
+        }
+        Vector2[] points = {
+            new(Clamp(tip.X, rectangle.X, rectangle.X + rectangle.Width), Clamp(tip.Y, rectangle.Y, rectangle.Y + rectangle.Height)),
+            new(rectangle.X, rectangle.Y), new(rectangle.X + rectangle.Width, rectangle.Y),
+            new(rectangle.X, rectangle.Y + rectangle.Height), new(rectangle.X + rectangle.Width, rectangle.Y + rectangle.Height),
+        };
+        foreach (Vector2 point in points)
+            if (GeometryRulePoint(point, center, length, rotation, angleLimit)) return true;
+        return false;
+    }
+
+    private static void ParentNativeGeometryHelperRulesMatchSource()
+    {
+        MethodInfo pointMethod = typeof(Terraria.Utils).GetMethod("DoesFitInCone", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
+        bool NativePoint(Vector2 point, Vector2 center, float length, float rotation, float limit)
+            => (bool)pointMethod.Invoke(null, new object[] { point, center, length, rotation, limit })!;
+        int cases = 0;
+        void Point(Vector2 point, Vector2 center, float length, float rotation, float limit)
+        {
+            Equal(NativePoint(point, center, length, rotation, limit), GeometryRulePoint(point, center, length, rotation, limit), $"native point geometry semantic relation p={point} c={center} len={length} rot={rotation} limit={limit}");
+            cases++;
+        }
+        void RectangleCase(Rectangle rectangle, Vector2 center, float length, float rotation, float limit)
+        {
+            Equal(Terraria.Utils.IntersectsConeSlowMoreAccurate(rectangle, center, length, rotation, limit), GeometryRuleRectangle(rectangle, center, length, rotation, limit), $"native five-point rectangle geometry semantic relation r={rectangle} c={center} len={length} rot={rotation} limit={limit}");
+            cases++;
+        }
+        foreach (float limit in new[] { 0f, MathHelper.PiOver4, MathHelper.Pi, -0.1f, float.NaN })
+        foreach (float rotation in new[] { 0f, -0f, MathHelper.PiOver2, MathHelper.Pi, float.NaN })
+        foreach (float length in new[] { 0f, 10f, -1f, float.PositiveInfinity, float.NaN })
+        {
+            foreach (Vector2 point in new[] { Vector2.Zero, new Vector2(1, 1), new Vector2(1, -1), new Vector2(10, 0), new Vector2(float.BitDecrement(10f), 0), new Vector2(float.BitIncrement(10f), 0), new Vector2(-10, 0), new Vector2(float.NaN, 1) })
+                Point(point, Vector2.Zero, length, rotation, limit);
+            foreach (Rectangle rectangle in new[] { new Rectangle(4, -20, 2, 40), new Rectangle(8, -2, 8, 4), new Rectangle(-10, -1, 2, 2), new Rectangle(10, 0, 0, 0), new Rectangle(-2, -2, 4, 4), new Rectangle(5, 5, -3, -7), new Rectangle(10, 0, 0, 4) })
+                RectangleCase(rectangle, Vector2.Zero, length, rotation, limit);
+        }
+        var random = new Random(76123);
+        for (int n = 0; n < 2000; n++)
+        {
+            Vector2 center = new(random.Next(-80, 81), random.Next(-80, 81));
+            float length = random.Next(1, 200), rotation = (float)(random.NextDouble() * 12 - 6), limit = (float)(random.NextDouble() * 3);
+            Point(new Vector2(random.Next(-200, 201), random.Next(-200, 201)), center, length, rotation, limit);
+            RectangleCase(new Rectangle(random.Next(-200, 201), random.Next(-200, 201), random.Next(0, 80), random.Next(0, 80)), center, length, rotation, limit);
+        }
+        Equal(true, NativePoint(new Vector2(1, 1), Vector2.Zero, 10, 0, MathHelper.PiOver4), "positive angular boundary included");
+        Equal(true, NativePoint(new Vector2(1, -1), Vector2.Zero, 10, 0, MathHelper.PiOver4), "negative angular boundary included");
+        Equal(false, NativePoint(new Vector2(10, 0), Vector2.Zero, 10, 0, MathHelper.PiOver4), "radial boundary excluded");
+        Equal(true, NativePoint(new Vector2(1, 0), Vector2.Zero, 10, float.NaN, MathHelper.PiOver4), "unordered angle is not abs-angle rejection");
+        var closestOnly = new Rectangle(4, -20, 2, 40);
+        Equal(true, Terraria.Utils.IntersectsConeSlowMoreAccurate(closestOnly, Vector2.Zero, 10, 0, 0.1f), "forward-tip closest-point witness cannot be replaced by corners only");
+        foreach (Vector2 corner in new[] { new Vector2(4, -20), new Vector2(6, -20), new Vector2(4, 20), new Vector2(6, 20) })
+            Equal(false, NativePoint(corner, Vector2.Zero, 10, 0, 0.1f), "each corner misses closest-point witness");
+        Console.WriteLine($"Native helper geometry comparisons: {cases}");
+    }
 }

@@ -11,6 +11,9 @@ import re
 from dataclasses import replace
 from typing import Any
 
+from infini_local.pipelines.native_attack_geometry_view import project_collision_behavior
+from infini_local.pipelines.native_attack_draw_view import project_draw_layers
+
 from infini_local.pipelines.native_attack_expression_view import (
     _Parser, _Term, _render, compact_attack_expressions,
 )
@@ -225,7 +228,8 @@ def project_attack_behavior(reference: dict[str, Any]) -> dict[str, Any]:
     selected = select(reference)
     if unrecognized_selection:
         return copy.deepcopy(reference)
-    out = compact_attack_expressions(selected)
+    out = compact_attack_expressions(project_collision_behavior(selected))
+    certificates = out.get("sourceMethods", [])
 
     def visit(value: Any) -> Any:
         if isinstance(value, list):
@@ -234,7 +238,8 @@ def project_attack_behavior(reference: dict[str, Any]) -> dict[str, Any]:
             return value
         if isinstance(value.get("method"), str) and (
                 "sourceMethodSha256" in value or all(key in value for key in ("observations", "dependencies", "predicates", "symbols"))):
-            value = _program(value)
+            behavior = _program(value)
+            value = project_draw_layers(value, behavior, certificates) or behavior
         return {key: visit(child) for key, child in value.items()}
 
     # This roster exists solely to certify the capture, not to describe behavior.

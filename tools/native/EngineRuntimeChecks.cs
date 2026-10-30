@@ -68,6 +68,7 @@ internal static partial class EngineRuntimeChecks
             ("projectile attack source symbolic dependencies and predicates", ProjectileAttackSourceObservationsKeepExpressionsAndPredicates),
             ("projectile attack identity specialization receiver and mutation safety", ProjectileAttackIdentitySelectionKeepsUnknownConditions),
             ("projectile attack native dispatch and source sibling controls", ProjectileAttackNativeDispatchAndSiblingWitnesses),
+            ("parent native geometry helper semantic equivalence", ParentNativeGeometryHelperRulesMatchSource),
             ("parent native growing arc motion and cone union oracle", ParentNativeGrowingArcMatchesRealMotionAndConeUnion),
             ("parent random status mutually exclusive native outcomes", ParentRandomStatusFactsMatchExclusiveNativeOutcomes),
             ("dropped alpha support exact rotated pixels", DroppedAlphaSupportTracksActualRotatedPixels),

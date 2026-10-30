@@ -124,7 +124,7 @@ def test_real_native_capture_keeps_attack_geometry_timing_targets_and_draw():
     assert [row["arguments"]["coneRotation"] for row in cone_calls] == ["d1", "d5"]
     assert [row["requiredPredicates"] for row in cone_calls] == [["b407"], ["b407", "b478", "b543"]]
     assert len(collision["predicateSources"]) == 2
-    assert [row["arguments"]["texture"] for row in view["draw"]["programs"][0]["observations"] if row.get("call") == "SpriteBatch.Draw"]
+    assert len([row for row in view["draw"]["programs"][0]["layers"] if row["kind"] == "sprite"]) == 7
     for field in ("penetrate", "maxPenetrate", "usesLocalNPCImmunity", "localNPCHitCooldown", "usesIDStaticNPCImmunity", "idStaticNPCHitCooldown", "stopsDealingDamageAfterPenetrateHits"):
         assert compact[field] == raw[field]
     # This is a real captured regression, not an asserted universal size budget.
