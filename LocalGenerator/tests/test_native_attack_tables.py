@@ -233,7 +233,7 @@ def test_independent_reader_fresh_process_and_detached_nested_values():
         [sys.executable, "-c", "import json,sys; "
          "from infini_local.pipelines.native_attack_tables import unpack_attack_tables; "
          "print(json.dumps(unpack_attack_tables(json.load(sys.stdin)),ensure_ascii=False,separators=(',',':')))"],
-        input=packed_wire, text=True, encoding="utf-8", capture_output=True, check=True,
+        input=packed_wire, text=True, encoding="utf-8", capture_output=True, check=True, timeout=30,
     )
     assert process.stdout.rstrip("\n") == _json(original)
     decoded = unpack_attack_tables(json.loads(packed_wire))
