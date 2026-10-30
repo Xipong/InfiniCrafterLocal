@@ -94,9 +94,22 @@ def test_retained_native_fixture_is_real_final_offline_projection(offline_backen
         assert delivery.visual_delivery_report(payload, check_backend_config=False)["ok"]
     # Historical delivery remains readable, but current master-sampled refits
     # legitimately change PNG bytes and their content-addressed publication URL.
-    # No authored visual field may change as a consequence of that normalization.
-    assert {k: v for k, v in retained["visual"].items() if k != "spriteUrl"} == {
-        k: v for k, v in outgoing["visual"].items() if k != "spriteUrl"}
+    # imagePrompt is the derived backend request, including current renderer
+    # guidance, not the immutable authored appearance. Preserve every authored
+    # field below, and check that delivery records the actual request verbatim.
+    derived_fields = {"spriteUrl", "imagePrompt"}
+    assert {k: v for k, v in retained["visual"].items() if k not in derived_fields} == {
+        k: v for k, v in outgoing["visual"].items() if k not in derived_fields}
+    image_requests, _events = offline_backend
+    assert len(image_requests) == 1
+    assert outgoing["visual"]["imagePrompt"] == image_requests[0]["prompt"]
+    item = next(entity for entity in outgoing["runtimeProgram"]["entities"] if entity["kind"] == "item_body")
+    assert outgoing["visual"]["imagePrompt"].startswith(item["visual"]["prompt"] + ".")
+    # Renderer prose may evolve, but the same historical source must still send
+    # the same concrete frame/axis/grip/scale facts to the image backend.
+    def frame_facts(prompt):
+        return json.JSONDecoder().raw_decode(prompt.split("Read-only final-frame facts: ", 1)[1])[0]
+    assert frame_facts(outgoing["visual"]["imagePrompt"]) == frame_facts(retained["visual"]["imagePrompt"])
     assert retained["vfxManifest"] == outgoing["vfxManifest"]
     def entity_images(payload):
         rows = []

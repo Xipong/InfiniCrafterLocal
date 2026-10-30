@@ -25,7 +25,7 @@ def sprite_presentation_properties() -> dict[str, Any]:
         },
         "forwardAngleDegrees": {
             "type": "number", "minimum": -180, "maximum": 180,
-            "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override; no image/prose inference.",
+            "description": "Finite local forward-axis angle of the final PNG after crop/fit/padding, before facing/gravity flips. Degrees: 0=+X (right), positive clockwise in y-down image coordinates. Describes the authored pixels, not AI movement or a gameplay rotation override. With an accepted rotation component the renderer subtracts this PNG axis automatically: changing it cannot cancel rotation.offsetRadians. Draw the declared axis literally; no image/prose inference.",
         },
     }
 

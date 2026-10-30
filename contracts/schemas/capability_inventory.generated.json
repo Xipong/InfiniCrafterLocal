@@ -716,7 +716,7 @@
         }
       },
       "positionOwnership": "owns_position_while_active",
-      "purpose": "Share a bounded curved polyline between collision and draw; its terminal point owns body center. tileCollide must be false because the curve bypasses native body tile collision.",
+      "purpose": "A flexible extending/retracting collision curve, not a rigid sword swing: reach grows as sin(pi*progress), peaks halfway, then returns to zero while sweeping and bending. Its tip owns body center; a single PNG follows only that tip. Visual runtime_geometry draws a plain constant-width solid line, not a textured whip; texturedPath can skin the same curve. Width is max(4, hitbox.widthPx*hitboxScale/2) world pixels. tileCollide must be false because the curve bypasses native body tile collision.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {
@@ -1998,7 +1998,7 @@
         }
       },
       "positionOwnership": "none",
-      "purpose": "Rotate the sprite.",
+      "purpose": "Set the visible body orientation; the renderer separately aligns the PNG forward axis. Zero offset aligns its forward direction with the chosen axis/velocity. This does not steer movement or rotate collision geometry.",
       "pythonOwner": "infini_local.core.runtime_authoring.compiler::compile_runtime_program",
       "requirements": [
         {

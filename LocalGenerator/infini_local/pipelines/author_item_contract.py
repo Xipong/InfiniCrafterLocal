@@ -18,7 +18,9 @@ from infini_local.core.schema_validation import strict_schema_errors
 
 AUTHOR_DESIGN_QUALITY_RULE = (
     "Create a coherent, useful new Terraria item whose parent properties interact in a distinctive player experience. "
-    "Choose mechanics and controls that reinforce each other, with readable strengths, limitations and costs grounded in the supplied source facts."
+    "Choose mechanics and controls that reinforce each other, with readable strengths, limitations and costs grounded in the supplied source facts. "
+    "Design the actual play sequence: where the player and targets are, how effects reach them, and what visible motion communicates the action. "
+    "Choose geometry for its executed motion and contact shape; later art and VFX dress that motion rather than replace it."
 )
 
 AUTHOR_STATUS_COMPOSITION_RULE = (

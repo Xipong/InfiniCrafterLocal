@@ -239,6 +239,20 @@ def _allowed_pairs(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: (row["entityId"], row["event"]))
 
 
+def _collision_path_source(entity: Mapping[str, Any]) -> str | None:
+    """Read current geometry and admitted saved-wire drivers; beam wins natively."""
+    controller, movement = entity.get("controller"), entity.get("movement")
+    if isinstance(entity.get("beamGeometry"), Mapping) or (
+        isinstance(controller, Mapping) and controller.get("name") == "channel_beam"
+        and type(controller.get("code")) is int and controller["code"] == 1):
+        return "beam"
+    if isinstance(entity.get("lashGeometry"), Mapping) or (
+        isinstance(movement, Mapping) and movement.get("name") == "move_whip_lash"
+        and type(movement.get("code")) is int and movement["code"] == 18):
+        return "whip"
+    return None
+
+
 def _textured_path_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
     runtime = data.get("runtimeProgram")
     entities = runtime.get("entities") if isinstance(runtime, Mapping) else []
@@ -250,16 +264,9 @@ def _textured_path_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         if kind is None or not kind.projectile:
             continue
         sources = ["anchorHistory"]
-        controller, movement = entity.get("controller"), entity.get("movement")
-        if isinstance(entity.get("beamGeometry"), Mapping):
-            sources.append("beam")
-        elif isinstance(entity.get("lashGeometry"), Mapping):
-            sources.append("whip")
-        elif isinstance(controller, Mapping) and controller.get("code") == 1:
-            if controller.get("name") == "channel_beam" and type(controller["code"]) is int:
-                sources.append("beam")  # Retained accepted wire, no recompile.
-        elif isinstance(movement, Mapping) and movement.get("name") == "move_whip_lash" and type(movement.get("code")) is int and movement["code"] == 18:
-            sources.append("whip")
+        geometry = _collision_path_source(entity)
+        if geometry is not None:
+            sources.append(geometry)
         sources.append("ownerLink")  # Generic explicit connector; no movement/preset selection.
         rows.append({"entityId": entity["id"], "sources": sources})
     return rows
@@ -276,6 +283,58 @@ def _entity_texture_sources(data: Mapping[str, Any]) -> list[dict[str, Any]]:
         visual = entity.get("visual")
         mode = visual.get("assetMode") if isinstance(visual, Mapping) else None
         rows.append({"entityId": entity["id"], "assetMode": mode, "sources": ["item", "impact", "asset", *(["entity"] if mode in ("baked_sprite", "reuse_item_icon") else [])]})
+    return rows
+
+
+def _body_presentation(data: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Exact selected body coverage, without asset paths or inferred art choices.
+
+    VFX can decorate accepted bodies, but cannot erase an already selected solid
+    primitive. Conversely no_asset supplies no body underneath a textured path.
+    These are read-only render facts, not another authored schema or design gate.
+    """
+    runtime = data.get("runtimeProgram")
+    entities = runtime.get("entities") if isinstance(runtime, Mapping) else []
+    root = data.get("visual")
+    rows: list[dict[str, Any]] = []
+    for entity in entities or []:
+        if not isinstance(entity, Mapping) or not isinstance(entity.get("id"), str):
+            continue
+        visual = entity.get("visual")
+        if not isinstance(visual, Mapping):
+            continue
+        mode = visual.get("assetMode")
+        geometry = _collision_path_source(entity)
+        row: dict[str, Any] = {"entityId": entity["id"], "assetMode": mode}
+        if mode in ("baked_sprite", "reuse_item_icon"):
+            selected = root if mode == "reuse_item_icon" or entity.get("kind") == "item_body" else visual
+            row["coverage"] = "single_sprite_at_body"
+            if isinstance(selected, Mapping):
+                row["image"] = {key: copy.deepcopy(selected[key]) for key in
+                    ("renderSizePx", "forwardAngleDegrees", "silhouette", "visualIdentity") if key in selected}
+            if entity.get("kind") == "item_body":
+                row["coverage"] = "inventory_and_item_use"
+                use = runtime.get("itemUse") if isinstance(runtime, Mapping) else None
+                if isinstance(use, Mapping):
+                    row["itemUse"] = {key: copy.deepcopy(use[key]) for key in
+                        ("hideUseGraphic", "releaseTiming", "customHeldSprite") if key in use}
+            elif geometry == "whip":
+                row["coverage"] = "single_sprite_at_curve_tip"
+        elif mode == "no_asset":
+            row["coverage"] = "no_body"
+        elif mode == "runtime_geometry":
+            row["material"] = "solid_untextured"
+            row["coverage"] = "body_segment"
+            if geometry == "beam":
+                row["coverage"] = "collision_beam"
+            elif geometry == "whip":
+                row["coverage"] = "collision_curve"
+                hitbox = entity.get("hitbox")
+                if isinstance(hitbox, Mapping):
+                    width, scale = hitbox.get("widthPx"), hitbox.get("hitboxScale")
+                    if type(width) in (int, float) and type(scale) in (int, float):
+                        row["widthPx"] = max(4.0, width * scale * 0.5)
+        rows.append(row)
     return rows
 
 
@@ -332,6 +391,7 @@ def vfx_director_surface(data: Mapping[str, Any]) -> dict[str, Any]:
             "asset": "exact declared VFX asset ID; no compensating artwork for a bad reference",
         },
         "entityTextureSources": _entity_texture_sources(data),
+        "bodyPresentation": _body_presentation(data),
         "maxSlots": max(0, min(12, int(VFX_LLM_DIRECTOR_MAX_SLOTS))),
         "runtimePairs": _allowed_pairs(data),
         "placementBindings": _placement_bindings(data),
@@ -949,7 +1009,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "spriteElement and texturedPath use only their explicit nested texture and runtimeVocabulary.textureDependencyTuples; omit common scale/density/spread/particleSystemId/textureRole. Respect their own timing, opacity profiles and read-only geometry sources in runtimeVocabulary.rendererSemantics, runtimeSurface.texturedPathSources and outputSchema. Beam/whip/ownerLink current geometry owns placement and requires neutral anchor=self, historyTicks=0, minDistancePx=0 and profileDomain=length; anchorHistory keeps its authored anchor. ownerLink is an explicit optional cosmetic connector to projectile.Center, not automatic from movement, item names or categories. Require path.ownerAnchor=mountedCenter or frontHand only on ownerLink; omit it on all other sources. mountedCenter reads native owner.MountedCenter, not a hand. frontHand requires a currently enabled compositeFrontArm; when unavailable the connector is refused/retired, never guessed from body frames or changed to center.",
             "Only rendererKind=impactSprite authors required spritePrompt/spriteNegativePrompt/spriteCanvasSize; spritePrompt describes one dedicated impact sprite and spriteCanvasSize explicitly chooses its PNG canvas, independent of hitbox. Any other sprite renderer using textureRole=impact needs that impactSprite slot for the same entity. Primitive and particle renderers do not consume textureRole; every non-impactSprite slot omits all three image request fields.",
             _impact_sprite_background_rule(),
-            "Slots may be empty when presentation should be restrained.",
+            "Compose a coherent visible body, motion and impact from acceptedVisualKit, including its advisory animationPlan. runtimeSurface.bodyPresentation states what is already drawn: solid_untextured is a plain line, not a shaded weapon or textured skin; VFX cannot remove it. no_body has no underlying image. A texturedPath can carry an explicitly authored material along the actual beam/whip curve using a generated strip, width/color/opacity profiles and UV choice. Do not stretch a full inventory icon into a rope or mistake an impact spark for body coverage. Keep these choices deliberate; restrained presentation may still use empty slots.",
             _PLACED_VFX_RULE,
             "assets is optional: request at most four isolated texture ingredients consistent with acceptedVisualKit, declare exact safe IDs once and reuse explicitly through element.texture or path.texture. No filesystem paths/URLs or execution metadata. Never request unused art. cutout fits soft-alpha subjects; strip preserves authored frame/UV through resize without crop/recenter/rotation. Either layout can serve either new renderer; no asset-name or weapon classifier.",
             "Return only one JSON object matching outputSchema.",

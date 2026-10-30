@@ -3104,7 +3104,7 @@
                   },
                   "offsetRadians": {
                     "default": 0,
-                    "description": "Signed rotation offset.",
+                    "description": "Additional world-pose angle after forward-axis alignment, not correction for an upward/rightward PNG. Keep zero for a body pointing along axis/velocity; a quarter-turn deliberately makes it sideways.",
                     "maximum": 100,
                     "minimum": -100,
                     "type": "number",

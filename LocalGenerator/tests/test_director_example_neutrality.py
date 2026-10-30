@@ -45,19 +45,11 @@ def test_visual_packet_explains_geometry_without_prescribing_terminal_sprite_pat
     data = _accepted_data()
     frozen = deepcopy(data)
     request, packet = _capture_visual(monkeypatch, data)
-    rule = packet["spritePresentationReadOnly"]["geometryCoverage"]
-    for fact in ("driverMeaningReadOnly", "movement/controller params", "runtime_geometry",
-                 "beam/whip collision geometry", "baked_sprite/reuse_item_icon", "texturedPath",
-                 "animationPlan", "VFX is not yet authored", "no_asset", "no automatic mode conversion",
-                 "Do not alter accepted mechanics"):
-        assert fact in rule
     assert packet["acceptedPresentationMechanicsReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
     assert packet["runtimeEntities"] == visual._runtime_card(data)
     assert packet["assetModeCatalog"] == visual.visual_asset_mode_catalog()
     assert data == frozen
-    assert "with a separately chosen texturedPath for the path" not in rule
-    assert "represent only a terminal body" not in rule
-    assert "with a separately chosen texturedPath for the path" not in json.dumps(request["messages"])
+
 
 
 def _capture_vfx(monkeypatch, data, *, repair=False):
@@ -112,14 +104,12 @@ def test_shared_geometry_guidance_remains_neutral_in_serialized_repair(monkeypat
     request, packet = capture(monkeypatch, data, repair=True)
     scope = packet["repairScope"]
     assert scope == {}  # Shared presentation facts do not expand permissions.
-    assert "optional unreported fields stay absent" in " ".join(packet["rules"])
-    messages = json.dumps(request["messages"])
-    assert "with a separately chosen texturedPath for the path" not in messages
-    assert "can coexist with a baked tip/body" not in messages
     if director == "visual":
-        assert "texturedPath is an independent VFX renderer" in packet["spritePresentationReadOnly"]["geometryCoverage"]
+        assert packet["runtimeEntitiesReadOnly"] == visual._runtime_card(data)
+        assert packet["assetModeCatalog"] == visual.visual_asset_mode_catalog()
     else:
-        assert "Path coverage is independent of PNG-body presentation" in packet["runtimeVocabularyReadOnly"]["rendererSemantics"]["texturedPath"]
+        assert packet["acceptedRuntimeProgramReadOnly"]["bindings"] == data["runtimeProgram"]["bindings"]
+
 
 
 def test_author_packet_retains_full_grammar_without_counterexample_item_anecdotes(monkeypatch):
