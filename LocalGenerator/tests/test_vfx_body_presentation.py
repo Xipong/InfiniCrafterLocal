@@ -22,11 +22,14 @@ def test_selected_body_coverage_reaches_director_and_repair(monkeypatch, mode, r
     surface = packet["runtimeSurfaceReadOnly" if repair else "runtimeSurface"]
     row = next(row for row in surface["bodyPresentation"] if row["entityId"] == entity["id"])
     assert row["assetMode"] == mode
+    frame = {"aim": {"source": "initial", "turnOwner": False},
+             "units": {"distance": "native_world_pixels", "duration": "world_ticks"}}
+    assert row["frame"] == frame
     if mode == "runtime_geometry":
-        assert row == {"entityId": entity["id"], "assetMode": mode,
+        assert row == {"entityId": entity["id"], "assetMode": mode, "frame": frame,
                        "coverage": "collision_curve", "material": "solid_untextured", "widthPx": 8}
     elif mode == "no_asset":
-        assert row == {"entityId": entity["id"], "assetMode": mode, "coverage": "no_body"}
+        assert row == {"entityId": entity["id"], "assetMode": mode, "frame": frame, "coverage": "no_body"}
     else:
         assert row["coverage"] == "single_sprite_at_curve_tip"
         assert row["image"] == ({"renderSizePx": 44, "forwardAngleDegrees": 0} if mode == "reuse_item_icon"
