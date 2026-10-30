@@ -188,6 +188,8 @@ def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode
         author_presentation = fixture == "native_excalibur" and stage in {"Author", "GameplayRepair"}
         if author_presentation:
             expected.pop("draw")
+            from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+            expected = ordered_attack_context(expected)
             assert "Native draw layer instructions omitted" in projected.pop("presentationScope")
         if fixture == "native_excalibur" and stage not in {"Author", "GameplayRepair"}:
             for field in ("motion", "motionDispatch", "collision", "positionIntegration"):

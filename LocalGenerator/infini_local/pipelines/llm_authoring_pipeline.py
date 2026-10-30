@@ -45,6 +45,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
     build_llm_author_payload,
     realization_execution_truth_for_llm,
     runtime_units_for_llm,
+    sharp_engine_fn_catalog_for_llm,
     source_wire_units_for_llm,
 )
 
@@ -405,8 +406,9 @@ def build_gameplay_repair_dossier(
 
     This is intentionally a pure projection.  It contains exact invalid
     fragments, local dependencies, a compact global id index, and exact read-only
-    concept/runtimeProgram for the complete realizationReplacement. Capability
-    cards remain limited to current blockers; source visibility grants no edits.
+    concept/runtimeProgram for the complete realizationReplacement. Blocker
+    cards stay local; mutable function identities also receive the replacement
+    catalog. Visibility grants no edits beyond the exact repair scope.
     """
 
     assert_bounded_author_input(current)
@@ -414,6 +416,12 @@ def build_gameplay_repair_dossier(
     scope = build_runtime_repair_scope(current, exact_errors)
     fragments = runtime_repair_fragments(current, scope)
     blocker_plan = scope.get("blockerPlan") if isinstance(scope.get("blockerPlan"), Mapping) else {}
+    grammar_names = runtime_repair_schema_capabilities(scope)
+    documented_names = {
+        name
+        for key in ("directCapabilityNames", "supportingCapabilityNames", "existingBrokenCapabilityNames")
+        for name in blocker_plan.get(key) or []
+    }
 
     parents = {
         "a": {"packet": raw_parent_card_for_llm(dict(a))},
@@ -481,7 +489,12 @@ def build_gameplay_repair_dossier(
         "blockerCapabilities": cards(blocker_plan.get("directCapabilityNames")),
         "supportingCapabilities": cards(blocker_plan.get("supportingCapabilityNames")),
         "existingBrokenCapabilityCards": cards(blocker_plan.get("existingBrokenCapabilityNames")),
-        "requiredJsonShape": author_item_repair_prompt_shape_card(capability_names=runtime_repair_schema_capabilities(scope)),
+        # Mutable function identities retain the full Author grammar. Reuse its
+        # compact, self-contained catalog rather than repeating raw schemas or
+        # leaving schema-free transports with unexplained replacement names.
+        **({"replacementCapabilityCatalog": sharp_engine_fn_catalog_for_llm(include_source_units=False)}
+           if set(grammar_names) - documented_names else {}),
+        "requiredJsonShape": author_item_repair_prompt_shape_card(capability_names=grammar_names),
     }
 
 

@@ -133,6 +133,25 @@ internal static partial class EngineRuntimeChecks
             Equal(false, NativePoint(corner, Vector2.Zero, 10, 0, 0.1f), "each corner misses closest-point witness");
         Console.WriteLine($"Native helper geometry comparisons: {cases}");
     }
+    private static void ParentNativePositionIntegrationMatchesLiveGuards()
+    {
+        using var state = new NativeActorState();
+        MethodInfo update = typeof(Projectile).GetMethod("UpdatePosition", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!;
+        foreach (int type in new[] { ProjectileID.Excalibur, ProjectileID.WoodenArrowFriendly })
+        {
+            var projectile = new Projectile(); projectile.SetDefaults(type);
+            projectile.position = new Vector2(100, 200); projectile.velocity = new Vector2(3, 5);
+            projectile.wet = false;
+            update.Invoke(projectile, new object[] { new Vector2(7, 11) });
+            Equal(new Vector2(103, 205), projectile.position, "dry native integration uses velocity");
+            projectile.wet = true;
+            update.Invoke(projectile, new object[] { new Vector2(7, 11) });
+            Equal(new Vector2(110, 216), projectile.position, "wet native integration uses supplied wetVelocity, not regular velocity");
+            projectile.aiStyle = 4;
+            update.Invoke(projectile, new object[] { new Vector2(7, 11) });
+            Equal(new Vector2(110, 216), projectile.position, "native excluded style bypasses integration");
+        }
+    }
     private static void ParentNativeArrowMotionMatchesSelectedSource()
     {
         using var state = new NativeActorState();

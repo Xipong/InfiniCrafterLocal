@@ -3,7 +3,7 @@
 from __future__ import annotations
 from infini_local.core.runtime_authoring.capability_registry import (
     CAPABILITY_REGISTRY, BINDING_ACTION_REGISTRY, ENTITY_KIND_REGISTRY,
-    EVENT_KIND_REGISTRY,
+    EVENT_KIND_REGISTRY, author_parameter_shape,
 )
 from prompt_packet_helpers import request_dossier, dossier_text, expand_catalog_targets
 import copy
@@ -66,6 +66,7 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
                 assert capabilities[owner].params[leaf] == capabilities[fn].params[name]
                 assert "paramRef" not in cards[owner]["params"][leaf]
     canonical = runtime_authoring_prompt_field_guide()
+    canonical["types"] = {name: author_parameter_shape(schema) for name, schema in canonical["types"].items()}
     assert {key: catalog["fieldGuide"][key] for key in canonical} == canonical
     from infini_local.core.runtime_authoring.terraria_vocabulary import (
         DAMAGE_CLASS_MEANINGS, DAMAGE_CLASS_TOKENS,

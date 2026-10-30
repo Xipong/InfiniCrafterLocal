@@ -178,7 +178,17 @@ public sealed partial class GeneratorClient
             catch (Exception error) when (error is not OutOfMemoryException) { gaps.Add("draw_source:" + error.GetType().Name); }
         }
         if (result["motion"] is not null && Native(typeof(Projectile), "UpdatePosition") is { } integration)
-            result["positionIntegration"] = Observe(integration, "motion");
+        {
+            // This is a direct entry-point source conditioned on the captured
+            // actor identity, not a claim that an enclosing Update has reached it.
+            // Mutable tables, hooks and identity reads after actor escape remain
+            // symbolic under the same selector safety rules as AI helpers.
+            var program = Observe(integration, "motion", boundActor: true);
+            if (program["identitySelected"]?["identitySelection"] is JsonObject receipt)
+                receipt["scope"] = receipt["scope"]!.GetValue<string>()
+                    + " Assumes captured Projectile.type/aiStyle at UpdatePosition entry; enclosing caller identity preservation is not proved.";
+            result["positionIntegration"] = program;
+        }
         result["sourceMethods"] = certificates;
         result["coverage"] = new JsonObject { ["proved"] = "bounded_native_source_observations_only", ["unresolved"] = gaps,
             ["boundaries"] = "ProjectileLoader.Colliding/ShouldUpdatePosition and all other hooks remain unevaluated; no source fact is absence of a mechanic; damage may stop before visual lifetime; held-item draw is separate and not inferred from noMelee" };

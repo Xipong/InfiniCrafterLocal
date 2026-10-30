@@ -12,6 +12,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     RUNTIME_PROGRAM_API_VERSION,
     RUNTIME_PROGRAM_SCHEMA,
     compact_capability_catalog,
+    author_parameter_shape,
 )
 from infini_local.core.runtime_authoring.capability_registry import (
     runtime_authoring_prompt_field_guide,
@@ -247,6 +248,7 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     # Registry cards retain their canonical fields; only missing execution facts
     # are attached to the relevant presentation card.
     field_guide = runtime_authoring_prompt_field_guide()
+    field_guide["types"] = {name: author_parameter_shape(schema) for name, schema in field_guide["types"].items()}
     field_guide["descendantSpawnBudget"] = descendant_spawn_budget_for_llm()
     field_guide["sourceInterpretation"] = source_interpretation_for_llm()
     field_guide["statusEffects"] = AUTHOR_STATUS_COMPOSITION_RULE
@@ -295,8 +297,8 @@ def sharp_engine_fn_catalog_for_llm(*, include_source_units: bool = True) -> dic
     field_guide["rowShapes"] = RUNTIME_ROW_SHAPE_RULE
     field_guide["consumerConstraints"] = _share_consumer_constraints(capabilities)
     field_guide["consumerConstraintReadingRule"] = (
-        "consumerConstraint/projectionConstraints and nested x-infini-consumerConstraint/x-infini-authorProjection "
-        "refer to fieldGuide.consumerConstraints."
+        "At every parameter depth, consumerConstraint/projectionConstraints string values refer to "
+        "fieldGuide.consumerConstraints; object values are literal rules."
     )
     for card in capabilities:
         if card["fn"] == "configure_item_stats":

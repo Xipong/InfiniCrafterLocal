@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
-from infini_local.pipelines.native_attack_behavior_view import _PROGRAM_FIELDS, _ROW_FIELDS
+from infini_local.pipelines.native_attack_behavior_view import _PROGRAM_FIELDS, _ROW_FIELDS, ordered_attack_context
 
 from infini_local.core.item_identity_tools import (
     dict_get_ci,
@@ -538,6 +538,8 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
                     source["presentationScope"] = "Native draw layer instructions omitted for Gameplay Author; " \
                         "source presentation motifs are in parentBriefs. Gameplay source is unchanged."
                     profile["attackReference"] = pack_attack_tables(source)
+            if stage == "author" and known_attack_context_schema(source):
+                profile["attackReference"] = ordered_attack_context(source)
         if "spriteReference" in raw:
             brief["appearance"]["spriteReference"] = copy.deepcopy(raw["spriteReference"])
         briefs[label] = brief

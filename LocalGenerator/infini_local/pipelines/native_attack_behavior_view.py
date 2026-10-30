@@ -31,7 +31,10 @@ _NOTATION = (
     "read indexed array values. Vector2.add/sub/mul/div and Color.mul are native operators. "
     "T=Terraria, Xna=Microsoft.Xna.Framework, XnaGfx=Xna.Graphics, Content=ReLogic.Content; "
     "primitive type names are shortened. rgba.white and color * scalar denote certified native Color "
-    "operations on all RGBA channels, including native rounding/clamping, not alpha alone. Calls retain signatures."
+    "operations on all RGBA channels, including native rounding/clamping, not alpha alone. Calls retain signatures. "
+    "readFloat(array,index) reads a System.Single element. writeFloat(array,index,value) resolves/checks "
+    "the element address BEFORE evaluating value, then writes it; it is source notation, not an ordinary "
+    "helper call. Both preserve native array/address checks and re-read live state."
 )
 
 
@@ -49,6 +52,16 @@ def _expression_names(text: str, names: dict[str, str], *, rgba_multiply: bool =
         if term.args is None:
             return term
         args = tuple(readable(arg) for arg in term.args)
+        # Only the exact typed array-address idiom; unknown aliases stay literal.
+        if term.name in {"ldind.r4", "stind.r4"} and args:
+            address = args[0]
+            if (address.name == "ldelema" and address.args is not None
+                    and len(address.args) == 3 and address.args[2] == _Term('"System.Single"')
+                    and address.separators == (",", ";")
+                    and len(args) == (1 if term.name == "ldind.r4" else 2)):
+                values = (*address.args[:2], *args[1:])
+                return _Term("readFloat" if len(args) == 1 else "writeFloat", values,
+                             separators=(",",) * (len(values) - 1))
         if rgba_white and term.name == "Color.get_White" and not args:
             return _Term("rgba.white")
         if rgba_multiply and term.name == "Color.op_Multiply" and len(args) == 2:
@@ -107,15 +120,25 @@ def _program(value: dict) -> dict:
     rows += [use for row in rows for use in row.get("orderedSourceUses", [])]
     if any(not isinstance(row, dict) or not set(row) <= known_row for row in rows):
         return copy.deepcopy(value)
+    removed_literals = set()
     if not any(re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", str(out))
                          for name in names.values()):
         renamed = copy.deepcopy(out)
         try:
-            _map_expressions(renamed, names)
+            literals = {
+                name: row["expression"] for name, row in out["dependencies"].items()
+                if set(row) <= {"expression", "at", "block", "requiredPredicates"}
+                and row.get("requiredPredicates") == []
+                and isinstance(row.get("expression"), str)
+                and re.fullmatch(r"-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", row["expression"])
+            }
+            # Never inline live/guarded/addressed definitions across their reads.
+            _map_expressions(renamed, names | literals)
         except (ValueError, IndexError, TypeError, AttributeError, RecursionError):
             pass
         else:
             renamed["dependencies"] = {names[key]: child for key, child in renamed["dependencies"].items()}
+            removed_literals = {names[key] for key in literals}
             out = renamed
     # A shared step order preserves interleaving between dependencies, predicates,
     # observations and addressed-local uses. Removing offsets outright would lose
@@ -130,6 +153,7 @@ def _program(value: dict) -> dict:
         for row in rows:
             if isinstance(row, dict) and type(row.get("at")) is int:
                 row["step"] = steps[row.pop("at")]
+    out["dependencies"] = {key: row for key, row in out["dependencies"].items() if key not in removed_literals}
     # Field qualification duplicates the already-written owner.field. Method
     # overloads/signatures and unfamiliar symbols are deliberately retained.
     out["symbols"] = {key: re.sub(r", Version=[^,\]]+, Culture=[^,\]]+, PublicKeyToken=[^,\]]+", "", symbol)
@@ -203,7 +227,7 @@ def _selected_program(value: dict, identity: Any) -> dict:
     out = copy.deepcopy(selected)
     out["identitySelection"] = {
         "forCapturedIdentity": True,
-        "scope": "Only certified receiver identity branches selected; dynamic conditions and unknown alias/hook behavior remain symbolic.",
+        "scope": receipt["scope"],
     }
     if unavailable_full_method:
         out["identitySelection"]["fullMethodCapture"] = {
@@ -260,3 +284,145 @@ def project_attack_behavior(reference: dict[str, Any]) -> dict[str, Any]:
         out["expressionNotation"] = _NOTATION
     out["behaviorView"] = {"version": 1, "scope": _GUIDE}
     return out
+
+
+def _snapshot_source_name(expression: str) -> str | None:
+    """Names expose syntax only: ai slots are not guessed to mean age/direction."""
+    def name(term: _Term) -> str | None:
+        args = term.args or ()
+        if term.name in {"ldelem.r4", "ldelem.ref", "ldelem.i4"} and len(args) == 2:
+            array = name(args[0])
+            index = args[1].name if args[1].args is None else ""
+            return array + index if array and re.fullmatch(r"[0-9]+", index) else array
+        if term.name in {"ldfld", "ldsfld"} and args and args[0].args is None:
+            return args[0].name.rsplit(".", 1)[-1]
+        if term.name == "div" and len(args) == 2:
+            left, right = name(args[0]), name(args[1])
+            return left + "Over" + right if left and right else None
+        if term.opener == "[" and term.name not in {"alternatives", "source_block"}:
+            return term.name.rsplit(".", 1)[-1]
+        return None
+    try:
+        result = name(_Parser(expression, compact=True).parse())
+    except (ValueError, IndexError, RecursionError):
+        return None
+    return result if result and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", result) else None
+
+
+_BRANCH_TESTS = {
+    "brfalse": "take branch when input is zero or null; otherwise fall through",
+    "brtrue": "take branch when input is nonzero or non-null; otherwise fall through",
+    "beq": "take branch when inputs[0] equals inputs[1]; unordered floating-point inputs do not compare equal",
+    "bne.un": "take branch when inputs differ, including unordered floating-point inputs (NaN)",
+    "blt": "take branch when inputs[0] < inputs[1]; integers signed, floating-point comparison ordered (NaN is false)",
+    "ble": "take branch when inputs[0] <= inputs[1]; integers signed, floating-point comparison ordered (NaN is false)",
+    "bgt": "take branch when inputs[0] > inputs[1]; integers signed, floating-point comparison ordered (NaN is false)",
+    "bge": "take branch when inputs[0] >= inputs[1]; integers signed, floating-point comparison ordered (NaN is false)",
+    "blt.un": "take branch when inputs[0] < inputs[1]; integers unsigned; floating-point comparison also takes branch if unordered (NaN)",
+    "ble.un": "take branch when inputs[0] <= inputs[1]; integers unsigned; floating-point comparison also takes branch if unordered (NaN)",
+    "bgt.un": "take branch when inputs[0] > inputs[1]; integers unsigned; floating-point comparison also takes branch if unordered (NaN)",
+    "bge.un": "take branch when inputs[0] >= inputs[1]; integers unsigned; floating-point comparison also takes branch if unordered (NaN)",
+}
+
+
+def ordered_attack_context(reference: dict[str, Any]) -> dict[str, Any]:
+    """Present known scalar source programs in one ordered stream, not three lists.
+
+    This is not CFG reconstruction: branch opcodes, both successors, source blocks
+    and reached-branch guards remain explicit. Addressed/multi-use snapshots stay
+    in their existing representation until a faithful ordering can be supplied.
+    """
+    converted = False
+    branch_tests: dict[str, str] = {}
+
+    def visit(value: Any) -> Any:
+        nonlocal converted
+        if isinstance(value, list):
+            return [visit(child) for child in value]
+        if not isinstance(value, dict):
+            return copy.deepcopy(value)
+        out = {key: visit(child) for key, child in value.items()}
+        if not all(key in value for key in ("observations", "dependencies", "predicates", "symbols")):
+            return out
+        if not set(value) <= _PROGRAM_FIELDS | {"identitySelection"}:
+            return out
+        definitions = value["dependencies"]
+        if (not isinstance(definitions, dict)
+                or any(not isinstance(row, dict) or not isinstance(row.get("expression"), str)
+                       or "orderedSourceUses" in row for row in definitions.values())):
+            return out
+        # A switch has indexed successors (possibly duplicates), not the
+        # conditional [taken,fallthrough] shape. Keep it and unfamiliar opcodes
+        # literal until their ordering/legend is explicitly supported.
+        for predicate in value["predicates"]:
+            opcode = predicate.get("op", "") if isinstance(predicate, dict) else ""
+            if (not isinstance(opcode, str) or (opcode[:-2] if opcode.endswith(".s") else opcode) not in _BRANCH_TESTS
+                    or not isinstance(predicate.get("successors"), list) or len(predicate["successors"]) != 2):
+                return out
+        rows = [*value["observations"], *definitions.values(), *value["predicates"]]
+        if any(not isinstance(row, dict) or not set(row) <= _ROW_FIELDS | {"step"}
+               or type(row.get("step")) is not int or "at" in row for row in rows):
+            return out
+        # Names describe proven source use, not inferred gameplay roles.
+        roles: dict[str, set[str]] = {name: set() for name in definitions}
+        for row in value["observations"]:
+            for argument, expression in row.get("arguments", {}).items():
+                if expression in roles:
+                    roles[expression].add(argument)
+            if isinstance(row.get("expression"), str):
+                try:
+                    term = _Parser(row["expression"], compact=True).parse()
+                except (ValueError, IndexError, RecursionError):
+                    continue
+                if term.name == "stfld" and term.args and len(term.args) == 3 and term.args[2].args is None:
+                    if term.args[2].name in roles:
+                        roles[term.args[2].name].add(term.args[0].name.rsplit(".", 1)[-1])
+        names = {}
+        for name, role in roles.items():
+            label = next(iter(role)) if len(role) == 1 else _snapshot_source_name(definitions[name]["expression"])
+            if label and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", label):
+                label = None
+            names[name] = (label + "Snapshot_" if label else "snapshot_") + name
+        # A producer-owned identifier collision must not acquire our meaning.
+        if any(re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", str(value))
+               for name in names.values()):
+            return out
+        mapped = copy.deepcopy(value)
+        try:
+            _map_expressions(mapped, names)
+        except (ValueError, IndexError, TypeError, AttributeError, RecursionError):
+            return out
+        operations = [dict(row, bind=names[name]) for name, row in mapped.pop("dependencies").items()]
+        operations.extend(mapped.pop("observations"))
+        operations.extend(mapped.pop("predicates"))
+        # Equal steps remain equal: list ordering does not invent an ordering for
+        # multiple records of the same source instruction.
+        mapped["operations"] = sorted(operations, key=lambda row: row["step"])
+        for predicate in mapped["operations"]:
+            if "op" in predicate:
+                opcode = predicate["op"]
+                base = opcode[:-2] if opcode.endswith(".s") else opcode
+                if base in _BRANCH_TESTS:
+                    branch_tests[opcode] = _BRANCH_TESTS[base]
+        converted = True
+        return {key: visit(child) if key != "operations" else child for key, child in mapped.items()}
+
+    result = visit(reference)
+    if converted:
+        reading = (
+            "Read-only connected source, not executed gameplay. Scalar programs use one operations stream; "
+            "addressed/unsupported programs retain observations/dependencies/predicates and their source steps. "
+            "Read operations in step order; equal steps describe the same source instruction. "
+            "bind names a value captured at that step, not a live expression. requiredPredicates lists "
+            "reached branches, NOT necessarily true conditions. branchTests explains the used opcodes; "
+            "successors are [taken,fallthrough] source blocks. Do not assume all listed operations execute. "
+            "Fields/calls/aliases remain symbolic; alternatives are reaching definitions, not independent rolls."
+        )
+        if isinstance(result.get("behaviorView"), dict):
+            old_scope = result["behaviorView"].get("scope", "")
+            result["behaviorView"]["scope"] = reading if old_scope == _GUIDE else old_scope + " " + reading
+        else:
+            result["operationReading"] = reading
+        if branch_tests:
+            result["branchTests"] = branch_tests
+    return result

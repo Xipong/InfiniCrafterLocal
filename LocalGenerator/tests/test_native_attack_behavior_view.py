@@ -104,12 +104,12 @@ def test_real_native_capture_keeps_attack_geometry_timing_targets_and_draw():
     raw_motion = raw["attackReference"]["motion"]["programs"][0]
     assert len(raw_motion["observations"]) == 9
     assert len(motion["observations"]) == 6
-    assert len(motion["dependencies"]) == 7
+    assert len(motion["dependencies"]) == 5
     assert motion["identitySelection"]["forCapturedIdentity"] is True
     assert view["identityPredicates"] == {"Projectile.type": 982, "Projectile.aiStyle": 190}
-    assert motion["observations"][3]["expression"] == "set((this).Projectile.scale,(d5+(d2*d6)))"
-    assert motion["dependencies"]["d5"]["expression"] == "1"
-    assert motion["dependencies"]["d6"]["expression"] == "0.6"
+    assert motion["observations"][3]["expression"] == "set((this).Projectile.scale,(1+(d2*0.6)))"
+    assert "d5" not in motion["dependencies"] and "d6" not in motion["dependencies"]
+    assert motion["observations"][0]["expression"] == "writeFloat((this).Projectile.localAI,0,(readFloat((this).Projectile.localAI,0)+1))"
     assert [predicate["id"] for predicate in motion["predicates"]] == ["b2504"]
     assert motion["dependencies"]["d2"]["expression"] == "(f32_at((this).Projectile.localAI,0)/f32_at((this).Projectile.ai,1))"
     assert motion["observations"][-2]["expression"] == "set((this).Projectile.scale,((this).Projectile.scale*f32_at((this).Projectile.ai,2)))"
@@ -319,3 +319,92 @@ def test_unavailable_full_method_never_weakens_selected_source_admission(mutatio
     before = copy.deepcopy(source)
     assert project_attack_behavior(source) == before
     assert source == before
+
+
+def test_literal_bindings_inline_without_moving_live_or_guarded_reads():
+    source = native_reference()
+    program = source['motion']['programs'][0]
+    program['dependencies'] = {
+        'constant': {'expression': '-0.0', 'at': 1, 'block': 0, 'requiredPredicates': []},
+        'guarded': {'expression': '2', 'at': 2, 'block': 0, 'requiredPredicates': ['b8']},
+        'live': {'expression': 'ldfld(Projectile.scale,this)', 'at': 3, 'block': 0, 'requiredPredicates': []},
+    }
+    program['observations'] = [{'kind': 'state_write', 'at': 4, 'block': 0, 'requiredPredicates': [],
+                                'expression': 'stfld(Projectile.scale,this,add(constant,mul(guarded,live)))'}]
+    program['predicates'] = []
+    result = project_attack_behavior(source)['motion']['programs'][0]
+    assert list(result['dependencies']) == ['d1', 'd2']
+    assert result['observations'][0]['expression'] == 'set((this).Projectile.scale,(-0.0+(d1*d2)))'
+    assert result['observations'][0]['step'] == 3
+    assert result['dependencies']['d1']['requiredPredicates'] == ['b8']
+    assert result['dependencies']['d2']['expression'] == '(this).Projectile.scale'
+
+
+@pytest.mark.parametrize('element_type', ['System.Double', 'System.Int32', 'unknown'])
+def test_address_load_store_never_guesses_unknown_pointee(element_type):
+    source = native_reference()
+    program = source['motion']['programs'][0]
+    expression = f'stind.r4(ldelema(ldfld(Projectile.ai,this),0;"{element_type}"),1)'
+    program['observations'][0]['expression'] = expression
+    result = project_attack_behavior(source)['motion']['programs'][0]
+    assert 'stind.r4(ldelema(' in result['observations'][0]['expression']
+    assert 'writeFloat' not in result['observations'][0]['expression']
+
+
+def test_ordered_context_preserves_steps_guards_snapshots_and_unknown_programs():
+    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    source = native_reference()
+    program = source['motion']['programs'][0]
+    del program['dependencies']['addressed_l2']
+    projected = project_attack_behavior(source)
+    original = copy.deepcopy(projected)
+    ordered = ordered_attack_context(projected)['motion']['programs'][0]
+    assert not {'observations', 'dependencies', 'predicates'} & ordered.keys()
+    assert [row['step'] for row in ordered['operations']] == sorted(row['step'] for row in ordered['operations'])
+    bound = next(row for row in ordered['operations'] if 'bind' in row)
+    assert bound['expression'] == original['motion']['programs'][0]['dependencies']['d0']['expression']
+    assert bound['requiredPredicates'] == ['b8']
+    branch = next(row for row in ordered['operations'] if 'successors' in row)
+    assert branch['successors'] == [20, 21] and branch['op'] == 'bge.un.s'
+    assert branch['inputs'] == [bound['bind'], '0']
+    assert projected == original
+    # Addressed mutations cannot silently become immutable scalar snapshots.
+    addressed = project_attack_behavior(native_reference())
+    assert ordered_attack_context(addressed) == addressed
+
+
+@pytest.mark.parametrize('literal', ['-2.5', '-1E-05', '3e+07'])
+def test_inlined_numeric_lexemes_keep_subtraction_multiplication_grouping(literal):
+    source = native_reference()
+    program = source['motion']['programs'][0]
+    program['dependencies'] = {'literal': {'expression': literal, 'at': 1, 'block': 0, 'requiredPredicates': []}}
+    program['observations'] = [{'kind': 'state_write', 'at': 2, 'block': 0, 'requiredPredicates': [],
+                                'expression': 'stfld(Projectile.scale,this,sub(3,mul(literal,4)))'}]
+    program['predicates'] = []
+    result = project_attack_behavior(source)['motion']['programs'][0]
+    assert result['dependencies'] == {}
+    assert result['observations'][0]['expression'] == f'set((this).Projectile.scale,(3-({literal}*4)))'
+
+
+def test_ordered_context_future_consumer_and_semantic_name_collision_stay_literal():
+    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    source = native_reference()
+    del source['motion']['programs'][0]['dependencies']['addressed_l2']
+    projected = project_attack_behavior(source)
+    program = projected['motion']['programs'][0]
+    program['futureConsumer'] = {'expression': 'd0'}
+    assert ordered_attack_context(projected) == projected
+    del program['futureConsumer']
+    program['symbols']['targetSnapshot_d0'] = 'opaque.original.symbol'
+    assert ordered_attack_context(projected) == projected
+
+
+@pytest.mark.parametrize('op,successors', [('switch', [20, 20, 21, 22]), ('future_branch', [20, 21]), ('beq', [20])])
+def test_ordered_context_does_not_reinterpret_switch_or_unknown_edge_shape(op, successors):
+    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    source = native_reference()
+    del source['motion']['programs'][0]['dependencies']['addressed_l2']
+    projected = project_attack_behavior(source)
+    predicate = projected['motion']['programs'][0]['predicates'][0]
+    predicate['op'], predicate['successors'] = op, successors
+    assert ordered_attack_context(projected) == projected

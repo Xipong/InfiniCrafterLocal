@@ -165,7 +165,7 @@ def test_shared_constraints_expand_to_every_literal_registry_rule_without_mutati
     def visit(value):
         if isinstance(value, dict):
             for key, child in value.items():
-                if key in {"x-infini-consumerConstraint", "projectionConstraints", "x-infini-authorProjection"}:
+                if key in {"consumerConstraint", "x-infini-consumerConstraint", "projectionConstraints", "x-infini-authorProjection"}:
                     assert isinstance(child, str)
                     nested_references.append(child)
                 else:
@@ -325,33 +325,33 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
         return result
 
     def compare_shape(source, sent, path, root_meaning=None):
-        if isinstance(source, dict):
-            assert isinstance(sent, dict), path
-            removed = set(source) - set(sent)
-            assert not set(sent) - set(source), path
-            if removed:
-                # The exact text must still occur at its parameter or sole
-                # branch property; no description may simply vanish.
-                assert removed == {"description"}, path
-                retained = root_meaning
+        names = {"description": "meaning", "minimum": "min", "maximum": "max",
+                 "x-infini-units": "units", "x-infini-reference": "reference",
+                 "x-infini-neutral": "neutral", "x-infini-consumerConstraint": "consumerConstraint",
+                 "x-infini-authorProjection": "projectionConstraints"}
+        for key, value in source.items():
+            if key == "x-infini-semanticType":
+                continue  # Presentation-only label, just as at scalar roots.
+            if key == "required":
+                assert value == [name for name, row in sent["properties"].items() if not row.get("optional", False)], path
+            elif key == "properties":
+                assert set(value) == set(sent[key]), path
+                for name, child in value.items():
+                    compare_shape(child, sent[key][name], path + "." + name)
+            elif key == "oneOf":
+                assert len(value) == len(sent[key]), path
+                for index, child in enumerate(value):
+                    compare_shape(child, sent[key][index], path + f"[{index}]")
+            elif key == "description":
+                retained = sent.get("meaning", root_meaning)
                 properties = sent.get("properties", {})
                 if retained is None and len(properties) == 1:
-                    retained = next(iter(properties.values())).get("description")
-                assert retained is not None, path
-                assert consumer_text(source["description"], source) == retained, path
-                omitted_root_copies.append(path)
-            for key in set(source) & set(sent):
-                if key == "description" and isinstance(source[key], str):
-                    assert sent[key] == consumer_text(source[key], source), path
-                    checked_descriptions.append(path)
-                else:
-                    compare_shape(source[key], sent[key], path + "." + key)
-        elif isinstance(source, list):
-            assert isinstance(sent, list) and len(sent) == len(source), path
-            for index, (before, after) in enumerate(zip(source, sent)):
-                compare_shape(before, after, path + f"[{index}]")
-        else:
-            assert sent == source, path
+                    retained = next(iter(properties.values())).get("meaning")
+                    omitted_root_copies.append(path)
+                assert consumer_text(retained, source) == consumer_text(value, source), path
+                checked_descriptions.append(path)
+            else:
+                assert sent[names.get(key, key)] == value, (path, key)
 
     for name, cap in CAPABILITY_REGISTRY.items():
         if not cap.author_visible:
@@ -380,9 +380,9 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
                 if "default" in target:
                     expanded_shape["default"] = target["default"]
                 if "neutral" in target:
-                    expanded_shape["x-infini-neutral"] = target["neutral"]
-                assert expanded_shape == source["shape"] == spec.schema()
-                assert source["meaning"] == shared_types[spec.shared_type]["description"]
+                    expanded_shape["neutral"] = target["neutral"]
+                compare_shape(spec.schema(), expanded_shape, name + "." + param)
+                assert source["meaning"] == shared_types[spec.shared_type]["meaning"]
                 checked_shared_types.add(spec.shared_type)
                 continue
             # Previously documented card notation controls these presentation
@@ -412,7 +412,7 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
             elif "neutral" in source:
                 assert target["neutral"] == source["neutral"], (name, param)
             if "shape" in source:
-                compare_shape(source["shape"], target["shape"], name + "." + param,
+                compare_shape(source["shape"], target, name + "." + param,
                               root_meaning=target.get("meaning"))
     assert checked_descriptions and omitted_root_copies
     assert checked_shared_types == set(shared_types)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+import copy
 import json
 import math
 import struct
@@ -892,6 +893,47 @@ class ParamSpec:
         return out
 
 
+def author_parameter_shape(schema: Mapping[str, Any]) -> dict[str, Any]:
+    """Present a registry schema in the same notation as scalar Author params.
+
+    Only schema nodes are transformed: literal enum/default/reference/projection
+    data remain untouched. Object requiredness becomes per-property optionality;
+    oneOf branches and additionalProperties retain their exact schema meaning.
+    The validator/provider schema is never changed by this presentation view.
+    """
+    names = {"description": "meaning", "minimum": "min", "maximum": "max",
+             "x-infini-units": "units", "x-infini-reference": "reference",
+             "x-infini-neutral": "neutral", "x-infini-consumerConstraint": "consumerConstraint",
+             "x-infini-authorProjection": "projectionConstraints"}
+    result = {}
+    for key, value in schema.items():
+        if key == "x-infini-semanticType":
+            # Same non-executable descriptive label omitted by scalar cards.
+            continue
+        if key == "required" and isinstance(schema.get("properties"), dict):
+            # A JSON-schema composition may require a name declared in another
+            # branch. Per-property optionality cannot express that constraint.
+            nonlocal_names = [name for name in value if name not in schema["properties"]]
+            if nonlocal_names:
+                result[key] = nonlocal_names
+            continue
+        if key == "properties" and isinstance(value, dict):
+            required = schema.get("required", [])
+            result[key] = {}
+            for name, child in value.items():
+                row = author_parameter_shape(child)
+                if name not in required:
+                    row["optional"] = True
+                result[key][name] = row
+        elif key in {"oneOf", "anyOf", "allOf"} and isinstance(value, list):
+            result[key] = [author_parameter_shape(child) for child in value]
+        elif key in {"items", "additionalProperties"} and isinstance(value, dict):
+            result[key] = author_parameter_shape(value)
+        else:
+            result[names.get(key, key)] = copy.deepcopy(value)
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class CapabilitySpec:
     name: str
@@ -1059,6 +1101,10 @@ class CapabilitySpec:
                 row["min"] = spec.minimum
             if spec.maximum is not None:
                 row["max"] = spec.maximum
+            if spec.exclusive_minimum is not None:
+                row["exclusiveMinimum"] = spec.exclusive_minimum
+            if spec.exclusive_maximum is not None:
+                row["exclusiveMaximum"] = spec.exclusive_maximum
             if spec.multiple_of is not None:
                 row["multipleOf"] = spec.multiple_of
             if spec.enum:
@@ -1207,15 +1253,17 @@ class CapabilitySpec:
             # semanticType labels repeat the parameter meaning/units and are
             # often generic (including bounded_text for boolean parameters).
             row.pop("semanticType", None)
-            # A zero neutral for an optional bounded parameter is not a new
-            # value or design decision; absence and the numeric bounds remain.
-            if not spec.required and spec.neutral == 0:
-                row.pop("neutral", None)
             for suffix, units in (("Seconds", "seconds"), ("Tiles", "blocks (tiles)"),
                                   ("Px", "pixels"), ("Radians", "radians")):
                 if name.endswith(suffix) and spec.units == units:
                     row.pop("units", None)
                     break
+            if isinstance(row.get("shape"), dict):
+                shape = author_parameter_shape(row.pop("shape"))
+                # The former shape repeated the scalar envelope. Put object
+                # properties/union branches beside the same scalar constraints.
+                row.update(shape)
+                row.pop("semanticType", None)
         # References share only literally identical ParamSpecs (including all
         # bounds, units, omission predicates, wire and consumer metadata). Keep
         # the earliest visible owner literal, so every reference is one hop and
@@ -3942,8 +3990,14 @@ def runtime_authoring_prompt_field_guide() -> dict[str, Any]:
         "stableIdPattern": r"^[a-z][a-z0-9_]{0,47}$",
         "paramNotation": (
             "paramRef='function.param' borrows that parameter's complete card. Params are required unless marked optional. "
-            "An omitted optional default selects its neutral value, subject to omissionAllowedOnlyWhen. "
-            "A neutral annotation alone does not make a param optional."
+            "This notation also applies recursively to properties and oneOf branches. "
+            "oneOf selects exactly one branch; additionalProperties=false closes that object. "
+            "Any explicit required list adds cross-branch required names. "
+            "default is the declared value when an optional field is omitted; neutral is a no-effect value, "
+            "not permission to omit. omissionAllowedOnlyWhen further restricts omission. "
+            "min/max are inclusive bounds; exclusiveMinimum/exclusiveMaximum are strict. "
+            "Units omitted for names ending Seconds/Tiles/Px/Radians are seconds/blocks/pixels/radians respectively. "
+            "typeRef resolves in fieldGuide.types; projectionConstraints describe exact Author-to-consumer conversions."
         ),
         "requirementNotation": {
             "omittedMetadata": {"target": "same_target", "equals": None},
@@ -4080,6 +4134,7 @@ __all__ = [
     "capability_inventory_rows",
     "capability_provider_union",
     "compact_capability_catalog",
+    "author_parameter_shape",
     "compatible_entity_reference_ids",
     "referenced_entity_requirement_satisfied",
 ]

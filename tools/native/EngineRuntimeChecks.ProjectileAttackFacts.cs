@@ -263,6 +263,36 @@ internal static partial class EngineRuntimeChecks
                     Equal(true, actual.ToJsonString().Contains(fact, StringComparison.Ordinal), "actual arrow source dependency retained: " + fact);
         }
     }
+    private static void ProjectilePositionIntegrationSelectsEntryIdentity()
+    {
+        foreach (int type in new[] { ProjectileID.Excalibur, ProjectileID.WoodenArrowFriendly })
+        {
+            var projectile = new Projectile(); projectile.SetDefaults(type);
+            var reference = GeneratorClient.CaptureProjectileAttackReference(projectile);
+            var raw = reference["positionIntegration"]!.AsObject();
+            var selected = raw["identitySelected"]!.AsObject();
+            Equal(true, selected["predicates"]!.AsArray().Count < raw["predicates"]!.AsArray().Count,
+                "direct integration entry removes proven foreign identity predicates");
+            Equal(raw["observations"]!.AsArray().Count, selected["observations"]!.AsArray().Count,
+                "opaque pet/hook alternatives retain their actual position and velocity stores");
+            string predicates = selected["predicates"]!.ToJsonString();
+            foreach (string live in new[] { "Sets.IsAGolfBall", "Main.projPet", "ProjectileLoader.ShouldUpdatePosition", "Entity.wet", "Projectile.tileCollide" })
+                Equal(true, predicates.Contains(live, StringComparison.Ordinal), "mutable integration predicate retained: " + live);
+            Equal(false, predicates.Contains("ldelem.r4(ldfld(Projectile.ai", StringComparison.Ordinal),
+                "AI state from unreachable foreign identity arms is not an integration condition");
+            Equal(true, predicates.Contains("Projectile.aiStyle", StringComparison.Ordinal),
+                "identity read after opaque actor hook cannot be folded using entry identity");
+            Equal(type, selected["identitySelection"]!["identityPredicates"]!["Projectile.type"]!.GetValue<int>(),
+                "integration selection receipt uses actual captured actor");
+            Equal(true, selected["identitySelection"]!["scope"]!.GetValue<string>().Contains("enclosing caller identity preservation is not proved", StringComparison.Ordinal),
+                "entry identity precondition is explicit in serialized receipt, not just source comments");
+        }
+        // A native identity with an early integration return is not rewritten
+        // into unconditional position += velocity.
+        var excluded = new Projectile(); excluded.SetDefaults(ProjectileID.WoodenArrowFriendly); excluded.aiStyle = 4;
+        var stopped = GeneratorClient.CaptureProjectileAttackReference(excluded)["positionIntegration"]!["identitySelected"]!;
+        Equal(0, stopped["observations"]!.AsArray().Count, "excluded native AI style has no integration stores");
+    }
     private sealed class AttackObservationModProjectile : ModProjectile
     {
         public override void AI() { AttackObservationExecutions++; }

@@ -1,0 +1,2305 @@
+{
+  "requestSha256": "814917f0169fed71dd578d32c4be8b5282a67e95631d86363ceceb9fb3f1aa67",
+  "captures": {
+    "itemA": {
+      "identityPredicates": {
+        "Projectile.type": 982,
+        "Projectile.aiStyle": 190
+      },
+      "positionIntegration": {
+        "method": "Terraria.Projectile.UpdatePosition",
+        "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+        "sourceMethodSha256": "fcdc88afa102ee418b3eb30dab16e65907d74fd33680bca6fda0931b080856c4",
+        "observations": [
+          {
+            "kind": "state_write",
+            "at": 283,
+            "block": 270,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b268"
+            ],
+            "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),wetVelocity])"
+          },
+          {
+            "kind": "state_write",
+            "at": 308,
+            "block": 290,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b268"
+            ],
+            "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),ldfld(Entity.velocity,this)])"
+          },
+          {
+            "kind": "state_write",
+            "at": 456,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.X,ldflda(Entity.position,this),ldfld(Vector4.X,l1@443))"
+          },
+          {
+            "kind": "state_write",
+            "at": 473,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.Y,ldflda(Entity.position,this),ldfld(Vector4.Y,l1@443))"
+          },
+          {
+            "kind": "state_write",
+            "at": 490,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.X,ldflda(Entity.velocity,this),ldfld(Vector4.Z,l1@443))"
+          },
+          {
+            "kind": "state_write",
+            "at": 507,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.Y,ldflda(Entity.velocity,this),ldfld(Vector4.W,l1@443))"
+          }
+        ],
+        "dependencies": {
+          "l1@443": {
+            "expression": "Collision.SlopeCollision[ldfld(Entity.position,this),ldfld(Entity.velocity,this),ldfld(Entity.width,this),ldfld(Entity.height,this),0,alternatives(source_block(341,requires=[\"b7\",\"b20\",\"b33\",\"b49\",\"b61\",\"b76\",\"b92\",\"b105\",\"b118\",\"b133\",\"b143\",\"b158\",\"b171\",\"b184\",\"b197\",\"b210\",\"b223\",\"b236\",\"b250\",\"b259\",\"b325\",\"b336\"],value=l0@342),source_block(353,requires=[\"b7\",\"b20\",\"b33\",\"b49\",\"b61\",\"b76\",\"b92\",\"b105\",\"b118\",\"b133\",\"b143\",\"b158\",\"b171\",\"b184\",\"b197\",\"b210\",\"b223\",\"b236\",\"b250\",\"b259\",\"b325\",\"b336\",\"b351\"],value=l0@354),source_block(406,requires=[\"b7\",\"b20\",\"b33\",\"b49\",\"b61\",\"b76\",\"b92\",\"b105\",\"b118\",\"b133\",\"b143\",\"b158\",\"b171\",\"b184\",\"b197\",\"b210\",\"b223\",\"b236\",\"b250\",\"b259\",\"b325\",\"b336\",\"b368\",\"b376\",\"b386\",\"b396\",\"b404\"],value=l0@407))]",
+            "at": 443,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ]
+          },
+          "l0@342": {
+            "expression": "0",
+            "at": 342,
+            "block": 341,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ]
+          },
+          "l0@354": {
+            "expression": "1",
+            "at": 354,
+            "block": 353,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336",
+              "b351"
+            ]
+          },
+          "l0@407": {
+            "expression": "1",
+            "at": 407,
+            "block": 406,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336",
+              "b368",
+              "b376",
+              "b386",
+              "b396",
+              "b404"
+            ]
+          },
+          "l2@361": {
+            "expression": "ldfld(Projectile.type,this)",
+            "at": 361,
+            "block": 355,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ]
+          }
+        },
+        "predicates": [
+          {
+            "id": "b7",
+            "at": 7,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "4"
+            ],
+            "successors": [
+              252,
+              12
+            ]
+          },
+          {
+            "id": "b20",
+            "at": 20,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "38"
+            ],
+            "successors": [
+              252,
+              25
+            ]
+          },
+          {
+            "id": "b33",
+            "at": 33,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "84"
+            ],
+            "successors": [
+              252,
+              38
+            ]
+          },
+          {
+            "id": "b49",
+            "at": 49,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "148"
+            ],
+            "successors": [
+              252,
+              54
+            ]
+          },
+          {
+            "id": "b61",
+            "at": 61,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "7"
+            ],
+            "successors": [
+              81,
+              63
+            ]
+          },
+          {
+            "id": "b76",
+            "at": 76,
+            "op": "beq",
+            "inputs": [
+              "ldelem.r4(ldfld(Projectile.ai,this),0)",
+              "2"
+            ],
+            "successors": [
+              252,
+              81
+            ]
+          },
+          {
+            "id": "b92",
+            "at": 92,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "440"
+            ],
+            "successors": [
+              120,
+              94
+            ]
+          },
+          {
+            "id": "b105",
+            "at": 105,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "449"
+            ],
+            "successors": [
+              120,
+              107
+            ]
+          },
+          {
+            "id": "b118",
+            "at": 118,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "606"
+            ],
+            "successors": [
+              135,
+              120
+            ]
+          },
+          {
+            "id": "b133",
+            "at": 133,
+            "op": "beq.s",
+            "inputs": [
+              "ldelem.r4(ldfld(Projectile.ai,this),1)",
+              "1"
+            ],
+            "successors": [
+              252,
+              135
+            ]
+          },
+          {
+            "id": "b143",
+            "at": 143,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "93"
+            ],
+            "successors": [
+              160,
+              145
+            ]
+          },
+          {
+            "id": "b158",
+            "at": 158,
+            "op": "blt.s",
+            "inputs": [
+              "ldelem.r4(ldfld(Projectile.ai,this),0)",
+              "0"
+            ],
+            "successors": [
+              252,
+              160
+            ]
+          },
+          {
+            "id": "b171",
+            "at": 171,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "540"
+            ],
+            "successors": [
+              252,
+              173
+            ]
+          },
+          {
+            "id": "b184",
+            "at": 184,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "756"
+            ],
+            "successors": [
+              252,
+              186
+            ]
+          },
+          {
+            "id": "b197",
+            "at": 197,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "818"
+            ],
+            "successors": [
+              252,
+              199
+            ]
+          },
+          {
+            "id": "b210",
+            "at": 210,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "856"
+            ],
+            "successors": [
+              252,
+              212
+            ]
+          },
+          {
+            "id": "b223",
+            "at": 223,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "961"
+            ],
+            "successors": [
+              252,
+              225
+            ]
+          },
+          {
+            "id": "b236",
+            "at": 236,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "933"
+            ],
+            "successors": [
+              252,
+              238
+            ]
+          },
+          {
+            "id": "b250",
+            "at": 250,
+            "op": "brfalse.s",
+            "inputs": [
+              "ldelem.u1(ldsfld(Sets.IsAGolfBall),ldfld(Projectile.type,this))"
+            ],
+            "successors": [
+              253,
+              252
+            ]
+          },
+          {
+            "id": "b259",
+            "at": 259,
+            "op": "brtrue.s",
+            "inputs": [
+              "ProjectileLoader.ShouldUpdatePosition[this]"
+            ],
+            "successors": [
+              262,
+              261
+            ]
+          },
+          {
+            "id": "b268",
+            "at": 268,
+            "op": "brfalse.s",
+            "inputs": [
+              "ldfld(Entity.wet,this)"
+            ],
+            "successors": [
+              290,
+              270
+            ]
+          },
+          {
+            "id": "b325",
+            "at": 325,
+            "op": "brfalse",
+            "inputs": [
+              "ldelem.u1(ldsfld(Main.projPet),ldfld(Projectile.type,this))"
+            ],
+            "successors": [
+              512,
+              330
+            ]
+          },
+          {
+            "id": "b336",
+            "at": 336,
+            "op": "brfalse",
+            "inputs": [
+              "ldfld(Projectile.tileCollide,this)"
+            ],
+            "successors": [
+              512,
+              341
+            ]
+          },
+          {
+            "id": "b351",
+            "at": 351,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "62"
+            ],
+            "successors": [
+              355,
+              353
+            ]
+          },
+          {
+            "id": "b368",
+            "at": 368,
+            "op": "bgt.s",
+            "inputs": [
+              "l2@361",
+              "388"
+            ],
+            "successors": [
+              390,
+              370
+            ]
+          },
+          {
+            "id": "b376",
+            "at": 376,
+            "op": "beq.s",
+            "inputs": [
+              "l2@361",
+              "317"
+            ],
+            "successors": [
+              406,
+              378
+            ]
+          },
+          {
+            "id": "b386",
+            "at": 386,
+            "op": "ble.un.s",
+            "inputs": [
+              "sub(l2@361,387)",
+              "1"
+            ],
+            "successors": [
+              406,
+              388
+            ]
+          },
+          {
+            "id": "b396",
+            "at": 396,
+            "op": "beq.s",
+            "inputs": [
+              "l2@361",
+              "533"
+            ],
+            "successors": [
+              406,
+              398
+            ]
+          },
+          {
+            "id": "b404",
+            "at": 404,
+            "op": "bne.un.s",
+            "inputs": [
+              "l2@361",
+              "759"
+            ],
+            "successors": [
+              408,
+              406
+            ]
+          }
+        ],
+        "symbols": {
+          "Projectile.aiStyle": "Terraria.Projectile.aiStyle",
+          "Projectile.ai": "Terraria.Projectile.ai",
+          "Projectile.type": "Terraria.Projectile.type",
+          "Sets.IsAGolfBall": "Terraria.ID.ProjectileID+Sets.IsAGolfBall",
+          "ProjectileLoader.ShouldUpdatePosition": "Terraria.ModLoader.ProjectileLoader.ShouldUpdatePosition(Terraria.Projectile)",
+          "Entity.wet": "Terraria.Entity.wet",
+          "Entity.position": "Terraria.Entity.position",
+          "Vector2.op_Addition": "Microsoft.Xna.Framework.Vector2.op_Addition(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2)",
+          "Entity.velocity": "Terraria.Entity.velocity",
+          "Main.projPet": "Terraria.Main.projPet",
+          "Projectile.tileCollide": "Terraria.Projectile.tileCollide",
+          "Entity.width": "Terraria.Entity.width",
+          "Entity.height": "Terraria.Entity.height",
+          "Collision.SlopeCollision": "Terraria.Collision.SlopeCollision(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2,System.Int32,System.Int32,System.Single,System.Boolean)",
+          "Vector4.X": "Microsoft.Xna.Framework.Vector4.X",
+          "Vector2.X": "Microsoft.Xna.Framework.Vector2.X",
+          "Vector4.Y": "Microsoft.Xna.Framework.Vector4.Y",
+          "Vector2.Y": "Microsoft.Xna.Framework.Vector2.Y",
+          "Vector4.Z": "Microsoft.Xna.Framework.Vector4.Z",
+          "Vector4.W": "Microsoft.Xna.Framework.Vector4.W"
+        },
+        "coverage": "connected_source_slice; opaque_fields_calls_and_address_aliases_are_symbolic",
+        "unresolved": [
+          "source_slice_entry_and_external_CFG_targets_unresolved"
+        ],
+        "identitySelected": {
+          "method": "Terraria.Projectile.UpdatePosition",
+          "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+          "sourceMethodSha256": "fcdc88afa102ee418b3eb30dab16e65907d74fd33680bca6fda0931b080856c4",
+          "observations": [
+            {
+              "kind": "state_write",
+              "at": 283,
+              "block": 270,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b268"
+              ],
+              "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),wetVelocity])"
+            },
+            {
+              "kind": "state_write",
+              "at": 308,
+              "block": 290,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b268"
+              ],
+              "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),ldfld(Entity.velocity,this)])"
+            },
+            {
+              "kind": "state_write",
+              "at": 456,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.X,ldflda(Entity.position,this),ldfld(Vector4.X,l1@443))"
+            },
+            {
+              "kind": "state_write",
+              "at": 473,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.Y,ldflda(Entity.position,this),ldfld(Vector4.Y,l1@443))"
+            },
+            {
+              "kind": "state_write",
+              "at": 490,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.X,ldflda(Entity.velocity,this),ldfld(Vector4.Z,l1@443))"
+            },
+            {
+              "kind": "state_write",
+              "at": 507,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.Y,ldflda(Entity.velocity,this),ldfld(Vector4.W,l1@443))"
+            }
+          ],
+          "dependencies": {
+            "l1@443": {
+              "expression": "Collision.SlopeCollision[ldfld(Entity.position,this),ldfld(Entity.velocity,this),ldfld(Entity.width,this),ldfld(Entity.height,this),0,alternatives(source_block(341,requires=[\"b250\",\"b259\",\"b325\",\"b336\"],value=l0@342),source_block(353,requires=[\"b250\",\"b259\",\"b325\",\"b336\",\"b351\"],value=l0@354),source_block(406,requires=[\"b250\",\"b259\",\"b325\",\"b336\",\"b368\",\"b376\",\"b386\",\"b396\",\"b404\"],value=l0@407))]",
+              "at": 443,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ]
+            },
+            "l0@342": {
+              "expression": "0",
+              "at": 342,
+              "block": 341,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ]
+            },
+            "l0@354": {
+              "expression": "1",
+              "at": 354,
+              "block": 353,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336",
+                "b351"
+              ]
+            },
+            "l0@407": {
+              "expression": "1",
+              "at": 407,
+              "block": 406,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336",
+                "b368",
+                "b376",
+                "b386",
+                "b396",
+                "b404"
+              ]
+            },
+            "l2@361": {
+              "expression": "ldfld(Projectile.type,this)",
+              "at": 361,
+              "block": 355,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ]
+            }
+          },
+          "predicates": [
+            {
+              "id": "b250",
+              "at": 250,
+              "op": "brfalse.s",
+              "inputs": [
+                "ldelem.u1(ldsfld(Sets.IsAGolfBall),ldfld(Projectile.type,this))"
+              ],
+              "successors": [
+                253,
+                252
+              ]
+            },
+            {
+              "id": "b259",
+              "at": 259,
+              "op": "brtrue.s",
+              "inputs": [
+                "ProjectileLoader.ShouldUpdatePosition[this]"
+              ],
+              "successors": [
+                262,
+                261
+              ]
+            },
+            {
+              "id": "b268",
+              "at": 268,
+              "op": "brfalse.s",
+              "inputs": [
+                "ldfld(Entity.wet,this)"
+              ],
+              "successors": [
+                290,
+                270
+              ]
+            },
+            {
+              "id": "b325",
+              "at": 325,
+              "op": "brfalse",
+              "inputs": [
+                "ldelem.u1(ldsfld(Main.projPet),ldfld(Projectile.type,this))"
+              ],
+              "successors": [
+                512,
+                330
+              ]
+            },
+            {
+              "id": "b336",
+              "at": 336,
+              "op": "brfalse",
+              "inputs": [
+                "ldfld(Projectile.tileCollide,this)"
+              ],
+              "successors": [
+                512,
+                341
+              ]
+            },
+            {
+              "id": "b351",
+              "at": 351,
+              "op": "bne.un.s",
+              "inputs": [
+                "ldfld(Projectile.aiStyle,this)",
+                "62"
+              ],
+              "successors": [
+                355,
+                353
+              ]
+            },
+            {
+              "id": "b368",
+              "at": 368,
+              "op": "bgt.s",
+              "inputs": [
+                "l2@361",
+                "388"
+              ],
+              "successors": [
+                390,
+                370
+              ]
+            },
+            {
+              "id": "b376",
+              "at": 376,
+              "op": "beq.s",
+              "inputs": [
+                "l2@361",
+                "317"
+              ],
+              "successors": [
+                406,
+                378
+              ]
+            },
+            {
+              "id": "b386",
+              "at": 386,
+              "op": "ble.un.s",
+              "inputs": [
+                "sub(l2@361,387)",
+                "1"
+              ],
+              "successors": [
+                406,
+                388
+              ]
+            },
+            {
+              "id": "b396",
+              "at": 396,
+              "op": "beq.s",
+              "inputs": [
+                "l2@361",
+                "533"
+              ],
+              "successors": [
+                406,
+                398
+              ]
+            },
+            {
+              "id": "b404",
+              "at": 404,
+              "op": "bne.un.s",
+              "inputs": [
+                "l2@361",
+                "759"
+              ],
+              "successors": [
+                408,
+                406
+              ]
+            }
+          ],
+          "symbols": {
+            "Sets.IsAGolfBall": "Terraria.ID.ProjectileID+Sets.IsAGolfBall",
+            "Projectile.type": "Terraria.Projectile.type",
+            "ProjectileLoader.ShouldUpdatePosition": "Terraria.ModLoader.ProjectileLoader.ShouldUpdatePosition(Terraria.Projectile)",
+            "Entity.wet": "Terraria.Entity.wet",
+            "Entity.position": "Terraria.Entity.position",
+            "Vector2.op_Addition": "Microsoft.Xna.Framework.Vector2.op_Addition(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2)",
+            "Entity.velocity": "Terraria.Entity.velocity",
+            "Main.projPet": "Terraria.Main.projPet",
+            "Projectile.tileCollide": "Terraria.Projectile.tileCollide",
+            "Entity.width": "Terraria.Entity.width",
+            "Entity.height": "Terraria.Entity.height",
+            "Projectile.aiStyle": "Terraria.Projectile.aiStyle",
+            "Collision.SlopeCollision": "Terraria.Collision.SlopeCollision(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2,System.Int32,System.Int32,System.Single,System.Boolean)",
+            "Vector4.X": "Microsoft.Xna.Framework.Vector4.X",
+            "Vector2.X": "Microsoft.Xna.Framework.Vector2.X",
+            "Vector4.Y": "Microsoft.Xna.Framework.Vector4.Y",
+            "Vector2.Y": "Microsoft.Xna.Framework.Vector2.Y",
+            "Vector4.Z": "Microsoft.Xna.Framework.Vector4.Z",
+            "Vector4.W": "Microsoft.Xna.Framework.Vector4.W"
+          },
+          "coverage": "connected_source_slice; opaque_fields_calls_and_address_aliases_are_symbolic",
+          "unresolved": [
+            "source_slice_entry_and_external_CFG_targets_unresolved"
+          ],
+          "identitySelection": {
+            "source": "certified_receiver_identity_cfg",
+            "version": 1,
+            "identityPredicates": {
+              "Projectile.type": 982,
+              "Projectile.aiStyle": 190
+            },
+            "scope": "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage. Assumes captured Projectile.type/aiStyle at UpdatePosition entry; enclosing caller identity preservation is not proved.",
+            "selectedEdges": [
+              {
+                "at": 7,
+                "block": 0,
+                "op": "beq",
+                "successor": 12
+              },
+              {
+                "at": 20,
+                "block": 12,
+                "op": "beq",
+                "successor": 25
+              },
+              {
+                "at": 33,
+                "block": 25,
+                "op": "beq",
+                "successor": 38
+              },
+              {
+                "at": 49,
+                "block": 38,
+                "op": "beq",
+                "successor": 54
+              },
+              {
+                "at": 61,
+                "block": 54,
+                "op": "bne.un.s",
+                "successor": 81
+              },
+              {
+                "at": 92,
+                "block": 81,
+                "op": "beq.s",
+                "successor": 94
+              },
+              {
+                "at": 105,
+                "block": 94,
+                "op": "beq.s",
+                "successor": 107
+              },
+              {
+                "at": 118,
+                "block": 107,
+                "op": "bne.un.s",
+                "successor": 135
+              },
+              {
+                "at": 143,
+                "block": 135,
+                "op": "bne.un.s",
+                "successor": 160
+              },
+              {
+                "at": 171,
+                "block": 160,
+                "op": "beq.s",
+                "successor": 173
+              },
+              {
+                "at": 184,
+                "block": 173,
+                "op": "beq.s",
+                "successor": 186
+              },
+              {
+                "at": 197,
+                "block": 186,
+                "op": "beq.s",
+                "successor": 199
+              },
+              {
+                "at": 210,
+                "block": 199,
+                "op": "beq.s",
+                "successor": 212
+              },
+              {
+                "at": 223,
+                "block": 212,
+                "op": "beq.s",
+                "successor": 225
+              },
+              {
+                "at": 236,
+                "block": 225,
+                "op": "beq.s",
+                "successor": 238
+              }
+            ]
+          }
+        }
+      }
+    },
+    "itemB": {
+      "identityPredicates": {
+        "Projectile.type": 1,
+        "Projectile.aiStyle": 1
+      },
+      "positionIntegration": {
+        "method": "Terraria.Projectile.UpdatePosition",
+        "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+        "sourceMethodSha256": "fcdc88afa102ee418b3eb30dab16e65907d74fd33680bca6fda0931b080856c4",
+        "observations": [
+          {
+            "kind": "state_write",
+            "at": 283,
+            "block": 270,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b268"
+            ],
+            "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),wetVelocity])"
+          },
+          {
+            "kind": "state_write",
+            "at": 308,
+            "block": 290,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b268"
+            ],
+            "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),ldfld(Entity.velocity,this)])"
+          },
+          {
+            "kind": "state_write",
+            "at": 456,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.X,ldflda(Entity.position,this),ldfld(Vector4.X,l1@443))"
+          },
+          {
+            "kind": "state_write",
+            "at": 473,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.Y,ldflda(Entity.position,this),ldfld(Vector4.Y,l1@443))"
+          },
+          {
+            "kind": "state_write",
+            "at": 490,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.X,ldflda(Entity.velocity,this),ldfld(Vector4.Z,l1@443))"
+          },
+          {
+            "kind": "state_write",
+            "at": 507,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ],
+            "expression": "stfld(Vector2.Y,ldflda(Entity.velocity,this),ldfld(Vector4.W,l1@443))"
+          }
+        ],
+        "dependencies": {
+          "l1@443": {
+            "expression": "Collision.SlopeCollision[ldfld(Entity.position,this),ldfld(Entity.velocity,this),ldfld(Entity.width,this),ldfld(Entity.height,this),0,alternatives(source_block(341,requires=[\"b7\",\"b20\",\"b33\",\"b49\",\"b61\",\"b76\",\"b92\",\"b105\",\"b118\",\"b133\",\"b143\",\"b158\",\"b171\",\"b184\",\"b197\",\"b210\",\"b223\",\"b236\",\"b250\",\"b259\",\"b325\",\"b336\"],value=l0@342),source_block(353,requires=[\"b7\",\"b20\",\"b33\",\"b49\",\"b61\",\"b76\",\"b92\",\"b105\",\"b118\",\"b133\",\"b143\",\"b158\",\"b171\",\"b184\",\"b197\",\"b210\",\"b223\",\"b236\",\"b250\",\"b259\",\"b325\",\"b336\",\"b351\"],value=l0@354),source_block(406,requires=[\"b7\",\"b20\",\"b33\",\"b49\",\"b61\",\"b76\",\"b92\",\"b105\",\"b118\",\"b133\",\"b143\",\"b158\",\"b171\",\"b184\",\"b197\",\"b210\",\"b223\",\"b236\",\"b250\",\"b259\",\"b325\",\"b336\",\"b368\",\"b376\",\"b386\",\"b396\",\"b404\"],value=l0@407))]",
+            "at": 443,
+            "block": 408,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ]
+          },
+          "l0@342": {
+            "expression": "0",
+            "at": 342,
+            "block": 341,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ]
+          },
+          "l0@354": {
+            "expression": "1",
+            "at": 354,
+            "block": 353,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336",
+              "b351"
+            ]
+          },
+          "l0@407": {
+            "expression": "1",
+            "at": 407,
+            "block": 406,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336",
+              "b368",
+              "b376",
+              "b386",
+              "b396",
+              "b404"
+            ]
+          },
+          "l2@361": {
+            "expression": "ldfld(Projectile.type,this)",
+            "at": 361,
+            "block": 355,
+            "requiredPredicates": [
+              "b7",
+              "b20",
+              "b33",
+              "b49",
+              "b61",
+              "b76",
+              "b92",
+              "b105",
+              "b118",
+              "b133",
+              "b143",
+              "b158",
+              "b171",
+              "b184",
+              "b197",
+              "b210",
+              "b223",
+              "b236",
+              "b250",
+              "b259",
+              "b325",
+              "b336"
+            ]
+          }
+        },
+        "predicates": [
+          {
+            "id": "b7",
+            "at": 7,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "4"
+            ],
+            "successors": [
+              252,
+              12
+            ]
+          },
+          {
+            "id": "b20",
+            "at": 20,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "38"
+            ],
+            "successors": [
+              252,
+              25
+            ]
+          },
+          {
+            "id": "b33",
+            "at": 33,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "84"
+            ],
+            "successors": [
+              252,
+              38
+            ]
+          },
+          {
+            "id": "b49",
+            "at": 49,
+            "op": "beq",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "148"
+            ],
+            "successors": [
+              252,
+              54
+            ]
+          },
+          {
+            "id": "b61",
+            "at": 61,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "7"
+            ],
+            "successors": [
+              81,
+              63
+            ]
+          },
+          {
+            "id": "b76",
+            "at": 76,
+            "op": "beq",
+            "inputs": [
+              "ldelem.r4(ldfld(Projectile.ai,this),0)",
+              "2"
+            ],
+            "successors": [
+              252,
+              81
+            ]
+          },
+          {
+            "id": "b92",
+            "at": 92,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "440"
+            ],
+            "successors": [
+              120,
+              94
+            ]
+          },
+          {
+            "id": "b105",
+            "at": 105,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "449"
+            ],
+            "successors": [
+              120,
+              107
+            ]
+          },
+          {
+            "id": "b118",
+            "at": 118,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "606"
+            ],
+            "successors": [
+              135,
+              120
+            ]
+          },
+          {
+            "id": "b133",
+            "at": 133,
+            "op": "beq.s",
+            "inputs": [
+              "ldelem.r4(ldfld(Projectile.ai,this),1)",
+              "1"
+            ],
+            "successors": [
+              252,
+              135
+            ]
+          },
+          {
+            "id": "b143",
+            "at": 143,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "93"
+            ],
+            "successors": [
+              160,
+              145
+            ]
+          },
+          {
+            "id": "b158",
+            "at": 158,
+            "op": "blt.s",
+            "inputs": [
+              "ldelem.r4(ldfld(Projectile.ai,this),0)",
+              "0"
+            ],
+            "successors": [
+              252,
+              160
+            ]
+          },
+          {
+            "id": "b171",
+            "at": 171,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "540"
+            ],
+            "successors": [
+              252,
+              173
+            ]
+          },
+          {
+            "id": "b184",
+            "at": 184,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "756"
+            ],
+            "successors": [
+              252,
+              186
+            ]
+          },
+          {
+            "id": "b197",
+            "at": 197,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "818"
+            ],
+            "successors": [
+              252,
+              199
+            ]
+          },
+          {
+            "id": "b210",
+            "at": 210,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "856"
+            ],
+            "successors": [
+              252,
+              212
+            ]
+          },
+          {
+            "id": "b223",
+            "at": 223,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "961"
+            ],
+            "successors": [
+              252,
+              225
+            ]
+          },
+          {
+            "id": "b236",
+            "at": 236,
+            "op": "beq.s",
+            "inputs": [
+              "ldfld(Projectile.type,this)",
+              "933"
+            ],
+            "successors": [
+              252,
+              238
+            ]
+          },
+          {
+            "id": "b250",
+            "at": 250,
+            "op": "brfalse.s",
+            "inputs": [
+              "ldelem.u1(ldsfld(Sets.IsAGolfBall),ldfld(Projectile.type,this))"
+            ],
+            "successors": [
+              253,
+              252
+            ]
+          },
+          {
+            "id": "b259",
+            "at": 259,
+            "op": "brtrue.s",
+            "inputs": [
+              "ProjectileLoader.ShouldUpdatePosition[this]"
+            ],
+            "successors": [
+              262,
+              261
+            ]
+          },
+          {
+            "id": "b268",
+            "at": 268,
+            "op": "brfalse.s",
+            "inputs": [
+              "ldfld(Entity.wet,this)"
+            ],
+            "successors": [
+              290,
+              270
+            ]
+          },
+          {
+            "id": "b325",
+            "at": 325,
+            "op": "brfalse",
+            "inputs": [
+              "ldelem.u1(ldsfld(Main.projPet),ldfld(Projectile.type,this))"
+            ],
+            "successors": [
+              512,
+              330
+            ]
+          },
+          {
+            "id": "b336",
+            "at": 336,
+            "op": "brfalse",
+            "inputs": [
+              "ldfld(Projectile.tileCollide,this)"
+            ],
+            "successors": [
+              512,
+              341
+            ]
+          },
+          {
+            "id": "b351",
+            "at": 351,
+            "op": "bne.un.s",
+            "inputs": [
+              "ldfld(Projectile.aiStyle,this)",
+              "62"
+            ],
+            "successors": [
+              355,
+              353
+            ]
+          },
+          {
+            "id": "b368",
+            "at": 368,
+            "op": "bgt.s",
+            "inputs": [
+              "l2@361",
+              "388"
+            ],
+            "successors": [
+              390,
+              370
+            ]
+          },
+          {
+            "id": "b376",
+            "at": 376,
+            "op": "beq.s",
+            "inputs": [
+              "l2@361",
+              "317"
+            ],
+            "successors": [
+              406,
+              378
+            ]
+          },
+          {
+            "id": "b386",
+            "at": 386,
+            "op": "ble.un.s",
+            "inputs": [
+              "sub(l2@361,387)",
+              "1"
+            ],
+            "successors": [
+              406,
+              388
+            ]
+          },
+          {
+            "id": "b396",
+            "at": 396,
+            "op": "beq.s",
+            "inputs": [
+              "l2@361",
+              "533"
+            ],
+            "successors": [
+              406,
+              398
+            ]
+          },
+          {
+            "id": "b404",
+            "at": 404,
+            "op": "bne.un.s",
+            "inputs": [
+              "l2@361",
+              "759"
+            ],
+            "successors": [
+              408,
+              406
+            ]
+          }
+        ],
+        "symbols": {
+          "Projectile.aiStyle": "Terraria.Projectile.aiStyle",
+          "Projectile.ai": "Terraria.Projectile.ai",
+          "Projectile.type": "Terraria.Projectile.type",
+          "Sets.IsAGolfBall": "Terraria.ID.ProjectileID+Sets.IsAGolfBall",
+          "ProjectileLoader.ShouldUpdatePosition": "Terraria.ModLoader.ProjectileLoader.ShouldUpdatePosition(Terraria.Projectile)",
+          "Entity.wet": "Terraria.Entity.wet",
+          "Entity.position": "Terraria.Entity.position",
+          "Vector2.op_Addition": "Microsoft.Xna.Framework.Vector2.op_Addition(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2)",
+          "Entity.velocity": "Terraria.Entity.velocity",
+          "Main.projPet": "Terraria.Main.projPet",
+          "Projectile.tileCollide": "Terraria.Projectile.tileCollide",
+          "Entity.width": "Terraria.Entity.width",
+          "Entity.height": "Terraria.Entity.height",
+          "Collision.SlopeCollision": "Terraria.Collision.SlopeCollision(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2,System.Int32,System.Int32,System.Single,System.Boolean)",
+          "Vector4.X": "Microsoft.Xna.Framework.Vector4.X",
+          "Vector2.X": "Microsoft.Xna.Framework.Vector2.X",
+          "Vector4.Y": "Microsoft.Xna.Framework.Vector4.Y",
+          "Vector2.Y": "Microsoft.Xna.Framework.Vector2.Y",
+          "Vector4.Z": "Microsoft.Xna.Framework.Vector4.Z",
+          "Vector4.W": "Microsoft.Xna.Framework.Vector4.W"
+        },
+        "coverage": "connected_source_slice; opaque_fields_calls_and_address_aliases_are_symbolic",
+        "unresolved": [
+          "source_slice_entry_and_external_CFG_targets_unresolved"
+        ],
+        "identitySelected": {
+          "method": "Terraria.Projectile.UpdatePosition",
+          "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+          "sourceMethodSha256": "fcdc88afa102ee418b3eb30dab16e65907d74fd33680bca6fda0931b080856c4",
+          "observations": [
+            {
+              "kind": "state_write",
+              "at": 283,
+              "block": 270,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b268"
+              ],
+              "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),wetVelocity])"
+            },
+            {
+              "kind": "state_write",
+              "at": 308,
+              "block": 290,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b268"
+              ],
+              "expression": "stfld(Entity.position,this,Vector2.op_Addition[ldfld(Entity.position,this),ldfld(Entity.velocity,this)])"
+            },
+            {
+              "kind": "state_write",
+              "at": 456,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.X,ldflda(Entity.position,this),ldfld(Vector4.X,l1@443))"
+            },
+            {
+              "kind": "state_write",
+              "at": 473,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.Y,ldflda(Entity.position,this),ldfld(Vector4.Y,l1@443))"
+            },
+            {
+              "kind": "state_write",
+              "at": 490,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.X,ldflda(Entity.velocity,this),ldfld(Vector4.Z,l1@443))"
+            },
+            {
+              "kind": "state_write",
+              "at": 507,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ],
+              "expression": "stfld(Vector2.Y,ldflda(Entity.velocity,this),ldfld(Vector4.W,l1@443))"
+            }
+          ],
+          "dependencies": {
+            "l1@443": {
+              "expression": "Collision.SlopeCollision[ldfld(Entity.position,this),ldfld(Entity.velocity,this),ldfld(Entity.width,this),ldfld(Entity.height,this),0,alternatives(source_block(341,requires=[\"b250\",\"b259\",\"b325\",\"b336\"],value=l0@342),source_block(353,requires=[\"b250\",\"b259\",\"b325\",\"b336\",\"b351\"],value=l0@354),source_block(406,requires=[\"b250\",\"b259\",\"b325\",\"b336\",\"b368\",\"b376\",\"b386\",\"b396\",\"b404\"],value=l0@407))]",
+              "at": 443,
+              "block": 408,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ]
+            },
+            "l0@342": {
+              "expression": "0",
+              "at": 342,
+              "block": 341,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ]
+            },
+            "l0@354": {
+              "expression": "1",
+              "at": 354,
+              "block": 353,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336",
+                "b351"
+              ]
+            },
+            "l0@407": {
+              "expression": "1",
+              "at": 407,
+              "block": 406,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336",
+                "b368",
+                "b376",
+                "b386",
+                "b396",
+                "b404"
+              ]
+            },
+            "l2@361": {
+              "expression": "ldfld(Projectile.type,this)",
+              "at": 361,
+              "block": 355,
+              "requiredPredicates": [
+                "b250",
+                "b259",
+                "b325",
+                "b336"
+              ]
+            }
+          },
+          "predicates": [
+            {
+              "id": "b250",
+              "at": 250,
+              "op": "brfalse.s",
+              "inputs": [
+                "ldelem.u1(ldsfld(Sets.IsAGolfBall),ldfld(Projectile.type,this))"
+              ],
+              "successors": [
+                253,
+                252
+              ]
+            },
+            {
+              "id": "b259",
+              "at": 259,
+              "op": "brtrue.s",
+              "inputs": [
+                "ProjectileLoader.ShouldUpdatePosition[this]"
+              ],
+              "successors": [
+                262,
+                261
+              ]
+            },
+            {
+              "id": "b268",
+              "at": 268,
+              "op": "brfalse.s",
+              "inputs": [
+                "ldfld(Entity.wet,this)"
+              ],
+              "successors": [
+                290,
+                270
+              ]
+            },
+            {
+              "id": "b325",
+              "at": 325,
+              "op": "brfalse",
+              "inputs": [
+                "ldelem.u1(ldsfld(Main.projPet),ldfld(Projectile.type,this))"
+              ],
+              "successors": [
+                512,
+                330
+              ]
+            },
+            {
+              "id": "b336",
+              "at": 336,
+              "op": "brfalse",
+              "inputs": [
+                "ldfld(Projectile.tileCollide,this)"
+              ],
+              "successors": [
+                512,
+                341
+              ]
+            },
+            {
+              "id": "b351",
+              "at": 351,
+              "op": "bne.un.s",
+              "inputs": [
+                "ldfld(Projectile.aiStyle,this)",
+                "62"
+              ],
+              "successors": [
+                355,
+                353
+              ]
+            },
+            {
+              "id": "b368",
+              "at": 368,
+              "op": "bgt.s",
+              "inputs": [
+                "l2@361",
+                "388"
+              ],
+              "successors": [
+                390,
+                370
+              ]
+            },
+            {
+              "id": "b376",
+              "at": 376,
+              "op": "beq.s",
+              "inputs": [
+                "l2@361",
+                "317"
+              ],
+              "successors": [
+                406,
+                378
+              ]
+            },
+            {
+              "id": "b386",
+              "at": 386,
+              "op": "ble.un.s",
+              "inputs": [
+                "sub(l2@361,387)",
+                "1"
+              ],
+              "successors": [
+                406,
+                388
+              ]
+            },
+            {
+              "id": "b396",
+              "at": 396,
+              "op": "beq.s",
+              "inputs": [
+                "l2@361",
+                "533"
+              ],
+              "successors": [
+                406,
+                398
+              ]
+            },
+            {
+              "id": "b404",
+              "at": 404,
+              "op": "bne.un.s",
+              "inputs": [
+                "l2@361",
+                "759"
+              ],
+              "successors": [
+                408,
+                406
+              ]
+            }
+          ],
+          "symbols": {
+            "Sets.IsAGolfBall": "Terraria.ID.ProjectileID+Sets.IsAGolfBall",
+            "Projectile.type": "Terraria.Projectile.type",
+            "ProjectileLoader.ShouldUpdatePosition": "Terraria.ModLoader.ProjectileLoader.ShouldUpdatePosition(Terraria.Projectile)",
+            "Entity.wet": "Terraria.Entity.wet",
+            "Entity.position": "Terraria.Entity.position",
+            "Vector2.op_Addition": "Microsoft.Xna.Framework.Vector2.op_Addition(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2)",
+            "Entity.velocity": "Terraria.Entity.velocity",
+            "Main.projPet": "Terraria.Main.projPet",
+            "Projectile.tileCollide": "Terraria.Projectile.tileCollide",
+            "Entity.width": "Terraria.Entity.width",
+            "Entity.height": "Terraria.Entity.height",
+            "Projectile.aiStyle": "Terraria.Projectile.aiStyle",
+            "Collision.SlopeCollision": "Terraria.Collision.SlopeCollision(Microsoft.Xna.Framework.Vector2,Microsoft.Xna.Framework.Vector2,System.Int32,System.Int32,System.Single,System.Boolean)",
+            "Vector4.X": "Microsoft.Xna.Framework.Vector4.X",
+            "Vector2.X": "Microsoft.Xna.Framework.Vector2.X",
+            "Vector4.Y": "Microsoft.Xna.Framework.Vector4.Y",
+            "Vector2.Y": "Microsoft.Xna.Framework.Vector2.Y",
+            "Vector4.Z": "Microsoft.Xna.Framework.Vector4.Z",
+            "Vector4.W": "Microsoft.Xna.Framework.Vector4.W"
+          },
+          "coverage": "connected_source_slice; opaque_fields_calls_and_address_aliases_are_symbolic",
+          "unresolved": [
+            "source_slice_entry_and_external_CFG_targets_unresolved"
+          ],
+          "identitySelection": {
+            "source": "certified_receiver_identity_cfg",
+            "version": 1,
+            "identityPredicates": {
+              "Projectile.type": 1,
+              "Projectile.aiStyle": 1
+            },
+            "scope": "Source-only identity specialization; unknown runtime conditions retain all paths. Direct target identity writes/address escapes and uncertified target-passing calls before a read prevent selection. Native detours/global aliases remain outside capture coverage. Assumes captured Projectile.type/aiStyle at UpdatePosition entry; enclosing caller identity preservation is not proved.",
+            "selectedEdges": [
+              {
+                "at": 7,
+                "block": 0,
+                "op": "beq",
+                "successor": 12
+              },
+              {
+                "at": 20,
+                "block": 12,
+                "op": "beq",
+                "successor": 25
+              },
+              {
+                "at": 33,
+                "block": 25,
+                "op": "beq",
+                "successor": 38
+              },
+              {
+                "at": 49,
+                "block": 38,
+                "op": "beq",
+                "successor": 54
+              },
+              {
+                "at": 61,
+                "block": 54,
+                "op": "bne.un.s",
+                "successor": 81
+              },
+              {
+                "at": 92,
+                "block": 81,
+                "op": "beq.s",
+                "successor": 94
+              },
+              {
+                "at": 105,
+                "block": 94,
+                "op": "beq.s",
+                "successor": 107
+              },
+              {
+                "at": 118,
+                "block": 107,
+                "op": "bne.un.s",
+                "successor": 135
+              },
+              {
+                "at": 143,
+                "block": 135,
+                "op": "bne.un.s",
+                "successor": 160
+              },
+              {
+                "at": 171,
+                "block": 160,
+                "op": "beq.s",
+                "successor": 173
+              },
+              {
+                "at": 184,
+                "block": 173,
+                "op": "beq.s",
+                "successor": 186
+              },
+              {
+                "at": 197,
+                "block": 186,
+                "op": "beq.s",
+                "successor": 199
+              },
+              {
+                "at": 210,
+                "block": 199,
+                "op": "beq.s",
+                "successor": 212
+              },
+              {
+                "at": 223,
+                "block": 212,
+                "op": "beq.s",
+                "successor": 225
+              },
+              {
+                "at": 236,
+                "block": 225,
+                "op": "beq.s",
+                "successor": 238
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

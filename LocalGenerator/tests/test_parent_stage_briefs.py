@@ -37,7 +37,8 @@ def test_actual_author_briefs_precede_details_and_preserve_all_gameplay(monkeypa
     old.pop("draw")
     # Includes complete conditions, collision/target admission, clocks and gaps;
     # no reduced graph based on a guessed weapon family or inferred DPS.
-    assert current == old
+    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    assert current == ordered_attack_context(old)
     assert (a, b) == before
 
 
@@ -156,8 +157,10 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
     assert "draw_type_dispatch_outside_supported_source_shape" in reference["coverage"]["unresolved"]
     # Exact source equations, not prose keyword checks. Native CPU oracle covers
     # the positive-gravity execution branch; the packet retains both branches.
-    assert [row["expression"] for row in program["observations"]] == [
-        'stind.r4(ldelema((this).Projectile.ai,0;"System.Single"),(ldind.r4(ldelema((this).Projectile.ai,0;"System.Single"))+1))',
+    observations = [row for row in program["operations"] if "kind" in row]
+    definitions = {row["bind"]: row for row in program["operations"] if "bind" in row}
+    assert [row["expression"] for row in observations] == [
+        'writeFloat((this).Projectile.ai,0,(readFloat((this).Projectile.ai,0)+1))',
         "stelem.r4((this).Projectile.ai,0,15)",
         "stind.r4(ldflda(Vector2.Y,ldflda(Entity.velocity,this)),(ldind.r4(ldflda(Vector2.Y,ldflda(Entity.velocity,this)))-0.1))",
         "stind.r4(ldflda(Vector2.Y,ldflda(Entity.velocity,this)),(ldind.r4(ldflda(Vector2.Y,ldflda(Entity.velocity,this)))+0.1))",
@@ -165,16 +168,52 @@ def test_real_arrow_selected_motion_and_raw_refusal_reach_actual_author(monkeypa
         "set((ldflda(Entity.velocity,this)).Vector2.Y,-16)",
         "set((ldflda(Entity.velocity,this)).Vector2.Y,16)",
     ]
-    predicates = {row["id"]: row for row in program["predicates"]}
+    predicates = {row["id"]: row for row in program["operations"] if "id" in row}
     assert len(predicates) == 7
     assert predicates["b47116"]["inputs"] == ["f32_at((this).Projectile.ai,0)", "15"]
     assert predicates["b47116"]["op"] == "blt.un.s"
-    assert predicates["b47132"]["inputs"] == ["d1"]
+    assert predicates["b47132"]["inputs"] == ["0"]
     assert predicates["b47132"]["successors"] == [47156, 47134]
-    assert program["dependencies"]["d1"]["expression"] == "0"
-    assert program["observations"][3]["requiredPredicates"] == ["b47116", "b47132"]
+    assert "snapshot_d1" not in definitions
+    assert observations[3]["requiredPredicates"] == ["b47116", "b47132"]
     assert predicates["b49427"]["inputs"] == ["(ldflda(Entity.velocity,this)).Vector2.Y", "-16"]
     assert predicates["b49461"]["inputs"] == ["(ldflda(Entity.velocity,this)).Vector2.Y", "16"]
-    assert len(program["dependencies"]) == 3
-    assert reference == unpack_attack_tables(raw_parent_card_for_llm(arrow)["raw"]["directProjectile"]["attackReference"])
+    assert len(definitions) == 0
+    from infini_local.pipelines.native_attack_behavior_view import ordered_attack_context
+    assert reference == ordered_attack_context(unpack_attack_tables(raw_parent_card_for_llm(arrow)["raw"]["directProjectile"]["attackReference"]))
     assert arrow == before
+
+
+@pytest.mark.parametrize('mode', ['json_object', 'json_schema'])
+def test_current_native_integration_slice_remains_conditional_in_author_request(monkeypatch, mode):
+    from infini_local.core import llm_config
+    from infini_local.pipelines.llm_authoring_pipeline import build_initial_author_request
+    monkeypatch.setattr(llm_config, 'LLM_RESPONSE_FORMAT_MODE', mode)
+    capture = json.loads((Path(__file__).parent / 'fixtures/native_position_integration_capture.json').read_text())
+    parents = []
+    for entry in capture['captures'].values():
+        reference = {'source': 'read_only_native_attack_source', 'version': 1, **entry}
+        parents.append({'directProjectileRaw': {'type': entry['identityPredicates']['Projectile.type'],
+                                              'attackReference': reference}})
+    before = copy.deepcopy(parents)
+    request, _, _ = build_initial_author_request(*parents, 'current-integration', model_name='offline')
+    dossier = expand_native_source_references(request_dossier(json.loads(json.dumps(request))))
+    for label in ['A', 'B']:
+        reference = dossier['parents'][label]['packet']['raw']['directProjectile']['attackReference']
+        integration = reference['positionIntegration']
+        assert integration['identitySelection']['forCapturedIdentity'] is True
+        assert 'enclosing caller identity preservation is not proved' in integration['identitySelection']['scope']
+        operations = integration['operations']
+        predicates = [row for row in operations if 'successors' in row]
+        writes = [row for row in operations if row.get('kind') == 'state_write']
+        assert len(predicates) == 11 and len(writes) == 6
+        text = json.dumps(operations)
+        for retained in ['Sets.IsAGolfBall', 'ProjectileLoader.ShouldUpdatePosition',
+                         'Entity.wet', 'Main.projPet', 'Projectile.tileCollide', 'Collision.SlopeCollision']:
+            assert retained in text
+        assert all(row['requiredPredicates'] for row in writes)
+        assert 'branchTests' in reference
+        assert set(reference['branchTests']) == {row['op'] for row in predicates}
+        assert all('operations' in integration and key not in integration
+                   for key in ['observations', 'dependencies', 'predicates'])
+    assert parents == before

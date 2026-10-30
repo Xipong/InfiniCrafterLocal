@@ -168,6 +168,20 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             row["meaning"] = resolve_param("configure_accessory", param)["meaning"]
         return row
 
+    def expected_shape(schema):
+        names = {"description": "meaning", "minimum": "min", "maximum": "max",
+                 "x-infini-units": "units", "x-infini-reference": "reference",
+                 "x-infini-neutral": "neutral", "x-infini-consumerConstraint": "consumerConstraint",
+                 "x-infini-authorProjection": "projectionConstraints"}
+        result = {names.get(k, k): copy.deepcopy(v) for k, v in schema.items()
+                  if k not in {"x-infini-semanticType", "required", "properties", "oneOf"}}
+        if "properties" in schema:
+            result["properties"] = {k: {**expected_shape(v), **({"optional": True} if k not in schema.get("required", []) else {})}
+                                    for k, v in schema["properties"].items()}
+        if "oneOf" in schema:
+            result["oneOf"] = [expected_shape(v) for v in schema["oneOf"]]
+        return result
+
     for fn, delivered_card in cards.items():
         card = expand_catalog_targets([delivered_card], guide["targetKindSets"])[0]
         cap = CAPABILITY_REGISTRY[fn]
@@ -189,9 +203,9 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
                 if "default" in row:
                     expanded_shape["default"] = row["default"]
                 if "neutral" in row:
-                    expanded_shape["x-infini-neutral"] = row["neutral"]
-                assert expanded_shape == original["shape"] == spec.schema()
-                assert original["meaning"] == guide["types"][spec.shared_type]["description"]
+                    expanded_shape["neutral"] = row["neutral"]
+                assert expanded_shape == expected_shape(original["shape"]) == expected_shape(spec.schema())
+                assert original["meaning"] == guide["types"][spec.shared_type]["meaning"]
                 shared += 1
                 continue
             expected = normalize_meanings(copy.deepcopy(original))
@@ -199,8 +213,6 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             expected.pop("semanticType", None)  # Existing documented presentation-only omission.
             if not spec.required:
                 expected["optional"] = True
-                if spec.neutral == 0:
-                    expected.pop("neutral", None)
             for suffix, units in (("Seconds", "seconds"), ("Tiles", "blocks (tiles)"),
                                   ("Px", "pixels"), ("Radians", "radians")):
                 if param.endswith(suffix) and spec.units == units:
@@ -211,6 +223,8 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             shape = expected.get("shape")
             if isinstance(shape, dict) and shape.get("description") == expected["meaning"]:
                 shape.pop("description")
+            if "shape" in expected:
+                expected.update(expected_shape(expected.pop("shape")))
             # Exact deep equality includes every nested bound, enum, unit,
             # reference, ordering relation, omission rule, neutral and projection.
             assert row == expected, (fn, param)
