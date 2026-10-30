@@ -1944,7 +1944,7 @@
                 "additionalProperties": false,
                 "properties": {
                   "anchor": {
-                    "description": "Multiple attachments can share front_hand; front_arm_pose controls its pose.",
+                    "description": "owner_center reads owner.Center; owner_mounted reads owner.MountedCenter, not the hand. front_hand reads the native front hand, with no automatic arm follow; front_arm_pose independently writes its pose. Multiple attachments can share that hand. front_hand does not cancel physical axis/normal offsets or reachCurve displacement. Its PNG grip adapter compensates attachment offsets only, not reachCurve or beam origin.",
                     "enum": [
                       "owner_center",
                       "owner_mounted",
@@ -1993,7 +1993,7 @@
                   },
                   "reachCurve": {
                     "additionalProperties": false,
-                    "description": "Optional age-based axial reach curve. Its own window intersects attachment activity; it does not restart the curve.",
+                    "description": "Optional age-based axial translation of actual body center, collision geometry and selected PNG grip, even with front_hand; not arm stretch or a draw-only extension. Its own window intersects attachment activity; it does not restart the curve. Absence adds no reach displacement.",
                     "properties": {
                       "duration": {
                         "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Reach cycle duration.",
