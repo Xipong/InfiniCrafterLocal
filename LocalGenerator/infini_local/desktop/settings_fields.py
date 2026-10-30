@@ -15,6 +15,7 @@ def _field(key, label, page, *, options=(), hint='', secret=False, multiline=Fal
 
 
 FIELDS = [
+    _field('INFINI_LANGUAGE', 'Язык', 'configure', options=['ru', 'en']),
     _field('INFINI_HOST', 'Адрес сервера', 'configure', hint='127.0.0.1 — только ты; 0.0.0.0 — принимать подключения из Radmin/LAN.'),
     _field('INFINI_PORT', 'Порт сервера', 'configure'),
     _field('INFINI_CRAFT_HTTP_TIMEOUT_SECONDS', 'Ожидание крафта (сек.)', 'configure', hint='240 секунд: если крафт не готов, tModLoader попробует retry.'),

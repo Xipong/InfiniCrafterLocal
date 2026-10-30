@@ -541,6 +541,10 @@ class StudioOperations:
             "cacheDir", "worldRecipesDir", "imageBackend", "llmProvider", "llmModel", "openrouterProvider",
         )}
         types["sdcppAutostart"] = bool
+        # A running server from before the language setting remains restartable;
+        # its missing language is unconfirmed, never a claimed default.
+        if "language" in effective:
+            types["language"] = str
         if any(type(effective.get(key)) is not kind for key, kind in types.items()):
             return None
         return {key: effective[key] for key in types}
@@ -586,6 +590,7 @@ class StudioOperations:
                      "" if provider == "openai_codex" else "auto")
         return {
             "cacheDir": str(cache), "worldRecipesDir": str(worlds),
+            "language": env.get("INFINI_LANGUAGE", "ru").strip().lower(),
             "imageBackend": backend,
             "llmProvider": provider,
             "llmModel": model,

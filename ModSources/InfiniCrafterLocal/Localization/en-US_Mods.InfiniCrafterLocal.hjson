@@ -89,64 +89,6 @@ Mods: {
 
 		Projectiles.GeneratedProjectile.DisplayName: Generated Projectile
 
-		Configs: {
-			InfiniVfxClientConfig: {
-				DisplayName: VFX Client Options
-				Headers.GeneratedVFX: Generated VFX
-				ParticleSpawnMultiplier.Label: Particle spawn multiplier
-				DrawBudgetMultiplier.Label: Draw budget multiplier
-				ParticleAlphaMultiplier.Label: Particle alpha multiplier
-				PresentationLightMultiplier.Label: Presentation light multiplier
-				EnableScreenCulling.Label: Enable screen culling
-				EnableGeneratedSpriteSilhouette.Label: Enable generated sprite silhouette
-				EnableParticleLibraryBackend.Label: Enable ParticleLibrary backend
-			}
-
-			InfiniGameplayQolConfig: {
-				DisplayName: InfiniCraft gameplay QoL
-
-				Headers: {
-					InfiniCraftStationQoL: InfiniCraft station QoL
-					GeneratedGameplayQoL: Generated gameplay QoL
-					GeneratedRuntimeAssetQoL: Generated runtime assets
-				}
-
-				EnableInventoryAssetPrefetch: {
-					Label: Prefetch generated inventory sprites
-					Tooltip: When inventory is open, gently warms generated sprite files that are likely to be drawn soon.
-				}
-
-				InventoryAssetPrefetchIntervalTicks: {
-					Label: Inventory sprite prefetch interval
-					Tooltip: Delay in ticks between generated sprite prefetch passes while inventory is open.
-				}
-
-				InventoryAssetPrefetchMaxItems: {
-					Label: Inventory sprite prefetch max items
-					Tooltip: Maximum generated items scanned per inventory prefetch pass. Includes inventory, armor, and misc equipment; only warms existing authored sprite paths.
-				}
-
-				EnableGeneratedMeleeOnHitEffects: {
-					Label: Generated melee on-hit effects
-					Tooltip: Allows exact authored runtime events to apply bounded debuffs, healing, and impact presentation. No prompt text is parsed.
-				}
-
-				RuntimeSpriteCacheMaxTextures: {
-					Label: Runtime sprite cache size
-					Tooltip: Maximum generated PNG textures kept resident on this client. Default 512 is vanilla-like for small generated sprites; this is not a world item limit.
-				}
-
-				RuntimeSpriteMaxDimensionPixels: {
-					Label: Runtime sprite max side
-					Tooltip: Rejects generated runtime PNGs wider or taller than this many pixels. Default 192 keeps item/projectile sprites bounded without rejecting slightly larger generated art.
-				}
-
-				RuntimeSpriteMaxPngFileMegabytes: {
-					Label: Runtime PNG file limit
-					Tooltip: Rejects a single generated runtime PNG file larger than this many megabytes before loading it as a Texture2D.
-				}
-			}
-		}
 	}
 }
 
@@ -355,94 +297,92 @@ Projectiles.GeneratedProjectile.DisplayName: Generated Projectile
 
 Configs: {
 	InfiniGameplayQolConfig: {
-		DisplayName: Infini Gameplay Qol Config
+		DisplayName: Gameplay and sprites
 
 		Headers: {
-			InfiniCraftStationQoL: Infini Craft Station Qo L Header
-			GeneratedGameplayQoL: Generated Gameplay Qo L Header
-			GeneratedRuntimeAssetQoL: Generated Runtime Asset Qo L Header
+			InfiniCraftStationQoL: Inventory sprite preloading
+			GeneratedGameplayQoL: Gameplay effects
+			GeneratedRuntimeAssetQoL: Sprite cache
 		}
 
 		EnableInventoryAssetPrefetch: {
-			Label: Enable Inventory Asset Prefetch
-			Tooltip: ""
+			Label: Preload inventory sprites
+			Tooltip: Preloads generated item sprites while the inventory is open to reduce delays when displaying them.
 		}
 
 		InventoryAssetPrefetchIntervalTicks: {
-			Label: Inventory Asset Prefetch Interval Ticks
-			Tooltip: ""
+			Label: Preload interval (ticks)
+			Tooltip: Delay between preload passes while the inventory is open. 60 ticks equal one second.
 		}
 
 		InventoryAssetPrefetchMaxItems: {
-			Label: Inventory Asset Prefetch Max Items
-			Tooltip: ""
+			Label: Items per preload pass
+			Tooltip: Maximum generated items checked per pass, including inventory and equipment.
 		}
 
 		EnableGeneratedMeleeOnHitEffects: {
-			Label: Enable Generated Melee On Hit Effects
-			Tooltip: ""
+			Label: Melee hit effects
+			Tooltip: Unused in the current version.
 		}
 
 		RuntimeSpriteCacheMaxTextures: {
-			Label: Runtime Sprite Cache Max Textures
-			Tooltip: ""
+			Label: Sprite cache size
+			Tooltip: Maximum generated textures kept in memory. This does not limit the number of items in the world.
 		}
 
 		RuntimeSpriteMaxDimensionPixels: {
-			Label: Runtime Sprite Max Dimension Pixels
-			Tooltip: ""
+			Label: Maximum sprite side (pixels)
+			Tooltip: Generated PNG sprites wider or taller than this limit will not be loaded.
 		}
 
 		RuntimeSpriteMaxPngFileMegabytes: {
-			Label: Runtime Sprite Max Png File Megabytes
-			Tooltip: ""
+			Label: Maximum PNG file size (MB)
+			Tooltip: Generated PNG files larger than this limit will not be loaded.
 		}
 	}
 
 	InfiniVfxClientConfig: {
-		DisplayName: Infini Vfx Client Config
-		Headers.GeneratedVFX: Generated V F X Header
+		DisplayName: Visual effects
+		Headers.GeneratedVFX: Generated item effects
 
 		ParticleSpawnMultiplier: {
-			Label: Particle Spawn Multiplier
-			Tooltip: ""
+			Label: Particle count multiplier
+			Tooltip: Scales the number of particles. 0 disables them; 1 keeps the original count.
 		}
 
 		ParticleAlphaMultiplier: {
-			Label: Particle Alpha Multiplier
-			Tooltip: ""
+			Label: Particle opacity multiplier
+			Tooltip: Scales particle opacity. 0 makes particles invisible; 1 keeps the original opacity.
 		}
 
 		DrawBudgetMultiplier: {
-			Label: Draw Budget Multiplier
-			Tooltip: ""
+			Label: Effect draw budget multiplier
+			Tooltip: Scales the number of permitted effect draw calls. Higher values may increase graphics load.
 		}
 
 		PresentationLightMultiplier: {
-			Label: Presentation Light Multiplier
-			Tooltip: ""
+			Label: Effect lighting multiplier
+			Tooltip: Scales light emitted by generated effects. 0 disables this light; 1 keeps the original intensity.
 		}
 
 		EnableScreenCulling: {
-			Label: Enable Screen Culling
-			Tooltip: ""
+			Label: Skip offscreen effects
+			Tooltip: Reduces graphics load by skipping effects outside the screen. Gameplay is unchanged.
 		}
 
 		EnableGeneratedSpriteSilhouette: {
-			Label: Enable Generated Sprite Silhouette
-			Tooltip: ""
+			Label: Projectile sprite silhouette
+			Tooltip: Unused in the current version.
 		}
 
 		EnableParticleLibraryBackend: {
-			Label: Enable Particle Library Backend
-			Tooltip: "Enable explicitly authored libraryParticle effects. Legacy pl:* Dust selectors are unchanged; disabling this does not substitute Dust."
+			Label: ParticleLibrary particles
+			Tooltip: Enables effects created with ParticleLibrary. Disabling them does not replace them with other particles.
 		}
 
 		EnableLuminanceScreenShakeBackend: {
 			Label: Luminance camera shake
-			Tooltip: "Enable explicitly authored screenShakeCue events. Luminance's own screenshake settings remain authoritative. No implicit hit shake is added."
+			Tooltip: Enables camera shake included in generated effects. Luminance settings also apply.
 		}
-
-
 	}
 }

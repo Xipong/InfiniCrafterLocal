@@ -7,6 +7,9 @@ from infini_local.core.generation_defaults import GENERATION_DEFAULTS
 # LLM transport and generation policy configuration. This module owns env-derived
 # provider settings; pipelines consume them but do not re-export them.
 USE_LLM = env_bool("INFINI_USE_LLM", False)
+LANGUAGE = env_str("INFINI_LANGUAGE", "ru").lower()
+if LANGUAGE not in {"ru", "en"}:
+    raise ValueError("INFINI_LANGUAGE must be ru or en")
 PROMPT_STYLE = env_str("INFINI_PROMPT_STYLE", "Default")
 ALLOW_DETERMINISTIC_DEV_FALLBACK = env_bool("INFINI_ALLOW_DETERMINISTIC_DEV_FALLBACK", False)
 
