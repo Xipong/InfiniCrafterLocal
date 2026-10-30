@@ -58,13 +58,18 @@ internal static partial class EngineRuntimeChecks
             Terraria.Main.player[0] = owner; Terraria.Main.myPlayer = 1;
             Terraria.Main.netMode = Terraria.ID.NetmodeID.SinglePlayer;
             var cases = new[] {
-                (Name: "straight-right/entity-axis", Move: 0, Facing: 1, Reuse: false, Modern: true, Scale: 1.7f),
-                (Name: "straight-left/signed-axis", Move: 0, Facing: -1, Reuse: false, Modern: true, Scale: 1.7f),
-                (Name: "thrust-19/held-axis", Move: 19, Facing: -1, Reuse: false, Modern: true, Scale: 1.7f),
-                (Name: "glaive-14/native-spin", Move: 14, Facing: -1, Reuse: false, Modern: true, Scale: 1.7f),
-                (Name: "reuse-root/independent-selector-and-clamp", Move: 0, Facing: -1, Reuse: true, Modern: true, Scale: 0.01f),
-                (Name: "legacy-absence/raw-native-pose", Move: 0, Facing: 1, Reuse: false, Modern: false, Scale: 1.7f),
-            };
+                (Name: "straight-right/entity-axis", Move: 0, Facing: 1, Reuse: false, Modern: true, Scale: 1.7f, Offset: (float?)null, Axis: 45f),
+                (Name: "straight-left/signed-axis", Move: 0, Facing: -1, Reuse: false, Modern: true, Scale: 1.7f, Offset: (float?)null, Axis: 45f),
+                (Name: "thrust-19/held-axis", Move: 19, Facing: -1, Reuse: false, Modern: true, Scale: 1.7f, Offset: (float?)null, Axis: 45f),
+                (Name: "glaive-14/native-spin", Move: 14, Facing: -1, Reuse: false, Modern: true, Scale: 1.7f, Offset: (float?)null, Axis: 45f),
+                (Name: "reuse-root/independent-selector-and-clamp", Move: 0, Facing: -1, Reuse: true, Modern: true, Scale: 0.01f, Offset: (float?)null, Axis: 45f),
+                (Name: "legacy-absence/raw-native-pose", Move: 0, Facing: 1, Reuse: false, Modern: false, Scale: 1.7f, Offset: (float?)null, Axis: 45f),
+            }.Concat(from axis in new[] { 0f, -90f }
+                from facing in new[] { -1, 1 }
+                from offset in new[] { 0f, 1.57f }
+                select (Name: $"explicit-velocity/axis={axis}/facing={facing}/offset={offset}",
+                    Move: 0, Facing: facing, Reuse: false, Modern: true, Scale: 1.7f,
+                    Offset: (float?)offset, Axis: axis)).ToArray();
             foreach (var c in cases)
             {
                 string label = c.Name + ": ";
@@ -83,8 +88,10 @@ internal static partial class EngineRuntimeChecks
                 if (c.Modern)
                 {
                     data.Visual.RenderSizePx = 80; data.Visual.ForwardAngleDegrees = -30;
-                    entity.Visual.RenderSizePx = 40; entity.Visual.ForwardAngleDegrees = 45;
+                    entity.Visual.RenderSizePx = 40; entity.Visual.ForwardAngleDegrees = c.Axis;
                 }
+                if (c.Offset is { } authoredOffset)
+                    entity.Rotation = new RuntimeRotationSpec { Mode = "velocity", OffsetRadians = authoredOffset };
                 Vector2 aim = Vector2.Normalize(new Vector2(-3, 4));
                 var projectile = new Projectile { owner = 0, whoAmI = 7, active = true, Center = new Vector2(400), velocity = aim, rotation = 0.23f, spriteDirection = c.Facing };
                 var generated = Attach(projectile);
@@ -102,11 +109,11 @@ internal static partial class EngineRuntimeChecks
                     continue;
                 }
                 Equal(index + 1, count(), label + "one selected authored texture quad");
-                float degrees = !c.Modern ? 0 : c.Reuse ? -30 : 45;
+                float degrees = !c.Modern ? 0 : c.Reuse ? -30 : c.Axis;
                 Vector2 actual = BodyForwardFromCpuQueue(batch, index, degrees, label);
                 float radians = degrees * MathF.PI / 180;
                 Vector2 native = new Vector2(MathF.Cos(radians) * c.Facing, MathF.Sin(radians)).RotatedBy(rotation);
-                Vector2 expected = c.Modern && c.Move != 14 ? aim : native;
+                Vector2 expected = c.Offset is { } offset ? aim.RotatedBy(offset) : c.Modern && c.Move != 14 ? aim : native;
                 AssertVfxNear(expected, actual, label + "UV-derived declared forward");
                 Equal(rotation, projectile.rotation, label + "draw preserves native rotation");
                 Equal(scale, projectile.scale, label + "draw preserves physics scale");

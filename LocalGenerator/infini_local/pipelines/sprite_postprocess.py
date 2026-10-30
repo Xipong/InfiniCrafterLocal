@@ -83,6 +83,10 @@ FINAL_COLOR_GAMMA_LUT = [
     for value in range(256)
 ]
 
+class RawSpriteBackgroundError(ValueError):
+    """Provider pixels violate the requested native-alpha transport contract."""
+
+
 def pick_best_sprite(paths: list[str], role: str = "item", canvas: int = 32) -> tuple[str, float]:
     if Image is None:
         return paths[0], 0.5
@@ -874,6 +878,14 @@ def postprocess_sprite(
     try:
         raw = load_image_input(path, Image)
         decoded = True
+        # A canvas fit adds transparent padding. It must not manufacture evidence
+        # that a fully opaque provider background satisfied native-alpha delivery.
+        # Full-frame UV strips are not fitted/padded; their final alpha gate owns
+        # that contract. Chroma transports intentionally start opaque.
+        if (not uses_key_background() and role != "vfx_strip"
+                and raw.getchannel("A").getextrema()[0] == 255):
+            raise RawSpriteBackgroundError(
+                "native_alpha_raw_background_opaque: provider must return real transparency, not a painted background")
         save_stage(raw, sprite_id, "00_raw", output_dir=output_dir)
 
         # Master-first pipeline: all destructive technical work happens before the
@@ -929,7 +941,7 @@ def postprocess_sprite(
                         "pillowAvailable": Image is not None, "bgMode": BG_REMOVE_MODE, "alpha": stats,
                         "projectileForwardAxis": forward_axis, "validation": validation})
         return str(out)
-    except ImageOutputIOError:
+    except (ImageOutputIOError, RawSpriteBackgroundError):
         raise
     except Exception as e:
         if decoded and isinstance(e, OSError):

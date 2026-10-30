@@ -531,7 +531,13 @@ Headless scenarios accept up to 14,400 ticks; rendered captures remain bounded t
 600. This permits full multi-minute field expiry without increasing image budgets.
 
 - `entity_spawn_count` counts distinct observed configured native lifetimes.
-- `entity_hit_count_at_least` counts actual projectile hit callbacks.
+- `entity_hit_count_at_least` counts actual projectile hit callbacks;
+  `entity_hit_count` requires an exact count, including zero. Both accept an
+  optional `npcId` native slot filter (dummy: 0, controlled `hostiles`: 2 onward).
+  For example, `{"kind":"entity_hit_count_at_least","entityId":"arrow","npcId":2,"value":1}`
+  checks that the arrow actually hits the first downstream hostile. Child
+  allocations, hits by a parent, or hits on a different target do not satisfy it.
+  A spawn-only assertion cannot certify a hit-triggered projectile's usefulness.
 - `entity_peak_active_at_most` checks native snapshots and configuration-time
   counts, including allocations between snapshots. All take `entityId` and `value`.
 - `entity_inactive` and `entity_natural_expiry` take `entityId`; they inspect final

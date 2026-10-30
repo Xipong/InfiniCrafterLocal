@@ -3276,7 +3276,7 @@
                         "type": "number",
                         "minimum": -100,
                         "maximum": 100,
-                        "description": "Signed rotation offset.",
+                        "description": "Additional world-pose angle after forward-axis alignment, not correction for an upward/rightward PNG. Keep zero for a body pointing along axis/velocity; a quarter-turn deliberately makes it sideways.",
                         "x-infini-units": "radians",
                         "x-infini-semanticType": "radians",
                         "default": 0,

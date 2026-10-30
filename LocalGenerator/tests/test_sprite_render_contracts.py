@@ -177,8 +177,8 @@ def test_full_pipeline_alpha_and_source_preservation(tmp_path, monkeypatch, role
         assert validation["ok"], validation
         assert "many_partial_alpha_pixels" not in validation["warnings"]
 
-@pytest.mark.parametrize("remove_bg,role", [(False, "item"), (True, "impact"), (True, "vfx_strip")])
-def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp_path, monkeypatch, remove_bg, role):
+@pytest.mark.parametrize("remove_bg,role,opaque_first", [(False, "item", False), (True, "impact", False), (True, "vfx_strip", False), (False, "item", True)])
+def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp_path, monkeypatch, remove_bg, role, opaque_first):
     from infini_local.pipelines import pipeline_visual_config as config
     from infini_local.pipelines import sprite_keyer as keyer
     monkeypatch.setattr(config, "BG_COLOR", "transparent")
@@ -206,7 +206,7 @@ def test_native_alpha_background_bypasses_keying_through_retry_and_saved_png(tmp
     def producer(_data, **kwargs):
         captured.append(kwargs)
         source = kwargs["output_dir"] / "fixture_raw_openai_codex.png"
-        supplied = Image.new("RGBA", (64, 64)) if len(captured) == 1 else image
+        supplied = Image.new("RGBA", (64, 64), "white" if opaque_first else (0, 0, 0, 0)) if len(captured) == 1 else image
         supplied.save(source)
         return [str(source)]
     monkeypatch.setattr(generation, "_generate_backend_variants", producer)
@@ -487,3 +487,39 @@ def test_postprocess_retains_exact_prebake_master_privately(tmp_path, monkeypatc
     master = Image.open(master_path)
     assert master.width > 24
     assert Image.open(final_path).tobytes() == post.bake_sprite_from_master(master, 24, 'field').tobytes()
+
+@pytest.mark.parametrize("mode", ["RGB", "RGBA"])
+@pytest.mark.parametrize("role", ["item", "runtime:child_projectile", "vfx_cutout"])
+def test_native_alpha_raw_opaque_card_cannot_become_valid_by_padding(tmp_path, monkeypatch, mode, role):
+    from infini_local.pipelines import pipeline_visual_config as config
+    monkeypatch.setattr(config, "BG_COLOR", "transparent")
+    monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
+    raw = Image.new(mode, (64, 64), "white")
+    draw = ImageDraw.Draw(raw)
+    for y in range(0, 64, 8):
+        for x in range(0, 64, 8):
+            if (x // 8 + y // 8) % 2:
+                draw.rectangle((x, y, x + 7, y + 7), fill="#bfbfbf")
+    draw.line((32, 8, 32, 56), fill="#a08010", width=5)
+    source = tmp_path / "raw.png"
+    raw.save(source)
+    original = source.read_bytes()
+    with pytest.raises(post.RawSpriteBackgroundError):
+        post.postprocess_sprite(str(source), "opaque-result", 32, role, output_dir=tmp_path)
+    assert source.read_bytes() == original
+    assert not (tmp_path / "opaque-result.png").exists()
+
+
+def test_native_alpha_checker_pattern_is_not_a_semantic_rejection(tmp_path, monkeypatch):
+    from infini_local.pipelines import pipeline_visual_config as config
+    monkeypatch.setattr(config, "BG_COLOR", "transparent")
+    monkeypatch.setattr(post, "SAVE_SPRITE_STAGES", False)
+    raw = Image.new("RGBA", (64, 64))
+    draw = ImageDraw.Draw(raw)
+    for y in range(8, 56, 8):
+        for x in range(8, 56, 8):
+            draw.rectangle((x, y, x + 7, y + 7), fill=(200, 200, 200, 255) if (x // 8 + y // 8) % 2 else (255, 255, 255, 255))
+    source = tmp_path / "authored-pattern.png"
+    raw.save(source)
+    result = post.postprocess_sprite(str(source), "pattern-result", 32, "runtime:child_projectile", output_dir=tmp_path)
+    assert post.validate_processed_sprite(result, "runtime:child_projectile", expected_canvas=32)["ok"]

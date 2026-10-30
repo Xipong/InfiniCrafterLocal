@@ -241,6 +241,7 @@ def image_final_frame_prompt_clause(data: Mapping[str, Any], role: str, canvas: 
         "the complete product is hitbox.drawScale times visual.scale times curveScale(active age) from that explicit visual owner. An independent hitbox curve does not multiply it. Otherwise its existing clamp(Projectile.scale,0.1,8) remains. "
         "Do not add a curve, change accepted endpoints or choose mirror in the image stage. Accepted phase/motion modifiers and whip gravity are immutable gameplay facts. VFX body copies retain their separate published scale rules. "
         "forwardAngleDegrees describes the final PNG local forward axis: 0=+X, positive clockwise in y-down coordinates, before facing/gravity flips. "
+        "Draw that declared local PNG axis literally; do not pre-rotate the artwork to compensate for runtime rotation.offsetRadians. The accepted rotation component and renderer own the world pose. "
         "Retain the literal authored silhouette, component count, spatial arrangement and distinctive elements from the art description and read-only facts. "
         "Do not omit or merge authored parts to simplify the sprite."
         + grip_instruction

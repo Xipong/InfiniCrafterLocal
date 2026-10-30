@@ -27,10 +27,11 @@ internal static partial class EngineRuntimeChecks
             var last=Sample();if(key is "player" or "dummy")last[key]!["nonFinite"]=true;else last[key]![0]!["nonFinite"]=true;
             if(WNoNonFinite(new JsonArray(Sample(),last)))throw new Exception("Final-frame nonfinite observer missed "+key);
         }
-        Console.WriteLine("PASS: finite and final-frame player/dummy/projectile/hostile snapshot assertion controls (not gameplay)");
+        CheckWorkbenchTargetHitAssertions();
+        Console.WriteLine("PASS: finite and final-frame player/dummy/projectile/hostile snapshot and target-specific hit assertion controls (not gameplay)");
     }
     // Assertions read observed native state/events. They never drive item/projectile logic.
-    private static bool WLifecycleKind(string kind) => kind is "entity_spawn_count" or "entity_hit_count_at_least"
+    private static bool WLifecycleKind(string kind) => kind is "entity_spawn_count" or "entity_hit_count_at_least" or "entity_hit_count"
         or "entity_peak_active_at_most" or "entity_inactive" or "entity_natural_expiry"
         or "generated_stack_at" or "exhaustion_at" or "target_effect_at" or "target_hit_damage_at";
 
@@ -49,9 +50,12 @@ internal static partial class EngineRuntimeChecks
             if(check["value"] is null || WInt(check,"tick",-1)<0 || WInt(check,"tick",-1)>=ticks)throw new ArgumentException("Target effect assertion requires value and in-range tick");
             WFloat(check,"value",0); return;
         }
+        bool hitCount=kind is "entity_hit_count" or "entity_hit_count_at_least";
+        if(hitCount && check["npcId"] is not null && (WInt(check,"npcId",-1)<0 || WInt(check,"npcId",-1)>=Terraria.Main.maxNPCs))
+            throw new ArgumentException("Hit assertion npcId must be a valid native NPC slot");
         bool timed=kind is "generated_stack_at" or "exhaustion_at";
         bool noValue=kind is "entity_inactive" or "entity_natural_expiry";
-        WKeys(check,"lifecycle assertion",timed?new[]{"kind","tick","value"}:noValue?new[]{"kind","entityId"}:new[]{"kind","entityId","value"});
+        WKeys(check,"lifecycle assertion",hitCount?new[]{"kind","entityId","value","npcId"}:timed?new[]{"kind","tick","value"}:noValue?new[]{"kind","entityId"}:new[]{"kind","entityId","value"});
         if(!timed && (check["entityId"]?.GetValue<string>() is not string entity || data.RuntimeProgram.TryGetEntity(entity)?.IsProjectileEntity!=true))
             throw new ArgumentException("Lifecycle assertion requires an existing projectile entityId");
         if(!noValue && (check["value"] is null || WInt(check,"value",-1)<0)) throw new ArgumentException("Lifecycle value must be a nonnegative integer");
@@ -87,7 +91,11 @@ internal static partial class EngineRuntimeChecks
         var entityEvents=events.Where(e=>e!["entityId"]?.GetValue<string>()==entity).ToArray();
         if(kind=="entity_spawn_count")return entityEvents.Where(e=>e!["kind"]!.GetValue<string>()=="entity_configured")
             .Select(e=>e!["projectileId"]!.GetValue<int>()).Distinct().Count()==value;
-        if(kind=="entity_hit_count_at_least")return entityEvents.Count(e=>e!["kind"]!.GetValue<string>()=="hit")>=value;
+        if(kind is "entity_hit_count" or "entity_hit_count_at_least") {
+            int hits=entityEvents.Count(e=>e!["kind"]!.GetValue<string>()=="hit"
+                && (check["npcId"] is null || e["npcId"]?.GetValue<int>()==WInt(check,"npcId",-1)));
+            return kind=="entity_hit_count"?hits==value:hits>=value;
+        }
         if(kind=="entity_natural_expiry")return entityEvents.Any(e=>e!["kind"]!.GetValue<string>()=="kill" && e["nativeLifetimeDepleted"]?.GetValue<bool>()==true && e["generatedExpiryEventRan"]?.GetValue<bool>()!=false);
         if(kind=="entity_inactive")return post.Length>0 && !post[^1]!["projectiles"]!.AsArray().Any(p=>p!["entityId"]?.GetValue<string>()==entity);
         // Include configuration-time counts, catching transient child allocations between snapshots.

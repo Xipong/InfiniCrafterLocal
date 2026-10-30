@@ -268,3 +268,65 @@ def test_accepted_historical_wire_drivers_are_presented_without_recompilation(wi
     assert sources == ["anchorHistory", *([source] if source else []), "ownerLink"]
     assert len(requests) == 2 and not responses
     assert data == before
+
+
+@pytest.mark.parametrize("format_name", ["json_object", "json_schema"])
+@pytest.mark.parametrize("offset", [0.0, 1.57])
+def test_visual_axis_repair_keeps_world_rotation_and_delivers_declared_pixels(wire_transport, monkeypatch, format_name, offset):
+    """Visual cannot compensate accepted rotation by rewriting mechanics."""
+    from infini_local.pipelines.visual_asset_plan import build_visual_asset_plan
+    monkeypatch.setattr("infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE", format_name)
+    data, raw = _presentation_input("baked_sprite", attachment=False)
+    body = data["runtimeProgram"]["entities"][1]
+    body["rotation"] = {"mode": "velocity", "offsetRadians": offset, "radiansPerUpdate": 0.0}
+    source = copy.deepcopy(data)
+    row = raw["entities"][1]
+    row["forwardAngleDegrees"] = None
+    row["prompt"] = "One narrow wooden object pointing vertically upward; tip at top."
+    responses, requests = wire_transport
+    responses.extend([raw, {"schema": visual.VISUAL_REPAIR_PATCH_SCHEMA,
+                           "entitiesUpsert": [{"entityId": row["entityId"], "forwardAngleDegrees": -90,
+                                               "renderSizePx": 300}], "note": "axis only"}])
+    result = visual.apply_visual_director(data, {}, {})
+    assert len(requests) == 2 and not responses
+    for request, key in zip(requests, ("runtimeEntities", "runtimeEntitiesReadOnly")):
+        packet = request_dossier(request)
+        actual = next(value for value in packet[key] if value["id"] == body["id"])
+        assert actual["rotation"] == body["rotation"]
+        assert actual["aim"] == body["aim"]
+        # The Repair must retain relevant transform guidance as well as facts.
+        assert packet["spritePresentationReadOnly"]["rotation"]
+    repaired = result["runtimeProgram"]["entities"][1]
+    assert repaired["rotation"] == body["rotation"]
+    assert repaired["visual"]["forwardAngleDegrees"] == -90
+    assert repaired["visual"]["renderSizePx"] == row["renderSizePx"]
+    assert repaired["visual"]["prompt"] == row["prompt"]
+    plan = next(value for value in build_visual_asset_plan(result) if value["entityId"] == body["id"])
+    assert plan["forwardAngleDegrees"] == -90 and plan["prompt"] == row["prompt"]
+    assert {key: value for key, value in data.items() if key != "debug"} == source
+
+
+@pytest.mark.parametrize("body_mode", ["runtime_geometry", "no_asset"])
+def test_selected_curve_body_and_animation_intent_reach_actual_vfx_request(wire_transport, body_mode):
+    from infini_local.core import vfx_manifest as vfx
+    from infini_local.pipelines import vfx_generation_pipeline as transport
+    data = compile_runtime_program(build_capability_witness("lash_geometry"))
+    raw = _visual_kit(data)
+    raw["entities"][1].update(assetMode=body_mode, visualProjectRef="none")
+    raw["animationPlan"] = "A textured copper ribbon follows the existing curved path, with a narrow dark edge."
+    responses, requests = wire_transport
+    responses.extend([raw, {"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": []}])
+    rendered = visual.apply_visual_director(data, {}, {})
+    before = copy.deepcopy(rendered)
+    final = vfx.attach_vfx_manifest(rendered, "curve-presentation", llm_director=transport.call_llm_vfx_director)
+    packet = request_dossier(requests[1])
+    assert packet["acceptedVisualKit"] == raw
+    assert packet["acceptedVisualKit"]["entities"][1]["assetMode"] == body_mode
+    runtime = copy.deepcopy(before["runtimeProgram"])
+    for entity in runtime["entities"]:
+        entity.pop("visual", None)
+    assert packet["acceptedRuntimeProgramReadOnly"] == runtime
+    assert final["runtimeProgram"] == before["runtimeProgram"]
+    # An advisory plan does not secretly force a slot or a second model pass.
+    assert final["vfxManifest"]["slots"] == []
+    assert len(requests) == 2 and not responses

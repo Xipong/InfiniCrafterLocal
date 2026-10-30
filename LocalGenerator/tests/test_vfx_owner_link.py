@@ -111,10 +111,11 @@ def test_actual_visual_packet_explains_owner_link_composition(wire_transport):
     responses, sent = wire_transport
     responses.append({})
     visual._request_visual_kit(data, {}, {})
-    coverage = request_dossier(sent[0])["spritePresentationReadOnly"]["geometryCoverage"]
-    assert "ownerLink" in coverage and "explicit" in coverage
-    assert all(word in coverage for word in ("ownerAnchor", "mountedCenter", "frontHand", "compositeFrontArm.enabled"))
-    assert "inventory" in coverage and "hidden" in coverage and "head-only" in coverage
+    packet = request_dossier(sent[0])
+    assert packet["runtimeEntities"] == visual._runtime_card(data)
+    assert packet["acceptedPresentationMechanicsReadOnly"]["itemUse"] == data["runtimeProgram"]["itemUse"]
+    assert packet["assetModeCatalog"] == visual.visual_asset_mode_catalog()
+
 
 
 @pytest.mark.parametrize("kind", ["owner_attached_projectile", "free_projectile", "stationary_projectile", "temporary_helper", "field", "child_projectile"])

@@ -1896,7 +1896,7 @@ _CAPS: list[CapabilitySpec] = [
     }, cs="Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::BeamWarmupProgress|Content/Projectiles/GeneratedProjectile.RuntimeEvents.cs::GetChannelBeamGeometry/ModifyHitNPC", window=False, requirements=(RequirementSpec("capability_present", capability="beam_geometry", message="BeamRamp requires BeamGeometry."),)),
     _motion_cap("sustain_mana", "Pay recurring native held-item mana at the held item's use-time cadence; initial payment belongs to item use.", {},
         cs="Content/Projectiles/GeneratedProjectile.ComposableMotion.Lifecycle.cs::PaySustainedMana", window=False, fixed_wire_literals={"cadence": "held_item_use_time"}, requirements=(RequirementSpec("capability_present", capability="set_owner_control", message="Recurring native held-item payment requires explicit owner control."),), persisted_name='sustain_projectile_mana'),
-    _motion_cap("lash_geometry", "Share a bounded curved polyline between collision and draw; its terminal point owns body center. tileCollide must be false because the curve bypasses native body tile collision.", {
+    _motion_cap("lash_geometry", "A flexible extending/retracting collision curve, not a rigid sword swing: reach grows as sin(pi*progress), peaks halfway, then returns to zero while sweeping and bending. Its tip owns body center; a single PNG follows only that tip. Visual runtime_geometry draws a plain constant-width solid line, not a textured whip; texturedPath can skin the same curve. Width is max(4, hitbox.widthPx*hitboxScale/2) world pixels. tileCollide must be false because the curve bypasses native body tile collision.", {
         "clock": _p("string", "Explicit lash progress clock.", enum=("owner_animation", "active")),
         "duration": _previous_param_name('durationSeconds', _seconds(_p("integer", "Required only for active clock.", minimum=1, maximum=21600, required=False), "durationTicks")),
         "anchor": _p("string", "Explicit native curve origin.", enum=("owner_center", "owner_mounted", "front_hand")),
@@ -1996,9 +1996,9 @@ _CAPS: list[CapabilitySpec] = [
        cs="Content/Projectiles/GeneratedProjectile.Modifiers.cs::ApplyActiveModifiers", requirements=(
         RequirementSpec("capability_absent", any_of=("multiply_projectile_velocity", "set_projectile_speed_modifier"), message="New late scaling cannot coexist with historical velocity scalers."),
     ), persisted_name='scale_projectile_velocity'),
-    _motion_cap("rotate_sprite", "Rotate the sprite.", {
+    _motion_cap("rotate_sprite", "Set the visible body orientation; the renderer separately aligns the PNG forward axis. Zero offset aligns its forward direction with the chosen axis/velocity. This does not steer movement or rotate collision geometry.", {
         "mode": _p("string", "Axis alignment, velocity alignment or independent spin.", enum=("axis", "velocity", "spin")),
-        "offsetRadians": replace(_motion_number("offsetRadians", "Signed rotation offset.", -100, 100, units="radians"), required=False, default=0, neutral=0),
+        "offsetRadians": replace(_motion_number("offsetRadians", "Additional world-pose angle after forward-axis alignment, not correction for an upward/rightward PNG. Keep zero for a body pointing along axis/velocity; a quarter-turn deliberately makes it sideways.", -100, 100, units="radians"), required=False, default=0, neutral=0),
         "radiansPerSecond": replace(_motion_number("radiansPerUpdate", "Signed spin rate; required for spin, exact zero for other modes.", -6, 6, divisor=60, updates=1, units="radians/second", required=False), default=0, neutral=0,
             omission_condition=OmissionCondition(param_equals=(("mode", "axis"), ("mode", "velocity")))),
     }, cs="Content/Projectiles/GeneratedProjectile.ComposableMotion.cs::ApplyMotionRotation", requirements=(RequirementSpec("conditional_param", param="mode", any_of=("spin:radiansPerSecond",), message="Spin requires an explicit angular rate."),
