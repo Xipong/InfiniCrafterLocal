@@ -8,19 +8,19 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 
 
 CASES = [
-    ("set_projectile_aim", {"source": "initial"}, {"turnOwner": False}, "aim"),
-    ("attach_projectile", {"anchor": "owner_center"}, {"axisOffsetBlocks": 0, "normalOffsetBlocks": 0}, "attachment"),
-    ("set_projectile_return_trigger", {"afterSeconds": 1}, {"onOwnerRelease": False, "onTileCollision": False, "disableTileCollisionOnReturn": False}, "returnTrigger"),
-    ("set_projectile_rotation", {"mode": "velocity"}, {"offsetRadians": 0, "radiansPerSecond": 0}, "rotation"),
+    ("set_aim", {"source": "initial"}, {"turnOwner": False}, "aim"),
+    ("attach", {"anchor": "owner_center"}, {"axisOffsetBlocks": 0, "normalOffsetBlocks": 0}, "attachment"),
+    ("return_when", {"afterSeconds": 1}, {"onOwnerRelease": False, "onTileCollision": False, "passTilesOnReturn": False}, "returnTrigger"),
+    ("rotate_sprite", {"mode": "velocity"}, {"offsetRadians": 0, "radiansPerSecond": 0}, "rotation"),
 ]
 
 
 @pytest.mark.parametrize("fn,core,neutrals,member", CASES)
 def test_omitted_side_controls_equal_only_their_explicit_neutrals(fn, core, neutrals, member):
     doc = base_document()
-    if fn == "attach_projectile":
-        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
-        add(doc, "set_projectile_aim", {"source": "initial", "turnOwner": False})
+    if fn == "attach":
+        next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")["params"]["tileCollide"] = False
+        add(doc, "set_aim", {"source": "initial", "turnOwner": False})
     call = add(doc, fn, dict(core))
     report = validate_runtime_program(doc)
     assert report["ok"], report["errors"]
@@ -44,8 +44,8 @@ def test_omitted_side_controls_equal_only_their_explicit_neutrals(fn, core, neut
 def test_invalid_present_side_control_never_becomes_a_default(fn, core, neutrals, member):
     for name in neutrals:
         doc = base_document()
-        if fn == "attach_projectile":
-            add(doc, "set_projectile_aim", {"source": "initial", "turnOwner": False})
+        if fn == "attach":
+            add(doc, "set_aim", {"source": "initial", "turnOwner": False})
         add(doc, fn, dict(core, **neutrals))
         doc["runtimeProgram"]["calls"][-1]["params"][name] = None
         assert not validate_runtime_program(doc)["ok"]
@@ -53,15 +53,15 @@ def test_invalid_present_side_control_never_becomes_a_default(fn, core, neutrals
 
 def test_optional_return_flags_do_not_make_an_empty_trigger_valid():
     doc = base_document()
-    add(doc, "set_projectile_return_trigger", {})
+    add(doc, "return_when", {})
     assert not validate_runtime_program(doc)["ok"]
 
 
 def test_valid_nonzero_side_control_is_delivered_not_rewritten():
     doc = base_document()
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
-    add(doc, "set_projectile_aim", {"source": "cursor", "turnOwner": True})
-    add(doc, "attach_projectile", {"anchor": "owner_center", "axisOffsetBlocks": -2, "normalOffsetBlocks": 1})
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "projectile_collision")["params"]["tileCollide"] = False
+    add(doc, "set_aim", {"source": "cursor", "turnOwner": True})
+    add(doc, "attach", {"anchor": "owner_center", "axisOffsetBlocks": -2, "normalOffsetBlocks": 1})
     _, entity = compile_ok(doc)
     assert entity["aim"]["turnOwner"] is True
     assert entity["attachment"]["axisOffsetPx"] == -32
@@ -71,12 +71,12 @@ def test_valid_nonzero_side_control_is_delivered_not_rewritten():
 def test_singleton_new_protocol_choices_are_selected_by_fn_not_authored_params():
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
     doc = base_document()
-    add(doc, "set_projectile_arrival", {"target": "owner_center", "radiusBlocks": 1})
+    add(doc, "kill_on_arrival", {"target": "owner_center", "radius": 1})
     assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
-    assert CAPABILITY_REGISTRY["set_projectile_arrival"].fixed_wire_literals == {"action": "kill"}
-    assert "action" not in CAPABILITY_REGISTRY["set_projectile_arrival"].params
-    assert CAPABILITY_REGISTRY["sustain_projectile_mana"].fixed_wire_literals == {"cadence": "held_item_use_time"}
-    assert "cadence" not in CAPABILITY_REGISTRY["sustain_projectile_mana"].params
+    assert CAPABILITY_REGISTRY["kill_on_arrival"].fixed_wire_literals == {"action": "kill"}
+    assert "action" not in CAPABILITY_REGISTRY["kill_on_arrival"].params
+    assert CAPABILITY_REGISTRY["sustain_mana"].fixed_wire_literals == {"cadence": "held_item_use_time"}
+    assert "cadence" not in CAPABILITY_REGISTRY["sustain_mana"].params
     wire, entity = compile_ok(doc)
     assert entity["arrival"]["action"] == "kill"
     proof = next(r for r in wire["runtimeContract"]["finalWireReceipts"] if r["finalPath"].endswith(".arrival.action"))
@@ -85,7 +85,7 @@ def test_singleton_new_protocol_choices_are_selected_by_fn_not_authored_params()
 
 def test_owner_control_disabled_side_effects_are_omittable_but_empty_control_is_red():
     doc = base_document()
-    call = add(doc, "set_projectile_owner_control", {"requireHeldItem": True})
+    call = add(doc, "set_owner_control", {"requireHeldItem": True})
     assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
     call["params"] = {}
     assert not validate_runtime_program(doc)["ok"]
@@ -93,7 +93,7 @@ def test_owner_control_disabled_side_effects_are_omittable_but_empty_control_is_
 
 def test_owner_control_animation_only_is_an_effect_not_an_empty_capability():
     doc = base_document()
-    add(doc, "set_projectile_owner_control", {"animation": "keep_alive"})
+    add(doc, "set_owner_control", {"animation": "keep_alive"})
     assert validate_runtime_program(doc)["ok"], validate_runtime_program(doc)["errors"]
 
 
@@ -101,7 +101,7 @@ def test_valid_absent_side_control_is_frozen_while_repairing_core_choice():
     from infini_local.core.runtime_authoring.program_schema import apply_repair_patch
     from infini_local.core.runtime_authoring.repair_scope import build_runtime_repair_scope, filter_repair_patch_scope
     doc = base_document()
-    call = add(doc, "set_projectile_aim", {"source": "invalid"})
+    call = add(doc, "set_aim", {"source": "invalid"})
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     proposed = deepcopy(call)
     proposed["params"].update(source="initial", turnOwner=True)
@@ -114,10 +114,10 @@ def test_valid_absent_side_control_is_frozen_while_repairing_core_choice():
 
 
 RAMP_NEUTRALS = [
-    ("accumulate_projectile_charge", "releaseEffect", "chargeRelease", "launchSpeedBlocksPerSecond", 30,
+    ("charge", "releaseEffect", "chargeRelease", "launchSpeed", 30,
      {"damageMultiplier": 1, "knockbackMultiplier": 1, "speedMultiplier": 1,
       "pauseLifetimeWhileCharging": False}),
-    ("set_projectile_beam_geometry", "ramp", "beamRamp", "warmupSeconds", 1,
+    ("beam_geometry", "ramp", "beamRamp", "warmupSeconds", 1,
      {"initialWidthMultiplier": 1, "initialDamageMultiplier": 1, "damageStartProgress": 0}),
 ]
 
@@ -126,7 +126,7 @@ def ramp_document(fn, property, neutrals):
     from infini_local.qa.capability_witnesses import build_capability_witness
     doc = build_capability_witness(fn)
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == fn)
-    call["params"][property] = {"launchSpeedBlocksPerSecond": 30} if property == "releaseEffect" else {"warmupSeconds": 1}
+    call["params"][property] = {"launchSpeed": 30} if property == "releaseEffect" else {"warmupSeconds": 1}
     return doc, call
 
 

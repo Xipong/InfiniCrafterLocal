@@ -293,6 +293,44 @@ internal static partial class EngineRuntimeChecks
         var stopped = GeneratorClient.CaptureProjectileAttackReference(excluded)["positionIntegration"]!["identitySelected"]!;
         Equal(0, stopped["observations"]!.AsArray().Count, "excluded native AI style has no integration stores");
     }
+    private static void AttackAlternativePure(Projectile projectile)
+    {
+        if (projectile.aiStyle == 4) return;
+        projectile.position += projectile.velocity;
+    }
+    private static void AttackAlternativeWrites(Projectile projectile)
+    {
+        if (projectile.aiStyle == 4) { projectile.velocity.X = 3; return; }
+        projectile.position += projectile.velocity;
+    }
+    private static void AttackAlternativePriorWrite(Projectile projectile)
+    {
+        projectile.velocity.X = 3;
+        if (projectile.aiStyle == 4) return;
+        projectile.position += projectile.velocity;
+    }
+    private static void ProjectileDiscardedIdentityAlternativesAreDisclosed()
+    {
+        MethodInfo Method(string name) => typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!;
+        foreach (var (name, effect) in new[] {
+            (nameof(AttackAlternativePure), "returns_without_method_state_changes"),
+            (nameof(AttackAlternativeWrites), "discarded_path_effect_unresolved"),
+            (nameof(AttackAlternativePriorWrite), "discarded_path_effect_unresolved") })
+        {
+            var disclosure = GeneratorClient.InspectProjectileIdentityAlternatives(Method(name), 1, 1);
+            Equal(1, disclosure["cases"]!.AsArray().Count, "discarded branch clue survives even when effect is unproved");
+            Equal(effect, disclosure["cases"]![0]!["effect"]!.GetValue<string>(), "early return proof refuses writes before/on alternative path");
+        }
+        foreach (int type in new[] { ProjectileID.Excalibur, ProjectileID.WoodenArrowFriendly })
+        {
+            var projectile = new Projectile(); projectile.SetDefaults(type);
+            var alternatives = GeneratorClient.CaptureProjectileAttackReference(projectile)["positionIntegration"]!["identitySelected"]!["identityAlternatives"]!;
+            Equal(20, alternatives["cases"]!.AsArray().Count, "all fifteen discarded edges and five complementary nested paths are disclosed");
+            Equal(30, alternatives["cases"]!.AsArray().Sum(c => c!["allConditions"]!.AsArray().Count), "both nested live AI arms survive for all five identity paths");
+            Equal(15, alternatives["cases"]!.AsArray().Count(row => row!["effect"]!.GetValue<string>() == "returns_without_method_state_changes"), "all fifteen native early returns are proved");
+            Equal(5, alternatives["cases"]!.AsArray().Count(row => row!["effect"]!.GetValue<string>() == "discarded_path_effect_unresolved"), "complementary paths are not silently hidden or claimed equivalent");
+        }
+    }
     private sealed class AttackObservationModProjectile : ModProjectile
     {
         public override void AI() { AttackObservationExecutions++; }

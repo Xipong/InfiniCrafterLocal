@@ -77,7 +77,7 @@ def stage_packets(monkeypatch, stage, format_mode="json_object", *, labels=("nov
                     parse_error=ValueError(label), original_recipe_context=json.dumps({"recipeKey": label}), model_name="test-model")
             elif stage == "repair":
                 item = build_runtime_fixture("workbench_blade")
-                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")
+                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "item_use")
                 del use["params"]["useStyle"]
                 author.repair_author_item_after_failure(item, a, {}, label, failure_report=validate_runtime_program(item))
             elif stage.startswith("visual"):

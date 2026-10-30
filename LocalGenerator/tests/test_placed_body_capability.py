@@ -19,7 +19,7 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_low_level_three_stage_pipeline import wire_transport as wire_transport
 
-FN = "present_placed_item_sprite"
+FN = "placed_sprite"
 TRANSFORM = dict(renderSizePx=96, footprintAnchorX=0.25, footprintAnchorY=1,
                  imagePivotX=0.75, imagePivotY=1, offsetXPx=-13, offsetYPx=7,
                  rotationDegrees=-30.5, flipX=True, flipY=False)
@@ -366,13 +366,13 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
 
     doc = placed()
     calls = doc["runtimeProgram"]["calls"]
-    owner = next(row["target"] for row in calls if row["fn"] == "set_projectile_hitbox")
-    for fn in ("set_projectile_hitbox_curve", "configure_weapon_ammo", "refresh_generated_effect_group_while_held"):
+    owner = next(row["target"] for row in calls if row["fn"] == "projectile_hitbox")
+    for fn in ("hitbox_curve", "weapon_ammo", "refresh_held_effect"):
         for row in build_capability_witness(fn)["runtimeProgram"]["calls"]:
-            if row["fn"] not in {fn, "apply_generated_buff_on_use"}:
+            if row["fn"] not in {fn, "generated_buff_on_use"}:
                 continue
             row["id"] = "combined_" + str(len(calls))
-            if fn == "set_projectile_hitbox_curve":
+            if fn == "hitbox_curve":
                 row["target"] = owner
             else:
                 row.pop("target", None)
@@ -400,11 +400,11 @@ def test_combined_hitbox_ammo_named_utility_provider_and_frozen_leaf_repair(wire
     assert next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == owner)["hitboxCurve"]["endScale"] == 0.25
 
     broken = deepcopy(accepted)
-    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    curve = next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "hitbox_curve")
     curve["params"]["endScale"] = 9
     candidate = deepcopy(curve)
     candidate["params"].update(endScale=0.25, startScale=7)
-    frozen = deepcopy(next(row for row in calls if row["fn"] == "configure_weapon_ammo"))
+    frozen = deepcopy(next(row for row in calls if row["fn"] == "weapon_ammo"))
     frozen["params"]["ammoCategory"] = "bullet"
     repaired, dossier = _offline_gameplay_repair(monkeypatch, broken,
         {"note": "exact curve correction with hostile frozen companions",

@@ -159,7 +159,7 @@ def _hidden_item_spawn_primary_target(program: Mapping[str, Any], item_id: str) 
     """Return the only explicit lifecycle target when the item body cannot represent use."""
     item_use_calls = [
         row for row in _rows(program.get("calls"))
-        if row.get("fn") == "configure_item_use" and str(row.get("target") or "") == item_id
+        if row.get("fn") == "item_use" and str(row.get("target") or "") == item_id
     ]
     if len(item_use_calls) != 1:
         return ""
@@ -278,7 +278,7 @@ def _numeric_param(params: Mapping[str, Any], key: str, default: int | float) ->
 
 def _has_non_neutral_generated_buff(params: Mapping[str, Any]) -> bool:
     # Preserve the existing strict-wire seam; effect facts live in the registry.
-    return CAPABILITY_REGISTRY["apply_generated_buff_on_use"].has_non_neutral_effect(params)
+    return CAPABILITY_REGISTRY["generated_buff_on_use"].has_non_neutral_effect(params)
 
 
 def _event_available(
@@ -618,8 +618,8 @@ def _validate_requirement(
     if requirement.kind == "binding_action_present":
         required_target = item_id if requirement.target == "item_body" else target_id
         group_id = params.get("effectGroupId") if cap.effect_groupable else None
-        held = (cap.name == "apply_generated_buff_on_use" and isinstance(group_id, str)
-                and any(row.get("fn") in {"refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"}
+        held = (cap.name == "generated_buff_on_use" and isinstance(group_id, str)
+                and any(row.get("fn") in {"refresh_held_effect", "generated_buff_on_event"}
                         and isinstance(row.get("params"), Mapping)
                         and row["params"].get("effectGroupId") == group_id for row in target_calls))
         if not any(
@@ -920,7 +920,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         if kind not in cap.target_kinds:
             issues.append(ValidationIssue(f"$.runtimeProgram.calls[{index}].target", "wrong_target_kind", f"{fn} cannot target {kind}.", cap.target_kinds, (call_id, target_id)))
         key = (target_id, fn, params.get("effectGroupId") if cap.effect_groupable and isinstance(params.get("effectGroupId"), str) else None)
-        if fn == "require_use_condition":
+        if fn == "use_condition":
             selector = params.get("input")
             matching = [row for row in calls[:index] if row.get("fn") == fn
                         and isinstance(row.get("params"), Mapping) and row["params"].get("input") == selector]
@@ -1007,17 +1007,17 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
         if cap is None:
             continue
-        if cap.name == "add_equipment_damage_bonus":
+        if cap.name == "equipment_damage_bonus":
             raw_bonus_params = call.get("params")
             bonus_params: Mapping[str, Any] = raw_bonus_params if isinstance(raw_bonus_params, Mapping) else {}
             target_id = str(call.get("target") or "")
             configurations = [row for row in calls_by_target.get(target_id, [])
-                              if row.get("fn") in {"configure_accessory", "configure_armor"}]
+                              if row.get("fn") in {"accessory", "armor"}]
             if len(configurations) != 1:
                 issues.append(ValidationIssue(
                     f"$.runtimeProgram.calls[{index}]", "equipment_scope_conflict",
                     "Select exactly one explicit accessory or armor configuration for this class bonus.",
-                    ("configure_accessory", "configure_armor"), (str(call.get("id") or ""), target_id),
+                    ("accessory", "armor"), (str(call.get("id") or ""), target_id),
                 ))
             elif bonus_params.get("phase") == "matching_armor_set":
                 config = configurations[0]
@@ -1025,7 +1025,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                 config_id = str(config.get("id") or "")
                 raw_armor_params = config.get("params")
                 armor_params: Mapping[str, Any] = raw_armor_params if isinstance(raw_armor_params, Mapping) else {}
-                if config.get("fn") != "configure_armor":
+                if config.get("fn") != "armor":
                     issues.append(ValidationIssue(
                         f"$.runtimeProgram.calls[{index}].params.phase", "equipment_scope_conflict",
                         "A matching armor set phase cannot target an accessory.",
@@ -1041,7 +1041,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                     issues.append(ValidationIssue(
                         f"$.runtimeProgram.calls[{config_index}].params.slot", "set_bonus_head_only",
                         "Only the head piece executes a matching three-piece armor set bonus.",
-                        ("configure_armor(slot=head)", "remove only the invalid class bonus call"),
+                        ("armor(slot=head)", "remove only the invalid class bonus call"),
                         (config_id, str(call.get("id") or ""), target_id),
                     ))
             selector = (target_id, str(bonus_params.get("phase") or ""), str(bonus_params.get("damageClass") or ""))
@@ -1097,7 +1097,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         active = any(isinstance(binding.get("input"), str) and binding.get("input") in ACTIVE_USE_INPUTS and action_kind(binding) == "spawn_entity"
                      and binding_target_id(binding) == entity_id for binding in bindings)
         item_use = next((row.get("params", {}) for row in calls_by_target.get(item_id, [])
-                         if row.get("fn") == "configure_item_use"), {})
+                         if row.get("fn") == "item_use"), {})
         item_use = item_use if isinstance(item_use, Mapping) else {}
         issues.extend(_motion_composition_issues(motion_rows, wire=False, active=active,
                       channel=item_use.get("channel") is True, primary=entity_id == primary_entity_id,
@@ -1131,14 +1131,14 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         if declared is not None and declared.effect_groupable and isinstance(group_id, str):
             effect_groups.setdefault(group_id, []).append(row)
     valid_held_groups = tuple(group_id for group_id, rows in effect_groups.items()
-                             if len(rows) == 1 and rows[0].get("fn") == "apply_generated_buff_on_use")
+                             if len(rows) == 1 and rows[0].get("fn") == "generated_buff_on_use")
     for row in item_calls:
-        if row.get("fn") in {"refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"}:
+        if row.get("fn") in {"refresh_held_effect", "generated_buff_on_event"}:
             group_id = row.get("params", {}).get("effectGroupId") if isinstance(row.get("params"), Mapping) else None
             if isinstance(group_id, str) and group_id not in valid_held_groups:
                 issues.append(ValidationIssue(
                     f"$.runtimeProgram.calls[{calls.index(row)}].params.effectGroupId",
-                    "invalid_reaction_effect_group" if row.get("fn") == "apply_generated_buff_on_event" else "invalid_held_effect_group",
+                    "invalid_reaction_effect_group" if row.get("fn") == "generated_buff_on_event" else "invalid_held_effect_group",
                     "This consumer requires exactly one named generated utility buff and no heal/native buff/mobility components.",
                     valid_held_groups, (str(row.get("id") or ""),),
                 ))
@@ -1194,7 +1194,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
             # whole item and breaking the tile returns it. A larger stack would let one
             # alternate click lock an arbitrary number of weapon instances in the world.
             for call in calls:
-                if str(call.get("fn") or "") != "configure_item_stats":
+                if str(call.get("fn") or "") != "item_stats":
                     continue
                 params = call.get("params") if isinstance(call.get("params"), Mapping) else {}
                 max_stack = params.get("maxStack")
@@ -1202,7 +1202,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
                     issues.append(ValidationIssue(
                         f"$.runtimeProgram.calls[{calls.index(call)}].params.maxStack",
                         "hybrid_placeable_max_stack",
-                        "A durable placeable hybrid must hold exactly one unit: set configure_item_stats maxStack to 1.",
+                        "A durable placeable hybrid must hold exactly one unit: set item_stats maxStack to 1.",
                         ("1",),
                         (str(call.get("id") or ""),),
                     ))
@@ -1212,18 +1212,18 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
         # invalidate an otherwise accepted placement-call identity for Repair.
         if (
             referenced_call is None
-            or str(referenced_call.get("fn") or "") not in {"configure_tile_placement", "configure_wall_placement"}
+            or str(referenced_call.get("fn") or "") not in {"place_tile", "place_wall"}
             or (binding_target_id(binding) == item_id
                 and str(referenced_call.get("target") or "") != binding_target_id(binding))
         ):
             issues.append(ValidationIssue(
                 f"$.runtimeProgram.bindings[{index}].action.placementCallId",
                 "missing_binding_dependency",
-                "place_item must reference one configure_tile_placement or configure_wall_placement call on the same item target.",
+                "place_item must reference one place_tile or place_wall call on the same item target.",
                 tuple(
                     str(row.get("id") or "")
                     for row in item_calls
-                    if str(row.get("fn") or "") in {"configure_tile_placement", "configure_wall_placement"}
+                    if str(row.get("fn") or "") in {"place_tile", "place_wall"}
                 ),
                 (str(binding.get("id") or ""), referenced_call_id),
             ))
@@ -1265,7 +1265,7 @@ def _validate_runtime_program_semantics(document: Mapping[str, Any]) -> dict[str
     # opt-in reference adapters contribute when selected; old programs keep
     # their exact diagnostic bytes as well as their gameplay wire.
     counted_capabilities = [cap for cap in CAPABILITY_REGISTRY.values()
-                            if cap.name not in {"present_placed_item_sprite", "add_placed_light", "enable_placed_vfx", "select_targets_and_emit_on_event", "move_front_hand"}
+                            if cap.name not in {"placed_sprite", "placed_light", "placed_vfx", "emit_to_targets_on_event", "move_front_hand"}
                             or any(call.get("fn") == cap.name for call in calls)]
     stats = {
         "entities": len(entities),
@@ -1307,15 +1307,15 @@ def _composition_warnings(document: Mapping[str, Any]) -> list[dict[str, Any]]:
         siblings = by_target.get(str(target), [])
         cap = CAPABILITY_REGISTRY.get(str(call.get("fn")))
         if cap and (cap.category == "movement" or call.get("fn") in {
-                "set_projectile_turn_modifier", "set_projectile_speed_modifier", "set_projectile_homing_modifier"}) and any(
+                "turn_velocity", "set_projectile_speed_modifier", "homing"}) and any(
                 row.get("fn") == "channel_beam" for row in siblings):
             warnings.append({"path": f"$.runtimeProgram.calls[{index}]", "code": "motion_owned_by_beam",
                 "message": "channel_beam owns position and velocity; this movement/modifier does not execute while that controller is active.", "relatedIds": [str(call.get("id"))]})
         if params.get("damageBasis") == "live_parent":
             child = params.get("entity") or params.get("shotEntity")
-            if child and not any(row.get("fn") == "set_projectile_damage" for row in by_target.get(str(child), [])):
+            if child and not any(row.get("fn") == "projectile_damage" for row in by_target.get(str(child), [])):
                 warnings.append({"path": f"$.runtimeProgram.calls[{index}].params.damageBasis", "code": "inherited_damage_disabled",
-                    "message": "live_parent selects damage magnitude but the child has no set_projectile_damage lane; it remains harmless. An explicit damage=0 lane can still receive inherited damage. Harmless children remain valid.",
+                    "message": "live_parent selects damage magnitude but the child has no projectile_damage lane; it remains harmless. An explicit damage=0 lane can still receive inherited damage. Harmless children remain valid.",
                     "relatedIds": [str(call.get("id")), str(child)]})
     return warnings
 
@@ -1332,7 +1332,7 @@ def _motion_windows_overlap(left: Mapping[str, Any], right: Mapping[str, Any], *
                   frozenset(("outbound", "returning"))):
         return False
     if a and b and a.get("clock") == b.get("clock"):
-        start, duration = ("startDelayTicks", "durationTicks") if wire else ("startDelaySeconds", "durationSeconds")
+        start, duration = ("startDelayTicks", "durationTicks") if wire else ("startDelay", "duration")
         values = (a.get(start), a.get(duration), b.get(start), b.get(duration))
         if all(type(value) in (int, float) and 0 <= value <= 21600 for value in values):
             # Author gates execute after nearest-world-tick projection, not at
@@ -1384,9 +1384,9 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
         issues.append(ValidationIssue(path, code, message, allowed,
                                       (str(row.get("id") or ""),)))
 
-    collision = next((row for row in rows if row["fn"] == "set_projectile_collision"), None)
+    collision = next((row for row in rows if row["fn"] == "projectile_collision"), None)
     always_absolute = any(
-        row["fn"] == "set_projectile_lash_geometry" or row["fn"] == "attach_projectile" and (
+        row["fn"] == "lash_geometry" or row["fn"] == "attach" and (
             "window" not in params(row) or isinstance(params(row)["window"], Mapping)
             and params(row)["window"].get("phase") == "always" and "clock" not in params(row)["window"])
         for row in rows)
@@ -1404,7 +1404,7 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
                 reject(row, "", "retained_motion_stage_conflict",
                        f"{retained_cap.name} already owns this native motion stage; a new {cap.component_slot} cannot execute alongside that retained driver, even with a phase window.")
 
-    seeks = [row for row in rows if row["fn"] == "seek_projectile"]
+    seeks = [row for row in rows if row["fn"] == "seek"]
     for fn in fns:
         maximum = CAPABILITY_REGISTRY[fn].max_per_target
         matching = [row for row in rows if row["fn"] == fn]
@@ -1424,33 +1424,33 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
         if isinstance(window, Mapping):
             needs_charge = window.get("phase") in ("charging", "released") or window.get("clock") == "since_release"
             needs_return = window.get("phase") == "returning" or window.get("clock") == "since_return"
-            if needs_charge and not fns.intersection({"accumulate_projectile_charge", "charge_then_release"}):
+            if needs_charge and not fns.intersection({"charge", "charge_then_release"}):
                 reject(row, "window.phase" if window.get("phase") in ("charging", "released") else "window.clock",
                        "missing_capability_dependency", "Charge/release windows require their actual charge latch producer; no release is inferred.",
-                       ("accumulate_projectile_charge",))
-            if needs_return and not fns.intersection({"set_projectile_return_trigger", "move_boomerang", "move_returning_glaive", "move_flail_tether"}):
+                       ("charge",))
+            if needs_return and not fns.intersection({"return_when", "move_boomerang", "move_returning_glaive", "move_flail_tether"}):
                 reject(row, "window.phase" if window.get("phase") == "returning" else "window.clock",
                        "missing_capability_dependency", "Return windows require an actual return latch producer; seek and arrival do not produce returning.",
-                       ("set_projectile_return_trigger",))
+                       ("return_when",))
         if cap.category != "motion_primitive":
             continue
-        if active and not channel and (fn == "set_projectile_return_trigger" and p.get("onOwnerRelease") is True
-                                      or fn == "set_projectile_owner_control" and p.get("requireChannel") is True):
+        if active and not channel and (fn == "return_when" and p.get("onOwnerRelease") is True
+                                      or fn == "set_owner_control" and p.get("requireChannel") is True):
             # The trigger/control choice is valid. Diagnose its exact item
             # dependency, as the registry requirement owner does, rather than
             # thawing the authored selector to make the error disappear.
             path = row["_path"] if wire else row["_path"].removesuffix(".params")
             issues.append(ValidationIssue(path, "missing_item_capability_param",
-                "Active owner-channel consumers require configure_item_use.channel=true.",
-                ("configure_item_use.channel=true",),
+                "Active owner-channel consumers require item_use.channel=true.",
+                ("item_use.channel=true",),
                 (str(row.get("id") or ""),) if wire else (item_owner_id,)))
-        if fn == "set_projectile_rotation" and p.get("mode") != "spin" and leaf(row, "radiansPerSecond") not in (0, None):
+        if fn == "rotate_sprite" and p.get("mode") != "spin" and leaf(row, "radiansPerSecond") not in (0, None):
             reject(row, "radiansPerSecond", "incompatible_param_variant", "Non-spin rotation has exact zero angular rate.")
-        if fn == "sustain_projectile_mana":
-            owner = next((params(other) for other in rows if other["fn"] == "set_projectile_owner_control"), {})
+        if fn == "sustain_mana":
+            owner = next((params(other) for other in rows if other["fn"] == "set_owner_control"), {})
             if owner.get("requireHeldItem") is not True or owner.get("requireChannel") is not True:
                 reject(row, "", "missing_capability_dependency", "Mana sustain requires held-item/channel owner control.",
-                       ("set_projectile_owner_control",))
+                       ("set_owner_control",))
         if not wire:
             continue  # The ordinary Author requirement owner already ran.
         for rule in cap.requirements:
@@ -1499,14 +1499,14 @@ def _motion_composition_issues(rows: list[dict[str, Any]], *, wire: bool,
                 (rcap.position_ownership in {"owns_position_while_active", "velocity_or_position_controller"} or rcap.category == "motion_modifier") and right["fn"] != "move_straight"
                 or rcap.position_ownership == "owns_position_while_active" and
                 (lcap.position_ownership in {"owns_position_while_active", "velocity_or_position_controller"} or lcap.category == "motion_modifier") and left["fn"] != "move_straight")
-            scale_fns = {"add_projectile_visual_scale", "set_projectile_visual_scale_curve"}
+            scale_fns = {"add_sprite_scale", "sprite_scale_curve"}
             scale_conflict = (left["fn"] in scale_fns and right["fn"] in scale_fns
-                or left["fn"] == "add_projectile_visual_scale" and right["fn"] == "set_projectile_hitbox_curve" and params(right).get("mirrorToSprite") is True
-                or right["fn"] == "add_projectile_visual_scale" and left["fn"] == "set_projectile_hitbox_curve" and params(left).get("mirrorToSprite") is True)
-            velocity_scale_conflict = left["fn"] == right["fn"] == "scale_projectile_velocity"
+                or left["fn"] == "add_sprite_scale" and right["fn"] == "hitbox_curve" and params(right).get("mirrorToSprite") is True
+                or right["fn"] == "add_sprite_scale" and left["fn"] == "hitbox_curve" and params(left).get("mirrorToSprite") is True)
+            velocity_scale_conflict = left["fn"] == right["fn"] == "scale_velocity"
             if (absolute_conflict or scale_conflict or velocity_scale_conflict) and _motion_windows_overlap(params(left), params(right), wire=wire):
                 mirror = next((row for row in (left, right)
-                    if row["fn"] == "set_projectile_hitbox_curve" and params(row).get("mirrorToSprite") is True), None)
+                    if row["fn"] == "hitbox_curve" and params(row).get("mirrorToSprite") is True), None)
                 if velocity_scale_conflict:
                     reject(right, "window", "overlapping_motion_windows",
                            "Velocity-scale instances require provably disjoint windows; adjust this window or delete this call.")

@@ -1,5 +1,5 @@
 {
-  "requestSha256": "814917f0169fed71dd578d32c4be8b5282a67e95631d86363ceceb9fb3f1aa67",
+  "requestSha256": "bac44b377cdc697006d8852ae44aba6ba632af6d2d9a8d5f741de192d2775d6f",
   "captures": {
     "itemA": {
       "identityPredicates": {
@@ -1145,6 +1145,503 @@
                 "block": 225,
                 "op": "beq.s",
                 "successor": 238
+              }
+            ]
+          },
+          "identityAlternatives": {
+            "source": "excluded_identity_edges",
+            "version": 1,
+            "scope": "Alternative source clues, conditional on reaching the listed guard; not behavior of the captured entry identity. Early-return proof covers normal source control flow, not exceptions/detours. These are not selectable native-AI imports or guarantees of Author capability equivalence.",
+            "cases": [
+              {
+                "allConditions": [
+                  {
+                    "at": 7,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "4"
+                    ],
+                    "successors": [
+                      252,
+                      12
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 20,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "38"
+                    ],
+                    "successors": [
+                      252,
+                      25
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 33,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "84"
+                    ],
+                    "successors": [
+                      252,
+                      38
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 49,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "148"
+                    ],
+                    "successors": [
+                      252,
+                      54
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 61,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "7"
+                    ],
+                    "successors": [
+                      81,
+                      63
+                    ],
+                    "chosenSuccessor": 63
+                  },
+                  {
+                    "at": 76,
+                    "op": "beq",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "2"
+                    ],
+                    "successors": [
+                      252,
+                      81
+                    ],
+                    "chosenSuccessor": 81
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 61,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "7"
+                    ],
+                    "successors": [
+                      81,
+                      63
+                    ],
+                    "chosenSuccessor": 63
+                  },
+                  {
+                    "at": 76,
+                    "op": "beq",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "2"
+                    ],
+                    "successors": [
+                      252,
+                      81
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 92,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "440"
+                    ],
+                    "successors": [
+                      120,
+                      94
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 135
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 92,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "440"
+                    ],
+                    "successors": [
+                      120,
+                      94
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 105,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "449"
+                    ],
+                    "successors": [
+                      120,
+                      107
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 135
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 105,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "449"
+                    ],
+                    "successors": [
+                      120,
+                      107
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 118,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "606"
+                    ],
+                    "successors": [
+                      135,
+                      120
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 135
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 118,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "606"
+                    ],
+                    "successors": [
+                      135,
+                      120
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 143,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "93"
+                    ],
+                    "successors": [
+                      160,
+                      145
+                    ],
+                    "chosenSuccessor": 145
+                  },
+                  {
+                    "at": 158,
+                    "op": "blt.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "0"
+                    ],
+                    "successors": [
+                      252,
+                      160
+                    ],
+                    "chosenSuccessor": 160
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 143,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "93"
+                    ],
+                    "successors": [
+                      160,
+                      145
+                    ],
+                    "chosenSuccessor": 145
+                  },
+                  {
+                    "at": 158,
+                    "op": "blt.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "0"
+                    ],
+                    "successors": [
+                      252,
+                      160
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 171,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "540"
+                    ],
+                    "successors": [
+                      252,
+                      173
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 184,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "756"
+                    ],
+                    "successors": [
+                      252,
+                      186
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 197,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "818"
+                    ],
+                    "successors": [
+                      252,
+                      199
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 210,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "856"
+                    ],
+                    "successors": [
+                      252,
+                      212
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 223,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "961"
+                    ],
+                    "successors": [
+                      252,
+                      225
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 236,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "933"
+                    ],
+                    "successors": [
+                      252,
+                      238
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
               }
             ]
           }
@@ -2295,6 +2792,503 @@
                 "block": 225,
                 "op": "beq.s",
                 "successor": 238
+              }
+            ]
+          },
+          "identityAlternatives": {
+            "source": "excluded_identity_edges",
+            "version": 1,
+            "scope": "Alternative source clues, conditional on reaching the listed guard; not behavior of the captured entry identity. Early-return proof covers normal source control flow, not exceptions/detours. These are not selectable native-AI imports or guarantees of Author capability equivalence.",
+            "cases": [
+              {
+                "allConditions": [
+                  {
+                    "at": 7,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "4"
+                    ],
+                    "successors": [
+                      252,
+                      12
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 20,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "38"
+                    ],
+                    "successors": [
+                      252,
+                      25
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 33,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "84"
+                    ],
+                    "successors": [
+                      252,
+                      38
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 49,
+                    "op": "beq",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "148"
+                    ],
+                    "successors": [
+                      252,
+                      54
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 61,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "7"
+                    ],
+                    "successors": [
+                      81,
+                      63
+                    ],
+                    "chosenSuccessor": 63
+                  },
+                  {
+                    "at": 76,
+                    "op": "beq",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "2"
+                    ],
+                    "successors": [
+                      252,
+                      81
+                    ],
+                    "chosenSuccessor": 81
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 61,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "7"
+                    ],
+                    "successors": [
+                      81,
+                      63
+                    ],
+                    "chosenSuccessor": 63
+                  },
+                  {
+                    "at": 76,
+                    "op": "beq",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "2"
+                    ],
+                    "successors": [
+                      252,
+                      81
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 92,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "440"
+                    ],
+                    "successors": [
+                      120,
+                      94
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 135
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 92,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "440"
+                    ],
+                    "successors": [
+                      120,
+                      94
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 105,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "449"
+                    ],
+                    "successors": [
+                      120,
+                      107
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 135
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 105,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "449"
+                    ],
+                    "successors": [
+                      120,
+                      107
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 118,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "606"
+                    ],
+                    "successors": [
+                      135,
+                      120
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 135
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 118,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "606"
+                    ],
+                    "successors": [
+                      135,
+                      120
+                    ],
+                    "chosenSuccessor": 120
+                  },
+                  {
+                    "at": 133,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),1)",
+                      "1"
+                    ],
+                    "successors": [
+                      252,
+                      135
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 143,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "93"
+                    ],
+                    "successors": [
+                      160,
+                      145
+                    ],
+                    "chosenSuccessor": 145
+                  },
+                  {
+                    "at": 158,
+                    "op": "blt.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "0"
+                    ],
+                    "successors": [
+                      252,
+                      160
+                    ],
+                    "chosenSuccessor": 160
+                  }
+                ],
+                "effect": "discarded_path_effect_unresolved"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 143,
+                    "op": "bne.un.s",
+                    "inputs": [
+                      "ldfld(Projectile.aiStyle,this)",
+                      "93"
+                    ],
+                    "successors": [
+                      160,
+                      145
+                    ],
+                    "chosenSuccessor": 145
+                  },
+                  {
+                    "at": 158,
+                    "op": "blt.s",
+                    "inputs": [
+                      "ldelem.r4(ldfld(Projectile.ai,this),0)",
+                      "0"
+                    ],
+                    "successors": [
+                      252,
+                      160
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 171,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "540"
+                    ],
+                    "successors": [
+                      252,
+                      173
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 184,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "756"
+                    ],
+                    "successors": [
+                      252,
+                      186
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 197,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "818"
+                    ],
+                    "successors": [
+                      252,
+                      199
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 210,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "856"
+                    ],
+                    "successors": [
+                      252,
+                      212
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 223,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "961"
+                    ],
+                    "successors": [
+                      252,
+                      225
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
+              },
+              {
+                "allConditions": [
+                  {
+                    "at": 236,
+                    "op": "beq.s",
+                    "inputs": [
+                      "ldfld(Projectile.type,this)",
+                      "933"
+                    ],
+                    "successors": [
+                      252,
+                      238
+                    ],
+                    "chosenSuccessor": 252
+                  }
+                ],
+                "effect": "returns_without_method_state_changes"
               }
             ]
           }

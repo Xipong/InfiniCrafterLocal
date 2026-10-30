@@ -151,8 +151,8 @@ def test_visual_does_not_invent_literal_synthesis_from_missing_or_malformed_advi
 
 @pytest.mark.parametrize("mirror", [pytest.param(False, id="independent-hitbox"), pytest.param(True, id="explicit-mirroring")])
 def test_visual_receives_authored_hitbox_curve_without_selecting_sprite_scale(wire_transport, mirror):
-    source = build_capability_witness("set_projectile_hitbox_curve")
-    call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_hitbox_curve")
+    source = build_capability_witness("hitbox_curve")
+    call = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "hitbox_curve")
     call["params"].update(startScale=0.25, endScale=8, mirrorToSprite=mirror)
     data = compile_runtime_program(source)
     before = copy.deepcopy(data)
@@ -170,15 +170,15 @@ def test_visual_receives_authored_hitbox_curve_without_selecting_sprite_scale(wi
 
 @pytest.mark.parametrize("base_flight", [False, True], ids=["attached-line", "moving-line"])
 def test_physical_geometry_is_read_only_guidance_and_can_have_no_vfx_slots(wire_transport, base_flight):
-    source = build_capability_witness("set_projectile_beam_geometry")
+    source = build_capability_witness("beam_geometry")
     if not base_flight:
         calls = source["runtimeProgram"]["calls"]
         calls[:] = [call for call in calls if call["fn"] != "move_straight"]
-        calls.append({"id": "explicit_anchor", "fn": "attach_projectile", "target": "witness_entity",
+        calls.append({"id": "explicit_anchor", "fn": "attach", "target": "witness_entity",
                       "params": {"anchor": "owner_center", "axisOffsetBlocks": 0, "normalOffsetBlocks": 0}})
-        next(call for call in calls if call["fn"] == "set_projectile_collision")["params"]["tileCollide"] = False
+        next(call for call in calls if call["fn"] == "projectile_collision")["params"]["tileCollide"] = False
     next(call for call in source["runtimeProgram"]["calls"]
-         if call["fn"] == "set_projectile_beam_geometry")["params"]["lengthBlocks"] = 1.0
+         if call["fn"] == "beam_geometry")["params"]["length"] = 1.0
     beam = compile_runtime_program(source)
     before = copy.deepcopy(beam)
     raw = _visual_kit(beam)

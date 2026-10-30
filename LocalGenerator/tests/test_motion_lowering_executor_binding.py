@@ -81,11 +81,11 @@ def test_selected_owner_teleport_has_one_fixed_destination_mode(mutation):
 
 
 @pytest.mark.parametrize("fn,tail", [
-    ("set_projectile_damage", ".damage.enabled"),
-    ("configure_spawn", ".spawn.enabled"),
-    ("configure_item_use", ".itemUse.configured"),
-    ("configure_accessory", "accessory.enabled"),
-    ("configure_armor", "armor.enabled"),
+    ("projectile_damage", ".damage.enabled"),
+    ("spawn", ".spawn.enabled"),
+    ("item_use", ".itemUse.configured"),
+    ("accessory", "accessory.enabled"),
+    ("armor", "armor.enabled"),
 ])
 @pytest.mark.parametrize("mutation", ["false_with_matching_receipt", "remove_receipt"])
 def test_selected_configuration_flag_is_fixed_and_covered(fn, tail, mutation):

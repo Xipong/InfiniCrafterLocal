@@ -73,11 +73,11 @@ def item_body_contact_suppressed(
     """The same frozen engine gates used by validation and wire projection."""
     calls = tuple(target_calls)  # Repair passes a one-shot generator; both gates must see it.
     return (contact_suppressed
-            or any(call.get("fn") == "configure_item_use"
+            or any(call.get("fn") == "item_use"
                    and isinstance(call.get("params"), Mapping)
                    and call["params"].get("disableMeleeHitbox") is True
                    for call in calls)
-            or any(call.get("fn") == "configure_vanilla_ammo_item"
+            or any(call.get("fn") == "ammo_item"
                    and isinstance(call.get("params"), Mapping)
                    and call["params"].get("ammoCategory")
                    for call in calls))

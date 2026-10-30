@@ -53,17 +53,17 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert request["response_format"]["type"] == mode
     assert dossier_text(request) == serialized
     packet = json.loads(serialized)
-    spec = CAPABILITY_REGISTRY["set_projectile_lifetime"].params["lifetimeSeconds"]
+    spec = CAPABILITY_REGISTRY["projectile_lifetime"].params["lifetimeSeconds"]
     assert (spec.minimum, spec.maximum) == (spec.minimum, spec.maximum)
     bounds = {"minimum": spec.minimum, "maximum": spec.maximum}
     assert packet["balanceCorridor"]["broadEnvelope"]["lifetimeSeconds"] == bounds
     card = next(row for row in packet["runtimeCapabilityContract"]["catalog"]["capabilities"]
-                if row["fn"] == "set_projectile_lifetime")
+                if row["fn"] == "projectile_lifetime")
     assert (card["params"]['lifetimeSeconds']["min"], card["params"]['lifetimeSeconds']["max"]) == (spec.minimum, spec.maximum)
 
     item = build_runtime_fixture("workbench_blade")
     index, lifetime = next((index, row) for index, row in enumerate(item["runtimeProgram"]["calls"])
-                           if row["fn"] == "set_projectile_lifetime")
+                           if row["fn"] == "projectile_lifetime")
     lifetime["params"]['lifetimeSeconds'] = (36000) / 60
     local_schema = contract.author_item_response_schema()
     provider_schema = contract.author_item_provider_response_schema()
@@ -110,7 +110,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert repair_request["response_format"]["type"] == mode
     repair = request_dossier(repair_request)
     repair_card = next(row for row in repair["existingBrokenCapabilityCards"]
-                       if row["fn"] == "set_projectile_lifetime")
+                       if row["fn"] == "projectile_lifetime")
     assert (repair_card["params"]['lifetimeSeconds']["min"],
             repair_card["params"]['lifetimeSeconds']["max"]) == (spec.minimum, spec.maximum)
     assert repair["acceptedItemContext"]["runtimeProgram"] == item["runtimeProgram"]
@@ -129,7 +129,7 @@ def test_serialized_lifetime_guidance_matches_author_repair_and_existing_gates(m
     assert json.loads(format_packet["malformedRawText"][:-2] + "}") == item
 
     # A different declared maximum must reach the real packet, not a copied cap.
-    cap = CAPABILITY_REGISTRY["set_projectile_lifetime"]
+    cap = CAPABILITY_REGISTRY["projectile_lifetime"]
     changed = replace(cap, params={**cap.params, "lifetimeSeconds": replace(spec, maximum=350)})
     monkeypatch.setattr(balance, "CAPABILITY_REGISTRY", {**CAPABILITY_REGISTRY, cap.name: changed})
     variant_request, variant_serialized, _ = author.build_initial_author_request(
@@ -246,11 +246,11 @@ def test_nullable_inverse_accepts_both_exact_projection_policies(omit_annotation
 # Capability execution belongs to registry_vertical_contract. This adapter is
 # recursive over schema shapes, so exercise those shapes instead of every fn.
 @pytest.mark.parametrize("fn,params,omitted", [
-    pytest.param("configure_item_stats", {}, "manaCost", id="optional-item-leaf"),
+    pytest.param("item_stats", {}, "manaCost", id="optional-item-leaf"),
     pytest.param("move_straight", {}, None, id="omitted-noarg-params"),
-    pytest.param("set_projectile_collision", {"immunity": {"localCooldown": 37}}, None, id="typed-union"),
-    pytest.param("configure_armor", {"setBonuses": {"minionSlotsBonus": 2}}, None, id="nested-optional-object"),
-    pytest.param("spawn_entity_on_event", {"when": {"everySeconds": 0.5}}, None, id="event-object-branch"),
+    pytest.param("projectile_collision", {"immunity": {"localCooldown": 37}}, None, id="typed-union"),
+    pytest.param("armor", {"setBonuses": {"minionSlotsBonus": 2}}, None, id="nested-optional-object"),
+    pytest.param("spawn_on_event", {"when": {"everySeconds": 0.5}}, None, id="event-object-branch"),
 ])
 def test_compact_provider_roundtrips_structural_witnesses(fn, params, omitted):
     item = build_capability_witness(fn)
@@ -280,10 +280,10 @@ def test_source_units_keep_zero_null_and_exact_namespaces_without_selecting_capa
     glossary = prompt.source_wire_units_for_llm(packets)
     actual = {(row["source"], row["fn"], field) for row in glossary["scopes"] for field in row["fields"]}
     assert actual == {
-        ("raw.item", "configure_tool", "axePower"),
-        ("raw.generatedParent.accessory", "configure_accessory", "movementSpeed"),
-        ("raw.generatedParent.armor", "configure_armor", "lifeRegen"),
-        ("raw.generatedParent.gameplay.generatedBuff", "apply_generated_buff_on_use", "lifeRegen"),
+        ("raw.item", "tool_stats", "axePower"),
+        ("raw.generatedParent.accessory", "accessory", "movementSpeed"),
+        ("raw.generatedParent.armor", "armor", "lifeRegen"),
+        ("raw.generatedParent.gameplay.generatedBuff", "generated_buff_on_use", "lifeRegen"),
     }
     assert prompt.source_wire_units_for_llm([])["scopes"] == []
     assert packets == before
@@ -390,12 +390,12 @@ def test_author_card_compaction_keeps_every_constraint_and_consumer_description(
             for key in source.keys() - {"meaning", "required", "semanticType", "neutral", "units", "shape"}:
                 assert target[key] == source[key], (name, param, key)
             meaning = consumer_text(source["meaning"], source)
-            if name == "configure_armor" and "meaning" not in target:
+            if name == "armor" and "meaning" not in target:
                 # Armor borrows only an identical accessory effect description.
-                assert CAPABILITY_REGISTRY["configure_accessory"].params[param].description == spec.description
-                assert CAPABILITY_REGISTRY["configure_accessory"].author_prompt_card()["params"][param]["meaning"] == meaning
+                assert CAPABILITY_REGISTRY["accessory"].params[param].description == spec.description
+                assert CAPABILITY_REGISTRY["accessory"].author_prompt_card()["params"][param]["meaning"] == meaning
             else:
-                if name == "configure_armor" and param.startswith("setBonus"):
+                if name == "armor" and param.startswith("setBonus"):
                     meaning = meaning.removeprefix("Matching armor set (head piece only; matching head, body and legs must actually be equipped): ")
                 assert target["meaning"] == meaning, (name, param)
             checked_descriptions.append(name + "." + param)

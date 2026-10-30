@@ -107,12 +107,12 @@ def _sparse_event_item(event):
 
     item = build_runtime_fixture("workbench_blade")
     calls = item["runtimeProgram"]["calls"]
-    spawn = next(row for row in calls if row["fn"] == "spawn_entity_on_event")
+    spawn = next(row for row in calls if row["fn"] == "spawn_on_event")
     selected = {"id": "pull_case", "fn": "pull_on_event", "target": spawn["target"],
         "params": {"when": {'everySeconds': (6) / 60} if event == "periodic" else event,
-                   "mode": "target_to_entity", "impulseBlocksPerSecond": 3.75, "radiusTiles": 8}}
+                   "mode": "target_to_entity", "impulseBlocksPerSecond": 3.75, "radius": 8}}
     calls.append(selected)
-    next(row for row in calls if row["fn"] == "configure_item_stats")["params"].pop("manaCost", None)
+    next(row for row in calls if row["fn"] == "item_stats")["params"].pop("manaCost", None)
     return item, selected
 
 

@@ -61,7 +61,7 @@ def test_runtime_defect_still_repairs_with_malformed_advisory_patch(monkeypatch,
     source = build_runtime_fixture('workbench_blade')
     source.update(concept=['raw debug'], realization='unstructured post-program report')
     expected = compile_runtime_program(source)
-    stats = next(row for row in source['runtimeProgram']['calls'] if row['fn'] == 'configure_item_stats')
+    stats = next(row for row in source['runtimeProgram']['calls'] if row['fn'] == 'item_stats')
     correction = deepcopy(stats)
     stats['params']['damage'] = True  # bool is not an authored integer.
     responses = [source, {'note': 'Correct only damage type', 'callsUpsert': [correction],

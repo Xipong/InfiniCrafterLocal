@@ -44,7 +44,7 @@ def test_parameter_shape_does_not_rewrite_literal_projection_metadata():
 
 
 def test_strict_scalar_peak_bounds_are_visible_not_only_prose():
-    for name in ("set_front_arm_pose", "set_projectile_reach_curve"):
+    for name in ("front_arm_pose", "set_projectile_reach_curve"):
         card = CAPABILITY_REGISTRY[name].author_prompt_card()["params"]["peakProgress"]
         if "paramRef" in card:
             owner, param = card["paramRef"].split(".")

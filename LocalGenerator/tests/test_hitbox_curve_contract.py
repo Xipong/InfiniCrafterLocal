@@ -18,8 +18,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.qa.capability_library_audit import capability_library_audit
 
 
-FN = "set_projectile_hitbox_curve"
-PARAMS = {"startScale": .5, "endScale": 4, 'startDelaySeconds': (5) / 60, 'durationSeconds': (60) / 60, "curve": "exponential", "mirrorToSprite": False}
+FN = "hitbox_curve"
+PARAMS = {"startScale": .5, "endScale": 4, 'startDelay': (5) / 60, 'duration': (60) / 60, "curve": "exponential", "mirrorToSprite": False}
 
 
 def _call(doc, fn=FN):
@@ -55,8 +55,8 @@ def test_explicit_curve_projection_and_provenance(curve, mirror):
 @pytest.mark.parametrize("name,value", [
     ("startScale", None), ("startScale", True), ("startScale", "1"), ("startScale", .249), ("startScale", 8.001),
     ("endScale", None), ("endScale", 0), ("endScale", 9), ("endScale", float("inf")), ("endScale", float("nan")),
-    ("startDelaySeconds", -1 / 60), ("startDelaySeconds", 21601 / 60), ("startDelaySeconds", -0.5 / 60), ("startDelaySeconds", False),
-    ("durationSeconds", 0), ("durationSeconds", 21601 / 60), ("durationSeconds", 0.001), ("durationSeconds", True),
+    ("startDelay", -1 / 60), ("startDelay", 21601 / 60), ("startDelay", -0.5 / 60), ("startDelay", False),
+    ("duration", 0), ("duration", 21601 / 60), ("duration", 0.001), ("duration", True),
     ("curve", "smooth"), ("curve", None), ("curve", []), ("mirrorToSprite", 0), ("mirrorToSprite", None),
 ])
 def test_present_invalid_authored_and_wire_values_are_rejected(name, value):
@@ -108,7 +108,7 @@ def test_no_ambiguous_container_or_provenance_gap(mutation):
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("name,valid", [("startScale", 1.5), ("endScale", 3), ("startDelaySeconds", 0), ("durationSeconds", 100 / 60)])
+@pytest.mark.parametrize("name,valid", [("startScale", 1.5), ("endScale", 3), ("startDelay", 0), ("duration", 100 / 60)])
 def test_repair_changes_only_the_invalid_curve_leaf(name, valid):
     doc = _source()
     _call(doc)["params"][name] = -1
@@ -126,14 +126,14 @@ def test_repair_changes_only_the_invalid_curve_leaf(name, valid):
 
 @pytest.mark.parametrize("reverse_scale_owners", [False, True])
 def test_curve_conflicts_with_line_geometry_and_sprite_mirror_has_one_owner(reverse_scale_owners):
-    for driver in ("set_projectile_beam_geometry", "set_projectile_lash_geometry"):
+    for driver in ("beam_geometry", "lash_geometry"):
         doc = build_capability_witness(driver)
         owner = _call(doc, driver)["target"]
         doc["runtimeProgram"]["calls"].append({"id": "new_curve", "fn": FN, "target": owner, "params": deepcopy(PARAMS)})
         report = validate_runtime_program(doc)
         assert not report["ok"] and any(row["code"] == "exclusive_component_conflict" for row in report["errors"])
-    doc = build_capability_witness("add_projectile_visual_scale")
-    owner = _call(doc, "add_projectile_visual_scale")["target"]
+    doc = build_capability_witness("add_sprite_scale")
+    owner = _call(doc, "add_sprite_scale")["target"]
     doc["runtimeProgram"]["calls"].append({"id": "new_curve", "fn": FN, "target": owner, "params": {**PARAMS, "mirrorToSprite": True}})
     if reverse_scale_owners:
         doc["runtimeProgram"]["calls"].reverse()
@@ -146,12 +146,12 @@ def test_curve_conflicts_with_line_geometry_and_sprite_mirror_has_one_owner(reve
     assert audit["ok"], audit
     repaired = apply_repair_patch(doc, patch)
     assert _call(repaired)["params"] == PARAMS
-    assert _call(repaired, "add_projectile_visual_scale") == _call(doc, "add_projectile_visual_scale")
+    assert _call(repaired, "add_sprite_scale") == _call(doc, "add_sprite_scale")
     compile_runtime_program(repaired)
 
 
 def test_unselected_curve_does_not_appear_in_current_wire():
-    wire = compile_runtime_program(build_capability_witness("set_projectile_hitbox"))
+    wire = compile_runtime_program(build_capability_witness("projectile_hitbox"))
     assert all("hitboxCurve" not in entity for entity in wire["runtimeProgram"]["entities"])
 
 
@@ -161,13 +161,13 @@ def test_full_request_and_numeric_native_range_audit_cover_the_new_owner():
     card = next(row for row in catalog["capabilities"] if row["fn"] == FN)
     assert set(card["params"]) == set(PARAMS)
     assert card["requires"] == CAPABILITY_REGISTRY[FN].author_prompt_card()["requires"]
-    assert any(rule.get("kind") == "capability_present" and rule.get("capability") == "set_projectile_hitbox"
+    assert any(rule.get("kind") == "capability_present" and rule.get("capability") == "projectile_hitbox"
                for rule in card["requires"])
     assert any(rule.get("kind") == "capability_absent" and rule.get("param") == "mirrorToSprite"
-               and rule.get("equals") is True and "set_projectile_visual_scale_curve" in rule.get("anyOf", [])
+               and rule.get("equals") is True and "sprite_scale_curve" in rule.get("anyOf", [])
                for rule in card["requires"])
     audit = capability_library_audit()
     assert audit["ok"]
     rows = [row for row in audit["rangeParity"] if row["capability"] == FN]
-    assert {row["param"] for row in rows} == {"startScale", "endScale", "startDelaySeconds", "durationSeconds"}
+    assert {row["param"] for row in rows} == {"startScale", "endScale", "startDelay", "duration"}
     assert all(row["preserved"] for row in rows)

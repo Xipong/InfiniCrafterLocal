@@ -25,9 +25,9 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     parent = {"id": "literal", "name": "Literal object", "damage": 7, "useTime": 20}
     author, user, _ = build_initial_author_request(parent, parent, "visibility", model_name="test-model")
     author_packet = json.loads(user)
-    author_card = next(c for c in author_packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "configure_item_use")
+    author_card = next(c for c in author_packet["runtimeCapabilityContract"]["catalog"]["capabilities"] if c["fn"] == "item_use")
     good = build_runtime_fixture("returning_potion")  # Free projectile, not a replacement held body.
-    use = next(c for c in good["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")
+    use = next(c for c in good["runtimeProgram"]["calls"] if c["fn"] == "item_use")
     use["params"].update(hideUseGraphic=hidden, customHeldSprite=hint)
     baseline = compile_runtime_program(good)
     broken = copy.deepcopy(good)
@@ -38,7 +38,7 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     responses.append({"callsUpsert": [hostile_use], "realizationReplacement": good["realization"], "note": "repair useStyle only"})
     fixed = gameplay.repair_author_item_after_failure(broken, parent, parent, "visibility", failure_report={"stage": "validation", "errors": report["errors"]})
     repaired_packet = request_dossier(requests[0])
-    repair_card = next(c for c in repaired_packet["existingBrokenCapabilityCards"] if c["fn"] == "configure_item_use")
+    repair_card = next(c for c in repaired_packet["existingBrokenCapabilityCards"] if c["fn"] == "item_use")
     assert repaired_packet["repairScope"]["fieldPermissions"]["calls"] == [{"id": use["id"], "paths": ["params.useStyle"]}]
     assert compile_runtime_program(fixed)["runtimeProgram"] == baseline["runtimeProgram"]
     assert validate_runtime_program(good)["ok"]
@@ -72,7 +72,7 @@ def test_visibility_advisory_reaches_real_packets_without_changing_choices(wire_
     assert visual_packets[1]["acceptedPresentationMechanicsReadOnly"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     assert vfx_packets[1]["acceptedRuntimeProgramReadOnly"]["itemUse"] == baseline["runtimeProgram"]["itemUse"]
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    expected_meaning = CAPABILITY_REGISTRY["configure_item_use"].params["hideUseGraphic"].description
+    expected_meaning = CAPABILITY_REGISTRY["item_use"].params["hideUseGraphic"].description
     assert descriptions == [expected_meaning] * len(descriptions)
     for request in [author, *requests]:
         assert request["response_format"]["type"] == format_mode

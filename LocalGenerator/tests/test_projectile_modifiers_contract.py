@@ -20,13 +20,13 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 from test_low_level_three_stage_pipeline import wire_transport
 
 PARAMS = {
-    "set_projectile_turn_modifier": dict(turnRadiansPerSecond=(.04) * 60, startDelaySeconds=(0) / 60, durationSeconds=(90) / 60),
-    "set_projectile_homing_modifier": dict(rangeTiles=40, maxTurnRadiansPerSecond=(.1) * 60, requireLineOfSight=True, startDelaySeconds=(40) / 60, durationSeconds=(50) / 60),
-    "attract_npcs_while_active": dict(rangeTiles=10, accelerationBlocksPerSecondSquared=(2) * 3600 / 16, falloff="linear", maxTargets=8, startDelaySeconds=(5) / 60, durationSeconds=(60) / 60),
-    "set_projectile_visual_scale_curve": dict(startScale=.5, endScale=4, startDelaySeconds=(5) / 60, durationSeconds=(60) / 60, curve="exponential"),
-    "set_projectile_lash_geometry": dict(clock="owner_animation", anchor="owner_center", reachBlocks=8,
+    "turn_velocity": dict(turnRadiansPerSecond=(.04) * 60, startDelay=(0) / 60, duration=(90) / 60),
+    "homing": dict(range=40, maxTurnRadiansPerSecond=(.1) * 60, requireLineOfSight=True, startDelay=(40) / 60, duration=(50) / 60),
+    "attract_npcs": dict(range=10, accel=(2) * 3600 / 16, falloff="linear", maxTargets=8, startDelay=(5) / 60, duration=(60) / 60),
+    "sprite_scale_curve": dict(startScale=.5, endScale=4, startDelay=(5) / 60, duration=(60) / 60, curve="exponential"),
+    "lash_geometry": dict(clock="owner_animation", anchor="owner_center", reach=8,
         segments=12, sweepStartRadians=-1, sweepEndRadians=1, bendRatio=.5,
-        useOwnerGravity=True, useOwnerWhipRangeMultiplier=False),
+        useOwnerGravity=True, useWhipRange=False),
 }
 
 def call(doc, fn):
@@ -46,8 +46,8 @@ def entity(wire, fn):
 
 
 @pytest.mark.parametrize("fn,format_mode,repair", [
-    ("set_projectile_visual_scale_curve", "json_object", False),
-    ("set_projectile_homing_modifier", "json_schema", True),
+    ("sprite_scale_curve", "json_object", False),
+    ("homing", "json_schema", True),
 ])
 def test_actual_visual_and_repair_packets_preserve_exact_modifier_owner(wire_transport, monkeypatch, fn, format_mode, repair):
     from infini_local.pipelines import visual_generation_pipeline as visual
@@ -84,15 +84,15 @@ def test_complete_vertical_witness_exact_identity_and_source_receipts(fn):
 # Distinct scalar admissions at both Author and unreceipted persisted-wire boundaries.
 # Registry numeric tests own the repeated per-field type/bounds matrix.
 @pytest.mark.parametrize("fn,leaf,kind,value", [
-    ("set_projectile_turn_modifier", "turnRadiansPerSecond", "missing", None),
-    ("set_projectile_turn_modifier", "turnRadiansPerSecond", "null", None),
-    ("set_projectile_homing_modifier", "rangeTiles", "negative", -22000),
-    ("set_projectile_homing_modifier", "requireLineOfSight", "wrong-type", 0),
-    ("attract_npcs_while_active", "accelerationBlocksPerSecondSquared", "infinity", float("inf")),
-    ("attract_npcs_while_active", "falloff", "unknown", "unknown"),
-    ("set_projectile_visual_scale_curve", "endScale", "nan", float("nan")),
-    ("set_projectile_visual_scale_curve", "curve", "missing", None),
-    ("set_projectile_visual_scale_curve", "durationSeconds", "negative", 0),
+    ("turn_velocity", "turnRadiansPerSecond", "missing", None),
+    ("turn_velocity", "turnRadiansPerSecond", "null", None),
+    ("homing", "range", "negative", -22000),
+    ("homing", "requireLineOfSight", "wrong-type", 0),
+    ("attract_npcs", "accel", "infinity", float("inf")),
+    ("attract_npcs", "falloff", "unknown", "unknown"),
+    ("sprite_scale_curve", "endScale", "nan", float("nan")),
+    ("sprite_scale_curve", "curve", "missing", None),
+    ("sprite_scale_curve", "duration", "negative", 0),
 ])
 def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, kind, value):
     doc = source(fn)
@@ -111,12 +111,12 @@ def test_modifier_leaf_requires_exact_present_author_and_wire_value(fn, leaf, ki
     assert not validate_runtime_wire(compiled)["ok"]
 
 @pytest.mark.parametrize("fn,mutation", [
-    ("set_projectile_turn_modifier", "null"),
-    ("set_projectile_homing_modifier", "duplicate"),
-    ("attract_npcs_while_active", "receipt_deleted"),
-    ("set_projectile_visual_scale_curve", "other_entity"),
-    ("set_projectile_lash_geometry", "item_target"),
-    ("set_projectile_lash_geometry", "unknown"),
+    ("turn_velocity", "null"),
+    ("homing", "duplicate"),
+    ("attract_npcs", "receipt_deleted"),
+    ("sprite_scale_curve", "other_entity"),
+    ("lash_geometry", "item_target"),
+    ("lash_geometry", "unknown"),
 ])
 def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutation):
     doc = source(fn); compiled = compile_runtime_program(doc)
@@ -138,89 +138,89 @@ def test_modifier_cannot_be_injected_or_reassigned_without_authority(fn, mutatio
     else: compiled["runtimeProgram"]["entities"][0][member] = entity(compiled, fn).pop(member)
     assert not validate_runtime_wire(compiled)["ok"]
 
-@pytest.mark.parametrize("fn", [fn for fn in PARAMS if fn != "set_projectile_lash_geometry"])
+@pytest.mark.parametrize("fn", [fn for fn in PARAMS if fn != "lash_geometry"])
 def test_frozen_repair_changes_only_invalid_phase_leaf(fn):
     doc = source(fn)
-    call(doc, fn)["params"]['durationSeconds'] = (0) / 60
+    call(doc, fn)["params"]['duration'] = (0) / 60
     expected = deepcopy(doc)
-    call(expected, fn)["params"]['durationSeconds'] = (100) / 60
+    call(expected, fn)["params"]['duration'] = (100) / 60
     replacement = deepcopy(call(doc, fn))
-    replacement["params"].update(durationSeconds=(100) / 60, startDelaySeconds=(21000) / 60)
+    replacement["params"].update(duration=(100) / 60, startDelay=(21000) / 60)
     repaired, final = frozen_call_repair(doc, [replacement],
-        [{"id": replacement["id"], "paths": ['params.durationSeconds']}], expected,
+        [{"id": replacement["id"], "paths": ['params.duration']}], expected,
         note="fix invalid duration only")
     assert entity(final, fn)[PROJECTILE_MODIFIER_COMPONENTS[fn]]["durationTicks"] == 100
 
 def test_simultaneous_and_delayed_modifiers_are_independent_of_the_movement_slot():
-    doc = source("set_projectile_turn_modifier")
-    target = call(doc, "set_projectile_turn_modifier")["target"]
-    for index, fn in enumerate([fn for fn in PARAMS if fn != "set_projectile_lash_geometry"][1:]):
+    doc = source("turn_velocity")
+    target = call(doc, "turn_velocity")["target"]
+    for index, fn in enumerate([fn for fn in PARAMS if fn != "lash_geometry"][1:]):
         doc["runtimeProgram"]["calls"].append(dict(id=f"modifier_{index}", fn=fn, target=target, params=deepcopy(PARAMS[fn])))
-    doc["runtimeProgram"]["calls"].append(dict(id="gameplay_curve", fn="set_projectile_hitbox_curve", target=target,
-        params=dict(startScale=1, endScale=2, startDelaySeconds=0, durationSeconds=80 / 60, curve="linear", mirrorToSprite=False)))
+    doc["runtimeProgram"]["calls"].append(dict(id="gameplay_curve", fn="hitbox_curve", target=target,
+        params=dict(startScale=1, endScale=2, startDelay=0, duration=80 / 60, curve="linear", mirrorToSprite=False)))
     compiled = compile_runtime_program(doc)
-    final = entity(compiled, "set_projectile_turn_modifier")
+    final = entity(compiled, "turn_velocity")
     assert final["movement"]["code"] == 0
     for fn in PARAMS:
-        if fn != "set_projectile_lash_geometry":
+        if fn != "lash_geometry":
             assert final[PROJECTILE_MODIFIER_COMPONENTS[fn]] == projected_params(fn, PARAMS[fn])
     assert final["hitboxCurve"]["endScale"] == 2
-    call(doc, "set_projectile_hitbox_curve")["params"]["mirrorToSprite"] = True
+    call(doc, "hitbox_curve")["params"]["mirrorToSprite"] = True
     errors = validate_runtime_program(doc)["errors"]
     assert any(row["code"] == "exclusive_component_conflict" and row["path"].endswith("mirrorToSprite") for row in errors)
     scope = build_runtime_repair_scope(doc, errors)
-    fix = deepcopy(call(doc, "set_projectile_hitbox_curve")); fix["params"].update(mirrorToSprite=False, endScale=7)
+    fix = deepcopy(call(doc, "hitbox_curve")); fix["params"].update(mirrorToSprite=False, endScale=7)
     patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [fix], "note": "retain the independent visual curve"}, scope)
     repaired = apply_repair_patch(doc, patch)
-    assert call(repaired, "set_projectile_hitbox_curve")["params"]["endScale"] == 2
+    assert call(repaired, "hitbox_curve")["params"]["endScale"] == 2
     compile_runtime_program(repaired)
 
 def test_npc_attraction_alone_is_meaningful_on_a_field_without_drag():
-    doc = source("attract_npcs_while_active")
-    target = call(doc, "attract_npcs_while_active")["target"]
+    doc = source("attract_npcs")
+    target = call(doc, "attract_npcs")["target"]
     next(row for row in doc["runtimeProgram"]["entities"] if row["id"] == target)["kind"] = "field"
-    doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] not in {"move_straight", "set_projectile_damage"}]
+    doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] not in {"move_straight", "projectile_damage"}]
     compiled = compile_runtime_program(doc)
-    final = entity(compiled, "attract_npcs_while_active")
+    final = entity(compiled, "attract_npcs")
     assert "movement" not in final and "damage" not in final
-    assert final["npcAttraction"] == projected_params("attract_npcs_while_active", PARAMS["attract_npcs_while_active"])
+    assert final["npcAttraction"] == projected_params("attract_npcs", PARAMS["attract_npcs"])
 
 def test_lash_gravity_is_explicit_and_requires_its_real_axis_dependency():
-    doc = source("set_projectile_lash_geometry")
+    doc = source("lash_geometry")
     compiled = compile_runtime_program(doc)
-    assert entity(compiled, "set_projectile_lash_geometry")["lashGeometry"]["useOwnerGravity"] is True
-    doc["runtimeProgram"]["calls"].remove(call(doc, "set_projectile_aim"))
+    assert entity(compiled, "lash_geometry")["lashGeometry"]["useOwnerGravity"] is True
+    doc["runtimeProgram"]["calls"].remove(call(doc, "set_aim"))
     assert not validate_runtime_program(doc)["ok"]
     compiled.pop("runtimeContract")
-    entity(compiled, "set_projectile_lash_geometry").pop("aim")
+    entity(compiled, "lash_geometry").pop("aim")
     assert not validate_runtime_wire(compiled)["ok"]
 
-@pytest.mark.parametrize("driver", ["set_projectile_beam_geometry", "set_projectile_lash_geometry", "add_projectile_visual_scale"])
+@pytest.mark.parametrize("driver", ["beam_geometry", "lash_geometry", "add_sprite_scale"])
 def test_visual_curve_cannot_be_ignored_by_line_geometry_or_overwritten_by_another_scale_owner(driver):
     doc = build_capability_witness(driver)
     target = call(doc, driver)["target"]
-    doc["runtimeProgram"]["calls"].append(dict(id="visual_curve", fn="set_projectile_visual_scale_curve", target=target,
-        params=deepcopy(PARAMS["set_projectile_visual_scale_curve"])))
+    doc["runtimeProgram"]["calls"].append(dict(id="visual_curve", fn="sprite_scale_curve", target=target,
+        params=deepcopy(PARAMS["sprite_scale_curve"])))
     assert any(row["code"] == "exclusive_component_conflict" for row in validate_runtime_program(doc)["errors"])
     compiled = compile_runtime_program(build_capability_witness(driver))
-    next(row for row in compiled["runtimeProgram"]["entities"] if row["id"] == target)["visualScaleCurve"] = projected_params("set_projectile_visual_scale_curve", PARAMS["set_projectile_visual_scale_curve"])
+    next(row for row in compiled["runtimeProgram"]["entities"] if row["id"] == target)["visualScaleCurve"] = projected_params("sprite_scale_curve", PARAMS["sprite_scale_curve"])
     compiled.pop("runtimeContract")
     assert not validate_runtime_wire(compiled)["ok"]
 
 
 @pytest.mark.parametrize("fn,leaf,collapsed,neutral,positive", [
-    ("set_projectile_turn_modifier", "turnRadiansPerSecond", 1e-46, 0, 2.4),
+    ("turn_velocity", "turnRadiansPerSecond", 1e-46, 0, 2.4),
 ])
 def test_non_neutral_modifier_cannot_collapse_in_the_real_consumer_and_repair_is_leaf_local(fn, leaf, collapsed, neutral, positive):
     doc = source(fn); call(doc, fn)["params"][leaf] = collapsed
     errors = validate_runtime_program(doc)["errors"]
     assert any(row["path"].endswith(".params." + leaf) for row in errors)
     scope = build_runtime_repair_scope(doc, errors)
-    correction = deepcopy(call(doc, fn)); correction["params"].update({leaf: positive, 'durationSeconds': (20000) / 60})
+    correction = deepcopy(call(doc, fn)); correction["params"].update({leaf: positive, 'duration': (20000) / 60})
     patch, audit = filter_repair_patch_scope(doc, {"callsUpsert": [correction], "note": "retain nonneutral consumer value"}, scope)
     assert audit["ok"] and audit["ignoredChanges"]
     repaired = apply_repair_patch(doc, patch)
-    assert call(repaired, fn)["params"]['durationSeconds'] == PARAMS[fn]["durationSeconds"]
+    assert call(repaired, fn)["params"]['duration'] == PARAMS[fn]["duration"]
     assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]
     for accepted in (neutral, positive):
         control = source(fn); call(control, fn)["params"][leaf] = accepted
@@ -232,29 +232,29 @@ def test_non_neutral_modifier_cannot_collapse_in_the_real_consumer_and_repair_is
 
 @pytest.mark.parametrize("format_mode", ["json_object", "json_schema"])
 def test_modifier_phase_repair_freezes_child_launch_and_parent_combat(monkeypatch, format_mode):
-    doc = build_capability_witness("spawn_entity_on_event")
-    producer = call(doc, "spawn_entity_on_event")
+    doc = build_capability_witness("spawn_on_event")
+    producer = call(doc, "spawn_on_event")
     producer["params"].update(damageBasis="live_parent", knockbackBasis="authored_child")
     child = producer["params"]["entity"]
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
-                 if row["fn"] == "configure_spawn" and row["target"] == child)
+                 if row["fn"] == "spawn" and row["target"] == child)
     spawn["params"]["velocity"] = {"cone": {
-        'minSpeedBlocksPerSecond': (4) * 60 / 16, 'maxSpeedBlocksPerSecond': (7) * 60 / 16, "halfAngleRadians": .2}}
-    modifier = dict(id="child_turn", fn="set_projectile_turn_modifier", target=child,
-                    params=deepcopy(PARAMS["set_projectile_turn_modifier"]))
+        'minSpeed': (4) * 60 / 16, 'maxSpeed': (7) * 60 / 16, "halfAngleRadians": .2}}
+    modifier = dict(id="child_turn", fn="turn_velocity", target=child,
+                    params=deepcopy(PARAMS["turn_velocity"]))
     doc["runtimeProgram"]["calls"].append(modifier)
     expected = deepcopy(doc)
     expected_wire = compile_runtime_program(expected)
-    modifier["params"]['durationSeconds'] = (0) / 60
+    modifier["params"]['duration'] = (0) / 60
     correction = deepcopy(modifier)
-    correction["params"].update(durationSeconds=(90) / 60, turnRadiansPerSecond=(.2) * 60)
+    correction["params"].update(duration=(90) / 60, turnRadiansPerSecond=(.2) * 60)
     hostile_producer = deepcopy(producer)
     hostile_producer["params"].update(entity="item", damageBasis="authored_child")
     hostile_spawn = deepcopy(spawn)
-    hostile_spawn["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (12) * 60 / 16}
+    hostile_spawn["params"]["velocity"] = {'speed': (12) * 60 / 16}
     _, _, wire = frozen_gameplay_repair(monkeypatch, doc,
         {"note": "repair child phase only", "realizationReplacement": doc["realization"],
          "callsUpsert": [correction, hostile_producer, hostile_spawn]}, format_mode,
-        {"calls": [{"id": "child_turn", "paths": ['params.durationSeconds']}]}, expected,
+        {"calls": [{"id": "child_turn", "paths": ['params.duration']}]}, expected,
         out_of_scope_response=True)
     assert wire == expected_wire

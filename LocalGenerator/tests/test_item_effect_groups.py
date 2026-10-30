@@ -32,20 +32,20 @@ def _groups(fn="restore_resources_on_use"):
     other["params"]["effectGroupId"] = "second"
     if fn == "restore_resources_on_use":
         other["params"].update(healLife=0, healMana=35)
-    elif fn == "move_player_on_use":
-        other["params"].update(mode="blink_to_cursor", rangeTiles=12, cooldownSeconds=(90) / 60)
+    elif fn == "blink_on_use":
+        other["params"].update(mode="blink_to_cursor", range=12, cooldown=(90) / 60)
     elif fn == "recall_home_on_use":
-        other["params"]['cooldownSeconds'] = (90) / 60
-    elif fn == "apply_vanilla_buff_on_use":
+        other["params"]['cooldown'] = (90) / 60
+    elif fn == "native_buff_on_use":
         other["params"]["buffId"] = 2
     else:
-        other["params"].update(lightStrength=0.5, durationSeconds=(120) / 60)
+        other["params"].update(lightStrength=0.5, duration=(120) / 60)
     program["bindings"].append(alternate)
     program["calls"].append(other)
     return doc
 
 
-@pytest.mark.parametrize("fn", ["restore_resources_on_use", "apply_vanilla_buff_on_use", "apply_generated_buff_on_use", "move_player_on_use", "recall_home_on_use"])
+@pytest.mark.parametrize("fn", ["restore_resources_on_use", "native_buff_on_use", "generated_buff_on_use", "blink_on_use", "recall_home_on_use"])
 def test_every_existing_item_effect_can_partition_explicit_main_and_alternate_groups(fn):
     doc = _groups(fn)
     before = deepcopy(doc)
@@ -67,18 +67,18 @@ def _mobility_pair(first, second):
     doc = _groups(first)
     replacement = deepcopy(next(row for row in build_capability_witness(second)["runtimeProgram"]["calls"] if row["fn"] == second))
     replacement.update(id="second_effect")
-    replacement["params"].update(effectGroupId="second", cooldownSeconds=(90) / 60)
+    replacement["params"].update(effectGroupId="second", cooldown=(90) / 60)
     doc["runtimeProgram"]["calls"][-1] = replacement
     return doc
 
 
 @pytest.mark.parametrize("first,second,owner", [
-    ("move_player_on_use", "move_player_on_use", "same"),
+    ("blink_on_use", "blink_on_use", "same"),
     ("recall_home_on_use", "recall_home_on_use", "default"),
-    ("move_player_on_use", "recall_home_on_use", "same"),
-    ("recall_home_on_use", "move_player_on_use", "default"),
-    ("move_player_on_use", "recall_home_on_use", "distinct"),
-    ("recall_home_on_use", "move_player_on_use", "named-default"),
+    ("blink_on_use", "recall_home_on_use", "same"),
+    ("recall_home_on_use", "blink_on_use", "default"),
+    ("blink_on_use", "recall_home_on_use", "distinct"),
+    ("recall_home_on_use", "blink_on_use", "named-default"),
 ])
 def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(first, second, owner):
     doc = _mobility_pair(first, second)
@@ -103,7 +103,7 @@ def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(fir
         for call in effects:
             group_id = call["params"].get("effectGroupId")
             destination = next(row for row in final["runtimeProgram"]["effectGroups"] if row["id"] == group_id) if group_id else final["gameplay"]
-            assert destination["mobilityCooldownTicks"] == CAPABILITY_REGISTRY[call["fn"]].params["cooldownSeconds"].to_wire(call["params"]["cooldownSeconds"])
+            assert destination["mobilityCooldownTicks"] == CAPABILITY_REGISTRY[call["fn"]].params["cooldown"].to_wire(call["params"]["cooldown"])
             if call["fn"] == "recall_home_on_use":
                 assert {key: destination[key] for key in CAPABILITY_REGISTRY[call["fn"]].fixed_wire_literals} == dict(CAPABILITY_REGISTRY[call["fn"]].fixed_wire_literals)
         receipts = final["runtimeContract"]["finalWireReceipts"]
@@ -122,7 +122,7 @@ def test_mobility_exclusivity_uses_exact_effect_owner_not_input_or_operation(fir
     ("mobilitySafeTileOnly", "cross_owner", True),
 ])
 def test_named_recall_fixed_literals_have_unique_exact_selected_owner_receipts(field, mutation, source_available):
-    doc = _mobility_pair("move_player_on_use", "recall_home_on_use")
+    doc = _mobility_pair("blink_on_use", "recall_home_on_use")
     final = compile_runtime_program(doc)
     rows = final["runtimeContract"]["finalWireReceipts"]
     row = next(row for row in rows if row.get("fn") == "recall_home_on_use" and row["finalPath"].endswith("." + field))
@@ -144,20 +144,20 @@ def test_named_recall_fixed_literals_have_unique_exact_selected_owner_receipts(f
     assert not validate_runtime_wire(final)["ok"]
 
 
-@pytest.mark.parametrize("fn", ["move_player_on_use", "recall_home_on_use"])
+@pytest.mark.parametrize("fn", ["blink_on_use", "recall_home_on_use"])
 def test_mobility_leaf_repair_keeps_group_identity_and_other_effect_frozen(monkeypatch, fn):
     format_mode = "json_schema"
-    doc = _mobility_pair("move_player_on_use", fn)
+    doc = _mobility_pair("blink_on_use", fn)
     call = doc["runtimeProgram"]["calls"][-1]
-    call["params"]['cooldownSeconds'] = True
+    call["params"]['cooldown'] = True
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": "second_effect", "paths": ['params.cooldownSeconds']}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": "second_effect", "paths": ['params.cooldown']}]
     fixed = deepcopy(call)
-    fixed["params"]['cooldownSeconds'] = (90) / 60
+    fixed["params"]['cooldown'] = (90) / 60
     expected = apply_repair_patch(doc, {"note": "one explicit leaf", "callsUpsert": [fixed]})
     fixed["params"]["effectGroupId"] = "first"
     hostile = deepcopy(doc["runtimeProgram"]["calls"][-2])
-    hostile["params"]["rangeTiles"] = 120
+    hostile["params"]["range"] = 120
     repaired, _ = gameplay_repair(monkeypatch, doc,
         {"note": "one explicit leaf with frozen attacks", "realizationReplacement": doc["realization"], "callsUpsert": [fixed, hostile]},
         format_mode, out_of_scope_response=fn == "recall_home_on_use")
@@ -180,7 +180,7 @@ def test_named_and_default_effects_remain_independent():
 
 def test_same_named_group_composes_explicit_components():
     doc = _groups()
-    buff = next(c for c in build_capability_witness("apply_generated_buff_on_use")["runtimeProgram"]["calls"] if c["fn"] == "apply_generated_buff_on_use")
+    buff = next(c for c in build_capability_witness("generated_buff_on_use")["runtimeProgram"]["calls"] if c["fn"] == "generated_buff_on_use")
     buff["id"] = "primary_light"
     buff["params"]["effectGroupId"] = "first"
     doc["runtimeProgram"]["calls"].append(buff)
@@ -206,7 +206,7 @@ def test_same_named_group_composes_explicit_components():
 
 
 def test_held_refresh_is_explicit_generated_utility_with_no_active_effect_binding():
-    doc = build_capability_witness("refresh_generated_effect_group_while_held")
+    doc = build_capability_witness("refresh_held_effect")
     final = compile_runtime_program(doc)
     assert final["runtimeProgram"]["heldEffectGroupId"] == "witness"
     assert set(final["runtimeProgram"]["effectGroups"][0]) == {"id", "generatedBuff"}
@@ -214,9 +214,9 @@ def test_held_refresh_is_explicit_generated_utility_with_no_active_effect_bindin
     assert len(final["runtimeProgram"]["entities"]) == 1
 
 
-@pytest.mark.parametrize("extra", ["restore_resources_on_use", "apply_vanilla_buff_on_use", "move_player_on_use"])
+@pytest.mark.parametrize("extra", ["restore_resources_on_use", "native_buff_on_use", "blink_on_use"])
 def test_held_refresh_cannot_repeat_instant_heal_native_buffs_or_mobility(extra):
-    doc = build_capability_witness("refresh_generated_effect_group_while_held")
+    doc = build_capability_witness("refresh_held_effect")
     call = next(c for c in build_capability_witness(extra)["runtimeProgram"]["calls"] if c["fn"] == extra)
     call["id"] = "illegal_held_effect"
     call["params"]["effectGroupId"] = "witness"
@@ -237,9 +237,9 @@ def test_effect_identity_is_strict_and_not_a_semantic_family(value):
 
 @pytest.mark.parametrize("held", [False, True])
 def test_repair_retargets_only_invalid_reference_and_keeps_effects_frozen(held):
-    doc = build_capability_witness("refresh_generated_effect_group_while_held") if held else _groups()
+    doc = build_capability_witness("refresh_held_effect") if held else _groups()
     rows = doc["runtimeProgram"]["calls" if held else "bindings"]
-    row = next(r for r in rows if r.get("fn") == "refresh_generated_effect_group_while_held") if held else rows[0]
+    row = next(r for r in rows if r.get("fn") == "refresh_held_effect") if held else rows[0]
     holder = row["params"] if held else row["action"]
     expected = holder["effectGroupId"]
     holder["effectGroupId"] = "missing"
@@ -301,18 +301,18 @@ def test_ungrouped_omission_never_materializes_named_groups_or_binding_receipts(
 
 @pytest.mark.parametrize("held", [False, True])
 def test_named_generated_buff_neutral_omissions_have_exact_unique_group_receipts(held):
-    doc = build_capability_witness("refresh_generated_effect_group_while_held") if held else _groups("apply_generated_buff_on_use")
-    defaults = {name: spec.default for name, spec in CAPABILITY_REGISTRY["apply_generated_buff_on_use"].params.items()
+    doc = build_capability_witness("refresh_held_effect") if held else _groups("generated_buff_on_use")
+    defaults = {name: spec.default for name, spec in CAPABILITY_REGISTRY["generated_buff_on_use"].params.items()
                 if spec.default is not None}
     for call in doc["runtimeProgram"]["calls"]:
-        if call["fn"] == "apply_generated_buff_on_use":
+        if call["fn"] == "generated_buff_on_use":
             for name in defaults:
                 call["params"].pop(name, None)
     before = deepcopy(doc)
     final = compile_runtime_program(doc)
     assert doc == before
     rows = final["runtimeContract"]["finalWireReceipts"]
-    omissions = [row for row in rows if row.get("status") == "declared_neutral_omission" and row.get("fn") == "apply_generated_buff_on_use"]
+    omissions = [row for row in rows if row.get("status") == "declared_neutral_omission" and row.get("fn") == "generated_buff_on_use"]
     assert len(omissions) == len(defaults) * (1 if held else 2)
     assert all(row["finalPath"].startswith("runtimeProgram.effectGroups[") for row in omissions)
     assert audit_compiler_receipts(rows, final_document=final)["ok"]
@@ -322,7 +322,7 @@ def test_named_generated_buff_neutral_omissions_have_exact_unique_group_receipts
 
 
 def test_named_group_dto_neutral_serialization_is_accepted_without_new_effects():
-    final = compile_runtime_program(build_capability_witness("refresh_generated_effect_group_while_held"))
+    final = compile_runtime_program(build_capability_witness("refresh_held_effect"))
     final.pop("runtimeContract")  # DTO transport is validated without claiming source receipts.
     group = final["runtimeProgram"]["effectGroups"][0]
     group.update(healLife=0, healMana=0, potion=False, extraBuffs=[], mobilityMode="", mobilityRangeTiles=0,
@@ -354,10 +354,10 @@ def test_broken_selector_does_not_suppress_independent_group_consumer(monkeypatc
 
 def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatch):
     format_mode = "json_schema"
-    doc = build_capability_witness("refresh_generated_effect_group_while_held")
-    doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "apply_generated_buff_on_use"]
-    held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
-    frozen = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    doc = build_capability_witness("refresh_held_effect")
+    doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "generated_buff_on_use"]
+    held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_held_effect")
+    frozen = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     before = json.dumps(doc, sort_keys=True)
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["deletable"]["callIds"] == [held["id"]]
@@ -371,12 +371,12 @@ def test_empty_held_domain_allows_only_explicit_invalid_call_deletion(monkeypatc
 
 def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(monkeypatch):
     format_mode = "json_schema"
-    doc = _groups("apply_generated_buff_on_use")
+    doc = _groups("generated_buff_on_use")
     bindings = doc["runtimeProgram"]["bindings"]
     alternate = bindings.pop()
     bindings[0]["action"] = {"kind": "use_item_body"}
-    held = deepcopy(next(row for row in build_capability_witness("refresh_generated_effect_group_while_held")["runtimeProgram"]["calls"]
-                         if row["fn"] == "refresh_generated_effect_group_while_held"))
+    held = deepcopy(next(row for row in build_capability_witness("refresh_held_effect")["runtimeProgram"]["calls"]
+                         if row["fn"] == "refresh_held_effect"))
     held.update(id="held_selector")
     held["params"]["effectGroupId"] = "missing"
     doc["runtimeProgram"]["calls"].append(held)
@@ -397,9 +397,9 @@ def test_broken_held_selector_cannot_suppress_another_generated_group_consumer(m
 
 def test_nonempty_held_domain_retargets_but_cannot_delete_valid_utility(monkeypatch):
     format_mode = "json_schema"
-    doc = build_capability_witness("refresh_generated_effect_group_while_held")
-    held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")
-    buff = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "apply_generated_buff_on_use")
+    doc = build_capability_witness("refresh_held_effect")
+    held = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_held_effect")
+    buff = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "generated_buff_on_use")
     held["params"]["effectGroupId"] = "missing"
     scope = build_runtime_repair_scope(doc, validate_runtime_program(doc)["errors"])
     assert scope["deletable"]["callIds"] == []
@@ -417,14 +417,14 @@ def test_selector_noop_remains_red_without_host_design(monkeypatch, case):
     format_mode = "json_schema"
     from infini_local.core.errors import PlannerUnavailable
 
-    doc = _groups() if case == "broken-active" else build_capability_witness("refresh_generated_effect_group_while_held")
+    doc = _groups() if case == "broken-active" else build_capability_witness("refresh_held_effect")
     if case == "broken-active":
         doc["runtimeProgram"]["bindings"].pop()
         doc["runtimeProgram"]["bindings"][0]["action"]["effectGroupId"] = "missing"
     elif case == "nonempty-held":
-        next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_generated_effect_group_while_held")["params"]["effectGroupId"] = "missing"
+        next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "refresh_held_effect")["params"]["effectGroupId"] = "missing"
     else:
-        doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "apply_generated_buff_on_use"]
+        doc["runtimeProgram"]["calls"] = [row for row in doc["runtimeProgram"]["calls"] if row["fn"] != "generated_buff_on_use"]
     before = deepcopy(doc)
     with pytest.raises(PlannerUnavailable):
         gameplay_repair(monkeypatch, doc,
@@ -546,12 +546,12 @@ def test_combined_raw_wire_malformed_input_is_structured_nonmutating_refusal(inp
     assert json.dumps(parsed, sort_keys=True) == raw
 
 
-@pytest.mark.parametrize("activation", ["apply_generated_buff_on_use", "refresh_generated_effect_group_while_held", "apply_generated_buff_on_event"])
+@pytest.mark.parametrize("activation", ["generated_buff_on_use", "refresh_held_effect", "generated_buff_on_event"])
 def test_generated_buff_activation_requires_its_exact_group_not_an_unrelated_consumer(activation):
     doc = build_capability_witness(activation)
     assert validate_runtime_program(doc)["ok"]
     assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
-    effect = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "apply_generated_buff_on_use")
+    effect = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "generated_buff_on_use")
     effect["params"]["effectGroupId"] = "orphan_group"
     before = deepcopy(doc)
     report = validate_runtime_program(doc)

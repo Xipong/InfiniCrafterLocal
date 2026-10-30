@@ -14,10 +14,10 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-def unrestricted_source(fn="set_projectile_homing_modifier"):
+def unrestricted_source(fn="homing"):
     source = build_capability_witness(fn)
     call = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == fn)
-    for name in ("window", "startDelaySeconds", "durationSeconds"):
+    for name in ("window", "startDelay", "duration"):
         call["params"].pop(name, None)
     return source, call
 
@@ -35,8 +35,8 @@ def test_root_neutral_window_is_a_flat_leaf_receipt_and_exact_private_completion
 
 
 @pytest.mark.parametrize("timing", [
-    {"startDelaySeconds": 0, "durationSeconds": 1},
-    {"startDelaySeconds": 0}, {"durationSeconds": 1},
+    {"startDelay": 0, "duration": 1},
+    {"startDelay": 0}, {"duration": 1},
     {"window": {"phase": "always"}}, {"window": None},
 ])
 def test_timing_presence_does_not_authorize_unrestricted_completion(timing):
@@ -47,8 +47,8 @@ def test_timing_presence_does_not_authorize_unrestricted_completion(timing):
 
 
 @pytest.mark.parametrize("fn", [
-    "set_projectile_homing_modifier", "set_projectile_turn_modifier",
-    "attract_npcs_while_active",
+    "homing", "turn_velocity",
+    "attract_npcs",
 ])
 def test_unrestricted_compilation_is_explicit_always_wire_with_one_omitted_phase(fn):
     source, call = unrestricted_source(fn)
@@ -109,7 +109,7 @@ def test_forged_or_incomplete_window_proof_is_rejected_without_mutation(attack):
     elif attack == "root_path":
         phase["authoredPath"] = phase["authoredPath"].removesuffix(".phase")
     elif attack == "foreign_fn":
-        phase["fn"] = "set_projectile_turn_modifier"
+        phase["fn"] = "turn_velocity"
     elif attack == "foreign_target":
         other = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] != call["target"])
         index = wire["runtimeProgram"]["entities"].index(other)
@@ -153,8 +153,8 @@ def test_saved_omission_scope_uses_delivered_siblings_even_without_their_receipt
 
 @pytest.mark.parametrize("timing", [
     {"window": {"phase": "always"}},
-    {"startDelaySeconds": 0, "durationSeconds": 1},
-    {"startDelaySeconds": None, "durationSeconds": 1},
+    {"startDelay": 0, "duration": 1},
+    {"startDelay": None, "duration": 1},
 ])
 def test_omission_receipt_cannot_relabel_present_author_timing(timing):
     source, call = unrestricted_source()
@@ -165,13 +165,13 @@ def test_omission_receipt_cannot_relabel_present_author_timing(timing):
 
 
 @pytest.mark.parametrize("fn", [
-    "set_projectile_turn_modifier", "set_projectile_homing_modifier", "attract_npcs_while_active",
+    "turn_velocity", "homing", "attract_npcs",
 ])
 def test_full_pair_preserves_absent_window_and_delivered_receipt_presence(fn):
     source = build_capability_witness(fn)
     call = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == fn)
     call["params"].pop("window", None)
-    call["params"].update(startDelaySeconds=0.5, durationSeconds=1)
+    call["params"].update(startDelay=0.5, duration=1)
     before = deepcopy(source)
     wire = compile_runtime_program(source)
     entity = next(e for e in wire["runtimeProgram"]["entities"] if e["id"] == call["target"])
@@ -191,7 +191,7 @@ def test_full_pair_preserves_absent_window_and_delivered_receipt_presence(fn):
 def test_root_omission_cannot_be_spliced_into_an_explicit_timed_window():
     source, call = unrestricted_source()
     call["params"]["window"] = {
-        "phase": "always", "clock": "active", "startDelaySeconds": 0, "durationSeconds": 1,
+        "phase": "always", "clock": "active", "startDelay": 0, "duration": 1,
     }
     wire = compile_runtime_program(source)
     omitted_phase(wire, call)["status"] = "declared_neutral_omission"
@@ -220,7 +220,7 @@ def test_stripped_wire_never_completes_invalid_or_partial_windows(window):
 
 
 def test_completion_does_not_create_an_undeclared_structured_parent():
-    fn = "set_projectile_visual_scale_curve"
+    fn = "sprite_scale_curve"
     _, call = unrestricted_source(fn)
     assert "window" not in _completed_params(fn, call["params"])
     assert not declared_neutral_omissions(fn, call["params"])

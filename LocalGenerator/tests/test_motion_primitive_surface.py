@@ -118,7 +118,7 @@ def test_partial_property_inventory_ignores_nested_class_and_decoys():
 
 
 def test_missing_nested_wire_key_is_detected_from_registry_projection(dto, monkeypatch):
-    cap = audit.CAPABILITY_REGISTRY["seek_projectile"]
+    cap = audit.CAPABILITY_REGISTRY["seek"]
     params = {name: spec for name, spec in cap.params.items() if "maxSpeed" not in spec.wire_field_names(name)}
     monkeypatch.setattr(audit, "CAPABILITY_REGISTRY", {**audit.CAPABILITY_REGISTRY,
         cap.name: replace(cap, params=params)})
@@ -128,7 +128,7 @@ def test_missing_nested_wire_key_is_detected_from_registry_projection(dto, monke
 
 
 def test_one_component_cannot_lose_shared_window_wire_leaf(dto, monkeypatch):
-    cap = audit.CAPABILITY_REGISTRY["seek_projectile"]
+    cap = audit.CAPABILITY_REGISTRY["seek"]
     window = cap.params["window"]
     alternatives = tuple(replace(variant, properties={name: spec for name, spec in variant.properties.items()
                                                      if "window.clock" not in spec.wire_field_names(name)})
@@ -142,8 +142,8 @@ def test_one_component_cannot_lose_shared_window_wire_leaf(dto, monkeypatch):
 
 
 @pytest.mark.parametrize("fn,cls,field", (
-    ("set_projectile_arrival", "RuntimeArrivalSpec", "Action"),
-    ("sustain_projectile_mana", "RuntimeManaSustainSpec", "Cadence"),
+    ("kill_on_arrival", "RuntimeArrivalSpec", "Action"),
+    ("sustain_mana", "RuntimeManaSustainSpec", "Cadence"),
 ))
 def test_fn_selected_literals_are_owned_not_hidden(dto, monkeypatch, fn, cls, field):
     cap = audit.CAPABILITY_REGISTRY[fn]

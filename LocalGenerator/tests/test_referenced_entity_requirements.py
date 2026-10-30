@@ -18,15 +18,15 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 def constrained_reference(monkeypatch):
     # Exercise generic metadata on an isolated registry entry. Production A10/A11
     # supply real adapter names/opcodes; this framework test adds no runtime alias.
-    source = registry.CAPABILITY_REGISTRY["spawn_entity_on_event"]
+    source = registry.CAPABILITY_REGISTRY["spawn_on_event"]
     params = dict(source.params)
     params["entity"] = replace(params["entity"], reference=registry.ReferenceSpec(
         "entity", ("free_projectile", "child_projectile"), False, True))
     requirements = (*source.requirements,
-        registry.RequirementSpec("referenced_entity_capability_params", param="entity", capability="configure_spawn",
+        registry.RequirementSpec("referenced_entity_capability_params", param="entity", capability="spawn",
             equals={"position": {"at": "activation_origin"}, "aim": "velocity", "offsetBlocks": 0},
             message="The emission reference needs explicit origin/velocity spawn without offset."),
-        registry.RequirementSpec("referenced_entity_without_capability", param="entity", capability="emit_light_while_active",
+        registry.RequirementSpec("referenced_entity_without_capability", param="entity", capability="projectile_light",
             message="This test-local reference forbids an independently valid light capability."))
     cap = replace(source, name="probe_reference_adapter", params=MappingProxyType(params), requirements=requirements)
     mapping = dict(registry.CAPABILITY_REGISTRY, probe_reference_adapter=cap)
@@ -55,7 +55,7 @@ def _new_child(doc, name):
     calls = [deepcopy(row) for row in doc["runtimeProgram"]["calls"] if row.get("target") == "nail"]
     for row in calls:
         row["target"] = name; row["id"] = row["id"].replace("nail", name)
-        if row["fn"] == "configure_spawn":
+        if row["fn"] == "spawn":
             row["params"].update(aim="velocity", position={"at": "activation_origin"}, offsetBlocks=(0) / 16)
     return entity, calls
 
@@ -84,9 +84,9 @@ def test_reference_exact_params_have_no_missing_or_boolean_numeric_fallback(cons
 
 def test_reference_exact_number_uses_declared_json_numeric_domain(constrained_reference):
     requirement = registry.RequirementSpec("referenced_entity_capability_params", param="entity",
-        capability="configure_spawn", equals={"spreadRadians": 0})
+        capability="spawn", equals={"spreadRadians": 0})
     for value, accepted in [(0, True), (0.0, True), (False, False), (0.1, False)]:
-        rows = {"child": [{"fn": "configure_spawn", "params": {"spreadRadians": value}}]}
+        rows = {"child": [{"fn": "spawn", "params": {"spreadRadians": value}}]}
         assert registry.referenced_entity_requirement_satisfied(requirement, "child", rows) is accepted
 
 
@@ -95,12 +95,12 @@ def test_reference_without_capability_is_not_a_supporting_dependency(constrained
     spawn = next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "nail_spawn")
     spawn["params"]["aim"] = "velocity"
     assert validate_runtime_program(doc)["ok"]
-    doc["runtimeProgram"]["calls"].append({"id": "nail_telegraph", "target": "nail", "fn": "emit_light_while_active",
+    doc["runtimeProgram"]["calls"].append({"id": "nail_telegraph", "target": "nail", "fn": "projectile_light",
         "params": {"strength": 0.5, "color": "orange"}})
     report = validate_runtime_program(doc)
     assert [row["code"] for row in report["errors"]] == ["reference_requirements_unsatisfied"]
     scope = build_runtime_repair_scope(doc, report["errors"])
-    assert "emit_light_while_active" not in scope["capabilitySubset"]
+    assert "projectile_light" not in scope["capabilitySubset"]
     assert scope["fieldPermissions"]["calls"] == [{"id": "probe_reference", "paths": ["params.entity"]}]
     assert "nail_telegraph" not in scope["mutable"]["callIds"]
 
@@ -206,7 +206,7 @@ def test_reference_repair_can_create_complete_child_without_touching_existing_no
     assert scope["create"]["entities"]["allowed"]
     assert set(scope["create"]["entities"]["allowedKinds"]) == {"free_projectile", "child_projectile"}
     assert scope["create"]["calls"]["allowedTargetIds"] == []
-    assert "emit_light_while_active" not in scope["create"]["calls"]["allowedFns"]
+    assert "projectile_light" not in scope["create"]["calls"]["allowedFns"]
     entity, calls = _new_child(doc, "selected_nail")
     candidate = deepcopy(_probe(doc)); candidate["params"]["entity"] = entity["id"]
     patch = {"note": "explicit complete replacement child", "entitiesUpsert": [entity], "callsUpsert": [candidate, *calls]}

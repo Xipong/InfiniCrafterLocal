@@ -187,6 +187,12 @@ public sealed partial class GeneratorClient
             if (program["identitySelected"]?["identitySelection"] is JsonObject receipt)
                 receipt["scope"] = receipt["scope"]!.GetValue<string>()
                     + " Assumes captured Projectile.type/aiStyle at UpdatePosition entry; enclosing caller identity preservation is not proved.";
+            if (program["identitySelected"] is JsonObject selected && program["predicates"] is JsonArray)
+            {
+                try { selected["identityAlternatives"] = DescribeIdentityAlternatives(new ParentSourceMethod(integration, AttackCode(integration)), program, selected); }
+                catch (Exception error) when (error is not OutOfMemoryException)
+                { selected["identityAlternatives"] = new JsonObject { ["coverage"] = "unknown", ["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name }; }
+            }
             result["positionIntegration"] = program;
         }
         result["sourceMethods"] = certificates;

@@ -5,8 +5,11 @@ import json
 import re
 from typing import Any
 
+from infini_local.pipelines.parent_stat_view import parent_stat_context
 from infini_local.pipelines.native_attack_tables import pack_attack_tables, unpack_attack_tables
-from infini_local.pipelines.native_attack_behavior_view import _PROGRAM_FIELDS, _ROW_FIELDS, ordered_attack_context
+from infini_local.pipelines.native_attack_behavior_view import (
+    _PROGRAM_FIELDS, _ROW_FIELDS, known_identity_alternatives, ordered_attack_context,
+)
 
 from infini_local.core.item_identity_tools import (
     dict_get_ci,
@@ -321,6 +324,9 @@ def _known_context_program(program: Any) -> bool:
             if not isinstance(value, list) or any(not isinstance(row, dict) or not set(row) <= {
                     "field", "literal", "guardOffset"} or not all(_context_literals(v) for v in row.values()) for row in value):
                 return False
+        elif key == "identityAlternatives":
+            if not known_identity_alternatives(value):
+                return False
         elif key == "identitySelection":
             if not isinstance(value, dict) or not set(value) <= {"forCapturedIdentity", "scope", "fullMethodCapture"}:
                 return False
@@ -485,7 +491,9 @@ def parent_context_for_stage(parents: dict[str, Any] | list[dict[str, Any]], *, 
     briefs: dict[str, Any] = {}
     for label, row in result.items():
         packet = row.get("packet", {})
-        raw = packet.get("raw", {})
+        raw = parent_stat_context(packet.get("raw", {}))
+        if "raw" in packet:
+            packet["raw"] = raw
         item = raw.get("item", {})
         brief = {
             "identity": {key: copy.deepcopy(packet[key]) for key in ("name", "internalName", "sourceMod") if key in packet},

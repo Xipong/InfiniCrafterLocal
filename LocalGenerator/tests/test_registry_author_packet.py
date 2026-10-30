@@ -80,7 +80,7 @@ def _assert_catalog_delivery(catalog, capabilities=CAPABILITY_REGISTRY):
         assert vocabulary["builtInTokens"] == list(tokens)
         assert vocabulary["meaningByToken"] == dict(meanings)
         assert set(meanings) == set(tokens)
-    assert set(ITEM_USE_STYLE_TMODLOADER_NAMES) == set(cards["configure_item_use"]["params"]["useStyle"]["enum"])
+    assert set(ITEM_USE_STYLE_TMODLOADER_NAMES) == set(cards["item_use"]["params"]["useStyle"]["enum"])
 
 
 @pytest.mark.parametrize("fixture_name", ["fishing_platform_tool", "workbench_blade"])
@@ -229,7 +229,7 @@ def test_catalog_delivery_oracle_accepts_reordering_and_rejects_loss(monkeypatch
     elif defect == "duplicate":
         cards.append(copy.deepcopy(cards[0]))
     else:
-        stats = next(row for row in cards if row["fn"] == "configure_item_stats")
+        stats = next(row for row in cards if row["fn"] == "item_stats")
         stats["params"]["damage"]["max"] += 1
     with pytest.raises(AssertionError):
         _assert_catalog_delivery(catalog)
@@ -245,11 +245,11 @@ def test_rewording_canonical_cards_reaches_author_and_repair_without_changing_me
     from infini_local.qa.capability_witnesses import build_capability_witness
 
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', "json_schema")
-    source = build_capability_witness("configure_item_stats")
+    source = build_capability_witness("item_stats")
     before = copy.deepcopy(source)
     wire = compile_runtime_program(source)
     provider_schema = author_item_provider_response_schema()
-    cap = registry.CAPABILITY_REGISTRY["configure_item_stats"]
+    cap = registry.CAPABILITY_REGISTRY["item_stats"]
     summary = "Item statistics in revised player language."
     meaning = "Mana points requested by the item's native use."
     changed = replace(cap, summary=summary, params={**cap.params, "manaCost": replace(cap.params["manaCost"], description=meaning)})
@@ -288,10 +288,10 @@ def test_tool_applicability_does_not_rewrite_authored_composition(pick_power):
     from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
     from infini_local.qa.capability_witnesses import build_capability_witness
 
-    doc = build_capability_witness("configure_tool")
-    tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_tool")
-    tool["params"].update(pickPower=pick_power, axePowerTooltipPercent=0, hammerPower=0, miningSpeedMultiplier=2)
-    light = copy.deepcopy(next(row for row in build_capability_witness("add_hold_light")["runtimeProgram"]["calls"] if row["fn"] == "add_hold_light"))
+    doc = build_capability_witness("tool_stats")
+    tool = next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "tool_stats")
+    tool["params"].update(pickPower=pick_power, axePower=0, hammerPower=0, miningSpeedMultiplier=2)
+    light = copy.deepcopy(next(row for row in build_capability_witness("held_light")["runtimeProgram"]["calls"] if row["fn"] == "held_light"))
     light["id"] = "independent_light"
     doc["runtimeProgram"]["calls"].append(light)
     before = copy.deepcopy(doc)
@@ -307,7 +307,7 @@ def test_tool_applicability_does_not_rewrite_authored_composition(pick_power):
 # Phrase clauses are assertions on that one field, not separate setup/requests.
 
 def _stats(item):
-    return next(row for row in item["runtimeProgram"]["calls"] if isinstance(row, dict) and row["fn"] == "configure_item_stats")
+    return next(row for row in item["runtimeProgram"]["calls"] if isinstance(row, dict) and row["fn"] == "item_stats")
 
 
 def _response_format():
@@ -331,7 +331,7 @@ def test_nullable_projection_requires_actual_schema_and_preserves_invalid_neighb
     response_format = _response_format() if mode == "json_schema" else ({"type": mode} if mode != "off" else None)
     if mode == "json_schema" and not wrapper:
         variants = response_format["json_schema"]["schema"]["properties"]["runtimeProgram"]["properties"]["calls"]["items"]["anyOf"]
-        variant = next(r for r in variants if r["properties"]["fn"]["const"] == "configure_item_stats")
+        variant = next(r for r in variants if r["properties"]["fn"]["const"] == "item_stats")
         params = variant["properties"]["params"]["properties"]
         params["manaCost"] = params["manaCost"]["anyOf"][0]
     projected = project_provider_author_item_to_local(item, response_format=response_format)

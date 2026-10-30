@@ -44,15 +44,15 @@ def _wire_roundtrip(patch, local):
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission(monkeypatch, mode):
     item = build_runtime_fixture("workbench_blade")
-    stats = _call(item, "configure_item_stats")
+    stats = _call(item, "item_stats")
     stats["params"].pop("manaCost")
     expected = copy.deepcopy(item)
     stats["params"]["damage"] = -1
     failure = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, failure["errors"])
-    assert runtime_repair_schema_capabilities(scope) == ["configure_item_stats"]
+    assert runtime_repair_schema_capabilities(scope) == ["item_stats"]
     local = _local(scope)
-    fixed = copy.deepcopy(_call(expected, "configure_item_stats"))
+    fixed = copy.deepcopy(_call(expected, "item_stats"))
     patch = {"note": "Repair exact damage only", "callsUpsert": [fixed], "realizationReplacement": item["realization"]}
     provider, encoded = _wire_roundtrip(patch, local)
     requests = []
@@ -72,7 +72,7 @@ def test_parameter_repair_uses_exact_scoped_schema_and_retains_accepted_omission
     assert repaired["debug"]["gameplayRepairScope"] == scope
     repaired.pop("debug")
     assert repaired == expected and item == before
-    assert "manaCost" not in _call(repaired, "configure_item_stats")["params"]
+    assert "manaCost" not in _call(repaired, "item_stats")["params"]
 
 
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
@@ -81,14 +81,14 @@ def test_real_repair_accepts_missing_optional_report_without_mutating_source(mon
     from repair_test_helpers import gameplay_repair
 
     item = build_runtime_fixture("workbench_blade")
-    fixed = copy.deepcopy(_call(item, "configure_item_stats"))
-    _call(item, "configure_item_stats")["params"]["damage"] = -1
+    fixed = copy.deepcopy(_call(item, "item_stats"))
+    _call(item, "item_stats")["params"]["damage"] = -1
     before = copy.deepcopy(item)
     patch = {"note": "exact executable correction only", "callsUpsert": [fixed]}
     if report_value != "absent":
         patch["realizationReplacement"] = report_value
     repaired, _ = gameplay_repair(monkeypatch, item, patch, mode)
-    assert _call(repaired, "configure_item_stats")["params"]["damage"] == fixed["params"]["damage"]
+    assert _call(repaired, "item_stats")["params"]["damage"] == fixed["params"]["damage"]
     if mode == "json_schema" or report_value == "absent":
         assert repaired["realization"] == before["realization"]
     else:
@@ -97,7 +97,7 @@ def test_real_repair_accepts_missing_optional_report_without_mutating_source(mon
 
 
 def test_single_function_schema_never_decodes_an_unknown_function_by_object_type():
-    local = contract.author_item_repair_response_schema(capability_names=["configure_item_stats"])
+    local = contract.author_item_repair_response_schema(capability_names=["item_stats"])
     provider = contract.author_item_provider_repair_response_schema(local_schema=local)
     bad = {"note": "unknown function", "callsUpsert": [{"id": "probe", "fn": "not_registered", "target": "item", "params": {"manaCost": None}}]}
     actual = contract.project_provider_nullable_optionals_to_local(
@@ -146,14 +146,14 @@ def test_empty_scope_never_becomes_full_catalog_and_unknown_names_fail_closed(ro
 
 def test_create_policy_and_event_support_are_included_without_granting_permissions():
     item = build_runtime_fixture("door_on_chain")
-    damage = copy.deepcopy(_call(item, "set_projectile_damage"))
-    item["runtimeProgram"]["calls"].remove(_call(item, "set_projectile_damage"))
+    damage = copy.deepcopy(_call(item, "projectile_damage"))
+    item["runtimeProgram"]["calls"].remove(_call(item, "projectile_damage"))
     event = _call(item, "apply_status_on_event")
     event["params"]["when"] = "on_spawn"
     failure = validate_runtime_program(item)
     scope = build_runtime_repair_scope(item, failure["errors"])
     before = copy.deepcopy(scope)
-    assert "set_projectile_damage" in runtime_repair_schema_capabilities(scope)
+    assert "projectile_damage" in runtime_repair_schema_capabilities(scope)
     assert "apply_status_on_event" in runtime_repair_schema_capabilities(scope)
     corrected = copy.deepcopy(event)
     corrected["params"]["when"] = "on_hit"
@@ -166,8 +166,8 @@ def test_create_policy_and_event_support_are_included_without_granting_permissio
     assert scope == before
     # Missing-component create alternatives remain a complete finite set.
     missing = build_runtime_fixture("workbench_blade")
-    attachment = copy.deepcopy(_call(missing, "attach_projectile"))
-    missing["runtimeProgram"]["calls"].remove(_call(missing, "attach_projectile"))
+    attachment = copy.deepcopy(_call(missing, "attach"))
+    missing["runtimeProgram"]["calls"].remove(_call(missing, "attach"))
     create_scope = build_runtime_repair_scope(missing, validate_runtime_program(missing)["errors"])
     assert create_scope["create"]["calls"]["allowed"]
     assert set(create_scope["create"]["calls"]["allowedFns"]) <= set(runtime_repair_schema_capabilities(create_scope))
@@ -201,7 +201,7 @@ def test_format_repair_keeps_exact_source_and_rejects_gameplay_rewriting(monkeyp
 
     response = copy.deepcopy(item)
     if rewrite:
-        _call(response, "configure_item_stats")["params"]["damage"] += 1
+        _call(response, "item_stats")["params"]["damage"] += 1
     requests = []
 
     def respond(request, **_kwargs):

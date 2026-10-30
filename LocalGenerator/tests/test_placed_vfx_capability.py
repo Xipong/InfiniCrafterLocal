@@ -14,7 +14,7 @@ from infini_local.core.vfx_manifest import (VFX_DIRECTOR_SCHEMA, validate_vfx_di
 
 def authored():
     d = _dual_use_placeable()
-    d['runtimeProgram']['calls'].append({'id':'placed_effects','fn':'enable_placed_vfx',
+    d['runtimeProgram']['calls'].append({'id':'placed_effects','fn':'placed_vfx',
         'params':{'placementCallId':'install_tile','minFrameY':0,'maxFrameY':35}})
     return d
 
@@ -94,7 +94,7 @@ def test_authored_reference_and_receipts_are_exact_and_repair_leaf_frozen():
     repaired=apply_repair_patch(d,filtered)
     assert repaired['runtimeProgram']['calls'][-1]['params']=={'placementCallId':'install_tile','minFrameY':0,'maxFrameY':35}
     wire=compile_runtime_program(repaired)
-    wire['runtimeContract']['finalWireReceipts'][:]=[r for r in wire['runtimeContract']['finalWireReceipts'] if r.get('fn')!='enable_placed_vfx']
+    wire['runtimeContract']['finalWireReceipts'][:]=[r for r in wire['runtimeContract']['finalWireReceipts'] if r.get('fn')!='placed_vfx']
     assert not validate_runtime_wire(wire)['ok']
 
 
@@ -126,10 +126,10 @@ def test_real_director_and_repair_packets_freeze_sibling_selector_absence():
 def test_new_registry_witness_and_native_bounds_surface():
     from infini_local.qa.capability_witnesses import build_capability_witness
     from infini_local.qa.primitive_loss_audit import _placed_component_surface_audit
-    d=build_capability_witness('enable_placed_vfx')
+    d=build_capability_witness('placed_vfx')
     assert validate_runtime_program(d)['ok'],validate_runtime_program(d)
     assert validate_runtime_wire(compile_runtime_program(d))['ok']
-    assert _placed_component_surface_audit('enable_placed_vfx','RuntimePlacedVfxSpec',None)['ok']
+    assert _placed_component_surface_audit('placed_vfx','RuntimePlacedVfxSpec',None)['ok']
     from infini_local.qa.primitive_loss_audit import structural_surface_audit
     assert structural_surface_audit().get('placedVfxStorage',{}).get('ok')
 

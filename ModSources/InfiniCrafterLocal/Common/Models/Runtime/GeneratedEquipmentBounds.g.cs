@@ -8,9 +8,9 @@ internal static class GeneratedEquipmentBounds
 {
     internal static void Normalize(AccessorySpec a)
     {
+        a.GenericCrit = Math.Clamp(a.GenericCrit, -100f, 100f);
         a.Endurance = Math.Clamp(a.Endurance, 0f, 0.75f);
         a.Defense = Math.Clamp(a.Defense, -100, 500);
-        a.GenericCrit = Math.Clamp(a.GenericCrit, -100f, 100f);
         a.LifeRegen = Math.Clamp(a.LifeRegen, -120, 200);
         a.LightStrength = Math.Clamp(a.LightStrength, 0f, 1.5f);
         a.ManaRegen = Math.Clamp(a.ManaRegen, -120, 200);
@@ -24,8 +24,8 @@ internal static class GeneratedEquipmentBounds
 
     internal static void Normalize(ArmorSpec a)
     {
-        a.Defense = Math.Clamp(a.Defense, 0, 500);
         a.GenericCrit = Math.Clamp(a.GenericCrit, -100f, 100f);
+        a.Defense = Math.Clamp(a.Defense, 0, 500);
         a.MaxLife = Math.Clamp(a.MaxLife, -500, 5000);
         a.MaxMana = Math.Clamp(a.MaxMana, -500, 5000);
         a.MovementSpeed = Math.Clamp(a.MovementSpeed, -0.9f, 3f);

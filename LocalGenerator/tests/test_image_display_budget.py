@@ -27,18 +27,18 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 def _accepted_visual_data(*, long_art: bool = False, curve_mirror: bool | None = None, visual_curve: bool = False) -> dict:
     author = build_runtime_fixture("workbench_blade")
     for call in author["runtimeProgram"]["calls"]:
-        if call["fn"] == "configure_item_stats":
+        if call["fn"] == "item_stats":
             call["params"]["scale"] = 1.25
-        if call["fn"] == "set_projectile_hitbox":
+        if call["fn"] == "projectile_hitbox":
             call["params"]["drawScale"] = 1.75 if call["target"] == "nail" else 1.5
     if curve_mirror is not None:
         for target in ("workbench_blade", "nail"):
-            author["runtimeProgram"]["calls"].append({"id": "curve_" + target, "fn": "set_projectile_hitbox_curve", "target": target,
-                "params": {"startScale": .25, "endScale": 8, 'startDelaySeconds': (5) / 60, 'durationSeconds': (60) / 60, "curve": "exponential", "mirrorToSprite": curve_mirror}})
+            author["runtimeProgram"]["calls"].append({"id": "curve_" + target, "fn": "hitbox_curve", "target": target,
+                "params": {"startScale": .25, "endScale": 8, 'startDelay': (5) / 60, 'duration': (60) / 60, "curve": "exponential", "mirrorToSprite": curve_mirror}})
     if visual_curve:
         for target in ("workbench_blade", "nail"):
-            author["runtimeProgram"]["calls"].append({"id": "visual_curve_" + target, "fn": "set_projectile_visual_scale_curve", "target": target,
-                "params": {"startScale": 8, "endScale": .25, 'startDelaySeconds': (7) / 60, 'durationSeconds': (30) / 60, "curve": "linear"}})
+            author["runtimeProgram"]["calls"].append({"id": "visual_curve_" + target, "fn": "sprite_scale_curve", "target": target,
+                "params": {"startScale": 8, "endScale": .25, 'startDelay': (7) / 60, 'duration': (30) / 60, "curve": "linear"}})
     data = compile_runtime_program(author)
     item_id = data["runtimeProgram"]["itemEntityId"]
     item_art = "Four short blades around a red glass vial, copper handle and oak brace."

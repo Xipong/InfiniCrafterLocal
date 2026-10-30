@@ -47,7 +47,7 @@
               ],
               "description": "Interval clock."
             },
-            "startDelaySeconds": {
+            "startDelay": {
               "type": "number",
               "minimum": 0,
               "maximum": 360.0,
@@ -59,7 +59,7 @@
                 "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
               }
             },
-            "durationSeconds": {
+            "duration": {
               "type": "number",
               "minimum": 0.008333333333333333,
               "maximum": 360.0,
@@ -75,14 +75,14 @@
           "required": [
             "phase",
             "clock",
-            "startDelaySeconds",
-            "durationSeconds"
+            "startDelay",
+            "duration"
           ],
           "additionalProperties": false,
           "description": "Phase intersected with clock interval."
         }
       ],
-      "description": "Phase alone covers the whole phase. charging/released/since_release require accumulate_projectile_charge; returning/since_return require set_projectile_return_trigger on this entity, never seek/arrival. Timing is all-or-none; relative clocks wait for their latch and sample step-start age.",
+      "description": "Phase alone covers the whole phase. charging/released/since_release require charge; returning/since_return require return_when on this entity, never seek/arrival. Timing is all-or-none; relative clocks wait for their latch and sample step-start age.",
       "x-infini-semanticType": "bounded_text"
     }
   },
@@ -185,7 +185,7 @@
           "const": "infini.runtime-program.v5"
         },
         "schema": {
-          "const": "infini.runtime-program.authoring.v6"
+          "const": "infini.runtime-program.authoring.v7"
         },
         "primaryEntityId": {
           "type": "string",
@@ -657,8 +657,8 @@
                         "x-infini-reference": {
                           "namespace": "call",
                           "capabilities": [
-                            "configure_tile_placement",
-                            "configure_wall_placement"
+                            "place_tile",
+                            "place_wall"
                           ],
                           "allowSelf": false,
                           "graphEdge": false
@@ -1097,8 +1097,8 @@
                         "x-infini-reference": {
                           "namespace": "call",
                           "capabilities": [
-                            "configure_tile_placement",
-                            "configure_wall_placement"
+                            "place_tile",
+                            "place_wall"
                           ],
                           "allowSelf": false,
                           "graphEdge": false
@@ -1253,7 +1253,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_owner_control"
+                    "const": "set_owner_control"
                   },
                   "target": {
                     "type": "string",
@@ -1349,7 +1349,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "accumulate_projectile_charge"
+                    "const": "charge"
                   },
                   "target": {
                     "type": "string",
@@ -1373,7 +1373,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 10.0,
@@ -1385,7 +1385,7 @@
                           "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                         }
                       },
-                      "autoReleaseAfterActiveSeconds": {
+                      "autoReleaseAge": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 360.0,
@@ -1439,7 +1439,7 @@
                               "meaning": "Preserves the admitted JSON number; no float32 guard, rounding or replacement."
                             }
                           },
-                          "launchSpeedBlocksPerSecond": {
+                          "launchSpeed": {
                             "type": "number",
                             "minimum": 0.0,
                             "maximum": 1800.0,
@@ -1454,7 +1454,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   0.0,
@@ -1491,7 +1491,7 @@
                           }
                         },
                         "required": [
-                          "launchSpeedBlocksPerSecond"
+                          "launchSpeed"
                         ],
                         "additionalProperties": false,
                         "description": "Optional release effect; absent leaves velocity and combat unchanged. Present rewrites launch velocity even with unit multipliers.",
@@ -1499,7 +1499,7 @@
                       }
                     },
                     "required": [
-                      "durationSeconds"
+                      "duration"
                     ]
                   }
                 },
@@ -1520,7 +1520,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "gate_projectile_contact"
+                    "const": "gate_contact"
                   },
                   "target": {
                     "type": "string",
@@ -1576,7 +1576,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_beam_geometry"
+                    "const": "beam_geometry"
                   },
                   "target": {
                     "type": "string",
@@ -1600,7 +1600,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "lengthBlocks": {
+                      "length": {
                         "type": "number",
                         "minimum": 6.25e-05,
                         "maximum": 120.0,
@@ -1703,7 +1703,7 @@
                       }
                     },
                     "required": [
-                      "lengthBlocks",
+                      "length",
                       "widthBlocks",
                       "raycastTiles"
                     ]
@@ -1726,7 +1726,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "sustain_projectile_mana"
+                    "const": "sustain_mana"
                   },
                   "target": {
                     "type": "string",
@@ -1769,7 +1769,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_lash_geometry"
+                    "const": "lash_geometry"
                   },
                   "target": {
                     "type": "string",
@@ -1802,7 +1802,7 @@
                         "description": "Explicit lash progress clock.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 360.0,
@@ -1824,7 +1824,7 @@
                         "description": "Explicit native curve origin.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "reachBlocks": {
+                      "reach": {
                         "type": "number",
                         "minimum": 6.25e-05,
                         "maximum": 60.0,
@@ -1904,7 +1904,7 @@
                         "description": "Apply owner gravity to sweep orientation.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "useOwnerWhipRangeMultiplier": {
+                      "useWhipRange": {
                         "type": "boolean",
                         "description": "Apply native owner whip range multiplier.",
                         "x-infini-semanticType": "bounded_text"
@@ -1913,13 +1913,13 @@
                     "required": [
                       "clock",
                       "anchor",
-                      "reachBlocks",
+                      "reach",
                       "segments",
                       "sweepStartRadians",
                       "sweepEndRadians",
                       "bendRatio",
                       "useOwnerGravity",
-                      "useOwnerWhipRangeMultiplier"
+                      "useWhipRange"
                     ]
                   }
                 },
@@ -1940,7 +1940,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_aim"
+                    "const": "set_aim"
                   },
                   "target": {
                     "type": "string",
@@ -2005,7 +2005,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "attach_projectile"
+                    "const": "attach"
                   },
                   "target": {
                     "type": "string",
@@ -2036,7 +2036,7 @@
                           "owner_mounted",
                           "front_hand"
                         ],
-                        "description": "Multiple attachments can share front_hand; set_front_arm_pose controls its pose.",
+                        "description": "Multiple attachments can share front_hand; front_arm_pose controls its pose.",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "axisOffsetBlocks": {
@@ -2083,7 +2083,7 @@
                       "reachCurve": {
                         "type": "object",
                         "properties": {
-                          "durationSeconds": {
+                          "duration": {
                             "type": "number",
                             "minimum": 0.008333333333333333,
                             "maximum": 360.0,
@@ -2203,7 +2203,7 @@
                                     ],
                                     "description": "Interval clock."
                                   },
-                                  "startDelaySeconds": {
+                                  "startDelay": {
                                     "type": "number",
                                     "minimum": 0,
                                     "maximum": 360.0,
@@ -2215,7 +2215,7 @@
                                       "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                                     }
                                   },
-                                  "durationSeconds": {
+                                  "duration": {
                                     "type": "number",
                                     "minimum": 0.008333333333333333,
                                     "maximum": 360.0,
@@ -2231,18 +2231,18 @@
                                 "required": [
                                   "phase",
                                   "clock",
-                                  "startDelaySeconds",
-                                  "durationSeconds"
+                                  "startDelay",
+                                  "duration"
                                 ],
                                 "additionalProperties": false,
                                 "description": "Phase intersected with clock interval."
                               }
                             ],
-                            "description": "Phase alone covers the whole phase. charging/released/since_release require accumulate_projectile_charge; returning/since_return require set_projectile_return_trigger on this entity, never seek/arrival. Timing is all-or-none; relative clocks wait for their latch and sample step-start age."
+                            "description": "Phase alone covers the whole phase. charging/released/since_release require charge; returning/since_return require return_when on this entity, never seek/arrival. Timing is all-or-none; relative clocks wait for their latch and sample step-start age."
                           }
                         },
                         "required": [
-                          "durationSeconds",
+                          "duration",
                           "startOffsetBlocks",
                           "peakOffsetBlocks",
                           "endOffsetBlocks",
@@ -2275,7 +2275,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_front_arm_pose"
+                    "const": "front_arm_pose"
                   },
                   "target": {
                     "type": "string",
@@ -2299,7 +2299,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.025,
                         "maximum": 4.0,
@@ -2361,7 +2361,7 @@
                       }
                     },
                     "required": [
-                      "durationSeconds",
+                      "duration",
                       "startStretch",
                       "peakStretch",
                       "endStretch",
@@ -2386,7 +2386,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "orbit_projectile"
+                    "const": "orbit"
                   },
                   "target": {
                     "type": "string",
@@ -2420,13 +2420,13 @@
                         "description": "Native orbit anchor.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "radiusBlocks": {
+                      "radius": {
                         "type": "number",
                         "minimum": 6.25e-05,
                         "maximum": 120.0,
                         "description": "Author units: blocks. Native consumer: Positive orbit radius.",
                         "x-infini-units": "blocks",
-                        "x-infini-semanticType": "blocks",
+                        "x-infini-semanticType": "tiles",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
@@ -2452,7 +2452,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               -360.0,
@@ -2481,13 +2481,13 @@
                           ]
                         }
                       },
-                      "phaseRadians": {
+                      "anglePhase": {
                         "type": "number",
                         "minimum": -100,
                         "maximum": 100,
                         "description": "Explicit base phase.",
                         "x-infini-units": "radians",
-                        "x-infini-semanticType": "radians",
+                        "x-infini-semanticType": "unitless_scalar",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
@@ -2498,13 +2498,13 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "identityPhaseRadians": {
+                      "identityAnglePhase": {
                         "type": "number",
                         "minimum": -100,
                         "maximum": 100,
                         "description": "Explicit phase per projectile identity; zero disables identity spreading.",
                         "x-infini-units": "radians",
-                        "x-infini-semanticType": "radians",
+                        "x-infini-semanticType": "unitless_scalar",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
@@ -2521,10 +2521,10 @@
                     },
                     "required": [
                       "anchor",
-                      "radiusBlocks",
+                      "radius",
                       "radiansPerSecond",
-                      "phaseRadians",
-                      "identityPhaseRadians"
+                      "anglePhase",
+                      "identityAnglePhase"
                     ]
                   }
                 },
@@ -2545,7 +2545,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "seek_projectile"
+                    "const": "seek"
                   },
                   "target": {
                     "type": "string",
@@ -2580,7 +2580,7 @@
                         "description": "Explicit destination; nearest_npc requires range and line-of-sight choice.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "maxSpeedBlocksPerSecond": {
+                      "maxSpeed": {
                         "type": "number",
                         "minimum": 0.00375,
                         "maximum": 1800.0,
@@ -2595,7 +2595,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               0.00375,
@@ -2624,7 +2624,7 @@
                           ]
                         }
                       },
-                      "velocityLerpPerUpdate": {
+                      "lerpPerUpdate": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 1,
@@ -2663,13 +2663,13 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "searchRangeTiles": {
+                      "searchRange": {
                         "type": "number",
                         "minimum": 0.001,
                         "maximum": 120,
                         "description": "Required only for nearest NPC selection.",
                         "x-infini-units": "blocks",
-                        "x-infini-semanticType": "tiles",
+                        "x-infini-semanticType": "unitless_scalar",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
@@ -2685,7 +2685,7 @@
                         "description": "Required only for nearest NPC selection.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "minimumSpeedBlocksPerSecond": {
+                      "minSpeed": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 1800.0,
@@ -2700,7 +2700,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               0.0,
@@ -2735,8 +2735,8 @@
                     },
                     "required": [
                       "target",
-                      "maxSpeedBlocksPerSecond",
-                      "velocityLerpPerUpdate",
+                      "maxSpeed",
+                      "lerpPerUpdate",
                       "limitSpeedToDistance"
                     ]
                   }
@@ -2758,7 +2758,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_return_trigger"
+                    "const": "return_when"
                   },
                   "target": {
                     "type": "string",
@@ -2794,7 +2794,7 @@
                           "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                         }
                       },
-                      "ownerDistanceBlocks": {
+                      "ownerDistance": {
                         "type": "number",
                         "minimum": 6.25e-05,
                         "maximum": 2000.0,
@@ -2825,7 +2825,7 @@
                         "default": false,
                         "x-infini-neutral": false
                       },
-                      "disableTileCollisionOnReturn": {
+                      "passTilesOnReturn": {
                         "type": "boolean",
                         "description": "Explicit return tile-collision gameplay policy; omission does not disable collision.",
                         "x-infini-semanticType": "bounded_text",
@@ -2853,7 +2853,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_arrival"
+                    "const": "kill_on_arrival"
                   },
                   "target": {
                     "type": "string",
@@ -2886,13 +2886,13 @@
                         "description": "Arrival anchor.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "radiusBlocks": {
+                      "radius": {
                         "type": "number",
                         "minimum": 6.25e-05,
                         "maximum": 32.0,
                         "description": "Author units: blocks. Native consumer: Positive pre-integration arrival radius.",
                         "x-infini-units": "blocks",
-                        "x-infini-semanticType": "blocks",
+                        "x-infini-semanticType": "tiles",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
@@ -2909,7 +2909,7 @@
                     },
                     "required": [
                       "target",
-                      "radiusBlocks"
+                      "radius"
                     ]
                   }
                 },
@@ -2930,7 +2930,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_proximity_action"
+                    "const": "proximity_action"
                   },
                   "target": {
                     "type": "string",
@@ -2954,13 +2954,13 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "searchRangeTiles": {
+                      "searchRange": {
                         "type": "number",
                         "minimum": 0.001,
                         "maximum": 120,
                         "description": "Positive NPC search radius.",
                         "x-infini-units": "blocks",
-                        "x-infini-semanticType": "tiles",
+                        "x-infini-semanticType": "unitless_scalar",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
@@ -3007,7 +3007,7 @@
                       }
                     },
                     "required": [
-                      "searchRangeTiles",
+                      "searchRange",
                       "triggerRadiusBlocks",
                       "requireLineOfSight",
                       "action"
@@ -3031,7 +3031,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "accelerate_projectile_vertical"
+                    "const": "accelerate_y"
                   },
                   "target": {
                     "type": "string",
@@ -3055,7 +3055,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "accelerationYBlocksPerSecondSquared": {
+                      "accelY": {
                         "type": "number",
                         "minimum": -16200.0,
                         "maximum": 16200.0,
@@ -3070,7 +3070,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               -450.0,
@@ -3104,7 +3104,7 @@
                       }
                     },
                     "required": [
-                      "accelerationYBlocksPerSecondSquared"
+                      "accelY"
                     ]
                   }
                 },
@@ -3125,7 +3125,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "scale_projectile_velocity"
+                    "const": "scale_velocity"
                   },
                   "target": {
                     "type": "string",
@@ -3149,7 +3149,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "multiplierPerUpdate": {
+                      "scalePerUpdate": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 1.2,
@@ -3168,7 +3168,7 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "maxSpeedBlocksPerSecond": {
+                      "maxSpeed": {
                         "type": "number",
                         "minimum": 0.00375,
                         "maximum": 1800.0,
@@ -3183,7 +3183,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               0.00375,
@@ -3217,7 +3217,7 @@
                       }
                     },
                     "required": [
-                      "multiplierPerUpdate"
+                      "scalePerUpdate"
                     ]
                   }
                 },
@@ -3238,7 +3238,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_rotation"
+                    "const": "rotate_sprite"
                   },
                   "target": {
                     "type": "string",
@@ -3308,7 +3308,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               -360.0,
@@ -3363,7 +3363,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "oscillate_projectile_velocity"
+                    "const": "oscillate_velocity"
                   },
                   "target": {
                     "type": "string",
@@ -3410,7 +3410,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -3474,7 +3474,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -3521,7 +3521,7 @@
                         "description": "Select one explicit sine law and its world-unit amplitude. The selected object uniquely lowers the native law discriminator.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "frequencyRadiansPerSecond": {
+                      "angularFrequency": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 2160.0,
@@ -3536,7 +3536,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               0.0,
@@ -3565,13 +3565,13 @@
                           ]
                         }
                       },
-                      "phaseRadians": {
+                      "anglePhase": {
                         "type": "number",
                         "minimum": -100,
                         "maximum": 100,
                         "description": "Starting sine phase.",
                         "x-infini-units": "radians",
-                        "x-infini-semanticType": "radians",
+                        "x-infini-semanticType": "unitless_scalar",
                         "x-infini-consumerConstraint": {
                           "storage": "float32",
                           "neutral": null,
@@ -3588,8 +3588,8 @@
                     },
                     "required": [
                       "law",
-                      "frequencyRadiansPerSecond",
-                      "phaseRadians"
+                      "angularFrequency",
+                      "anglePhase"
                     ]
                   }
                 },
@@ -3610,7 +3610,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "add_projectile_visual_scale"
+                    "const": "add_sprite_scale"
                   },
                   "target": {
                     "type": "string",
@@ -3649,7 +3649,7 @@
                         },
                         "x-infini-authorProjection": {
                           "nonzeroMustRemainNonzero": true,
-                          "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                          "targetContext": "same target's unique projectile_collision.updatesPerTick",
                           "boundsAtUpdatesPerTick1To6": [
                             [
                               -60.0,
@@ -3722,7 +3722,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_opacity"
+                    "const": "set_opacity"
                   },
                   "target": {
                     "type": "string",
@@ -3746,11 +3746,12 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "alpha": {
+                      "transparencyByte": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 255,
-                        "description": "Native alpha: 0 opaque, 255 transparent.",
+                        "description": "Native transparency: 0 opaque, 255 transparent.",
+                        "x-infini-units": "byte (0 opaque; 255 transparent)",
                         "x-infini-semanticType": "unitless_scalar"
                       },
                       "window": {
@@ -3758,7 +3759,7 @@
                       }
                     },
                     "required": [
-                      "alpha"
+                      "transparencyByte"
                     ]
                   }
                 },
@@ -3779,7 +3780,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_item_stats"
+                    "const": "item_stats"
                   },
                   "target": {
                     "type": "string",
@@ -3847,7 +3848,7 @@
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 500,
-                        "description": "Base mana cost, paid when a new use animation starts. Multiple activations within that animation share this payment; sustain_projectile_mana can add recurring payments.",
+                        "description": "Base mana cost, paid when a new use animation starts. Multiple activations within that animation share this payment; sustain_mana can add recurring payments.",
                         "x-infini-semanticType": "mana_points",
                         "default": 0,
                         "x-infini-neutral": 0
@@ -3949,7 +3950,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_item_use"
+                    "const": "item_use"
                   },
                   "target": {
                     "type": "string",
@@ -4082,7 +4083,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "collect_seeds_from_grass"
+                    "const": "collect_seeds"
                   },
                   "target": {
                     "type": "string",
@@ -4119,7 +4120,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_item_contact_hitbox"
+                    "const": "item_hitbox"
                   },
                   "target": {
                     "type": "string",
@@ -4176,7 +4177,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_weapon_ammo"
+                    "const": "weapon_ammo"
                   },
                   "target": {
                     "type": "string",
@@ -4223,7 +4224,7 @@
                           "authored_spawn",
                           "native_shot"
                         ],
-                        "description": "authored_spawn keeps configure_spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative",
+                        "description": "authored_spawn keeps spawn initial speed; native_shot uses the final native shot velocity magnitude, including ammo/prefix/player/late-hook speed, along the independently authored aim. Stationary entities still have zero velocity; later authored movement/controller logic remains authoritative",
                         "x-infini-semanticType": "bounded_text"
                       }
                     },
@@ -4249,7 +4250,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_vanilla_ammo_item"
+                    "const": "ammo_item"
                   },
                   "target": {
                     "type": "string",
@@ -4297,7 +4298,7 @@
                         "description": "Vanilla ProjectileID fired when this ammunition is consumed.",
                         "x-infini-semanticType": "terraria_projectile_id"
                       },
-                      "shootSpeedContributionBlocksPerSecond": {
+                      "speedBonus": {
                         "type": "number",
                         "minimum": -75.0,
                         "maximum": 300.0,
@@ -4323,7 +4324,7 @@
                     "required": [
                       "ammoCategory",
                       "projectileId",
-                      "shootSpeedContributionBlocksPerSecond",
+                      "speedBonus",
                       "notAmmo"
                     ]
                   }
@@ -4387,7 +4388,7 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
@@ -4414,7 +4415,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "apply_vanilla_buff_on_use"
+                    "const": "native_buff_on_use"
                   },
                   "target": {
                     "type": "string",
@@ -4440,7 +4441,7 @@
                         "description": "Terraria BuffID or loaded ModContent.BuffType. Native immunity and recipient behavior apply; player-only effects may have no effect on NPCs.",
                         "x-infini-semanticType": "terraria_buff_id"
                       },
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 360.0,
@@ -4455,13 +4456,13 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [
                       "buffId",
-                      "durationSeconds"
+                      "duration"
                     ]
                   }
                 },
@@ -4481,7 +4482,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "apply_generated_buff_on_use"
+                    "const": "generated_buff_on_use"
                   },
                   "target": {
                     "type": "string",
@@ -4510,11 +4511,12 @@
                             "description": "Signed Player.statDefense points; negative weakens defense; aggregate generated-buff range -100..100",
                             "x-infini-neutral": 0
                           },
-                          "attackSpeedPercent": {
+                          "attackSpeedBonus": {
                             "type": "number",
                             "minimum": -80,
                             "maximum": 100,
                             "description": "Signed additive generic attack speed percent; negative slows attacks; aggregate range -80..100",
+                            "x-infini-units": "additive_percent",
                             "x-infini-neutral": 0,
                             "x-infini-consumerConstraint": {
                               "storage": "float32",
@@ -4523,11 +4525,12 @@
                               "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                             }
                           },
-                          "critChancePoints": {
+                          "critChance": {
                             "type": "number",
                             "minimum": -100,
                             "maximum": 100,
                             "description": "Signed percentage-point contribution to generic critical chance; negative reduces chance; aggregate range -100..100",
+                            "x-infini-units": "percentage_points",
                             "x-infini-neutral": 0,
                             "x-infini-consumerConstraint": {
                               "storage": "float32",
@@ -4536,11 +4539,12 @@
                               "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                             }
                           },
-                          "damagePercent": {
+                          "damageBonus": {
                             "type": "number",
                             "minimum": -90,
                             "maximum": 200,
                             "description": "Signed additive damage percent to the explicitly selected class; negative reduces damage; aggregate range -90..200 per class. Generic and specific contributions may combine through native inheritance",
+                            "x-infini-units": "additive_percent",
                             "x-infini-neutral": 0,
                             "x-infini-consumerConstraint": {
                               "storage": "float32",
@@ -4559,21 +4563,21 @@
                               "summon",
                               "throwing"
                             ],
-                            "description": "Exact class receiving damagePercent; generic also contributes through native class inheritance"
+                            "description": "Exact class receiving damageBonus; generic also contributes through native class inheritance"
                           }
                         },
                         "required": [
                           "defensePoints",
-                          "attackSpeedPercent",
-                          "critChancePoints",
-                          "damagePercent",
+                          "attackSpeedBonus",
+                          "critChance",
+                          "damageBonus",
                           "damageClass"
                         ],
                         "additionalProperties": false,
                         "description": "Optional signed temporary combat modifiers; all fields explicit when selected. Negative values penalize their selected stat; zero has no effect. Same-effect refresh does not stack. No automatic active binding.",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 35791394.1,
@@ -4653,7 +4657,7 @@
                         "default": false,
                         "x-infini-neutral": false
                       },
-                      "moveSpeedBonusPercent": {
+                      "moveSpeedBonus": {
                         "type": "number",
                         "minimum": -80,
                         "maximum": 200,
@@ -4673,7 +4677,7 @@
                           }
                         }
                       },
-                      "jumpSpeedBonusBlocksPerSecond": {
+                      "jumpSpeedBonus": {
                         "type": "number",
                         "minimum": -30.0,
                         "maximum": 30.0,
@@ -4692,36 +4696,36 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "manaRegenBonusPoints": {
+                      "manaRegen": {
                         "type": "integer",
                         "minimum": -100,
                         "maximum": 120,
                         "description": "Signed Player.manaRegenBonus contribution; negative penalizes regeneration; not directly mana/second",
                         "x-infini-units": "engine units: manaRegenBonus points",
-                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-semanticType": "terraria_mana_regen",
                         "default": 0,
                         "x-infini-neutral": 0
                       },
-                      "lifeRegenHpPerSecond": {
+                      "lifeRegen": {
                         "type": "number",
                         "minimum": -50,
                         "maximum": 60,
                         "multipleOf": 0.5,
                         "description": "Signed HP/s regeneration contribution before other effects; negative causes regeneration loss. Exact half-HP/s steps map to Player.lifeRegen units (2 units = 1 HP/s)",
                         "x-infini-units": "HP/s",
-                        "x-infini-semanticType": "unitless_scalar",
+                        "x-infini-semanticType": "terraria_life_regen",
                         "default": 0,
                         "x-infini-neutral": 0
                       },
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [
-                      "durationSeconds",
+                      "duration",
                       "lightStrength",
                       "lightColor"
                     ]
@@ -4743,7 +4747,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "refresh_generated_effect_group_while_held"
+                    "const": "refresh_held_effect"
                   },
                   "target": {
                     "type": "string",
@@ -4790,7 +4794,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_tool"
+                    "const": "tool_stats"
                   },
                   "target": {
                     "type": "string",
@@ -4816,14 +4820,14 @@
                         "description": "Terraria Item.pick tooltip power percent",
                         "x-infini-semanticType": "terraria_pick_power"
                       },
-                      "axePowerTooltipPercent": {
+                      "axePower": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 500,
                         "multipleOf": 5,
                         "description": "Axe power as displayed in Terraria's tooltip; exact Item.axe internal value = this / 5",
                         "x-infini-units": "tooltip percent",
-                        "x-infini-semanticType": "unitless_scalar"
+                        "x-infini-semanticType": "terraria_axe_power"
                       },
                       "hammerPower": {
                         "type": "integer",
@@ -4836,14 +4840,14 @@
                         "type": "number",
                         "minimum": 0.1,
                         "maximum": 4,
-                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePowerTooltipPercent/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect.",
+                        "description": "Divides Player.pickSpeed (mining-time factor); >1 mines faster. Applies while held only when at least one of pickPower/axePower/hammerPower > 0 and abs(miningSpeedMultiplier - 1) > 0.001. Intentional all-zero powers remain valid but give no mining-speed effect.",
                         "x-infini-units": "engine units: pickSpeed divisor",
                         "x-infini-semanticType": "unitless_scalar"
                       }
                     },
                     "required": [
                       "pickPower",
-                      "axePowerTooltipPercent",
+                      "axePower",
                       "hammerPower",
                       "miningSpeedMultiplier"
                     ]
@@ -4865,7 +4869,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_tile_placement"
+                    "const": "place_tile"
                   },
                   "target": {
                     "type": "string",
@@ -4921,7 +4925,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_wall_placement"
+                    "const": "place_wall"
                   },
                   "target": {
                     "type": "string",
@@ -4977,7 +4981,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "present_placed_item_sprite"
+                    "const": "placed_sprite"
                   },
                   "target": {
                     "type": "string",
@@ -4999,7 +5003,7 @@
                       "placementCallId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Exact same-item configure_tile_placement call executed by a place_item binding; wall placements cannot carry this presentation",
+                        "description": "Exact same-item place_tile call executed by a place_item binding; wall placements cannot carry this presentation",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-reference": {
                           "namespace": "call",
@@ -5148,7 +5152,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "add_placed_light"
+                    "const": "placed_light"
                   },
                   "target": {
                     "type": "string",
@@ -5170,7 +5174,7 @@
                       "placementCallId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement",
+                        "description": "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-reference": {
                           "namespace": "call",
@@ -5236,7 +5240,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "enable_placed_vfx"
+                    "const": "placed_vfx"
                   },
                   "target": {
                     "type": "string",
@@ -5258,7 +5262,7 @@
                       "placementCallId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Exact same-item configure_tile_placement call executed by a place_item binding; no walls or unused placement",
+                        "description": "Exact same-item place_tile call executed by a place_item binding; no walls or unused placement",
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-reference": {
                           "namespace": "call",
@@ -5309,7 +5313,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "require_use_condition"
+                    "const": "use_condition"
                   },
                   "target": {
                     "type": "string",
@@ -5412,7 +5416,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "add_hold_light"
+                    "const": "held_light"
                   },
                   "target": {
                     "type": "string",
@@ -5480,7 +5484,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "move_player_on_use"
+                    "const": "blink_on_use"
                   },
                   "target": {
                     "type": "string",
@@ -5507,7 +5511,7 @@
                         "description": "Mobility executor",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "rangeTiles": {
+                      "range": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 120,
@@ -5515,7 +5519,7 @@
                         "x-infini-units": "blocks (tiles)",
                         "x-infini-semanticType": "tiles"
                       },
-                      "cooldownSeconds": {
+                      "cooldown": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 60.0,
@@ -5535,14 +5539,14 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [
                       "mode",
-                      "rangeTiles",
-                      "cooldownSeconds",
+                      "range",
+                      "cooldown",
                       "safeTileOnly"
                     ]
                   }
@@ -5582,7 +5586,7 @@
                     "type": "object",
                     "additionalProperties": false,
                     "properties": {
-                      "cooldownSeconds": {
+                      "cooldown": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 60.0,
@@ -5597,12 +5601,12 @@
                       "effectGroupId": {
                         "type": "string",
                         "pattern": "^[a-z][a-z0-9_]{0,47}$",
-                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / apply_generated_buff_on_event capability.",
+                        "description": "Optional explicit named effect group. Calls with the same ID compose only that group's effects; absent uses the default item group. Select the group explicitly in apply_item_effects.action.effectGroupId or the held refresh / generated_buff_on_event capability.",
                         "x-infini-semanticType": "item_effect_group_identity"
                       }
                     },
                     "required": [
-                      "cooldownSeconds"
+                      "cooldown"
                     ]
                   }
                 },
@@ -5622,7 +5626,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_accessory"
+                    "const": "accessory"
                   },
                   "target": {
                     "type": "string",
@@ -5668,7 +5672,7 @@
                         "x-infini-semanticType": "mana_points",
                         "x-infini-neutral": 0
                       },
-                      "lifeRegenHpPerSecond": {
+                      "lifeRegen": {
                         "type": "number",
                         "minimum": -50,
                         "maximum": 100,
@@ -5678,7 +5682,7 @@
                         "x-infini-semanticType": "HP/s",
                         "x-infini-neutral": 0
                       },
-                      "manaRegenBonusPoints": {
+                      "manaRegen": {
                         "type": "integer",
                         "minimum": -100,
                         "maximum": 200,
@@ -5687,7 +5691,7 @@
                         "x-infini-semanticType": "engine units: manaRegenBonus points",
                         "x-infini-neutral": 0
                       },
-                      "moveSpeedBonusPercent": {
+                      "moveSpeedBonus": {
                         "type": "number",
                         "minimum": -90,
                         "maximum": 300,
@@ -5706,7 +5710,7 @@
                           }
                         }
                       },
-                      "maxRunSpeedBonusBlocksPerSecond": {
+                      "runSpeedBonus": {
                         "type": "number",
                         "minimum": -18.75,
                         "maximum": 75.0,
@@ -5724,7 +5728,7 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "jumpSpeedBonusBlocksPerSecond": {
+                      "jumpSpeedBonus": {
                         "type": "number",
                         "minimum": -18.75,
                         "maximum": 75.0,
@@ -5742,7 +5746,7 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "genericCritChancePercentagePoints": {
+                      "critChance": {
                         "type": "number",
                         "minimum": -100,
                         "maximum": 100,
@@ -5751,7 +5755,7 @@
                         "x-infini-semanticType": "percentage_points",
                         "x-infini-neutral": 0
                       },
-                      "genericAttackSpeedBonusPercent": {
+                      "attackSpeedBonus": {
                         "type": "number",
                         "minimum": -90,
                         "maximum": 300,
@@ -5770,7 +5774,7 @@
                           }
                         }
                       },
-                      "genericKnockbackBonusPercent": {
+                      "knockbackBonus": {
                         "type": "number",
                         "minimum": -90,
                         "maximum": 300,
@@ -5807,7 +5811,7 @@
                         "x-infini-semanticType": "slots",
                         "x-infini-neutral": 0
                       },
-                      "manaCostReductionPercentagePoints": {
+                      "manaCostReduction": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 90,
@@ -5854,7 +5858,7 @@
                         "x-infini-semanticType": "engine units: aggro points",
                         "x-infini-neutral": 0
                       },
-                      "damageReductionPercentagePoints": {
+                      "damageReduction": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 75,
@@ -5873,7 +5877,7 @@
                           }
                         }
                       },
-                      "genericArmorPenetrationPoints": {
+                      "armorPenetration": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 100,
@@ -5901,7 +5905,7 @@
                           }
                         }
                       },
-                      "taggedSummonSourceDamageBonusPercent": {
+                      "taggedSummonDamageBonus": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 300,
@@ -5984,7 +5988,7 @@
                         "x-infini-semanticType": "bounded_text",
                         "x-infini-neutral": false
                       },
-                      "accRunSpeedBlocksPerSecond": {
+                      "sprintSpeedFloor": {
                         "type": "number",
                         "minimum": 0.0,
                         "maximum": 75.0,
@@ -6037,7 +6041,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_armor"
+                    "const": "armor"
                   },
                   "target": {
                     "type": "string",
@@ -6100,7 +6104,7 @@
                         "x-infini-semanticType": "mana_points",
                         "x-infini-neutral": 0
                       },
-                      "lifeRegenHpPerSecond": {
+                      "lifeRegen": {
                         "type": "number",
                         "minimum": -50,
                         "maximum": 100,
@@ -6110,7 +6114,7 @@
                         "x-infini-semanticType": "HP/s",
                         "x-infini-neutral": 0
                       },
-                      "manaRegenBonusPoints": {
+                      "manaRegen": {
                         "type": "integer",
                         "minimum": -100,
                         "maximum": 200,
@@ -6119,7 +6123,7 @@
                         "x-infini-semanticType": "engine units: manaRegenBonus points",
                         "x-infini-neutral": 0
                       },
-                      "moveSpeedBonusPercent": {
+                      "moveSpeedBonus": {
                         "type": "number",
                         "minimum": -90,
                         "maximum": 300,
@@ -6138,7 +6142,7 @@
                           }
                         }
                       },
-                      "maxRunSpeedBonusBlocksPerSecond": {
+                      "runSpeedBonus": {
                         "type": "number",
                         "minimum": -18.75,
                         "maximum": 75.0,
@@ -6156,7 +6160,7 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "jumpSpeedBonusBlocksPerSecond": {
+                      "jumpSpeedBonus": {
                         "type": "number",
                         "minimum": -18.75,
                         "maximum": 75.0,
@@ -6174,7 +6178,7 @@
                           "nonzeroMustRemainNonzero": true
                         }
                       },
-                      "genericCritChancePercentagePoints": {
+                      "critChance": {
                         "type": "number",
                         "minimum": -100,
                         "maximum": 100,
@@ -6183,7 +6187,7 @@
                         "x-infini-semanticType": "percentage_points",
                         "x-infini-neutral": 0
                       },
-                      "genericAttackSpeedBonusPercent": {
+                      "attackSpeedBonus": {
                         "type": "number",
                         "minimum": -90,
                         "maximum": 300,
@@ -6202,7 +6206,7 @@
                           }
                         }
                       },
-                      "genericKnockbackBonusPercent": {
+                      "knockbackBonus": {
                         "type": "number",
                         "minimum": -90,
                         "maximum": 300,
@@ -6239,7 +6243,7 @@
                         "x-infini-semanticType": "slots",
                         "x-infini-neutral": 0
                       },
-                      "manaCostReductionPercentagePoints": {
+                      "manaCostReduction": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 90,
@@ -6286,7 +6290,7 @@
                         "x-infini-semanticType": "engine units: aggro points",
                         "x-infini-neutral": 0
                       },
-                      "damageReductionPercentagePoints": {
+                      "damageReduction": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 75,
@@ -6305,7 +6309,7 @@
                           }
                         }
                       },
-                      "genericArmorPenetrationPoints": {
+                      "armorPenetration": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 100,
@@ -6333,7 +6337,7 @@
                           }
                         }
                       },
-                      "taggedSummonSourceDamageBonusPercent": {
+                      "taggedSummonDamageBonus": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 300,
@@ -6401,7 +6405,7 @@
                       "setBonuses": {
                         "type": "object",
                         "properties": {
-                          "genericCritChancePercentagePoints": {
+                          "critChance": {
                             "type": "number",
                             "minimum": -100,
                             "maximum": 100,
@@ -6410,7 +6414,7 @@
                             "x-infini-semanticType": "percentage_points",
                             "x-infini-neutral": 0
                           },
-                          "moveSpeedBonusPercent": {
+                          "moveSpeedBonus": {
                             "type": "number",
                             "minimum": -90,
                             "maximum": 300,
@@ -6429,7 +6433,7 @@
                               }
                             }
                           },
-                          "lifeRegenHpPerSecond": {
+                          "lifeRegen": {
                             "type": "number",
                             "minimum": -50,
                             "maximum": 100,
@@ -6439,7 +6443,7 @@
                             "x-infini-semanticType": "HP/s",
                             "x-infini-neutral": 0
                           },
-                          "manaRegenBonusPoints": {
+                          "manaRegen": {
                             "type": "integer",
                             "minimum": -100,
                             "maximum": 200,
@@ -6466,7 +6470,7 @@
                             "x-infini-semanticType": "slots",
                             "x-infini-neutral": 0
                           },
-                          "manaCostReductionPercentagePoints": {
+                          "manaCostReduction": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 90,
@@ -6513,7 +6517,7 @@
                             "x-infini-semanticType": "engine units: aggro points",
                             "x-infini-neutral": 0
                           },
-                          "damageReductionPercentagePoints": {
+                          "damageReduction": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 75,
@@ -6532,7 +6536,7 @@
                               }
                             }
                           },
-                          "genericArmorPenetrationPoints": {
+                          "armorPenetration": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 100,
@@ -6571,7 +6575,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "add_equipment_damage_bonus"
+                    "const": "equipment_damage_bonus"
                   },
                   "target": {
                     "type": "string",
@@ -6654,7 +6658,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "configure_spawn"
+                    "const": "spawn"
                   },
                   "target": {
                     "type": "string",
@@ -6683,7 +6687,7 @@
                           {
                             "type": "object",
                             "properties": {
-                              "constantSpeedBlocksPerSecond": {
+                              "speed": {
                                 "type": "number",
                                 "minimum": 0.0,
                                 "maximum": 1800.0,
@@ -6699,7 +6703,7 @@
                                 },
                                 "x-infini-authorProjection": {
                                   "nonzeroMustRemainNonzero": true,
-                                  "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                  "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                   "boundsAtUpdatesPerTick1To6": [
                                     [
                                       0.0,
@@ -6730,7 +6734,7 @@
                               }
                             },
                             "required": [
-                              "constantSpeedBlocksPerSecond"
+                              "speed"
                             ],
                             "additionalProperties": false,
                             "description": "Exact constant-speed deterministic fan."
@@ -6741,11 +6745,11 @@
                               "fanSpeed": {
                                 "type": "object",
                                 "properties": {
-                                  "minSpeedBlocksPerSecond": {
+                                  "minSpeed": {
                                     "type": "number",
                                     "minimum": 0.0,
                                     "maximum": 1800.0,
-                                    "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeedBlocksPerSecond.",
+                                    "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeed.",
                                     "x-infini-units": "blocks/s",
                                     "x-infini-semanticType": "blocks/s",
                                     "x-infini-neutral": 0.0,
@@ -6757,7 +6761,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -6786,7 +6790,7 @@
                                       ]
                                     }
                                   },
-                                  "maxSpeedBlocksPerSecond": {
+                                  "maxSpeed": {
                                     "type": "number",
                                     "minimum": 0.0,
                                     "maximum": 1800.0,
@@ -6802,7 +6806,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -6833,8 +6837,8 @@
                                   }
                                 },
                                 "required": [
-                                  "minSpeedBlocksPerSecond",
-                                  "maxSpeedBlocksPerSecond"
+                                  "minSpeed",
+                                  "maxSpeed"
                                 ],
                                 "additionalProperties": false,
                                 "description": "Keep the authored deterministic fan directions; independently sample each speed uniformly between min and max."
@@ -6852,11 +6856,11 @@
                               "radial": {
                                 "type": "object",
                                 "properties": {
-                                  "minSpeedBlocksPerSecond": {
+                                  "minSpeed": {
                                     "type": "number",
                                     "minimum": 0.0,
                                     "maximum": 1800.0,
-                                    "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeedBlocksPerSecond.",
+                                    "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeed.",
                                     "x-infini-units": "blocks/s",
                                     "x-infini-semanticType": "blocks/s",
                                     "x-infini-neutral": 0.0,
@@ -6868,7 +6872,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -6897,7 +6901,7 @@
                                       ]
                                     }
                                   },
-                                  "maxSpeedBlocksPerSecond": {
+                                  "maxSpeed": {
                                     "type": "number",
                                     "minimum": 0.0,
                                     "maximum": 1800.0,
@@ -6913,7 +6917,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -6944,8 +6948,8 @@
                                   }
                                 },
                                 "required": [
-                                  "minSpeedBlocksPerSecond",
-                                  "maxSpeedBlocksPerSecond"
+                                  "minSpeed",
+                                  "maxSpeed"
                                 ],
                                 "additionalProperties": false,
                                 "description": "Sample each direction uniformly over the full circle and speed uniformly between min and max."
@@ -6963,7 +6967,7 @@
                               "disk": {
                                 "type": "object",
                                 "properties": {
-                                  "maxSpeedBlocksPerSecond": {
+                                  "maxSpeed": {
                                     "type": "number",
                                     "minimum": 0.0,
                                     "maximum": 1800.0,
@@ -6979,7 +6983,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -7010,7 +7014,7 @@
                                   }
                                 },
                                 "required": [
-                                  "maxSpeedBlocksPerSecond"
+                                  "maxSpeed"
                                 ],
                                 "additionalProperties": false,
                                 "description": "Sample velocity uniformly by area in the zero-centred disk; radial speed is max*sqrt(U), not uniform radius."
@@ -7028,11 +7032,11 @@
                               "cone": {
                                 "type": "object",
                                 "properties": {
-                                  "minSpeedBlocksPerSecond": {
+                                  "minSpeed": {
                                     "type": "number",
                                     "minimum": 0.0,
                                     "maximum": 1800.0,
-                                    "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeedBlocksPerSecond.",
+                                    "description": "Author units: blocks/s. Native consumer: Lower sampled speed; must not exceed maxSpeed.",
                                     "x-infini-units": "blocks/s",
                                     "x-infini-semanticType": "blocks/s",
                                     "x-infini-neutral": 0.0,
@@ -7044,7 +7048,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -7073,7 +7077,7 @@
                                       ]
                                     }
                                   },
-                                  "maxSpeedBlocksPerSecond": {
+                                  "maxSpeed": {
                                     "type": "number",
                                     "minimum": 0.0,
                                     "maximum": 1800.0,
@@ -7089,7 +7093,7 @@
                                     },
                                     "x-infini-authorProjection": {
                                       "nonzeroMustRemainNonzero": true,
-                                      "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                                      "targetContext": "same target's unique projectile_collision.updatesPerTick",
                                       "boundsAtUpdatesPerTick1To6": [
                                         [
                                           0.0,
@@ -7135,8 +7139,8 @@
                                   }
                                 },
                                 "required": [
-                                  "minSpeedBlocksPerSecond",
-                                  "maxSpeedBlocksPerSecond",
+                                  "minSpeed",
+                                  "maxSpeed",
                                   "halfAngleRadians"
                                 ],
                                 "additionalProperties": false,
@@ -7157,7 +7161,7 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 12,
-                        "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select set_projectile_concurrency separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it",
+                        "description": "Default root binding spawn count per activation, not live concurrency; event actions and target_and_fire select their own counts. Select projectile_limit separately only when an explicit live cap is intended. May be omitted only for child_projectile, whose producers override it",
                         "x-infini-semanticType": "spawn_or_target_count",
                         "default": 1,
                         "x-infini-neutral": 1
@@ -7239,7 +7243,7 @@
                                 "description": "Vertical offset above the selected anchor",
                                 "x-infini-units": "blocks (tiles)"
                               },
-                              "activationDelaySeconds": {
+                              "activationDelay": {
                                 "type": "number",
                                 "minimum": 0,
                                 "maximum": 10.0,
@@ -7255,7 +7259,7 @@
                             "required": [
                               "above",
                               "heightTiles",
-                              "activationDelaySeconds"
+                              "activationDelay"
                             ],
                             "additionalProperties": false,
                             "description": "Above the explicit anchor"
@@ -7290,7 +7294,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_concurrency"
+                    "const": "projectile_limit"
                   },
                   "target": {
                     "type": "string",
@@ -7345,7 +7349,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_sentry"
+                    "const": "sentry"
                   },
                   "target": {
                     "type": "string",
@@ -7397,7 +7401,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_descendant_concurrency"
+                    "const": "descendant_limit"
                   },
                   "target": {
                     "type": "string",
@@ -7452,7 +7456,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_damage"
+                    "const": "projectile_damage"
                   },
                   "target": {
                     "type": "string",
@@ -7528,7 +7532,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_lifetime"
+                    "const": "projectile_lifetime"
                   },
                   "target": {
                     "type": "string",
@@ -7587,7 +7591,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_hitbox"
+                    "const": "projectile_hitbox"
                   },
                   "target": {
                     "type": "string",
@@ -7667,7 +7671,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_hitbox_curve"
+                    "const": "hitbox_curve"
                   },
                   "target": {
                     "type": "string",
@@ -7719,7 +7723,7 @@
                           "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                         }
                       },
-                      "startDelaySeconds": {
+                      "startDelay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 360.0,
@@ -7731,7 +7735,7 @@
                           "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                         }
                       },
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 360.0,
@@ -7761,8 +7765,8 @@
                     "required": [
                       "startScale",
                       "endScale",
-                      "startDelaySeconds",
-                      "durationSeconds",
+                      "startDelay",
+                      "duration",
                       "curve",
                       "mirrorToSprite"
                     ]
@@ -7785,7 +7789,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_turn_modifier"
+                    "const": "turn_velocity"
                   },
                   "target": {
                     "type": "string",
@@ -7827,7 +7831,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   -30.0,
@@ -7856,7 +7860,7 @@
                               ]
                             }
                           },
-                          "startDelaySeconds": {
+                          "startDelay": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 360.0,
@@ -7868,7 +7872,7 @@
                               "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                             }
                           },
-                          "durationSeconds": {
+                          "duration": {
                             "type": "number",
                             "minimum": 0.008333333333333333,
                             "maximum": 360.0,
@@ -7886,8 +7890,8 @@
                         },
                         "required": [
                           "turnRadiansPerSecond",
-                          "startDelaySeconds",
-                          "durationSeconds"
+                          "startDelay",
+                          "duration"
                         ]
                       },
                       {
@@ -7910,7 +7914,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   -30.0,
@@ -7968,7 +7972,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   -30.0,
@@ -8022,7 +8026,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_homing_modifier"
+                    "const": "homing"
                   },
                   "target": {
                     "type": "string",
@@ -8048,7 +8052,7 @@
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
-                          "rangeTiles": {
+                          "range": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 120,
@@ -8077,7 +8081,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   0.006,
@@ -8111,7 +8115,7 @@
                             "description": "Require native line-of-sight check between projectile/NPC boxes before selection",
                             "x-infini-semanticType": "bounded_text"
                           },
-                          "startDelaySeconds": {
+                          "startDelay": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 360.0,
@@ -8123,7 +8127,7 @@
                               "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                             }
                           },
-                          "durationSeconds": {
+                          "duration": {
                             "type": "number",
                             "minimum": 0.008333333333333333,
                             "maximum": 360.0,
@@ -8140,18 +8144,18 @@
                           }
                         },
                         "required": [
-                          "rangeTiles",
+                          "range",
                           "maxTurnRadiansPerSecond",
                           "requireLineOfSight",
-                          "startDelaySeconds",
-                          "durationSeconds"
+                          "startDelay",
+                          "duration"
                         ]
                       },
                       {
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
-                          "rangeTiles": {
+                          "range": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 120,
@@ -8180,7 +8184,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   0.006,
@@ -8219,7 +8223,7 @@
                           }
                         },
                         "required": [
-                          "rangeTiles",
+                          "range",
                           "maxTurnRadiansPerSecond",
                           "requireLineOfSight",
                           "window"
@@ -8229,7 +8233,7 @@
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
-                          "rangeTiles": {
+                          "range": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 120,
@@ -8258,7 +8262,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   0.006,
@@ -8294,7 +8298,7 @@
                           }
                         },
                         "required": [
-                          "rangeTiles",
+                          "range",
                           "maxTurnRadiansPerSecond",
                           "requireLineOfSight"
                         ]
@@ -8319,7 +8323,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "attract_npcs_while_active"
+                    "const": "attract_npcs"
                   },
                   "target": {
                     "type": "string",
@@ -8345,7 +8349,7 @@
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
-                          "rangeTiles": {
+                          "range": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 80,
@@ -8359,7 +8363,7 @@
                               "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                             }
                           },
-                          "accelerationBlocksPerSecondSquared": {
+                          "accel": {
                             "type": "number",
                             "minimum": 0.225,
                             "maximum": 5400.0,
@@ -8374,7 +8378,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   0.225,
@@ -8419,7 +8423,7 @@
                             "description": "Maximum accepted NPC slots per projectile update",
                             "x-infini-semanticType": "unitless_scalar"
                           },
-                          "startDelaySeconds": {
+                          "startDelay": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 360.0,
@@ -8431,7 +8435,7 @@
                               "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                             }
                           },
-                          "durationSeconds": {
+                          "duration": {
                             "type": "number",
                             "minimum": 0.008333333333333333,
                             "maximum": 360.0,
@@ -8448,19 +8452,19 @@
                           }
                         },
                         "required": [
-                          "rangeTiles",
-                          "accelerationBlocksPerSecondSquared",
+                          "range",
+                          "accel",
                           "falloff",
                           "maxTargets",
-                          "startDelaySeconds",
-                          "durationSeconds"
+                          "startDelay",
+                          "duration"
                         ]
                       },
                       {
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
-                          "rangeTiles": {
+                          "range": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 80,
@@ -8474,7 +8478,7 @@
                               "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                             }
                           },
-                          "accelerationBlocksPerSecondSquared": {
+                          "accel": {
                             "type": "number",
                             "minimum": 0.225,
                             "maximum": 5400.0,
@@ -8489,7 +8493,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   0.225,
@@ -8539,8 +8543,8 @@
                           }
                         },
                         "required": [
-                          "rangeTiles",
-                          "accelerationBlocksPerSecondSquared",
+                          "range",
+                          "accel",
                           "falloff",
                           "maxTargets",
                           "window"
@@ -8550,7 +8554,7 @@
                         "type": "object",
                         "additionalProperties": false,
                         "properties": {
-                          "rangeTiles": {
+                          "range": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 80,
@@ -8564,7 +8568,7 @@
                               "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                             }
                           },
-                          "accelerationBlocksPerSecondSquared": {
+                          "accel": {
                             "type": "number",
                             "minimum": 0.225,
                             "maximum": 5400.0,
@@ -8579,7 +8583,7 @@
                             },
                             "x-infini-authorProjection": {
                               "nonzeroMustRemainNonzero": true,
-                              "targetContext": "same target's unique set_projectile_collision.updatesPerTick",
+                              "targetContext": "same target's unique projectile_collision.updatesPerTick",
                               "boundsAtUpdatesPerTick1To6": [
                                 [
                                   0.225,
@@ -8626,8 +8630,8 @@
                           }
                         },
                         "required": [
-                          "rangeTiles",
-                          "accelerationBlocksPerSecondSquared",
+                          "range",
+                          "accel",
                           "falloff",
                           "maxTargets"
                         ]
@@ -8652,7 +8656,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_visual_scale_curve"
+                    "const": "sprite_scale_curve"
                   },
                   "target": {
                     "type": "string",
@@ -8704,7 +8708,7 @@
                           "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                         }
                       },
-                      "startDelaySeconds": {
+                      "startDelay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 360.0,
@@ -8716,7 +8720,7 @@
                           "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                         }
                       },
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 360.0,
@@ -8744,8 +8748,8 @@
                     "required": [
                       "startScale",
                       "endScale",
-                      "startDelaySeconds",
-                      "durationSeconds",
+                      "startDelay",
+                      "duration",
                       "curve"
                     ]
                   }
@@ -8767,7 +8771,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "set_projectile_collision"
+                    "const": "projectile_collision"
                   },
                   "target": {
                     "type": "string",
@@ -8999,7 +9003,7 @@
                           "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                         }
                       },
-                      "rangeTiles": {
+                      "range": {
                         "type": "number",
                         "minimum": 1,
                         "maximum": 120,
@@ -9011,7 +9015,7 @@
                         "type": "number",
                         "minimum": 0,
                         "maximum": 0.9,
-                        "description": "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below rangeTiles × 16; with hardRange=false the previous target may therefore lie outside that physical radius. With hardRange=true the geometric range is checked before discounting. This is a distance discount, not a hit probability",
+                        "description": "Previous target distance score = distance × (1 − bias); fresh bias is 0..0.9. Choose the smallest score below range × 16; with hardRange=false the previous target may therefore lie outside that physical radius. With hardRange=true the geometric range is checked before discounting. This is a distance discount, not a hit probability",
                         "x-infini-units": "engine units: distance-score discount",
                         "x-infini-semanticType": "unitless_scalar"
                       },
@@ -9021,7 +9025,7 @@
                           "authored_child",
                           "live_parent"
                         ],
-                        "description": "Child damage magnitude: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes). Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
+                        "description": "Child damage magnitude: its authored base, or this parent projectile's actual damage at firing time (including prior native/charge changes). Does not enable damage: the child needs projectile_damage; authored damage=0 is valid with live_parent",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "knockbackBasis": {
@@ -9044,7 +9048,7 @@
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 4,
-                        "description": "Shots per firing volley, independently of child configure_spawn.count; 1 retains a single shot",
+                        "description": "Shots per firing volley, independently of child spawn.count; 1 retains a single shot",
                         "x-infini-units": "projectiles/volley",
                         "x-infini-semanticType": "spawn_or_target_count",
                         "default": 1,
@@ -9086,7 +9090,7 @@
                       },
                       "hardRange": {
                         "type": "boolean",
-                        "description": "Reject geometric distance beyond rangeTiles before applying previous-target score discount; false retains the existing soft score limit",
+                        "description": "Reject geometric distance beyond range before applying previous-target score discount; false retains the existing soft score limit",
                         "x-infini-semanticType": "bounded_text",
                         "default": false,
                         "x-infini-neutral": false
@@ -9095,7 +9099,7 @@
                     "required": [
                       "shotEntity",
                       "intervalSeconds",
-                      "rangeTiles",
+                      "range",
                       "sameTargetBias",
                       "damageBasis",
                       "knockbackBasis",
@@ -9120,7 +9124,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "spawn_entity_on_event"
+                    "const": "spawn_on_event"
                   },
                   "target": {
                     "type": "string",
@@ -9222,7 +9226,7 @@
                                 ],
                                 "description": "Equipment event"
                               },
-                              "cooldownSeconds": {
+                              "cooldown": {
                                 "type": "number",
                                 "minimum": 0.09166666666666666,
                                 "maximum": 60.0,
@@ -9237,7 +9241,7 @@
                             },
                             "required": [
                               "on",
-                              "cooldownSeconds"
+                              "cooldown"
                             ],
                             "additionalProperties": false,
                             "description": "Functional equipment reaction; identical copies share cooldown."
@@ -9288,7 +9292,7 @@
                           "authored_child",
                           "live_parent"
                         ],
-                        "description": "Child damage magnitude: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
+                        "description": "Child damage magnitude: its authored base, or this event-owning projectile's actual damage at event time; live_parent requires a projectile source. Does not enable damage: the child needs projectile_damage; authored damage=0 is valid with live_parent",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "knockbackBasis": {
@@ -9307,7 +9311,7 @@
                         "description": "Multiply the selected damage basis exactly once; zero preserves a zero-damage child",
                         "x-infini-semanticType": "unitless_scalar"
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -9327,7 +9331,7 @@
                       "damageBasis",
                       "knockbackBasis",
                       "damageMultiplier",
-                      "delaySeconds"
+                      "delay"
                     ]
                   }
                 },
@@ -9348,7 +9352,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "spawn_entity_from_hit_target"
+                    "const": "spawn_at_hit"
                   },
                   "target": {
                     "type": "string",
@@ -9453,7 +9457,7 @@
                               "nonzeroMustRemainNonzero": true
                             }
                           },
-                          "beforePositionJitterRadiusBlocks": {
+                          "beforeJitterRadius": {
                             "type": "number",
                             "minimum": 0.0,
                             "maximum": 8.0,
@@ -9471,7 +9475,7 @@
                               "nonzeroMustRemainNonzero": true
                             }
                           },
-                          "beforeDirectionJitterRadians": {
+                          "beforeAngleJitter": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 3.141592653589793,
@@ -9486,7 +9490,7 @@
                               "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                             }
                           },
-                          "afterFanSpreadRadians": {
+                          "afterFanSpread": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 6.283185307179586,
@@ -9501,7 +9505,7 @@
                               "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                             }
                           },
-                          "initialIgnoreCountdownUpdates": {
+                          "ignoreTargetUpdates": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 600,
@@ -9514,10 +9518,10 @@
                           "beforeProbability",
                           "hitboxMaxSideFactor",
                           "clearanceBlocks",
-                          "beforePositionJitterRadiusBlocks",
-                          "beforeDirectionJitterRadians",
-                          "afterFanSpreadRadians",
-                          "initialIgnoreCountdownUpdates"
+                          "beforeJitterRadius",
+                          "beforeAngleJitter",
+                          "afterFanSpread",
+                          "ignoreTargetUpdates"
                         ],
                         "additionalProperties": false,
                         "description": "Explicit hit-target-relative origin and direction sampling. Capture target geometry and event direction at action admission, including delayed actions. Positive exclusion retains the exact NPC incarnation and refuses reused slots; zero disables exclusion and its incarnation cancellation guard.",
@@ -9529,7 +9533,7 @@
                           "authored_child",
                           "live_parent"
                         ],
-                        "description": "Child damage magnitude, selected independently of its velocity and knockback. Does not enable damage: the child needs set_projectile_damage; authored damage=0 is valid with live_parent",
+                        "description": "Child damage magnitude, selected independently of its velocity and knockback. Does not enable damage: the child needs projectile_damage; authored damage=0 is valid with live_parent",
                         "x-infini-semanticType": "bounded_text"
                       },
                       "knockbackBasis": {
@@ -9548,7 +9552,7 @@
                         "description": "Multiply the selected damage exactly once; zero preserves a zero-damage child",
                         "x-infini-semanticType": "unitless_scalar"
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -9569,7 +9573,7 @@
                       "damageBasis",
                       "knockbackBasis",
                       "damageMultiplier",
-                      "delaySeconds"
+                      "delay"
                     ]
                   }
                 },
@@ -9590,7 +9594,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "select_targets_and_emit_on_event"
+                    "const": "emit_to_targets_on_event"
                   },
                   "target": {
                     "type": "string",
@@ -9678,7 +9682,7 @@
                         "description": "Require native line-of-sight check from the current anchor hitbox to each candidate; independent of child tileCollide/ownerHitCheck",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "initialIgnoreCountdownUpdates": {
+                      "ignoreTargetUpdates": {
                         "type": "integer",
                         "minimum": 0,
                         "maximum": 600,
@@ -9686,7 +9690,7 @@
                         "x-infini-units": "native projectile AI updates",
                         "x-infini-semanticType": "unitless_scalar"
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -9707,8 +9711,8 @@
                       "selectionAnchor",
                       "repeatPolicy",
                       "requireLineOfSight",
-                      "initialIgnoreCountdownUpdates",
-                      "delaySeconds"
+                      "ignoreTargetUpdates",
+                      "delay"
                     ]
                   }
                 },
@@ -9729,7 +9733,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "apply_generated_buff_on_event"
+                    "const": "generated_buff_on_event"
                   },
                   "target": {
                     "type": "string",
@@ -9759,7 +9763,7 @@
                             ],
                             "description": "Equipment event"
                           },
-                          "cooldownSeconds": {
+                          "cooldown": {
                             "type": "number",
                             "minimum": 0.09166666666666666,
                             "maximum": 60.0,
@@ -9774,7 +9778,7 @@
                         },
                         "required": [
                           "on",
-                          "cooldownSeconds"
+                          "cooldown"
                         ],
                         "additionalProperties": false,
                         "description": "Functional equipment reaction; identical copies share cooldown.",
@@ -9786,7 +9790,7 @@
                         "description": "Exact named generated-buff-only group on this item",
                         "x-infini-semanticType": "item_effect_group_reference"
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -9822,7 +9826,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "apply_npc_effect_on_event"
+                    "const": "npc_effect_on_event"
                   },
                   "target": {
                     "type": "string",
@@ -9856,7 +9860,7 @@
                         "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 60.0,
@@ -9905,7 +9909,7 @@
                           "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
                         }
                       },
-                      "velocityRetentionPerTick": {
+                      "retentionPerTick": {
                         "type": "number",
                         "minimum": 0.1,
                         "maximum": 1,
@@ -9941,7 +9945,7 @@
                           }
                         }
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -9957,7 +9961,7 @@
                     },
                     "required": [
                       "when",
-                      "durationSeconds"
+                      "duration"
                     ]
                   }
                 },
@@ -10019,7 +10023,7 @@
                         "description": "Terraria BuffID or loaded ModContent.BuffType. Native immunity and recipient behavior apply; player-only effects may have no effect on NPCs.",
                         "x-infini-semanticType": "terraria_buff_id"
                       },
-                      "durationSeconds": {
+                      "duration": {
                         "type": "number",
                         "minimum": 0.008333333333333333,
                         "maximum": 360.0,
@@ -10031,7 +10035,7 @@
                           "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
                         }
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -10048,7 +10052,7 @@
                     "required": [
                       "when",
                       "buffId",
-                      "durationSeconds"
+                      "duration"
                     ]
                   }
                 },
@@ -10118,7 +10122,7 @@
                                 ],
                                 "description": "Equipment event"
                               },
-                              "cooldownSeconds": {
+                              "cooldown": {
                                 "type": "number",
                                 "minimum": 0.09166666666666666,
                                 "maximum": 60.0,
@@ -10133,7 +10137,7 @@
                             },
                             "required": [
                               "on",
-                              "cooldownSeconds"
+                              "cooldown"
                             ],
                             "additionalProperties": false,
                             "description": "Functional equipment reaction; identical copies share cooldown."
@@ -10142,7 +10146,7 @@
                         "description": "Explicit event trigger",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
-                      "radiusTiles": {
+                      "radius": {
                         "type": "number",
                         "minimum": 0.5,
                         "maximum": 60,
@@ -10164,10 +10168,10 @@
                         "type": "number",
                         "minimum": 0.05,
                         "maximum": 4,
-                        "description": "Multiply event-owning entity's authored base damage: item_body uses configure_item_stats.damage, projectile uses set_projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone",
+                        "description": "Multiply event-owning entity's authored base damage: item_body uses item_stats.damage, projectile uses projectile_damage.damage; rounded, at least 1 before target defense. 1 is base damage, 0.05 is 5% of base, not +5% or damageDone",
                         "x-infini-semanticType": "unitless_scalar"
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -10183,7 +10187,7 @@
                     },
                     "required": [
                       "when",
-                      "radiusTiles",
+                      "radius",
                       "damageMultiplier"
                     ]
                   }
@@ -10288,7 +10292,7 @@
                               "nonzeroMustRemainNonzero": true
                             }
                           },
-                          "radiusTiles": {
+                          "radius": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 60,
@@ -10296,7 +10300,7 @@
                             "x-infini-units": "blocks (tiles)",
                             "x-infini-semanticType": "tiles"
                           },
-                          "delaySeconds": {
+                          "delay": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 10.0,
@@ -10314,7 +10318,7 @@
                           "when",
                           "mode",
                           "impulseBlocksPerSecond",
-                          "radiusTiles"
+                          "radius"
                         ]
                       },
                       {
@@ -10378,7 +10382,7 @@
                               "nonzeroMustRemainNonzero": true
                             }
                           },
-                          "radiusTiles": {
+                          "radius": {
                             "type": "number",
                             "minimum": 1,
                             "maximum": 60,
@@ -10386,7 +10390,7 @@
                             "x-infini-units": "blocks (tiles)",
                             "x-infini-semanticType": "tiles"
                           },
-                          "delaySeconds": {
+                          "delay": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 10.0,
@@ -10404,7 +10408,7 @@
                           "when",
                           "mode",
                           "impulseBlocksPerSecond",
-                          "radiusTiles"
+                          "radius"
                         ]
                       },
                       {
@@ -10437,7 +10441,7 @@
                               "nonzeroMustRemainNonzero": true
                             }
                           },
-                          "delaySeconds": {
+                          "delay": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 10.0,
@@ -10504,7 +10508,7 @@
                               "nonzeroMustRemainNonzero": true
                             }
                           },
-                          "delaySeconds": {
+                          "delay": {
                             "type": "number",
                             "minimum": 0,
                             "maximum": 10.0,
@@ -10594,7 +10598,7 @@
                         "x-infini-units": "HP",
                         "x-infini-semanticType": "life_points"
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -10666,7 +10670,7 @@
                         "description": "Exact emitted event",
                         "x-infini-semanticType": "runtime_event_trigger"
                       },
-                      "rangeTiles": {
+                      "range": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 120,
@@ -10674,7 +10678,7 @@
                         "x-infini-units": "blocks (tiles)",
                         "x-infini-semanticType": "tiles"
                       },
-                      "cooldownSeconds": {
+                      "cooldown": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 60.0,
@@ -10691,7 +10695,7 @@
                         "description": "Check destination solid-tile overlap only; false skips it. No world-bounds or lava check in this event action; not a general hazard check",
                         "x-infini-semanticType": "bounded_text"
                       },
-                      "delaySeconds": {
+                      "delay": {
                         "type": "number",
                         "minimum": 0,
                         "maximum": 10.0,
@@ -10707,8 +10711,8 @@
                     },
                     "required": [
                       "when",
-                      "rangeTiles",
-                      "cooldownSeconds",
+                      "range",
+                      "cooldown",
                       "safeTileOnly"
                     ]
                   }
@@ -10730,7 +10734,7 @@
                     "description": "Stable unique call id."
                   },
                   "fn": {
-                    "const": "emit_light_while_active"
+                    "const": "projectile_light"
                   },
                   "target": {
                     "type": "string",

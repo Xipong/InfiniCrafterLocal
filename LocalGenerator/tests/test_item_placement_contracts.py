@@ -83,8 +83,8 @@ def test_placement_facts_survive_serialized_author(item, expected_item, expected
 @pytest.mark.parametrize("tile_id", [18, 19], ids=["historical-workbench", "dual-use-platform"])
 def test_durable_hybrid_stack_contract(max_stack, invalid, tile_id):
     document = _dual_use_placeable()
-    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "configure_tile_placement")["params"]["tileId"] = tile_id
-    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")["params"]["maxStack"] = max_stack
+    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "place_tile")["params"]["tileId"] = tile_id
+    next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "item_stats")["params"]["maxStack"] = max_stack
     report = validate_runtime_program(document)
     assert ("hybrid_placeable_max_stack" in {row["code"] for row in report["errors"]}) is invalid
     if not invalid:
@@ -94,7 +94,7 @@ def test_durable_hybrid_stack_contract(max_stack, invalid, tile_id):
 
 def test_hybrid_stack_repair_changes_only_authorized_leaf():
     document = _dual_use_placeable()
-    stats = next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    stats = next(c for c in document["runtimeProgram"]["calls"] if c["fn"] == "item_stats")
     stats["params"]["maxStack"] = 9999
     errors = [r for r in validate_runtime_program(document)["errors"] if r["code"] == "hybrid_placeable_max_stack"]
     assert errors

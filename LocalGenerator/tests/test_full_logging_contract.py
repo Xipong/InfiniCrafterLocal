@@ -55,7 +55,10 @@ def test_real_director_seams_store_complete_response_and_request_without_semanti
                     {"role": "user", "name": "vfx_repair_context", "content": json.dumps(user, ensure_ascii=False)}] if stage.endswith("repair") else None
         result = vfx_transport.call_llm_vfx_director("exact contract", user, 123, 0.2, 5, messages=messages)
         assert user == before
-        assert request_dossier(captured[0]) == before
+        from infini_local.core.vfx_material_contract import vfx_model_context
+        projected = request_dossier(captured[0])
+        assert projected == vfx_model_context(before)
+        assert projected["source"] == before["source"], "literal input bytes survive model spelling and logging"
         assert captured[0]["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
     expected_result = json.loads(raw)
     if stage == "visual_repair":

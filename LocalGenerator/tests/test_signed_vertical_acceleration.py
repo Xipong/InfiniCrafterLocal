@@ -17,8 +17,8 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-FN = "accelerate_projectile_vertical"
-PARAM = "accelerationYBlocksPerSecondSquared"
+FN = "accelerate_y"
+PARAM = "accelY"
 
 
 def selected(document, fn=FN):
@@ -31,7 +31,7 @@ def test_signed_values_reach_the_same_wire_and_exact_receipts(value, updates):
     document = build_capability_witness(FN)
     call = selected(document)
     call["params"][PARAM] = CAPABILITY_REGISTRY[FN].params[PARAM].from_wire(value, updates_per_tick=updates)
-    selected(document, "set_projectile_collision")["params"]["updatesPerTick"] = updates
+    selected(document, "projectile_collision")["params"]["updatesPerTick"] = updates
     assert validate_runtime_program(document)["ok"]
     wire = compile_runtime_program(document)
     entity = next(row for row in wire["runtimeProgram"]["entities"] if row["id"] == call["target"])
@@ -99,7 +99,7 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     assert selected(fixed)["target"] == call["target"]
     assert validate_runtime_program(fixed)["ok"]
     # A later unrelated invalid collision leaf cannot rewrite accepted acceleration.
-    collision = selected(fixed, "set_projectile_collision")
+    collision = selected(fixed, "projectile_collision")
     collision["params"]["pierce"] = 101
     scope = build_runtime_repair_scope(fixed, validate_runtime_program(fixed)["errors"])
     hostile = deepcopy(selected(fixed))
@@ -110,7 +110,7 @@ def test_repair_changes_only_bad_acceleration_and_keeps_valid_negative_frozen():
     assert audit["ok"], audit
     repaired = apply_repair_patch(fixed, filtered)
     assert selected(repaired)["params"][PARAM] == -42.1875
-    assert selected(repaired, "set_projectile_collision")["params"]["pierce"] == 3
+    assert selected(repaired, "projectile_collision")["params"]["pierce"] == 3
     assert validate_runtime_program(repaired)["ok"]
 
 

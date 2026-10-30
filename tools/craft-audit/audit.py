@@ -127,6 +127,23 @@ class SchemaDocs:
             row["default"] = schema["default"]
         return rows
 
+    def saved_param_docs(self, fn: str, suffix: tuple, *, same_units_only: bool = False) -> dict:
+        """Read declared historical names for display, never source admission."""
+        from infini_local.core.runtime_authoring.capability_registry import capability_for_saved_receipt
+        from infini_local.core.runtime_authoring.receipt_input import receipt_param_spec
+        if not suffix or not all(isinstance(part, str) for part in suffix):
+            return {}
+        cap = capability_for_saved_receipt(fn)
+        original = ".".join(suffix)
+        canonical = cap.canonical_receipt_param_path(original) if cap is not None else None
+        if canonical is None:
+            return {}
+        if same_units_only and canonical != original:
+            leaf = receipt_param_spec(cap, canonical)
+            if leaf is None or suffix[-1] not in leaf.previous_author_names:
+                return {}  # Old engine-domain units are not v6 Author units.
+        return self.param_docs(cap.name, tuple(canonical.split(".")))
+
     def param_docs(self, fn: str, suffix: tuple) -> dict:
         calls = self.root.get("properties", {}).get("calls", {}).get("items", {}).get("oneOf", [])
         matches = [(i, c) for i, c in enumerate(calls) if c.get("properties", {}).get("fn", {}).get("const") == fn]
@@ -159,7 +176,8 @@ def leaves(value: Any, parts: tuple = ()) -> list[dict]:
 def wire_documentation(data: dict, docs: SchemaDocs) -> list[dict]:
     """Index current registry projections; never invert them into lost Author JSON."""
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
-    from infini_local.core.runtime_authoring.technical_lowering import _parameter_outputs, _param_leaf, path_matches
+    from infini_local.core.runtime_authoring.technical_lowering import _parameter_outputs, path_matches
+    from infini_local.core.runtime_authoring.receipt_input import receipt_param_spec
 
     index = []
     for fn, cap in CAPABILITY_REGISTRY.items():
@@ -168,7 +186,7 @@ def wire_documentation(data: dict, docs: SchemaDocs) -> list[dict]:
             for source_name, destination, literal in spec.projection_paths(name):
                 if literal:
                     continue
-                leaf = _param_leaf(cap, source_name)
+                leaf = receipt_param_spec(cap, source_name)
                 for output in outputs:
                     if output.endswith("." + destination):
                         description = docs.param_docs(fn, tuple(source_name.split(".")))
@@ -268,6 +286,19 @@ def build_report(item: dict, author: dict | None = None, visual: dict | None = N
         author_rows = [r for r in author_rows if r["parts"][:1] != ["runtimeProgram"]]
         if "runtimeProgram" in source["data"]:
             author_rows += runtime_docs.rows(source["data"]["runtimeProgram"], parts=("runtimeProgram",))
+        old_program = source["data"].get("runtimeProgram")
+        if isinstance(old_program, dict) and old_program.get("schema") == "infini.runtime-program.authoring.v6":
+            for row in author_rows:
+                parts = tuple(row["parts"])
+                if parts[:2] != ("runtimeProgram", "calls") or len(parts) <= 4 or parts[3] != "params":
+                    continue
+                call = lookup(source["data"], parts[:3])
+                docs = runtime_docs.saved_param_docs(call.get("fn", ""), parts[4:], same_units_only=True) if isinstance(call, dict) else {}
+                if docs:
+                    row.update({key: docs[key] for key in ("description", "units", "schema")})
+                    row["documented"] = True
+                    # Present value/path stay literal; validation below still
+                    # rejects v6 as fresh Author and cannot authenticate it.
     checks = []
     if source is not None:
         def validate_author():
@@ -308,7 +339,10 @@ def build_report(item: dict, author: dict | None = None, visual: dict | None = N
         fp = receipt_parts(receipt.get("finalPath", ""))
         actual = lookup(data, fp) if fp else MISSING
         origin = source_index.get(pointer(ap)) if ap else None
-        docs = origin or (runtime_docs.param_docs(receipt.get("fn", ""), ap[4:])
+        docs = origin or (runtime_docs.saved_param_docs(receipt.get("fn", ""), ap[4:])
+                          if source is None and receipt_origin == "saved"
+                          and ap[:2] == ("runtimeProgram", "calls") and len(ap) > 4 and ap[3] == "params"
+                          else runtime_docs.param_docs(receipt.get("fn", ""), ap[4:])
                           if ap[:2] == ("runtimeProgram", "calls") and len(ap) > 4 and ap[3] == "params" else {})
         link = {"receiptIndex": i, "receipt": receipt, "wirePath": pointer(fp) if fp else "",
                 "wireValuePresent": actual is not MISSING, "wireValue": actual if actual is not MISSING else None,

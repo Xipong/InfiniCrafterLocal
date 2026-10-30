@@ -11,7 +11,7 @@ from infini_local.core.runtime_authoring.capability_registry import (
     MOVEMENT_OPCODE,
     PROJECTILE_MODIFIER_COMPONENTS,
     ENTITY_KIND_REGISTRY,
-    EVENT_ACTION_OPCODE,
+    WIRE_EVENT_ACTION_OPCODE,
     ParamSpec,
     RUNTIME_PROGRAM_SCHEMA,
     VISUAL_ROLE_BY_ENTITY_KIND,
@@ -19,6 +19,10 @@ from infini_local.core.runtime_authoring.capability_registry import (
 )
 from infini_local.core.runtime_authoring.program_schema import (
     PRIMARY_ENTITY_AUTHOR_PATH,
+)
+
+from infini_local.core.runtime_authoring.receipt_input import (
+    prepare_receipt_rows, receipt_param_spec, receipt_path_segments,
 )
 
 
@@ -370,15 +374,6 @@ def _completed_params(fn: str, params: Mapping[str, Any]) -> dict[str, Any]:
     return completed
 
 
-def _param_leaf(cap: Any, path: str) -> ParamSpec | None:
-    parts = path.split(".")
-    spec = cap.params.get(parts[0])
-    for part in parts[1:]:
-        spec = spec.properties.get(part) if spec is not None else None
-    return spec
-
-
-
 def _omission_context_allows(
     cap: Any, name: str, receipt: Mapping[str, Any], *,
     authored_document: Mapping[str, Any] | None, final_document: Mapping[str, Any] | None,
@@ -503,7 +498,7 @@ def _root_neutral_omission_matches(
 def _parameter_outputs(fn: str, name: str, params: Mapping[str, Any] | None = None) -> tuple[str, ...]:
     cap = CAPABILITY_REGISTRY[fn]
     root = name.split(".", 1)[0]
-    spec = _param_leaf(cap, name)
+    spec = receipt_param_spec(cap, name)
     if spec is None:
         root_spec = cap.params.get(root)
         if root_spec is None or not root_spec.structured:
@@ -556,8 +551,8 @@ def capability_fixed_outputs(fn: str) -> dict[str, Any]:
     if fn in CONTROLLER_OPCODE:
         literals.update({"controller.name": fn, "controller.code": CONTROLLER_OPCODE[fn]})
     if cap.category == "event":
-        action = cap.wire_action or fn
-        literals.update({"action": action, "actionCode": EVENT_ACTION_OPCODE[action]})
+        action = cap.wire_action or cap.persisted_name
+        literals.update({"action": action, "actionCode": WIRE_EVENT_ACTION_OPCODE[action]})
     return {path: value for key, value in literals.items()
             for path in cap.final_wire_paths if path.endswith("." + key)}
 
@@ -585,22 +580,9 @@ def _same_receipt_value(actual: Any, expected: Any) -> bool:
             and json.dumps(actual, sort_keys=True, default=repr) == json.dumps(expected, sort_keys=True, default=repr))
 
 
-def _receipt_path_segments(path: str) -> list[str | int] | None:
-    """Parse receipt grammar; unrepresentable numeric indices are malformed."""
-    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*|\[\d+\])*", path):
-        return None
-    try:
-        return [int(segment[1:-1]) if segment.startswith("[") else segment
-                for segment in re.findall(r"[A-Za-z][A-Za-z0-9_]*|\[\d+\]", path)]
-    except ValueError:
-        # Python bounds decimal conversion. Report bad input, never truncate it
-        # or change the process-wide integer conversion limit.
-        return None
-
-
 def _final_value(document: Mapping[str, Any], path: str) -> Any:
     """Read a compiler receipt path without evaluating arbitrary expressions."""
-    segments = _receipt_path_segments(path)
+    segments = receipt_path_segments(path)
     if segments is None:
         return _MISSING
     value: Any = document
@@ -838,7 +820,7 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
                     if receipt.get("fn") == cap.name and receipt.get("finalPath") == path
                     and (receipt.get("status") == ("alias_lowering" if projection.literal else "delivered")
                          or (not projection.literal and receipt.get("status") == "declared_neutral_omission"
-                             and (((omitted_spec := _param_leaf(cap, projection.authored_path)) is not None
+                             and (((omitted_spec := receipt_param_spec(cap, projection.authored_path)) is not None
                                    and _declares_neutral_omission(omitted_spec))
                                   or _root_neutral_omission_matches(cap, projection.authored_path, receipt,
                                       authored_document=authored, final_document=final))))
@@ -856,11 +838,11 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
         event_match = re.match(r"runtimeProgram\.entities\[\d+\]\.events\[\d+\]", path)
         if event_match is not None:
             event_base = event_match.group()
-            wire_action = cap.wire_action or fn
+            wire_action = cap.wire_action or cap.persisted_name
             code = _final_value(final, event_base + ".actionCode")
             associated = (_final_value(final, event_base + ".id") == receipt.get("callId")
                           and _final_value(final, event_base + ".action") == wire_action
-                          and type(code) is int and code == EVENT_ACTION_OPCODE.get(wire_action))
+                          and type(code) is int and code == WIRE_EVENT_ACTION_OPCODE.get(wire_action))
         elif cap.effect_groupable:
             owner_match = re.match(r"(gameplay|runtimeProgram\.effectGroups\[\d+\])\.", path)
             owner_prefix = owner_match.group(1) if owner_match else ""
@@ -927,7 +909,7 @@ def _audit_present_parameters(final: Mapping[str, Any], authored: Mapping[str, A
                 and type(row.get("value")) is int and row["value"] == code
                 for row in receipts) == 1
         else:
-            field, expected = ("spawn.enabled", True) if fn == "configure_spawn" else ("controller.name", fn)
+            field, expected = ("spawn.enabled", True) if fn == "spawn" else ("controller.name", fn)
             associated = _same_receipt_value(_final_value(final, entity_base + "." + field), expected)
             if fn in CONTROLLER_OPCODE:
                 code = _final_value(final, entity_base + ".controller.code")
@@ -1001,7 +983,7 @@ def _capability_receipt_owner_error(
                 or (final_document is not None and not _same_receipt_value(
                     _final_value(final_document, "runtimeProgram.itemEntityId"), identity))):
                 return "capability receipt item owner differs from the unique declared body and final item identity"
-    if final_document is not None and source_call is not None and receipt.get("fn") == "require_use_condition":
+    if final_document is not None and source_call is not None and receipt.get("fn") == "use_condition":
         gate = re.match(r"(gameplay\.useConditions\[\d+\])\.", receipt["finalPath"])
         if gate is None or _final_value(final_document, gate.group(1) + ".input") != source_call.get("params", {}).get("input"):
             return "use condition receipt differs from its exact authored input"
@@ -1052,52 +1034,8 @@ def audit_compiler_receipts(
     program = authored_document.get("runtimeProgram") if authored_document is not None else None
     source_calls = program.get("calls") if isinstance(program, Mapping) else None
     source_calls = source_calls if isinstance(source_calls, list) else []
-    violations: list[dict[str, Any]] = []
-    receipt_rows: list[Mapping[str, Any]] = []
-    predecessor_receipt_indices: set[int] = set()
-    for receipt_index, receipt in enumerate(receipts):
-        row_path = f"$.runtimeContract.finalWireReceipts[{receipt_index}]"
-        malformed: list[str] = []
-        if not isinstance(receipt, Mapping):
-            malformed.append("")
-        else:
-            required = {"finalPath", "status"}
-            required.update({"authoredPaths"} if receipt.get("lowererId") else {"fn", "callId", "authoredPath"})
-            for key in ("fn", "lowererId", "callId", "finalPath", "authoredPath", "status"):
-                if key in receipt or key in required:
-                    if not isinstance(receipt.get(key), str) or not receipt[key]:
-                        malformed.append(key)
-            if "authoredPaths" in receipt or "authoredPaths" in required:
-                paths = receipt.get("authoredPaths")
-                if not isinstance(paths, list) or not all(isinstance(p, str) and p for p in paths):
-                    malformed.append("authoredPaths")
-            if "value" not in receipt:
-                malformed.append("value")
-            for key in ("finalPath", "authoredPath", "authoredPaths"):
-                paths = receipt.get(key)
-                paths = paths if key == "authoredPaths" else [paths]
-                if isinstance(paths, list):
-                    for index, path in enumerate(paths):
-                        if isinstance(path, str) and _receipt_path_segments(path) is None:
-                            malformed.append(f"{key}[{index}]" if key == "authoredPaths" else key)
-        if malformed:
-            violations.extend({"receiptIndex": receipt_index,
-                               "path": row_path + (f".{key}" if key else ""),
-                               "reason": "malformed compiler receipt row or field"}
-                              for key in malformed)
-            continue
-        # Saved receipts retain their literal bytes. A local audit view may
-        # resolve ONLY finite registry-declared predecessor source paths; a
-        # source-backed current Author never enters this admission lane.
-        if authored_document is None and (cap := CAPABILITY_REGISTRY.get(str(receipt.get("fn") or ""))) is not None:
-            match = re.fullmatch(r"(runtimeProgram\.calls\[\d+\]\.params\.)([A-Za-z][A-Za-z0-9_.]*)", receipt.get("authoredPath", ""))
-            if match and (canonical := cap.canonical_receipt_param_path(match.group(2))) is not None:
-                canonical_path = match.group(1) + canonical
-                if canonical_path != receipt.get("authoredPath"):
-                    predecessor_receipt_indices.add(len(receipt_rows))
-                receipt = {**receipt, "authoredPath": canonical_path}
-        # Only structurally valid rows can participate in source coverage.
-        receipt_rows.append(receipt)
+    receipt_rows, predecessor_receipt_indices, violations = prepare_receipt_rows(
+        receipts, allow_saved_names=authored_document is None)
     if literal_source is not None and final_document is not None:
         expected_rows = _author_binding_receipts(literal_source, final_document)
         actual_rows = [row for row in receipt_rows if row.get("lowererId") == "author_binding_lanes"]
@@ -1152,7 +1090,7 @@ def audit_compiler_receipts(
                 "finalPath": path,
                 "reason": "final wire value differs from compiler receipt",
             })
-        if fn == "configure_weapon_ammo" and receipt.get("status") == "technical_projection":
+        if fn == "weapon_ammo" and receipt.get("status") == "technical_projection":
             match = re.fullmatch(r"runtimeProgram\.calls\[(\d+)\]\.fn", authored_path)
             source = source_calls[int(match.group(1))] if match and int(match.group(1)) < len(source_calls) else None
             valid = bool(match) and path == "runtimeProgram.weaponAmmo"
@@ -1245,7 +1183,7 @@ def audit_compiler_receipts(
             pairs = [(source, destination, literal) for source, destination, literal in spec.projection_paths(root_name)
                      if source == source_name and path.endswith("." + destination)]
             expected_statuses = {"alias_lowering" if literal else "delivered" for _, _, literal in pairs}
-            leaf_spec = _param_leaf(cap, source_name)
+            leaf_spec = receipt_param_spec(cap, source_name)
             root_omission = _root_neutral_omission_matches(cap, source_name, receipt,
                 authored_document=authored_document, final_document=final_document)
             if root_omission:
@@ -1283,7 +1221,7 @@ def audit_compiler_receipts(
         parameter_match = re.fullmatch(
             r"runtimeProgram\.calls\[(\d+)\]\.params\.([A-Za-z][A-Za-z0-9_]*)", authored_path
         ) if fn and not lowerer_id else None
-        if fn and authored_paths and (fn != "add_equipment_damage_bonus" or receipt.get("status") != "delivered"):
+        if fn and authored_paths and (fn != "equipment_damage_bonus" or receipt.get("status") != "delivered"):
             violations.append({
                 "callId": str(receipt.get("callId") or ""), "fn": fn,
                 "authoredPath": authored_path, "finalPath": path,
@@ -1294,14 +1232,14 @@ def audit_compiler_receipts(
             cap = CAPABILITY_REGISTRY.get(fn)
             is_omission = receipt.get("status") == "declared_neutral_omission"
             if match is not None and receipt.get("status") != "delivered" and not is_omission and not (
-                fn == "apply_vanilla_buff_on_use" and receipt.get("status") == "technical_projection"
+                fn == "native_buff_on_use" and receipt.get("status") == "technical_projection"
             ):
                 violations.append({
                     "callId": str(receipt.get("callId") or ""), "fn": fn,
                     "authoredPath": authored_path, "finalPath": path,
                     "reason": "capability parameter receipt has an unexpected status",
                 })
-            if match is not None and cap is not None and match.group(2) in cap.params and fn != "add_equipment_damage_bonus":
+            if match is not None and cap is not None and match.group(2) in cap.params and fn != "equipment_damage_bonus":
                 param = match.group(2)
                 spec = cap.params[param]
                 expected_paths = _parameter_outputs(fn, param)
@@ -1417,7 +1355,7 @@ def audit_compiler_receipts(
                     if not valid_scope:
                         violations.append({"fn": fn, "callId": receipt.get("callId"), "finalPath": path,
                                            "reason": "effect parameter is not projected into its exact authored group"})
-                if fn == "configure_item_stats":
+                if fn == "item_stats":
                     param = match.group(2)
                     expected = f"gameplay.{cap.params[param].wire_name or param}"
                     if path != expected:
@@ -1429,7 +1367,7 @@ def audit_compiler_receipts(
                             "expectedPath": expected,
                             "reason": "wrong item stat output for authored parameter",
                         })
-                if fn in {"configure_accessory", "configure_armor"}:
+                if fn in {"accessory", "armor"}:
                     prefix = fn.removeprefix("configure_")
                     expected = f"{prefix}.{cap.params[match.group(2)].wire_name or match.group(2)}"
                     if path != expected:
@@ -1442,17 +1380,17 @@ def audit_compiler_receipts(
                             "reason": "wrong equipment output for authored parameter",
                         })
                     delivered_equipment[authored_path] = delivered_equipment.get(authored_path, 0) + 1
-                elif fn == "add_equipment_damage_bonus" and isinstance(source_params, Mapping):
+                elif fn == "equipment_damage_bonus" and isinstance(source_params, Mapping):
                     source_target = str(source_call.get("target") or "") if isinstance(source_call, Mapping) else ""
                     configs = [row for row in source_calls
                                if isinstance(row, Mapping) and row.get("target") == source_target
-                               and row.get("fn") in {"configure_accessory", "configure_armor"}]
+                               and row.get("fn") in {"accessory", "armor"}]
                     if len(configs) == 1 and match.group(2) == "bonusPercent":
                         try:
                             expected = equipment_damage_wire_path(
                                 str(source_params.get("phase") or ""),
                                 str(source_params.get("damageClass") or ""),
-                                armor=configs[0].get("fn") == "configure_armor",
+                                armor=configs[0].get("fn") == "armor",
                             )
                         except ValueError:
                             expected = ""
@@ -1483,7 +1421,7 @@ def audit_compiler_receipts(
                      if source == source_name and row["finalPath"].endswith("." + destination)
                      and (row["status"] == ("alias_lowering" if literal else "delivered")
                           or not literal and row["status"] == "declared_neutral_omission"
-                          and (((leaf_spec := _param_leaf(CAPABILITY_REGISTRY[fn], source_name)) is not None
+                          and (((leaf_spec := receipt_param_spec(CAPABILITY_REGISTRY[fn], source_name)) is not None
                                 and _declares_neutral_omission(leaf_spec))
                                or _root_neutral_omission_matches(CAPABILITY_REGISTRY[fn], source_name, row,
                                    authored_document=authored_document, final_document=final_document)))]
@@ -1708,12 +1646,12 @@ def audit_compiler_receipts(
                                    "reason": "global projection has no unique compiler receipt"})
     if authored_document is not None:
         for index, call in enumerate(source_calls):
-            if not isinstance(call, Mapping) or call.get("fn") not in {"configure_accessory", "configure_armor", "add_equipment_damage_bonus"}:
+            if not isinstance(call, Mapping) or call.get("fn") not in {"accessory", "armor", "equipment_damage_bonus"}:
                 continue
             params = call.get("params")
             if not isinstance(params, Mapping):
                 continue
-            param_names = params if call.get("fn") != "add_equipment_damage_bonus" else ("bonusPercent",)
+            param_names = params if call.get("fn") != "equipment_damage_bonus" else ("bonusPercent",)
             for param in param_names:
                 cap = CAPABILITY_REGISTRY.get(str(call.get("fn") or ""))
                 if cap is not None and param in cap.params and cap.params[param].structured:
@@ -1820,7 +1758,7 @@ def audit_compiler_receipts(
                         violations.append({"fn": presence_fn, "finalPath": output,
                                            "reason": "present optional component lacks unique full output coverage"})
         if _final_value(final_document, "runtimeProgram.weaponAmmo") is not _MISSING:
-            selections = [row for row in receipt_rows if row.get("fn") == "configure_weapon_ammo"
+            selections = [row for row in receipt_rows if row.get("fn") == "weapon_ammo"
                           and row.get("finalPath") == "runtimeProgram.weaponAmmo"
                           and row.get("status") == "technical_projection"
                           and re.fullmatch(r"runtimeProgram\.calls\[\d+\]\.fn", str(row.get("authoredPath") or ""))]
@@ -1829,8 +1767,8 @@ def audit_compiler_receipts(
             else:
                 selection = selections[0]
                 prefix = selection["authoredPath"].rsplit(".", 1)[0] + ".params."
-                for name in CAPABILITY_REGISTRY["configure_weapon_ammo"].params:
-                    rows = [row for row in receipt_rows if row.get("fn") == "configure_weapon_ammo"
+                for name in CAPABILITY_REGISTRY["weapon_ammo"].params:
+                    rows = [row for row in receipt_rows if row.get("fn") == "weapon_ammo"
                             and row.get("callId") == selection.get("callId") and row.get("authoredPath") == prefix + name
                             and row.get("finalPath") == "runtimeProgram.weaponAmmo." + name and row.get("status") == "delivered"]
                     if len(rows) != 1:
@@ -1885,7 +1823,7 @@ def audit_compiler_receipts(
                     if cap.category == "event":
                         event_match = re.match(r"runtimeProgram\.entities\[\d+\]\.events\[\d+\]", expected)
                         event_base = event_match.group() if event_match else ""
-                        if _final_value(final_document, event_base + ".action") != (cap.wire_action or fn):
+                        if _final_value(final_document, event_base + ".action") != (cap.wire_action or cap.persisted_name):
                             continue
                         # An exact event alias may share this opcode and DTO
                         # leaf without sharing the ordinary action's authored

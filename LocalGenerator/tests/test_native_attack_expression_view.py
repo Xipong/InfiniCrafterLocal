@@ -137,7 +137,7 @@ def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode
         from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
         from repair_test_helpers import repair_with_response
         child = build_runtime_fixture("workbench_blade")
-        lifetime = next(row for row in child["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_lifetime")
+        lifetime = next(row for row in child["runtimeProgram"]["calls"] if row["fn"] == "projectile_lifetime")
         correct = copy.deepcopy(lifetime)
         lifetime["params"]["lifetimeSeconds"] = 0
         _, request = repair_with_response(monkeypatch, child, {"note": "lifetime only", "callsUpsert": [correct]},

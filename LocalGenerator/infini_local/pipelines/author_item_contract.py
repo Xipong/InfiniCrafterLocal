@@ -48,7 +48,7 @@ def primary_entity_llm_invariant() -> dict[str, Any]:
         "primaryRule": (
             "Select the entity owning lifecycle/held representation. "
             "Use the item_body for item-graphic/body-contact representation. When all active bindings spawn "
-            "the same entity, all have contactDamage=false and configure_item_use.hideUseGraphic=true, select "
+            "the same entity, all have contactDamage=false and item_use.hideUseGraphic=true, select "
             "that spawn target. "
             "A movement/controller that claims held-projectile representation does so only for this primary entity. "
         ),

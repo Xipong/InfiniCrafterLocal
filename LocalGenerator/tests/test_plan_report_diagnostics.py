@@ -41,7 +41,7 @@ def test_diagnostic_report_still_obeys_input_work_bounds(repair):
 def test_repair_advisory_never_opens_frozen_gameplay(advisory):
     baseline = build_runtime_fixture("workbench_blade")
     current = copy.deepcopy(baseline)
-    stats = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+    stats = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
     stats["params"]["damage"] = "invalid"
     scope = build_runtime_repair_scope(current, validate_runtime_program(current)["errors"])
     correction = next(copy.deepcopy(row) for row in baseline["runtimeProgram"]["calls"] if row["id"] == stats["id"])
@@ -72,7 +72,7 @@ def test_serialized_author_and_repair_preserve_diagnostic_report(monkeypatch, fo
     before = copy.deepcopy(current)
     responses = [current]
     if runtime_repair:
-        stats = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats")
+        stats = next(row for row in current["runtimeProgram"]["calls"] if row["fn"] == "item_stats")
         correction = copy.deepcopy(stats)
         stats["params"]["damage"] = "invalid"
         responses.append({"note": "repair damage", "callsUpsert": [correction], "realizationReplacement": copy.deepcopy(current["realization"])})

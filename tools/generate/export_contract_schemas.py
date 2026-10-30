@@ -27,8 +27,8 @@ def render()->dict[Path,str]:
     # placement cohort. This is schema evidence, never a generation default.
     authored=build_runtime_fixture("workbench_blade")
     authored["runtimeProgram"]["calls"].extend([
-        {"id":"install_tile","fn":"configure_tile_placement","params":{"tileId":1,"placeStyle":0}},
-        {"id":"placed_effects","fn":"enable_placed_vfx","params":{"placementCallId":"install_tile","minFrameY":0,"maxFrameY":35}},
+        {"id":"install_tile","fn":"place_tile","params":{"tileId":1,"placeStyle":0}},
+        {"id":"placed_effects","fn":"placed_vfx","params":{"placementCallId":"install_tile","minFrameY":0,"maxFrameY":35}},
     ])
     authored["runtimeProgram"]["bindings"].append({"id":"alternate_install","input":"alternate_use",
         "action":{"kind":"place_item","placementCallId":"install_tile"}})

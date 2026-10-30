@@ -8,17 +8,17 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.qa.capability_witnesses import build_capability_witness
 
 
-def without_timing(fn="set_projectile_homing_modifier"):
+def without_timing(fn="homing"):
     source = build_capability_witness(fn)
     call = next(c for c in source["runtimeProgram"]["calls"] if c["fn"] == fn)
-    for name in ("window", "startDelaySeconds", "durationSeconds"):
+    for name in ("window", "startDelay", "duration"):
         call["params"].pop(name, None)
     return source, call
 
 
 def test_homing_without_time_restriction_is_valid_author_without_mutation():
     source, call = without_timing()
-    call["params"].update(rangeTiles=8, maxTurnRadiansPerSecond=2, requireLineOfSight=True)
+    call["params"].update(range=8, maxTurnRadiansPerSecond=2, requireLineOfSight=True)
     before = deepcopy(source)
     report = validate_runtime_program(source)
     assert report["ok"], report["errors"]
@@ -51,7 +51,7 @@ def test_neutral_timing_filter_does_not_make_homing_an_empty_effect():
 
 def test_shared_window_type_never_inherits_a_use_specific_default(monkeypatch):
     import infini_local.core.runtime_authoring.capability_registry as registry
-    cap = registry.CAPABILITY_REGISTRY["set_projectile_homing_modifier"]
+    cap = registry.CAPABILITY_REGISTRY["homing"]
     reordered = {key: value for key, value in registry.CAPABILITY_REGISTRY.items() if key != cap.name}
     reordered[cap.name] = cap
     monkeypatch.setattr(registry, "CAPABILITY_REGISTRY", reordered)

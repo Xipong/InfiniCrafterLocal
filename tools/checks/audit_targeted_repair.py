@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit blocker-scoped conditional Repair against representative v5 failures."""
+"""Audit blocker-scoped conditional Repair against representative current Author failures."""
 from __future__ import annotations
 
 import argparse
@@ -97,8 +97,8 @@ def _channel_dependency(data: dict[str, Any]) -> None:
     # Keep the valid independent position owners frozen. Charge has an exact
     # declared channel dependency; a retired bundle is not a fresh repair case.
     data["runtimeProgram"]["calls"].append({
-        "id": "charge_input", "fn": "accumulate_projectile_charge",
-        "target": "workbench_blade", "params": {"durationSeconds": 0.2},
+        "id": "charge_input", "fn": "charge",
+        "target": "workbench_blade", "params": {"duration": 0.2},
     })
 
 
@@ -240,7 +240,7 @@ def render() -> dict[str, Any]:
     if "channel_beam" in movement["directCapabilities"] or "charge_then_release" in movement["directCapabilities"]:
         errors.append("missing_position_driver: multi-step/frozen-context alternatives leaked into blocker cards")
     channel = next(row for row in cases if row["name"] == "existing_dependency_parameter_mismatch")
-    if channel["directCapabilities"] != ["configure_item_use"]:
+    if channel["directCapabilities"] != ["item_use"]:
         errors.append("existing_dependency_parameter_mismatch: exact existing dependency was not isolated")
 
     emitted_codes = _emitted_validator_codes()

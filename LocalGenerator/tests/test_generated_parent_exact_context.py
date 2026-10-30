@@ -14,9 +14,9 @@ from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
 
 @pytest.mark.parametrize("capability", [
-    "apply_generated_buff_on_use", "apply_vanilla_buff_on_use", "move_player_on_use",
-    "add_hold_light", "configure_tool", "configure_item_contact_hitbox",
-    "configure_accessory", "configure_armor", "damage_nearby_on_event", "spawn_entity_on_event",
+    "generated_buff_on_use", "native_buff_on_use", "blink_on_use",
+    "held_light", "tool_stats", "item_hitbox",
+    "accessory", "armor", "damage_nearby_on_event", "spawn_on_event",
 ])
 def test_card_preserves_complete_accepted_mechanics(capability):
     data = sanitize_recipe_for_delivery(compile_runtime_program(build_capability_witness(capability)))
@@ -132,7 +132,7 @@ def test_serialized_visual_director_repair_keep_exact_parent_facts(monkeypatch, 
     monkeypatch.setattr(visual, "resolve_llm_model", lambda: "offline-test-model")
     monkeypatch.setattr(visual, "trace_stage_request", lambda *a, **k: None)
     parent = _accepted_appearance_parent()
-    child = compile_runtime_program(build_capability_witness("apply_generated_buff_on_use"))
+    child = compile_runtime_program(build_capability_witness("generated_buff_on_use"))
     before = copy.deepcopy((parent, child))
     chosen = _visual_kit(child)
     broken = copy.deepcopy(chosen)
@@ -254,7 +254,7 @@ def test_literal_tooltip_source_survives_real_author_visual_repair(monkeypatch, 
         return {"choices": [{"message": {"content": "{}"}}]}
 
     monkeypatch.setattr(visual, "llm_chat_json", provider_stub)
-    data = compile_runtime_program(build_capability_witness("apply_generated_buff_on_use"))
+    data = compile_runtime_program(build_capability_witness("generated_buff_on_use"))
     visual._request_visual_kit(data, parent, {})
     visual._request_visual_kit(data, parent, {}, repair_errors=[], previous={}, repair_scope={})
     packets = [author_packet,

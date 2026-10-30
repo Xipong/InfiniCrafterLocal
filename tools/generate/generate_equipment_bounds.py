@@ -34,8 +34,8 @@ def render() -> str:
         "#nullable enable", "using System;", "", "namespace InfiniCrafterLocal.Common.Models;", "",
         "internal static class GeneratedEquipmentBounds", "{",
     ]
-    for capability, cls in (("configure_accessory", "AccessorySpec"),
-                            ("configure_armor", "ArmorSpec")):
+    for capability, cls in (("accessory", "AccessorySpec"),
+                            ("armor", "ArmorSpec")):
         rows.append(f"    internal static void Normalize({cls} a)")
         rows.append("    {")
         seen: set[str] = set()
@@ -61,7 +61,7 @@ def render() -> str:
                         f"{_literal(low, integer=wire_integer)}, "
                         f"{_literal(high, integer=wire_integer)});")
         group = capability.removeprefix("configure_")
-        class_bonus = CAPABILITY_REGISTRY["add_equipment_damage_bonus"]
+        class_bonus = CAPABILITY_REGISTRY["equipment_damage_bonus"]
         bonus = class_bonus.params["bonusPercent"]
         for wire, (low, high) in sorted(EQUIPMENT_CLASS_DAMAGE_RUNTIME_BOUNDS[group].items()):
             if wire in seen or f"{group}.{wire}" not in class_bonus.final_wire_paths:

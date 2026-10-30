@@ -215,21 +215,21 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
         for cls in cap.wire_components.values():
             class_bounds.setdefault(cls, _clamp_bounds(text, cls, constants))
     property_map: dict[str, tuple[str, str]] = {
-        "configure_spawn": ("RuntimeSpawnSpec", ""),
-        "set_projectile_lifetime": ("RuntimeEntitySpec", ""),
-        "set_projectile_concurrency": ("RuntimeSpawnSpec", ""),
-        "set_descendant_concurrency": ("RuntimeSpawnSpec", ""),
-        "set_projectile_damage": ("RuntimeDamageSpec", ""),
-        "set_projectile_hitbox": ("RuntimeHitboxSpec", ""),
-        "set_projectile_hitbox_curve": ("RuntimeHitboxCurveSpec", ""),
-        "set_projectile_turn_modifier": ("RuntimeTurnModifierSpec", ""),
+        "spawn": ("RuntimeSpawnSpec", ""),
+        "projectile_lifetime": ("RuntimeEntitySpec", ""),
+        "projectile_limit": ("RuntimeSpawnSpec", ""),
+        "descendant_limit": ("RuntimeSpawnSpec", ""),
+        "projectile_damage": ("RuntimeDamageSpec", ""),
+        "projectile_hitbox": ("RuntimeHitboxSpec", ""),
+        "hitbox_curve": ("RuntimeHitboxCurveSpec", ""),
+        "turn_velocity": ("RuntimeTurnModifierSpec", ""),
         "set_projectile_speed_modifier": ("RuntimeSpeedModifierSpec", ""),
-        "set_projectile_homing_modifier": ("RuntimeHomingModifierSpec", ""),
-        "attract_npcs_while_active": ("RuntimeNpcAttractionSpec", ""),
-        "set_projectile_visual_scale_curve": ("RuntimeVisualScaleCurveSpec", ""),
-        "set_projectile_collision": ("RuntimeCollisionSpec", ""),
-        "emit_light_while_active": ("RuntimeLightSpec", ""),
-        "configure_item_contact_hitbox": ("RuntimeItemContactSpec", ""),
+        "homing": ("RuntimeHomingModifierSpec", ""),
+        "attract_npcs": ("RuntimeNpcAttractionSpec", ""),
+        "sprite_scale_curve": ("RuntimeVisualScaleCurveSpec", ""),
+        "projectile_collision": ("RuntimeCollisionSpec", ""),
+        "projectile_light": ("RuntimeLightSpec", ""),
+        "item_hitbox": ("RuntimeItemContactSpec", ""),
     }
     rows: list[dict[str, Any]] = []
     for cap in CAPABILITY_REGISTRY.values():
@@ -255,7 +255,7 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
             class_name = ({"velocityDistribution": "RuntimeSpawnVelocitySpec", "hitTargetSpawn": "RuntimeHitTargetSpawnSpec",
                            "overTarget": "RuntimeOverTargetSpec", **cap.wire_components}.get(field.split(".", 1)[0], default_class))
             field = field.rsplit(".", 1)[-1]
-            csharp_name = "DescendantMaxActive" if cap.name == "set_descendant_concurrency" else field[:1].upper() + field[1:]
+            csharp_name = "DescendantMaxActive" if cap.name == "descendant_limit" else field[:1].upper() + field[1:]
             bounds = class_bounds[class_name]
             csharp = bounds.get(csharp_name)
             if class_name in cap.wire_components.values():
@@ -308,8 +308,8 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                              "consumerPrecisionPreserved": preserves_precision,
                              "wireBounds": wire_bounds, "preserved": reject_bounds == wire_bounds and preserves_precision})
                 continue
-            if cap.name in {"set_projectile_concurrency", "set_descendant_concurrency"} or (
-                cap.name == "select_targets_and_emit_on_event" and field != "delayTicks"
+            if cap.name in {"projectile_limit", "descendant_limit"} or (
+                cap.name == "emit_to_targets_on_event" and field != "delayTicks"
             ):
                 block = _class_block(text, class_name)
                 storage = "int" if spec.projected_kind == "integer" else "double"
@@ -343,9 +343,9 @@ def _runtime_param_bound_rows() -> list[dict[str, Any]]:
                 "preserved": bool(projected and projected[0] >= csharp[0] and projected[1] <= csharp[1]),
             })
     from infini_local.qa.primitive_loss_audit import placed_body_surface_audit, placed_light_surface_audit, placed_vfx_surface_audit
-    for fn, cls, observe in (("present_placed_item_sprite", "RuntimePlacedBodySpec", placed_body_surface_audit),
-                             ("add_placed_light", "RuntimePlacedLightSpec", placed_light_surface_audit),
-                             ("enable_placed_vfx", "RuntimePlacedVfxSpec", placed_vfx_surface_audit)):
+    for fn, cls, observe in (("placed_sprite", "RuntimePlacedBodySpec", placed_body_surface_audit),
+                             ("placed_light", "RuntimePlacedLightSpec", placed_light_surface_audit),
+                             ("placed_vfx", "RuntimePlacedVfxSpec", placed_vfx_surface_audit)):
         placed = observe(text.encode())
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
             if spec.kind not in {"integer", "number"}:

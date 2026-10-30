@@ -87,7 +87,7 @@ def test_fresh_cards_share_only_exact_parameter_metadata_and_dead_negative_claus
     assert guide["requirementNotation"]["omittedMetadata"] == {"target": "same_target", "equals": None}
     # A reference to an unknown/unregistered function is not proved unreachable.
     unknown = RequirementSpec("present_param_forbids_capability", capability="future_function", param="count")
-    changed = replace(CAPABILITY_REGISTRY["configure_spawn"], requirements=(unknown,))
+    changed = replace(CAPABILITY_REGISTRY["spawn"], requirements=(unknown,))
     assert changed.author_prompt_card()["requires"][0]["capability"] == "future_function"
     assert before == {name: cap.audit_card() for name, cap in CAPABILITY_REGISTRY.items()}
 
@@ -99,10 +99,10 @@ def test_shared_parameter_reference_never_hides_a_different_fact(field, value):
     from infini_local.core.runtime_authoring.capability_registry import CAPABILITY_REGISTRY
 
     cap = CAPABILITY_REGISTRY["apply_status_on_event"]
-    assert cap.author_prompt_card()["params"]["delaySeconds"] == {
-        "paramRef": "apply_generated_buff_on_event.delaySeconds"}
-    changed = replace(cap, params={**cap.params, "delaySeconds": replace(cap.params["delaySeconds"], **{field: value})})
-    row = changed.author_prompt_card()["params"]["delaySeconds"]
+    assert cap.author_prompt_card()["params"]["delay"] == {
+        "paramRef": "generated_buff_on_event.delay"}
+    changed = replace(cap, params={**cap.params, "delay": replace(cap.params["delay"], **{field: value})})
+    row = changed.author_prompt_card()["params"]["delay"]
     assert "paramRef" not in row
     key = {"maximum": "max", "description": "meaning", "units": "units"}[field]
     assert row[key] == value
@@ -164,8 +164,8 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
             assert "paramRef" not in cards[owner]["params"][leaf]
             row = copy.deepcopy(cards[owner]["params"][leaf])
             fn = owner
-        if fn == "configure_armor" and "meaning" not in row:
-            row["meaning"] = resolve_param("configure_accessory", param)["meaning"]
+        if fn == "armor" and "meaning" not in row:
+            row["meaning"] = resolve_param("accessory", param)["meaning"]
         return row
 
     def expected_shape(schema):
@@ -218,7 +218,7 @@ def test_provider_cards_recover_all_canonical_parameter_facts(monkeypatch, mode)
                 if param.endswith(suffix) and spec.units == units:
                     expected.pop("units", None)
                     break
-            if fn == "configure_armor" and param.startswith("setBonus"):
+            if fn == "armor" and param.startswith("setBonus"):
                 expected["meaning"] = expected["meaning"].removeprefix(guide["setBonusParamPrefix"])
             shape = expected.get("shape")
             if isinstance(shape, dict) and shape.get("description") == expected["meaning"]:

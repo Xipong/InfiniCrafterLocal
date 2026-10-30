@@ -1,0 +1,177 @@
+{
+  "requestSha256": "d5eb1dfd206f0420b089e72443c6c0de34a0704360ebba18ec4efa1f335749a8",
+  "parents": {
+    "itemA": {
+      "nativeEquipmentReference": {
+        "source": "verified_native_equipment_source_branches",
+        "scope": "Partial source references for the unprefixed item in functional equipment. Per-item contributions are separate from conditional FULL armor sets; set slots are native equip-slot IDs, not item IDs. No current player state or arbitrary mod hooks are executed. Explicit conditionalEffects retain literal native Boolean gates with observed=false; they are not active bonuses and no world/player condition is evaluated. Other branches, runtime gates, final player stats and mod changes are not inferred. Additions are native stat contributions, not final animation/run speed or final damage multipliers. Boolean native flags are not quantified mechanics. Literal localized set text is not numeric proof. Author chooses generated behavior explicitly.",
+        "equippedContributions": {
+          "itemId": 410,
+          "condition": "equipped_functional_item_during_GrantArmorBenefits",
+          "branches": [
+            {
+              "guardIlOffset": 7313,
+              "effects": [
+                {
+                  "stat": "pickUseTimeMultiplier",
+                  "nativeMember": "Terraria.Player.pickSpeed",
+                  "operation": "add",
+                  "value": -0.1,
+                  "units": "additive_fraction",
+                  "ilOffset": 7328
+                }
+              ]
+            }
+          ],
+          "fullName": "Terraria/MiningShirt"
+        },
+        "equipmentSourceCertificate": "7291da1c5cb5a388b7cc5c3f8d20c2a9aa919710048c11aa3dd3d4902b43f07e:033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+        "conditionalArmorSets": [
+          {
+            "condition": {
+              "functionalEquipSlots": {
+                "head": [
+                  11
+                ],
+                "body": [
+                  20
+                ],
+                "legs": [
+                  19
+                ]
+              },
+              "allSlotsRequired": true,
+              "vanitySatisfies": false
+            },
+            "setBonusLocalizationKey": "ArmorSetBonus.Mining",
+            "effects": [
+              {
+                "stat": "pickUseTimeMultiplier",
+                "nativeMember": "Terraria.Player.pickSpeed",
+                "operation": "add",
+                "value": -0.1,
+                "units": "additive_fraction",
+                "ilOffset": 3485
+              }
+            ],
+            "guardIlOffset": 3426,
+            "literalSetBonusText": "ArmorSetBonus.Mining",
+            "literalTextStatus": "unavailable"
+          },
+          {
+            "condition": {
+              "functionalEquipSlots": {
+                "head": [
+                  216
+                ],
+                "body": [
+                  20
+                ],
+                "legs": [
+                  19
+                ]
+              },
+              "allSlotsRequired": true,
+              "vanitySatisfies": false
+            },
+            "setBonusLocalizationKey": "ArmorSetBonus.Mining",
+            "effects": [
+              {
+                "stat": "pickUseTimeMultiplier",
+                "nativeMember": "Terraria.Player.pickSpeed",
+                "operation": "add",
+                "value": -0.1,
+                "units": "additive_fraction",
+                "ilOffset": 3552
+              }
+            ],
+            "guardIlOffset": 3490,
+            "literalSetBonusText": "ArmorSetBonus.Mining",
+            "literalTextStatus": "unavailable"
+          }
+        ],
+        "setSourceCertificate": "dd6a0bbf7849f8bca4adfa6e2c2b605df889f3b633e884729fbb5d286ce96c2c:033e87cd-cefe-4dc6-a1fb-e14aa938bbb2"
+      }
+    },
+    "itemB": {
+      "nativeBuffEffectReference": {
+        "receiver": "player",
+        "buffId": 2,
+        "buffFullName": "Terraria/Regeneration",
+        "completeness": "partial_native_statement_fragments",
+        "fragments": [
+          {
+            "buffId": 2,
+            "condition": {
+              "buffTypeEquals": 2,
+              "slotLocal": 0,
+              "nativeControlFlowMustReachTest": 469,
+              "testBranchIlOffset": 478,
+              "conditionScope": "literal_test_and_straight_line_body_only; enclosing native guards remain required"
+            },
+            "operations": [
+              {
+                "nativeMember": "Terraria.Player.lifeRegen",
+                "operation": "add",
+                "value": 4,
+                "units": "native_member_units",
+                "storageType": "int32",
+                "sourceIlOffset": 489
+              }
+            ],
+            "completeness": "partial_native_statement_fragment",
+            "unsupported": [
+              "enclosing_path_and_downstream_consumers_not_fully_analyzed",
+              "other_native_and_mod_effects_unknown"
+            ],
+            "sourceMethod": "Player.UpdateBuffs"
+          }
+        ],
+        "sourceFlags": [],
+        "unsupported": [
+          "other_native_paths_and_mod_hooks_not_decoded",
+          "not_a_final_effect_or_immunity_guarantee"
+        ],
+        "scope": "Read-only native source operation fragments, not inherited execution or a complete buff implementation. Each fragment requires control to reach its certified test; unresolved enclosing guards remain required. Boolean assignments describe flags only, not their full gameplay effect. Numeric writes are contributions, not guaranteed final stats/damage. Other native paths, downstream AI, admission/immunity, duration refresh, equipment/world interactions and mod hooks remain unknown. No tooltip is used as semantic evidence.",
+        "sourceUnitDescriptors": {
+          "native_member_units": "Signed addition in the named member's native storage units, not a percentage or final stat; no conversion inferred."
+        },
+        "source": "certified_native_buff_operation_fragments",
+        "sourceCertificate": {
+          "assemblySha256": "fcc6a9624b12191be4a15d714a3675440911feb8c1d374642ab1fd686f0da0a5",
+          "sourceModuleVersionId": "033e87cd-cefe-4dc6-a1fb-e14aa938bbb2",
+          "methods": [
+            {
+              "owner": "Player",
+              "name": "UpdateBuffs",
+              "sourceMethodSha256": "3fade8bb6d90bc5a38708b1d7f2fd19e2cb8298a499521db6ef6ce6541a6b6d9"
+            },
+            {
+              "owner": "NPC",
+              "name": "UpdateNPC_BuffSetFlags",
+              "sourceMethodSha256": "623cb9c5612b402a05606319f1e0ba4d57be0a00d1b86d45f4123fd49c98ce2b"
+            },
+            {
+              "owner": "NPC",
+              "name": "UpdateNPC_BuffFlagsReset",
+              "sourceMethodSha256": "1bcbf9e88d09578c6386e448f8718d4456215db8fa333cda2f514391bc67bc08"
+            },
+            {
+              "owner": "NPC",
+              "name": "UpdateNPC_BuffApplyDOTs",
+              "sourceMethodSha256": "99380cc526232034edab6bddaf1dcae3c61fe61d87a266c50222c0e7f59ff6fc"
+            },
+            {
+              "owner": "NPC",
+              "name": "GetIncomingStrikeModifiers",
+              "sourceMethodSha256": "ce8ba61f274954bbb7312850b34d5c333101cec425b33ccaf72969e5e6abce46"
+            }
+          ]
+        },
+        "applicationSource": "Item.buffType_and_buffTime_on_use_request",
+        "requestedDurationTicks": 28800,
+        "applicationScope": "Native item field request only; item-use admission, refresh rules and loaded hooks were not executed."
+      }
+    }
+  }
+}

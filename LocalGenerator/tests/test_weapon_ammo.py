@@ -18,13 +18,13 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 
 def _weapon(category="arrow", speed="authored_spawn"):
-    doc = build_capability_witness("configure_weapon_ammo")
+    doc = build_capability_witness("weapon_ammo")
     _ammo_call(doc)["params"].update(ammoCategory=category, speedBasis=speed)
     return doc
 
 
 def _ammo_call(doc):
-    return next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "configure_weapon_ammo")
+    return next(row for row in doc["runtimeProgram"]["calls"] if row["fn"] == "weapon_ammo")
 
 
 @pytest.mark.parametrize("category", [
@@ -42,7 +42,7 @@ def test_each_exact_native_category_and_real_speed_choice_survives_vertical_slic
     assert not final["gameplay"].get("ammoCategory")
     assert len(final["runtimeProgram"]["entities"]) == len(doc["runtimeProgram"]["entities"])
     rows = final["runtimeContract"]["finalWireReceipts"]
-    selected = [row for row in rows if row.get("fn") == "configure_weapon_ammo"]
+    selected = [row for row in rows if row.get("fn") == "weapon_ammo"]
     assert len(selected) == 3
     assert next(row for row in selected if row["finalPath"] == "runtimeProgram.weaponAmmo")["authoredPath"].endswith(".fn")
 
@@ -74,11 +74,11 @@ def test_invalid_presence_is_rejected_without_guessing_ammo_or_speed(field, valu
         assert any(row["path"].endswith(suffix) for row in report["errors"]), report
 
 
-@pytest.mark.parametrize("fn", ["move_straight", "configure_vanilla_ammo_item", "restore_resources_on_use"])
+@pytest.mark.parametrize("fn", ["move_straight", "ammo_item", "restore_resources_on_use"])
 def test_existing_projectile_and_ammo_items_do_not_become_ammo_consumers(fn):
     final = compile_runtime_program(build_capability_witness(fn))
     assert "weaponAmmo" not in final["runtimeProgram"]
-    assert not any(row.get("fn") == "configure_weapon_ammo" for row in final["runtimeContract"]["finalWireReceipts"])
+    assert not any(row.get("fn") == "weapon_ammo" for row in final["runtimeContract"]["finalWireReceipts"])
 
 
 @pytest.mark.parametrize("invalid_input", [[], {}, ["primary_use"]])
@@ -111,8 +111,8 @@ def test_current_fixture_compositions_compile_and_deliver_without_implicit_weapo
 
 def test_ammo_stack_and_weapon_consumer_are_an_explicit_unsupported_composition():
     doc = _weapon()
-    ammo = next(row for row in build_capability_witness("configure_vanilla_ammo_item")["runtimeProgram"]["calls"]
-                if row["fn"] == "configure_vanilla_ammo_item")
+    ammo = next(row for row in build_capability_witness("ammo_item")["runtimeProgram"]["calls"]
+                if row["fn"] == "ammo_item")
     ammo["id"] = "ammo_stack"
     doc["runtimeProgram"]["calls"].append(ammo)
     report = validate_runtime_program(doc)
@@ -187,8 +187,8 @@ def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, 
                    if row["input"] in ("primary_use", "alternate_use")
                    and row["action"]["kind"] == "spawn_entity")
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
-                 if row["fn"] == "configure_spawn" and row["target"] == binding["action"]["targetId"])
-    spawn["params"]["velocity"] = {"fanSpeed": {'minSpeedBlocksPerSecond': (2.0) * 60 / 16, 'maxSpeedBlocksPerSecond': (8.0) * 60 / 16}}
+                 if row["fn"] == "spawn" and row["target"] == binding["action"]["targetId"])
+    spawn["params"]["velocity"] = {"fanSpeed": {'minSpeed': (2.0) * 60 / 16, 'maxSpeed': (8.0) * 60 / 16}}
     before = deepcopy(doc)
     report = validate_runtime_program(doc)
     assert not report["ok"]
@@ -198,12 +198,12 @@ def test_native_ammo_sampled_active_root_has_exact_frozen_repair(response_mode, 
     scope = build_runtime_repair_scope(doc, report["errors"])
     assert scope["fieldPermissions"]["calls"] == [{"id": spawn["id"], "paths": ["params.velocity"]}]
     correction = deepcopy(spawn)
-    correction["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (8.0) * 60 / 16}
+    correction["params"]["velocity"] = {'speed': (8.0) * 60 / 16}
     correction["params"]["count"] = 4  # hostile valid frozen sibling
     patch = {"note": "exact root velocity replacement", "realizationReplacement": doc["realization"],
              "callsUpsert": [correction]}
     expected = deepcopy(before)
-    expected["runtimeProgram"]["calls"][index]["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (8.0) * 60 / 16}
+    expected["runtimeProgram"]["calls"][index]["params"]["velocity"] = {'speed': (8.0) * 60 / 16}
     repaired, dossier, final = frozen_gameplay_repair(monkeypatch, doc, patch, response_mode,
         {"calls": scope["fieldPermissions"]["calls"]}, expected)
     assert _ammo_call(repaired)["params"]["speedBasis"] == "native_shot"
@@ -220,9 +220,9 @@ def test_native_ammo_and_velocity_keep_one_selected_root_speed_owner(speed, samp
                    if row["input"] in ("primary_use", "alternate_use")
                    and row["action"]["kind"] == "spawn_entity")
     spawn = next(row for row in doc["runtimeProgram"]["calls"]
-                 if row["fn"] == "configure_spawn" and row["target"] == binding["action"]["targetId"])
+                 if row["fn"] == "spawn" and row["target"] == binding["action"]["targetId"])
     if sampled:
-        spawn["params"]["velocity"] = {"fanSpeed": {'minSpeedBlocksPerSecond': (2.0) * 60 / 16, 'maxSpeedBlocksPerSecond': (8.0) * 60 / 16}}
+        spawn["params"]["velocity"] = {"fanSpeed": {'minSpeed': (2.0) * 60 / 16, 'maxSpeed': (8.0) * 60 / 16}}
     assert validate_runtime_program(doc)["ok"] is accepted
     if accepted:
         final = compile_runtime_program(doc)
@@ -250,8 +250,8 @@ def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_
             copy = deepcopy(row)
             copy["id"] = "side_" + copy["id"]
             copy["target"] = "sampled_side"
-            if copy["fn"] == "configure_spawn":
-                copy["params"]["velocity"] = {"fanSpeed": {'minSpeedBlocksPerSecond': (2.0) * 60 / 16, 'maxSpeedBlocksPerSecond': (8.0) * 60 / 16}}
+            if copy["fn"] == "spawn":
+                copy["params"]["velocity"] = {"fanSpeed": {'minSpeed': (2.0) * 60 / 16, 'maxSpeed': (8.0) * 60 / 16}}
             copied.append(copy)
     doc["runtimeProgram"]["calls"].extend(copied)
     binding = deepcopy(active)
@@ -269,7 +269,7 @@ def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_
     if accepted:
         assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
     else:
-        side_spawn = next(row for row in copied if row["fn"] == "configure_spawn")
+        side_spawn = next(row for row in copied if row["fn"] == "spawn")
         index = doc["runtimeProgram"]["calls"].index(side_spawn)
         assert [row["path"] for row in report["errors"]] == [f"$.runtimeProgram.calls[{index}].params.velocity"]
         scope = build_runtime_repair_scope(doc, report["errors"])
@@ -280,8 +280,8 @@ def test_native_ammo_speed_owner_checks_only_exact_active_binding_targets(input_
 @pytest.mark.parametrize("delay", [1, 600])
 def test_weapon_ammo_constant_speed_and_activation_delay_are_an_accepted_composition(basis, delay):
     doc = _weapon(speed=basis)
-    spawn = next(call for call in doc["runtimeProgram"]["calls"] if call["fn"] == "configure_spawn")
-    spawn["params"]["position"] = {"above": "activation_origin", "heightTiles": 2, 'activationDelaySeconds': (delay) / 60}
+    spawn = next(call for call in doc["runtimeProgram"]["calls"] if call["fn"] == "spawn")
+    spawn["params"]["position"] = {"above": "activation_origin", "heightTiles": 2, 'activationDelay': (delay) / 60}
     before = deepcopy(doc)
     final = compile_runtime_program(doc)
     assert validate_runtime_wire(final)["ok"]

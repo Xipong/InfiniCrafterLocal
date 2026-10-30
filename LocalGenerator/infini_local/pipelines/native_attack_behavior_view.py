@@ -111,7 +111,7 @@ def _program(value: dict) -> dict:
     # Reserved identifier collision / unsupported expression: retain the complete
     # original names. There is no partial renaming and no guessed syntax.
     known_program = {"method", "observations", "dependencies", "predicates", "symbols", "coverage",
-                     "unresolved", "identityWindows", "predicateSources", "identitySelection"}
+                     "unresolved", "identityWindows", "predicateSources", "identitySelection", "identityAlternatives"}
     known_row = _ROW_FIELDS
     rows = [*out["observations"], *out["dependencies"].values(), *out["predicates"]]
     if (not set(out) <= known_program or any(not isinstance(row, dict) or not set(row) <= known_row
@@ -168,7 +168,102 @@ _ROW_FIELDS = {"kind", "at", "block", "requiredPredicates", "expression", "call"
                  "scope", "orderedSourceUses", "id", "op", "inputs", "successors"}
 
 _PROGRAM_FIELDS = {"method", "sourceModuleVersionId", "sourceMethodSha256", "observations", "dependencies",
-                   "predicates", "symbols", "coverage", "unresolved", "identityWindows", "predicateSources"}
+                   "predicates", "symbols", "coverage", "unresolved", "identityWindows", "predicateSources", "identityAlternatives"}
+
+
+def _identity_alternatives(value: Any) -> Any:
+    """Readable disclosure of producer-proved discarded paths, never activation.
+
+    Merge only equalities differing in the literal on the same identity field,
+    with identical remaining conditions/effect. Unknown syntax stays untouched.
+    """
+    if (not isinstance(value, dict) or set(value) != {"source", "version", "scope", "cases"}
+            or value["source"] != "excluded_identity_edges" or type(value["version"]) is not int or value["version"] != 1
+            or not isinstance(value["scope"], str) or not isinstance(value["cases"], list)):
+        return copy.deepcopy(value)
+    groups = []
+    for case in value["cases"]:
+        if (not isinstance(case, dict) or set(case) != {"allConditions", "effect"}
+                or not isinstance(case["effect"], str)
+                or case["effect"] not in {"returns_without_method_state_changes", "discarded_path_effect_unresolved"}
+                or not isinstance(case["allConditions"], list) or not case["allConditions"]):
+            return copy.deepcopy(value)
+        conditions = []
+        source_path = []
+        for condition in case["allConditions"]:
+            if (not isinstance(condition, dict) or set(condition) != {"at", "op", "inputs", "successors", "chosenSuccessor"}
+                    or type(condition["at"]) is not int or type(condition["chosenSuccessor"]) is not int
+                    or not isinstance(condition["successors"], list) or len(condition["successors"]) != 2
+                    or any(type(n) is not int for n in condition["successors"])
+                    or condition["successors"][0] == condition["successors"][1]
+                    or condition["chosenSuccessor"] not in condition["successors"]
+                    or not isinstance(condition["inputs"], list) or len(condition["inputs"]) != 2
+                    or any(not isinstance(x, str) for x in condition["inputs"])):
+                return copy.deepcopy(value)
+            source_path.append(condition["at"])
+            left, right = condition["inputs"]
+            field = re.fullmatch(r"ldfld\(Projectile\.(type|aiStyle),this\)", left)
+            state = re.fullmatch(r"ldelem\.r4\(ldfld\(Projectile\.ai,this\),(\d+)\)", left)
+            if not (field or state) or not re.fullmatch(r"-?\d+", right):
+                return copy.deepcopy(value)
+            taken = condition["chosenSuccessor"] == condition["successors"][0]
+            op = condition["op"]
+            if not isinstance(op, str):
+                return copy.deepcopy(value)
+            op = op[:-2] if op.endswith(".s") else op
+            if op not in {"beq", "bne.un", "blt"}:
+                return copy.deepcopy(value)
+            relation = ("equals" if taken else "notEquals") if op == "beq" else ("notEquals" if taken else "equals") if op == "bne.un" else ("orderedLessThan" if taken else "notOrderedLessThan")
+            conditions.append({"field": "Projectile." + field[1] if field else "Projectile.ai[" + state[1] + "]",
+                               "test": relation, "value": int(right)})
+        head, *tail = conditions
+        # Integer identity equality has no NaN/range ambiguity. Do not merge
+        # mutable AI comparisons or arbitrary formulas into identity sets.
+        mergeable = head["field"] in {"Projectile.type", "Projectile.aiStyle"} and head["test"] == "equals"
+        existing = next((group for group in groups if mergeable and group["effect"] == case["effect"]
+                         and group["whenAll"][1:] == tail and group["whenAll"][0].get("field") == head["field"]
+                         and group["whenAll"][0].get("test") == "oneOf"), None)
+        if existing is not None:
+            existing["sourcePaths"].append(source_path)
+            if head["value"] not in existing["whenAll"][0]["values"]:
+                existing["whenAll"][0]["values"].append(head["value"])
+        else:
+            if mergeable:
+                head = {"field": head["field"], "test": "oneOf", "values": [head["value"]]}
+            groups.append({"whenAll": [head, *tail], "effect": case["effect"], "sourcePaths": [source_path]})
+    return {"scope": value["scope"], "comparisonSemantics": "equals/notEquals use ordinary numeric equality; orderedLessThan is false for NaN; notOrderedLessThan includes NaN.",
+            "meaning": "A proved return skips this method's remaining position/velocity integration, not necessarily movement elsewhere. Other native identity/controller choices are source clues, not imported Author options; capability equivalence is unproved.",
+            "cases": groups}
+
+
+def known_identity_alternatives(value: Any) -> bool:
+    """Admission for the exact projected disclosure; future fields stay opaque."""
+    if (not isinstance(value, dict) or set(value) != {"scope", "comparisonSemantics", "meaning", "cases"}
+            or any(not isinstance(value[key], str) for key in ("scope", "comparisonSemantics", "meaning"))
+            or not isinstance(value["cases"], list)):
+        return False
+    for case in value["cases"]:
+        if (not isinstance(case, dict) or set(case) != {"whenAll", "effect", "sourcePaths"}
+                or not isinstance(case["effect"], str)
+                or case["effect"] not in {"returns_without_method_state_changes", "discarded_path_effect_unresolved"}
+                or not isinstance(case["whenAll"], list) or not case["whenAll"]
+                or not isinstance(case["sourcePaths"], list) or not case["sourcePaths"]
+                or any(not isinstance(path, list) or len(path) != len(case["whenAll"])
+                       or any(type(offset) is not int for offset in path) for path in case["sourcePaths"])):
+            return False
+        for condition in case["whenAll"]:
+            if not isinstance(condition, dict) or not isinstance(condition.get("field"), str) or not isinstance(condition.get("test"), str):
+                return False
+            if condition.get("test") == "oneOf":
+                if (set(condition) != {"field", "test", "values"} or condition["field"] not in {"Projectile.type", "Projectile.aiStyle"}
+                        or not isinstance(condition["values"], list) or not condition["values"]
+                        or any(type(n) is not int for n in condition["values"])):
+                    return False
+            elif (set(condition) != {"field", "test", "value"} or condition.get("test") not in {"equals", "notEquals", "orderedLessThan", "notOrderedLessThan"}
+                    or type(condition.get("value")) is not int
+                    or not re.fullmatch(r"Projectile\.(?:type|aiStyle|ai\[\d+\])", condition["field"])):
+                return False
+    return True
 
 
 def _selected_program(value: dict, identity: Any) -> dict:
@@ -225,6 +320,8 @@ def _selected_program(value: dict, identity: Any) -> dict:
     # to silently make this reader discard it. Known graph fields come from the
     # selected source; selectedEdges is dump-only provenance, not an LLM decision.
     out = copy.deepcopy(selected)
+    if "identityAlternatives" in out:
+        out["identityAlternatives"] = _identity_alternatives(out["identityAlternatives"])
     out["identitySelection"] = {
         "forCapturedIdentity": True,
         "scope": receipt["scope"],

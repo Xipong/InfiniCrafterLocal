@@ -212,7 +212,7 @@ def test_repair_request_documents_grammar_without_expanding_frozen_permissions(m
     )
 
     item = build_runtime_fixture("held_and_deployed")
-    call = {"id": "audit_light", "fn": "add_light" if unknown_fn else "add_hold_light",
+    call = {"id": "audit_light", "fn": "add_light" if unknown_fn else "held_light",
             "target": "item", "params": {"strength": 0.5 if unknown_fn else 0, "color": "white"}}
     item["runtimeProgram"]["calls"].append(call)
     expected_scope = build_runtime_repair_scope(item, validate_runtime_program(item)["errors"])
@@ -228,13 +228,13 @@ def test_repair_request_documents_grammar_without_expanding_frozen_permissions(m
         assert Counter(card["fn"] for card in catalog["capabilities"]) == Counter(names)
         assert set(names) == {name for name, cap in CAPABILITY_REGISTRY.items() if cap.author_visible}
     else:
-        assert names == ["add_hold_light"]
+        assert names == ["held_light"]
         assert "replacementCapabilityCatalog" not in dossier
         cards = [card for section in ("blockerCapabilities", "supportingCapabilities",
                                       "existingBrokenCapabilityCards") for card in dossier[section]]
-        assert cards == [CAPABILITY_REGISTRY["add_hold_light"].prompt_card()]
+        assert cards == [CAPABILITY_REGISTRY["held_light"].prompt_card()]
 
-    fixed = {**copy.deepcopy(call), "fn": "add_hold_light", "params": {"strength": 0.5, "color": "white"}}
+    fixed = {**copy.deepcopy(call), "fn": "held_light", "params": {"strength": 0.5, "color": "white"}}
     filtered, audit = filter_repair_patch_scope(item, {"callsUpsert": [fixed], "note": "exact fix"}, expected_scope)
     repaired = apply_repair_patch(item, filtered)
     assert validate_runtime_program(repaired)["ok"]

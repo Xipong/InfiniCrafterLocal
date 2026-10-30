@@ -29,8 +29,8 @@ def test_missing_driver_repair_does_not_reintroduce_retained_compound_profiles()
 
 
 @pytest.mark.parametrize("fn,selector", [
-    ("set_projectile_return_trigger", "onOwnerRelease"),
-    ("set_projectile_owner_control", "requireChannel"),
+    ("return_when", "onOwnerRelease"),
+    ("set_owner_control", "requireChannel"),
 ])
 @pytest.mark.parametrize("input_name", ["primary_use", "alternate_use"])
 def test_channel_dependency_repairs_only_item_leaf_not_the_accepted_motion_choice(fn, selector, input_name):
@@ -38,7 +38,7 @@ def test_channel_dependency_repairs_only_item_leaf_not_the_accepted_motion_choic
     calls = doc["runtimeProgram"]["calls"]
     selected = next(call for call in calls if call["fn"] == fn)
     selected["params"][selector] = True
-    use = next(call for call in calls if call["fn"] == "configure_item_use")
+    use = next(call for call in calls if call["fn"] == "item_use")
     use["params"]["channel"] = False
     doc["runtimeProgram"]["bindings"][0]["input"] = input_name
     before = deepcopy(doc)
@@ -60,9 +60,9 @@ def test_channel_dependency_repairs_only_item_leaf_not_the_accepted_motion_choic
 
 
 @pytest.mark.parametrize("fn,selector,choice,field,value", [
-    ("seek_projectile", "target", "cursor", "searchRangeTiles", 20),
-    ("seek_projectile", "target", "owner_center", "cursorLeashBlocks", 4),
-    ("set_projectile_lash_geometry", "clock", "owner_animation", "durationSeconds", 1),
+    ("seek", "target", "cursor", "searchRange", 20),
+    ("seek", "target", "owner_center", "cursorLeashBlocks", 4),
+    ("lash_geometry", "clock", "owner_animation", "duration", 1),
 ])
 @pytest.mark.parametrize("explicit_delete", [False, True])
 def test_inactive_optional_motion_leaf_can_be_removed_without_reauthoring_its_selector(
@@ -82,7 +82,7 @@ def test_inactive_optional_motion_leaf_can_be_removed_without_reauthoring_its_se
     assert scope["fieldPermissions"]["calls"] == [{"id": selected["id"], "paths": ["params." + field]}]
     hostile = deepcopy(selected)
     hostile["params"].pop(field)
-    hostile["params"][selector] = "nearest_npc" if fn == "seek_projectile" else "active"
+    hostile["params"][selector] = "nearest_npc" if fn == "seek" else "active"
     proposed = {"callsUpsert": [hostile], "note": "remove only the inactive optional leaf"}
     if explicit_delete:
         proposed["callParamKeysDelete"] = [{"callId": selected["id"], "key": field},
@@ -97,8 +97,8 @@ def test_inactive_optional_motion_leaf_can_be_removed_without_reauthoring_its_se
 
 
 @pytest.mark.parametrize("fn,selector,field,value", [
-    ("seek_projectile", "target", "cursorLeashBlocks", 4),
-    ("set_projectile_lash_geometry", "clock", "durationSeconds", 1),
+    ("seek", "target", "cursorLeashBlocks", 4),
+    ("lash_geometry", "clock", "duration", 1),
 ])
 @pytest.mark.parametrize("choice", [None, "not_a_registered_choice", {"invalid": "selector"}])
 def test_undecided_motion_selector_does_not_thaw_its_valid_optional_leaf(fn, selector, field, value, choice):
@@ -118,11 +118,11 @@ def test_undecided_motion_selector_does_not_thaw_its_valid_optional_leaf(fn, sel
 
 
 @pytest.mark.parametrize("fn,property,core,value,extra", [
-    ("set_projectile_beam_geometry", "ramp", "lengthBlocks", 20, {"warmupSeconds": 1}),
-    ("attach_projectile", "reachCurve", "anchor", "owner_center", {
-        "durationSeconds": 1, "startOffsetBlocks": 0, "peakOffsetBlocks": 2,
+    ("beam_geometry", "ramp", "length", 20, {"warmupSeconds": 1}),
+    ("attach", "reachCurve", "anchor", "owner_center", {
+        "duration": 1, "startOffsetBlocks": 0, "peakOffsetBlocks": 2,
         "endOffsetBlocks": 0, "peakProgress": 0.5}),
-    ("accumulate_projectile_charge", "releaseEffect", "durationSeconds", 1, {"launchSpeedBlocksPerSecond": 30}),
+    ("charge", "releaseEffect", "duration", 1, {"launchSpeed": 30}),
 ])
 def test_repair_of_parent_does_not_invent_absent_nested_effect(fn, property, core, value, extra):
     from infini_local.core.runtime_authoring.compiler import compile_runtime_program

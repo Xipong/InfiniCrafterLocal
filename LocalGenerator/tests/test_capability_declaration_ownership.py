@@ -12,10 +12,10 @@ import infini_local.core.runtime_authoring.capability_registry as registry
     suffix=st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=12),
     enabled=st.booleans(),
 )
-@example(name="set_projectile_sentry", suffix="renamed", enabled=True)
+@example(name="sentry", suffix="renamed", enabled=True)
 @example(name="restore_resources_on_use", suffix="effects", enabled=False)
-@example(name="spawn_entity_on_event", suffix="events", enabled=True)
-@example(name="set_projectile_turn_modifier", suffix="timing", enabled=False)
+@example(name="spawn_on_event", suffix="events", enabled=True)
+@example(name="turn_velocity", suffix="timing", enabled=False)
 def test_declared_metadata_changes_reach_finalization_without_name_overrides(name, suffix, enabled):
     """Changing declared facts must change their projection, even for known names.
 
@@ -24,7 +24,7 @@ def test_declared_metadata_changes_reach_finalization_without_name_overrides(nam
     registry, while explicit examples retain event/effect-group special paths.
     """
     declared = next(cap for cap in registry._CAPS if cap.name == name)
-    requirement = registry.RequirementSpec("capability_present", capability="configure_item_use")
+    requirement = registry.RequirementSpec("capability_present", capability="item_use")
     facts = {
         "csharp_owner": f"{suffix}.cs::Execute",
         "component_slot": suffix,
@@ -42,13 +42,13 @@ def test_declared_metadata_changes_reach_finalization_without_name_overrides(nam
     assert {field: getattr(final, field) for field in facts} == facts
     assert final.requirements[0] == requirement
     assert final.final_wire_paths[0] == f"gameplay.{suffix}"
-    assert "configure_item_use" in final.dependencies
+    assert "item_use" in final.dependencies
     assert final.conflicts == (f"exclusive_group:{suffix}",)
     assert registry.CAPABILITY_REGISTRY[name].csharp_owner == declared.csharp_owner
 
 
 def test_one_declaration_is_enough_for_a_new_explicit_metadata_projection():
-    requirement = registry.RequirementSpec("capability_present", capability="configure_item_use")
+    requirement = registry.RequirementSpec("capability_present", capability="item_use")
     declared = registry._cap(
         "declaration_only_probe", "Metadata ownership probe, never installed in the registry.",
         "item", ("item_body",), {},
@@ -70,12 +70,12 @@ def test_one_declaration_is_enough_for_a_new_explicit_metadata_projection():
     assert final.activation_spawn_count_param == "count"
     assert final.meaningful_for_stationary
     assert final.requirements == (requirement,)
-    assert final.dependencies == ("configure_item_use",)
+    assert final.dependencies == ("item_use",)
     assert final.conflicts == ("exclusive_group:probe_group",)
 
 
 def test_simple_component_wire_paths_still_follow_parameter_projection():
-    declared = next(cap for cap in registry._CAPS if cap.name == "set_projectile_collision")
+    declared = next(cap for cap in registry._CAPS if cap.name == "projectile_collision")
     assert declared.final_wire_paths == ()
     changed = replace(declared, params={**declared.params,
                                        "probe": registry.ParamSpec("integer", "test", wire_name="probeWire")})
@@ -92,9 +92,9 @@ def test_effect_group_projection_and_dependencies_remain_derived():
         *(path.replace("gameplay.", "runtimeProgram.effectGroups[].", 1)
           for path in declared.final_wire_paths),
     )
-    tool = registry.CAPABILITY_REGISTRY["configure_tool"]
-    assert tool.dependencies == ("configure_item_use",)
-    declared = next(cap for cap in registry._CAPS if cap.name == "select_targets_and_emit_on_event")
+    tool = registry.CAPABILITY_REGISTRY["tool_stats"]
+    assert tool.dependencies == ("item_use",)
+    declared = next(cap for cap in registry._CAPS if cap.name == "emit_to_targets_on_event")
     required_event = next(row for row in declared.requirements if row.kind == "event_available")
     final_events = tuple(row for row in registry._enrich_capability(declared).requirements
                          if row.kind == "event_available")

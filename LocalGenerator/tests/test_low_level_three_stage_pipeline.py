@@ -156,6 +156,10 @@ def wire_transport(monkeypatch):
         requests.append(copy.deepcopy(request))
         assert responses, f"unexpected model call: {request.get('_infini_stage')}"
         value = responses.popleft()
+        if request.get("_infini_stage") in {"vfx_director", "vfx_repair"} and isinstance(value, dict):
+            # Fixtures are persisted-wire candidates; fake provider speaks the model schema.
+            from infini_local.core.vfx_material_contract import vfx_model_payload
+            value = vfx_model_payload(value)
         if isinstance(value, BaseException):
             raise value
         return {"choices": [{"message": {"content": value if isinstance(value, str) else json.dumps(value)}}]}
@@ -301,8 +305,8 @@ def test_single_format_repair_preserves_recoverable_design(wire_transport, stage
     assert context["malformedRawText"] == raw
     if stage == "gameplay":
         assert context["task"].startswith("Repair JSON syntax only")
-        assert "multiple" not in context["allowedCallParamsReadOnly"]["spawn_entity_on_event"]
-        assert "count" in context["allowedCallParamsReadOnly"]["spawn_entity_on_event"]
+        assert "multiple" not in context["allowedCallParamsReadOnly"]["spawn_on_event"]
+        assert "count" in context["allowedCallParamsReadOnly"]["spawn_on_event"]
         assert "do not invent undeclared params" in requests[1]["messages"][0]["content"]
     else:
         assert context["exactErrors"][0]["message"].startswith("malformed_json:")
@@ -408,7 +412,7 @@ def test_author_repair_defects_use_one_real_scoped_pipeline(wire_transport, monk
 
     monkeypatch.setattr('infini_local.core.llm_config.LLM_RESPONSE_FORMAT_MODE', mode)
     responses, requests = wire_transport
-    fn = "apply_generated_buff_on_use" if case == "huge-number" else "restore_resources_on_use"
+    fn = "generated_buff_on_use" if case == "huge-number" else "restore_resources_on_use"
     good = build_capability_witness(fn)
     current = copy.deepcopy(good)
     calls = current["runtimeProgram"]["calls"]
@@ -463,7 +467,7 @@ def test_bounded_diagnostic_completeness_reaches_the_single_pipeline_repair(wire
     assert validate_runtime_wire(compile_runtime_program(good))["ok"]
     original = copy.deepcopy(current)
     canonical_errors = validate_runtime_program(current)["errors"]
-    broken = [row for row in good["runtimeProgram"]["calls"] if row["fn"] == "apply_vanilla_buff_on_use"]
+    broken = [row for row in good["runtimeProgram"]["calls"] if row["fn"] == "native_buff_on_use"]
     candidates = copy.deepcopy(good["runtimeProgram"]["calls"])
     candidates[0]["params"]["damage"] = 100
     patch = {"note": "repair every diagnosed duration", "realizationReplacement": good["realization"], "callsUpsert": candidates}

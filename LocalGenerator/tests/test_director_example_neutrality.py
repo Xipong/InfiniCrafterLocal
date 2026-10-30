@@ -20,7 +20,7 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 def _accepted_data():
     # The independent curve needs no retired movement/controller. Keep the
     # actual compiler and Director readers in the absent-driver path.
-    source = build_capability_witness("set_projectile_lash_geometry")
+    source = build_capability_witness("lash_geometry")
     source["runtimeProgram"]["calls"] = [call for call in source["runtimeProgram"]["calls"] if call["fn"] != "move_straight"]
     return compile_runtime_program(source)
 
@@ -77,27 +77,32 @@ def _capture_vfx(monkeypatch, data, *, repair=False):
     return sent[0], request_dossier(sent[0])
 
 
-def test_vfx_packet_keeps_path_coverage_facts_without_tip_plus_path_build_example(monkeypatch):
+def test_vfx_packet_preserves_geometry_choices_without_adding_effects(monkeypatch):
     data = _accepted_data()
     frozen = deepcopy(data)
-    request, packet = _capture_vfx(monkeypatch, data)
-    rule = packet["runtimeVocabulary"]["rendererSemantics"]["texturedPath"]
-    for fact in ("anchor history", "beam/whip geometry", "baked_sprite/reuse_item_icon",
-                 "single PNG", "whip terminal point", "runtime_geometry",
-                 "Selection is not automatic", "slots may remain empty", "width",
-                 "collision corner", "shared caps", "Read-only gameplay geometry"):
-        assert fact in rule
+    _, packet = _capture_vfx(monkeypatch, data)
     mechanics = deepcopy(data["runtimeProgram"])
     for row in mechanics["entities"]:
         row.pop("visual", None)
     assert packet["acceptedRuntimeProgramReadOnly"] == mechanics
-    assert packet["runtimeVocabulary"] == {
-        key: vfx.vfx_director_surface(data)[key] for key in vfx._VFX_RUNTIME_VOCABULARY_KEYS
-    }
-    assert data == frozen
-    assert "can coexist with a baked tip/body" not in rule
-    assert "If the intended body covers that path" not in rule
-    assert "can coexist with a baked tip/body" not in json.dumps(request["messages"])
+    entity = next(row for row in mechanics["entities"] if "lashGeometry" in row)
+    offered = next(row for row in packet["runtimeSurface"]["texturedPathSources"]
+                   if row["entityId"] == entity["id"])
+    assert offered["sources"] == ["anchorHistory", "whip", "ownerLink"]
+    assert packet["outputSchema"]["properties"]["slots"]["minItems"] == 0
+    assert vfx.validate_vfx_director_output({"schema": vfx.VFX_DIRECTOR_SCHEMA, "slots": []}, data)["ok"]
+    assert "vfxManifest" not in data and data == frozen
+
+    # Geometry availability follows accepted runtime facts, not names or prose.
+    without_geometry = deepcopy(data)
+    next(row for row in without_geometry["runtimeProgram"]["entities"]
+         if row["id"] == entity["id"]).pop("lashGeometry")
+    _, without_packet = _capture_vfx(monkeypatch, without_geometry)
+    without_sources = next(row["sources"] for row in without_packet["runtimeSurface"]["texturedPathSources"]
+                           if row["entityId"] == entity["id"])
+    assert without_sources == ["anchorHistory", "ownerLink"]
+    assert without_packet["item"] == packet["item"]
+    assert without_packet["runtimeSurface"]["runtimePairs"] == packet["runtimeSurface"]["runtimePairs"]
 
 
 @pytest.mark.parametrize("director", ["visual", "vfx"])

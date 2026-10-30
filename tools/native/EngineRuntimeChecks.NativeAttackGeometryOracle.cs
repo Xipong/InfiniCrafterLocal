@@ -152,6 +152,27 @@ internal static partial class EngineRuntimeChecks
             Equal(new Vector2(110, 216), projectile.position, "native excluded style bypasses integration");
         }
     }
+    private static void ParentNativeExcludedIntegrationCasesMatchDisclosure()
+    {
+        using var state = new NativeActorState();
+        MethodInfo update = typeof(Projectile).GetMethod("UpdatePosition", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!;
+        void Case(int type, int style, float ai0, float ai1, bool skips)
+        {
+            var p = new Projectile(); p.SetDefaults(ProjectileID.WoodenArrowFriendly);
+            p.type = type; p.aiStyle = style; p.ai[0] = ai0; p.ai[1] = ai1;
+            p.position = new Vector2(100, 200); p.velocity = new Vector2(3, 5); p.wet = false; p.tileCollide = false;
+            update.Invoke(p, new object[] { Vector2.Zero });
+            Equal(skips ? new Vector2(100, 200) : new Vector2(103, 205), p.position,
+                "actual excluded integration condition type/style/AI " + type + "/" + style + "/" + ai0 + "/" + ai1);
+        }
+        foreach (int style in new[] { 4, 38, 84, 148 }) Case(1, style, 0, 0, true);
+        Case(1, 7, 2, 0, true); Case(1, 7, 1, 0, false); Case(1, 7, float.NaN, 0, false);
+        Case(1, 93, -1, 0, true); Case(1, 93, 0, 0, false); Case(1, 93, float.NaN, 0, false);
+        foreach (int type in new[] { 440, 449, 606 })
+        { Case(type, 1, 0, 1, true); Case(type, 1, 0, 0, false); Case(type, 1, 0, float.NaN, false); }
+        foreach (int type in new[] { 540, 756, 818, 856, 961, 933 }) Case(type, 1, 0, 0, true);
+        Case(1, 1, 0, 0, false); Case(982, 190, 0, 0, false);
+    }
     private static void ParentNativeArrowMotionMatchesSelectedSource()
     {
         using var state = new NativeActorState();

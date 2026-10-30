@@ -13,8 +13,8 @@ from infini_local.qa.capability_witnesses import build_capability_witness
 
 
 def document(event="on_hurt"):
-    doc = build_capability_witness("apply_generated_buff_on_event")
-    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "apply_generated_buff_on_event")["params"]["when"]["on"] = event
+    doc = build_capability_witness("generated_buff_on_event")
+    next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "generated_buff_on_event")["params"]["when"]["on"] = event
     return doc
 
 
@@ -37,7 +37,7 @@ def test_reaction_buff_compiles_exact_group_reference_and_existing_effects(event
     assert not validate_runtime_wire(wire)["ok"]
 
 
-@pytest.mark.parametrize("extra", ["restore_resources_on_use", "apply_vanilla_buff_on_use", "move_player_on_use"])
+@pytest.mark.parametrize("extra", ["restore_resources_on_use", "native_buff_on_use", "blink_on_use"])
 def test_reaction_group_cannot_smuggle_instant_healing_or_other_actions(extra):
     doc = document()
     effect = deepcopy(next(c for c in build_capability_witness(extra)["runtimeProgram"]["calls"] if c["fn"] == extra))
@@ -47,7 +47,7 @@ def test_reaction_group_cannot_smuggle_instant_healing_or_other_actions(extra):
 
 
 def test_reaction_requires_equipment_and_strict_event_cooldown():
-    for trigger in ["on_hurt", {"on": "on_hurt", "cooldownSeconds": 0}, {"on": "on_hit", "cooldownSeconds": 1}]:
+    for trigger in ["on_hurt", {"on": "on_hurt", "cooldown": 0}, {"on": "on_hit", "cooldown": 1}]:
         doc = document()
         doc["runtimeProgram"]["calls"][-1]["params"]["when"] = trigger
         assert not validate_runtime_program(doc)["ok"]
@@ -88,11 +88,11 @@ def test_actual_author_and_repair_packets_expose_complete_reaction_contract(monk
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, user, _ = author.build_initial_author_request({}, {}, "reactive-buff", model_name="offline")
     cards = json.loads(user)["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    card = next(c for c in cards if c["fn"] == "apply_generated_buff_on_event")
-    assert set(card["params"]) == {"when", "effectGroupId", "delaySeconds"}
+    card = next(c for c in cards if c["fn"] == "generated_buff_on_event")
+    assert set(card["params"]) == {"when", "effectGroupId", "delay"}
     doc = document(); doc["runtimeProgram"]["calls"][-1]["params"]["effectGroupId"] = "missing"
     dossier = author.build_gameplay_repair_dossier(doc, {}, {}, failure_report=validate_runtime_program(doc))
-    broken = next(c for c in dossier["existingBrokenCapabilityCards"] if c["fn"] == "apply_generated_buff_on_event")
+    broken = next(c for c in dossier["existingBrokenCapabilityCards"] if c["fn"] == "generated_buff_on_event")
     assert set(broken["params"]) == set(card["params"])
     assert broken["params"]["when"]["shape"]["properties"]["on"]["enum"] == ["on_hurt", "on_enemy_kill"]
     assert broken["params"]["effectGroupId"]["pattern"] == card["params"]["effectGroupId"]["pattern"]

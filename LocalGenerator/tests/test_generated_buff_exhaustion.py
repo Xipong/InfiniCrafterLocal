@@ -19,7 +19,7 @@ from infini_local.core.runtime_authoring.wire_validator import validate_runtime_
 from infini_local.core.runtime_authoring.technical_lowering import audit_compiler_receipts
 from infini_local.qa.capability_witnesses import build_capability_witness
 
-FN = "apply_generated_buff_on_use"
+FN = "generated_buff_on_use"
 
 
 def _fixture():
@@ -147,9 +147,9 @@ def test_exhaustion_policy_alone_never_counts_as_an_executable_buff_effect(group
 def test_repair_unrelated_leaf_freezes_accepted_policy_value_or_absence(monkeypatch, mode, value):
     doc, call = _policy_fixture(value, "survey")
     expected = deepcopy(doc)
-    call["params"]['durationSeconds'] = True
+    call["params"]['duration'] = True
     candidate = deepcopy(call)
-    candidate["params"]['durationSeconds'] = next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['durationSeconds']
+    candidate["params"]['duration'] = next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['duration']
     if value == 180:
         candidate["params"].pop("exhaustionSeconds")  # Repair omission is no-change.
     else:
@@ -157,7 +157,7 @@ def test_repair_unrelated_leaf_freezes_accepted_policy_value_or_absence(monkeypa
     candidate["params"]["effectGroupId"] = "foreign"
     repaired, dossier = gameplay_repair(monkeypatch, doc, {"note": "duration only", "callsUpsert": [candidate],
         "realizationReplacement": doc["realization"]}, mode)
-    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.durationSeconds']}]
+    assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.duration']}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]
     repaired.pop("debug")
     assert json.dumps(repaired, sort_keys=True) == json.dumps(expected, sort_keys=True)
@@ -172,7 +172,7 @@ def test_policy_type_only_repair_changes_exact_leaf_and_freezes_duration_group_s
     expected = deepcopy(doc)
     next(c for c in expected["runtimeProgram"]["calls"] if c["id"] == call["id"])["params"]['exhaustionSeconds'] = (1) / 60
     candidate = deepcopy(call)
-    candidate["params"].update(exhaustionSeconds=(1) / 60, durationSeconds=(1) / 60, effectGroupId="foreign", lightStrength=1.5)
+    candidate["params"].update(exhaustionSeconds=(1) / 60, duration=(1) / 60, effectGroupId="foreign", lightStrength=1.5)
     repaired, dossier = gameplay_repair(monkeypatch, doc, {"note": "typed policy leaf", "callsUpsert": [candidate],
         "realizationReplacement": doc["realization"]}, mode)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ['params.exhaustionSeconds']}]
@@ -350,7 +350,7 @@ def test_serialized_strict_provider_rejects_bad_policy_tokens(monkeypatch, value
 
 
 def test_explicit_held_refresh_preserves_policy_on_its_exact_generated_group():
-    doc = build_capability_witness("refresh_generated_effect_group_while_held")
+    doc = build_capability_witness("refresh_held_effect")
     call = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == FN)
     call["params"]['exhaustionSeconds'] = (180) / 60
     before = json.dumps(doc)
@@ -401,7 +401,7 @@ def test_coherent_inserted_zero_policy_cannot_forge_accepted_source_absence(grou
 @pytest.mark.parametrize("ticks", [0, 162000, 2147483646])
 def test_explicit_generated_buff_lifetime_survives_author_compile_and_wire(group, ticks):
     document, call = _policy_fixture(group=group)
-    call["params"]["durationSeconds"] = ticks / 60
+    call["params"]["duration"] = ticks / 60
     before = deepcopy(document)
     assert validate_runtime_program(document)["ok"]
     final = compile_runtime_program(document)
@@ -419,7 +419,7 @@ def test_permanent_generated_buff_is_an_explicit_provider_choice(monkeypatch, mo
     monkeypatch.setattr(llm_config, "LLM_RESPONSE_FORMAT_MODE", mode)
     request, _, _ = author.build_initial_author_request({}, {}, "permanent", model_name="offline")
     document, call = _policy_fixture(group="survey")
-    call["params"]["durationSeconds"] = 0
+    call["params"]["duration"] = 0
     document = {key: document[key] for key in ("name", "category", "runtimeProgram")}
     restored = provider_roundtrip(document, request["response_format"])
     assert validate_runtime_program(restored)["ok"]
@@ -432,10 +432,10 @@ def test_permanent_generated_buff_is_an_explicit_provider_choice(monkeypatch, mo
 @pytest.mark.parametrize("seconds", [None, True, -1, 0.001, 2147483647 / 60])
 def test_invalid_generated_buff_lifetime_does_not_turn_into_permanence(group, seconds):
     document, call = _policy_fixture(group=group)
-    call["params"]["durationSeconds"] = seconds
+    call["params"]["duration"] = seconds
     report = validate_runtime_program(document)
     assert not report["ok"]
-    assert any(error["path"].endswith(".durationSeconds") for error in report["errors"])
+    assert any(error["path"].endswith(".duration") for error in report["errors"])
     with pytest.raises(ValueError):
         compile_runtime_program(document)
 
@@ -444,7 +444,7 @@ def test_invalid_generated_buff_lifetime_does_not_turn_into_permanence(group, se
 @pytest.mark.parametrize("value", [OMITTED, None, True, -1, 2147483647])
 def test_nonempty_generated_buff_requires_a_valid_explicit_wire_lifetime(group, value):
     document, call = _policy_fixture(group=group)
-    call["params"]["durationSeconds"] = 2700
+    call["params"]["duration"] = 2700
     final = compile_runtime_program(document)
     final.pop("runtimeContract")
     buff = _buff(final, group)

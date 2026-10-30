@@ -38,7 +38,7 @@ def compiled_entity(document, call):
     ({"localCooldown": 600}, "local", 600, 2),
 ])
 def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, cooldown, updates):
-    document = build_capability_witness("set_projectile_collision")
+    document = build_capability_witness("projectile_collision")
     call = selected(document)
     call["params"].update(immunity=immunity, updatesPerTick=updates, pierce=-1)
     wire, entity = compiled_entity(document, call)
@@ -70,7 +70,7 @@ def test_immunity_and_update_rate_are_exact_independent_choices(immunity, mode, 
     ("updatesPerTick", 1.5),
 ])
 def test_collision_rejects_ambiguous_choices_and_noninteger_updates(name, value):
-    document = build_capability_witness("set_projectile_collision")
+    document = build_capability_witness("projectile_collision")
     selected(document)["params"][name] = value
     assert not validate_runtime_program(document)["ok"]
     with pytest.raises(ValueError):
@@ -93,10 +93,10 @@ def test_collision_rejects_ambiguous_choices_and_noninteger_updates(name, value)
     ("native_resting_spot", "native_resting_spot", 80, 600),
 ])
 def test_spawn_position_keeps_all_anchors_height_delay_aim_and_ids(anchor, wire_anchor, height, delay):
-    document = build_capability_witness("configure_spawn")
+    document = build_capability_witness("spawn")
     call = selected(document)
     call["params"].update(position=({"at": anchor} if height is None else {
-        "above": anchor, "heightTiles": height, 'activationDelaySeconds': (delay) / 60,
+        "above": anchor, "heightTiles": height, 'activationDelay': (delay) / 60,
     }), aim="velocity", offsetBlocks=(-37) / 16)
     wire, entity = compiled_entity(document, call)
     assert entity["spawn"]["placement"] == wire_anchor
@@ -108,20 +108,20 @@ def test_spawn_position_keeps_all_anchors_height_delay_aim_and_ids(anchor, wire_
 
 
 @pytest.mark.parametrize("position", [
-    {}, {"at": "above_cursor"}, {"at": "cursor", "activationDelaySeconds": 1 / 60},
-    {"at": "cursor", "above": "cursor", "heightTiles": 3, "activationDelaySeconds": 0},
-    {"above": "cursor", "heightTiles": 0, "activationDelaySeconds": 0},
+    {}, {"at": "above_cursor"}, {"at": "cursor", "activationDelay": 1 / 60},
+    {"at": "cursor", "above": "cursor", "heightTiles": 3, "activationDelay": 0},
+    {"above": "cursor", "heightTiles": 0, "activationDelay": 0},
     {"above": "cursor", "heightTiles": 3},
-    {"above": "cursor", "heightTiles": 3, "activationDelaySeconds": True},
+    {"above": "cursor", "heightTiles": 3, "activationDelay": True},
 ])
 def test_spawn_position_rejects_ambiguous_missing_and_unreviewed_delay_variants(position):
-    document = build_capability_witness("configure_spawn")
+    document = build_capability_witness("spawn")
     selected(document)["params"]["position"] = position
     assert not validate_runtime_program(document)["ok"]
 
 
 @pytest.mark.parametrize("fn,name,wire_name,lo,hi", [
-    ("damage_nearby_on_event", "radiusTiles", "radiusPx", 8, 960),
+    ("damage_nearby_on_event", "radius", "radiusPx", 8, 960),
 ])
 # Each owner retains both bounds, a non-boundary exact pixel, and every
 # rejection class. Extra interior pixels repeat the same exact projection.
@@ -153,7 +153,7 @@ def test_owner_pull_uses_exact_old_action_and_ignores_no_authored_radius(when):
     document = build_capability_witness("pull_on_event")
     selected(document)["params"] = {"when": "on_hit", "mode": "owner_to_target", "impulseBlocksPerSecond": 7.5}
     call = selected(document)
-    call["params"].update(when=when, impulseBlocksPerSecond=11.71875, delaySeconds=(37) / 60)
+    call["params"].update(when=when, impulseBlocksPerSecond=11.71875, delay=(37) / 60)
     wire, entity = compiled_entity(document, call)
     event = entity["events"][0]
     assert event == {
@@ -165,7 +165,7 @@ def test_owner_pull_uses_exact_old_action_and_ignores_no_authored_radius(when):
         receipt = next(r for r in relevant if r["finalPath"].endswith("." + literal))
         assert receipt["authoredPath"].endswith(".fn") and receipt["status"] == "technical_projection"
     hostile = deepcopy(document)
-    selected(hostile)["params"]["radiusTiles"] = 37
+    selected(hostile)["params"]["radius"] = 37
     assert not validate_runtime_program(hostile)["ok"]
     npc = build_capability_witness("pull_on_event")
     selected(npc)["params"]["mode"] = "owner_to_target"
@@ -202,7 +202,7 @@ def test_owner_pull_discriminator_receipts_bind_the_exact_existing_executor(muta
 # The shared event-trigger schema owns malformed interval shapes. Other
 # consumers keep a routed negative sentinel rather than copying the full matrix.
 @pytest.mark.parametrize("fn,when", [
-    *(pytest.param("spawn_entity_on_event", when, id="spawn-" + label) for label, when in (
+    *(pytest.param("spawn_on_event", when, id="spawn-" + label) for label, when in (
         ("null", None), ("empty", {}), ("bare-periodic", "periodic"),
         ("below", {"everySeconds": 5 / 60}), ("above", {"everySeconds": 3601 / 60}),
         ("rounds-below-minimum", {"everySeconds": 5.49 / 60}), ("boolean", {"everySeconds": True}),
@@ -218,9 +218,9 @@ def test_periodic_trigger_requires_one_explicit_integer_interval(fn, when):
 
 
 def test_root_spawn_fields_are_omittable_only_for_exact_child_kind():
-    document = build_capability_witness("spawn_entity_on_event")
+    document = build_capability_witness("spawn_on_event")
     spawn = next(row for row in document["runtimeProgram"]["calls"]
-                 if row["fn"] == "configure_spawn" and row["target"] == "witness_child")
+                 if row["fn"] == "spawn" and row["target"] == "witness_child")
     spawn["params"].pop("count")
     spawn["params"].pop("spreadRadians")
     original = deepcopy(document)
@@ -248,11 +248,11 @@ def test_root_spawn_fields_are_omittable_only_for_exact_child_kind():
     assert not audit_compiler_receipts(receipts, final_document=forged_wire)["ok"]
 
 
-@pytest.mark.parametrize("movement", ["move_straight", "accelerate_projectile_vertical", "set_projectile_return_trigger", "seek_projectile"])
+@pytest.mark.parametrize("movement", ["move_straight", "accelerate_y", "return_when", "seek"])
 @pytest.mark.parametrize("tile_collide", [False, True])
 def test_bounce_omission_is_limited_to_exact_inactive_consumer_branches(movement, tile_collide):
     document = build_capability_witness(movement)
-    collision = selected(document, "set_projectile_collision")
+    collision = selected(document, "projectile_collision")
     collision["params"].update(tileCollide=tile_collide, bounceCount=17)
     _, explicit = compiled_entity(document, collision)
     assert explicit["collision"]["bounceCount"] == 17
@@ -270,7 +270,7 @@ def test_bounce_omission_is_limited_to_exact_inactive_consumer_branches(movement
 @pytest.mark.parametrize("new_tile", [False, True])
 def test_repair_reactivating_collision_requires_an_explicit_bounce_choice(new_tile):
     document = build_capability_witness("move_straight")
-    collision = selected(document, "set_projectile_collision")
+    collision = selected(document, "projectile_collision")
     collision["params"].pop("bounceCount")
     collision["params"]["tileCollide"] = "invalid_boolean"
     report = validate_runtime_program(document)
@@ -280,7 +280,7 @@ def test_repair_reactivating_collision_requires_an_explicit_bounce_choice(new_ti
     filtered, audit = filter_repair_patch_scope(document, {"note": "choose collision", "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(document, filtered)
-    result = selected(repaired, "set_projectile_collision")["params"]
+    result = selected(repaired, "projectile_collision")["params"]
     assert result["pierce"] == collision["params"]["pierce"]
     assert result["bounceCount"] == 7  # exact missing leaf was a current deterministic error
     assert validate_runtime_program(repaired)["ok"]
@@ -288,7 +288,7 @@ def test_repair_reactivating_collision_requires_an_explicit_bounce_choice(new_ti
 
 def test_omitted_bounce_stays_absent_during_unrelated_repair():
     document = build_capability_witness("move_straight")
-    collision = selected(document, "set_projectile_collision")
+    collision = selected(document, "projectile_collision")
     collision["params"].update(tileCollide=False, pierce=101)
     collision["params"].pop("bounceCount")
     scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
@@ -297,7 +297,7 @@ def test_omitted_bounce_stays_absent_during_unrelated_repair():
     filtered, audit = filter_repair_patch_scope(document, {"note": "repair pierce", "callsUpsert": [candidate]}, scope)
     assert audit["ok"], audit
     repaired = apply_repair_patch(document, filtered)
-    result = selected(repaired, "set_projectile_collision")["params"]
+    result = selected(repaired, "projectile_collision")["params"]
     assert result["tileCollide"] is False and "bounceCount" not in result
     assert result["pierce"] == 3 and validate_runtime_program(repaired)["ok"]
 
@@ -306,7 +306,7 @@ def test_omitted_bounce_stays_absent_during_unrelated_repair():
 @pytest.mark.parametrize("author_bounce", [False, True])
 def test_repair_movement_conflict_cannot_invent_an_active_collision_choice(delete_motion, author_bounce):
     document = build_capability_witness("move_straight")
-    collision = selected(document, "set_projectile_collision")
+    collision = selected(document, "projectile_collision")
     collision["params"].pop("bounceCount")
     collision["params"]["tileCollide"] = True
     motion = selected(document)
@@ -325,10 +325,10 @@ def test_repair_movement_conflict_cannot_invent_an_active_collision_choice(delet
     }, scope)
     assert audit["ok"] is author_bounce, audit
     repaired = apply_repair_patch(document, filtered)
-    result = selected(repaired, "set_projectile_collision")["params"]
+    result = selected(repaired, "projectile_collision")["params"]
     assert result["pierce"] == collision["params"]["pierce"]
     if author_bounce:
-        _, entity = compiled_entity(repaired, selected(repaired, "set_projectile_collision"))
+        _, entity = compiled_entity(repaired, selected(repaired, "projectile_collision"))
         assert entity["collision"]["bounceCount"] == result["bounceCount"] == 7
     else:
         assert "bounceCount" not in result
@@ -338,10 +338,10 @@ def test_repair_movement_conflict_cannot_invent_an_active_collision_choice(delet
 
 
 @pytest.mark.parametrize("fn,broken,value,frozen_key,hostile", [
-    ("set_projectile_collision", {"immunity": {"localCooldown": 601}}, {"immunity": {"localCooldown": 19}}, "pierce", 99),
+    ("projectile_collision", {"immunity": {"localCooldown": 601}}, {"immunity": {"localCooldown": 19}}, "pierce", 99),
     ("pull_on_event", {"when": {"everySeconds": 5 / 60}}, {"when": {"everySeconds": 19 / 60}}, "impulseBlocksPerSecond", 15),
-    ("configure_spawn", {"position": {"above": "cursor", "heightTiles": 81, "activationDelaySeconds": 37 / 60}},
-     {"position": {"above": "owner_center", "heightTiles": 19, "activationDelaySeconds": 2 / 60}}, "count", 12),
+    ("spawn", {"position": {"above": "cursor", "heightTiles": 81, "activationDelay": 37 / 60}},
+     {"position": {"above": "owner_center", "heightTiles": 19, "activationDelay": 2 / 60}}, "count", 12),
 ])
 def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_key, hostile):
     document = build_capability_witness(fn)
@@ -350,10 +350,10 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     errors = validate_runtime_program(document)["errors"]
     scope = build_runtime_repair_scope(document, errors)
     paths = next(row["paths"] for row in scope["fieldPermissions"]["calls"] if row["id"] == call["id"])
-    leaf = {"set_projectile_collision": "immunity.localCooldown", "pull_on_event": "when.everySeconds",
-            "configure_spawn": "position.heightTiles"}[fn]
+    leaf = {"projectile_collision": "immunity.localCooldown", "pull_on_event": "when.everySeconds",
+            "spawn": "position.heightTiles"}[fn]
     assert paths == ["params." + leaf]
-    if fn == "set_projectile_collision":
+    if fn == "projectile_collision":
         assert any(e["code"] == "shape_maximum" and e["path"].endswith(".immunity.localCooldown") for e in errors)
     candidate = deepcopy(call)
     candidate["params"].update(deepcopy(value), **{frozen_key: hostile})
@@ -362,8 +362,8 @@ def test_nested_repair_changes_only_the_broken_leaf(fn, broken, value, frozen_ke
     repaired = apply_repair_patch(document, filtered)
     actual = selected(repaired)["params"]
     assert actual[frozen_key] == call["params"][frozen_key]
-    if fn == "configure_spawn":
-        assert actual["position"] == {"above": "cursor", "heightTiles": 19, "activationDelaySeconds": 37 / 60}
+    if fn == "spawn":
+        assert actual["position"] == {"above": "cursor", "heightTiles": 19, "activationDelay": 37 / 60}
     assert validate_runtime_program(repaired)["ok"]
 
 
@@ -434,11 +434,11 @@ def test_retained_capability_evidence_cannot_admit_a_second_author_grammar(fn):
 @pytest.mark.parametrize("attack", ["cooldown-domain", "hybrid-variant", "missing-literal", "duplicate", "foreign-source", "spawn-domain"])
 @pytest.mark.parametrize("source_available", [False, True])
 def test_actual_typed_alias_receipts_require_one_complete_valid_projection(attack, source_available):
-    fn = "configure_spawn" if attack == "spawn-domain" else "set_projectile_collision"
+    fn = "spawn" if attack == "spawn-domain" else "projectile_collision"
     document = build_capability_witness(fn)
     call = selected(document)
-    if fn == "configure_spawn":
-        call["params"]["position"] = {"above": "cursor", "heightTiles": 1, 'activationDelaySeconds': (0) / 60}
+    if fn == "spawn":
+        call["params"]["position"] = {"above": "cursor", "heightTiles": 1, 'activationDelay': (0) / 60}
     else:
         call["params"]["immunity"] = {"localCooldown": 19}
     wire = compile_runtime_program(document)
@@ -481,7 +481,7 @@ def test_retired_spawn_receipt_owner_is_refused_even_with_complete_outputs(missi
 def test_hit_pull_to_entity_retains_explicit_mode_and_delay(delay):
     document = build_capability_witness("pull_on_event")
     call = selected(document)
-    call["params"].update(when="on_hit", mode="target_to_entity", impulseBlocksPerSecond=7.5, radiusTiles=10, delaySeconds=(delay) / 60)
+    call["params"].update(when="on_hit", mode="target_to_entity", impulseBlocksPerSecond=7.5, radius=10, delay=(delay) / 60)
     assert validate_runtime_program(document)["ok"]
     wire, entity = compiled_entity(document, call)
     event = entity["events"][0]
@@ -506,7 +506,7 @@ def test_reserved_movement_six_is_refused_without_renumbering_current_codes():
     assert MOVEMENT_OPCODE["move_front_hand"] == 20
 
 
-@pytest.mark.parametrize("current,retired", [("configure_tile_placement", "configure_placeable"),
+@pytest.mark.parametrize("current,retired", [("place_tile", "configure_placeable"),
                                            ("damage_nearby_on_event", "chain_damage_on_event")])
 def test_retired_receipt_owner_cannot_authenticate_current_mechanics(current, retired):
     document = build_capability_witness(current)
@@ -524,7 +524,7 @@ def test_retired_receipt_owner_cannot_authenticate_current_mechanics(current, re
     (0, False), (32.0001, False), (True, False), (None, False),
 ])
 def test_independent_proximity_radius_uses_float_pixels_not_retired_integer_lattice(value, accepted):
-    fn = "set_projectile_proximity_action"
+    fn = "proximity_action"
     spec = CAPABILITY_REGISTRY[fn].params["triggerRadiusBlocks"]
     assert (spec.minimum, spec.maximum, spec.multiple_of) == (0.0000625, 32, None)
     document = build_capability_witness(fn)

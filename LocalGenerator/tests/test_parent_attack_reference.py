@@ -225,7 +225,7 @@ def test_native_attack_context_does_not_widen_actual_frozen_gameplay_repair(monk
     parent = {"directProjectileRaw": {"type": 42, "attackReference": observation}}
     source = build_runtime_fixture("workbench_blade")
     valid = copy.deepcopy(source)
-    lifetime = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "set_projectile_lifetime")
+    lifetime = next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "projectile_lifetime")
     lifetime["params"]["lifetimeSeconds"] = 0
     report = validate_runtime_program(source)
     assert not report["ok"]
@@ -233,7 +233,7 @@ def test_native_attack_context_does_not_widen_actual_frozen_gameplay_repair(monk
     expected = next(row for row in valid["runtimeProgram"]["calls"] if row["id"] == lifetime["id"])
     candidate = copy.deepcopy(expected)
     # A completely independent valid call must stay frozen.
-    independent = copy.deepcopy(next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "configure_item_stats"))
+    independent = copy.deepcopy(next(row for row in source["runtimeProgram"]["calls"] if row["fn"] == "item_stats"))
     independent["params"]["damage"] += 11
     before = copy.deepcopy((source, parent))
     repaired, request = repair_with_response(monkeypatch, source,

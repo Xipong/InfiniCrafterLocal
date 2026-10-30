@@ -10,7 +10,7 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [],
-      "dossierChars": 27944,
+      "dossierChars": 27520,
       "errorCodes": [
         "shape_one_of",
         "shape_required"
@@ -20,7 +20,7 @@
         "$.runtimeProgram.calls[1].params.useStyle"
       ],
       "existingBrokenCapabilities": [
-        "configure_item_use"
+        "item_use"
       ],
       "name": "missing_required_parameter",
       "nonRepairableCount": 0,
@@ -40,9 +40,9 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 1,
       "directCapabilities": [
-        "configure_item_use"
+        "item_use"
       ],
-      "dossierChars": 27376,
+      "dossierChars": 26922,
       "errorCodes": [
         "binding_dependency"
       ],
@@ -68,16 +68,16 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 9,
       "directCapabilities": [
-        "accelerate_projectile_vertical",
-        "attach_projectile",
+        "accelerate_y",
+        "attach",
+        "lash_geometry",
         "move_straight",
-        "orbit_projectile",
-        "oscillate_projectile_velocity",
-        "scale_projectile_velocity",
-        "seek_projectile",
-        "set_projectile_lash_geometry"
+        "orbit",
+        "oscillate_velocity",
+        "scale_velocity",
+        "seek"
       ],
-      "dossierChars": 66260,
+      "dossierChars": 64158,
       "errorCodes": [
         "missing_movement_component"
       ],
@@ -93,7 +93,7 @@
         "entities": 1
       },
       "supportingCapabilities": [
-        "set_projectile_aim"
+        "set_aim"
       ]
     },
     {
@@ -105,9 +105,9 @@
       "capabilityCardsMatchSubset": true,
       "capabilitySubsetCount": 2,
       "directCapabilities": [
-        "configure_item_use"
+        "item_use"
       ],
-      "dossierChars": 33118,
+      "dossierChars": 32392,
       "errorCodes": [
         "missing_item_capability_param"
       ],
@@ -115,8 +115,8 @@
         "$.runtimeProgram.calls[18]"
       ],
       "existingBrokenCapabilities": [
-        "accumulate_projectile_charge",
-        "configure_item_use"
+        "charge",
+        "item_use"
       ],
       "name": "existing_dependency_parameter_mismatch",
       "nonRepairableCount": 0,
@@ -147,7 +147,7 @@
     "ok": true,
     "optionalUnreportedAdditionIgnored": true
   },
-  "fullAuthorPayloadChars": 155217,
+  "fullAuthorPayloadChars": 152078,
   "fullCapabilityCatalogCount": 99,
   "ok": true,
   "policyCoverage": {

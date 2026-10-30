@@ -34,17 +34,17 @@ def test_nested_values_units_and_distinct_charge_meanings(author):
     report = audit.build_report(author)
     fields = {r["path"]: r for r in report["authorFields"]}
     base = "#/runtimeProgram/calls/12/params/"
-    assert fields[base + "durationSeconds"]["value"] == 0.5
-    assert fields[base + "durationSeconds"]["units"] == "seconds"
-    assert "Time to full charge" in fields[base + "durationSeconds"]["description"]
-    assert fields[base + "autoReleaseAfterActiveSeconds"]["value"] == 1
-    assert "automatic release age" in fields[base + "autoReleaseAfterActiveSeconds"]["description"]
+    assert fields[base + "duration"]["value"] == 0.5
+    assert fields[base + "duration"]["units"] == "seconds"
+    assert "Time to full charge" in fields[base + "duration"]["description"]
+    assert fields[base + "autoReleaseAge"]["value"] == 1
+    assert "automatic release age" in fields[base + "autoReleaseAge"]["description"]
     multiplier = fields[base + "releaseEffect/damageMultiplier"]
     assert multiplier["value"] == 2
     assert "at full charge; interpolated from 1" in multiplier["description"]
     assert multiplier["default"] == 1
     assert "runtime_program_author.schema.json#/" in multiplier["schema"]
-    window = fields["#/runtimeProgram/calls/8/params/window/durationSeconds"]
+    window = fields["#/runtimeProgram/calls/8/params/window/duration"]
     assert window["value"] == 1 and window["units"] == "seconds"
     assert author == before
     assert all(c["status"] != "failed" for c in report["checks"])
@@ -135,8 +135,8 @@ def test_schema_changes_reach_report_without_second_catalog(author, monkeypatch)
         original(self, filename)
         if filename == "runtime_program_author.schema.json":
             call = next(c for c in self.root["properties"]["calls"]["items"]["oneOf"]
-                        if c["properties"]["fn"]["const"] == "accumulate_projectile_charge")
-            call["properties"]["params"]["properties"]["durationSeconds"]["description"] = "CANONICAL_SENTINEL"
+                        if c["properties"]["fn"]["const"] == "charge")
+            call["properties"]["params"]["properties"]["duration"]["description"] = "CANONICAL_SENTINEL"
 
     monkeypatch.setattr(audit.SchemaDocs, "__init__", changed)
     assert "CANONICAL_SENTINEL" in audit.render(audit.build_report(author))
@@ -196,3 +196,66 @@ def test_cli_preserves_inputs_reports_failures_and_refuses_overwrite(author, tmp
     with pytest.raises(SystemExit) as exc:
         audit.main(["--item", str(path), "--out", str(out)])
     assert exc.value.code == 2 and (out / "audit.html").read_bytes() == first
+
+
+def test_saved_v6_receipt_names_keep_documentation_without_rewriting_evidence():
+    import gzip
+    capture = json.loads(gzip.decompress((ROOT / "LocalGenerator/tests/fixtures/gameplay_vocabulary_wire_baseline.json.gz").read_bytes()))
+    case = next(row for row in capture["cases"] if row["previousFn"] == "accumulate_projectile_charge")
+    saved = document(deepcopy(case["wire"]))
+    before = json.dumps(saved, sort_keys=True)
+    report = audit.build_report(saved)
+    row = next(row for row in report["receipts"]
+               if row["receipt"].get("fn") == "accumulate_projectile_charge"
+               and row["authorPath"].endswith("/durationSeconds"))
+    assert row["authorUnits"] == "seconds" and "Time to full charge" in row["description"]
+    assert row["schema"].endswith("/properties/duration")
+    assert row["wireValue"] == 1 and not row["authorValuePresent"] and row["authorValue"] is None
+    assert row["trust"] == "checked" and not report["authorAvailable"]
+    assert json.dumps(saved, sort_keys=True) == before
+    assert "Time to full charge" in audit.render(report)
+
+    # A similar-looking undeclared historical name must not acquire either
+    # documentation or trusted provenance by fuzzy spelling or wire proximity.
+    for change in ("function", "parameter"):
+        forged = deepcopy(saved)
+        receipt = next(r for r in forged["data"]["runtimeContract"]["finalWireReceipts"]
+                       if r == row["receipt"])
+        if change == "function":
+            receipt["fn"] = "accumulate_projectile_charge_unknown"
+        else:
+            receipt["authoredPath"] += "Unknown"
+        denied = audit.build_report(forged)
+        link = next(r for r in denied["receipts"] if r["receiptIndex"] == row["receiptIndex"])
+        assert link["description"] == link["authorUnits"] == link["schema"] == ""
+        assert link["trust"] == "unverified" and not link["authorValuePresent"]
+
+
+def test_supplied_v6_author_gets_display_docs_but_never_current_authentication():
+    import gzip
+    capture = json.loads(gzip.decompress((ROOT / "LocalGenerator/tests/fixtures/gameplay_vocabulary_wire_baseline.json.gz").read_bytes()))
+    case = next(row for row in capture["cases"] if row["previousFn"] == "accumulate_projectile_charge")
+    saved, source = document(deepcopy(case["wire"])), document(deepcopy(case["previousAuthor"]))
+    assert source["data"]["runtimeProgram"]["schema"] == "infini.runtime-program.authoring.v6"
+    before = json.dumps([saved, source], sort_keys=True)
+    report = audit.build_report(saved, author=source)
+    link = next(row for row in report["receipts"] if row["receipt"].get("fn") == "accumulate_projectile_charge"
+                and row["authorPath"].endswith("/durationSeconds"))
+    field = next(row for row in report["authorFields"] if row["path"] == link["authorPath"])
+    assert field["documented"] and field["units"] == link["authorUnits"] == "seconds"
+    assert "Time to full charge" in field["description"] == link["description"]
+    assert link["authorValuePresent"] and link["authorValue"] == field["value"]
+    assert link["trust"] == "unverified"
+    statuses = {row["name"]: row["status"] for row in report["checks"]}
+    assert statuses["Текущий Author validator"] == statuses["Текущий compiler receipt audit"] == "failed"
+    assert statuses["Текущий wire validator"] == "passed"
+    assert json.dumps([saved, source], sort_keys=True) == before
+
+    # Unknown versions and old engine-unit spellings must not be dressed up as
+    # recognized v6 Author quantities merely because a similar wire slot exists.
+    source["data"]["runtimeProgram"]["schema"] = "infini.runtime-program.authoring.v999"
+    unknown = audit.build_report(saved, author=source)
+    row = next(row for row in unknown["authorFields"] if row["path"] == field["path"])
+    assert not row["documented"] and row["description"] == row["units"] == ""
+    docs = audit.SchemaDocs("runtime_program_author.schema.json")
+    assert docs.saved_param_docs("accumulate_projectile_charge", ("durationTicks",), same_units_only=True) == {}

@@ -70,7 +70,7 @@ def test_author_has_no_host_damage_recommendation(monkeypatch, mode, source_a, s
     assert "damage" not in corridor["broadEnvelope"]
     assert corridor["parentDamage"] == [source_a["damage"], source_b["damage"]]
     catalog = payload["runtimeCapabilityContract"]["catalog"]
-    for fn in ("configure_item_stats", "set_projectile_damage"):
+    for fn in ("item_stats", "projectile_damage"):
         card = next(row for row in catalog["capabilities"] if row["fn"] == fn)
         assert card["params"]["damage"]["min"] == 0
         assert card["params"]["damage"]["max"] == 2000
@@ -110,7 +110,7 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch, mode):
     assert {card["fn"] for card in capabilities} == visible
     assert first["messages"][:2] == second["messages"][:2]
     assert first.get("response_format") == second.get("response_format")
-    assert "present_placed_item_sprite" in {card["fn"] for card in capabilities}
+    assert "placed_sprite" in {card["fn"] for card in capabilities}
     assert dossier_text(first) == first_user
     assert dossier_text(second) == second_user
 
@@ -146,7 +146,7 @@ def test_repair_declares_only_static_guidance_as_cacheable(monkeypatch, syntax_o
             else:
                 item = build_runtime_fixture("workbench_blade")
                 item["name"] = label
-                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "configure_item_use")
+                use = next(c for c in item["runtimeProgram"]["calls"] if c["fn"] == "item_use")
                 del use["params"]["useStyle"]
                 report = validate_runtime_program(item)
                 author.repair_author_item_after_failure(item, {"name": label}, {}, label, failure_report=report)

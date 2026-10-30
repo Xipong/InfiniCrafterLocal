@@ -27,7 +27,7 @@ from infini_local.qa.runtime_program_fixtures import build_runtime_fixture
 
 def build_report() -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
-    source = CAPABILITY_REGISTRY["emit_light_while_active"]
+    source = CAPABILITY_REGISTRY["projectile_light"]
     synthetic = replace(
         source,
         name="emit_mutation_light",
@@ -83,7 +83,7 @@ def build_report() -> dict[str, Any]:
         [
             {
                 "callId": "alias",
-                "fn": "emit_light_while_active",
+                "fn": "projectile_light",
                 "authoredPath": "x",
                 "finalPath": "runtimeProgram.entities[].movement.code",
                 "value": 1,

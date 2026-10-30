@@ -180,7 +180,7 @@ def test_captured_permissions_drive_real_frozen_merge_not_provider_schema_alone(
         assert fixed == inputs["vfxOutput"]
         assert audit["ignoredChanges"]
     else:
-        correct = next(row for row in inputs["authored"]["runtimeProgram"]["calls"] if row["fn"] == "configure_item_use")
+        correct = next(row for row in inputs["authored"]["runtimeProgram"]["calls"] if row["fn"] == "item_use")
         candidate = copy.deepcopy(correct)
         candidate["params"]["autoReuse"] = not correct["params"]["autoReuse"]
         patch = {"callsUpsert": [candidate], "note": "one leaf"}

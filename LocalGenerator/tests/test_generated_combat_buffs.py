@@ -6,16 +6,16 @@ from infini_local.core.runtime_authoring.validator import validate_runtime_progr
 from infini_local.core.runtime_authoring.wire_validator import validate_runtime_wire
 
 
-def combat_document(activation='apply_generated_buff_on_use'):
+def combat_document(activation='generated_buff_on_use'):
     doc = build_capability_witness(activation)
-    buff = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use')
+    buff = next(c for c in doc['runtimeProgram']['calls'] if c['fn'] == 'generated_buff_on_use')
     buff['params'].update(lightStrength=0, miningSpeedMultiplier=1, oreSenseEnabled=False,
-        moveSpeedBonusPercent=0, jumpSpeedBonusBlocksPerSecond=0, manaRegenBonusPoints=0, lifeRegenHpPerSecond=0)
-    buff['params']['combat'] = dict(defensePoints=10, attackSpeedPercent=15, critChancePoints=4, damagePercent=25, damageClass='melee')
+        moveSpeedBonus=0, jumpSpeedBonus=0, manaRegen=0, lifeRegen=0)
+    buff['params']['combat'] = dict(defensePoints=10, attackSpeedBonus=15, critChance=4, damageBonus=25, damageClass='melee')
     return doc
 
 
-@pytest.mark.parametrize('activation', ['apply_generated_buff_on_use', 'refresh_generated_effect_group_while_held', 'apply_generated_buff_on_event'])
+@pytest.mark.parametrize('activation', ['generated_buff_on_use', 'refresh_held_effect', 'generated_buff_on_event'])
 def test_combat_only_buff_reaches_default_named_and_reactive_groups(activation):
     doc = combat_document(activation)
     assert validate_runtime_program(doc)['ok'], validate_runtime_program(doc)
@@ -33,8 +33,8 @@ def test_combat_only_buff_reaches_default_named_and_reactive_groups(activation):
 
 
 def test_empty_combat_is_not_an_effect_and_invalid_fields_are_not_defaulted():
-    doc = combat_document(); params = next(c['params'] for c in doc['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use')
-    for name in ['defensePoints', 'attackSpeedPercent', 'critChancePoints', 'damagePercent']:
+    doc = combat_document(); params = next(c['params'] for c in doc['runtimeProgram']['calls'] if c['fn'] == 'generated_buff_on_use')
+    for name in ['defensePoints', 'attackSpeedBonus', 'critChance', 'damageBonus']:
         params['combat'][name] = 0
     assert not validate_runtime_program(doc)['ok']
     params['combat']['defensePoints'] = 10
@@ -45,7 +45,7 @@ def test_empty_combat_is_not_an_effect_and_invalid_fields_are_not_defaulted():
 
 def test_oversized_combat_integer_is_rejected_without_crashing_validation():
     doc = combat_document()
-    params = next(c['params'] for c in doc['runtimeProgram']['calls'] if c['fn'] == 'apply_generated_buff_on_use')
+    params = next(c['params'] for c in doc['runtimeProgram']['calls'] if c['fn'] == 'generated_buff_on_use')
     params['combat']['defensePoints'] = 10 ** 1000
     before = deepcopy(doc)
     report = validate_runtime_program(doc)

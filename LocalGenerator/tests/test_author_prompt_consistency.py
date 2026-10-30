@@ -17,13 +17,13 @@ def _stationary_periodic_shooter(pool=None):
     controller = next(row for row in calls if row["fn"] == "target_and_fire")
     calls.remove(controller)
     root, child = controller["target"], controller["params"]["shotEntity"]
-    calls.append({"id": "periodic_shot", "fn": "spawn_entity_on_event", "target": root, "params": {
+    calls.append({"id": "periodic_shot", "fn": "spawn_on_event", "target": root, "params": {
         "when": {'everySeconds': (30) / 60}, "entity": child, "count": 1, "spreadRadians": 0.0,
         "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1.0,
-        'delaySeconds': (0) / 60,
+        'delay': (0) / 60,
     }})
     if pool is not None:
-        calls.append({"id": "descendant_pool", "fn": "set_descendant_concurrency", "target": root,
+        calls.append({"id": "descendant_pool", "fn": "descendant_limit", "target": root,
                       "params": {"maxActive": pool}})
     return doc, root, child
 
@@ -66,6 +66,6 @@ def test_actual_scoped_repair_explains_stationary_shooting_without_changing_perm
     }, mode)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [
         {"id": "descendant_pool", "paths": ["params.maxActive"]}]
-    card = next(row for row in dossier["existingBrokenCapabilityCards"] if row["fn"] == "set_descendant_concurrency")
-    assert card == CAPABILITY_REGISTRY["set_descendant_concurrency"].prompt_card()
+    card = next(row for row in dossier["existingBrokenCapabilityCards"] if row["fn"] == "descendant_limit")
+    assert card == CAPABILITY_REGISTRY["descendant_limit"].prompt_card()
     assert validate_runtime_wire(compile_runtime_program(repaired))["ok"]

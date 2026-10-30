@@ -205,7 +205,7 @@ class OfflineCapture:
                         model_name=MODEL, source_response_format=source.get("response_format"), recipe_key=cohort)
                 elif stage == "gameplay_repair":
                     broken = copy.deepcopy(authored)
-                    next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "configure_item_use")["params"].pop("useStyle")
+                    next(row for row in broken["runtimeProgram"]["calls"] if row["fn"] == "item_use")["params"].pop("useStyle")
                     report = self.validate(broken)
                     assert not report["ok"]
                     evidence.update(broken=broken, failureReport=report)

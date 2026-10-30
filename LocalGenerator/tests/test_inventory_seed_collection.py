@@ -16,12 +16,12 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from infini_local.qa.capability_witnesses import build_capability_witness
 from infini_local.storage.world_storage import sanitize_recipe_for_delivery
 
-FN = "collect_seeds_from_grass"
+FN = "collect_seeds"
 FIELD = "collectSeedsFromGrass"
 
 
 def seed_source():
-    doc = build_capability_witness("configure_weapon_ammo")
+    doc = build_capability_witness("weapon_ammo")
     doc["runtimeProgram"]["calls"].append({"id": "seed_passive", "fn": FN, "target": "item", "params": {}})
     return doc
 
@@ -43,7 +43,7 @@ def test_explicit_seed_passive_survives_final_delivery_without_changing_ammo_or_
     assert "runtimeContract" not in delivered
     assert delivered["gameplay"][FIELD] is True
     assert validate_runtime_wire(delivered)["ok"]
-    baseline = sanitize_recipe_for_delivery(compile_runtime_program(build_capability_witness("configure_weapon_ammo")))
+    baseline = sanitize_recipe_for_delivery(compile_runtime_program(build_capability_witness("weapon_ammo")))
     without_passive = deepcopy(delivered)
     without_passive["gameplay"].pop(FIELD)
     assert without_passive == baseline
@@ -76,7 +76,7 @@ def test_seed_literal_receipt_requires_unique_exact_fn_owner(mutation, source_av
     elif mutation == "source":
         row["authoredPath"] = row["authoredPath"].replace(".fn", ".params.enabled")
     elif mutation == "owner":
-        row["fn"] = "configure_weapon_ammo"
+        row["fn"] = "weapon_ammo"
     else:
         row["finalPath"] = "runtimeProgram.entities[0]." + FIELD
         final["runtimeProgram"]["entities"][0][FIELD] = True
@@ -114,7 +114,7 @@ def test_sparse_seed_call_is_the_same_exact_opt_in_and_absence_stays_inactive():
 def test_seed_witness_is_inventory_only_without_active_use_or_binding():
     doc = build_capability_witness(FN)
     assert not doc["runtimeProgram"]["bindings"]
-    assert {c["fn"] for c in doc["runtimeProgram"]["calls"]} == {"configure_item_stats", FN}
+    assert {c["fn"] for c in doc["runtimeProgram"]["calls"]} == {"item_stats", FN}
     assert validate_runtime_program(doc)["ok"]
     assert validate_runtime_wire(compile_runtime_program(doc))["ok"]
 
@@ -129,29 +129,29 @@ def test_real_author_packet_exposes_explicit_inventory_capability_without_inheri
     assert card["params"] == {}
     assert "inventory check" in card["does"]
     packet = json.dumps(request)
-    assert "collect_seeds_from_grass" in packet
+    assert "collect_seeds" in packet
     assert "not executable support for that behavior" not in packet
     doc = seed_source()
     doc = {key: doc[key] for key in ("name", "category", "runtimeProgram")}
     if mode != "off":
         provider_roundtrip(doc, request["response_format"])
     # Parent facts do not inject a call; absent explicit selection remains absent.
-    baseline = build_capability_witness("configure_weapon_ammo")
+    baseline = build_capability_witness("weapon_ammo")
     assert FIELD not in compile_runtime_program(baseline)["gameplay"]
 
 
 @pytest.mark.parametrize("present", [True, False])
 @pytest.mark.parametrize("mode", ["json_object", "json_schema"])
 def test_leaf_repair_freezes_seed_selection_or_absence(monkeypatch, present, mode):
-    doc = seed_source() if present else build_capability_witness("configure_weapon_ammo")
-    stats = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "configure_item_stats")
+    doc = seed_source() if present else build_capability_witness("weapon_ammo")
+    stats = next(c for c in doc["runtimeProgram"]["calls"] if c["fn"] == "item_stats")
     stats["params"]["damage"] = True
     fixed = deepcopy(stats)
     fixed["params"]["damage"] = 37
     expected = apply_repair_patch(doc, {"note": "fix damage only", "callsUpsert": [fixed]})
     hostile = deepcopy(seed_source()["runtimeProgram"]["calls"][-1])
     hostile["fn"] = "recall_home_on_use" if present else FN
-    hostile["params"] = {"cooldownSeconds": 1.5} if present else {}
+    hostile["params"] = {"cooldown": 1.5} if present else {}
     repaired, dossier = gameplay_repair(monkeypatch, doc, {"note": "hostile seed change", "callsUpsert": [fixed, hostile]}, mode, out_of_scope_response=True)
     assert dossier["repairScope"]["fieldPermissions"]["calls"] == [{"id": stats["id"], "paths": ["params.damage"]}]
     assert repaired["debug"]["gameplayRepairFilterAudit"]["ignoredChanges"]

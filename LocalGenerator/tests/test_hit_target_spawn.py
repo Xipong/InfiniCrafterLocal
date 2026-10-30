@@ -18,7 +18,7 @@ from test_runtime_spawn_distributions import VELOCITIES
 from repair_test_helpers import gameplay_repair
 
 
-FN = "spawn_entity_from_hit_target"
+FN = "spawn_at_hit"
 
 
 def fixture():
@@ -37,9 +37,9 @@ def event_wire(wire, call):
 def test_target_geometry_and_child_velocity_have_exact_provider_inverse_and_native_wire(velocity, probability):
     document, call = fixture()
     call["params"]["geometry"]["beforeProbability"] = probability
-    call["params"].update(when="on_crit", damageBasis="live_parent", delaySeconds=(11) / 60)
+    call["params"].update(when="on_crit", damageBasis="live_parent", delay=(11) / 60)
     spawn = next(row for row in document["runtimeProgram"]["calls"]
-                 if row["fn"] == "configure_spawn" and row["target"] == call["params"]["entity"])
+                 if row["fn"] == "spawn" and row["target"] == call["params"]["entity"])
     spawn["params"]["velocity"] = deepcopy(velocity)
     local, provider = contract.author_item_response_schema(), contract.author_item_provider_response_schema()
     encoded = _encode_nullable_fixture(document, local)
@@ -60,10 +60,10 @@ def test_target_geometry_and_child_velocity_have_exact_provider_inverse_and_nati
 
 @pytest.mark.parametrize("name,value", [
     ("beforeProbability", -0.01), ("beforeProbability", 1.01), ("beforeProbability", True),
-    ("hitboxMaxSideFactor", 2.01), ("clearanceBlocks", -1 / 16), ("beforePositionJitterRadiusBlocks", 129 / 16),
-    ("beforeDirectionJitterRadians", 3.15), ("afterFanSpreadRadians", 6.3),
-    ("initialIgnoreCountdownUpdates", -1), ("initialIgnoreCountdownUpdates", 601),
-    ("initialIgnoreCountdownUpdates", 1.0), ("initialIgnoreCountdownUpdates", None),
+    ("hitboxMaxSideFactor", 2.01), ("clearanceBlocks", -1 / 16), ("beforeJitterRadius", 129 / 16),
+    ("beforeAngleJitter", 3.15), ("afterFanSpread", 6.3),
+    ("ignoreTargetUpdates", -1), ("ignoreTargetUpdates", 601),
+    ("ignoreTargetUpdates", 1.0), ("ignoreTargetUpdates", None),
 ])
 def test_geometry_rejects_invalid_values_in_author_and_wire_without_diagnostic_receipts(name, value):
     document, call = fixture()
@@ -100,14 +100,14 @@ def test_missing_geometry_leaf_repair_cannot_rewrite_probability_event_or_child(
 @pytest.mark.parametrize("mutation", ["drop", "duplicate", "old-fn", "swap-equal", "wrong-event", "remove-whole-geometry", "inactive-spread"])
 def test_target_geometry_receipts_cannot_be_reassigned_or_silently_removed(mutation):
     document, call = fixture()
-    call["params"]["geometry"].update(clearanceBlocks=(0) / 16, beforePositionJitterRadiusBlocks=(0) / 16)
+    call["params"]["geometry"].update(clearanceBlocks=(0) / 16, beforeJitterRadius=(0) / 16)
     wire = compile_runtime_program(document)
     receipts = wire["runtimeContract"]["finalWireReceipts"]
     geometry = [row for row in receipts if row.get("fn") == FN and ".params.geometry" in row.get("authoredPath", "")]
     leaf = next(row for row in geometry if row["finalPath"].endswith(".clearancePx"))
     if mutation == "drop": receipts.remove(leaf)
     elif mutation == "duplicate": receipts.append(deepcopy(leaf))
-    elif mutation == "old-fn": leaf["fn"] = "spawn_entity_on_event"
+    elif mutation == "old-fn": leaf["fn"] = "spawn_on_event"
     elif mutation == "wrong-event": leaf["callId"] = "other_event"
     elif mutation == "swap-equal":
         other = next(row for row in geometry if row["finalPath"].endswith(".beforePositionJitterRadiusPx"))
@@ -149,12 +149,12 @@ def test_sole_hit_reference_repairs_only_conflicting_child_spawn_leaves(monkeypa
     document, call = fixture()
     child_id = call["params"]["entity"]
     spawn = next(row for row in document["runtimeProgram"]["calls"]
-                 if row.get("target") == child_id and row["fn"] == "configure_spawn")
+                 if row.get("target") == child_id and row["fn"] == "spawn")
     expected = deepcopy(document)
     # Holy Storm's rejected composition: exact hit geometry plus a second
     # independently positioned/facing child. Replacing its only edge orphans it.
     spawn["params"].update(aim="facing", position={"above": "activation_origin", "heightTiles": 12,
-                                                  'activationDelaySeconds': (0) / 60})
+                                                  'activationDelay': (0) / 60})
     before = deepcopy(document)
     errors = validate_runtime_program(document)["errors"]
     assert [row["code"] for row in errors] == ["reference_requirements_unsatisfied"]
@@ -162,9 +162,9 @@ def test_sole_hit_reference_repairs_only_conflicting_child_spawn_leaves(monkeypa
     candidate["params"].update(aim="velocity", position={"at": "activation_origin"})
     incoming = [candidate]
     if hostile_edit:
-        candidate["params"]["velocity"] = {'constantSpeedBlocksPerSecond': (49) * 60 / 16}
+        candidate["params"]["velocity"] = {'speed': (49) * 60 / 16}
         hostile = deepcopy(next(row for row in document["runtimeProgram"]["calls"]
-                                if row.get("target") == child_id and row["fn"] == "set_projectile_damage"))
+                                if row.get("target") == child_id and row["fn"] == "projectile_damage"))
         hostile["params"]["damage"] = 999
         incoming.append(hostile)
     repaired, dossier = gameplay_repair(monkeypatch, document, {
@@ -192,14 +192,14 @@ def test_independently_used_child_keeps_spawn_frozen(consumer):
     child_id = call["params"]["entity"]
     child = next(row for row in document["runtimeProgram"]["entities"] if row["id"] == child_id)
     spawn = next(row for row in document["runtimeProgram"]["calls"]
-                 if row.get("target") == child_id and row["fn"] == "configure_spawn")
+                 if row.get("target") == child_id and row["fn"] == "spawn")
     spawn["params"]["aim"] = "cursor"
     if consumer == "second_reference":
         document["runtimeProgram"]["calls"].append({
-            "id": "independent_spawn", "target": call["target"], "fn": "spawn_entity_on_event",
+            "id": "independent_spawn", "target": call["target"], "fn": "spawn_on_event",
             "params": {"when": "on_hit", "entity": child_id, "count": 1, "spreadRadians": 0,
                        "damageBasis": "authored_child", "knockbackBasis": "authored_child",
-                       "damageMultiplier": 1, 'delaySeconds': (0) / 60},
+                       "damageMultiplier": 1, 'delay': (0) / 60},
         })
     elif consumer == "binding":
         child["kind"] = "free_projectile"
@@ -223,7 +223,7 @@ def test_sole_reference_noop_cannot_be_accepted_or_create_a_default():
     document, call = fixture()
     child_id = call["params"]["entity"]
     spawn = next(row for row in document["runtimeProgram"]["calls"]
-                 if row.get("target") == child_id and row["fn"] == "configure_spawn")
+                 if row.get("target") == child_id and row["fn"] == "spawn")
     spawn["params"]["aim"] = "cursor"
     before = deepcopy(document)
     scope = build_runtime_repair_scope(document, validate_runtime_program(document)["errors"])
@@ -238,11 +238,11 @@ def test_retarget_repair_keeps_existing_child_design_frozen_and_compiles_new_com
     calls = document["runtimeProgram"]["calls"]
     child_id = call["params"]["entity"]
     child_calls = [deepcopy(row) for row in calls if row.get("target") == child_id]
-    old_spawn = next(row for row in calls if row.get("target") == child_id and row["fn"] == "configure_spawn")
+    old_spawn = next(row for row in calls if row.get("target") == child_id and row["fn"] == "spawn")
     old_spawn["params"]["aim"] = "cursor"  # Valid independent design, incompatible with this reference.
-    calls.append({"id": "keep_original_child", "fn": "spawn_entity_on_event", "target": call["target"],
+    calls.append({"id": "keep_original_child", "fn": "spawn_on_event", "target": call["target"],
                   "params": {"when": "on_hit", "entity": child_id, "count": 1, "spreadRadians": 0,
-                             "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1, 'delaySeconds': (0) / 60}})
+                             "damageBasis": "authored_child", "knockbackBasis": "authored_child", "damageMultiplier": 1, 'delay': (0) / 60}})
     report = validate_runtime_program(document)
     assert [row["code"] for row in report["errors"]] == ["reference_requirements_unsatisfied"]
     scope = build_runtime_repair_scope(document, report["errors"])

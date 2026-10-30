@@ -138,7 +138,7 @@ def test_actual_stage_seam_records_complete_request_before_provider_without_live
                 parse_error=ValueError('fixture syntax'), original_recipe_context=context, model_name='offline-model')
         elif stage == 'gameplay_repair':
             broken = copy.deepcopy(source)
-            next(row for row in broken['runtimeProgram']['calls'] if row['fn'] == 'configure_item_stats')['params']['damage'] = -1
+            next(row for row in broken['runtimeProgram']['calls'] if row['fn'] == 'item_stats')['params']['damage'] = -1
             author.repair_author_item_after_failure(broken, parent, parent, 'r_capture', failure_report=author.validate_runtime_program(broken))
         else:
             data = compile_runtime_program(source)
@@ -212,7 +212,7 @@ def test_format_repair_capture_joins_author_owner_without_changing_frozen_fields
     frozen = build_runtime_fixture('workbench_blade')
     repaired = copy.deepcopy(frozen)
     if changed_value:
-        next(c for c in repaired['runtimeProgram']['calls'] if c['fn'] == 'configure_item_stats')['params']['damage'] += 1
+        next(c for c in repaired['runtimeProgram']['calls'] if c['fn'] == 'item_stats')['params']['damage'] += 1
     malformed = json.dumps(frozen)[:-1] + ',}'
     repaired_text = json.dumps(repaired)
     responses = iter([malformed, repaired_text])

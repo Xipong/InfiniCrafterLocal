@@ -1116,7 +1116,7 @@ def _complete_binding_transactions(
         call_ids = sorted(
             str(call.get("id") or "")
             for call in rows.get("calls", [])
-            if str(call.get("fn") or "") in {"configure_tile_placement", "configure_wall_placement"}
+            if str(call.get("fn") or "") in {"place_tile", "place_wall"}
             and str(call.get("target") or "") == target_id
             and str(call.get("id") or "")
         )
@@ -1735,7 +1735,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     param_name = param_match.group(1)
                     if code == "hybrid_placeable_max_stack" and param_name == "maxStack":
                         # The durable-hybrid invariant authorizes exactly this leaf so
-                        # Repair can set configure_item_stats.maxStack to 1.
+                        # Repair can set item_stats.maxStack to 1.
                         grant(node_namespace, node_id, f"params.{param_name}")
                         context[node_namespace].add(node_id)
                     cap = CAPABILITY_REGISTRY.get(str(node_row.get("fn") or ""))
@@ -1812,7 +1812,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                 modifier = row_by_id.get(row_id, {})
                 if (
                     row_id != node_id
-                    and str(modifier.get("fn") or "") == "add_equipment_damage_bonus"
+                    and str(modifier.get("fn") or "") == "equipment_damage_bonus"
                     and str(modifier.get("target") or "") == str(node_row.get("target") or "")
                     and _mapping(modifier.get("params")).get("phase") == "matching_armor_set"
                 ):
@@ -2195,7 +2195,7 @@ def build_runtime_repair_scope(current: Mapping[str, Any], errors: Iterable[Mapp
                     selector_namespace, selector_index, _ = selector_node
                     selector = _mapping(indexed_rows[selector_namespace][selector_index])
                     if (selector_code in {"invalid_held_effect_group", "invalid_reaction_effect_group"} and capability is not None
-                            and capability.name == "apply_generated_buff_on_use"
+                            and capability.name == "generated_buff_on_use"
                             and str(selector.get("target") or "") == node_target_id):
                         held_selector_covers_group = True
                     elif (selector_code == "missing_effect_group" and selector_namespace == "bindings"

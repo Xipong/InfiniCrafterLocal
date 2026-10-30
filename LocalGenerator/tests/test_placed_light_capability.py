@@ -14,7 +14,7 @@ from infini_local.core.runtime_authoring.technical_lowering import audit_compile
 from test_dual_use_placeable_contract import _dual_use_placeable
 from test_placed_body_capability import placement
 
-FN = "add_placed_light"
+FN = "placed_light"
 LIGHT = {"strength": 0.625, "color": "cyan"}
 
 
@@ -54,7 +54,7 @@ def test_exact_placement_reference_is_model_choice_not_inferred(fault):
     if fault == "unknown": light["params"]["placementCallId"] = "SoulOfLight"
     elif fault == "wrong-fn": light["params"]["placementCallId"] = "item_stats"
     elif fault == "unused": document["runtimeProgram"]["bindings"] = [b for b in document["runtimeProgram"]["bindings"] if b["id"] != "alternate_install"]
-    elif fault == "wall": next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "install_tile").update(fn="configure_wall_placement", params={"wallId": 1, "placeStyle": 0})
+    elif fault == "wall": next(c for c in document["runtimeProgram"]["calls"] if c["id"] == "install_tile").update(fn="place_wall", params={"wallId": 1, "placeStyle": 0})
     else: document["runtimeProgram"]["calls"].append({**copy.deepcopy(light), "id": "duplicate_light"})
     before = json.dumps(document, sort_keys=True)
     assert not validate_runtime_program(document)["ok"]

@@ -72,7 +72,7 @@ def test_registered_capability_reaches_provider_and_wire_without_mutation(fn):
 
 
 def test_registry_mutation_updates_schema_but_missing_executor_stays_red(monkeypatch: pytest.MonkeyPatch) -> None:
-    source = CAPABILITY_REGISTRY["emit_light_while_active"]
+    source = CAPABILITY_REGISTRY["projectile_light"]
     synthetic = replace(
         source,
         name="emit_test_light",
@@ -111,7 +111,7 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     ]
     original_errors = validator.validate_runtime_program(without_damage)["errors"]
     assert [(row["code"], row["allowed"]) for row in original_errors] == [
-        ("event_not_emitted", ["set_projectile_damage"]),
+        ("event_not_emitted", ["projectile_damage"]),
     ]
 
     # Conversely, removing collision leaves an unrelated required-component
@@ -127,7 +127,7 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     registry = dict(EVENT_KIND_REGISTRY)
     registry["on_hit"] = replace(
         registry["on_hit"],
-        producer_capabilities=("set_projectile_collision",),
+        producer_capabilities=("projectile_collision",),
     )
     monkeypatch.setattr(capability_registry, "EVENT_KIND_REGISTRY", registry)
     assert validator.validate_runtime_program(without_damage)["ok"] is True
@@ -135,12 +135,12 @@ def test_event_registry_mutation_reaches_validator_and_repair_projection(monkeyp
     changed_errors = validator.validate_runtime_program(without_collision)["errors"]
     event_errors = [row for row in changed_errors if row["code"] == "event_not_emitted"]
     assert len(event_errors) == 1
-    assert event_errors[0]["allowed"] == ["set_projectile_collision"]
+    assert event_errors[0]["allowed"] == ["projectile_collision"]
     assert event_errors[0]["relatedIds"] == ["workbench_blade"]
     scope = repair_scope.build_runtime_repair_scope(without_collision, event_errors)
-    assert scope["create"]["calls"]["allowedFns"] == ["set_projectile_collision"]
+    assert scope["create"]["calls"]["allowedFns"] == ["projectile_collision"]
     assert scope["create"]["calls"]["allowedTargetIds"] == ["workbench_blade"]
-    assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["set_projectile_collision"]
+    assert scope["repairRequirements"][0]["requiredOneOfCapabilities"] == ["projectile_collision"]
 
 
 @pytest.mark.parametrize("name", list(EVENT_KIND_REGISTRY))

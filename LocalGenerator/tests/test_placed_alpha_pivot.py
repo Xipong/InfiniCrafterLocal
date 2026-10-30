@@ -126,17 +126,17 @@ def test_outgoing_placement_cards_keep_native_containers_at_existing_placement(w
     accepted = author.try_llm_plan({"name":"A"}, {"name":"B"}, "offline-native-precondition")
     assert accepted is not None
     cards = request_dossier(requests[-1])["runtimeCapabilityContract"]["catalog"]["capabilities"]
-    native = next(c for c in cards if c["fn"] == "configure_tile_placement")
+    native = next(c for c in cards if c["fn"] == "place_tile")
     assert set(native["params"]) == {"tileId", "placeStyle"}  # No chest flag or new authored decision.
     summary = native["does"].lower()
     assert "native containers" in summary and "terraria" in summary
     assert "inventory" in summary and "return" in summary
     assert "unsupported" in summary and "callback" in summary
-    for fn in (FN, "add_placed_light", "enable_placed_vfx"):
+    for fn in (FN, "placed_light", "placed_vfx"):
         card = next(c for c in cards if c["fn"] == fn)
         summary = card["does"].lower()
         assert "footprint" in summary and "16x16/256 cells" in summary
-        assert "configure_tile_placement" in card["params"]["placementCallId"]["meaning"]
+        assert "place_tile" in card["params"]["placementCallId"]["meaning"]
         assert "waterchest" not in summary and "tile 21/style 17" not in summary
     wire = compile_runtime_program(accepted)
     assert {"placedBody", "placedLight"} <= placement(wire).keys()
