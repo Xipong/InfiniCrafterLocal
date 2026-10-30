@@ -40,7 +40,9 @@ public partial class GeneratedItem
         if (a.PlayerEffect is { } effect) player.GetModPlayer<InfiniCraftPlayer>().ApplyPlayerEffect(effect);
         // Terraria already applies Item.defense in Player.GrantArmorBenefits.
         player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
-        player.lifeRegen += a.LifeRegen; player.manaRegenBonus += a.ManaRegen;
+        player.GetModPlayer<InfiniCraftPlayer>().ApplyLifeRegen(a.LifeRegen, a.LifeRegenCondition);
+        player.GetModPlayer<InfiniCraftPlayer>().ApplyTreasureSense(a.TreasureSense == true, a.TreasureSenseCondition);
+        player.manaRegenBonus += a.ManaRegen;
         player.moveSpeed += a.MovementSpeed; player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedMaxRunSpeedBonus(a.MaxRunSpeed); player.jumpSpeedBoost += a.JumpSpeed;
         player.GetDamage(DamageClass.Generic) += a.GenericDamage; player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
         player.GetDamage(DamageClass.Ranged) += a.RangedDamage; player.GetDamage(DamageClass.Magic) += a.MagicDamage; player.GetDamage(DamageClass.Summon) += a.SummonDamage;
@@ -66,7 +68,9 @@ public partial class GeneratedItem
     {
         if (a.PlayerEffect is { } effect) player.GetModPlayer<InfiniCraftPlayer>().ApplyPlayerEffect(effect);
         player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
-        player.lifeRegen += a.LifeRegen; player.manaRegenBonus += a.ManaRegen;
+        player.GetModPlayer<InfiniCraftPlayer>().ApplyLifeRegen(a.LifeRegen, a.LifeRegenCondition);
+        player.GetModPlayer<InfiniCraftPlayer>().ApplyTreasureSense(a.TreasureSense == true, a.TreasureSenseCondition);
+        player.manaRegenBonus += a.ManaRegen;
         player.moveSpeed += a.MovementSpeed; player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedMaxRunSpeedBonus(a.MaxRunSpeed); player.jumpSpeedBoost += a.JumpSpeed;
         player.GetDamage(DamageClass.Generic) += a.GenericDamage; player.GetDamage(DamageClass.Melee) += a.MeleeDamage;
         player.GetDamage(DamageClass.Ranged) += a.RangedDamage; player.GetDamage(DamageClass.Magic) += a.MagicDamage; player.GetDamage(DamageClass.Summon) += a.SummonDamage;
@@ -111,7 +115,7 @@ public partial class GeneratedItem
         player.GetDamage(DamageClass.Magic) += a.SetBonusMagicDamage;
         player.GetDamage(DamageClass.Summon) += a.SetBonusSummonDamage;
         player.GetCritChance(DamageClass.Generic) += a.SetBonusGenericCrit;
-        player.moveSpeed += a.SetBonusMovementSpeed; player.lifeRegen += a.SetBonusLifeRegen; player.manaRegenBonus += a.SetBonusManaRegen;
+        player.moveSpeed += a.SetBonusMovementSpeed; player.GetModPlayer<InfiniCraftPlayer>().ApplyLifeRegen(a.SetBonusLifeRegen); player.manaRegenBonus += a.SetBonusManaRegen;
         player.maxMinions += a.SetBonusMinionSlots; player.maxTurrets += a.SetBonusSentrySlots;
         if (a.SetBonusManaCostReduction > 0f) player.manaCost = Math.Max(0.1f, player.manaCost - a.SetBonusManaCostReduction);
         player.GetModPlayer<InfiniCraftPlayer>().AddGeneratedAmmoSaveChance(a.SetBonusAmmoSaveChance);

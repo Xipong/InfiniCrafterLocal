@@ -311,7 +311,7 @@ def _validate_generated_buff(wire: Mapping[str, Any], errors: list[dict[str, Any
         elif spec.wire_boolean_true_value is not None:
             valid = type(value) is int and value in (0, spec.wire_boolean_true_value)
         elif spec.kind == "string":
-            valid = isinstance(value, str) and (value in spec.enum or (value == "" and no_light))
+            valid = isinstance(value, str) and (value in spec.enum or (key == "lightColorName" and value == "" and no_light))
         elif spec.wire_kind:
             valid = spec.matches_scalar_projection(value)
         else:
@@ -1320,6 +1320,14 @@ def validate_runtime_wire(data: Mapping[str, Any]) -> dict[str, Any]:
                             if path.startswith(prefix))
         _reject_unknown(node, allowed, "$." + component, errors)
         for name, spec in CAPABILITY_REGISTRY[fn].params.items():
+            fields = spec.wire_field_names(name)
+            # Closed nested components keep their typed shape even after saved
+            # wire strips receipts; unknown siblings must not disappear.
+            if spec.structured and fields and all(field.startswith(name + ".") for field in fields):
+                if name in node and not _wire_projection_witness(spec, name, component, {component: node}):
+                    errors.append({"path": f"$.{component}.{name}", "code": "invalid_equipment_parameter",
+                                   "message": "Present equipment component must match its complete registered wire shape."})
+                continue
             if not spec.wire_presence_requires_receipt or spec.structured:
                 continue
             field = spec.wire_name or name

@@ -228,22 +228,12 @@ def _compile_item_call(
         return
     if fn == "apply_generated_buff_on_use":
         generated = gameplay.setdefault("generatedBuff", {})
-        project(generated, effect_prefix + ".generatedBuff", {
-            "durationTicks": "durationTicks",
-            "exhaustionTicks": "exhaustionTicks",
-            "miningSpeedMultiplier": "miningSpeedMultiplier",
-            "lightStrength": "emitLightStrength",
-            "lightColor": "lightColorName",
-            "oreSenseEnabled": "oreSenseRadiusTiles",
-            "movementSpeed": "movementSpeed",
-            "jumpBoost": "jumpBoost",
-            "manaRegen": "manaRegen",
-            "lifeRegenHpPerSecond": "lifeRegen",
-        })
-        if "playerEffect" in p:
-            ctx.project_parameter(call=call, param="playerEffect", value=p["playerEffect"], target=generated, prefix=effect_prefix + ".generatedBuff")
-        if "combat" in p:
-            ctx.project_parameter(call=call, param="combat", value=p["combat"], target=generated, prefix=effect_prefix + ".generatedBuff")
+        # All scalar and structured fields use their canonical Lowery projection.
+        # effectGroupId chooses the enclosing group; it is not a buff DTO field.
+        for name in cap.params:
+            if name != "effectGroupId" and name in p:
+                ctx.project_parameter(call=call, param=name, value=p[name], target=generated,
+                                      prefix=effect_prefix + ".generatedBuff")
         return
     if fn == "configure_tool":
         project(gameplay, "gameplay", {

@@ -41,7 +41,7 @@ Binding сохраняет exact `placementCallId`, `stackCost=1`, `contactDamag
 ## Бонусы комплекта брони
 
 ```json
-{"slot":"head","setKey":"coral","setBonuses":{"moveSpeedBonusPercent":25,"lifeRegenHpPerSecond":0.5,"minionSlotsBonus":1}}
+{"slot":"head","setKey":"coral","setBonuses":{"moveSpeedBonusPercent":25,"lifeRegen":0.5,"minionSlotsBonus":1}}
 ```
 
 В `configure_armor.params.setBonuses` находятся те же 11 independently authored stats с обычными именами. Все units, bounds, signed values, percent/100 и HP/s×2 проекции сохранены. Объект, если выбран, содержит хотя бы одно поле. Любой ненейтральный set bonus требует head slot и непустой exact setKey для реально надетых head/body/legs. Нулевые выбранные значения не превращаются в бонусы.

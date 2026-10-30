@@ -90,7 +90,7 @@ internal static partial class EngineRuntimeChecks
     private static void PlayerEffectSnapshotRetainsNumericMechanics()
     {
         var effect = new PlayerEffectSpec { Condition = "stationary", HealingPotionCooldownOnHitReductionTicks = 30,
-            ItemPickupRangePx = 48, HighlightDanger = true, LifeRegenUnits = 5 };
+            ItemPickupRangePx = 48, HighlightDanger = true };
         using var stream = new MemoryStream();
         using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, true)) effect.Write(writer);
         stream.Position = 0;
@@ -98,7 +98,7 @@ internal static partial class EngineRuntimeChecks
         Equal(true, PlayerEffectSpec.SameEffect(effect, read), "typed binary snapshot preserves values and condition");
         WithPlayer((player, effects) => {
             player.active = true; player.statLife = 50;
-            Equal(true, effects.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 60, PlayerEffect = effect }), "source buff accepted");
+            Equal(true, effects.ApplyGeneratedUtilityBuff(new GeneratedBuffSpec { DurationTicks = 60, PlayerEffect = effect, LifeRegen = 5, LifeRegenCondition = "stationary", OreSenseRadiusTiles = 1, TreasureSenseCondition = "stationary" }), "source buff accepted");
             using var packet = new MemoryStream();
             typeof(InfiniCraftPlayer).GetMethod("WriteGeneratedBuffState", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(effects, new object[] { new BinaryWriter(packet) });
@@ -107,6 +107,9 @@ internal static partial class EngineRuntimeChecks
                 .Invoke(effects, new object[] { new BinaryReader(packet) });
             var entries = effects.CaptureGeneratedUtilityBuffPresentation().Entries;
             Equal(1, entries.Count, "real state reader retains one buff");
+            Equal(5, entries[0].LifeRegen, "one existing regen value survives the state reader");
+            Equal("stationary", entries[0].LifeRegenCondition, "regen condition survives the state reader");
+            Equal("stationary", entries[0].TreasureSenseCondition, "treasure condition survives the state reader");
             Equal(true, PlayerEffectSpec.SameEffect(effect, entries[0].PlayerEffect), "real utility state roundtrip retains modifiers");
         });
     }

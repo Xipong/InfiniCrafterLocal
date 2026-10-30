@@ -107,7 +107,7 @@ def test_home_recall_keeps_shared_cooldown_and_only_declared_inactive_blink_fiel
 SET_FIELDS = {
     "genericCritChancePercentagePoints": ("setBonusGenericCrit", 3, 3),
     "moveSpeedBonusPercent": ("setBonusMovementSpeed", 25, 0.25),
-    "lifeRegenHpPerSecond": ("setBonusLifeRegen", -0.5, -1),
+    "lifeRegen": ("setBonusLifeRegen", -0.5, -1),
     "manaRegenBonusPoints": ("setBonusManaRegen", 2, 2),
     "minionSlotsBonus": ("setBonusMinionSlots", 1, 1),
     "sentrySlotsBonus": ("setBonusSentrySlots", 2, 2),
@@ -174,16 +174,16 @@ def test_condition_never_infers_threshold_or_combines_two_conditions(condition):
 
 def test_armor_repair_preserves_the_other_valid_nested_set_bonus():
     source, call = _source("configure_armor")
-    call["params"]["setBonuses"] = {"lifeRegenHpPerSecond": 0.25, "minionSlotsBonus": 2}
+    call["params"]["setBonuses"] = {"lifeRegen": 0.25, "minionSlotsBonus": 2}
     report = validate_runtime_program(source)
     scope = build_runtime_repair_scope(source, report["errors"])
-    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.setBonuses.lifeRegenHpPerSecond"]}]
+    assert scope["fieldPermissions"]["calls"] == [{"id": call["id"], "paths": ["params.setBonuses.lifeRegen"]}]
     fixed = deepcopy(call)
-    fixed["params"]["setBonuses"] = {"lifeRegenHpPerSecond": 0.5, "minionSlotsBonus": 20}
+    fixed["params"]["setBonuses"] = {"lifeRegen": 0.5, "minionSlotsBonus": 20}
     patch, audit = filter_repair_patch_scope(source, {"note": "repair one nested leaf", "callsUpsert": [fixed]}, scope)
     repaired = apply_repair_patch(source, patch)
     actual = next(row for row in repaired["runtimeProgram"]["calls"] if row["id"] == call["id"])
-    assert actual["params"]["setBonuses"] == {"lifeRegenHpPerSecond": 0.5, "minionSlotsBonus": 2}
+    assert actual["params"]["setBonuses"] == {"lifeRegen": 0.5, "minionSlotsBonus": 2}
     assert audit["ignoredChanges"] and validate_runtime_wire(compile_runtime_program(repaired))["ok"]
 
 

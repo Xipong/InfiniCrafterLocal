@@ -178,17 +178,17 @@ PERCENT_PARAMS = tuple((fn, name, spec) for fn, cap in CAPABILITY_REGISTRY.items
 
 @pytest.mark.parametrize("fn,param,path,value,expected", [
     pytest.param("configure_tool", "axePowerTooltipPercent", "gameplay.axePower", 35, 7, id="axe-tooltip-to-engine"),
-    pytest.param(FN, "lifeRegenHpPerSecond", "gameplay.generatedBuff.lifeRegen", 3.5, 7, id="buff-half-hp-units"),
+    pytest.param(FN, "lifeRegen", "gameplay.generatedBuff.lifeRegen", 3.5, 7, id="buff-half-hp-units"),
     pytest.param(FN, "manaRegenBonusPoints", "gameplay.generatedBuff.manaRegen", 7, 7, id="buff-mana-points"),
-    pytest.param("configure_accessory", "lifeRegenHpPerSecond", "accessory.lifeRegen", -3.5, -7, id="signed-accessory-regen"),
-    pytest.param("configure_armor", "lifeRegenHpPerSecond", "armor.lifeRegen", 3.5, 7, id="armor-regen"),
-    pytest.param("configure_armor", "setBonuses.lifeRegenHpPerSecond", "armor.setBonusLifeRegen", 3.5, 7, id="set-bonus-regen"),
+    pytest.param("configure_accessory", "lifeRegen", "accessory.lifeRegen", -3.5, -7, id="signed-accessory-regen"),
+    pytest.param("configure_armor", "lifeRegen", "armor.lifeRegen", 3.5, 7, id="armor-regen"),
+    pytest.param("configure_armor", "setBonuses.lifeRegen", "armor.setBonusLifeRegen", 3.5, 7, id="set-bonus-regen"),
 ])
 def test_discrete_author_units_reach_each_engine_destination(fn, param, path, value, expected):
     doc = build_capability_witness(fn)
     call = next(row for row in doc["runtimeProgram"]["calls"] if row["id"] == "witness_call")
     if fn == FN:
-        call["params"]["oreSenseEnabled"] = True
+        call["params"]["treasureSense"] = True
     _set_stat(call["params"], param, value)
     before = _bytes(doc)
     wire = compile_runtime_program(doc)
@@ -223,7 +223,7 @@ def percent_document(fn, name, value, *, companion=True):
         params = call["params"]
         params.update({key: spec.neutral for key, spec in CAPABILITY_REGISTRY[FN].params.items() if spec.neutral is not None})
         if companion == "ore":
-            params["oreSenseEnabled"] = True
+            params["treasureSense"] = True
         elif companion == "healing":
             doc["runtimeProgram"]["calls"].append({"id": "healing", "fn": "restore_resources_on_use",
                 "params": {"healLife": 1, "healMana": 0, "usesPotionRules": False}})
@@ -324,7 +324,7 @@ def test_numeric_collapse_has_exact_repair_authority_and_frozen_siblings(fn, nam
     assert REPAIR_ERROR_POLICY["consumer_representability"]["llmRepairable"] is True
     doc, index, call = percent_document(fn, name, value)
     if name == "miningSpeedMultiplier":
-        call["params"]["oreSenseEnabled"] = True
+        call["params"]["treasureSense"] = True
     before = _bytes(doc)
     report = validate_runtime_program(doc)
     assert [(e["code"], e["path"]) for e in report["errors"]] == [

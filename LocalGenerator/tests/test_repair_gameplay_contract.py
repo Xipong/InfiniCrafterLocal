@@ -380,9 +380,9 @@ def test_gameplay_exact_leaf_repair(case):
                     node["params"][name] = spec.neutral
         node["params"].update(durationSeconds=(60) / 60, lightColor="blue")
         good = copy.deepcopy(node)
-        good["params"]["oreSenseEnabled"] = True
+        good["params"]["treasureSense"] = True
         candidate = copy.deepcopy(node)
-        candidate["params"].update(oreSenseEnabled=True, durationSeconds=(21600) / 60, lightColor="red")
+        candidate["params"].update(treasureSense=True, durationSeconds=(21600) / 60, lightColor="red")
         paths = None
     else:
         node["params"] = {}

@@ -33,11 +33,9 @@ public sealed partial class InfiniCraftPlayer
         if (effect.PreventLineBreak == true) Player.accFishingLine = true;
         if (effect.AllowLavaFishing == true) Player.accLavaFishing = true;
         if (effect.RevealHookedCatch == true) Player.sonarPotion = true;
-        if (effect.HighlightTreasure == true) Player.findTreasure = true;
         if (effect.HighlightDanger == true) Player.dangerSense = true;
         if (effect.HighlightCreatures == true) Player.detectCreature = true;
         if (effect.NightVision == true) Player.nightVision = true;
-        Player.lifeRegen += effect.LifeRegenUnits ?? 0;
         _itemPickupRange = Math.Min(2560, _itemPickupRange + (effect.ItemPickupRangePx ?? 0));
         _heartPickupRange = Math.Min(2560, _heartPickupRange + (effect.HeartPickupRangePx ?? 0));
         _manaPickupRange = Math.Min(2560, _manaPickupRange + (effect.ManaPickupRangePx ?? 0));
@@ -47,6 +45,20 @@ public sealed partial class InfiniCraftPlayer
         _autoManaBelowPercent = Math.Max(_autoManaBelowPercent, effect.AutoManaPotionBelowPercent ?? 0);
         _hurtImmunityBonus = Math.Min(300, _hurtImmunityBonus + (effect.HurtInvulnerabilityBonusTicks ?? 0));
         _extraCrateChance = 1 - (1 - _extraCrateChance) * (1 - (effect.ExtraCrateChancePercent ?? 0) / 100d);
+    }
+
+    // Existing stat values have one consumer; conditions only gate when the
+    // native contribution applies, never create another regeneration channel.
+    internal void ApplyLifeRegen(int units, string? condition = null)
+    {
+        if (Player.active && !Player.dead && PlayerEffectSpec.IsConditionActive(condition ?? "always", Player))
+            Player.lifeRegen += units;
+    }
+
+    internal void ApplyTreasureSense(bool enabled, string? condition = null)
+    {
+        if (enabled && Player.active && !Player.dead && PlayerEffectSpec.IsConditionActive(condition ?? "always", Player))
+            Player.findTreasure = true;
     }
 
     internal void ModifyHealingPotionBaseDelay(ref int ticks)

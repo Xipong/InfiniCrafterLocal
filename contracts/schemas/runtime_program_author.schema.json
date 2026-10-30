@@ -94,13 +94,6 @@
           "type": "boolean",
           "x-infini-neutral": false
         },
-        "autoManaPotionBelowPercent": {
-          "description": "Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.",
-          "maximum": 100,
-          "minimum": 0,
-          "type": "integer",
-          "x-infini-neutral": 0
-        },
         "coinPickupRangeBlocks": {
           "description": "Author units: blocks. Native consumer: Additional pickup range for coins.",
           "maximum": 40.0,
@@ -138,7 +131,7 @@
           "type": "integer",
           "x-infini-neutral": 0
         },
-        "healingPotionCooldownOnHitReductionSeconds": {
+        "healCooldownOnHit": {
           "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Remove this duration from an already running healing-potion cooldown on each actual owner item/projectile hit while this modifier is active; zero grants no proc.",
           "maximum": 60.0,
           "minimum": 0,
@@ -151,14 +144,7 @@
           "x-infini-semanticType": "seconds",
           "x-infini-units": "seconds"
         },
-        "healingPotionCooldownReductionPercent": {
-          "description": "Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.",
-          "maximum": 90,
-          "minimum": 0,
-          "type": "integer",
-          "x-infini-neutral": 0
-        },
-        "healingPotionCooldownReductionSeconds": {
+        "healCooldownReduction": {
           "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Subtract seconds from the next healing potion base cooldown after the selected percentage reduction and before native duration multipliers; floor zero.",
           "maximum": 60.0,
           "minimum": 0,
@@ -170,6 +156,13 @@
           "x-infini-neutral": 0.0,
           "x-infini-semanticType": "seconds",
           "x-infini-units": "seconds"
+        },
+        "healCooldownReductionPercent": {
+          "description": "Reduce the next healing potion base cooldown by this percent, before native duration multipliers; does not change a running timer.",
+          "maximum": 90,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
         },
         "heartPickupRangeBlocks": {
           "description": "Author units: blocks. Native consumer: Additional pickup range for heart pickups.",
@@ -194,12 +187,7 @@
           "type": "boolean",
           "x-infini-neutral": false
         },
-        "highlightTreasure": {
-          "description": "Enable native treasure highlighting.",
-          "type": "boolean",
-          "x-infini-neutral": false
-        },
-        "hurtInvulnerabilityBonusSeconds": {
+        "hurtImmunityBonus": {
           "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Add immunity time after a surviving hurt to that hit's actual immunity slot.",
           "maximum": 5.0,
           "minimum": 0,
@@ -225,19 +213,6 @@
           "x-infini-semanticType": "blocks",
           "x-infini-units": "blocks"
         },
-        "lifeRegenHpPerSecond": {
-          "description": "Author units: HP/s. Native consumer: Signed life-regeneration contribution; condition controls when this component is active.",
-          "maximum": 100.0,
-          "minimum": -50.0,
-          "multipleOf": 0.5,
-          "type": "number",
-          "x-infini-authorProjection": {
-            "nonzeroMustRemainNonzero": true
-          },
-          "x-infini-neutral": 0.0,
-          "x-infini-semanticType": "HP/s",
-          "x-infini-units": "HP/s"
-        },
         "manaPickupRangeBlocks": {
           "description": "Author units: blocks. Native consumer: Additional pickup range for mana-star pickups.",
           "maximum": 40.0,
@@ -250,6 +225,13 @@
           "x-infini-neutral": 0.0,
           "x-infini-semanticType": "blocks",
           "x-infini-units": "blocks"
+        },
+        "manaPotionBelowPercent": {
+          "description": "Use an available native mana potion when mana falls below this percentage of maximum; zero disables automation.",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "integer",
+          "x-infini-neutral": 0
         },
         "nightVision": {
           "description": "Improve dark visibility without emitting world light.",
@@ -4644,7 +4626,7 @@
                     "x-infini-semanticType": "blocks/s",
                     "x-infini-units": "blocks/s"
                   },
-                  "lifeRegenHpPerSecond": {
+                  "lifeRegen": {
                     "default": 0,
                     "description": "Signed HP/s regeneration contribution before other effects; negative causes regeneration loss. Exact half-HP/s steps map to Player.lifeRegen units (2 units = 1 HP/s)",
                     "maximum": 60,
@@ -4652,7 +4634,7 @@
                     "multipleOf": 0.5,
                     "type": "number",
                     "x-infini-neutral": 0,
-                    "x-infini-semanticType": "unitless_scalar",
+                    "x-infini-semanticType": "terraria_life_regen",
                     "x-infini-units": "HP/s"
                   },
                   "lightColor": {
@@ -4734,15 +4716,37 @@
                     "x-infini-semanticType": "additive_percent",
                     "x-infini-units": "additive_percent"
                   },
-                  "oreSenseEnabled": {
+                  "playerEffect": {
+                    "$ref": "#/$defs/player_effect"
+                  },
+                  "regenWhen": {
+                    "default": "always",
+                    "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                    "enum": [
+                      "always",
+                      "stationary"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "always",
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "treasureSense": {
                     "default": false,
                     "description": "Enable native Spelunker treasure highlighting, including eligible ores, chests and life crystals; not a radius or ore-only filter",
                     "type": "boolean",
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "boolean_capability"
                   },
-                  "playerEffect": {
-                    "$ref": "#/$defs/player_effect"
+                  "treasureWhen": {
+                    "default": "always",
+                    "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                    "enum": [
+                      "always",
+                      "stationary"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "always",
+                    "x-infini-semanticType": "bounded_text"
                   }
                 },
                 "required": [
@@ -5838,7 +5842,7 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "lifeRegenHpPerSecond": {
+                  "lifeRegen": {
                     "description": "Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration",
                     "maximum": 100,
                     "minimum": -50,
@@ -5977,6 +5981,17 @@
                   "playerEffect": {
                     "$ref": "#/$defs/player_effect"
                   },
+                  "regenWhen": {
+                    "default": "always",
+                    "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                    "enum": [
+                      "always",
+                      "stationary"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "always",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "rocketBoots": {
                     "description": "Native Player.rocketBoots mode: 0 grants nothing, 1 uses 30-tick rocketDelay2, 2..5 use 15-tick rocketDelay2. Any nonzero mode enables native charge/thrust flight, not wings. Modes combine by max; does not choose vanityRocketBoots, ice skating, sprint speed or refresh rocketTime. Native rocketTimeMax=7 charges with 10-tick thrust windows; landing, sliding or movement-ability refresh refill, wings may convert charges to wingTime; mounts suppress flight",
                     "maximum": 5,
@@ -6013,6 +6028,23 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
+                  },
+                  "treasureSense": {
+                    "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "treasureWhen": {
+                    "default": "always",
+                    "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                    "enum": [
+                      "always",
+                      "stationary"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "always",
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "waterWalk": {
                     "description": "Walk on water while equipped",
@@ -6226,7 +6258,7 @@
                     "x-infini-neutral": false,
                     "x-infini-semanticType": "bounded_text"
                   },
-                  "lifeRegenHpPerSecond": {
+                  "lifeRegen": {
                     "description": "Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration",
                     "maximum": 100,
                     "minimum": -50,
@@ -6359,6 +6391,17 @@
                   "playerEffect": {
                     "$ref": "#/$defs/player_effect"
                   },
+                  "regenWhen": {
+                    "default": "always",
+                    "description": "When lifeRegen applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                    "enum": [
+                      "always",
+                      "stationary"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "always",
+                    "x-infini-semanticType": "bounded_text"
+                  },
                   "sentrySlotsBonus": {
                     "description": "Add sentry slots",
                     "maximum": 20,
@@ -6438,7 +6481,7 @@
                         "x-infini-semanticType": "percentage_points",
                         "x-infini-units": "percentage_points"
                       },
-                      "lifeRegenHpPerSecond": {
+                      "lifeRegen": {
                         "description": "Matching armor set (head piece only; matching head, body and legs must actually be equipped): Add signed HP/s regeneration contribution before other Terraria effects; negative values reduce regeneration",
                         "maximum": 100,
                         "minimum": -50,
@@ -6553,6 +6596,23 @@
                     "x-infini-neutral": 0,
                     "x-infini-semanticType": "source_damage_percent",
                     "x-infini-units": "source_damage_percent"
+                  },
+                  "treasureSense": {
+                    "description": "Highlight eligible native treasures, including ores, chests and life crystals; not a radius or ore-only scan",
+                    "type": "boolean",
+                    "x-infini-neutral": false,
+                    "x-infini-semanticType": "bounded_text"
+                  },
+                  "treasureWhen": {
+                    "default": "always",
+                    "description": "When treasureSense applies: always, or stationary (zero velocity and no active item animation). This condition is not an effect by itself.",
+                    "enum": [
+                      "always",
+                      "stationary"
+                    ],
+                    "type": "string",
+                    "x-infini-neutral": "always",
+                    "x-infini-semanticType": "bounded_text"
                   },
                   "waterWalk": {
                     "description": "Walk on water while equipped",
@@ -10585,7 +10645,7 @@
             "additionalProperties": false,
             "properties": {
               "fn": {
-                "const": "reduce_healing_potion_cooldown_on_event"
+                "const": "reduce_heal_cooldown_on_event"
               },
               "id": {
                 "description": "Stable unique call id.",
