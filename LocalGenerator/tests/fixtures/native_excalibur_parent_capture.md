@@ -1,8 +1,10 @@
 # Native Excalibur parent capture
 
 `native_excalibur_parent_capture.json` is the `itemA` object from a real
-`GeneratorClient.Prepare` request, captured by the current canonical native
-checks. It includes the item/spawn-input source graph, direct/effective native
+`GeneratorClient.Prepare` request, captured by earlier canonical native
+checks. This historical fixture is not the newly regenerated 2026-10-30
+Excalibur/Arrow pair documented beside the Wooden Arrow fixture. It includes
+the item/spawn-input source graph, direct/effective native
 projectile snapshots, and their original provenance. Repeated fingerprint data
 is deliberately retained: tests exercise the actual parent packet builders.
 

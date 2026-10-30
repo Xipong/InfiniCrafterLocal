@@ -57,8 +57,12 @@ public sealed partial class GeneratorClient
                 var next = slice is null ? null : AttackCode(method).Zip(AttackCode(method).Skip(1), (a, b) => (a.Offset, b.Offset))
                     .ToDictionary(p => p.Item1, p => p.Item2);
                 var body = new ParentSourceMethod(method, slice ?? AttackCode(method), next);
-                var observation = new AttackSourceObservation(body, role);
-                var program = observation.Finish();
+                JsonObject? specialized = null;
+                AttackSourceObservation? selectedObservation = null;
+                string? selectionFailure = null;
+                // Select the captured actor before traversing/serializing every
+                // sibling's equations. Raw audit capture has an independent work
+                // budget and cannot erase a successfully proved selected body.
                 if (boundActor && slice is null && role is "motion" or "draw")
                 {
                     try
@@ -66,21 +70,27 @@ public sealed partial class GeneratorClient
                         var selection = new AttackIdentitySelection(body, type, style);
                         if (selection.Selected.Count > 0)
                         {
-                            var specialized = new AttackSourceObservation(new ParentSourceMethod(method, AttackCode(method), selectedSuccessors: selection.Selected), role, selection: selection).Finish();
+                            selectedObservation = new AttackSourceObservation(new ParentSourceMethod(method, AttackCode(method), selectedSuccessors: selection.Selected), role, selection: selection);
+                            specialized = selectedObservation.Finish();
                             specialized["identitySelection"] = selection.Receipt;
-                            program["identitySelected"] = specialized;
                         }
                     }
                     catch (Exception error) when (error is not OutOfMemoryException)
-                    {
-                        // An optional specialization must never discard the
-                        // already captured full connected source/audit program.
-                        program["identitySelectionUnavailable"] = error is NotSupportedException ? error.Message : error.GetType().Name;
-                    }
+                    { selectionFailure = error is NotSupportedException ? error.Message : error.GetType().Name; }
                 }
-                // Referenced native helper identities are certified separately;
-                // unselected dust/audio code does not bloat the attack slice.
-                foreach (var call in observation.ReferencedMethods.Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
+                var observation = new AttackSourceObservation(body, role);
+                JsonObject program;
+                try { program = observation.Finish(); }
+                catch (Exception error) when (error is not OutOfMemoryException)
+                {
+                    program = MethodSourceIdentity(method);
+                    program["coverage"] = "unknown";
+                    program["unresolved"] = error is NotSupportedException ? error.Message : error.GetType().Name;
+                }
+                if (specialized is not null) program["identitySelected"] = specialized;
+                if (selectionFailure is not null) program["identitySelectionUnavailable"] = selectionFailure;
+                foreach (var call in observation.ReferencedMethods.Concat(selectedObservation?.ReferencedMethods ?? new HashSet<MethodBase>())
+                    .Where(m => m.Module == typeof(Projectile).Module && m.GetMethodBody() is not null)) Certify(call);
                 return program;
             }
             catch (Exception error) when (error is not OutOfMemoryException)
@@ -124,13 +134,25 @@ public sealed partial class GeneratorClient
                     result["motionDispatch"] = dispatch;
                     var helpers = slice.Select(i => i.Arg).OfType<MethodInfo>().Where(m => m.DeclaringType == typeof(Projectile)
                         && m.GetParameters().Length == 0 && m.ReturnType == typeof(void) && m.GetMethodBody() is not null).Distinct().ToArray();
-                    var caller = new ParentSourceMethod(method, slice, AttackCode(method).Zip(AttackCode(method).Skip(1), (a, b) => (a.Offset, b.Offset)).ToDictionary(p => p.Item1, p => p.Item2));
-                    var programs = helpers.Select(m => Observe(m, "motion", boundActor: AttackCallBindsCapturedActor(caller, caller.Statements, m))).Where(p => p["observations"] is JsonArray a && a.Count > 0).ToArray();
-                    if (programs.Length > 0) result["motion"] = new JsonObject { ["programs"] = new JsonArray(programs.Select(p => (JsonNode?)p).ToArray()) };
-                    else gaps.Add("motion_helper_or_state_sinks_outside_supported_source_shape");
+                    ParentSourceMethod? caller = null;
+                    string? callerFailure = null;
+                    try { caller = ParentSourceMethod.ForCallPrefixes(method, AttackCode(method), helpers); }
+                    catch (Exception error) when (error is not OutOfMemoryException)
+                    { callerFailure = error is NotSupportedException ? error.Message : error.GetType().Name; }
+                    var programs = helpers.Select(m => Observe(m, "motion", boundActor: caller is not null && AttackCallBindsCapturedActor(caller, caller.Statements, m))).ToArray();
+                    if (callerFailure is not null)
+                        foreach (var program in programs) program["identitySelectionUnavailable"] = "caller_prefix:" + callerFailure;
+                    if (programs.Length > 0)
+                    {
+                        result["motion"] = new JsonObject { ["programs"] = new JsonArray(programs.Select(p => (JsonNode?)p).ToArray()) };
+                        foreach (var program in programs)
+                            if (program["coverage"]?.GetValue<string>() == "unknown")
+                                gaps.Add("motion_source:" + program["method"]?.GetValue<string>() + ":" + program["unresolved"]?.GetValue<string>());
+                    }
+                    else gaps.Add("motion_helper_outside_supported_source_shape");
                 }
             }
-            catch (Exception error) when (error is not OutOfMemoryException) { gaps.Add(root + ":" + error.GetType().Name); }
+            catch (Exception error) when (error is not OutOfMemoryException) { gaps.Add(root + ":" + (error is NotSupportedException ? error.Message : error.GetType().Name)); }
         }
         // Draw dispatch is selected only from actual source type comparisons or
         // integer switch selectors. No item name, controller label or ID roster.
@@ -248,9 +270,33 @@ public sealed partial class GeneratorClient
                 return field.Name is "position" or "velocity" or "rotation" or "scale" or "timeLeft" or "direction" or "spriteDirection";
             if (value.Operand is MethodInfo call && (call.DeclaringType == typeof(Projectile) || call.DeclaringType == typeof(Entity))
                 && (call.Name is "set_Center" or "Kill")) return true;
+            // Native movement commonly writes velocity.Y/position.X through a
+            // Vector2 address rather than replacing Entity.velocity as a whole.
+            if (value.Op == "stfld" && value.Operand is FieldInfo component && component.DeclaringType == typeof(Microsoft.Xna.Framework.Vector2)
+                && component.Name is "X" or "Y" && value.Inputs.Count > 0 && ContainsMotionVector(value.Inputs[0], new())) return true;
             if (value.Op.StartsWith("stind", StringComparison.Ordinal) || value.Op.StartsWith("stelem", StringComparison.Ordinal))
-                return value.Inputs.Count > 0 && ContainsClock(value.Inputs[0], new HashSet<string>());
+                return value.Inputs.Count > 0 && (ContainsClock(value.Inputs[0], new HashSet<string>()) || ContainsMotionVector(value.Inputs[0], new()));
             return false;
+        }
+        private bool CapturedMotionActor(string id, HashSet<string> seen)
+        {
+            if (seen.Count >= 128 || !seen.Add(id) || !body.Values.TryGetValue(id, out var value)) return false;
+            if (value.Op == "ldarg" && value.Operand is int slot)
+                return slot == AttackActorArgument(body.Method) && !body.WrittenArguments.Contains(slot);
+            return value.Op is "ldloc" or "stloc" && value.Inputs.Count == 1 && CapturedMotionActor(value.Inputs[0], seen);
+        }
+        private bool ContainsMotionVector(string id, HashSet<string> seen)
+        {
+            if (seen.Count >= 128 || !seen.Add(id) || !body.Values.TryGetValue(id, out var value)) return false;
+            // Only an address into the captured actor is a motion sink. A copied
+            // Vector2 local or another actor's vector is not its movement.
+            if (value.Op == "ldflda" && value.Operand is FieldInfo field && value.Inputs.Count == 1)
+                return field.DeclaringType == typeof(Entity) && field.Name is "position" or "velocity"
+                    ? CapturedMotionActor(value.Inputs[0], new())
+                    : field.DeclaringType == typeof(Microsoft.Xna.Framework.Vector2) && field.Name is "X" or "Y"
+                        && ContainsMotionVector(value.Inputs[0], seen);
+            return value.Op is "ldloc" or "stloc" or "predecessor_stack_alternatives" && value.Inputs.Count > 0
+                && value.Inputs.All(input => ContainsMotionVector(input, new(seen)));
         }
         private bool ContainsClock(string id, HashSet<string> seen)
             => seen.Count < 128 && seen.Add(id) && body.Values.TryGetValue(id, out var v)
@@ -304,7 +350,8 @@ public sealed partial class GeneratorClient
 
         private string Expression(string id)
         {
-            if (++expressionCount > 12000 || dependencies.Count > 192) throw new NotSupportedException("connected_source_expression_bound");
+            if (++expressionCount > 12000) throw new NotSupportedException("connected_source_expression_work_bound:" + expressionCount + ">12000");
+            if (dependencies.Count > 192) throw new NotSupportedException("connected_source_dependency_count_bound:" + dependencies.Count + ">192");
             if (!body.Values.TryGetValue(id, out var value)) return "unresolved(" + id + ")";
             if (value.Op is "ldloca" or "address_exposed_local") return AddressLocal(value);
             // Local() installs its named dependency before walking connected
@@ -343,7 +390,7 @@ public sealed partial class GeneratorClient
             foreach (var value in roots)
             {
                 string kind = value.Operand is FieldInfo f ? f.Name == "scale" ? "live_scale" : f.Name == "rotation" ? "rotation" : "state_write"
-                    : value.Operand is MethodBase m ? m.Name == "set_Center" ? "center_assignment" : m.Name == "Kill" ? "lifetime_end" : role + "_call" : value.Op == "ret" ? "return" : "clock_or_ai_write";
+                    : value.Operand is MethodBase m ? m.Name == "set_Center" ? "center_assignment" : m.Name == "Kill" ? "lifetime_end" : role + "_call" : value.Op == "ret" ? "return" : value.Inputs.Count > 0 && ContainsMotionVector(value.Inputs[0], new()) ? "state_write" : "clock_or_ai_write";
                 var row = new JsonObject { ["kind"] = kind, ["at"] = value.At, ["block"] = value.Block,
                     ["requiredPredicates"] = Required(value) };
                 if (value.Operand is MethodBase call)
@@ -360,9 +407,9 @@ public sealed partial class GeneratorClient
             result["observations"] = observations; result["dependencies"] = dependencies; result["predicates"] = predicates; result["symbols"] = symbols;
             result["coverage"] = "connected_source_slice; opaque_fields_calls_and_address_aliases_are_symbolic";
             if (body.Unknown.Count > 0) result["unresolved"] = new JsonArray(body.Unknown.Distinct().Select(s => (JsonNode?)JsonValue.Create(s)).ToArray());
-            // Reject an oversized connected role instead of clipping an equation,
-            // its predicates or alternative definitions to make it appear whole.
-            if (result.ToJsonString().Length > 32000) throw new NotSupportedException("connected_source_role_character_bound");
+            // Source evidence is not a prompt-size budget. CFG, expression and
+            // dependency work remain bounded; never throw away complete captured
+            // mechanics solely because their JSON spelling crosses a text length.
             return result;
         }
     }

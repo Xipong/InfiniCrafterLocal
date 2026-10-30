@@ -102,7 +102,7 @@ def test_author_declares_exact_recipe_independent_prefix(monkeypatch, mode):
     assert prefix == other_prefix
     assert len(prefix) > 65000
     assert set(static) == {"priorityHeader", "runtimeProgramInvariants", "runtimeCapabilityContract", "requiredJsonShape"}
-    assert set(full) - set(static) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
+    assert set(full) - set(static) == {"recipeKey", "parentBriefRule", "parentBriefs", "parents", "balanceCorridor", "sourceWireUnits"}
     assert full["recipeKey"] != other_full["recipeKey"]
     capabilities = static["runtimeCapabilityContract"]["catalog"]["capabilities"]
     visible = {name for name, cap in author.CAPABILITY_REGISTRY.items() if cap.author_visible}

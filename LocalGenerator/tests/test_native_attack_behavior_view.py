@@ -276,3 +276,46 @@ def test_color_display_does_not_rewrite_quoted_literals_or_unknown_metadata():
     result = project_attack_behavior(source)["motion"]["programs"][0]
     assert result["futureColor"] == {"expression": "Color.get_White[]"}
     assert result["observations"][0]["expression"] == 'opaque["Color.get_White[]",Color.get_White[]]'
+
+
+def full_method_failure_with_selected_source():
+    source = identity_selection_reference()
+    original = source["motion"]["programs"][0]
+    source["motion"]["programs"][0] = {
+        **{key: copy.deepcopy(original[key]) for key in ("method", "sourceModuleVersionId", "sourceMethodSha256", "identitySelected")},
+        "coverage": "unknown", "unresolved": "connected_source_expression_bound",
+    }
+    return source
+
+
+def test_verified_identity_slice_survives_explicit_unavailable_full_method_without_fabricating_raw():
+    source = full_method_failure_with_selected_source()
+    before = copy.deepcopy(source)
+    program = project_attack_behavior(source)["motion"]["programs"][0]
+    assert len(program["observations"]) == 2
+    assert program["observations"][1]["arguments"]["target"] == "d0"
+    assert program["identitySelection"]["fullMethodCapture"] == {
+        "coverage": "unknown", "unresolved": "connected_source_expression_bound"}
+    assert "observations" not in source["motion"]["programs"][0]
+    assert source == before
+
+
+@pytest.mark.parametrize("mutation", ["module", "method", "identity", "unknown_field", "bad_reason", "wrong_coverage"])
+def test_unavailable_full_method_never_weakens_selected_source_admission(mutation):
+    source = full_method_failure_with_selected_source()
+    original = source["motion"]["programs"][0]
+    if mutation == "module":
+        original["identitySelected"]["sourceModuleVersionId"] = "other-module"
+    elif mutation == "method":
+        original["identitySelected"]["method"] = "Other.Method"
+    elif mutation == "identity":
+        original["identitySelected"]["identitySelection"]["identityPredicates"]["Projectile.type"] = 43
+    elif mutation == "unknown_field":
+        original["futureSourceFact"] = "must not disappear"
+    elif mutation == "bad_reason":
+        original["unresolved"] = ["future-format"]
+    else:
+        original["coverage"] = "future-partial"
+    before = copy.deepcopy(source)
+    assert project_attack_behavior(source) == before
+    assert source == before

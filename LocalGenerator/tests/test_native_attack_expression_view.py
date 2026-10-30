@@ -179,16 +179,34 @@ def test_native_v1_behavior_view_at_each_real_serialized_stage(monkeypatch, mode
     assert len(found) == 2
     for view in found:
         if fixture == "synthetic":
+            # This future-shaped coverage fixture deliberately adds unknown
+            # fields. Stage pruning must retain its complete connected graph.
             assert "(1+(l1@130*0.6))" in json.dumps(view)
         from infini_local.pipelines.native_attack_behavior_view import project_attack_behavior
         projected = unpack_attack_tables(view)
-        assert projected == project_attack_behavior(source)
+        expected = project_attack_behavior(source)
+        author_presentation = fixture == "native_excalibur" and stage in {"Author", "GameplayRepair"}
+        if author_presentation:
+            expected.pop("draw")
+            assert "Native draw layer instructions omitted" in projected.pop("presentationScope")
+        if fixture == "native_excalibur" and stage not in {"Author", "GameplayRepair"}:
+            for field in ("motion", "motionDispatch", "collision", "positionIntegration"):
+                expected.pop(field, None)
+            assert projected.pop("presentationScope")
+        assert projected == expected
         assert projected["behaviorView"]["version"] == 1
         if fixture == "native_excalibur":
-            literal_draw = view.get("data", view)["draw"]["programs"][0]
-            assert literal_draw["layers"][6]["tint"] == "((rgba.white*0.4)*fade)"
-            assert "$table" not in json.dumps(literal_draw)
-            assert "geometryRule" in projected["collision"]["predicateSources"][0]
+            if author_presentation:
+                brief = next(iter(packet["parentBriefs"].values()))
+                appearance = brief["appearance"]["directProjectile"]
+                assert appearance["sourceRenderKinds"] == ["sprite", "nativeStarSparkle"]
+                assert appearance["sourceColorWrites"][0]["expression"] == "writeRGB(tint1,180,160,60)"
+            else:
+                literal_draw = view.get("data", view)["draw"]["programs"][0]
+                assert literal_draw["layers"][6]["tint"] == "((rgba.white*0.4)*fade)"
+                assert "$table" not in json.dumps(literal_draw)
+            if stage in {"Author", "GameplayRepair"}:
+                assert "geometryRule" in projected["collision"]["predicateSources"][0]
     if scope is not None:
         assert packet["repairScope"] == scope
     assert json.dumps(parent) == before

@@ -180,7 +180,14 @@ def _selected_program(value: dict, identity: Any) -> dict:
             or not isinstance(selected.get("predicates"), list)
             or not isinstance(selected.get("symbols"), dict)):
         return value
-    for graph in (value, selected):
+    unavailable_full_method = (
+        set(value) == {"method", "sourceModuleVersionId", "sourceMethodSha256", "coverage", "unresolved", "identitySelected"}
+        and value.get("coverage") == "unknown" and isinstance(value.get("unresolved"), str) and bool(value["unresolved"])
+    )
+    # A producer may certify the captured-identity slice even when the complete
+    # all-identity method exceeds its extraction work bound. Never fabricate an
+    # empty original graph; retain its explicit failure beside the selected one.
+    for graph in (selected,) if unavailable_full_method else (value, selected):
         if (not isinstance(graph.get("observations"), list) or not isinstance(graph.get("dependencies"), dict)
                 or not isinstance(graph.get("predicates"), list) or not isinstance(graph.get("symbols"), dict)):
             return value
@@ -198,6 +205,10 @@ def _selected_program(value: dict, identity: Any) -> dict:
         "forCapturedIdentity": True,
         "scope": "Only certified receiver identity branches selected; dynamic conditions and unknown alias/hook behavior remain symbolic.",
     }
+    if unavailable_full_method:
+        out["identitySelection"]["fullMethodCapture"] = {
+            "coverage": value["coverage"], "unresolved": value["unresolved"],
+        }
     return out
 
 

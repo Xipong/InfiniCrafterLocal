@@ -48,7 +48,7 @@ from infini_local.pipelines.llm_authoring_prompt import (
     source_wire_units_for_llm,
 )
 
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm, share_exact_native_parent_facts
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm, parent_context_for_stage
 from infini_local.pipelines.llm_provider_wire import (
     effective_response_format,
     apply_minimum_reasoning_effort,
@@ -459,7 +459,7 @@ def build_gameplay_repair_dossier(
             "units": runtime_units_for_llm(include_source_units=False),
         },
 
-        **share_exact_native_parent_facts(parents),
+        **parent_context_for_stage(parents, stage="author"),
         # Like Author, keep parent-dependent reading aids beside the raw facts,
         # outside the shared instruction prefix. Visibility never grants edits.
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),

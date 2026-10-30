@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -220,7 +221,7 @@ def test_changed_parent_context_is_dynamic_and_retains_generated_facts(capture, 
     else:
         assert parents != dossier(first)["parentSizeReferencesReadOnly"]
         for key, parent in (("parentA", a), ("parentB", b)):
-            source = capture.visual.raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]["generatedParent"]
+            source = raw_parent_card_for_llm(parent, include_visual_reference=True)["raw"]["generatedParent"]
             assert parents[key]["entities"] == [
                 {"id": row["id"], **({"visual": row["visual"]} if "visual" in row else {})}
                 for row in source["runtimeProgram"]["entities"]

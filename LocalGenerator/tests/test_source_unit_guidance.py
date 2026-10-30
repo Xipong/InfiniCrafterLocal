@@ -308,6 +308,9 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
         for section in ("accessory", "armor", "gameplay"):
             assert json.dumps(raw["generatedParent"][section]) == json.dumps(variant["generatedData"][section])
         changed["parents"][root] = copy.deepcopy(packet["parents"][root])
+        assert changed["parentBriefs"][root]["identity"]["tooltipLines"] == variant["tooltipLines"]
+        assert changed["parentBriefs"][root]["properties"]["axePower"] == 13
+        changed["parentBriefs"][root] = copy.deepcopy(packet["parentBriefs"][root])
         assert changed["sourceWireUnits"] != packet["sourceWireUnits"]
         changed["sourceWireUnits"] = copy.deepcopy(packet["sourceWireUnits"])
         assert changed == packet
@@ -315,7 +318,7 @@ def test_static_guidance_never_launders_dynamic_sources_into_instruction_prefix(
             assert second["_infini_prompt_cache"] == {"instructionMessageIndex": 1}
             static_text, dynamic_text = [row["content"] for row in second["messages"][1:]]
             assert "UNTRUSTED" not in static_text
-            assert set(json.loads(dynamic_text)) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
+            assert set(json.loads(dynamic_text)) == {"recipeKey", "parentBriefRule", "parentBriefs", "parents", "balanceCorridor", "sourceWireUnits"}
             assert json.loads(dynamic_text)["parents"]["A"]["packet"]["raw"] == raw
         else:
             assert static_instruction_prefix_parts(second) is None
@@ -461,6 +464,7 @@ def test_repair_source_units_cover_every_registry_path_without_changing_scope(mo
     # allowed calls, schema, errors, accepted context or repair permissions.
     for dossier in (with_sources, without_sources):
         dossier.pop("parents")
+        dossier.pop("parentBriefs")
         dossier.pop("sourceWireUnits")
     assert with_sources == without_sources
 

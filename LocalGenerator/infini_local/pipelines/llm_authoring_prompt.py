@@ -29,7 +29,7 @@ from infini_local.pipelines.author_item_contract import (
 from infini_local.pipelines.combine_balance import stat_profile_for
 
 from infini_local.pipelines.parent_context_cards import (
-    NATIVE_SOURCE_REFERENCE_RULE, raw_parent_card_for_llm, share_exact_native_parent_facts,
+    NATIVE_SOURCE_REFERENCE_RULE, raw_parent_card_for_llm, parent_context_for_stage,
 )
 from infini_local.core.item_identity_tools import item_field
 from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
@@ -372,11 +372,10 @@ def build_llm_author_payload(a: dict[str, Any], b: dict[str, Any], key: str) -> 
         # but this preserves a large exact request prefix without hiding or
         # removing any Author capability.
         "recipeKey": key,
-        "parents": parents,
+        **parent_context_for_stage(parents, stage="author"),
         "balanceCorridor": corridor,
         "sourceWireUnits": source_wire_units_for_llm([row["packet"] for row in parents.values()]),
     }
-    payload.update(share_exact_native_parent_facts(parents))
     chars = len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
     if chars > PLANNER_PROMPT_LIMIT_CHARS:
         raise ValueError(

@@ -17,7 +17,8 @@ import struct
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
-from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
+from infini_local.pipelines.parent_context_cards import parent_context_for_stage
+from infini_local.pipelines.parent_presentation_context import presentation_parent_card_for_llm
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
@@ -911,9 +912,10 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "internalName": str(source.get("internalName") or ""),
             "sourceMod": str(source.get("sourceMod") or ""),
             "generatedParentSummary": copy.deepcopy(dict(summary_raw)) if isinstance(summary_raw, Mapping) else {},
-            "packet": raw_parent_card_for_llm(dict(source), include_visual_reference=True),
+            "packet": presentation_parent_card_for_llm(dict(source), stage="vfx"),
         }
 
+    parent_context = parent_context_for_stage([parent_packet(parent_a), parent_packet(parent_b)], stage="vfx")
     runtime = data.get("runtimeProgram")
     mechanics = copy.deepcopy(dict(runtime)) if isinstance(runtime, Mapping) else {}
     for entity in mechanics.get("entities") or []:
@@ -927,7 +929,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "description": str(realization.get("description") or ""),
             "playerExperience": str(realization.get("playerExperience") or ""),
         },
-        "parents": [parent_packet(parent_a), parent_packet(parent_b)],
+        **parent_context,
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
         **({"acceptedGameplayReadOnly": copy.deepcopy(data["gameplay"])} if "gameplay" in data else {}),
         "acceptedRuntimeProgramReadOnly": mechanics,
@@ -1369,6 +1371,7 @@ def _director_system(*, repair: bool = False) -> str:
         ) + generation_system_suffix()
     return (
         "You are the VFX Director. Author finite Terraria presentation only for accepted low-level runtime entity/event pairs. "
+        "Make the accepted item’s motion, timing and impacts legible in a coherent visual style informed by its authored concept. "
         "Gameplay is immutable. Do not infer or create weapon families. Return strict JSON only."
     ) + generation_system_suffix()
 
@@ -1423,6 +1426,9 @@ def _request(
         )
         if design:
             user["parentFactsReadOnly"] = copy.deepcopy(packet.get("parents") or [])
+            for key in ("parentBriefs", "parentBriefRule"):
+                if key in packet:
+                    user[key] = copy.deepcopy(packet[key])
         user["runtimeVocabularyReadOnly"] = _vfx_scoped_repair_vocabulary(
             user["runtimeVocabularyReadOnly"], previous, repair_scope or {},
         )

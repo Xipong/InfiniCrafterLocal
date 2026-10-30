@@ -133,4 +133,26 @@ internal static partial class EngineRuntimeChecks
             Equal(false, NativePoint(corner, Vector2.Zero, 10, 0, 0.1f), "each corner misses closest-point witness");
         Console.WriteLine($"Native helper geometry comparisons: {cases}");
     }
+    private static void ParentNativeArrowMotionMatchesSelectedSource()
+    {
+        using var state = new NativeActorState();
+        Terraria.Main.netMode = NetmodeID.Server;
+        Terraria.Main.rand = new UnifiedRandom(73);
+        var projectile = new Projectile(); projectile.SetDefaults(ProjectileID.WoodenArrowFriendly);
+        projectile.owner = 0; projectile.active = true;
+        projectile.velocity = new Vector2(3f, 0f);
+        MethodInfo ai = typeof(Projectile).GetMethod("AI_001", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        for (int update = 1; update <= 18; update++)
+        {
+            ai.Invoke(projectile, null);
+            float expectedY = update < 15 ? 0f : (update - 14) * 0.1f;
+            Equal(true, Math.Abs(projectile.velocity.Y - expectedY) < .00001f, "actual native arrow delayed gravity update " + update);
+            Equal((float)Math.Min(update, 15), projectile.ai[0], "actual native arrow timing clock and clamp");
+            Equal(true, Math.Abs(projectile.rotation - ((float)Math.Atan2(projectile.velocity.Y, projectile.velocity.X) + 1.57f)) < .00001f,
+                "actual native arrow rotation follows velocity");
+        }
+        projectile.velocity.Y = 16f;
+        ai.Invoke(projectile, null);
+        Equal(16f, projectile.velocity.Y, "actual native arrow vertical speed cap");
+    }
 }

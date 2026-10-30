@@ -29,7 +29,7 @@ def test_author_builds_complete_instruction_and_user_segments(monkeypatch):
     data = json.loads(first["messages"][2]["content"])
     assert set(instructions) == set(author._AUTHOR_CACHE_PREFIX_KEYS)
     assert {**instructions, **data} == json.loads(dossier)
-    assert set(data) == {"recipeKey", "parents", "balanceCorridor", "sourceWireUnits"}
+    assert set(data) == {"recipeKey", "parentBriefRule", "parentBriefs", "parents", "balanceCorridor", "sourceWireUnits"}
     assert first["messages"][:2] == second["messages"][:2]
     assert first["messages"][2] != second["messages"][2]
     assert source == before
@@ -107,7 +107,7 @@ def test_every_production_stage_owns_only_complete_static_instructions(monkeypat
     data = json.loads(first["messages"][endpoint + 1]["content"])
     assert not static.keys() & data.keys()
     assert first["messages"][endpoint + 1] != second["messages"][endpoint + 1]
-    assert not static.keys() & {"parents", "parentFactsReadOnly", "repairScope", "brokenFragments", "acceptedItemContext", "outputSchema", "responseSchema", "sourceWireUnits", "runtimePairs", "item"}
+    assert not static.keys() & {"parents", "parentBriefs", "parentFactsReadOnly", "repairScope", "brokenFragments", "acceptedItemContext", "outputSchema", "responseSchema", "sourceWireUnits", "runtimePairs", "item"}
     if stage == "repair":
         assert "fieldPermissions" in data["repairScope"]
         assert "runtimeProgram" in data["acceptedItemContext"]

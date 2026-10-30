@@ -95,6 +95,18 @@ internal static partial class EngineRuntimeChecks
     }
     private static void AttackIdentityDirectCall(Projectile projectile) => AttackIdentitySource(projectile);
     private static void AttackIdentityForeignCall(Projectile projectile) => AttackIdentitySource(AttackOtherProjectile!);
+    private static void AttackIdentityChangedBeforeCall(Projectile projectile) { projectile.type = 983; AttackIdentitySource(projectile); }
+    private static void AttackIdentityEscapedBeforeCall(Projectile projectile) { AttackMutateActor(projectile); AttackIdentitySource(projectile); }
+    private static void AttackIdentityExceptionBeforeCall(Projectile projectile)
+    {
+        try { AttackMutateActor(projectile); } catch (InvalidOperationException) { }
+        AttackIdentitySource(projectile);
+    }
+    private static void AttackIdentityExceptionAfterCall(Projectile projectile)
+    {
+        AttackIdentitySource(projectile);
+        try { AttackMutateActor(projectile); } catch (InvalidOperationException) { }
+    }
     private static void AttackIdentityIndirectStore(Projectile projectile, ref Projectile sink)
     {
         sink = projectile;
@@ -154,6 +166,9 @@ internal static partial class EngineRuntimeChecks
         MethodInfo Method(string name) => typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)!;
         Equal(true, GeneratorClient.InspectProjectileAttackCallBinding(Method(nameof(AttackIdentityDirectCall)), Method(nameof(AttackIdentitySource))), "direct helper receives the captured actor");
         Equal(false, GeneratorClient.InspectProjectileAttackCallBinding(Method(nameof(AttackIdentityForeignCall)), Method(nameof(AttackIdentitySource))), "foreign helper actor cannot borrow captured identity");
+        foreach (string caller in new[] { nameof(AttackIdentityChangedBeforeCall), nameof(AttackIdentityEscapedBeforeCall), nameof(AttackIdentityExceptionBeforeCall) })
+            Equal(false, GeneratorClient.InspectProjectileAttackCallBinding(Method(caller), Method(nameof(AttackIdentitySource))), "caller must preserve actor identity before helper: " + caller);
+        Equal(true, GeneratorClient.InspectProjectileAttackCallBinding(Method(nameof(AttackIdentityExceptionAfterCall)), Method(nameof(AttackIdentitySource))), "unrelated later exception arm does not hide complete call prefix");
         var selected = Inspect(nameof(AttackIdentitySource));
         string json = selected.ToJsonString();
         Equal(true, json.Contains("1.25", StringComparison.Ordinal), "matching identity assignment remains");
@@ -181,6 +196,71 @@ internal static partial class EngineRuntimeChecks
                 Equal(false, native["symbols"]!.AsObject().ContainsKey("Entity.position"), "Excalibur excludes sibling position controller");
             if (type == 972)
                 Equal(true, native["symbols"]!.AsObject().ContainsKey("Entity.position"), "matching sibling retains its own position controller");
+        }
+    }
+    private static void AttackIdentityUnreachableMutation(Projectile projectile)
+    {
+        if (projectile.type == 983) AttackMutateActor(projectile);
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityUnknownMutation(Projectile projectile)
+    {
+        if (projectile.ai[0] > 0f) AttackMutateActor(projectile);
+        if (projectile.type == 982) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackIdentityUnsignedRange(Projectile projectile)
+    {
+        if ((uint)(projectile.type - 10) <= 2) projectile.scale = 1.25f;
+        else projectile.scale = 2.5f;
+    }
+    private static void AttackMotionVectorComponents(Projectile projectile)
+    {
+        projectile.velocity.Y += 0.1f;
+        if (projectile.velocity.Y > 16f) projectile.velocity.Y = 16f;
+        projectile.position.X += projectile.velocity.X;
+        var unrelated = new Microsoft.Xna.Framework.Vector2(); unrelated.Y = 999f;
+        var copied = projectile.velocity; copied.Y = 777f;
+        AttackOtherProjectile!.velocity.Y = 888f;
+    }
+    private static void ProjectileSharedAiCaptureSelectsBeforeSourceBudgets()
+    {
+        MethodInfo Method(string name) => typeof(EngineRuntimeChecks).GetMethod(name, BindingFlags.Static | BindingFlags.NonPublic)!;
+        string selected = GeneratorClient.InspectProjectileAttackIdentitySource(Method(nameof(AttackIdentityUnreachableMutation)), 982, 190).ToJsonString();
+        Equal(false, selected.Contains("2.5", StringComparison.Ordinal), "excluded foreign identity mutation cannot block later proven identity");
+        var unknown = GeneratorClient.InspectProjectileAttackIdentitySource(Method(nameof(AttackIdentityUnknownMutation)), 982, 190);
+        Equal(0, unknown["identitySelection"]!["selectedEdges"]!.AsArray().Count, "runtime-conditioned mutation still blocks selection");
+        foreach (int type in new[] { 1, 10, 11, 12, 13 })
+        {
+            string range = GeneratorClient.InspectProjectileAttackIdentitySource(Method(nameof(AttackIdentityUnsignedRange)), type, 1).ToJsonString();
+            Equal(type is >= 10 and <= 12, range.Contains("1.25", StringComparison.Ordinal), "unsigned subtraction range preserves underflow semantics");
+            Equal(type is < 10 or > 12, range.Contains("2.5", StringComparison.Ordinal), "unsigned subtraction rejects outside range");
+        }
+        string components = GeneratorClient.InspectProjectileAttackSource(Method(nameof(AttackMotionVectorComponents)), "motion").ToJsonString();
+        foreach (string fact in new[] { "Vector2.Y", "Entity.velocity", "Entity.position", "0.1", "16" })
+            Equal(true, components.Contains(fact, StringComparison.Ordinal), "native vector component sink captured: " + fact);
+        foreach (string excluded in new[] { "999", "777", "888" })
+            Equal(false, components.Contains(excluded, StringComparison.Ordinal), "local/foreign vector is not captured actor motion: " + excluded);
+        foreach (int type in new[] { ProjectileID.WoodenArrowFriendly, ProjectileID.FireArrow, ProjectileID.UnholyArrow })
+        {
+            var projectile = new Projectile(); projectile.SetDefaults(type);
+            var reference = GeneratorClient.CaptureProjectileAttackReference(projectile);
+            var raw = reference["motion"]!["programs"]![0]!.AsObject();
+            var actual = raw["identitySelected"]!.AsObject();
+            Equal(type, actual["identitySelection"]!["identityPredicates"]!["Projectile.type"]!.GetValue<int>(), "shared controller selected for exact native identity");
+            Equal(true, actual["observations"]!.AsArray().Count > 0, "source budget cannot erase successful selected behavior");
+            Equal(false, actual.ToJsonString().Contains("character_bound", StringComparison.Ordinal), "source length is not a rejection threshold");
+            Equal(true, actual["symbols"]!.AsObject().ContainsKey("Entity.velocity"), "native actual projectile movement exposed");
+            if (raw["coverage"]!.GetValue<string>() == "unknown")
+            {
+                string reason = raw["unresolved"]!.GetValue<string>();
+                Equal(true, reason.StartsWith("connected_source_", StringComparison.Ordinal), "unselected audit retains exact resource refusal");
+                Equal(true, reference["coverage"]!["unresolved"]!.AsArray().Any(gap => gap!.GetValue<string>().Contains(reason, StringComparison.Ordinal)), "resource refusal survives root coverage");
+            }
+            if (type == ProjectileID.WoodenArrowFriendly)
+                foreach (string fact in new[] { "Projectile.ai", "Vector2.Y", "0.1", "15", "16", "Math.Atan2" })
+                    Equal(true, actual.ToJsonString().Contains(fact, StringComparison.Ordinal), "actual arrow source dependency retained: " + fact);
         }
     }
     private sealed class AttackObservationModProjectile : ModProjectile

@@ -17,8 +17,8 @@ from infini_local.core.schema_validation import strict_schema_errors
 
 
 AUTHOR_DESIGN_QUALITY_RULE = (
-    "Create a coherent, useful new Terraria item inspired by both parents. "
-    "Choose mechanics and controls that work together, with power and costs informed by the supplied source facts."
+    "Create a coherent, useful new Terraria item whose parent properties interact in a distinctive player experience. "
+    "Choose mechanics and controls that reinforce each other, with readable strengths, limitations and costs grounded in the supplied source facts."
 )
 
 AUTHOR_STATUS_COMPOSITION_RULE = (
