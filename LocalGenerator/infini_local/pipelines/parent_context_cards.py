@@ -109,7 +109,10 @@ _FORBIDDEN_DERIVED_PACKET_KEYS = frozenset({
 def _strip_derived_packet_fields(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            key: _strip_derived_packet_fields(item)
+            # This optional native observation has its own producer-owned
+            # vocabulary. A nested source member named e.g. class/semantics is
+            # not a derived parent hint and must not be rewritten or removed.
+            key: copy.deepcopy(item) if key == "attackReference" else _strip_derived_packet_fields(item)
             for key, item in value.items()
             if key not in _FORBIDDEN_DERIVED_PACKET_KEYS
         }

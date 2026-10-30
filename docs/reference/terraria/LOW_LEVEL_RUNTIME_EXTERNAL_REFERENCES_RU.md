@@ -108,3 +108,13 @@ NPC и другие моды могут менять результат. Во в
 запускаются. Native regression отдельно вызывает настоящий `StatusNPC` на
 изолированных NPC и проверяет fixed/integer/stepped durations; Python tests
 проверяют условные/dynamic exclusions, ветвления и отсутствие потери multiplicity.
+
+## Native attack source за пределами SetDefaults
+
+`GeneratorClient.ProjectileAttackFacts.cs` извлекает `attackReference` из actual native source: выбор AI/helper по type/aiStyle guards, связанные clock/position/rotation/scale/lifetime expressions, collision calls и их аргументы/предикаты, выбранный draw helper с Frame/palette/fade/scale dependencies. Каждый использованный native метод имеет SHA256 IL и MVID; неизвестный native binary или mod projectile не заимствует vanilla-факт. AI, draw и hooks при capture не запускаются.
+
+Это source observations, не автоматически унаследованное поведение. В частности, 16×16 из projectile defaults не описывает cone collision; `noMelee` отключает item contact damage, а не видимость held item. Сам held-item renderer, runtime detours, mod/world/player gates и итоговый урон остаются отдельной границей доказательства. Unsupported source shape и превышение bound обозначаются явно: отсутствие справки не доказывает отсутствие механики. Связанная source-роль отклоняется целиком вместо обрезания формулы.
+
+`InfiniDumpCommand` использует тот же `ToWireItem` / `ProjectileRawSnapshot`, что live craft, и добавляет только dump-specific identity/texture diagnostics. Source observations целиком проходят до Author, Visual/VFX и их conditional Repair как read-only context; они не расширяют `fieldPermissions`. Native source-program statements не являются новым generated opcode/controller или weapon-family router.
+
+Offline `generate_native_attack_facts.py` сохраняет exact typed constructor и `spawnInputs`, включая source position/velocity/ai0…2 и helper certificates; helper output не подменяется Item.scale. Существующие strict count/damage proofs сохраняют свою узкую область: multi-spawn branches не объявляются fixed1 или полностью распознанными. Native decoder читает полную объявленную длину method body, а не прежний prefix 100000 bytes.

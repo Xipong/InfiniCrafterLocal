@@ -25,6 +25,32 @@ public sealed partial class GeneratorClient
         return graph.Finish();
     }
 
+    // Shared native identity-window recognizer. It selects source syntax only;
+    // entry, hooks and any opaque/non-identity predicates remain unresolved.
+    private static IEnumerable<(string Field, int Literal, int Guard, AmmoIl[] Code)> ProjectileIdentityWindows(List<AmmoIl> code, int type, int style)
+    {
+        for (int n = 0; n + 4 < code.Count; n++)
+        {
+            if (code[n].Op != "ldarg" || !Equals(code[n].Arg, 0)
+                || code[n + 1].Op != "ldfld" || code[n + 1].Arg is not FieldInfo field || field.DeclaringType != typeof(Projectile)
+                || code[n + 2].Op != "const" || code[n + 2].Arg is not int literal
+                || !(field.Name == "type" && literal == type || field.Name == "aiStyle" && literal == style)
+                || code[n + 3].Arg is not int destination || destination <= code[n + 3].Offset) continue;
+            int start = n + 4, end;
+            if (code[n + 3].Op is "bne.un" or "bne.un.s") end = destination;
+            else if (code[n + 3].Op is "beq" or "beq.s")
+            {
+                start = code.FindIndex(i => i.Offset == destination);
+                if (start < 1 || code[start - 1].Op is not ("bne.un" or "bne.un.s" or "br" or "br.s")
+                    || code[start - 1].Arg is not int boundary || boundary <= destination) continue;
+                end = boundary;
+            }
+            else continue;
+            var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(1025).ToArray();
+            if (window.Length <= 1024) yield return (field.Name, literal, code[n + 3].Offset, window);
+        }
+    }
+
     private sealed class ParentSourceGraph
     {
         private const int NodeLimit = 48, EdgeLimit = 192, DepthLimit = 6, CharacterLimit = 16000;
@@ -225,7 +251,10 @@ public sealed partial class GeneratorClient
         {
             if (observation is JsonObject row)
             {
-                string target = row["receiver"]?.GetValue<string>() ?? receiver;
+                // Structured source expressions can also have a receiver; only
+                // a literal recipient token belongs to a buff observation.
+                string target = row["receiver"] is JsonValue recipient && recipient.TryGetValue<string>(out string? observed)
+                    ? observed ?? receiver : receiver;
                 if (row["buffId"] is JsonValue value && value.TryGetValue<int>(out int id)) Buff(id, target, null, null);
                 foreach (var pair in row) ObservedBuffs(pair.Value, pair.Key == "nativeBuffEffectReference" ? "player" : target);
             }
@@ -266,34 +295,15 @@ public sealed partial class GeneratorClient
                 {
                     if (!nativeCode.TryGetValue(method, out var code))
                     {
-                        nativeCode[method] = code = ReadAmmoIl(method, preserveStructure: true, sourceGraph: true);
+                        nativeCode[method] = code = AttackCode(method);
                         nativeNext[method] = code.Zip(code.Skip(1), (left, right) => (left.Offset, Next: right.Offset)).ToDictionary(p => p.Offset, p => p.Next);
                     }
                     var selected = new Dictionary<int, AmmoIl>();
                     // Exact type/AI-style equality fallthrough windows. Entry,
                     // missing predecessors and exits stay explicitly unresolved.
                     // No other branch arm is executed, selected or assumed true.
-                    for (int n = 0; n + 4 < code.Count; n++)
-                    {
-                        if (code[n].Op != "ldarg" || !Equals(code[n].Arg, 0)
-                            || code[n + 1].Op != "ldfld" || code[n + 1].Arg is not FieldInfo field || field.DeclaringType != typeof(Projectile)
-                            || code[n + 2].Op != "const" || code[n + 2].Arg is not int literal
-                            || !(field.Name == "type" && literal == projectile.type || field.Name == "aiStyle" && literal == projectile.aiStyle)
-                            || code[n + 3].Arg is not int destination || destination <= code[n + 3].Offset) continue;
-                        int start = n + 4, end;
-                        if (code[n + 3].Op is "bne.un" or "bne.un.s") end = destination;
-                        else if (code[n + 3].Op is "beq" or "beq.s")
-                        {
-                            start = code.FindIndex(i => i.Offset == destination);
-                            if (start < 1 || code[start - 1].Op is not ("bne.un" or "bne.un.s" or "br" or "br.s")
-                                || code[start - 1].Arg is not int boundary || boundary <= destination) continue;
-                            end = boundary;
-                        }
-                        else continue;
-                        var window = code.Skip(n).Take(4).Concat(code.Skip(start).TakeWhile(i => i.Offset < end)).Take(1025).ToArray();
-                        if (window.Length > 1024) { Gap("native_projectile_equality_window_bound"); continue; }
-                        foreach (var instruction in window) selected[instruction.Offset] = instruction;
-                    }
+                    foreach (var window in ProjectileIdentityWindows(code, projectile.type, projectile.aiStyle))
+                        foreach (var instruction in window.Code) selected[instruction.Offset] = instruction;
                     if (selected.Count == 0)
                     { Edge(from, null, "native_projectile_source", at, JsonValue.Create(projectile.type), "no_supported_type_or_aiStyle_equality_window_in_" + name); continue; }
                     if (nativeSlices.TryGetValue(method, out var prior)) foreach (var instruction in prior) selected[instruction.Offset] = instruction;

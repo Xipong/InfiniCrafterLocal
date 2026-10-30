@@ -53,10 +53,7 @@ internal static partial class EngineRuntimeChecks
             Equal(CanonicalParentFactJson(fact), CanonicalParentFactJson(delivered), "native certificate and limits delivered intact to generator");
             Equal(0, item.buffType, "NPC-hit fact does not rewrite native self-use buff");
             Equal(-1, Array.IndexOf(Terraria.Main.npc[0].buffType, buffType), "craft capture does not execute hit effects");
-            var dumpCapture = typeof(InfiniDumpCommand).GetMethod("ProjectileRawSnapshot", BindingFlags.NonPublic | BindingFlags.Static)!;
-            object dump = dumpCapture.Invoke(null, new object[] { projectileType, item.shootSpeed, "item.shoot",
-                itemType, item.Name, "literal-source-name", item.ammo, item.useAmmo, item.damage, "magic",
-                item.shoot, item.shootSpeed, item.knockBack })!;
+            var dump = InfiniDumpCommand.CaptureProjectileSnapshot(projectileType);
             var dumpFact = JsonSerializer.SerializeToElement(dump).GetProperty("onHitStatusReference");
             Equal(CanonicalParentFactJson(fact), CanonicalParentFactJson(dumpFact), "offline dump and live request share exact source certificate and limits");
             for (int trial = 0; trial < 16; trial++)

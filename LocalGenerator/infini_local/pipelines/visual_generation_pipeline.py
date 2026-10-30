@@ -1192,6 +1192,18 @@ def _request_visual_kit(
                                  for row in (generated.get("runtimeProgram") or {}).get("entities") or []],
                 }
             payload["parentSizeReferencesReadOnly"] = references
+            # Native attack observations remain read-only even when only a
+            # size/grip leaf can change. Generated-parent sizing stays compact.
+            def has_attack_reference(value: Any) -> bool:
+                if isinstance(value, Mapping):
+                    return isinstance(value.get("attackReference"), Mapping) or any(has_attack_reference(child) for child in value.values())
+                return isinstance(value, list) and any(has_attack_reference(child) for child in value)
+
+            native_parents = {key: parent for key, parent in parents.items()
+                              if "generatedParent" not in (parent["packet"].get("raw") or {})
+                              and has_attack_reference(parent["packet"].get("raw") or {})}
+            if native_parents:
+                payload["parentFactsReadOnly"] = native_parents
         guidance = presentation["spritePresentationReadOnly"]
         selected = {"requiredMetadata"}
         if design:

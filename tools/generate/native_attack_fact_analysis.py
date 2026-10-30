@@ -25,6 +25,13 @@ def expression(code, index, depth=0):
         right, before = expression(code, index - 1, depth + 1)
         left, before = expression(code, before, depth + 1)
         return (op, left, right), before
+    if op == "newobj":
+        # Metadata includes the complete signature, not just a name/arity.
+        # This is a symbolic data value, never a constructor invocation.
+        if arg != ("Microsoft.Xna.Framework.Vector2..ctor", "2002010c0c"):
+            raise Unrecognized("not a known typed data constructor")
+        args, before = arguments(code, index, 2, depth + 1)
+        return ("newobj", arg, *args), before
     if op == "call":
         name, count, has_this, returns = arg
         if not returns:
@@ -171,6 +178,94 @@ def counted_spawn(block, call_offset):
     return {"minimum": low, "maximum": high, "distribution": distribution}
 
 
+def definition_dominates(block, store, use):
+    """Can the use be reached from branch entry without the unique store?"""
+    positions = {ins.offset: n for n, ins in enumerate(block)}
+    pending, seen = [0], set()
+    while pending:
+        n = pending.pop()
+        if n == store or n in seen or not 0 <= n < len(block):
+            continue
+        if n == use:
+            return False
+        seen.add(n)
+        ins = block[n]
+        if ins.op == "ret":
+            continue
+        targets = ins.arg if ins.op == "switch" else [ins.arg] if ins.op.startswith("b") and isinstance(ins.arg, int) else []
+        pending.extend(positions[t] for t in targets if t in positions)
+        if ins.op != "br":
+            pending.append(n + 1)
+    return True
+
+
+def spawn_inputs(block, call_index, args, method_provenance=None):
+    """Serialize source values; only branch-local, unique dominating defs expand.
+
+    A definition retains its store offset and snapshot scope: reads in its RHS
+    happened at the store, not necessarily at the subsequent projectile call.
+    Current shot locals deliberately do not borrow method-entry/base values.
+    """
+    provenance = method_provenance or {}
+    budget = [512]
+
+    def value(expr, use, trail=()):
+        budget[0] -= 1
+        op = expr[0]
+        if budget[0] < 0 or len(trail) > 16:
+            return {"kind": "unknown", "reason": "source_expression_bound"}
+        if op == "ldloc":
+            local = expr[1]
+            unknown = {"kind": "unknown", "local": local}
+            stores = [n for n, ins in enumerate(block) if ins.op == "stloc" and ins.arg == local]
+            if any(ins.op == "ldloca" and ins.arg == local for ins in block):
+                return {**unknown, "reason": "address_exposed_local"}
+            if len(stores) != 1:
+                return {**unknown, "reason": "multiple_branch_local_definitions" if stores else "no_branch_local_definition"}
+            store = stores[0]
+            if store >= use or not definition_dominates(block, store, use):
+                return {**unknown, "reason": "definition_does_not_dominate_use"}
+            if local in trail:
+                return {**unknown, "reason": "cyclic_local_definition"}
+            try:
+                rhs = straight_line_arguments(block, store, 1)[0]
+            except (Unrecognized, IndexError):
+                return {**unknown, "reason": "unsupported_definition_expression"}
+            return {"kind": "local_definition", "local": local,
+                    "sourceStoreIlOffset": block[store].offset, "scope": "value_at_store",
+                    "value": value(rhs, store, (*trail, local))}
+        if op == "const":
+            return {"kind": "constant", "value": expr[1]}
+        if op == "ldarg":
+            return {"kind": "argument", "index": expr[1]}
+        if op in ("ldloca", "ldflda"):
+            return {"kind": "unknown", "reason": "address_expression", "sourceOperation": op}
+        if op == "ldsfld":
+            return {"kind": "static_field", "member": expr[1]}
+        if op == "ldfld":
+            return {"kind": "field", "member": expr[1], "receiver": value(expr[2], use, trail)}
+        if op == "conv":
+            return {"kind": "conversion", "operator": expr[1], "value": value(expr[2], use, trail)}
+        if op in ("mul", "add", "sub", "div"):
+            return {"kind": "binary", "operator": op, "left": value(expr[1], use, trail), "right": value(expr[2], use, trail)}
+        if op == "newobj":
+            return {"kind": "data_constructor", "member": expr[1][0], "signature": expr[1][1],
+                    "arguments": [value(v, use, trail) for v in expr[2:]]}
+        if op == "call":
+            return {"kind": "call", "member": expr[1],
+                    "arguments": [value(v, use, trail) for v in expr[2:]],
+                    "evaluation": "unresolved_helper_or_hook_output",
+                    "provenance": provenance.get(expr[1], {"status": "unknown", "reason": "method_certificate_unavailable"})}
+        return {"kind": "unknown", "reason": "unsupported_source_expression", "sourceOperation": op}
+
+    names = (("source", "position", "velocity") if len(args) == 10 else
+             ("source", "positionX", "positionY", "velocityX", "velocityY")) + ("type", "damage", "knockback", "owner", "ai0", "ai1", "ai2")
+    result = {name: value(expr, call_index) for name, expr in zip(names, args)}
+    for name, role in (("type", "current_native_shot_type"), ("damage", "current_native_shot_damage"), ("knockback", "current_native_knockback")):
+        result[name]["role"] = role
+    return result
+
+
 def shoot_facts(instructions):
     # Native ItemCheck_Shoot receives damage as argument 3 and initializes a
     # local before ammo and mod hooks. The multiplier below is relative to the
@@ -213,7 +308,16 @@ def shoot_facts(instructions):
                 "sourceSpawnIlOffset": call.offset, "damageMultiplierAtSpawn": multiplier,
                 "damageIntegerConversion": "native_truncate_toward_zero" if damage[0] == "conv" else "none",
                 "shotDamageLocalMayBeModifiedInBranch": any(i.op in ("stloc", "ldloca") and i.arg == damage_local for i in block),
-                "explicitSpawnCount": spawn_count})
+                "explicitSpawnCount": spawn_count,
+                "sourcePredicates": [{"field": "Terraria.Item.type", "argument": 2,
+                    "operator": "equals", "literal": item_id, "sourceIlOffset": guard}],
+                "spawnInputs": spawn_inputs(block, n, args, getattr(instructions, "method_provenance", None)),
+                "spawnInputCoverage": {
+                    "scope": "native_call_arguments_only_not_final_attack",
+                    "localDefinitions": "branch_local_single_assignment_dominating_use_only",
+                    "calls": "symbolic_unresolved_helper_and_mod_contributions_not_executed",
+                    "multiplicity": "existing_branch_count_proof_only_not_global_use_count",
+                    "unresolved": "unknown_nodes_retain_current_locals_not_item_base_values"}})
         except (Unrecognized, IndexError, StopIteration):
             continue
     # Duplicate guards are ambiguous; never overwrite one branch with another.

@@ -1,18 +1,15 @@
 #nullable enable
 using InfiniCrafterLocal.Common;
-using InfiniCrafterLocal.Common.Models;
 using InfiniCrafterLocal.Common.Services;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Terraria;
 using Terraria.GameContent;
 using Terraria.ID;
-using Terraria.Localization;
 using Terraria.ModLoader;
 
 namespace InfiniCrafterLocal.Common.Commands;
@@ -35,69 +32,12 @@ public sealed class InfiniDumpCommand : ModCommand
         {
             for (int type = InfiniTerrariaSentinels.FirstValidItemType; type < ItemLoader.ItemCount; type++)
             {
-                try
+                WriteSnapshot(itemWriter, type, () =>
                 {
                     Item item = new();
                     item.SetDefaults(type);
-                    if (item.IsAir || string.IsNullOrWhiteSpace(item.Name)) continue;
-                    itemWriter.WriteLine(JsonSerializer.Serialize(new
-                    {
-                        type,
-                        name = item.Name,
-                        internalName = TryItemName(type),
-                        sourceMod = item.ModItem?.Mod?.Name ?? "Terraria",
-                        fullName = item.ModItem is not null ? item.ModItem.Mod.Name + "/" + item.ModItem.Name : "Terraria/" + TryItemName(type),
-                        tooltipLines = TryItemTooltipLines(item, type),
-                        textureMetrics = TryItemTextureMetrics(type),
-                        damage = item.damage,
-                        damageClass = DamageClassName(item),
-                        useStyle = item.useStyle,
-                        useTime = item.useTime,
-                        useAnimation = item.useAnimation,
-                        reuseDelay = item.reuseDelay,
-                        channel = item.channel,
-                        noMelee = item.noMelee,
-                        noUseGraphic = item.noUseGraphic,
-                        autoReuse = item.autoReuse,
-                        rare = item.rare,
-                        value = item.value,
-                        maxStack = item.maxStack,
-                        stack = item.stack,
-                        consumable = item.consumable,
-                        material = item.material,
-                        accessory = item.accessory,
-                        questItem = item.questItem,
-                        expert = item.expert,
-                        master = item.master,
-                        defense = item.defense,
-                        headSlot = item.headSlot,
-                        bodySlot = item.bodySlot,
-                        legSlot = item.legSlot,
-                        createTile = item.createTile,
-                        createWall = item.createWall,
-                        placeStyle = item.placeStyle,
-                        pickPower = item.pick,
-                        axePower = item.axe,
-                        hammerPower = item.hammer,
-                        bait = item.bait,
-                        fishingPole = item.fishingPole,
-                        healLife = item.healLife,
-                        lifeRegen = item.lifeRegen,
-                        nativeShootReference = GeneratorClient.CaptureNativeShootReference(item),
-                        nativeContactHitStatusReference = GeneratorClient.CaptureNativeContactHitStatusReference(item),
-                        healMana = item.healMana,
-                        manaCost = item.mana,
-                        ammo = item.ammo,
-                        useAmmo = item.useAmmo,
-                        shoot = item.shoot,
-                        shootSpeed = item.shootSpeed,
-                        directProjectileRaw = item.shoot > ProjectileID.None ? ProjectileRawSnapshot(item.shoot, item.shootSpeed, "item.shoot", item.type, item.Name, TryItemName(item.type), item.ammo, item.useAmmo, item.damage, DamageClassName(item), item.shoot, item.shootSpeed, item.knockBack) : null,
-                        knockback = item.knockBack,
-                        buffType = item.buffType,
-                        buffTime = item.buffTime
-                    }, options));
-                }
-                catch { }
+                    return item.IsAir || string.IsNullOrWhiteSpace(item.Name) ? null : CaptureItemSnapshot(item);
+                }, options);
             }
         }
 
@@ -105,51 +45,7 @@ public sealed class InfiniDumpCommand : ModCommand
         {
             for (int type = InfiniTerrariaSentinels.FirstValidProjectileType; type < ProjectileLoader.ProjectileCount; type++)
             {
-                try
-                {
-                    Projectile p = new();
-                    p.SetDefaults(type);
-                    if (p.width <= 0 && p.height <= 0) continue;
-                    projectileWriter.WriteLine(JsonSerializer.Serialize(new
-                    {
-                        type,
-                        internalName = TryProjectileName(type),
-                        sourceMod = p.ModProjectile?.Mod?.Name ?? "Terraria",
-                        textureMetrics = TryProjectileTextureMetrics(type),
-                        collisionReference = GeneratorClient.CaptureNativeCollisionReference(p),
-                armorPenetration = p.ArmorPenetration,
-                width = p.width,
-                        height = p.height,
-                        scale = p.scale,
-                        aiStyle = p.aiStyle,
-                        penetrate = p.penetrate,
-                        maxPenetrate = p.maxPenetrate,
-                        timeLeft = p.timeLeft,
-                        extraUpdates = p.extraUpdates,
-                        tileCollide = p.tileCollide,
-                        ignoreWater = p.ignoreWater,
-                        friendly = p.friendly,
-                        hostile = p.hostile,
-                        arrow = p.arrow,
-                        minion = p.minion,
-                        sentry = p.sentry,
-                        minionSlots = p.minionSlots,
-                        ownerHitCheck = p.ownerHitCheck,
-                        usesLocalNPCImmunity = p.usesLocalNPCImmunity,
-                        localNPCHitCooldown = p.localNPCHitCooldown,
-                        usesIDStaticNPCImmunity = p.usesIDStaticNPCImmunity,
-                        idStaticNPCHitCooldown = p.idStaticNPCHitCooldown,
-                        stopsDealingDamageAfterPenetrateHits = p.stopsDealingDamageAfterPenetrateHits,
-                        light = p.light,
-                        alpha = p.alpha,
-                        netImportant = p.netImportant,
-                        framesRaw = SafeProjFrames(type),
-                        setsRaw = ProjectileSetsRaw(type),
-                        onHitStatusReference = GeneratorClient.CaptureNativeHitStatusReference(p),
-                        damageClass = p.DamageType == DamageClass.Melee ? "melee" : p.DamageType == DamageClass.Ranged ? "ranged" : p.DamageType == DamageClass.Magic ? "magic" : p.DamageType == DamageClass.Summon ? "summon" : p.DamageType == DamageClass.Generic ? "generic" : "modded"
-                    }, options));
-                }
-                catch { }
+                WriteSnapshot(projectileWriter, type, () => CaptureProjectileSnapshot(type), options);
             }
         }
 
@@ -157,37 +53,41 @@ public sealed class InfiniDumpCommand : ModCommand
         Main.NewText($"InfiniCraft dump written: {projectilePath}", 120, 220, 255);
     }
 
-    private static string[] TryItemTooltipLines(Item item, int type)
+    internal static void WriteSnapshot(TextWriter writer, int type, Func<JsonObject?> capture, JsonSerializerOptions options)
     {
-        try
+        JsonObject? snapshot;
+        try { snapshot = capture(); }
+        catch (Exception error)
         {
-            string raw;
-            if (item.ModItem is not null)
-            {
-                raw = item.ModItem.Tooltip.Value;
-            }
-            else
-            {
-                string key = "ItemTooltip." + TryItemName(type);
-                raw = Language.GetTextValue(key);
-                if (raw == key) return Array.Empty<string>();
-            }
+            // Absence of a row must not masquerade as absence of mechanics.
+            // I/O errors remain terminal; only definition capture is isolated.
+            snapshot = new JsonObject { ["type"] = type, ["unavailable"] = true, ["captureError"] = error.GetType().Name };
+        }
+        if (snapshot is not null) writer.WriteLine(snapshot.ToJsonString(options));
+    }
 
-            if (string.IsNullOrWhiteSpace(raw)) return Array.Empty<string>();
-            List<string> lines = new();
-            foreach (string sourceLine in raw.Replace("\r", "").Split('\n'))
-            {
-                string line = sourceLine.Trim();
-                if (line.Length == 0) continue;
-                lines.Add(line.Length <= 512 ? line : line[..512]);
-                if (lines.Count >= 12) break;
-            }
-            return lines.ToArray();
-        }
-        catch
-        {
-            return Array.Empty<string>();
-        }
+    // Dump rows are the same complete source observations used by live crafting.
+    // Only dump-specific identity aliases, flags and graphics metrics are added here.
+    internal static JsonObject CaptureItemSnapshot(Item item)
+    {
+        JsonObject snapshot = GeneratorClient.ToWireItem(item);
+        snapshot["type"] = item.type;
+        snapshot["questItem"] = item.questItem;
+        snapshot["expert"] = item.expert;
+        snapshot["master"] = item.master;
+        snapshot["textureMetrics"] = JsonSerializer.SerializeToNode(TryItemTextureMetrics(item.type));
+        if (snapshot["directProjectileRaw"] is JsonObject projectile)
+            projectile["textureMetrics"] = JsonSerializer.SerializeToNode(TryProjectileTextureMetrics(item.shoot));
+        return snapshot;
+    }
+
+    internal static JsonObject CaptureProjectileSnapshot(int type)
+    {
+        object? facts = GeneratorClient.ProjectileRawSnapshot(type, 0f, "runtime_dump", null, -1);
+        JsonObject snapshot = JsonSerializer.SerializeToNode(facts) as JsonObject
+            ?? throw new InvalidOperationException("Projectile capture was unavailable");
+        snapshot["textureMetrics"] = JsonSerializer.SerializeToNode(TryProjectileTextureMetrics(type));
+        return snapshot;
     }
 
     private sealed class TextureMetrics
@@ -333,104 +233,6 @@ public sealed class InfiniDumpCommand : ModCommand
         return m;
     }
 
-    private static string TryItemName(int type)
-    {
-        try { return ItemID.Search.GetName(type) ?? type.ToString(); }
-        catch { return type.ToString(); }
-    }
-
-    private static string TryProjectileName(int type)
-    {
-        try { return ProjectileID.Search.GetName(type) ?? type.ToString(); }
-        catch { return type.ToString(); }
-    }
-
-    private static object ProjectileRawSnapshot(int projectileType, float itemShootSpeed, string source, int sourceItemType, string sourceItemName, string sourceItemInternalName, int sourceItemAmmo, int sourceItemUseAmmo, int sourceItemDamage, string sourceItemDamageClass, int sourceItemShoot, float sourceItemShootSpeed, float sourceItemKnockback)
-    {
-        try
-        {
-            Projectile p = new();
-            p.SetDefaults(projectileType);
-            string sourceMod = p.ModProjectile?.Mod?.Name ?? "Terraria";
-            string internalName = TryProjectileName(projectileType);
-            return new
-            {
-                source,
-                type = projectileType,
-                sourceMod,
-                internalName,
-                fullName = sourceMod + "/" + internalName,
-                textureMetrics = TryProjectileTextureMetrics(projectileType),
-                sourceItemType,
-                sourceItemName,
-                sourceItemInternalName,
-                sourceItemAmmo,
-                sourceItemUseAmmo,
-                sourceItemDamage,
-                sourceItemDamageClass,
-                sourceItemShoot,
-                sourceItemShootSpeed,
-                sourceItemKnockback,
-                itemShootSpeed,
-                ai0 = p.ai.Length > 0 ? p.ai[0] : 0f,
-                ai1 = p.ai.Length > 1 ? p.ai[1] : 0f,
-                ai2 = p.ai.Length > 2 ? p.ai[2] : 0f,
-                localAI0 = p.localAI.Length > 0 ? p.localAI[0] : 0f,
-                localAI1 = p.localAI.Length > 1 ? p.localAI[1] : 0f,
-                collisionReference = GeneratorClient.CaptureNativeCollisionReference(p),
-                armorPenetration = p.ArmorPenetration,
-                width = p.width,
-                height = p.height,
-                scale = p.scale,
-                aiStyle = p.aiStyle,
-                penetrate = p.penetrate,
-                maxPenetrate = p.maxPenetrate,
-                timeLeft = p.timeLeft,
-                extraUpdates = p.extraUpdates,
-                tileCollide = p.tileCollide,
-                ignoreWater = p.ignoreWater,
-                friendly = p.friendly,
-                hostile = p.hostile,
-                arrow = p.arrow,
-                minion = p.minion,
-                sentry = p.sentry,
-                minionSlots = p.minionSlots,
-                ownerHitCheck = p.ownerHitCheck,
-                usesLocalNPCImmunity = p.usesLocalNPCImmunity,
-                localNPCHitCooldown = p.localNPCHitCooldown,
-                usesIDStaticNPCImmunity = p.usesIDStaticNPCImmunity,
-                idStaticNPCHitCooldown = p.idStaticNPCHitCooldown,
-                stopsDealingDamageAfterPenetrateHits = p.stopsDealingDamageAfterPenetrateHits,
-                light = p.light,
-                alpha = p.alpha,
-                netImportant = p.netImportant,
-                framesRaw = SafeProjFrames(projectileType),
-                setsRaw = ProjectileSetsRaw(projectileType),
-                onHitStatusReference = GeneratorClient.CaptureNativeHitStatusReference(p),
-                damageClass = p.DamageType == DamageClass.Melee ? "melee" : p.DamageType == DamageClass.Ranged ? "ranged" : p.DamageType == DamageClass.Magic ? "magic" : p.DamageType == DamageClass.Summon ? "summon" : p.DamageType == DamageClass.Generic ? "generic" : "modded"
-            };
-        }
-        catch
-        {
-            return new { source, type = projectileType, itemShootSpeed, unavailable = true };
-        }
-    }
-
-    private static object ProjectileSetsRaw(int projectileType)
-    {
-        return new
-        {
-            trailCacheLength = SafeArrayValue(ProjectileID.Sets.TrailCacheLength, projectileType, 0),
-            trailingMode = SafeArrayValue(ProjectileID.Sets.TrailingMode, projectileType, 0),
-            lightPet = SafeProjectileSetValue("LightPet", projectileType),
-            minionSacrificable = SafeProjectileSetValue("MinionSacrificable", projectileType),
-            homing = SafeProjectileSetValue("Homing", projectileType),
-            dontAttachHideToAlpha = SafeProjectileSetValue("DontAttachHideToAlpha", projectileType),
-            usesOldTargeting = SafeProjectileSetValue("UsesOldTargeting", projectileType),
-            noLiquidDistortion = SafeProjectileSetValue("NoLiquidDistortion", projectileType)
-        };
-    }
-
     private static int SafeProjFrames(int projectileType)
     {
         try
@@ -442,32 +244,5 @@ public sealed class InfiniDumpCommand : ModCommand
         return 0;
     }
 
-    private static int SafeArrayValue(int[] values, int index, int fallback)
-    {
-        try
-        {
-            if (index >= 0 && index < values.Length)
-                return values[index];
-        }
-        catch { }
-        return fallback;
-    }
-
-    private static object? SafeProjectileSetValue(string fieldName, int index)
-    {
-        try
-        {
-            var field = typeof(ProjectileID.Sets).GetField(fieldName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-            if (field is null) return null;
-            object? value = field.GetValue(null);
-            if (value is Array arr && index >= 0 && index < arr.Length)
-                return arr.GetValue(index);
-        }
-        catch { }
-        return null;
-    }
-
-    private static string DamageClassName(Item item)
-        => TerrariaRuntimeVocabulary.CanonicalDamageClassToken(item?.DamageType);
 
 }

@@ -38,7 +38,7 @@ from infini_local.pipelines.pipeline_runtime_constants import LLM_ITEM_RAW_KEYS
 # Engineering character guard, not a model token limit: complete compact JSON
 # dossiers include parent-local source effects and source-derived ammo variants.
 # Preserve literal tooltips, accepted graphs and capabilities; never clip to fit.
-PLANNER_PROMPT_LIMIT_CHARS = 225_000
+PLANNER_PROMPT_LIMIT_CHARS = 300_000
 PLANNER_PROMPT_MIN_HEADROOM_CHARS = 1_000
 COMBAT_EXECUTOR_RESULT_KIND_RULE = (
     "Do not choose a sword/bow/staff/sentry family. Choose explicit entities, input bindings, "

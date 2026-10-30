@@ -244,8 +244,8 @@ def test_retired_loaded_status_vocabulary_never_reaches_author_or_changes_litera
     assert source == before
 
 
-def test_author_budget_remains_the_authorized_225k_characters():
-    assert PLANNER_PROMPT_LIMIT_CHARS == 225_000
+def test_author_budget_is_the_authorized_300k_for_complete_attack_source_context():
+    assert PLANNER_PROMPT_LIMIT_CHARS == 300_000
 
 
 def test_shared_target_kind_sets_preserve_every_exact_capability_domain():

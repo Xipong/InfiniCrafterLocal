@@ -185,6 +185,11 @@ def compact_projectile_profile(proj: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(proj, dict) or not proj:
         return {}
     out = _select_raw_keys(proj, LLM_PROJECTILE_RAW_KEYS)
+    # Source-certified attack observations are read-only native facts, not
+    # generated behavior. Preserve the entire producer-owned JSON, including
+    # unknown coverage, empty containers, nulls and exact scalar kinds.
+    if isinstance(proj.get("attackReference"), dict):
+        out["attackReference"] = copy.deepcopy(proj["attackReference"])
     # The native producer owns verification and scope. Never infer a trajectory
     # from names/aiStyle or compact/clip this optional read-only observation.
     if isinstance(proj.get("motionReference"), dict):

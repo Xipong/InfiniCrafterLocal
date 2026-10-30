@@ -17,6 +17,7 @@ import struct
 from typing import Any, Callable, Mapping
 
 from infini_local.core.errors import PlannerUnavailable
+from infini_local.pipelines.parent_context_cards import raw_parent_card_for_llm
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
 from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
@@ -910,6 +911,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             "internalName": str(source.get("internalName") or ""),
             "sourceMod": str(source.get("sourceMod") or ""),
             "generatedParentSummary": copy.deepcopy(dict(summary_raw)) if isinstance(summary_raw, Mapping) else {},
+            "packet": raw_parent_card_for_llm(dict(source), include_visual_reference=True),
         }
 
     runtime = data.get("runtimeProgram")
@@ -1385,6 +1387,7 @@ def _request(
         user = {
             "task": "Patch only exact invalid VFX fields/slots.",
             "item": copy.deepcopy(packet.get("item") or {}),
+            "parentFactsReadOnly": copy.deepcopy(packet.get("parents") or []),
             "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
             **({"acceptedGameplayReadOnly": copy.deepcopy(packet["acceptedGameplayReadOnly"])} if "acceptedGameplayReadOnly" in packet else {}),
             "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
