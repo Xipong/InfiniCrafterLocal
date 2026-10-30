@@ -143,7 +143,9 @@
   },
   "accessory": {
     "enabled": true,
-    "defense": 1
+    "defense": 1,
+    "lifeRegenCondition": "always",
+    "treasureSenseCondition": "always"
   },
   "armor": {
     "enabled": false
