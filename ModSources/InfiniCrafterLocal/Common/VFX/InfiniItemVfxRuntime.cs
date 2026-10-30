@@ -94,6 +94,7 @@ public static partial class InfiniItemVfxRuntime
 
     public static void EmitAndSyncEvent(Player player, GeneratedItemData? data, string entityId, string eventName, Vector2? eventPosition = null)
     {
+        if (eventName == RuntimeEventKind.OnJump) return; // exact live grant owns this producer
         if (player is null || !player.active || data is null || !HasExactSlot(data, entityId, eventName)) return;
         if (eventPosition.HasValue && !Finite(eventPosition.Value)) return;
         EmitLocal(player, data, entityId, eventName, eventPosition: eventPosition);
@@ -129,8 +130,9 @@ public static partial class InfiniItemVfxRuntime
         {
             // Earlier payloads had no event identity and cannot distinguish
             // two genuine hits from a replay. They are refused, not guessed.
-            if (reader.ReadByte() == MaterialItemPacketVersion)
-                HandleMaterialItemEvent(reader, whoAmI);
+            byte version = reader.ReadByte();
+            if (version == MaterialItemPacketVersion) HandleMaterialItemEvent(reader, whoAmI);
+            else if (version == AirJumpPacketVersion) HandleAirJumpEvent(reader, whoAmI);
         }
         catch { }
     }
@@ -142,7 +144,7 @@ public static partial class InfiniItemVfxRuntime
         return false;
     }
 
-    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null, bool allowLightCue=true)
+    private static void EmitLocal(Player player, GeneratedItemData data, string entityId, string eventName, bool cadence = false, Vector2? eventPosition = null,bool includeMaterials=true,MaterialEventAllowance? sharedAllowance=null, bool allowLightCue=true, VfxSourceBinding? sourceBinding=null)
     {
         if (Main.dedServ) return;
         // One synchronous event call owns its total across matching slots. Periodic
@@ -153,7 +155,7 @@ public static partial class InfiniItemVfxRuntime
             if (slot.PlacementBindingId is not null || !string.Equals(slot.EntityId, entityId, StringComparison.Ordinal) || !string.Equals(slot.Event, eventName, StringComparison.Ordinal)) continue;
             if(InfiniDetachedVfxSystem.HasSnapshotVfx(slot)) {
                 if(!cadence&&includeMaterials)InfiniDetachedVfxSystem.EnqueueSnapshotVfx(data,entityId,slot,$"item:{player.whoAmI}:{data.Id}:{entityId}",
-                    VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);
+                    VfxSourceBinding.ItemFrame(player,slot.Anchor,eventPosition),sourceBinding??VfxSourceBinding.Capture(player,EventSourceItem(player,data.Id,eventName)?.Item,data),itemBudget:true,allowance:eventAllowance);
                 continue;
             }
             int repeat = cadence && slot.RepeatEvery!.Value > 0 ? slot.RepeatEvery!.Value : 10;

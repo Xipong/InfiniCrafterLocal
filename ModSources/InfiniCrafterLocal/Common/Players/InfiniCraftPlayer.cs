@@ -145,6 +145,9 @@ public sealed partial class InfiniCraftPlayer : ModPlayer
         // Keep the vanilla mount override of equipment's flat run-speed bonus.
         if (!Player.mount.Active)
             Player.maxRunSpeed += _generatedMaxRunSpeedBonus;
+        // Native gravity/fall-speed initialization precedes this hook, and
+        // vertical integration follows it. Apply authored physics before use.
+        ApplyGeneratedTraversalMovement();
     }
 
     public void AddGeneratedAmmoSaveChance(float chance)

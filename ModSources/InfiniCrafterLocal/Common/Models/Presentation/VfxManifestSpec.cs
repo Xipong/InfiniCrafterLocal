@@ -317,6 +317,8 @@ public sealed class VfxSlotSpec
         if (VfxRendererRegistry.ConsumesSpriteTexture(rendererKind) && TextureRole == "none")
             throw new InvalidDataException("sprite renderer requires a non-none textureRole");
         Anchor = ExactEnumText(Anchor, "anchor", "self", "owner", "tip", "tipHistory", "hitPoint", "velocity", "field");
+        if (!RuntimeEventKind.SupportsVfxAnchor(Event,Anchor))
+            throw new InvalidDataException("jump VFX requires player center, motion axis or captured jump-point anchors");
         if (!cadenceOnly && StartTick is null) throw new InvalidDataException("VFX renderer requires startTick");
         if (StartTick is { } startTick) StartTick = Math.Clamp(startTick, 0, 120);
         PhaseOffset = Math.Clamp(PhaseOffset, -1f, 1f);

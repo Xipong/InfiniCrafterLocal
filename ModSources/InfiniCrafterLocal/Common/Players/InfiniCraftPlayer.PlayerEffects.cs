@@ -15,6 +15,8 @@ public sealed partial class InfiniCraftPlayer
     private int _potionReductionOnHit;
     private int _potionReductionPercent, _potionReductionTicks, _autoManaBelowPercent, _hurtImmunityBonus;
     private double _extraCrateChance;
+    private double _traversalGravityMultiplier = 1d;
+    private float _traversalFallSpeedCap;
 
     private void ResetPlayerEffects()
     {
@@ -22,13 +24,28 @@ public sealed partial class InfiniCraftPlayer
         _potionReductionPercent = _potionReductionTicks = _autoManaBelowPercent = _hurtImmunityBonus = 0;
         _extraCrateChance = 0;
         _potionReductionOnHit = 0;
+        ResetAirJumpGrants();
+        _traversalGravityMultiplier = 1f; _traversalFallSpeedCap = 0;
     }
 
-    internal void ApplyPlayerEffect(PlayerEffectSpec effect)
+    internal void ApplyPlayerEffect(PlayerEffectSpec effect, GeneratedItemData? source = null, long sourceGeneration = 0, string sourceComponent = "accessory")
     {
         effect.Validate();
         if (!Player.active || Player.dead || !effect.IsActive(Player)) return;
+        if (effect.AirJump is { } jump && source is not null) RegisterAirJumpGrant(source, jump, sourceGeneration, sourceComponent);
         _potionReductionOnHit = Math.Min(3600, _potionReductionOnHit + (effect.HealingPotionCooldownOnHitReductionTicks ?? 0));
+        if (effect.AutoJump == true) Player.autoJump = true;
+        if (effect.GravityControl == true) Player.gravControl = true;
+        if (effect.WaterBreathing == true) Player.gills = true;
+        if (effect.SwimJump == true) Player.accFlipper = true;
+        if (effect.WaterBuoyancy == true) Player.canFloatInWater = true;
+        if (effect.WallSlideAndJump == true) Player.spikedBoots = Math.Max(Player.spikedBoots, 1);
+        if (effect.WallCling == true) Player.spikedBoots = Math.Max(Player.spikedBoots, 2);
+        Player.extraFall += effect.SafeFallDistanceBlocks ?? 0;
+        Player.breathMax += effect.BreathCapacityBonus ?? 0;
+        _traversalGravityMultiplier *= effect.GravityMultiplier ?? 1f;
+        float fallCap = effect.MaxFallSpeedPxPerTick ?? 0;
+        if (fallCap > 0) _traversalFallSpeedCap = _traversalFallSpeedCap > 0 ? Math.Min(_traversalFallSpeedCap, fallCap) : fallCap;
         Player.fishingSkill += effect.FishingPowerPoints ?? 0;
         if (effect.PreventLineBreak == true) Player.accFishingLine = true;
         if (effect.AllowLavaFishing == true) Player.accLavaFishing = true;
@@ -45,6 +62,13 @@ public sealed partial class InfiniCraftPlayer
         _autoManaBelowPercent = Math.Max(_autoManaBelowPercent, effect.AutoManaPotionBelowPercent ?? 0);
         _hurtImmunityBonus = Math.Min(300, _hurtImmunityBonus + (effect.HurtInvulnerabilityBonusTicks ?? 0));
         _extraCrateChance = 1 - (1 - _extraCrateChance) * (1 - (effect.ExtraCrateChancePercent ?? 0) / 100d);
+    }
+
+    private void ApplyGeneratedTraversalMovement()
+    {
+        Player.gravity *= (float)Math.Clamp(_traversalGravityMultiplier, 0.01d, 25d);
+        if (_traversalFallSpeedCap <= 0) return;
+        Player.maxFallSpeed = Math.Min(Player.maxFallSpeed, _traversalFallSpeedCap);
     }
 
     // Existing stat values have one consumer; conditions only gate when the

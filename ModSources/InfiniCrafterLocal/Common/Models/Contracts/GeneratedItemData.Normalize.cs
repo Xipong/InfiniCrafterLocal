@@ -288,7 +288,8 @@ public sealed partial class GeneratedItemData
                     || placedBinding.UsePolicy.Action.TargetId != entity.Id || placedBinding.UsePolicy.Action.Placement?.PlacedVfx is null)
                     throw new InvalidDataException("VFX placementBindingId requires same-item accepted place_item binding with placedVfx");
             }
-            try { RuntimeEventKind.ValidateProducer(entity, slot.Event, hasItemContactBinding, hasEmittingItemUse, RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped) is not null); }
+            try { RuntimeEventKind.ValidateProducer(entity, slot.Event, hasItemContactBinding, hasEmittingItemUse,
+                RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped) is not null, HasAirJumpProducer); }
             catch (InvalidDataException error)
             {
                 throw new InvalidDataException($"VFX slot '{slot.Id}' binds unavailable event '{slot.Event}' on '{entity.Id}': {error.Message}", error);

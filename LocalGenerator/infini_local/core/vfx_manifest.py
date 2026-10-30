@@ -19,7 +19,7 @@ from typing import Any, Callable, Mapping
 from infini_local.core.errors import PlannerUnavailable
 from infini_local.core.llm_stage_messages import generation_system_suffix, stage_chat_message
 from infini_local.core.repair_merge import json_path_child, json_path_relative, json_values_equal, merge_frozen_subtree
-from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY
+from infini_local.core.runtime_authoring.capability_registry import ENTITY_KIND_REGISTRY, EVENT_KIND_REGISTRY
 from infini_local.core.runtime_authoring.wire_views import runtime_event_inventory, runtime_visual_roles
 from infini_local.core.schema_validation import strict_schema_errors
 from infini_local.core.visual_contract_schema import SPRITE_CANVAS_SIZES
@@ -458,6 +458,10 @@ def _director_schema(data: Mapping[str, Any]) -> dict[str, Any]:
             "repeatEvery": {"minimum": 1}}},
     })
     slot["allOf"].extend({
+        "if": {"properties": {"event": {"const": name}}, "required": ["event"]},
+        "then": {"properties": {"anchor": {"enum": list(spec.vfx_anchors)}}},
+    } for name, spec in EVENT_KIND_REGISTRY.items() if spec.vfx_anchors and name in events)
+    slot["allOf"].extend({
         "if": {"properties": {"placementBindingId": {"const": row["id"]}}, "required": ["placementBindingId"]},
         "then": {"properties": {"entityId": {"const": row["entityId"]}}},
     } for row in _placement_bindings(data))
@@ -557,6 +561,13 @@ def _number(value: Any, low: float, high: float, path: str, errors: list[dict[st
     if numeric < low or numeric > high:
         errors.append({"path": path, "message": f"must be within [{low}, {high}]"})
     return int(value) if integer else numeric
+
+
+def _event_anchor_errors(slot: Mapping[str, Any], path: str) -> list[dict[str, Any]]:
+    event = EVENT_KIND_REGISTRY.get(str(slot.get("event") or ""))
+    if event is not None and event.vfx_anchors and slot.get("anchor") not in event.vfx_anchors:
+        return [{"path": path + ".anchor", "message": "event requires one of its exact source anchors: " + ", ".join(event.vfx_anchors)}]
+    return []
 
 
 def vfx_png_dependencies(
@@ -794,6 +805,7 @@ def validate_vfx_director_output(raw: Any, data: Mapping[str, Any]) -> dict[str,
             clean["sound"] = copy.deepcopy(slot["sound"])
         errors.extend(_sound_slot_errors(slot, path))
         errors.extend(_material_slot_errors(slot, path))
+        errors.extend(_event_anchor_errors(slot, path))
         normalized_slots.append(clean)
     errors.extend(vfx_png_dependencies(data, raw, require_used=True)["errors"])
     return {
@@ -889,6 +901,7 @@ def validate_vfx_manifest_wire(data: Any) -> dict[str, Any]:
             impact_entities.add(entity_id)
         errors.extend(_material_slot_errors(slot, path))
         errors.extend(_sound_slot_errors(slot, path, persisted_wire=True))
+        errors.extend(_event_anchor_errors(slot, path))
     for error in vfx_png_dependencies(data, manifest)["errors"]:
         errors.append({**error, "path": error["path"].replace("$.", "$.vfxManifest.", 1)})
     return {"ok": not errors, "errors": errors}
@@ -928,6 +941,12 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
         "parents": [parent_packet(parent_a), parent_packet(parent_b)],
         "acceptedVisualKit": copy.deepcopy(data.get("visualKit") or {}),
         **({"acceptedGameplayReadOnly": copy.deepcopy(data["gameplay"])} if "gameplay" in data else {}),
+        **({"acceptedPlayerEffectsReadOnly": {
+            field: copy.deepcopy(data[field]["playerEffect"])
+            for field in ("accessory", "armor")
+            if isinstance(data.get(field), Mapping) and isinstance(data[field].get("playerEffect"), Mapping)
+        }} if any(isinstance(data.get(field), Mapping) and isinstance(data[field].get("playerEffect"), Mapping)
+                  for field in ("accessory", "armor")) else {}),
         "acceptedRuntimeProgramReadOnly": mechanics,
         "runtimeVocabulary": {key: surface[key] for key in _VFX_RUNTIME_VOCABULARY_KEYS},
         "runtimeSurface": {key: value for key, value in surface.items() if key not in _VFX_RUNTIME_VOCABULARY_KEYS},
@@ -938,6 +957,7 @@ def _prompt_packet(data: Mapping[str, Any], parent_a: Mapping[str, Any] | None, 
             _ACCEPTED_GAMEPLAY_CONTEXT_RULE,
             _READABILITY_RULE,
             "acceptedRuntimeProgramReadOnly contains the actual accepted mechanics, not another design request. Read its exact movement, controller, lifetime, collision, bindings and event parameters when composing presentation; runtimePairs still owns event availability. Do not invent missing geometry from names or the prose summary. Visual attachment and particle motion never change the source entity's gameplay.",
+            "on_jump is presentation for an actual authored air jump, emitted once by its granting equipment or active generated buff when that jump starts. It does not fire for ground jumps or vanilla extra jumps. self/owner/field anchor to the player, hitPoint is the captured jump-start center, and velocity uses the source motion axis. Read exact airJump mechanics from acceptedPlayerEffectsReadOnly, acceptedGameplayReadOnly.generatedBuff or acceptedRuntimeProgramReadOnly.effectGroups. Compose its visual and sound from the ordinary renderer primitives; movement selects no built-in jump effect. Source-attached elements retire when that exact grant expires or is replaced; world-attached elements finish their bounded lifetime.",
             "Procedural forms: choose from runtimeVocabulary.rendererSemantics. Procedural phase is fractional age/period: positive repeatEvery sets the period, otherwise duration; projectile periodic forms remain live; item periodic emits bounded detached snapshots on cadence, and event forms expire and fade over duration. Each segment/mote consumes one bounded draw call. Item events share a per-tick particle ceiling and each event has its own total; continuous item periodic does not have an infinite-lifetime total.",
             "Use only enum values and numeric ranges from runtimeVocabulary; each selected rendererKind also requires the exact companion fields in runtimeVocabulary.rendererRequirements (encoded in the slot schema).",
             "spriteStampTrail consumes textureRole through the exact bound entity; use item for the item PNG or entity for the bound entity PNG. impactSprite instead consumes its dedicated impact texture.",
@@ -1387,6 +1407,7 @@ def _request(
             "item": copy.deepcopy(packet.get("item") or {}),
             "acceptedVisualKitReadOnly": copy.deepcopy(packet.get("acceptedVisualKit") or {}),
             **({"acceptedGameplayReadOnly": copy.deepcopy(packet["acceptedGameplayReadOnly"])} if "acceptedGameplayReadOnly" in packet else {}),
+            **({"acceptedPlayerEffectsReadOnly": copy.deepcopy(packet["acceptedPlayerEffectsReadOnly"])} if "acceptedPlayerEffectsReadOnly" in packet else {}),
             "acceptedRuntimeProgramReadOnly": copy.deepcopy(packet.get("acceptedRuntimeProgramReadOnly") or {}),
             "runtimeVocabularyReadOnly": copy.deepcopy(packet.get("runtimeVocabulary") or {}),
             "runtimeSurfaceReadOnly": copy.deepcopy(packet.get("runtimeSurface") or {}),

@@ -44,10 +44,21 @@ internal static partial class EngineRuntimeChecks
     private static int RunChecks(string? filter = null)
     {
         (string Name, Action Check)[] checks = {
+            ("air jump VFX producer and bounded snapshot wire", AirJumpVfxProducerAndPacketContract),
+            ("air jump VFX exact live-source admission", AirJumpVfxLiveSourceAdmission),
+            ("air jump VFX native owner callback and relay once", AirJumpVfxNativeStartAndRelayHaveOneOwnerOccurrence),
             ("player effect timed buff actual cooldown hit", PlayerEffectBuffReducesActualCooldownOnHit),
             ("player effect weapon event actual cooldown", PlayerEffectWeaponActionMutatesNativeTimer),
             ("player effect equipment pickup and potion hooks", PlayerEffectNativeEquipmentAndPickup),
             ("player effect typed snapshot roundtrip", PlayerEffectSnapshotRetainsNumericMechanics),
+            ("player traversal native fields and reset", PlayerTraversalUsesNativeFieldsAndReset),
+            ("player traversal timed buff physics and codec", PlayerTraversalBuffPhysicsAndCodec),
+            ("player traversal actual buff source snapshot and charges", PlayerTraversalBuffRetainsSourceAndSpentCharges),
+            ("authored air jump native duration and movement", AuthoredAirJumpUsesNativeDurationAndMovement),
+            ("authored air jump equipment swap preserves consumption", AuthoredAirJumpCannotRefillFromEquipmentSwap),
+            ("authored air jump VFX source lifetime", AuthoredAirJumpSourceLifetimeRetiresVfx),
+            ("authored air jump duration retains native mod hooks", AuthoredAirJumpDurationPreservesNativeHooks),
+            ("authored air jump independent same-item components", AuthoredAirJumpComponentsKeepIndependentCharges),
             ("existing player stats shared equipment consumers", ExistingPlayerStatsShareEquipmentConsumer),
             ("existing buff stats condition before aggregate cap", ExistingBuffStatsFilterBeforeTheirAggregateCap),
             ("parent source graph unresolved identity alternatives", ParentSourceGraphKeepsUnresolvedIdentityAlternatives),

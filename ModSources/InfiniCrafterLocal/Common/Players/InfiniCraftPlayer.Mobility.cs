@@ -35,6 +35,16 @@ public sealed partial class InfiniCraftPlayer
         public string TreasureSenseCondition = "always";
         public GeneratedCombatBuffSpec? Combat;
         public PlayerEffectSpec? PlayerEffect;
+        public string SourceItemId = "";
+        public string SourceDefinitionIdentity = "";
+        public long SourceGeneration;
+        public string SourceComponent = "";
+
+        public GeneratedItemData? ResolveSource()
+            => InfiniCrafterLocalMod.GeneratedItems is { } registry
+                && registry.TryGet(SourceItemId, out var data)
+                && GeneratedItemRegistryService.IsCurrentWorldData(data)
+                && GeneratedItemRegistryService.DefinitionIdentity(data) == SourceDefinitionIdentity ? data : null;
 
         public static ActiveGeneratedUtilityBuff From(GeneratedBuffSpec buff) => new()
         {
@@ -66,8 +76,12 @@ public sealed partial class InfiniCraftPlayer
             && (LifeRegen == 0 || LifeRegenCondition == other.LifeRegenCondition)
             && (OreSenseRadiusTiles == 0 || TreasureSenseCondition == other.TreasureSenseCondition)
             && GeneratedCombatBuffSpec.SameEffect(Combat, other.Combat)
-            && PlayerEffectSpec.SameEffect(PlayerEffect, other.PlayerEffect);
+            && PlayerEffectSpec.SameEffect(PlayerEffect, other.PlayerEffect)
+            && (PlayerEffect?.AirJump is null || (SourceItemId == other.SourceItemId
+                && SourceDefinitionIdentity == other.SourceDefinitionIdentity && SourceComponent == other.SourceComponent));
     }
+
+    private long _nextGeneratedBuffSourceGeneration;
 
     public bool TryReserveGeneratedMobilityCooldown(int cooldownTicks)
     {
@@ -97,6 +111,18 @@ public sealed partial class InfiniCraftPlayer
         }
         buff.Normalize();
         if (!buff.HasAnyEffect) return false;
+        // Jump execution and VFX retain the exact source even after a consumable
+        // disappears. Source-free calls cannot manufacture an unowned jump.
+        string jumpSourceIdentity = "";
+        string jumpSourceComponent = "";
+        if (buff.PlayerEffect?.AirJump is not null)
+        {
+            if (!TryGeneratedExhaustionSource(source, out jumpSourceIdentity)) return false;
+            if (ReferenceEquals(source!.Gameplay.GeneratedBuff, buff)) jumpSourceComponent = "buff";
+            else if (source.RuntimeProgram.EffectGroups?.FirstOrDefault(group => ReferenceEquals(group.GeneratedBuff, buff)) is { } group)
+                jumpSourceComponent = "group:" + group.Id;
+            else return false; // source must identify this exact authored component
+        }
         uint elapsed = activationTick.HasValue
             ? unchecked(Main.GameUpdateCount - activationTick.Value) : 0;
         if (elapsed > int.MaxValue)
@@ -118,6 +144,12 @@ public sealed partial class InfiniCraftPlayer
         {
             var incoming = ActiveGeneratedUtilityBuff.From(buff);
             incoming.Ticks = remaining;
+            if (incoming.PlayerEffect?.AirJump is not null)
+            {
+                incoming.SourceItemId = source!.Id;
+                incoming.SourceDefinitionIdentity = jumpSourceIdentity;
+                incoming.SourceComponent = jumpSourceComponent;
+            }
             var existing = _activeGeneratedUtilityBuffs.FirstOrDefault(active => active.SameEffect(incoming));
             if (existing is not null)
             {
@@ -136,6 +168,13 @@ public sealed partial class InfiniCraftPlayer
                 {
                     var shortest = _activeGeneratedUtilityBuffs.OrderBy(active => active.Ticks).First();
                     _activeGeneratedUtilityBuffs.Remove(shortest);
+                }
+                if (incoming.PlayerEffect?.AirJump is not null)
+                {
+                    // Negative tokens are disjoint from equipment presentation
+                    // tokens. Refreshing an existing entry preserves its lifetime.
+                    if (_nextGeneratedBuffSourceGeneration == long.MinValue) return false;
+                    incoming.SourceGeneration = --_nextGeneratedBuffSourceGeneration;
                 }
                 _activeGeneratedUtilityBuffs.Add(incoming);
             }
@@ -422,7 +461,8 @@ public sealed partial class InfiniCraftPlayer
     private void ApplyGeneratedUtilityBuffEffects()
     {
         foreach (var active in _activeGeneratedUtilityBuffs)
-            if (active.Ticks > 0 && active.PlayerEffect is { } effect) ApplyPlayerEffect(effect);
+            if (active.Ticks > 0 && active.PlayerEffect is { } effect)
+                ApplyPlayerEffect(effect, active.ResolveSource(), active.SourceGeneration, active.SourceComponent);
         if (Player.dead || _generatedBuffTicks <= 0 || !InfiniRuntimeAuthority.ShouldRunPlayerGameplay(Player))
             return;
         if (_generatedMiningSpeedMultiplier != 1f)

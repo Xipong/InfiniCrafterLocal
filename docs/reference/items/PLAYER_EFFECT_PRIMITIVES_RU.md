@@ -102,7 +102,7 @@ leaf receipts. `PlayerEffectSpec` отвергает присутствующи�
 новая длительность лечебного КД проходят native `GlobalItem` hooks, ловля —
 `ModPlayer.ModifyFishingAttempt`, попадания — реальные item/projectile callbacks.
 
-Generated utility snapshot имеет версию 9; клиент и сервер должны обновляться
+Generated utility snapshot имеет версию 10; клиент и сервер должны обновляться
 вместе. Новый reader не принимает старый пакет как новый. Сохранённые определения
 без optional `playerEffect` сохраняют прежнее отсутствие. Истечение, refresh,
 смерть и authority остаются у существующего buff lifecycle.

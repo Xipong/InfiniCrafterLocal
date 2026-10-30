@@ -98,6 +98,162 @@
           "default": "always",
           "x-infini-neutral": "always"
         },
+        "airJump": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 6,
+              "description": "Extra jumps available per native movement refresh, independently for this source.",
+              "x-infini-neutral": 0
+            },
+            "launchSpeedBlocksPerSecond": {
+              "type": "number",
+              "minimum": 0.375,
+              "maximum": 120.0,
+              "description": "Author units: blocks/s. Native consumer: Upward speed while the extra jump is held, relative to gravity direction.",
+              "x-infini-units": "blocks/s",
+              "x-infini-semanticType": "blocks/s",
+              "x-infini-consumerConstraint": {
+                "storage": "float32",
+                "neutral": null,
+                "rule": "nonneutral_must_remain_nonneutral",
+                "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+              },
+              "x-infini-authorProjection": {
+                "nonzeroMustRemainNonzero": true
+              }
+            },
+            "holdDurationSeconds": {
+              "type": "number",
+              "minimum": 0.008333333333333333,
+              "maximum": 2.0,
+              "description": "World duration (seconds); shared nearest-tick rounding applies. Native consumer: Maximum held-jump duration before native duration modifiers. Releasing jump ends the hold normally.",
+              "x-infini-units": "seconds",
+              "x-infini-semanticType": "seconds",
+              "x-infini-authorProjection": {
+                "nonzeroMustRemainNonzero": true,
+                "secondsRounding": "nearest world tick (60/s); half-tick ties UP"
+              }
+            },
+            "horizontalAccelerationMultiplier": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 5,
+              "description": "Multiply horizontal acceleration only during this active extra jump.",
+              "default": 1,
+              "x-infini-neutral": 1,
+              "x-infini-consumerConstraint": {
+                "storage": "float32",
+                "neutral": 1,
+                "rule": "nonneutral_must_remain_nonneutral",
+                "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+              }
+            },
+            "horizontalSpeedMultiplier": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 5,
+              "description": "Multiply maximum horizontal run speed only during this active extra jump.",
+              "default": 1,
+              "x-infini-neutral": 1,
+              "x-infini-consumerConstraint": {
+                "storage": "float32",
+                "neutral": 1,
+                "rule": "nonneutral_must_remain_nonneutral",
+                "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+              }
+            }
+          },
+          "required": [
+            "count",
+            "launchSpeedBlocksPerSecond",
+            "holdDurationSeconds"
+          ],
+          "additionalProperties": false,
+          "description": "Grant authored extra jumps through native jump input. Charges refresh only when Terraria refreshes jumps; switching equipment or refreshing a buff never refills them in midair. Jump visuals are authored independently with item_body/on_jump VFX."
+        },
+        "autoJump": {
+          "type": "boolean",
+          "description": "Repeat ordinary native jumps while jump input remains held.",
+          "x-infini-neutral": false
+        },
+        "gravityControl": {
+          "type": "boolean",
+          "description": "Permit native gravity-direction switching with up input.",
+          "x-infini-neutral": false
+        },
+        "gravityMultiplier": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 5,
+          "description": "Multiply native downward gravity; active contributions multiply, bounded to 0.01..25 overall.",
+          "x-infini-neutral": 1,
+          "x-infini-consumerConstraint": {
+            "storage": "float32",
+            "neutral": 1,
+            "rule": "nonneutral_must_remain_nonneutral",
+            "meaning": "Finite float32 storage must preserve a non-neutral value as non-neutral; exact neutral is allowed. No rounding or replacement is performed by validation."
+          }
+        },
+        "maxFallSpeedBlocksPerSecond": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 120.0,
+          "description": "Author units: blocks/s. Native consumer: Cap downward fall speed; zero contributes no cap. The strictest active cap wins.",
+          "x-infini-units": "blocks/s",
+          "x-infini-semanticType": "blocks/s",
+          "x-infini-neutral": 0.0,
+          "x-infini-consumerConstraint": {
+            "storage": "float32",
+            "neutral": 0.0,
+            "rule": "nonneutral_must_remain_nonneutral",
+            "meaning": "Deterministic lowering and finite float32 storage must preserve non-neutral values as non-neutral; exact neutral is allowed. Validation never rewrites Author values."
+          },
+          "x-infini-authorProjection": {
+            "nonzeroMustRemainNonzero": true
+          }
+        },
+        "safeFallDistanceBlocks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Add safe falling distance in blocks without granting damage immunity.",
+          "x-infini-neutral": 0
+        },
+        "waterBreathing": {
+          "type": "boolean",
+          "description": "Enable native gill breathing, including the world's native air/water breathing rules.",
+          "x-infini-neutral": false
+        },
+        "swimJump": {
+          "type": "boolean",
+          "description": "Permit repeated swimming jumps while submerged; does not grant water breathing.",
+          "x-infini-neutral": false
+        },
+        "waterBuoyancy": {
+          "type": "boolean",
+          "description": "Float in water while down input is not held; does not grant swimming jumps.",
+          "x-infini-neutral": false
+        },
+        "wallSlideAndJump": {
+          "type": "boolean",
+          "description": "Permit native wall sliding and wall jumps; wallCling is an independent stronger contact mode.",
+          "x-infini-neutral": false
+        },
+        "wallCling": {
+          "type": "boolean",
+          "description": "Permit native wall clinging and wall jumps.",
+          "x-infini-neutral": false
+        },
+        "breathCapacityBonus": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1200,
+          "description": "Add breath-capacity units; native drowning and breath consumption remain independent.",
+          "x-infini-neutral": 0
+        },
         "fishingPowerPoints": {
           "type": "integer",
           "minimum": 0,

@@ -19,7 +19,7 @@ public partial class GeneratedItem
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Accessory.Enabled) return;
         player.GetModPlayer<InfiniCraftPlayer>().RegisterReactiveEquipment(this);
-        ApplyEquipmentEffects(player, Data.Accessory);
+        ApplyEquipmentEffects(player, Data.Accessory, Data, PresentationToken);
         RunPeriodicItemEvents(player, Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);
     }
@@ -30,14 +30,14 @@ public partial class GeneratedItem
         RuntimeBindingSpec? binding = Data.RuntimeProgram.BindingForInput(RuntimeInputKind.Equipped);
         if (binding?.UsePolicy.Action.Kind != RuntimeBindingAction.EquipPassive || !Data.Armor.Enabled) return;
         player.GetModPlayer<InfiniCraftPlayer>().RegisterReactiveEquipment(this);
-        ApplyEquipmentEffects(player, Data.Armor);
+        ApplyEquipmentEffects(player, Data.Armor, Data, PresentationToken);
         RunPeriodicItemEvents(player, Data.RuntimeProgram.TryGetEntity(Data.RuntimeProgram.ItemEntityId)!);
         InfiniItemVfxRuntime.OnPeriodic(player, Data, Data.RuntimeProgram.ItemEntityId,Item);
     }
 
-    private static void ApplyEquipmentEffects(Player player, AccessorySpec a)
+    private static void ApplyEquipmentEffects(Player player, AccessorySpec a, GeneratedItemData source, long generation)
     {
-        if (a.PlayerEffect is { } effect) player.GetModPlayer<InfiniCraftPlayer>().ApplyPlayerEffect(effect);
+        if (a.PlayerEffect is { } effect) player.GetModPlayer<InfiniCraftPlayer>().ApplyPlayerEffect(effect, source, generation, "accessory");
         // Terraria already applies Item.defense in Player.GrantArmorBenefits.
         player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
         player.GetModPlayer<InfiniCraftPlayer>().ApplyLifeRegen(a.LifeRegen, a.LifeRegenCondition);
@@ -64,9 +64,9 @@ public partial class GeneratedItem
         AddEquipmentLight(player, a.LightStrength, a.LightColorName);
     }
 
-    private static void ApplyEquipmentEffects(Player player, ArmorSpec a)
+    private static void ApplyEquipmentEffects(Player player, ArmorSpec a, GeneratedItemData source, long generation)
     {
-        if (a.PlayerEffect is { } effect) player.GetModPlayer<InfiniCraftPlayer>().ApplyPlayerEffect(effect);
+        if (a.PlayerEffect is { } effect) player.GetModPlayer<InfiniCraftPlayer>().ApplyPlayerEffect(effect, source, generation, "armor");
         player.statLifeMax2 += a.MaxLife; player.statManaMax2 += a.MaxMana;
         player.GetModPlayer<InfiniCraftPlayer>().ApplyLifeRegen(a.LifeRegen, a.LifeRegenCondition);
         player.GetModPlayer<InfiniCraftPlayer>().ApplyTreasureSense(a.TreasureSense == true, a.TreasureSenseCondition);

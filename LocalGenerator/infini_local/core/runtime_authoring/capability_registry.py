@@ -311,6 +311,9 @@ class EventKindSpec:
     producer_binding_actions: tuple[str, ...] = ()
     producer_binding_kinds: tuple[str, ...] = ()
     producer_binding_contact_damage: bool | None = None
+    presentation_only: bool = False
+    producer_player_effect_member: str = ""
+    vfx_anchors: tuple[str, ...] = ()
     producer_exact_params: Mapping[str, Mapping[str, Any]] = field(
         default_factory=lambda: MappingProxyType({}),
         compare=False,
@@ -330,6 +333,10 @@ class EventKindSpec:
             "producedByBindingActions": list(self.producer_binding_actions),
             "producedByBindingKinds": list(self.producer_binding_kinds),
             "producerBindingContactDamage": self.producer_binding_contact_damage,
+            **({"presentationOnly": True} if self.presentation_only else {}),
+            **({"producerPlayerEffectMember": self.producer_player_effect_member}
+               if self.producer_player_effect_member else {}),
+            **({"vfxAnchors": list(self.vfx_anchors)} if self.vfx_anchors else {}),
             "producerFreeKinds": producer_free_kinds,
             "producerExactParams": {
                 capability: dict(params)
@@ -1528,6 +1535,24 @@ def _player_effect_param() -> ParamSpec:
     """Shared mechanical vocabulary for equipment and timed generated buffs."""
     return _p("object", "Independent player modifiers; condition applies to this component only. Available in equipment or a generated buff.", required=False, shared_type="player_effect", min_properties=1, properties={
         "condition": _p("string", "When to apply this component: stationary requires zero velocity and no active item animation.", required=False, enum=("always", "stationary"), default="always", neutral="always", wire_name="playerEffect.condition"),
+        "airJump": _p("object", "Grant authored extra jumps through native jump input. Charges refresh only when Terraria refreshes jumps; switching equipment or refreshing a buff never refills them in midair. Jump visuals are authored independently with item_body/on_jump VFX.", required=False, properties={
+            "count": _p("integer", "Extra jumps available per native movement refresh, independently for this source.", minimum=1, maximum=6, neutral=0, wire_name="playerEffect.airJump.count"),
+            "launchSpeedBlocksPerSecond": _world_units(_p("number", "Upward speed while the extra jump is held, relative to gravity direction.", minimum=0.1, maximum=32, wire_name="playerEffect.airJump.launchSpeedPxPerTick"), "launchSpeedPxPerTick", multiplier=16, divisor=60, units="blocks/s"),
+            "holdDurationSeconds": _seconds(_p("integer", "Maximum held-jump duration before native duration modifiers. Releasing jump ends the hold normally.", minimum=1, maximum=120, wire_name="playerEffect.airJump.holdDurationTicks"), "holdDurationTicks"),
+            "horizontalAccelerationMultiplier": _p("number", "Multiply horizontal acceleration only during this active extra jump.", required=False, minimum=0.1, maximum=5, default=1, neutral=1, consumer_storage="float32", wire_name="playerEffect.airJump.horizontalAccelerationMultiplier"),
+            "horizontalSpeedMultiplier": _p("number", "Multiply maximum horizontal run speed only during this active extra jump.", required=False, minimum=0.1, maximum=5, default=1, neutral=1, consumer_storage="float32", wire_name="playerEffect.airJump.horizontalSpeedMultiplier"),
+        }),
+        "autoJump": _p("boolean", "Repeat ordinary native jumps while jump input remains held.", required=False, neutral=False, wire_name="playerEffect.autoJump", wire_presence_requires_receipt=True),
+        "gravityControl": _p("boolean", "Permit native gravity-direction switching with up input.", required=False, neutral=False, wire_name="playerEffect.gravityControl", wire_presence_requires_receipt=True),
+        "gravityMultiplier": _p("number", "Multiply native downward gravity; active contributions multiply, bounded to 0.01..25 overall.", required=False, minimum=0.1, maximum=5, neutral=1, consumer_storage="float32", wire_name="playerEffect.gravityMultiplier", wire_presence_requires_receipt=True),
+        "maxFallSpeedBlocksPerSecond": _world_units(_p("number", "Cap downward fall speed; zero contributes no cap. The strictest active cap wins.", required=False, minimum=0, maximum=32, neutral=0, wire_name="playerEffect.maxFallSpeedPxPerTick", wire_presence_requires_receipt=True), "maxFallSpeedPxPerTick", multiplier=16, divisor=60, units="blocks/s"),
+        "safeFallDistanceBlocks": _p("integer", "Add safe falling distance in blocks without granting damage immunity.", required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.safeFallDistanceBlocks", wire_presence_requires_receipt=True),
+        "waterBreathing": _p("boolean", "Enable native gill breathing, including the world's native air/water breathing rules.", required=False, neutral=False, wire_name="playerEffect.waterBreathing", wire_presence_requires_receipt=True),
+        "swimJump": _p("boolean", "Permit repeated swimming jumps while submerged; does not grant water breathing.", required=False, neutral=False, wire_name="playerEffect.swimJump", wire_presence_requires_receipt=True),
+        "waterBuoyancy": _p("boolean", "Float in water while down input is not held; does not grant swimming jumps.", required=False, neutral=False, wire_name="playerEffect.waterBuoyancy", wire_presence_requires_receipt=True),
+        "wallSlideAndJump": _p("boolean", "Permit native wall sliding and wall jumps; wallCling is an independent stronger contact mode.", required=False, neutral=False, wire_name="playerEffect.wallSlideAndJump", wire_presence_requires_receipt=True),
+        "wallCling": _p("boolean", "Permit native wall clinging and wall jumps.", required=False, neutral=False, wire_name="playerEffect.wallCling", wire_presence_requires_receipt=True),
+        "breathCapacityBonus": _p("integer", "Add breath-capacity units; native drowning and breath consumption remain independent.", required=False, minimum=0, maximum=1200, neutral=0, wire_name="playerEffect.breathCapacityBonus", wire_presence_requires_receipt=True),
         "fishingPowerPoints": _p("integer", 'Add fishing-power points before native rod/bait/environment multipliers.', required=False, minimum=0, maximum=100, neutral=0, wire_name="playerEffect.fishingPowerPoints", wire_presence_requires_receipt=True),
         "preventLineBreak": _p("boolean", 'Prevent fishing-line breakage.', required=False, neutral=False, wire_name="playerEffect.preventLineBreak", wire_presence_requires_receipt=True),
         "allowLavaFishing": _p("boolean", 'Allow catches in lava with otherwise suitable fishing gear.', required=False, neutral=False, wire_name="playerEffect.allowLavaFishing", wire_presence_requires_receipt=True),
@@ -3430,6 +3455,12 @@ EVENT_KIND_REGISTRY: Final[Mapping[str, EventKindSpec]] = MappingProxyType({
         "Hostile NPC death credited to the owner. Functional equipment only; excludes critters/segments. Position=enemy center; no live target. Not projectile on_kill.",
         producer_binding_inputs=("equipped",), producer_binding_actions=("equip_passive",), producer_binding_kinds=("item_body",),
     ),
+    "on_jump": EventKindSpec(
+        "on_jump", ("item_body",), (),
+        "Presentation emitted once when an actual authored air jump starts. The granting equipment or active generated buff owns this event; ordinary ground jumps and vanilla extra jumps do not emit it.",
+        presentation_only=True, producer_player_effect_member="airJump",
+        vfx_anchors=("self", "owner", "hitPoint", "velocity", "field"),
+    ),
 })
 
 
@@ -3541,8 +3572,8 @@ if tuple(INPUT_KIND_REGISTRY) != INPUT_KINDS:
     raise RuntimeError("INPUT_KINDS must be the exact input registry projection")
 if tuple(BINDING_ACTION_REGISTRY) != BINDING_ACTIONS:
     raise RuntimeError("BINDING_ACTIONS must be the exact binding-action registry projection")
-if tuple(EVENT_KIND_REGISTRY) != EVENT_KINDS:
-    raise RuntimeError("EVENT_KINDS must be the exact event registry projection")
+if tuple(name for name, spec in EVENT_KIND_REGISTRY.items() if not spec.presentation_only) != EVENT_KINDS:
+    raise RuntimeError("EVENT_KINDS must be the exact executable gameplay event registry projection")
 
 
 def _exact_wire_paths(cap: CapabilitySpec) -> tuple[str, ...]:

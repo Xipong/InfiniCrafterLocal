@@ -466,19 +466,23 @@ public static class RuntimeEventKind
     public const string ChannelComplete = "channel_complete";
     public const string OnHurt = "on_hurt";
     public const string OnEnemyKill = "on_enemy_kill";
+    public const string OnJump = "on_jump";
     private static readonly HashSet<string> Known = new(StringComparer.Ordinal)
     {
         OnUse, OnSpawn, OnHit, OnCrit, OnTileCollision, OnExpire, OnKill,
-        Periodic, OnRelease, ChannelComplete, OnHurt, OnEnemyKill,
+        Periodic, OnRelease, ChannelComplete, OnHurt, OnEnemyKill, OnJump,
     };
     public static bool IsKnown(string? value) => value is not null && Known.Contains(value);
 
-    public static void ValidateProducer(RuntimeEntitySpec entity, string eventName, bool itemContactEnabled, bool hasActiveItemUse, bool hasEquipment = false)
+    public static bool SupportsVfxAnchor(string eventName,string anchor)
+        =>eventName!=OnJump||anchor is "self" or "owner" or "hitPoint" or "velocity" or "field";
+
+    public static void ValidateProducer(RuntimeEntitySpec entity, string eventName, bool itemContactEnabled, bool hasActiveItemUse, bool hasEquipment = false, bool hasAirJump = false)
     {
         bool projectile = entity.IsProjectileEntity;
         bool sourceCompatible = eventName switch
         {
-            OnUse or OnHurt or OnEnemyKill => entity.Kind == RuntimeEntityKind.ItemBody,
+            OnUse or OnHurt or OnEnemyKill or OnJump => entity.Kind == RuntimeEntityKind.ItemBody,
             OnSpawn or OnTileCollision or OnExpire or OnKill or OnRelease or ChannelComplete => projectile,
             OnHit or OnCrit or Periodic => true,
             _ => false,
@@ -490,6 +494,7 @@ public static class RuntimeEventKind
         {
             OnUse => hasActiveItemUse,
             OnHurt or OnEnemyKill => hasEquipment,
+            OnJump => hasAirJump,
             OnHit or OnCrit => entity.Kind == RuntimeEntityKind.ItemBody ? itemContactEnabled : entity.Damage.Enabled,
             OnTileCollision => entity.Collision.TileCollide,
             OnRelease or ChannelComplete => entity.Controller.Code == RuntimeControllerCode.ChargeThenRelease || entity.Charge is not null,

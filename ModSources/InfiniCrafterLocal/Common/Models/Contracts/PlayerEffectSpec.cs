@@ -8,6 +8,90 @@ namespace InfiniCrafterLocal.Common.Models;
 
 public sealed record PlayerEffectSpec
 {
+    private bool? _autoJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoJump
+    {
+        get => _autoJump;
+        set { if (value is not bool scalar) throw new InvalidDataException("autoJump must match its declared domain"); _autoJump = scalar; }
+    }
+    private bool? _gravityControl;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? GravityControl
+    {
+        get => _gravityControl;
+        set { if (value is not bool scalar) throw new InvalidDataException("gravityControl must match its declared domain"); _gravityControl = scalar; }
+    }
+    private float? _gravityMultiplier;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? GravityMultiplier
+    {
+        get => _gravityMultiplier;
+        set { if (value is not float scalar || scalar < 0.1f || scalar > 5f || !float.IsFinite(scalar)) throw new InvalidDataException("gravityMultiplier must match its declared domain"); _gravityMultiplier = scalar; }
+    }
+    private float? _maxFallSpeedPxPerTick;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public float? MaxFallSpeedPxPerTick
+    {
+        get => _maxFallSpeedPxPerTick;
+        set { if (value is not float scalar || scalar < 0f || scalar > 32f || !float.IsFinite(scalar)) throw new InvalidDataException("maxFallSpeedPxPerTick must match its declared domain"); _maxFallSpeedPxPerTick = scalar; }
+    }
+    private int? _safeFallDistanceBlocks;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SafeFallDistanceBlocks
+    {
+        get => _safeFallDistanceBlocks;
+        set { if (value is not int scalar || scalar < 0 || scalar > 100) throw new InvalidDataException("safeFallDistanceBlocks must match its declared domain"); _safeFallDistanceBlocks = scalar; }
+    }
+    private bool? _waterBreathing;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WaterBreathing
+    {
+        get => _waterBreathing;
+        set { if (value is not bool scalar) throw new InvalidDataException("waterBreathing must match its declared domain"); _waterBreathing = scalar; }
+    }
+    private bool? _swimJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? SwimJump
+    {
+        get => _swimJump;
+        set { if (value is not bool scalar) throw new InvalidDataException("swimJump must match its declared domain"); _swimJump = scalar; }
+    }
+    private bool? _waterBuoyancy;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WaterBuoyancy
+    {
+        get => _waterBuoyancy;
+        set { if (value is not bool scalar) throw new InvalidDataException("waterBuoyancy must match its declared domain"); _waterBuoyancy = scalar; }
+    }
+    private bool? _wallSlideAndJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WallSlideAndJump
+    {
+        get => _wallSlideAndJump;
+        set { if (value is not bool scalar) throw new InvalidDataException("wallSlideAndJump must match its declared domain"); _wallSlideAndJump = scalar; }
+    }
+    private bool? _wallCling;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? WallCling
+    {
+        get => _wallCling;
+        set { if (value is not bool scalar) throw new InvalidDataException("wallCling must match its declared domain"); _wallCling = scalar; }
+    }
+    private int? _breathCapacityBonus;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? BreathCapacityBonus
+    {
+        get => _breathCapacityBonus;
+        set { if (value is not int scalar || scalar < 0 || scalar > 1200) throw new InvalidDataException("breathCapacityBonus must match its declared domain"); _breathCapacityBonus = scalar; }
+    }
+    private PlayerAirJumpSpec? _airJump;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PlayerAirJumpSpec? AirJump
+    {
+        get => _airJump;
+        set { if (value is null) throw new InvalidDataException("airJump must be an object when present"); value.Validate(); _airJump = value; }
+    }
     private string _condition = "always";
     public string Condition
     {
@@ -204,13 +288,25 @@ public sealed record PlayerEffectSpec
         get => _healingPotionCooldownOnHitReductionTicks;
         set { if (value is not int ticks || ticks < 0 || ticks > 3600) throw new InvalidDataException("healingPotionCooldownOnHitReductionTicks must be 0..3600"); _healingPotionCooldownOnHitReductionTicks = ticks; }
     }
-    [JsonIgnore] public bool HasEffect => (HealingPotionCooldownOnHitReductionTicks ?? 0) != 0 || (FishingPowerPoints ?? 0) != 0 || PreventLineBreak == true || AllowLavaFishing == true || RevealHookedCatch == true || (ExtraCrateChancePercent ?? 0) != 0 || (ItemPickupRangePx ?? 0) != 0 || (HeartPickupRangePx ?? 0) != 0 || (ManaPickupRangePx ?? 0) != 0 || (CoinPickupRangePx ?? 0) != 0 || HighlightDanger == true || HighlightCreatures == true || NightVision == true || (HealingPotionCooldownReductionPercent ?? 0) != 0 || (HealingPotionCooldownReductionTicks ?? 0) != 0 || (AutoManaPotionBelowPercent ?? 0) != 0 || (HurtInvulnerabilityBonusTicks ?? 0) != 0;
-    public void Validate() => ValidateCondition(Condition);
+    [JsonIgnore] public bool HasEffect => (AutoJump ?? false) != false || (GravityControl ?? false) != false || (GravityMultiplier ?? 1f) != 1f || (MaxFallSpeedPxPerTick ?? 0f) != 0f || (SafeFallDistanceBlocks ?? 0) != 0 || (WaterBreathing ?? false) != false || (SwimJump ?? false) != false || (WaterBuoyancy ?? false) != false || (WallSlideAndJump ?? false) != false || (WallCling ?? false) != false || (BreathCapacityBonus ?? 0) != 0 || AirJump is not null || (HealingPotionCooldownOnHitReductionTicks ?? 0) != 0 || (FishingPowerPoints ?? 0) != 0 || PreventLineBreak == true || AllowLavaFishing == true || RevealHookedCatch == true || (ExtraCrateChancePercent ?? 0) != 0 || (ItemPickupRangePx ?? 0) != 0 || (HeartPickupRangePx ?? 0) != 0 || (ManaPickupRangePx ?? 0) != 0 || (CoinPickupRangePx ?? 0) != 0 || HighlightDanger == true || HighlightCreatures == true || NightVision == true || (HealingPotionCooldownReductionPercent ?? 0) != 0 || (HealingPotionCooldownReductionTicks ?? 0) != 0 || (AutoManaPotionBelowPercent ?? 0) != 0 || (HurtInvulnerabilityBonusTicks ?? 0) != 0;
+    public void Validate() { ValidateCondition(Condition); AirJump?.Validate(); }
     internal static bool SameEffect(PlayerEffectSpec? a, PlayerEffectSpec? b)
     {
         if (a?.HasEffect != true) a = null;
         if (b?.HasEffect != true) b = null;
-        return (a?.HealingPotionCooldownOnHitReductionTicks ?? 0) == (b?.HealingPotionCooldownOnHitReductionTicks ?? 0)
+        return (a?.AutoJump ?? false) == (b?.AutoJump ?? false)
+        && (a?.GravityControl ?? false) == (b?.GravityControl ?? false)
+        && (a?.GravityMultiplier ?? 1f) == (b?.GravityMultiplier ?? 1f)
+        && (a?.MaxFallSpeedPxPerTick ?? 0f) == (b?.MaxFallSpeedPxPerTick ?? 0f)
+        && (a?.SafeFallDistanceBlocks ?? 0) == (b?.SafeFallDistanceBlocks ?? 0)
+        && (a?.WaterBreathing ?? false) == (b?.WaterBreathing ?? false)
+        && (a?.SwimJump ?? false) == (b?.SwimJump ?? false)
+        && (a?.WaterBuoyancy ?? false) == (b?.WaterBuoyancy ?? false)
+        && (a?.WallSlideAndJump ?? false) == (b?.WallSlideAndJump ?? false)
+        && (a?.WallCling ?? false) == (b?.WallCling ?? false)
+        && (a?.BreathCapacityBonus ?? 0) == (b?.BreathCapacityBonus ?? 0)
+        && a?.AirJump == b?.AirJump
+        && (a?.HealingPotionCooldownOnHitReductionTicks ?? 0) == (b?.HealingPotionCooldownOnHitReductionTicks ?? 0)
         && (a?.Condition ?? "always") == (b?.Condition ?? "always")
         && (a?.FishingPowerPoints ?? 0) == (b?.FishingPowerPoints ?? 0)
         && (a?.PreventLineBreak ?? false) == (b?.PreventLineBreak ?? false)
@@ -231,6 +327,19 @@ public sealed record PlayerEffectSpec
     }
     internal void Write(BinaryWriter writer) {
         Validate(); writer.Write((byte)(Condition == "stationary" ? 1 : 0));
+        writer.Write(AirJump is not null); AirJump?.Write(writer);
+        writer.Write(AutoJump ?? false);
+        writer.Write(GravityControl ?? false);
+        writer.Write(GravityMultiplier ?? 1f);
+        writer.Write(MaxFallSpeedPxPerTick ?? 0f);
+        writer.Write(SafeFallDistanceBlocks ?? 0);
+        writer.Write(WaterBreathing ?? false);
+        writer.Write(SwimJump ?? false);
+        writer.Write(WaterBuoyancy ?? false);
+        writer.Write(WallSlideAndJump ?? false);
+        writer.Write(WallCling ?? false);
+        writer.Write(BreathCapacityBonus ?? 0);
+
         writer.Write(HealingPotionCooldownOnHitReductionTicks ?? 0);
         writer.Write(FishingPowerPoints ?? 0);
         writer.Write(PreventLineBreak ?? false);
@@ -251,7 +360,21 @@ public sealed record PlayerEffectSpec
     }
     internal static PlayerEffectSpec Read(BinaryReader reader) {
         byte condition = reader.ReadByte(); if (condition > 1) throw new InvalidDataException("Unknown player-effect condition");
-        return new PlayerEffectSpec { Condition = condition == 1 ? "stationary" : "always",
+        var value = new PlayerEffectSpec { Condition = condition == 1 ? "stationary" : "always" };
+        if (reader.ReadBoolean()) value.AirJump = PlayerAirJumpSpec.Read(reader);
+        value = value with {
+            AutoJump = reader.ReadBoolean(),
+            GravityControl = reader.ReadBoolean(),
+            GravityMultiplier = reader.ReadSingle(),
+            MaxFallSpeedPxPerTick = reader.ReadSingle(),
+            SafeFallDistanceBlocks = reader.ReadInt32(),
+            WaterBreathing = reader.ReadBoolean(),
+            SwimJump = reader.ReadBoolean(),
+            WaterBuoyancy = reader.ReadBoolean(),
+            WallSlideAndJump = reader.ReadBoolean(),
+            WallCling = reader.ReadBoolean(),
+            BreathCapacityBonus = reader.ReadInt32(),
+
             HealingPotionCooldownOnHitReductionTicks = reader.ReadInt32(),
             FishingPowerPoints = reader.ReadInt32(),
             PreventLineBreak = reader.ReadBoolean(),
@@ -270,5 +393,6 @@ public sealed record PlayerEffectSpec
             AutoManaPotionBelowPercent = reader.ReadInt32(),
             HurtInvulnerabilityBonusTicks = reader.ReadInt32(),
         };
+        value.Validate(); return value;
     }
 }
